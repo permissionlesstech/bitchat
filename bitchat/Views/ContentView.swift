@@ -175,27 +175,20 @@ struct ContentView: View {
             }
         } label: {
             HStack(spacing: 4) {
-                // Notification indicator for unread messages (on the left)
-                if !viewModel.unreadPrivateMessages.isEmpty {
-                    Circle()
-                        .fill(Color.orange)
-                        .frame(width: 8, height: 8)
-                }
-                
                 // Text
                 Text(viewModel.isConnected ? "\(viewModel.connectedPeers.count) \(viewModel.connectedPeers.count == 1 ? "person" : "people")" : "scanning")
                     .font(.system(size: 14, design: .monospaced))
                     .foregroundColor(viewModel.isConnected ? textColor : Color.red)
                 
-                // Chevron (on the right)
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 10))
-                    .foregroundColor(secondaryTextColor)
+                // Notification indicator (on the right after default chevron)
+                if !viewModel.unreadPrivateMessages.isEmpty {
+                    Circle()
+                        .fill(Color.orange)
+                        .frame(width: 5, height: 5)
+                }
             }
         }
         .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
     }
     
     private var messagesView: some View {
