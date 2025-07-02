@@ -149,6 +149,7 @@ extension ChatViewModel: BitchatDelegate {
     }
     
     func didUpdatePeerList(_ peers: [String]) {
+        print("[DEBUG] ChatViewModel: Peer list updated with \(peers.count) peers: \(peers)")
         connectedPeers = peers
         isConnected = !peers.isEmpty
         
