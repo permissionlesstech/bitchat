@@ -34,11 +34,11 @@ struct BitchatPacket: Codable {
     }
     
     var data: Data? {
-        try? JSONEncoder().encode(self)
+        BinaryProtocol.encode(self)
     }
     
     static func from(_ data: Data) -> BitchatPacket? {
-        try? JSONDecoder().decode(BitchatPacket.self, from: data)
+        BinaryProtocol.decode(data)
     }
 }
 

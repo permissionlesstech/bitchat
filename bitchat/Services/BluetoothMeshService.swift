@@ -176,7 +176,7 @@ class BluetoothMeshService: NSObject {
                 originalSender: nil
             )
             
-            if let messageData = try? JSONEncoder().encode(message) {
+            if let messageData = message.toBinaryPayload() {
                 let packet = BitchatPacket(
                     type: MessageType.message.rawValue,
                     senderID: self.myPeerID.data(using: .utf8)!,
@@ -211,7 +211,7 @@ class BluetoothMeshService: NSObject {
                 senderPeerID: self.myPeerID
             )
             
-            if let messageData = try? JSONEncoder().encode(message) {
+            if let messageData = message.toBinaryPayload() {
                 let packet = BitchatPacket(
                     type: MessageType.privateMessage.rawValue,
                     senderID: self.myPeerID.data(using: .utf8)!,
@@ -322,7 +322,7 @@ class BluetoothMeshService: NSObject {
         
         // For any message type, if we have a nickname in the payload, update it immediately
         if packet.type == MessageType.message.rawValue || packet.type == MessageType.privateMessage.rawValue {
-            if let message = try? JSONDecoder().decode(BitchatMessage.self, from: packet.payload),
+            if let message = BitchatMessage.fromBinaryPayload(packet.payload),
                senderID != "unknown" && senderID != myPeerID {
                 // Update nickname mapping immediately
                 if peerNicknames[senderID] != message.sender {
@@ -339,7 +339,7 @@ class BluetoothMeshService: NSObject {
         
         switch MessageType(rawValue: packet.type) {
         case .message:
-            if let message = try? JSONDecoder().decode(BitchatMessage.self, from: packet.payload) {
+            if let message = BitchatMessage.fromBinaryPayload(packet.payload) {
                 // Ignore our own messages
                 if let senderID = String(data: packet.senderID, encoding: .utf8), senderID == myPeerID {
                     return
@@ -365,7 +365,8 @@ class BluetoothMeshService: NSObject {
             // Use senderID from packet for consistency
             if let senderID = String(data: packet.senderID, encoding: .utf8) {
                 print("[DEBUG] Received key exchange from \(senderID)")
-                if let publicKeyData = try? JSONDecoder().decode(Data.self, from: packet.payload) {
+                if packet.payload.count > 0 {
+                    let publicKeyData = packet.payload
                     try? encryptionService.addPeerPublicKey(senderID, publicKeyData: publicKeyData)
                     
                     // Track this peer temporarily
@@ -460,7 +461,7 @@ class BluetoothMeshService: NSObject {
             }
             
         case .privateMessage:
-            if let message = try? JSONDecoder().decode(BitchatMessage.self, from: packet.payload) {
+            if let message = BitchatMessage.fromBinaryPayload(packet.payload) {
                 // Check if this private message is for us
                 if let recipientID = packet.recipientID,
                    let recipientIDString = String(data: recipientID, encoding: .utf8),
@@ -632,7 +633,7 @@ extension BluetoothMeshService: CBPeripheralDelegate {
                     senderID: self.myPeerID.data(using: .utf8)!,
                     recipientID: nil,
                     timestamp: UInt64(Date().timeIntervalSince1970),
-                    payload: try! JSONEncoder().encode(publicKeyData),
+                    payload: publicKeyData,
                     signature: nil,
                     ttl: 1
                 )
@@ -736,7 +737,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                             senderID: self.myPeerID.data(using: .utf8)!,
                             recipientID: peerID.data(using: .utf8),
                             timestamp: UInt64(Date().timeIntervalSince1970),
-                            payload: try! JSONEncoder().encode(publicKeyData),
+                            payload: publicKeyData,
                             signature: nil,
                             ttl: 1
                         )
