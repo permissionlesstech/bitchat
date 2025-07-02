@@ -150,7 +150,7 @@ class BluetoothMeshService: NSObject {
         self.characteristic = characteristic
     }
     
-    func sendMessage(_ content: String, to recipientID: String? = nil) {
+    func sendMessage(_ content: String, mentions: [String] = [], to recipientID: String? = nil) {
         messageQueue.async { [weak self] in
             guard let self = self else { return }
             
@@ -162,7 +162,8 @@ class BluetoothMeshService: NSObject {
                 content: content,
                 timestamp: Date(),
                 isRelay: false,
-                originalSender: nil
+                originalSender: nil,
+                mentions: mentions.isEmpty ? nil : mentions
             )
             
             if let messageData = message.toBinaryPayload() {
