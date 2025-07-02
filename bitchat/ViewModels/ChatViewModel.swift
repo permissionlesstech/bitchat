@@ -20,11 +20,13 @@ class ChatViewModel: ObservableObject {
     @Published var privateChats: [String: [BitchatMessage]] = [:] // peerID -> messages
     @Published var selectedPrivateChatPeer: String? = nil
     @Published var unreadPrivateMessages: Set<String> = []
+    @Published var privateMessageNotification: (sender: String, message: String)? = nil
     
     let meshService = BluetoothMeshService()
     private let userDefaults = UserDefaults.standard
     private let nicknameKey = "bitchat.nickname"
     private var nicknameSaveTimer: Timer?
+    private var notificationTimer: Timer?
     
     init() {
         loadNickname()
@@ -101,6 +103,17 @@ class ChatViewModel: ObservableObject {
         return nicknames.first(where: { $0.value == nickname })?.key
     }
     
+    private func showPrivateMessageNotification(from sender: String, content: String) {
+        // Show notification
+        privateMessageNotification = (sender: sender, message: content)
+        
+        // Auto-dismiss after 3 seconds
+        notificationTimer?.invalidate()
+        notificationTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { [weak self] _ in
+            self?.privateMessageNotification = nil
+        }
+    }
+    
     
     func formatTimestamp(_ date: Date) -> String {
         let formatter = DateFormatter()
@@ -173,6 +186,9 @@ extension ChatViewModel: BitchatDelegate {
                 if selectedPrivateChatPeer != peerID {
                     unreadPrivateMessages.insert(peerID)
                     print("[DEBUG] Added unread message indicator for peer: \(peerID)")
+                    
+                    // Show notification banner
+                    showPrivateMessageNotification(from: message.sender, content: message.content)
                 }
             } else if message.sender == nickname {
                 // Our own message - find recipient by nickname
@@ -190,9 +206,16 @@ extension ChatViewModel: BitchatDelegate {
         }
         
         #if os(iOS)
-        // Haptic feedback for new messages
-        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-        impactFeedback.impactOccurred()
+        // Different haptic feedback for private vs public messages
+        if message.isPrivate && message.sender != nickname {
+            // Medium haptic for private messages
+            let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+            impactFeedback.impactOccurred()
+        } else {
+            // Light haptic for public messages
+            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+            impactFeedback.impactOccurred()
+        }
         #endif
     }
     
