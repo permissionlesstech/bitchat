@@ -10,6 +10,7 @@ enum MessageType: UInt8 {
     case keyExchange = 0x06
     case leave = 0x07
     case privateMessage = 0x08
+    case voiceNote = 0x09
 }
 
 struct BitchatPacket: Codable {
@@ -69,8 +70,10 @@ struct BitchatMessage: Codable, Equatable {
     let recipientNickname: String?
     let senderPeerID: String?
     let mentions: [String]?  // Array of mentioned nicknames
+    let voiceNoteData: Data?  // Audio data for voice notes
+    let voiceNoteDuration: TimeInterval?  // Duration in seconds
     
-    init(sender: String, content: String, timestamp: Date, isRelay: Bool, originalSender: String? = nil, isPrivate: Bool = false, recipientNickname: String? = nil, senderPeerID: String? = nil, mentions: [String]? = nil) {
+    init(sender: String, content: String, timestamp: Date, isRelay: Bool, originalSender: String? = nil, isPrivate: Bool = false, recipientNickname: String? = nil, senderPeerID: String? = nil, mentions: [String]? = nil, voiceNoteData: Data? = nil, voiceNoteDuration: TimeInterval? = nil) {
         self.id = UUID().uuidString
         self.sender = sender
         self.content = content
@@ -81,6 +84,8 @@ struct BitchatMessage: Codable, Equatable {
         self.recipientNickname = recipientNickname
         self.senderPeerID = senderPeerID
         self.mentions = mentions
+        self.voiceNoteData = voiceNoteData
+        self.voiceNoteDuration = voiceNoteDuration
     }
 }
 

@@ -172,7 +172,7 @@ extension BitchatMessage {
         var data = Data()
         
         // Message format:
-        // - Flags: 1 byte (bit 0: isRelay, bit 1: isPrivate, bit 2: hasOriginalSender, bit 3: hasRecipientNickname, bit 4: hasSenderPeerID)
+        // - Flags: 1 byte (bit 0: isRelay, bit 1: isPrivate, bit 2: hasOriginalSender, bit 3: hasRecipientNickname, bit 4: hasSenderPeerID, bit 5: hasMentions, bit 6: hasVoiceNote)
         // - Timestamp: 8 bytes (seconds since epoch)
         // - ID length: 1 byte
         // - ID: variable
@@ -184,6 +184,8 @@ extension BitchatMessage {
         // - Original sender length + data
         // - Recipient nickname length + data
         // - Sender peer ID length + data
+        // - Mentions array
+        // - Voice note duration (8 bytes, double) + data length (4 bytes) + data
         
         var flags: UInt8 = 0
         if isRelay { flags |= 0x01 }
@@ -192,6 +194,7 @@ extension BitchatMessage {
         if recipientNickname != nil { flags |= 0x08 }
         if senderPeerID != nil { flags |= 0x10 }
         if mentions != nil && !mentions!.isEmpty { flags |= 0x20 }
+        if voiceNoteData != nil { flags |= 0x40 }
         
         data.append(flags)
         
@@ -258,6 +261,24 @@ extension BitchatMessage {
             }
         }
         
+        // Voice note data
+        if let voiceData = voiceNoteData, let duration = voiceNoteDuration {
+            // Duration as 8 bytes (double)
+            let durationBits = duration.bitPattern
+            for i in (0..<8).reversed() {
+                data.append(UInt8((durationBits >> (i * 8)) & 0xFF))
+            }
+            
+            // Voice data length as 4 bytes (UInt32)
+            let voiceLength = UInt32(min(voiceData.count, Int(UInt32.max)))
+            for i in (0..<4).reversed() {
+                data.append(UInt8((voiceLength >> (i * 8)) & 0xFF))
+            }
+            
+            // Voice data
+            data.append(voiceData.prefix(Int(voiceLength)))
+        }
+        
         return data
     }
     
@@ -283,6 +304,7 @@ extension BitchatMessage {
         let hasRecipientNickname = (flags & 0x08) != 0
         let hasSenderPeerID = (flags & 0x10) != 0
         let hasMentions = (flags & 0x20) != 0
+        let hasVoiceNote = (flags & 0x40) != 0
         
         // Timestamp
         guard offset + 8 <= dataCopy.count else { 
@@ -380,6 +402,31 @@ extension BitchatMessage {
             }
         }
         
+        // Voice note data
+        var voiceNoteData: Data?
+        var voiceNoteDuration: TimeInterval?
+        if hasVoiceNote && offset + 12 <= dataCopy.count {
+            // Duration (8 bytes)
+            let durationData = dataCopy[offset..<offset+8]
+            let durationBits = durationData.reduce(0) { result, byte in
+                (result << 8) | UInt64(byte)
+            }
+            voiceNoteDuration = TimeInterval(bitPattern: durationBits)
+            offset += 8
+            
+            // Voice data length (4 bytes)
+            let lengthData = dataCopy[offset..<offset+4]
+            let voiceLength = lengthData.reduce(0) { result, byte in
+                (result << 8) | UInt32(byte)
+            }
+            offset += 4
+            
+            // Voice data
+            if offset + Int(voiceLength) <= dataCopy.count {
+                voiceNoteData = dataCopy[offset..<offset+Int(voiceLength)]
+            }
+        }
+        
         let message = BitchatMessage(
             sender: sender,
             content: content,
@@ -389,7 +436,9 @@ extension BitchatMessage {
             isPrivate: isPrivate,
             recipientNickname: recipientNickname,
             senderPeerID: senderPeerID,
-            mentions: mentions
+            mentions: mentions,
+            voiceNoteData: voiceNoteData,
+            voiceNoteDuration: voiceNoteDuration
         )
         return message
     }

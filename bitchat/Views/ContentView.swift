@@ -7,6 +7,7 @@ struct ContentView: View {
     @FocusState private var isTextFieldFocused: Bool
     @Environment(\.colorScheme) var colorScheme
     @State private var showPeerList = false
+    @State private var isRecordingVoice = false
     
     private var backgroundColor: Color {
         colorScheme == .dark ? Color.black : Color.white
@@ -228,11 +229,32 @@ struct ContentView: View {
                             // Check if current user is mentioned
                             let isMentioned = message.mentions?.contains(viewModel.nickname) ?? false
                             
-                            Text(viewModel.formatMessage(message, colorScheme: colorScheme))
-                                .font(.system(size: 14, design: .monospaced))
-                                .fontWeight(isMentioned ? .bold : .regular)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                            if message.voiceNoteData != nil {
+                                // Voice note message
+                                HStack(spacing: 8) {
+                                    Button(action: {
+                                        viewModel.playVoiceNote(message: message)
+                                    }) {
+                                        Image(systemName: viewModel.audioPlayer.isPlaying && viewModel.audioPlayer.currentPlayingMessageID == message.id ? "pause.circle.fill" : "play.circle.fill")
+                                            .font(.system(size: 20))
+                                            .foregroundColor(textColor)
+                                    }
+                                    .buttonStyle(.plain)
+                                    
+                                    Text(viewModel.formatMessage(message, colorScheme: colorScheme))
+                                        .font(.system(size: 14, design: .monospaced))
+                                        .fontWeight(isMentioned ? .bold : .regular)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                            } else {
+                                // Regular text message
+                                Text(viewModel.formatMessage(message, colorScheme: colorScheme))
+                                    .font(.system(size: 14, design: .monospaced))
+                                    .fontWeight(isMentioned ? .bold : .regular)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
                             
                         }
                         .padding(.horizontal, 12)
@@ -334,6 +356,27 @@ struct ContentView: View {
                     sendMessage()
                 }
             
+            // Push to talk button
+            Button(action: {}) {
+                Image(systemName: "mic.circle.fill")
+                    .font(.system(size: 20))
+                    .foregroundColor(isRecordingVoice ? Color.red : textColor)
+            }
+            .buttonStyle(.plain)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in
+                        if !isRecordingVoice {
+                            startVoiceRecording()
+                        }
+                    }
+                    .onEnded { _ in
+                        if isRecordingVoice {
+                            stopVoiceRecording()
+                        }
+                    }
+            )
+            
             Button(action: sendMessage) {
                 Image(systemName: "arrow.right.circle.fill")
                     .font(.system(size: 20))
@@ -353,5 +396,38 @@ struct ContentView: View {
     private func sendMessage() {
         viewModel.sendMessage(messageText)
         messageText = ""
+    }
+    
+    private func startVoiceRecording() {
+        isRecordingVoice = true
+        #if os(iOS)
+        // Light haptic feedback
+        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+        impactFeedback.impactOccurred()
+        #endif
+        
+        viewModel.audioRecorder.startRecording { result in
+            // Will handle result in stopVoiceRecording
+        }
+    }
+    
+    private func stopVoiceRecording() {
+        isRecordingVoice = false
+        
+        viewModel.audioRecorder.stopRecording { result in
+            switch result {
+            case .success(let audioURL):
+                // Read audio file and send as voice note
+                if let audioData = try? Data(contentsOf: audioURL) {
+                    let duration = viewModel.audioRecorder.recordingTime
+                    viewModel.sendVoiceNote(audioData, duration: duration)
+                    
+                    // Clean up temporary file
+                    try? FileManager.default.removeItem(at: audioURL)
+                }
+            case .failure(let error):
+                print("[AUDIO] Recording failed: \(error)")
+            }
+        }
     }
 }
