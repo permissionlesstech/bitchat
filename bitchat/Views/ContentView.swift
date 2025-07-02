@@ -20,15 +20,50 @@ struct ContentView: View {
     }
     
     var body: some View {
-        VStack(spacing: 0) {
-            headerView
-            Divider()
-            messagesView
-            Divider()
-            inputView
+        ZStack {
+            VStack(spacing: 0) {
+                headerView
+                Divider()
+                messagesView
+                Divider()
+                inputView
+            }
+            .background(backgroundColor)
+            .foregroundColor(textColor)
+            
+            // Private message notification overlay
+            if let notification = viewModel.privateMessageNotification {
+                VStack {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Message from \(notification.sender)")
+                                .font(.system(size: 14, weight: .medium, design: .monospaced))
+                                .foregroundColor(.white)
+                            Text(notification.message)
+                                .font(.system(size: 12, design: .monospaced))
+                                .foregroundColor(.white.opacity(0.9))
+                                .lineLimit(2)
+                        }
+                        Spacer()
+                    }
+                    .padding()
+                    .background(Color.orange)
+                    .cornerRadius(8)
+                    .shadow(radius: 4)
+                    .padding(.horizontal)
+                    .onTapGesture {
+                        if let peerID = viewModel.getPeerIDForNickname(notification.sender) {
+                            viewModel.startPrivateChat(with: peerID)
+                            viewModel.privateMessageNotification = nil
+                        }
+                    }
+                    Spacer()
+                }
+                .padding(.top, 60)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .animation(.easeInOut, value: viewModel.privateMessageNotification)
+            }
         }
-        .background(backgroundColor)
-        .foregroundColor(textColor)
         #if os(macOS)
         .frame(minWidth: 600, minHeight: 400)
         #endif
@@ -39,38 +74,36 @@ struct ContentView: View {
             if let privatePeerID = viewModel.selectedPrivateChatPeer,
                let privatePeerNick = viewModel.meshService.getPeerNicknames()[privatePeerID] {
                 // Private chat header
-                HStack {
-                    Button(action: {
-                        viewModel.endPrivateChat()
-                    }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "chevron.left")
-                                .font(.system(size: 12))
-                            Text("back")
-                                .font(.system(size: 14, design: .monospaced))
-                        }
-                        .foregroundColor(textColor)
-                    }
-                    .buttonStyle(.plain)
-                    
-                    Spacer()
-                    
-                    Text("private: \(privatePeerNick)")
-                        .font(.system(size: 16, weight: .medium, design: .monospaced))
-                        .foregroundColor(Color.orange)
-                        .frame(maxWidth: .infinity)
-                    
-                    Spacer()
-                    
-                    // Invisible spacer to balance the back button
+                Button(action: {
+                    viewModel.endPrivateChat()
+                }) {
                     HStack(spacing: 4) {
                         Image(systemName: "chevron.left")
                             .font(.system(size: 12))
                         Text("back")
                             .font(.system(size: 14, design: .monospaced))
                     }
-                    .opacity(0)
+                    .foregroundColor(textColor)
                 }
+                .buttonStyle(.plain)
+                
+                Spacer()
+                
+                Text("private: \(privatePeerNick)")
+                    .font(.system(size: 16, weight: .medium, design: .monospaced))
+                    .foregroundColor(Color.orange)
+                    .frame(maxWidth: .infinity)
+                
+                Spacer()
+                
+                // Invisible spacer to balance the back button
+                HStack(spacing: 4) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 12))
+                    Text("back")
+                        .font(.system(size: 14, design: .monospaced))
+                }
+                .opacity(0)
             } else {
                 // Public chat header
                 Text("bitchat")
@@ -103,8 +136,8 @@ struct ContentView: View {
                 }
             }
         }
+        .frame(height: 44) // Fixed height to prevent bouncing
         .padding(.horizontal, 12)
-        .padding(.vertical, 8)
         .background(backgroundColor.opacity(0.95))
     }
     
