@@ -241,6 +241,7 @@ extension ChatViewModel: BitchatDelegate {
     }
     
     func didConnectToPeer(_ peerID: String) {
+        print("[DEBUG] didConnectToPeer called with: \(peerID)")
         isConnected = true
         let systemMessage = BitchatMessage(
             sender: "system",
@@ -250,9 +251,11 @@ extension ChatViewModel: BitchatDelegate {
             originalSender: nil
         )
         messages.append(systemMessage)
+        print("[DEBUG] Added join message, total messages: \(messages.count)")
     }
     
     func didDisconnectFromPeer(_ peerID: String) {
+        print("[DEBUG] didDisconnectFromPeer called with: \(peerID)")
         let systemMessage = BitchatMessage(
             sender: "system",
             content: "\(peerID) has left the channel",
@@ -261,6 +264,7 @@ extension ChatViewModel: BitchatDelegate {
             originalSender: nil
         )
         messages.append(systemMessage)
+        print("[DEBUG] Added leave message, total messages: \(messages.count)")
     }
     
     func didUpdatePeerList(_ peers: [String]) {

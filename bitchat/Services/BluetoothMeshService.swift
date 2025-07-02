@@ -117,10 +117,9 @@ class BluetoothMeshService: NSObject {
             startAdvertising()
         }
         
-        // Schedule initial announcement after services are ready
-        announcementTimer?.invalidate()
-        announcementTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: false) { [weak self] _ in
-            self?.sendInitialAnnouncement()
+        // Send initial announcement immediately if we have peers
+        if !connectedPeripherals.isEmpty || !subscribedCentrals.isEmpty {
+            sendInitialAnnouncement()
         }
     }
     
@@ -623,7 +622,7 @@ extension BluetoothMeshService: CBPeripheralDelegate {
                 peripheral.setNotifyValue(true, for: characteristic)
                 peripheralCharacteristics[peripheral] = characteristic
                 
-                // Send key exchange immediately
+                // Send key exchange and announce immediately
                 DispatchQueue.main.async { [weak self] in
                     guard let self = self else { return }
                     
@@ -644,7 +643,7 @@ extension BluetoothMeshService: CBPeripheralDelegate {
                     
                     // Send announce packet immediately after key exchange
                     if let vm = self.delegate as? ChatViewModel {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                        DispatchQueue.main.async { [weak self] in
                             guard let self = self else { return }
                             let announcePacket = BitchatPacket(
                                 type: MessageType.announce.rawValue,
@@ -751,7 +750,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                         
                         // Send announce immediately after key exchange
                         if let vm = self.delegate as? ChatViewModel {
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                            DispatchQueue.main.async { [weak self] in
                                 guard let self = self else { return }
                                 print("[DEBUG] Sending announce packet to central after key exchange")
                                 let announcePacket = BitchatPacket(
@@ -805,7 +804,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 
                 // Send announce immediately after key exchange
                 if let vm = delegate as? ChatViewModel {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                    DispatchQueue.main.async { [weak self] in
                         guard let self = self else { return }
                         let announcePacket = BitchatPacket(
                             type: MessageType.announce.rawValue,
