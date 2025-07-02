@@ -1,6 +1,11 @@
 import Foundation
 import CoreBluetooth
 import Combine
+#if os(macOS)
+import AppKit
+#else
+import UIKit
+#endif
 
 class BluetoothMeshService: NSObject {
     static let serviceUUID = CBUUID(string: "F47B5E2D-4A9E-4C5A-9B3F-8E1D2C3A4B5C")
@@ -21,6 +26,9 @@ class BluetoothMeshService: NSObject {
     private let messageQueue = DispatchQueue(label: "bitchat.messageQueue", attributes: .concurrent)
     private var processedMessages = Set<String>()
     private let maxTTL: UInt8 = 5
+    private var hasAnnounced = false
+    private var announcementTimer: Timer?
+    private var announcedPeers = Set<String>()  // Track peers who have already been announced
     
     let myPeerID: String
     
@@ -30,6 +38,69 @@ class BluetoothMeshService: NSObject {
         
         centralManager = CBCentralManager(delegate: self, queue: nil)
         peripheralManager = CBPeripheralManager(delegate: self, queue: nil)
+        
+        // Register for app termination notifications
+        #if os(macOS)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appWillTerminate),
+            name: NSApplication.willTerminateNotification,
+            object: nil
+        )
+        #else
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appWillTerminate),
+            name: UIApplication.willTerminateNotification,
+            object: nil
+        )
+        #endif
+    }
+    
+    deinit {
+        cleanup()
+    }
+    
+    @objc private func appWillTerminate() {
+        cleanup()
+    }
+    
+    private func cleanup() {
+        print("[DEBUG] Cleaning up Bluetooth connections...")
+        
+        // Send leave announcement before disconnecting
+        sendLeaveAnnouncement()
+        
+        // Give the leave message time to send
+        Thread.sleep(forTimeInterval: 0.2)
+        
+        // First, disconnect all peripherals which will trigger disconnect delegates
+        for (_, peripheral) in connectedPeripherals {
+            centralManager.cancelPeripheralConnection(peripheral)
+        }
+        
+        // Stop advertising
+        if peripheralManager.isAdvertising {
+            peripheralManager.stopAdvertising()
+        }
+        
+        // Stop scanning
+        centralManager.stopScan()
+        
+        // Remove all services - this will disconnect any connected centrals
+        if peripheralManager.state == .poweredOn {
+            peripheralManager.removeAllServices()
+        }
+        
+        // Clear all tracking
+        connectedPeripherals.removeAll()
+        subscribedCentrals.removeAll()
+        activePeers.removeAll()
+        announcedPeers.removeAll()
+        
+        // Cancel announcement timer
+        announcementTimer?.invalidate()
+        announcementTimer = nil
     }
     
     func startServices() {
@@ -44,6 +115,12 @@ class BluetoothMeshService: NSObject {
         if peripheralManager.state == .poweredOn {
             setupPeripheral()
             startAdvertising()
+        }
+        
+        // Schedule initial announcement after services are ready
+        announcementTimer?.invalidate()
+        announcementTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: false) { [weak self] _ in
+            self?.sendInitialAnnouncement()
         }
     }
     
@@ -117,30 +194,106 @@ class BluetoothMeshService: NSObject {
         }
     }
     
+    func sendPrivateMessage(_ content: String, to recipientPeerID: String, recipientNickname: String) {
+        messageQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            let nickname = self.delegate as? ChatViewModel
+            let senderNick = nickname?.nickname ?? self.myPeerID
+            
+            let message = BitchatMessage(
+                sender: senderNick,
+                content: content,
+                timestamp: Date(),
+                isRelay: false,
+                originalSender: nil,
+                isPrivate: true,
+                recipientNickname: recipientNickname,
+                senderPeerID: self.myPeerID
+            )
+            
+            if let messageData = try? JSONEncoder().encode(message) {
+                let packet = BitchatPacket(
+                    type: MessageType.privateMessage.rawValue,
+                    senderID: self.myPeerID.data(using: .utf8)!,
+                    recipientID: recipientPeerID.data(using: .utf8),
+                    timestamp: UInt64(Date().timeIntervalSince1970),
+                    payload: messageData,
+                    signature: try? self.encryptionService.sign(messageData),
+                    ttl: self.maxTTL
+                )
+                
+                print("[DEBUG] Sending private message to \(recipientNickname): \(content)")
+                self.broadcastPacket(packet)
+                
+                // Also show the message locally
+                DispatchQueue.main.async {
+                    self.delegate?.didReceiveMessage(message)
+                }
+            }
+        }
+    }
+    
+    private func sendInitialAnnouncement() {
+        guard let vm = delegate as? ChatViewModel else { return }
+        
+        print("[DEBUG] Sending initial announcement to all peers")
+        let packet = BitchatPacket(
+            type: MessageType.announce.rawValue,
+            senderID: myPeerID.data(using: .utf8)!,
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970),
+            payload: vm.nickname.data(using: .utf8)!,
+            signature: nil,
+            ttl: maxTTL
+        )
+        
+        broadcastPacket(packet)
+        hasAnnounced = true
+    }
+    
+    private func sendLeaveAnnouncement() {
+        guard let vm = delegate as? ChatViewModel else { return }
+        
+        print("[DEBUG] Sending leave announcement")
+        let packet = BitchatPacket(
+            type: MessageType.leave.rawValue,
+            senderID: myPeerID.data(using: .utf8)!,
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970),
+            payload: vm.nickname.data(using: .utf8)!,
+            signature: nil,
+            ttl: 1  // Don't relay leave messages
+        )
+        
+        broadcastPacket(packet)
+    }
+    
     
     func getPeerNicknames() -> [String: String] {
         return peerNicknames
     }
     
     private func getAllConnectedPeerIDs() -> [String] {
-        var peers = Set<String>()
-        
-        // Include connected peripherals (devices we connected to as central)
-        peers.formUnion(connectedPeripherals.keys)
-        
-        // Include active peers (devices that have announced)
-        peers.formUnion(activePeers)
-        
-        // Filter out invalid peers
-        return peers.filter { $0 != "unknown" && $0 != myPeerID }
+        // Return all active peers, even if they haven't announced yet
+        let uniquePeers = Set(activePeers.filter { peerID in
+            peerID != "unknown" && peerID != myPeerID
+        })
+        return Array(uniquePeers).sorted()
     }
     
     private func broadcastPacket(_ packet: BitchatPacket) {
-        guard let data = packet.data else { return }
+        guard let data = packet.data else { 
+            print("[DEBUG] Failed to encode packet data")
+            return 
+        }
+        
+        print("[DEBUG] Broadcasting packet type \(packet.type) to \(connectedPeripherals.count) peripherals and \(subscribedCentrals.count) centrals")
         
         // Send to connected peripherals (as central)
-        for (_, peripheral) in connectedPeripherals {
+        for (peerID, peripheral) in connectedPeripherals {
             if let characteristic = peripheralCharacteristics[peripheral] {
+                print("[DEBUG] Sending packet type \(packet.type) to peripheral \(peerID)")
                 // Use withResponse for larger data for reliability
                 let writeType: CBCharacteristicWriteType = data.count > 50000 ? .withResponse : .withoutResponse
                 peripheral.writeValue(data, for: characteristic, type: writeType)
@@ -149,7 +302,11 @@ class BluetoothMeshService: NSObject {
         
         // Send to subscribed centrals (as peripheral)
         if characteristic != nil && !subscribedCentrals.isEmpty {
-            peripheralManager.updateValue(data, for: characteristic, onSubscribedCentrals: subscribedCentrals)
+            print("[DEBUG] Sending packet type \(packet.type) to \(subscribedCentrals.count) subscribed centrals")
+            let success = peripheralManager.updateValue(data, for: characteristic, onSubscribedCentrals: subscribedCentrals)
+            if !success {
+                print("[DEBUG] Failed to send to centrals - queue full")
+            }
         }
     }
     
@@ -164,7 +321,25 @@ class BluetoothMeshService: NSObject {
             processedMessages.removeAll()
         }
         
-        print("[DEBUG] Received packet type: \(packet.type) from \(peerID)")
+        let senderID = String(data: packet.senderID, encoding: .utf8) ?? "unknown"
+        print("[DEBUG] Received packet type: \(packet.type) from peerID: \(peerID), senderID: \(senderID)")
+        
+        // For any message type, if we have a nickname in the payload, update it immediately
+        if packet.type == MessageType.message.rawValue || packet.type == MessageType.privateMessage.rawValue {
+            if let message = try? JSONDecoder().decode(BitchatMessage.self, from: packet.payload),
+               senderID != "unknown" && senderID != myPeerID {
+                // Update nickname mapping immediately
+                if peerNicknames[senderID] != message.sender {
+                    peerNicknames[senderID] = message.sender
+                    print("[DEBUG] Updated nickname for \(senderID): \(message.sender) from message")
+                    
+                    // Update peer list to show the new nickname
+                    DispatchQueue.main.async {
+                        self.delegate?.didUpdatePeerList(self.getAllConnectedPeerIDs())
+                    }
+                }
+            }
+        }
         
         switch MessageType(rawValue: packet.type) {
         case .message:
@@ -191,27 +366,32 @@ class BluetoothMeshService: NSObject {
             }
             
         case .keyExchange:
-            print("[DEBUG] Received key exchange from \(peerID)")
-            if let publicKeyData = try? JSONDecoder().decode(Data.self, from: packet.payload) {
-                try? encryptionService.addPeerPublicKey(peerID, publicKeyData: publicKeyData)
-                
-                // Track this peer temporarily but don't announce until we get their name
-                if peerID != "unknown" && peerID != myPeerID && !peerNicknames.keys.contains(peerID) {
-                    // Just track them, don't announce yet
-                    print("[DEBUG] Tracking peer \(peerID) after key exchange")
-                    DispatchQueue.main.async {
-                        self.delegate?.didUpdatePeerList(self.getAllConnectedPeerIDs())
+            // Use senderID from packet for consistency
+            if let senderID = String(data: packet.senderID, encoding: .utf8) {
+                print("[DEBUG] Received key exchange from \(senderID)")
+                if let publicKeyData = try? JSONDecoder().decode(Data.self, from: packet.payload) {
+                    try? encryptionService.addPeerPublicKey(senderID, publicKeyData: publicKeyData)
+                    
+                    // Track this peer temporarily
+                    if senderID != "unknown" && senderID != myPeerID {
+                        // Add to active peers immediately on key exchange
+                        activePeers.insert(senderID)
+                        print("[DEBUG] Added peer \(senderID) to active peers after key exchange")
+                        print("[DEBUG] Active peers now: \(activePeers)")
+                        let connectedPeerIDs = self.getAllConnectedPeerIDs()
+                        print("[DEBUG] Connected peer IDs: \(connectedPeerIDs)")
+                        DispatchQueue.main.async {
+                            self.delegate?.didUpdatePeerList(connectedPeerIDs)
+                        }
                     }
-                }
-                
-                // Send announce with our nickname immediately
-                DispatchQueue.main.async { [weak self] in
-                    if let self = self, let vm = self.delegate as? ChatViewModel {
-                        print("[DEBUG] Sending announce to \(peerID)")
+                    
+                    // Send announce with our nickname immediately
+                    if let vm = self.delegate as? ChatViewModel {
+                        print("[DEBUG] Sending announce to \(senderID)")
                         let announcePacket = BitchatPacket(
                             type: MessageType.announce.rawValue,
                             senderID: self.myPeerID.data(using: .utf8)!,
-                            recipientID: peerID.data(using: .utf8),
+                            recipientID: senderID.data(using: .utf8),
                             timestamp: UInt64(Date().timeIntervalSince1970),
                             payload: vm.nickname.data(using: .utf8)!,
                             signature: nil,
@@ -223,24 +403,32 @@ class BluetoothMeshService: NSObject {
             }
             
         case .announce:
-            if let nickname = String(data: packet.payload, encoding: .utf8) {
-                print("[DEBUG] Received announce from \(peerID): \(nickname)")
+            if let nickname = String(data: packet.payload, encoding: .utf8), 
+               let senderID = String(data: packet.senderID, encoding: .utf8) {
+                print("[DEBUG] Received announce from \(senderID): \(nickname)")
                 
-                // Check if this is the first time we're getting a nickname for this peer
-                let isNewNickname = peerNicknames[peerID] == nil
+                // Ignore if it's from ourselves
+                if senderID == myPeerID {
+                    return
+                }
+                
+                // Check if we've already announced this peer
+                let isFirstAnnounce = !announcedPeers.contains(senderID)
                 
                 // Store the nickname
-                peerNicknames[peerID] = nickname
+                peerNicknames[senderID] = nickname
+                print("[DEBUG] Stored nickname for \(senderID): \(nickname)")
                 
                 // Add to active peers if not already there
-                if peerID != "unknown" && peerID != myPeerID {
-                    if !activePeers.contains(peerID) {
-                        print("[DEBUG] Adding new peer \(peerID) to active peers")
-                        activePeers.insert(peerID)
+                if senderID != "unknown" {
+                    if !activePeers.contains(senderID) {
+                        print("[DEBUG] Adding new peer \(senderID) to active peers")
+                        activePeers.insert(senderID)
                     }
                     
-                    // Show join message if this is a new nickname
-                    if isNewNickname {
+                    // Show join message only for first announce
+                    if isFirstAnnounce {
+                        announcedPeers.insert(senderID)
                         DispatchQueue.main.async {
                             self.delegate?.didConnectToPeer(nickname)
                             self.delegate?.didUpdatePeerList(self.getAllConnectedPeerIDs())
@@ -252,7 +440,77 @@ class BluetoothMeshService: NSObject {
                         }
                     }
                 } else {
-                    print("[DEBUG] Peer \(peerID) is invalid (unknown or self)")
+                    print("[DEBUG] Peer \(senderID) is invalid (unknown)")
+                }
+            }
+            
+        case .leave:
+            if let nickname = String(data: packet.payload, encoding: .utf8),
+               let senderID = String(data: packet.senderID, encoding: .utf8) {
+                print("[DEBUG] Received leave from \(senderID): \(nickname)")
+                
+                // Remove from active peers
+                activePeers.remove(senderID)
+                announcedPeers.remove(senderID)
+                
+                // Show leave message
+                DispatchQueue.main.async {
+                    self.delegate?.didDisconnectFromPeer(nickname)
+                    self.delegate?.didUpdatePeerList(self.getAllConnectedPeerIDs())
+                }
+                
+                // Clean up peer data
+                peerNicknames.removeValue(forKey: senderID)
+            }
+            
+        case .privateMessage:
+            if let message = try? JSONDecoder().decode(BitchatMessage.self, from: packet.payload) {
+                // Check if this private message is for us
+                if let recipientID = packet.recipientID,
+                   let recipientIDString = String(data: recipientID, encoding: .utf8),
+                   recipientIDString == myPeerID {
+                    
+                    // Get sender ID
+                    if let senderID = String(data: packet.senderID, encoding: .utf8) {
+                        // Ignore our own messages
+                        if senderID == myPeerID {
+                            return
+                        }
+                        
+                        // Store nickname mapping if we don't have it
+                        if peerNicknames[senderID] == nil {
+                            peerNicknames[senderID] = message.sender
+                            print("[DEBUG] Updated nickname for \(senderID): \(message.sender)")
+                            
+                            // Update peer list to show the new nickname
+                            DispatchQueue.main.async {
+                                self.delegate?.didUpdatePeerList(self.getAllConnectedPeerIDs())
+                            }
+                        }
+                        
+                        print("[DEBUG] Received private message from \(message.sender) (peer: \(senderID))")
+                        
+                        // Create a new message with the sender peer ID
+                        let messageWithPeerID = BitchatMessage(
+                            sender: message.sender,
+                            content: message.content,
+                            timestamp: message.timestamp,
+                            isRelay: message.isRelay,
+                            originalSender: message.originalSender,
+                            isPrivate: message.isPrivate,
+                            recipientNickname: message.recipientNickname,
+                            senderPeerID: senderID
+                        )
+                        
+                        DispatchQueue.main.async {
+                            self.delegate?.didReceiveMessage(messageWithPeerID)
+                        }
+                    }
+                } else if packet.ttl > 0 {
+                    // Relay private messages that aren't for us
+                    var relayPacket = packet
+                    relayPacket.ttl -= 1
+                    self.broadcastPacket(relayPacket)
                 }
             }
             
@@ -267,6 +525,14 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
         print("[DEBUG] Central state changed to: \(central.state.rawValue)")
         if central.state == .poweredOn {
             startScanning()
+            
+            // If we haven't announced yet and we're now powered on, schedule announcement
+            if !hasAnnounced {
+                announcementTimer?.invalidate()
+                announcementTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: false) { [weak self] _ in
+                    self?.sendInitialAnnouncement()
+                }
+            }
         }
     }
     
@@ -287,13 +553,15 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
         peripheral.delegate = self
         peripheral.discoverServices([BluetoothMeshService.serviceUUID])
         
-        // Extract peer ID from advertisement or generate one
-        var peerID = peripheral.identifier.uuidString.prefix(8).lowercased()
+        // Extract peer ID from advertisement or use peripheral identifier
+        let peerID: String
         if let name = peripheral.name, name.hasPrefix("bitchat-") {
             peerID = String(name.dropFirst(8))
+        } else {
+            peerID = peripheral.identifier.uuidString.prefix(8).lowercased()
         }
         
-        connectedPeripherals[String(peerID)] = peripheral
+        connectedPeripherals[peerID] = peripheral
         print("[DEBUG] Connected to peer: \(peerID)")
         print("[DEBUG] Active peers: \(activePeers)")
         
@@ -312,6 +580,7 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
             
             // Remove from active peers
             activePeers.remove(peerID)
+            announcedPeers.remove(peerID)
             
             // Only show disconnect if we have a resolved nickname
             if let nickname = peerNicknames[peerID], nickname != peerID {
@@ -331,7 +600,8 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
         
         // Continue scanning for reconnection
         if centralManager.state == .poweredOn {
-            // Always restart scan to ensure we can reconnect
+            print("[DEBUG] Restarting scan after disconnect")
+            // Stop and restart to ensure clean state
             centralManager.stopScan()
             centralManager.scanForPeripherals(withServices: [BluetoothMeshService.serviceUUID], options: [CBCentralManagerScanOptionAllowDuplicatesKey: false])
         }
@@ -352,11 +622,12 @@ extension BluetoothMeshService: CBPeripheralDelegate {
         
         for characteristic in characteristics {
             if characteristic.uuid == BluetoothMeshService.characteristicUUID {
+                print("[DEBUG] Found characteristic, subscribing to notifications...")
                 peripheral.setNotifyValue(true, for: characteristic)
                 peripheralCharacteristics[peripheral] = characteristic
                 
-                // Wait a moment for subscription to complete before sending data
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                // Send key exchange immediately
+                DispatchQueue.main.async { [weak self] in
                     guard let self = self else { return }
                     
                     let publicKeyData = self.encryptionService.publicKey.rawRepresentation
@@ -374,9 +645,9 @@ extension BluetoothMeshService: CBPeripheralDelegate {
                         peripheral.writeValue(data, for: characteristic, type: .withResponse)
                     }
                     
-                    // Also send announce packet immediately
+                    // Send announce packet immediately after key exchange
                     if let vm = self.delegate as? ChatViewModel {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
                             guard let self = self else { return }
                             let announcePacket = BitchatPacket(
                                 type: MessageType.announce.rawValue,
@@ -416,7 +687,11 @@ extension BluetoothMeshService: CBPeripheralDelegate {
     }
     
     func peripheral(_ peripheral: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic, error: Error?) {
-        // Handle notification state update if needed
+        if let error = error {
+            print("[DEBUG] Error updating notification state: \(error)")
+        } else {
+            print("[DEBUG] Notification state updated for characteristic: \(characteristic.isNotifying)")
+        }
     }
 }
 
@@ -428,6 +703,14 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             print("[DEBUG] Peripheral powered on, setting up...")
             setupPeripheral()
             startAdvertising()
+            
+            // If we haven't announced yet and we're now powered on, schedule announcement
+            if !hasAnnounced {
+                announcementTimer?.invalidate()
+                announcementTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: false) { [weak self] _ in
+                    self?.sendInitialAnnouncement()
+                }
+            }
         default:
             break
         }
@@ -469,10 +752,11 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                             peripheral.updateValue(data, for: self.characteristic, onSubscribedCentrals: [request.central])
                         }
                         
-                        // Also send announce immediately after key exchange
+                        // Send announce immediately after key exchange
                         if let vm = self.delegate as? ChatViewModel {
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
                                 guard let self = self else { return }
+                                print("[DEBUG] Sending announce packet to central after key exchange")
                                 let announcePacket = BitchatPacket(
                                     type: MessageType.announce.rawValue,
                                     senderID: self.myPeerID.data(using: .utf8)!,
@@ -483,7 +767,8 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                                     ttl: 1
                                 )
                                 if let data = announcePacket.data {
-                                    peripheral.updateValue(data, for: self.characteristic, onSubscribedCentrals: [request.central])
+                                    let success = peripheral.updateValue(data, for: self.characteristic, onSubscribedCentrals: nil)
+                                    print("[DEBUG] Announce sent to all centrals: \(success)")
                                 }
                             }
                         }
@@ -521,9 +806,9 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             if let data = keyPacket.data {
                 peripheral.updateValue(data, for: self.characteristic, onSubscribedCentrals: [central])
                 
-                // Also send announce after key exchange
+                // Send announce immediately after key exchange
                 if let vm = delegate as? ChatViewModel {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
                         guard let self = self else { return }
                         let announcePacket = BitchatPacket(
                             type: MessageType.announce.rawValue,

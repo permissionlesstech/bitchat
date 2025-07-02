@@ -8,6 +8,8 @@ enum MessageType: UInt8 {
     case relay = 0x04
     case announce = 0x05
     case keyExchange = 0x06
+    case leave = 0x07
+    case privateMessage = 0x08
 }
 
 struct BitchatPacket: Codable {
@@ -40,21 +42,27 @@ struct BitchatPacket: Codable {
     }
 }
 
-struct BitchatMessage: Codable {
+struct BitchatMessage: Codable, Equatable {
     let id: String
     let sender: String
     let content: String
     let timestamp: Date
     let isRelay: Bool
     let originalSender: String?
+    let isPrivate: Bool
+    let recipientNickname: String?
+    let senderPeerID: String?
     
-    init(sender: String, content: String, timestamp: Date, isRelay: Bool, originalSender: String? = nil) {
+    init(sender: String, content: String, timestamp: Date, isRelay: Bool, originalSender: String? = nil, isPrivate: Bool = false, recipientNickname: String? = nil, senderPeerID: String? = nil) {
         self.id = UUID().uuidString
         self.sender = sender
         self.content = content
         self.timestamp = timestamp
         self.isRelay = isRelay
         self.originalSender = originalSender
+        self.isPrivate = isPrivate
+        self.recipientNickname = recipientNickname
+        self.senderPeerID = senderPeerID
     }
 }
 

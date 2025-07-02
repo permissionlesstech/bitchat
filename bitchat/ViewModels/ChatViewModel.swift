@@ -17,6 +17,9 @@ class ChatViewModel: ObservableObject {
         }
     }
     @Published var isConnected = false
+    @Published var privateChats: [String: [BitchatMessage]] = [:] // peerID -> messages
+    @Published var selectedPrivateChatPeer: String? = nil
+    @Published var unreadPrivateMessages: Set<String> = []
     
     let meshService = BluetoothMeshService()
     private let userDefaults = UserDefaults.standard
@@ -48,18 +51,54 @@ class ChatViewModel: ObservableObject {
     func sendMessage(_ content: String) {
         guard !content.isEmpty else { return }
         
-        // Add message to local display
-        let message = BitchatMessage(
-            sender: nickname,
-            content: content,
-            timestamp: Date(),
-            isRelay: false,
-            originalSender: nil
-        )
-        messages.append(message)
+        if let selectedPeer = selectedPrivateChatPeer {
+            // Send as private message
+            sendPrivateMessage(content, to: selectedPeer)
+        } else {
+            // Add message to local display
+            let message = BitchatMessage(
+                sender: nickname,
+                content: content,
+                timestamp: Date(),
+                isRelay: false,
+                originalSender: nil
+            )
+            messages.append(message)
+            
+            // Send via mesh
+            meshService.sendMessage(content)
+        }
+    }
+    
+    func sendPrivateMessage(_ content: String, to peerID: String) {
+        guard !content.isEmpty else { return }
+        guard let recipientNickname = meshService.getPeerNicknames()[peerID] else { return }
         
         // Send via mesh
-        meshService.sendMessage(content)
+        meshService.sendPrivateMessage(content, to: peerID, recipientNickname: recipientNickname)
+    }
+    
+    func startPrivateChat(with peerID: String) {
+        selectedPrivateChatPeer = peerID
+        unreadPrivateMessages.remove(peerID)
+        
+        // Initialize chat history if needed
+        if privateChats[peerID] == nil {
+            privateChats[peerID] = []
+        }
+    }
+    
+    func endPrivateChat() {
+        selectedPrivateChatPeer = nil
+    }
+    
+    func getPrivateChatMessages(for peerID: String) -> [BitchatMessage] {
+        return privateChats[peerID] ?? []
+    }
+    
+    func getPeerIDForNickname(_ nickname: String) -> String? {
+        let nicknames = meshService.getPeerNicknames()
+        return nicknames.first(where: { $0.value == nickname })?.key
     }
     
     
@@ -86,7 +125,7 @@ class ChatViewModel: ObservableObject {
             let content = AttributedString("* \(message.content) *")
             var contentStyle = AttributeContainer()
             contentStyle.foregroundColor = secondaryColor
-            contentStyle.font = .system(size: 12, design: .monospaced).italic()
+            contentStyle.font = .system(size: 14, design: .monospaced).italic()
             result.append(content.mergingAttributes(contentStyle))
         } else {
             let sender = AttributedString("<\(message.sender)> ")
@@ -116,7 +155,39 @@ class ChatViewModel: ObservableObject {
 
 extension ChatViewModel: BitchatDelegate {
     func didReceiveMessage(_ message: BitchatMessage) {
-        messages.append(message)
+        if message.isPrivate {
+            // Handle private message
+            print("[DEBUG] Received private message from \(message.sender)")
+            
+            // Use the senderPeerID from the message if available
+            let senderPeerID = message.senderPeerID ?? getPeerIDForNickname(message.sender)
+            
+            if let peerID = senderPeerID {
+                // Message from someone else
+                if privateChats[peerID] == nil {
+                    privateChats[peerID] = []
+                }
+                privateChats[peerID]?.append(message)
+                
+                // Mark as unread if not currently viewing this chat
+                if selectedPrivateChatPeer != peerID {
+                    unreadPrivateMessages.insert(peerID)
+                    print("[DEBUG] Added unread message indicator for peer: \(peerID)")
+                }
+            } else if message.sender == nickname {
+                // Our own message - find recipient by nickname
+                if let recipientNickname = message.recipientNickname,
+                   let recipientPeerID = getPeerIDForNickname(recipientNickname) {
+                    if privateChats[recipientPeerID] == nil {
+                        privateChats[recipientPeerID] = []
+                    }
+                    privateChats[recipientPeerID]?.append(message)
+                }
+            }
+        } else {
+            // Regular public message
+            messages.append(message)
+        }
         
         #if os(iOS)
         // Haptic feedback for new messages
@@ -129,7 +200,7 @@ extension ChatViewModel: BitchatDelegate {
         isConnected = true
         let systemMessage = BitchatMessage(
             sender: "system",
-            content: "\(peerID) has joined",
+            content: "\(peerID) has joined the channel",
             timestamp: Date(),
             isRelay: false,
             originalSender: nil
@@ -140,7 +211,7 @@ extension ChatViewModel: BitchatDelegate {
     func didDisconnectFromPeer(_ peerID: String) {
         let systemMessage = BitchatMessage(
             sender: "system",
-            content: "\(peerID) has left",
+            content: "\(peerID) has left the channel",
             timestamp: Date(),
             isRelay: false,
             originalSender: nil
@@ -156,6 +227,13 @@ extension ChatViewModel: BitchatDelegate {
         // If we just disconnected from all peers, ensure UI updates
         if peers.isEmpty && isConnected {
             isConnected = false
+        }
+        
+        // If we're in a private chat with someone who disconnected, exit the chat
+        if let currentChatPeer = selectedPrivateChatPeer,
+           !peers.contains(currentChatPeer) {
+            print("[DEBUG] Private chat peer disconnected, exiting private chat")
+            endPrivateChat()
         }
     }
 }
