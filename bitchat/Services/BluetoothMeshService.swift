@@ -226,10 +226,7 @@ class BluetoothMeshService: NSObject {
                 print("[DEBUG] Sending private message to \(recipientNickname): \(content)")
                 self.broadcastPacket(packet)
                 
-                // Also show the message locally
-                DispatchQueue.main.async {
-                    self.delegate?.didReceiveMessage(message)
-                }
+                // Don't call didReceiveMessage here - let the view model handle it directly
             }
         }
     }

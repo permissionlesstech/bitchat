@@ -76,6 +76,27 @@ class ChatViewModel: ObservableObject {
         guard !content.isEmpty else { return }
         guard let recipientNickname = meshService.getPeerNicknames()[peerID] else { return }
         
+        // Create the message locally
+        let message = BitchatMessage(
+            sender: nickname,
+            content: content,
+            timestamp: Date(),
+            isRelay: false,
+            originalSender: nil,
+            isPrivate: true,
+            recipientNickname: recipientNickname,
+            senderPeerID: meshService.myPeerID
+        )
+        
+        // Add to our private chat history
+        if privateChats[peerID] == nil {
+            privateChats[peerID] = []
+        }
+        privateChats[peerID]?.append(message)
+        
+        // Trigger UI update
+        objectWillChange.send()
+        
         // Send via mesh
         meshService.sendPrivateMessage(content, to: peerID, recipientNickname: recipientNickname)
     }
@@ -182,6 +203,9 @@ extension ChatViewModel: BitchatDelegate {
                 }
                 privateChats[peerID]?.append(message)
                 
+                // Trigger UI update for private chats
+                objectWillChange.send()
+                
                 // Mark as unread if not currently viewing this chat
                 if selectedPrivateChatPeer != peerID {
                     unreadPrivateMessages.insert(peerID)
@@ -189,16 +213,13 @@ extension ChatViewModel: BitchatDelegate {
                     
                     // Show notification banner
                     showPrivateMessageNotification(from: message.sender, content: message.content)
+                } else {
+                    // We're viewing this chat, make sure unread is cleared
+                    unreadPrivateMessages.remove(peerID)
                 }
             } else if message.sender == nickname {
-                // Our own message - find recipient by nickname
-                if let recipientNickname = message.recipientNickname,
-                   let recipientPeerID = getPeerIDForNickname(recipientNickname) {
-                    if privateChats[recipientPeerID] == nil {
-                        privateChats[recipientPeerID] = []
-                    }
-                    privateChats[recipientPeerID]?.append(message)
-                }
+                // Our own message that was echoed back - ignore it since we already added it locally
+                print("[DEBUG] Ignoring our own private message echo")
             }
         } else {
             // Regular public message

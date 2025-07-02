@@ -61,7 +61,7 @@ struct ContentView: View {
                 }
                 .padding(.top, 60)
                 .transition(.move(edge: .top).combined(with: .opacity))
-                .animation(.easeInOut, value: viewModel.privateMessageNotification)
+                .animation(.easeInOut, value: viewModel.privateMessageNotification != nil)
             }
         }
         #if os(macOS)
