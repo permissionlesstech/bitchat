@@ -27,6 +27,8 @@ class ChatViewModel: ObservableObject {
     @Published var privateMessageNotification: (sender: String, message: String)? = nil
     
     let meshService = BluetoothMeshService()
+    let audioRecorder = AudioRecordingService()
+    let audioPlayer = AudioPlaybackService()
     private let userDefaults = UserDefaults.standard
     private let nicknameKey = "bitchat.nickname"
     private var nicknameSaveTimer: Timer?
@@ -470,5 +472,31 @@ extension ChatViewModel: BitchatDelegate {
         }
         
         return Array(Set(mentions)) // Remove duplicates
+    }
+    
+    func sendVoiceNote(_ audioData: Data, duration: TimeInterval) {
+        let message = BitchatMessage(
+            sender: nickname,
+            content: "🎤 Voice note (\(String(format: "%.1f", duration))s)",
+            timestamp: Date(),
+            isRelay: false,
+            originalSender: nil,
+            voiceNoteData: audioData,
+            voiceNoteDuration: duration
+        )
+        messages.append(message)
+        
+        // Send via mesh
+        meshService.sendVoiceNote(audioData, duration: duration)
+    }
+    
+    func playVoiceNote(message: BitchatMessage) {
+        guard let audioData = message.voiceNoteData else { return }
+        
+        audioPlayer.togglePlayback(messageID: message.id, audioData: audioData) { result in
+            if case .failure(let error) = result {
+                print("[AUDIO] Failed to play voice note: \(error)")
+            }
+        }
     }
 }

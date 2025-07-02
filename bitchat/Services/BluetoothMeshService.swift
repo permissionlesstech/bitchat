@@ -179,6 +179,36 @@ class BluetoothMeshService: NSObject {
         }
     }
     
+    func sendVoiceNote(_ audioData: Data, duration: TimeInterval) {
+        messageQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            let nickname = self.delegate as? ChatViewModel
+            let senderNick = nickname?.nickname ?? self.myPeerID
+            
+            let message = BitchatMessage(
+                sender: senderNick,
+                content: "🎤 Voice note (\(String(format: "%.1f", duration))s)",
+                timestamp: Date(),
+                isRelay: false,
+                originalSender: nil,
+                voiceNoteData: audioData,
+                voiceNoteDuration: duration
+            )
+            
+            if let messageData = message.toBinaryPayload() {
+                let packet = BitchatPacket(
+                    type: MessageType.voiceNote.rawValue,
+                    ttl: self.maxTTL,
+                    senderID: self.myPeerID,
+                    payload: messageData
+                )
+                
+                self.broadcastPacket(packet)
+            }
+        }
+    }
+    
     func sendPrivateMessage(_ content: String, to recipientPeerID: String, recipientNickname: String) {
         messageQueue.async { [weak self] in
             guard let self = self else { return }
@@ -505,6 +535,29 @@ class BluetoothMeshService: NSObject {
                     // Relay private messages that aren't for us
                     var relayPacket = packet
                     relayPacket.ttl -= 1
+                    self.broadcastPacket(relayPacket)
+                }
+            }
+            
+        case .voiceNote:
+            if let message = BitchatMessage.fromBinaryPayload(packet.payload) {
+                // Ignore our own messages
+                if let senderID = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8), senderID == myPeerID {
+                    return
+                }
+                
+                // Store nickname mapping
+                if let senderID = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8) {
+                    peerNicknames[senderID] = message.sender
+                }
+                
+                DispatchQueue.main.async {
+                    self.delegate?.didReceiveMessage(message)
+                }
+                
+                var relayPacket = packet
+                relayPacket.ttl -= 1
+                if relayPacket.ttl > 0 {
                     self.broadcastPacket(relayPacket)
                 }
             }
