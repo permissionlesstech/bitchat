@@ -113,7 +113,6 @@ struct ContentView: View {
                     
                     // Peer status section
                     peerStatusView
-                        .frame(maxWidth: 120)
                 }
                 
                 Spacer()
@@ -175,7 +174,7 @@ struct ContentView: View {
                 }
             }
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: 2) {
                 // Text
                 Text(viewModel.isConnected ? "\(viewModel.connectedPeers.count) \(viewModel.connectedPeers.count == 1 ? "person" : "people")" : "scanning")
                     .font(.system(size: 14, design: .monospaced))
@@ -188,6 +187,7 @@ struct ContentView: View {
                         .frame(width: 5, height: 5)
                 }
             }
+            .fixedSize()
         }
         #if os(macOS)
         .menuStyle(.borderlessButton)
