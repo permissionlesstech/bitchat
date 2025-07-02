@@ -175,7 +175,7 @@ struct ContentView: View {
             }
         } label: {
             HStack(spacing: 4) {
-                // Notification indicator for unread messages
+                // Notification indicator for unread messages (on the left)
                 if !viewModel.unreadPrivateMessages.isEmpty {
                     Circle()
                         .fill(Color.orange)
@@ -187,7 +187,7 @@ struct ContentView: View {
                     .font(.system(size: 14, design: .monospaced))
                     .foregroundColor(viewModel.isConnected ? textColor : Color.red)
                 
-                // Chevron
+                // Chevron (on the right)
                 Image(systemName: "chevron.down")
                     .font(.system(size: 10))
                     .foregroundColor(secondaryTextColor)
