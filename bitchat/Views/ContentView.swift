@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject var viewModel: ChatViewModel
     @State private var messageText = ""
+    @State private var textFieldSelection: NSRange? = nil
     @FocusState private var isTextFieldFocused: Bool
     @Environment(\.colorScheme) var colorScheme
     @State private var showPeerList = false
@@ -224,8 +225,12 @@ struct ContentView: View {
                     
                     ForEach(Array(messages.enumerated()), id: \.offset) { index, message in
                         VStack(alignment: .leading, spacing: 4) {
+                            // Check if current user is mentioned
+                            let isMentioned = message.mentions?.contains(viewModel.nickname) ?? false
+                            
                             Text(viewModel.formatMessage(message, colorScheme: colorScheme))
                                 .font(.system(size: 14, design: .monospaced))
+                                .fontWeight(isMentioned ? .bold : .regular)
                                 .fixedSize(horizontal: false, vertical: true)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                             
@@ -258,7 +263,42 @@ struct ContentView: View {
     }
     
     private var inputView: some View {
-        HStack(spacing: 4) {
+        ZStack(alignment: .bottom) {
+            VStack(spacing: 0) {
+                // Autocomplete suggestions overlay
+                if viewModel.showAutocomplete && !viewModel.autocompleteSuggestions.isEmpty {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(viewModel.autocompleteSuggestions.enumerated()), id: \.element) { index, suggestion in
+                            Button(action: {
+                                _ = viewModel.completeNickname(suggestion, in: &messageText)
+                            }) {
+                                HStack {
+                                    Text("@\(suggestion)")
+                                        .font(.system(size: 12, design: .monospaced))
+                                        .foregroundColor(index == viewModel.selectedAutocompleteIndex ? backgroundColor : textColor)
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(index == viewModel.selectedAutocompleteIndex ? textColor : Color.clear)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .background(backgroundColor)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(secondaryTextColor.opacity(0.5), lineWidth: 1)
+                    )
+                    .frame(maxWidth: 200, alignment: .leading)
+                    .padding(.leading, 100) // Align with input field
+                    .padding(.bottom, 4)
+                }
+                
+                Spacer()
+            }
+            
+            HStack(spacing: 4) {
             Text("[\(viewModel.formatTimestamp(Date()))]")
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundColor(secondaryTextColor)
@@ -285,6 +325,11 @@ struct ContentView: View {
                 .font(.system(size: 14, design: .monospaced))
                 .foregroundColor(textColor)
                 .focused($isTextFieldFocused)
+                .onChange(of: messageText) { newValue in
+                    // Get cursor position (approximate - end of text for now)
+                    let cursorPosition = newValue.count
+                    viewModel.updateAutocomplete(for: newValue, cursorPosition: cursorPosition)
+                }
                 .onSubmit {
                     sendMessage()
                 }
@@ -296,9 +341,10 @@ struct ContentView: View {
             }
             .buttonStyle(.plain)
             .padding(.trailing, 12)
+            }
+            .padding(.vertical, 10)
+            .background(backgroundColor.opacity(0.95))
         }
-        .padding(.vertical, 10)
-        .background(backgroundColor.opacity(0.95))
         .onAppear {
             isTextFieldFocused = true
         }

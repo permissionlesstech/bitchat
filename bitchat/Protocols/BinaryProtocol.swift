@@ -191,6 +191,7 @@ extension BitchatMessage {
         if originalSender != nil { flags |= 0x04 }
         if recipientNickname != nil { flags |= 0x08 }
         if senderPeerID != nil { flags |= 0x10 }
+        if mentions != nil && !mentions!.isEmpty { flags |= 0x20 }
         
         data.append(flags)
         
@@ -244,6 +245,19 @@ extension BitchatMessage {
             data.append(peerData.prefix(255))
         }
         
+        // Mentions array
+        if let mentions = mentions {
+            data.append(UInt8(min(mentions.count, 255))) // Number of mentions
+            for mention in mentions.prefix(255) {
+                if let mentionData = mention.data(using: .utf8) {
+                    data.append(UInt8(min(mentionData.count, 255)))
+                    data.append(mentionData.prefix(255))
+                } else {
+                    data.append(0)
+                }
+            }
+        }
+        
         return data
     }
     
@@ -268,6 +282,7 @@ extension BitchatMessage {
         let hasOriginalSender = (flags & 0x04) != 0
         let hasRecipientNickname = (flags & 0x08) != 0
         let hasSenderPeerID = (flags & 0x10) != 0
+        let hasMentions = (flags & 0x20) != 0
         
         // Timestamp
         guard offset + 8 <= dataCopy.count else { 
@@ -345,6 +360,26 @@ extension BitchatMessage {
             }
         }
         
+        // Mentions array
+        var mentions: [String]?
+        if hasMentions && offset < dataCopy.count {
+            let mentionCount = Int(dataCopy[offset]); offset += 1
+            if mentionCount > 0 {
+                mentions = []
+                for _ in 0..<mentionCount {
+                    if offset < dataCopy.count {
+                        let length = Int(dataCopy[offset]); offset += 1
+                        if offset + length <= dataCopy.count {
+                            if let mention = String(data: dataCopy[offset..<offset+length], encoding: .utf8) {
+                                mentions?.append(mention)
+                            }
+                            offset += length
+                        }
+                    }
+                }
+            }
+        }
+        
         let message = BitchatMessage(
             sender: sender,
             content: content,
@@ -353,7 +388,8 @@ extension BitchatMessage {
             originalSender: originalSender,
             isPrivate: isPrivate,
             recipientNickname: recipientNickname,
-            senderPeerID: senderPeerID
+            senderPeerID: senderPeerID,
+            mentions: mentions
         )
         return message
     }

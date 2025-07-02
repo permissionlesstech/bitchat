@@ -68,8 +68,9 @@ struct BitchatMessage: Codable, Equatable {
     let isPrivate: Bool
     let recipientNickname: String?
     let senderPeerID: String?
+    let mentions: [String]?  // Array of mentioned nicknames
     
-    init(sender: String, content: String, timestamp: Date, isRelay: Bool, originalSender: String? = nil, isPrivate: Bool = false, recipientNickname: String? = nil, senderPeerID: String? = nil) {
+    init(sender: String, content: String, timestamp: Date, isRelay: Bool, originalSender: String? = nil, isPrivate: Bool = false, recipientNickname: String? = nil, senderPeerID: String? = nil, mentions: [String]? = nil) {
         self.id = UUID().uuidString
         self.sender = sender
         self.content = content
@@ -79,6 +80,7 @@ struct BitchatMessage: Codable, Equatable {
         self.isPrivate = isPrivate
         self.recipientNickname = recipientNickname
         self.senderPeerID = senderPeerID
+        self.mentions = mentions
     }
 }
 

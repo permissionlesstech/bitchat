@@ -20,6 +20,10 @@ class ChatViewModel: ObservableObject {
     @Published var privateChats: [String: [BitchatMessage]] = [:] // peerID -> messages
     @Published var selectedPrivateChatPeer: String? = nil
     @Published var unreadPrivateMessages: Set<String> = []
+    @Published var autocompleteSuggestions: [String] = []
+    @Published var showAutocomplete: Bool = false
+    @Published var autocompleteRange: NSRange? = nil
+    @Published var selectedAutocompleteIndex: Int = 0
     @Published var privateMessageNotification: (sender: String, message: String)? = nil
     
     let meshService = BluetoothMeshService()
@@ -57,18 +61,22 @@ class ChatViewModel: ObservableObject {
             // Send as private message
             sendPrivateMessage(content, to: selectedPeer)
         } else {
+            // Parse mentions from the content
+            let mentions = parseMentions(from: content)
+            
             // Add message to local display
             let message = BitchatMessage(
                 sender: nickname,
                 content: content,
                 timestamp: Date(),
                 isRelay: false,
-                originalSender: nil
+                originalSender: nil,
+                mentions: mentions.isEmpty ? nil : mentions
             )
             messages.append(message)
             
-            // Send via mesh
-            meshService.sendMessage(content)
+            // Send via mesh with mentions
+            meshService.sendMessage(content, mentions: mentions)
         }
     }
     
@@ -165,6 +173,72 @@ class ChatViewModel: ObservableObject {
         }
     }
     
+    func updateAutocomplete(for text: String, cursorPosition: Int) {
+        // Find @ symbol before cursor
+        let beforeCursor = String(text.prefix(cursorPosition))
+        
+        // Look for @ pattern
+        let pattern = "@([a-zA-Z0-9_]*)$"
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: []),
+              let match = regex.firstMatch(in: beforeCursor, options: [], range: NSRange(location: 0, length: beforeCursor.count)) else {
+            showAutocomplete = false
+            autocompleteSuggestions = []
+            autocompleteRange = nil
+            return
+        }
+        
+        // Extract the partial nickname
+        let partialRange = match.range(at: 1)
+        guard let range = Range(partialRange, in: beforeCursor) else {
+            showAutocomplete = false
+            autocompleteSuggestions = []
+            autocompleteRange = nil
+            return
+        }
+        
+        let partial = String(beforeCursor[range]).lowercased()
+        
+        // Get all available nicknames
+        let peerNicknames = meshService.getPeerNicknames()
+        var allNicknames = Array(peerNicknames.values)
+        allNicknames.append(nickname) // Include self
+        
+        // Filter suggestions
+        let suggestions = allNicknames.filter { nick in
+            nick.lowercased().hasPrefix(partial)
+        }.sorted()
+        
+        if !suggestions.isEmpty {
+            autocompleteSuggestions = suggestions
+            showAutocomplete = true
+            autocompleteRange = match.range(at: 0) // Store full @mention range
+            selectedAutocompleteIndex = 0
+        } else {
+            showAutocomplete = false
+            autocompleteSuggestions = []
+            autocompleteRange = nil
+            selectedAutocompleteIndex = 0
+        }
+    }
+    
+    func completeNickname(_ nickname: String, in text: inout String) -> Int {
+        guard let range = autocompleteRange else { return text.count }
+        
+        // Replace the @partial with @nickname
+        let nsText = text as NSString
+        let newText = nsText.replacingCharacters(in: range, with: "@\(nickname) ")
+        text = newText
+        
+        // Hide autocomplete
+        showAutocomplete = false
+        autocompleteSuggestions = []
+        autocompleteRange = nil
+        selectedAutocompleteIndex = 0
+        
+        // Return new cursor position (after the space)
+        return range.location + nickname.count + 2
+    }
+    
     func formatMessage(_ message: BitchatMessage, colorScheme: ColorScheme) -> AttributedString {
         var result = AttributedString()
         
@@ -203,11 +277,49 @@ class ChatViewModel: ObservableObject {
             senderStyle.font = .system(size: 12, weight: .medium, design: .monospaced)
             result.append(sender.mergingAttributes(senderStyle))
             
-            let content = AttributedString(message.content)
-            var contentStyle = AttributeContainer()
-            contentStyle.font = .system(size: 14, design: .monospaced)
-            contentStyle.foregroundColor = isDark ? Color.white : Color.black
-            result.append(content.mergingAttributes(contentStyle))
+            // Process content to highlight mentions
+            let contentText = message.content
+            var processedContent = AttributedString()
+            
+            // Regular expression to find @mentions
+            let pattern = "@([a-zA-Z0-9_]+)"
+            let regex = try? NSRegularExpression(pattern: pattern, options: [])
+            let matches = regex?.matches(in: contentText, options: [], range: NSRange(location: 0, length: contentText.count)) ?? []
+            
+            var lastEndIndex = contentText.startIndex
+            
+            for match in matches {
+                // Add text before the mention
+                if let range = Range(match.range(at: 0), in: contentText) {
+                    let beforeText = String(contentText[lastEndIndex..<range.lowerBound])
+                    if !beforeText.isEmpty {
+                        var normalStyle = AttributeContainer()
+                        normalStyle.font = .system(size: 14, design: .monospaced)
+                        normalStyle.foregroundColor = isDark ? Color.white : Color.black
+                        processedContent.append(AttributedString(beforeText).mergingAttributes(normalStyle))
+                    }
+                    
+                    // Add the mention with highlight
+                    let mentionText = String(contentText[range])
+                    var mentionStyle = AttributeContainer()
+                    mentionStyle.font = .system(size: 14, weight: .semibold, design: .monospaced)
+                    mentionStyle.foregroundColor = Color.orange
+                    processedContent.append(AttributedString(mentionText).mergingAttributes(mentionStyle))
+                    
+                    lastEndIndex = range.upperBound
+                }
+            }
+            
+            // Add any remaining text
+            if lastEndIndex < contentText.endIndex {
+                let remainingText = String(contentText[lastEndIndex...])
+                var normalStyle = AttributeContainer()
+                normalStyle.font = .system(size: 14, design: .monospaced)
+                normalStyle.foregroundColor = isDark ? Color.white : Color.black
+                processedContent.append(AttributedString(remainingText).mergingAttributes(normalStyle))
+            }
+            
+            result.append(processedContent)
             
             if message.isRelay, let originalSender = message.originalSender {
                 let relay = AttributedString(" (via \(originalSender))")
@@ -259,8 +371,23 @@ extension ChatViewModel: BitchatDelegate {
         }
         
         #if os(iOS)
-        // Different haptic feedback for private vs public messages
-        if message.isPrivate && message.sender != nickname {
+        // Check if we're mentioned
+        let isMentioned = message.mentions?.contains(nickname) ?? false
+        
+        // Different haptic feedback for mentions, private messages, and regular messages
+        if isMentioned && message.sender != nickname {
+            // Very prominent haptic for @mentions - triple tap with heavy impact
+            let impactFeedback = UIImpactFeedbackGenerator(style: .heavy)
+            impactFeedback.prepare()
+            impactFeedback.impactOccurred()
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                impactFeedback.impactOccurred()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                impactFeedback.impactOccurred()
+            }
+        } else if message.isPrivate && message.sender != nickname {
             // Heavy haptic for private messages - more pronounced
             let impactFeedback = UIImpactFeedbackGenerator(style: .heavy)
             impactFeedback.prepare()
@@ -321,5 +448,27 @@ extension ChatViewModel: BitchatDelegate {
            !peers.contains(currentChatPeer) {
             endPrivateChat()
         }
+    }
+    
+    private func parseMentions(from content: String) -> [String] {
+        let pattern = "@([a-zA-Z0-9_]+)"
+        let regex = try? NSRegularExpression(pattern: pattern, options: [])
+        let matches = regex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
+        
+        var mentions: [String] = []
+        let peerNicknames = meshService.getPeerNicknames()
+        let allNicknames = Set(peerNicknames.values).union([nickname]) // Include self
+        
+        for match in matches {
+            if let range = Range(match.range(at: 1), in: content) {
+                let mentionedName = String(content[range])
+                // Only include if it's a valid nickname
+                if allNicknames.contains(mentionedName) {
+                    mentions.append(mentionedName)
+                }
+            }
+        }
+        
+        return Array(Set(mentions)) // Remove duplicates
     }
 }
