@@ -36,66 +36,71 @@ struct ContentView: View {
     
     private var headerView: some View {
         HStack {
-            Text("bitchat")
-                .font(.system(size: 18, weight: .medium, design: .monospaced))
-                .foregroundColor(textColor)
-            
-            Spacer()
-            
-            Menu {
-                if viewModel.connectedPeers.isEmpty {
-                    Text("No peers connected")
-                        .font(.system(size: 12, design: .monospaced))
-                } else {
-                    let peerNicknames = viewModel.meshService.getPeerNicknames()
-                    ForEach(viewModel.connectedPeers, id: \.self) { peerID in
-                        if let displayName = peerNicknames[peerID], displayName != peerID {
-                            // Only show if we have a real nickname
-                            Label(displayName, systemImage: "person.fill")
-                                .font(.system(size: 12, design: .monospaced))
+            if let privatePeerID = viewModel.selectedPrivateChatPeer,
+               let privatePeerNick = viewModel.meshService.getPeerNicknames()[privatePeerID] {
+                // Private chat header
+                HStack {
+                    Button(action: {
+                        viewModel.endPrivateChat()
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 12))
+                            Text("back")
+                                .font(.system(size: 14, design: .monospaced))
                         }
+                        .foregroundColor(textColor)
                     }
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(viewModel.isConnected ? textColor : Color.red)
-                        .frame(width: 8, height: 8)
+                    .buttonStyle(.plain)
                     
-                    HStack(spacing: 0) {
-                        Text(viewModel.isConnected ? "\(viewModel.connectedPeers.count) \(viewModel.connectedPeers.count == 1 ? "peer" : "peers")" : "Scanning...")
+                    Spacer()
+                    
+                    Text("private: \(privatePeerNick)")
+                        .font(.system(size: 16, weight: .medium, design: .monospaced))
+                        .foregroundColor(Color.orange)
+                        .frame(maxWidth: .infinity)
+                    
+                    Spacer()
+                    
+                    // Invisible spacer to balance the back button
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 12))
+                        Text("back")
                             .font(.system(size: 14, design: .monospaced))
-                            .foregroundColor(secondaryTextColor)
-                        Text(Image(systemName: "chevron.down"))
-                            .font(.system(size: 10))
-                            .foregroundColor(secondaryTextColor)
-                            .baselineOffset(-1)
                     }
+                    .opacity(0)
                 }
-                .contentShape(Rectangle()) // Make entire area tappable
-            }
-            .buttonStyle(.plain)
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            
-            Spacer()
-            
-            HStack(spacing: 4) {
-                Text("nick:")
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(secondaryTextColor)
-                
-                TextField("nickname", text: $viewModel.nickname)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 12, design: .monospaced))
-                    .frame(maxWidth: 100)
+            } else {
+                // Public chat header
+                Text("bitchat")
+                    .font(.system(size: 18, weight: .medium, design: .monospaced))
                     .foregroundColor(textColor)
-                    .onChange(of: viewModel.nickname) { _ in
-                        viewModel.saveNickname()
-                    }
-                    .onSubmit {
-                        viewModel.saveNickname()
-                    }
+                
+                Spacer()
+                
+                // Peer status section
+                peerStatusView
+                
+                Spacer()
+                
+                HStack(spacing: 4) {
+                    Text("nick:")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(secondaryTextColor)
+                    
+                    TextField("nickname", text: $viewModel.nickname)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 12, design: .monospaced))
+                        .frame(maxWidth: 100)
+                        .foregroundColor(textColor)
+                        .onChange(of: viewModel.nickname) { _ in
+                            viewModel.saveNickname()
+                        }
+                        .onSubmit {
+                            viewModel.saveNickname()
+                        }
+                }
             }
         }
         .padding(.horizontal, 12)
@@ -103,11 +108,71 @@ struct ContentView: View {
         .background(backgroundColor.opacity(0.95))
     }
     
+    private var peerStatusView: some View {
+        Menu {
+            if viewModel.connectedPeers.isEmpty {
+                Text("No peers connected")
+                    .font(.system(size: 12, design: .monospaced))
+            } else {
+                let peerNicknames = viewModel.meshService.getPeerNicknames()
+                let myPeerID = viewModel.meshService.myPeerID
+                ForEach(viewModel.connectedPeers.filter { $0 != myPeerID }.sorted(), id: \.self) { peerID in
+                    let displayName = peerNicknames[peerID] ?? "peer-\(peerID.prefix(4))"
+                    Button(action: {
+                        // Only allow private chat if peer has announced
+                        if peerNicknames[peerID] != nil {
+                            viewModel.startPrivateChat(with: peerID)
+                        }
+                    }) {
+                        HStack {
+                            Text(displayName)
+                                .font(.system(size: 12, design: .monospaced))
+                                .foregroundColor(peerNicknames[peerID] != nil ? textColor : secondaryTextColor)
+                            Spacer()
+                            if viewModel.unreadPrivateMessages.contains(peerID) {
+                                Circle()
+                                    .fill(Color.orange)
+                                    .frame(width: 6, height: 6)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(peerNicknames[peerID] == nil)
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                // Notification indicator for unread messages
+                if !viewModel.unreadPrivateMessages.isEmpty {
+                    Circle()
+                        .fill(Color.orange)
+                        .frame(width: 8, height: 8)
+                }
+                
+                // Text
+                Text(viewModel.isConnected ? "\(viewModel.connectedPeers.count) \(viewModel.connectedPeers.count == 1 ? "peer" : "peers")" : "scanning")
+                    .font(.system(size: 14, design: .monospaced))
+                    .foregroundColor(viewModel.isConnected ? textColor : Color.red)
+                
+                // Chevron
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 10))
+                    .foregroundColor(secondaryTextColor)
+            }
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+    }
+    
     private var messagesView: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {
-                    ForEach(Array(viewModel.messages.enumerated()), id: \.offset) { index, message in
+                    let messages = viewModel.selectedPrivateChatPeer != nil 
+                        ? viewModel.getPrivateChatMessages(for: viewModel.selectedPrivateChatPeer!)
+                        : viewModel.messages
+                    
+                    ForEach(Array(messages.enumerated()), id: \.offset) { index, message in
                         VStack(alignment: .leading, spacing: 4) {
                             Text(viewModel.formatMessage(message, colorScheme: colorScheme))
                                 .font(.system(size: 14, design: .monospaced))
@@ -124,8 +189,19 @@ struct ContentView: View {
             }
             .background(backgroundColor)
             .onChange(of: viewModel.messages.count) { _ in
-                withAnimation {
-                    proxy.scrollTo(viewModel.messages.count - 1, anchor: .bottom)
+                if viewModel.selectedPrivateChatPeer == nil {
+                    withAnimation {
+                        proxy.scrollTo(viewModel.messages.count - 1, anchor: .bottom)
+                    }
+                }
+            }
+            .onChange(of: viewModel.privateChats) { _ in
+                if let peerID = viewModel.selectedPrivateChatPeer,
+                   let messages = viewModel.privateChats[peerID],
+                   !messages.isEmpty {
+                    withAnimation {
+                        proxy.scrollTo(messages.count - 1, anchor: .bottom)
+                    }
                 }
             }
         }
@@ -140,11 +216,19 @@ struct ContentView: View {
                 .fixedSize()
                 .padding(.leading, 12)
             
-            Text("<\(viewModel.nickname)>")
-                .font(.system(size: 12, weight: .medium, design: .monospaced))
-                .foregroundColor(textColor)
-                .lineLimit(1)
-                .fixedSize()
+            if viewModel.selectedPrivateChatPeer != nil {
+                Text("<\(viewModel.nickname)> →")
+                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .foregroundColor(Color.orange)
+                    .lineLimit(1)
+                    .fixedSize()
+            } else {
+                Text("<\(viewModel.nickname)>")
+                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .foregroundColor(textColor)
+                    .lineLimit(1)
+                    .fixedSize()
+            }
             
             TextField("", text: $messageText)
                 .textFieldStyle(.plain)
@@ -157,7 +241,7 @@ struct ContentView: View {
             
             Button(action: sendMessage) {
                 Image(systemName: "arrow.right.circle.fill")
-                    .font(.system(size: 16))
+                    .font(.system(size: 20))
                     .foregroundColor(textColor)
             }
             .buttonStyle(.plain)
