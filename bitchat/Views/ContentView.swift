@@ -118,7 +118,7 @@ struct ContentView: View {
                 Spacer()
                 
                 HStack(spacing: 4) {
-                    Text("nick:")
+                    Text("name:")
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundColor(secondaryTextColor)
                     
@@ -144,13 +144,13 @@ struct ContentView: View {
     private var peerStatusView: some View {
         Menu {
             if viewModel.connectedPeers.isEmpty {
-                Text("No peers connected")
+                Text("No people connected")
                     .font(.system(size: 12, design: .monospaced))
             } else {
                 let peerNicknames = viewModel.meshService.getPeerNicknames()
                 let myPeerID = viewModel.meshService.myPeerID
                 ForEach(viewModel.connectedPeers.filter { $0 != myPeerID }.sorted(), id: \.self) { peerID in
-                    let displayName = peerNicknames[peerID] ?? "peer-\(peerID.prefix(4))"
+                    let displayName = peerNicknames[peerID] ?? "person-\(peerID.prefix(4))"
                     Button(action: {
                         // Only allow private chat if peer has announced
                         if peerNicknames[peerID] != nil {
@@ -183,7 +183,7 @@ struct ContentView: View {
                 }
                 
                 // Text
-                Text(viewModel.isConnected ? "\(viewModel.connectedPeers.count) \(viewModel.connectedPeers.count == 1 ? "peer" : "peers")" : "scanning")
+                Text(viewModel.isConnected ? "\(viewModel.connectedPeers.count) \(viewModel.connectedPeers.count == 1 ? "person" : "people")" : "scanning")
                     .font(.system(size: 14, design: .monospaced))
                     .foregroundColor(viewModel.isConnected ? textColor : Color.red)
                 
@@ -195,6 +195,7 @@ struct ContentView: View {
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
+        .fixedSize()
     }
     
     private var messagesView: some View {

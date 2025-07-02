@@ -143,7 +143,7 @@ class BluetoothMeshService: NSObject {
             print("[DEBUG] Cannot scan - central not powered on")
             return 
         }
-        print("[DEBUG] Starting scan for peers...")
+        print("[DEBUG] Starting scan for people...")
         centralManager.scanForPeripherals(withServices: [BluetoothMeshService.serviceUUID], options: [CBCentralManagerScanOptionAllowDuplicatesKey: false])
     }
     
