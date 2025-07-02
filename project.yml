@@ -1,0 +1,46 @@
+name: bitchat
+options:
+  bundleIdPrefix: com.bitchat
+  deploymentTarget:
+    iOS: 16.0
+    macOS: 13.0
+  createIntermediateGroups: true
+  
+settings:
+  MARKETING_VERSION: 1.0.0
+  CURRENT_PROJECT_VERSION: 1
+  DEVELOPMENT_TEAM: ""
+  
+targets:
+  bitchat:
+    type: application
+    platform: [iOS, macOS]
+    sources: 
+      - bitchat
+    info:
+      path: bitchat/Info.plist
+      properties:
+        CFBundleDisplayName: bitchat
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        NSBluetoothAlwaysUsageDescription: bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users.
+        NSBluetoothPeripheralUsageDescription: bitchat uses Bluetooth to discover and connect with other bitchat users nearby.
+        UILaunchScreen:
+          UIColorName: Black
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.bitchat.app
+      INFOPLIST_FILE: bitchat/Info.plist
+      ENABLE_PREVIEWS: YES
+      SWIFT_VERSION: 5.0
+      IPHONEOS_DEPLOYMENT_TARGET: 16.0
+      MACOSX_DEPLOYMENT_TARGET: 13.0
+      SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: YES
+      CODE_SIGN_STYLE: Automatic
+      ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+      ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
