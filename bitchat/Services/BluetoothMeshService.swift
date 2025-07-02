@@ -123,7 +123,16 @@ class BluetoothMeshService: NSObject {
     }
     
     private func getAllConnectedPeerIDs() -> [String] {
-        return Array(activePeers)
+        var peers = Set<String>()
+        
+        // Include connected peripherals (devices we connected to as central)
+        peers.formUnion(connectedPeripherals.keys)
+        
+        // Include active peers (devices that have announced)
+        peers.formUnion(activePeers)
+        
+        // Filter out invalid peers
+        return peers.filter { $0 != "unknown" && $0 != myPeerID }
     }
     
     private func broadcastPacket(_ packet: BitchatPacket) {
@@ -217,23 +226,33 @@ class BluetoothMeshService: NSObject {
             if let nickname = String(data: packet.payload, encoding: .utf8) {
                 print("[DEBUG] Received announce from \(peerID): \(nickname)")
                 
+                // Check if this is the first time we're getting a nickname for this peer
+                let isNewNickname = peerNicknames[peerID] == nil
+                
                 // Store the nickname
                 peerNicknames[peerID] = nickname
                 
                 // Add to active peers if not already there
-                if peerID != "unknown" && peerID != myPeerID && !activePeers.contains(peerID) {
-                    print("[DEBUG] Adding new peer \(peerID) to active peers")
-                    activePeers.insert(peerID)
-                    DispatchQueue.main.async {
-                        self.delegate?.didConnectToPeer(nickname)
-                        self.delegate?.didUpdatePeerList(self.getAllConnectedPeerIDs())
+                if peerID != "unknown" && peerID != myPeerID {
+                    if !activePeers.contains(peerID) {
+                        print("[DEBUG] Adding new peer \(peerID) to active peers")
+                        activePeers.insert(peerID)
+                    }
+                    
+                    // Show join message if this is a new nickname
+                    if isNewNickname {
+                        DispatchQueue.main.async {
+                            self.delegate?.didConnectToPeer(nickname)
+                            self.delegate?.didUpdatePeerList(self.getAllConnectedPeerIDs())
+                        }
+                    } else {
+                        // Just update the peer list
+                        DispatchQueue.main.async {
+                            self.delegate?.didUpdatePeerList(self.getAllConnectedPeerIDs())
+                        }
                     }
                 } else {
-                    print("[DEBUG] Peer \(peerID) already active or invalid")
-                    // Just update the peer list to refresh nicknames
-                    DispatchQueue.main.async {
-                        self.delegate?.didUpdatePeerList(self.getAllConnectedPeerIDs())
-                    }
+                    print("[DEBUG] Peer \(peerID) is invalid (unknown or self)")
                 }
             }
             
