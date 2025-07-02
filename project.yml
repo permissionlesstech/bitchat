@@ -26,6 +26,9 @@ targets:
         LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
         NSBluetoothAlwaysUsageDescription: bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users.
         NSBluetoothPeripheralUsageDescription: bitchat uses Bluetooth to discover and connect with other bitchat users nearby.
+        UIBackgroundModes:
+          - bluetooth-central
+          - bluetooth-peripheral
         UILaunchScreen:
           UIColorName: Black
         UISupportedInterfaceOrientations:

@@ -148,7 +148,9 @@ struct ContentView: View {
                     .font(.system(size: 12, design: .monospaced))
             } else {
                 let peerNicknames = viewModel.meshService.getPeerNicknames()
+                let peerRSSI = viewModel.meshService.getPeerRSSI()
                 let myPeerID = viewModel.meshService.myPeerID
+                let _ = print("[UI DEBUG] connectedPeers: \(viewModel.connectedPeers), myPeerID: \(myPeerID), RSSI: \(peerRSSI)")
                 ForEach(viewModel.connectedPeers.filter { $0 != myPeerID }.sorted(), id: \.self) { peerID in
                     let displayName = peerNicknames[peerID] ?? "person-\(peerID.prefix(4))"
                     Button(action: {
@@ -168,6 +170,9 @@ struct ContentView: View {
                                     .frame(width: 6, height: 6)
                             }
                         }
+                        #if os(macOS)
+                        .frame(minWidth: 120)
+                        #endif
                     }
                     .buttonStyle(.plain)
                     .disabled(peerNicknames[peerID] == nil)
@@ -176,9 +181,21 @@ struct ContentView: View {
         } label: {
             HStack(spacing: 2) {
                 // Text
-                Text(viewModel.isConnected ? "\(viewModel.connectedPeers.count) \(viewModel.connectedPeers.count == 1 ? "person" : "people")" : "scanning")
+                let otherPeersCount = viewModel.connectedPeers.filter { $0 != viewModel.meshService.myPeerID }.count
+                Text(viewModel.isConnected ? "\(otherPeersCount) \(otherPeersCount == 1 ? "person" : "people")" : "scanning")
+                    #if os(iOS)
+                    .font(.system(size: 12, design: .monospaced))
+                    #else
                     .font(.system(size: 14, design: .monospaced))
+                    #endif
                     .foregroundColor(viewModel.isConnected ? textColor : Color.red)
+                
+                #if os(iOS)
+                // Add chevron for iOS
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 10))
+                    .foregroundColor(textColor.opacity(0.6))
+                #endif
                 
                 // Notification indicator (on the right after default chevron)
                 if !viewModel.unreadPrivateMessages.isEmpty {
@@ -191,6 +208,7 @@ struct ContentView: View {
         }
         #if os(macOS)
         .menuStyle(.borderlessButton)
+        .menuIndicator(.visible)
         #else
         .menuStyle(.automatic)
         #endif
