@@ -33,7 +33,23 @@ struct BitchatPacket: Codable {
         self.ttl = ttl
     }
     
+    // Convenience initializer for new binary format
+    init(type: UInt8, ttl: UInt8, senderID: String, payload: Data) {
+        self.version = 1
+        self.type = type
+        self.senderID = senderID.data(using: .utf8)!
+        self.recipientID = nil
+        self.timestamp = UInt64(Date().timeIntervalSince1970)
+        self.payload = payload
+        self.signature = nil
+        self.ttl = ttl
+    }
+    
     var data: Data? {
+        BinaryProtocol.encode(self)
+    }
+    
+    func toBinaryData() -> Data? {
         BinaryProtocol.encode(self)
     }
     

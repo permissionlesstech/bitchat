@@ -1,5 +1,15 @@
 import Foundation
 
+extension Data {
+    func trimmingNullBytes() -> Data {
+        // Find the first null byte
+        if let nullIndex = self.firstIndex(of: 0) {
+            return self.prefix(nullIndex)
+        }
+        return self
+    }
+}
+
 // Binary Protocol Format:
 // Header (Fixed 13 bytes):
 // - Version: 1 byte
@@ -36,8 +46,8 @@ struct BinaryProtocol {
         data.append(packet.ttl)
         
         // Timestamp (8 bytes, big-endian)
-        withUnsafeBytes(of: packet.timestamp.bigEndian) { bytes in
-            data.append(contentsOf: bytes)
+        for i in (0..<8).reversed() {
+            data.append(UInt8((packet.timestamp >> (i * 8)) & 0xFF))
         }
         
         // Flags
@@ -52,9 +62,8 @@ struct BinaryProtocol {
         
         // Payload length (2 bytes, big-endian)
         let payloadLength = UInt16(packet.payload.count)
-        withUnsafeBytes(of: payloadLength.bigEndian) { bytes in
-            data.append(contentsOf: bytes)
-        }
+        data.append(UInt8((payloadLength >> 8) & 0xFF))
+        data.append(UInt8(payloadLength & 0xFF))
         
         // SenderID (exactly 8 bytes)
         let senderBytes = packet.senderID.prefix(senderIDSize)
@@ -95,8 +104,9 @@ struct BinaryProtocol {
         let ttl = data[offset]; offset += 1
         
         // Timestamp
-        let timestamp = data[offset..<offset+8].withUnsafeBytes { bytes in
-            bytes.load(as: UInt64.self).bigEndian
+        let timestampData = data[offset..<offset+8]
+        let timestamp = timestampData.reduce(0) { result, byte in
+            (result << 8) | UInt64(byte)
         }
         offset += 8
         
@@ -106,8 +116,9 @@ struct BinaryProtocol {
         let hasSignature = (flags & Flags.hasSignature) != 0
         
         // Payload length
-        let payloadLength = data[offset..<offset+2].withUnsafeBytes { bytes in
-            bytes.load(as: UInt16.self).bigEndian
+        let payloadLengthData = data[offset..<offset+2]
+        let payloadLength = payloadLengthData.reduce(0) { result, byte in
+            (result << 8) | UInt16(byte)
         }
         offset += 2
         
@@ -185,8 +196,9 @@ extension BitchatMessage {
         
         // Timestamp
         let timestampSeconds = UInt64(timestamp.timeIntervalSince1970)
-        withUnsafeBytes(of: timestampSeconds.bigEndian) { bytes in
-            data.append(contentsOf: bytes)
+        // Encode as 8 bytes, big-endian
+        for i in (0..<8).reversed() {
+            data.append(UInt8((timestampSeconds >> (i * 8)) & 0xFF))
         }
         
         // ID
@@ -208,9 +220,9 @@ extension BitchatMessage {
         // Content
         if let contentData = content.data(using: .utf8) {
             let length = UInt16(min(contentData.count, 65535))
-            withUnsafeBytes(of: length.bigEndian) { bytes in
-                data.append(contentsOf: bytes)
-            }
+            // Encode length as 2 bytes, big-endian
+            data.append(UInt8((length >> 8) & 0xFF))
+            data.append(UInt8(length & 0xFF))
             data.append(contentData.prefix(Int(length)))
         } else {
             data.append(contentsOf: [0, 0])
@@ -236,12 +248,21 @@ extension BitchatMessage {
     }
     
     static func fromBinaryPayload(_ data: Data) -> BitchatMessage? {
-        guard data.count >= 13 else { return nil } // Minimum size
+        // Create an immutable copy to prevent threading issues
+        let dataCopy = Data(data)
+        
+        
+        guard dataCopy.count >= 13 else { 
+            return nil 
+        }
         
         var offset = 0
         
         // Flags
-        let flags = data[offset]; offset += 1
+        guard offset < dataCopy.count else { 
+            return nil 
+        }
+        let flags = dataCopy[offset]; offset += 1
         let isRelay = (flags & 0x01) != 0
         let isPrivate = (flags & 0x02) != 0
         let hasOriginalSender = (flags & 0x04) != 0
@@ -249,64 +270,82 @@ extension BitchatMessage {
         let hasSenderPeerID = (flags & 0x10) != 0
         
         // Timestamp
-        let timestampSeconds = data[offset..<offset+8].withUnsafeBytes { bytes in
-            bytes.load(as: UInt64.self).bigEndian
+        guard offset + 8 <= dataCopy.count else { 
+            return nil 
+        }
+        let timestampData = dataCopy[offset..<offset+8]
+        let timestampSeconds = timestampData.reduce(0) { result, byte in
+            (result << 8) | UInt64(byte)
         }
         offset += 8
         let timestamp = Date(timeIntervalSince1970: TimeInterval(timestampSeconds))
         
         // ID
-        let idLength = Int(data[offset]); offset += 1
-        guard offset + idLength <= data.count else { return nil }
-        _ = String(data: data[offset..<offset+idLength], encoding: .utf8) ?? UUID().uuidString
+        guard offset < dataCopy.count else { 
+            return nil 
+        }
+        let idLength = Int(dataCopy[offset]); offset += 1
+        guard offset + idLength <= dataCopy.count else { 
+            return nil 
+        }
+        let _ = String(data: dataCopy[offset..<offset+idLength], encoding: .utf8) ?? UUID().uuidString
         offset += idLength
         
         // Sender
-        guard offset < data.count else { return nil }
-        let senderLength = Int(data[offset]); offset += 1
-        guard offset + senderLength <= data.count else { return nil }
-        let sender = String(data: data[offset..<offset+senderLength], encoding: .utf8) ?? "unknown"
+        guard offset < dataCopy.count else { 
+            return nil 
+        }
+        let senderLength = Int(dataCopy[offset]); offset += 1
+        guard offset + senderLength <= dataCopy.count else { 
+            return nil 
+        }
+        let sender = String(data: dataCopy[offset..<offset+senderLength], encoding: .utf8) ?? "unknown"
         offset += senderLength
         
         // Content
-        guard offset + 2 <= data.count else { return nil }
-        let contentLength = data[offset..<offset+2].withUnsafeBytes { bytes in
-            Int(bytes.load(as: UInt16.self).bigEndian)
+        guard offset + 2 <= dataCopy.count else { 
+            return nil 
         }
+        let contentLengthData = dataCopy[offset..<offset+2]
+        let contentLength = Int(contentLengthData.reduce(0) { result, byte in
+            (result << 8) | UInt16(byte)
+        })
         offset += 2
-        guard offset + contentLength <= data.count else { return nil }
-        let content = String(data: data[offset..<offset+contentLength], encoding: .utf8) ?? ""
+        guard offset + contentLength <= dataCopy.count else { 
+            return nil 
+        }
+        let content = String(data: dataCopy[offset..<offset+contentLength], encoding: .utf8) ?? ""
         offset += contentLength
         
         // Optional fields
         var originalSender: String?
-        if hasOriginalSender && offset < data.count {
-            let length = Int(data[offset]); offset += 1
-            if offset + length <= data.count {
-                originalSender = String(data: data[offset..<offset+length], encoding: .utf8)
+        if hasOriginalSender && offset < dataCopy.count {
+            let length = Int(dataCopy[offset]); offset += 1
+            if offset + length <= dataCopy.count {
+                originalSender = String(data: dataCopy[offset..<offset+length], encoding: .utf8)
                 offset += length
             }
         }
         
         var recipientNickname: String?
-        if hasRecipientNickname && offset < data.count {
-            let length = Int(data[offset]); offset += 1
-            if offset + length <= data.count {
-                recipientNickname = String(data: data[offset..<offset+length], encoding: .utf8)
+        if hasRecipientNickname && offset < dataCopy.count {
+            let length = Int(dataCopy[offset]); offset += 1
+            if offset + length <= dataCopy.count {
+                recipientNickname = String(data: dataCopy[offset..<offset+length], encoding: .utf8)
                 offset += length
             }
         }
         
         var senderPeerID: String?
-        if hasSenderPeerID && offset < data.count {
-            let length = Int(data[offset]); offset += 1
-            if offset + length <= data.count {
-                senderPeerID = String(data: data[offset..<offset+length], encoding: .utf8)
+        if hasSenderPeerID && offset < dataCopy.count {
+            let length = Int(dataCopy[offset]); offset += 1
+            if offset + length <= dataCopy.count {
+                senderPeerID = String(data: dataCopy[offset..<offset+length], encoding: .utf8)
                 offset += length
             }
         }
         
-        return BitchatMessage(
+        let message = BitchatMessage(
             sender: sender,
             content: content,
             timestamp: timestamp,
@@ -316,5 +355,6 @@ extension BitchatMessage {
             recipientNickname: recipientNickname,
             senderPeerID: senderPeerID
         )
+        return message
     }
 }

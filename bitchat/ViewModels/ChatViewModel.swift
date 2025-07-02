@@ -142,6 +142,29 @@ class ChatViewModel: ObservableObject {
         return formatter.string(from: date)
     }
     
+    func getRSSIColor(rssi: Int, colorScheme: ColorScheme) -> Color {
+        let isDark = colorScheme == .dark
+        // RSSI typically ranges from -30 (excellent) to -90 (poor)
+        // We'll map this to colors from green (strong) to red (weak)
+        
+        if rssi >= -50 {
+            // Excellent signal: bright green
+            return isDark ? Color(red: 0.0, green: 1.0, blue: 0.0) : Color(red: 0.0, green: 0.7, blue: 0.0)
+        } else if rssi >= -60 {
+            // Good signal: green-yellow
+            return isDark ? Color(red: 0.5, green: 1.0, blue: 0.0) : Color(red: 0.3, green: 0.7, blue: 0.0)
+        } else if rssi >= -70 {
+            // Fair signal: yellow
+            return isDark ? Color(red: 1.0, green: 1.0, blue: 0.0) : Color(red: 0.7, green: 0.7, blue: 0.0)
+        } else if rssi >= -80 {
+            // Weak signal: orange
+            return isDark ? Color(red: 1.0, green: 0.6, blue: 0.0) : Color(red: 0.8, green: 0.4, blue: 0.0)
+        } else {
+            // Poor signal: red
+            return isDark ? Color(red: 1.0, green: 0.2, blue: 0.2) : Color(red: 0.8, green: 0.0, blue: 0.0)
+        }
+    }
+    
     func formatMessage(_ message: BitchatMessage, colorScheme: ColorScheme) -> AttributedString {
         var result = AttributedString()
         
@@ -164,7 +187,19 @@ class ChatViewModel: ObservableObject {
         } else {
             let sender = AttributedString("<\(message.sender)> ")
             var senderStyle = AttributeContainer()
-            senderStyle.foregroundColor = message.sender == nickname ? primaryColor : primaryColor.opacity(0.9)
+            
+            // Get RSSI-based color
+            let senderColor: Color
+            if message.sender == nickname {
+                senderColor = primaryColor
+            } else if let peerID = message.senderPeerID ?? getPeerIDForNickname(message.sender),
+                      let rssi = meshService.getPeerRSSI()[peerID] {
+                senderColor = getRSSIColor(rssi: rssi.intValue, colorScheme: colorScheme)
+            } else {
+                senderColor = primaryColor.opacity(0.9)
+            }
+            
+            senderStyle.foregroundColor = senderColor
             senderStyle.font = .system(size: 12, weight: .medium, design: .monospaced)
             result.append(sender.mergingAttributes(senderStyle))
             
@@ -191,7 +226,6 @@ extension ChatViewModel: BitchatDelegate {
     func didReceiveMessage(_ message: BitchatMessage) {
         if message.isPrivate {
             // Handle private message
-            print("[DEBUG] Received private message from \(message.sender)")
             
             // Use the senderPeerID from the message if available
             let senderPeerID = message.senderPeerID ?? getPeerIDForNickname(message.sender)
@@ -209,7 +243,6 @@ extension ChatViewModel: BitchatDelegate {
                 // Mark as unread if not currently viewing this chat
                 if selectedPrivateChatPeer != peerID {
                     unreadPrivateMessages.insert(peerID)
-                    print("[DEBUG] Added unread message indicator for peer: \(peerID)")
                     
                     // Show notification banner
                     showPrivateMessageNotification(from: message.sender, content: message.content)
@@ -219,7 +252,6 @@ extension ChatViewModel: BitchatDelegate {
                 }
             } else if message.sender == nickname {
                 // Our own message that was echoed back - ignore it since we already added it locally
-                print("[DEBUG] Ignoring our own private message echo")
             }
         } else {
             // Regular public message
@@ -229,11 +261,17 @@ extension ChatViewModel: BitchatDelegate {
         #if os(iOS)
         // Different haptic feedback for private vs public messages
         if message.isPrivate && message.sender != nickname {
-            // Medium haptic for private messages
-            let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+            // Heavy haptic for private messages - more pronounced
+            let impactFeedback = UIImpactFeedbackGenerator(style: .heavy)
+            impactFeedback.prepare()
             impactFeedback.impactOccurred()
-        } else {
-            // Light haptic for public messages
+            
+            // Double tap for extra emphasis
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                impactFeedback.impactOccurred()
+            }
+        } else if message.sender != nickname {
+            // Light haptic for public messages from others
             let impactFeedback = UIImpactFeedbackGenerator(style: .light)
             impactFeedback.impactOccurred()
         }
@@ -241,7 +279,6 @@ extension ChatViewModel: BitchatDelegate {
     }
     
     func didConnectToPeer(_ peerID: String) {
-        print("[DEBUG] didConnectToPeer called with: \(peerID)")
         isConnected = true
         let systemMessage = BitchatMessage(
             sender: "system",
@@ -251,14 +288,12 @@ extension ChatViewModel: BitchatDelegate {
             originalSender: nil
         )
         messages.append(systemMessage)
-        print("[DEBUG] Added join message, total messages: \(messages.count)")
         
         // Force UI update
         objectWillChange.send()
     }
     
     func didDisconnectFromPeer(_ peerID: String) {
-        print("[DEBUG] didDisconnectFromPeer called with: \(peerID)")
         let systemMessage = BitchatMessage(
             sender: "system",
             content: "\(peerID) has left the channel",
@@ -267,14 +302,12 @@ extension ChatViewModel: BitchatDelegate {
             originalSender: nil
         )
         messages.append(systemMessage)
-        print("[DEBUG] Added leave message, total messages: \(messages.count)")
         
         // Force UI update
         objectWillChange.send()
     }
     
     func didUpdatePeerList(_ peers: [String]) {
-        print("[DEBUG] ChatViewModel: Peer list updated with \(peers.count) peers: \(peers)")
         connectedPeers = peers
         isConnected = !peers.isEmpty
         
@@ -286,7 +319,6 @@ extension ChatViewModel: BitchatDelegate {
         // If we're in a private chat with someone who disconnected, exit the chat
         if let currentChatPeer = selectedPrivateChatPeer,
            !peers.contains(currentChatPeer) {
-            print("[DEBUG] Private chat peer disconnected, exiting private chat")
             endPrivateChat()
         }
     }
