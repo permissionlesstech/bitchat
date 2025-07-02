@@ -33,6 +33,10 @@ class BluetoothMeshService: NSObject {
     }
     
     func startServices() {
+        print("[DEBUG] Starting services...")
+        print("[DEBUG] Central state: \(centralManager.state.rawValue)")
+        print("[DEBUG] Peripheral state: \(peripheralManager.state.rawValue)")
+        
         // Start both central and peripheral services
         if centralManager.state == .poweredOn {
             startScanning()
@@ -45,6 +49,7 @@ class BluetoothMeshService: NSObject {
     
     func startAdvertising() {
         guard peripheralManager.state == .poweredOn else { 
+            print("[DEBUG] Cannot advertise - peripheral not powered on")
             return 
         }
         
@@ -52,13 +57,16 @@ class BluetoothMeshService: NSObject {
             CBAdvertisementDataServiceUUIDsKey: [BluetoothMeshService.serviceUUID],
             CBAdvertisementDataLocalNameKey: "bitchat-\(myPeerID)"
         ]
+        print("[DEBUG] Starting advertising as: bitchat-\(myPeerID)")
         peripheralManager.startAdvertising(advertisementData)
     }
     
     func startScanning() {
         guard centralManager.state == .poweredOn else { 
+            print("[DEBUG] Cannot scan - central not powered on")
             return 
         }
+        print("[DEBUG] Starting scan for peers...")
         centralManager.scanForPeripherals(withServices: [BluetoothMeshService.serviceUUID], options: [CBCentralManagerScanOptionAllowDuplicatesKey: false])
     }
     
@@ -103,6 +111,7 @@ class BluetoothMeshService: NSObject {
                     ttl: self.maxTTL
                 )
                 
+                print("[DEBUG] Sending message: \(content)")
                 self.broadcastPacket(packet)
             }
         }
@@ -146,6 +155,8 @@ class BluetoothMeshService: NSObject {
             processedMessages.removeAll()
         }
         
+        print("[DEBUG] Received packet type: \(packet.type) from \(peerID)")
+        
         switch MessageType(rawValue: packet.type) {
         case .message:
             if let message = try? JSONDecoder().decode(BitchatMessage.self, from: packet.payload) {
@@ -171,12 +182,14 @@ class BluetoothMeshService: NSObject {
             }
             
         case .keyExchange:
+            print("[DEBUG] Received key exchange from \(peerID)")
             if let publicKeyData = try? JSONDecoder().decode(Data.self, from: packet.payload) {
                 try? encryptionService.addPeerPublicKey(peerID, publicKeyData: publicKeyData)
                 
                 // Track this peer temporarily but don't announce until we get their name
                 if peerID != "unknown" && peerID != myPeerID && !peerNicknames.keys.contains(peerID) {
                     // Just track them, don't announce yet
+                    print("[DEBUG] Tracking peer \(peerID) after key exchange")
                     DispatchQueue.main.async {
                         self.delegate?.didUpdatePeerList(self.getAllConnectedPeerIDs())
                     }
@@ -185,6 +198,7 @@ class BluetoothMeshService: NSObject {
                 // Send announce with our nickname immediately
                 DispatchQueue.main.async { [weak self] in
                     if let self = self, let vm = self.delegate as? ChatViewModel {
+                        print("[DEBUG] Sending announce to \(peerID)")
                         let announcePacket = BitchatPacket(
                             type: MessageType.announce.rawValue,
                             senderID: self.myPeerID.data(using: .utf8)!,
@@ -201,17 +215,21 @@ class BluetoothMeshService: NSObject {
             
         case .announce:
             if let nickname = String(data: packet.payload, encoding: .utf8) {
+                print("[DEBUG] Received announce from \(peerID): \(nickname)")
+                
                 // Store the nickname
                 peerNicknames[peerID] = nickname
                 
                 // Add to active peers if not already there
                 if peerID != "unknown" && peerID != myPeerID && !activePeers.contains(peerID) {
+                    print("[DEBUG] Adding new peer \(peerID) to active peers")
                     activePeers.insert(peerID)
                     DispatchQueue.main.async {
                         self.delegate?.didConnectToPeer(nickname)
                         self.delegate?.didUpdatePeerList(self.getAllConnectedPeerIDs())
                     }
                 } else {
+                    print("[DEBUG] Peer \(peerID) already active or invalid")
                     // Just update the peer list to refresh nicknames
                     DispatchQueue.main.async {
                         self.delegate?.didUpdatePeerList(self.getAllConnectedPeerIDs())
@@ -227,14 +245,18 @@ class BluetoothMeshService: NSObject {
 
 extension BluetoothMeshService: CBCentralManagerDelegate {
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
+        print("[DEBUG] Central state changed to: \(central.state.rawValue)")
         if central.state == .poweredOn {
             startScanning()
         }
     }
     
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi RSSI: NSNumber) {
+        print("[DEBUG] Discovered peripheral: \(peripheral.name ?? "unknown") RSSI: \(RSSI)")
+        
         // Connect to any device we discover - we'll filter by service later
         if !discoveredPeripherals.contains(peripheral) {
+            print("[DEBUG] Connecting to peripheral...")
             discoveredPeripherals.append(peripheral)
             peripheral.delegate = self
             central.connect(peripheral, options: nil)
@@ -242,6 +264,7 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
     }
     
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
+        print("[DEBUG] Connected to peripheral: \(peripheral.name ?? "unknown")")
         peripheral.delegate = self
         peripheral.discoverServices([BluetoothMeshService.serviceUUID])
         
@@ -252,6 +275,8 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
         }
         
         connectedPeripherals[String(peerID)] = peripheral
+        print("[DEBUG] Connected to peer: \(peerID)")
+        print("[DEBUG] Active peers: \(activePeers)")
         
         // Update peer list to show we're connecting
         DispatchQueue.main.async {
@@ -260,6 +285,8 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
     }
     
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
+        print("[DEBUG] Disconnected from peripheral: \(peripheral.name ?? "unknown"), error: \(error?.localizedDescription ?? "none")")
+        
         if let peerID = connectedPeripherals.first(where: { $0.value == peripheral })?.key {
             connectedPeripherals.removeValue(forKey: peerID)
             peripheralCharacteristics.removeValue(forKey: peripheral)
@@ -376,8 +403,10 @@ extension BluetoothMeshService: CBPeripheralDelegate {
 
 extension BluetoothMeshService: CBPeripheralManagerDelegate {
     func peripheralManagerDidUpdateState(_ peripheral: CBPeripheralManager) {
+        print("[DEBUG] Peripheral state changed to: \(peripheral.state.rawValue)")
         switch peripheral.state {
         case .poweredOn:
+            print("[DEBUG] Peripheral powered on, setting up...")
             setupPeripheral()
             startAdvertising()
         default:
@@ -390,11 +419,13 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
     }
     
     func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveWrite requests: [CBATTRequest]) {
+        print("[DEBUG] Received write request")
         for request in requests {
             if let data = request.value,
                let packet = BitchatPacket.from(data) {
                 // Try to identify peer from packet
                 let peerID = String(data: packet.senderID, encoding: .utf8) ?? "unknown"
+                print("[DEBUG] Write from peer: \(peerID)")
                 
                 // Store the central for updates
                 if !subscribedCentrals.contains(request.central) {
@@ -451,8 +482,10 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
     }
     
     func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didSubscribeTo characteristic: CBCharacteristic) {
+        print("[DEBUG] Central subscribed to notifications")
         if !subscribedCentrals.contains(central) {
             subscribedCentrals.append(central)
+            print("[DEBUG] New central subscribed, total: \(subscribedCentrals.count)")
             
             // Send our public key to the newly connected central
             let publicKeyData = encryptionService.publicKey.rawRepresentation
@@ -490,6 +523,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             }
             
             // Update peer list to show we're connected (even without peer ID yet)
+            print("[DEBUG] Updating peer list after subscription")
             DispatchQueue.main.async {
                 self.delegate?.didUpdatePeerList(self.getAllConnectedPeerIDs())
             }
