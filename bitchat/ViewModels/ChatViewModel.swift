@@ -252,6 +252,9 @@ extension ChatViewModel: BitchatDelegate {
         )
         messages.append(systemMessage)
         print("[DEBUG] Added join message, total messages: \(messages.count)")
+        
+        // Force UI update
+        objectWillChange.send()
     }
     
     func didDisconnectFromPeer(_ peerID: String) {
@@ -265,6 +268,9 @@ extension ChatViewModel: BitchatDelegate {
         )
         messages.append(systemMessage)
         print("[DEBUG] Added leave message, total messages: \(messages.count)")
+        
+        // Force UI update
+        objectWillChange.send()
     }
     
     func didUpdatePeerList(_ peers: [String]) {
