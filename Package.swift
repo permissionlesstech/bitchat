@@ -17,10 +17,7 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "bitchat",
-            path: "bitchat",
-            resources: [
-                .process("Info.plist")
-            ]
+            path: "bitchat"
         ),
     ]
 )
