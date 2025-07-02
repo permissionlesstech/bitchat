@@ -559,6 +559,9 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
         
         connectedPeripherals[peerID] = peripheral
         print("[DEBUG] Connected to peer: \(peerID)")
+        
+        // Add to active peers immediately
+        activePeers.insert(peerID)
         print("[DEBUG] Active peers: \(activePeers)")
         
         // Update peer list to show we're connecting
@@ -622,42 +625,35 @@ extension BluetoothMeshService: CBPeripheralDelegate {
                 peripheral.setNotifyValue(true, for: characteristic)
                 peripheralCharacteristics[peripheral] = characteristic
                 
-                // Send key exchange and announce immediately
-                DispatchQueue.main.async { [weak self] in
-                    guard let self = self else { return }
-                    
-                    let publicKeyData = self.encryptionService.publicKey.rawRepresentation
-                    let packet = BitchatPacket(
-                        type: MessageType.keyExchange.rawValue,
+                // Send key exchange and announce immediately without any delay
+                let publicKeyData = self.encryptionService.publicKey.rawRepresentation
+                let packet = BitchatPacket(
+                    type: MessageType.keyExchange.rawValue,
+                    senderID: self.myPeerID.data(using: .utf8)!,
+                    recipientID: nil,
+                    timestamp: UInt64(Date().timeIntervalSince1970),
+                    payload: try! JSONEncoder().encode(publicKeyData),
+                    signature: nil,
+                    ttl: 1
+                )
+                
+                if let data = packet.data {
+                    peripheral.writeValue(data, for: characteristic, type: .withResponse)
+                }
+                
+                // Send announce packet immediately after key exchange
+                if let vm = self.delegate as? ChatViewModel {
+                    let announcePacket = BitchatPacket(
+                        type: MessageType.announce.rawValue,
                         senderID: self.myPeerID.data(using: .utf8)!,
                         recipientID: nil,
                         timestamp: UInt64(Date().timeIntervalSince1970),
-                        payload: try! JSONEncoder().encode(publicKeyData),
+                        payload: vm.nickname.data(using: .utf8)!,
                         signature: nil,
                         ttl: 1
                     )
-                    
-                    if let data = packet.data {
+                    if let data = announcePacket.data {
                         peripheral.writeValue(data, for: characteristic, type: .withResponse)
-                    }
-                    
-                    // Send announce packet immediately after key exchange
-                    if let vm = self.delegate as? ChatViewModel {
-                        DispatchQueue.main.async { [weak self] in
-                            guard let self = self else { return }
-                            let announcePacket = BitchatPacket(
-                                type: MessageType.announce.rawValue,
-                                senderID: self.myPeerID.data(using: .utf8)!,
-                                recipientID: nil,
-                                timestamp: UInt64(Date().timeIntervalSince1970),
-                                payload: vm.nickname.data(using: .utf8)!,
-                                signature: nil,
-                                ttl: 1
-                            )
-                            if let data = announcePacket.data {
-                                peripheral.writeValue(data, for: characteristic, type: .withResponse)
-                            }
-                        }
                     }
                 }
             }

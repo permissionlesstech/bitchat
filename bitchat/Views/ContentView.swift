@@ -106,14 +106,15 @@ struct ContentView: View {
                 .opacity(0)
             } else {
                 // Public chat header
-                Text("bitchat")
-                    .font(.system(size: 18, weight: .medium, design: .monospaced))
-                    .foregroundColor(textColor)
-                
-                Spacer()
-                
-                // Peer status section
-                peerStatusView
+                HStack(spacing: 12) {
+                    Text("bitchat")
+                        .font(.system(size: 18, weight: .medium, design: .monospaced))
+                        .foregroundColor(textColor)
+                    
+                    // Peer status section
+                    peerStatusView
+                        .frame(maxWidth: 120)
+                }
                 
                 Spacer()
                 
@@ -188,7 +189,11 @@ struct ContentView: View {
                 }
             }
         }
+        #if os(macOS)
         .menuStyle(.borderlessButton)
+        #else
+        .menuStyle(.automatic)
+        #endif
     }
     
     private var messagesView: some View {
