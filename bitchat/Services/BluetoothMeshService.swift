@@ -373,10 +373,19 @@ class BluetoothMeshService: NSObject {
         
         // Send to subscribed centrals (as peripheral)
         if characteristic != nil && !subscribedCentrals.isEmpty {
-            peripheralManager.updateValue(data, for: characteristic, onSubscribedCentrals: subscribedCentrals)
-            print("[BROADCAST] Sent to \(subscribedCentrals.count) subscribed centrals")
+            let success = peripheralManager.updateValue(data, for: characteristic, onSubscribedCentrals: subscribedCentrals)
+            if success {
+                print("[BROADCAST] Successfully sent to \(subscribedCentrals.count) subscribed centrals")
+            } else {
+                print("[BROADCAST] Failed to send to centrals - queue full, will retry on delegate callback")
+            }
         } else {
-            print("[BROADCAST] No subscribed centrals to send to")
+            if characteristic == nil {
+                print("[BROADCAST] No characteristic available")
+            }
+            if subscribedCentrals.isEmpty {
+                print("[BROADCAST] No subscribed centrals")
+            }
         }
     }
     

@@ -72,10 +72,14 @@ class AudioRecordingService: NSObject, ObservableObject {
             audioRecorder?.delegate = self
             audioRecorder?.prepareToRecord() // Important: prepare before recording
             
+            print("[AUDIO] Created recorder with URL: \(audioFilename)")
+            print("[AUDIO] Recorder prepared: \(audioRecorder?.prepareToRecord() ?? false)")
+            
             if audioRecorder?.record() == true {
                 isRecording = true
                 recordingStartTime = Date()
                 recordingTime = 0
+                print("[AUDIO] Recording started successfully")
                 
                 // Start timer to update recording time and enforce max duration
                 recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
