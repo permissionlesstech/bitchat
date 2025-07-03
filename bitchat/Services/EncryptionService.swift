@@ -51,42 +51,29 @@ class EncryptionService {
     
     // Add peer's combined public keys
     func addPeerPublicKey(_ peerID: String, publicKeyData: Data) throws {
-        print("[CRYPTO] Received public key data of size: \(publicKeyData.count)")
-        
         // Convert to array for safe access
         let keyBytes = [UInt8](publicKeyData)
         
-        if keyBytes.count == 96 {
-            // New format: 32 for key agreement + 32 for signing + 32 for identity
-            let keyAgreementData = Data(keyBytes[0..<32])
-            let signingKeyData = Data(keyBytes[32..<64])
-            let identityKeyData = Data(keyBytes[64..<96])
-            
-            let publicKey = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: keyAgreementData)
-            peerPublicKeys[peerID] = publicKey
-            
-            let signingKey = try Curve25519.Signing.PublicKey(rawRepresentation: signingKeyData)
-            peerSigningKeys[peerID] = signingKey
-            
-            let identityKey = try Curve25519.Signing.PublicKey(rawRepresentation: identityKeyData)
-            peerIdentityKeys[peerID] = identityKey
-            
-            print("[CRYPTO] Stored all three keys for peer \(peerID)")
-        } else if keyBytes.count == 64 {
-            // Handle old format (64 bytes) for backward compatibility
-            print("[CRYPTO] Received old key format (64 bytes), no identity key")
-            let keyAgreementData = Data(keyBytes[0..<32])
-            let signingKeyData = Data(keyBytes[32..<64])
-            
-            let publicKey = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: keyAgreementData)
-            peerPublicKeys[peerID] = publicKey
-            
-            let signingKey = try Curve25519.Signing.PublicKey(rawRepresentation: signingKeyData)
-            peerSigningKeys[peerID] = signingKey
-        } else {
-            print("[CRYPTO] Invalid public key data size: \(keyBytes.count)")
+        guard keyBytes.count == 96 else {
+            print("[CRYPTO] Invalid public key data size: \(keyBytes.count), expected 96")
             throw EncryptionError.invalidPublicKey
         }
+        
+        // Extract all three keys: 32 for key agreement + 32 for signing + 32 for identity
+        let keyAgreementData = Data(keyBytes[0..<32])
+        let signingKeyData = Data(keyBytes[32..<64])
+        let identityKeyData = Data(keyBytes[64..<96])
+        
+        let publicKey = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: keyAgreementData)
+        peerPublicKeys[peerID] = publicKey
+        
+        let signingKey = try Curve25519.Signing.PublicKey(rawRepresentation: signingKeyData)
+        peerSigningKeys[peerID] = signingKey
+        
+        let identityKey = try Curve25519.Signing.PublicKey(rawRepresentation: identityKeyData)
+        peerIdentityKeys[peerID] = identityKey
+        
+        print("[CRYPTO] Stored all three keys for peer \(peerID)")
         
         // Generate shared secret for encryption
         if let publicKey = peerPublicKeys[peerID] {

@@ -652,4 +652,8 @@ extension ChatViewModel: BitchatDelegate {
         return Array(Set(mentions)) // Remove duplicates
     }
     
+    func isFavorite(fingerprint: String) -> Bool {
+        return favoritePeers.contains(fingerprint)
+    }
+    
 }
