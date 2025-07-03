@@ -259,13 +259,18 @@ class BluetoothMeshService: NSObject {
             )
             
             if let messageData = message.toBinaryPayload() {
+                // Create packet with recipient ID for proper routing
                 let packet = BitchatPacket(
                     type: MessageType.privateMessage.rawValue,
-                    ttl: self.maxTTL,
-                    senderID: self.myPeerID,
-                    payload: messageData
+                    senderID: Data(self.myPeerID.utf8),
+                    recipientID: Data(recipientPeerID.utf8),
+                    timestamp: UInt64(Date().timeIntervalSince1970),
+                    payload: messageData,
+                    signature: nil,
+                    ttl: self.maxTTL
                 )
                 
+                print("[PRIVATE] Sending private message to \(recipientPeerID)")
                 self.broadcastPacket(packet)
                 
                 // Don't call didReceiveMessage here - let the view model handle it directly
@@ -538,52 +543,63 @@ class BluetoothMeshService: NSObject {
             }
             
         case .privateMessage:
+            print("[PRIVATE] Received private message packet")
             if let message = BitchatMessage.fromBinaryPayload(packet.payload) {
                 // Check if this private message is for us
                 if let recipientID = packet.recipientID,
-                   let recipientIDString = String(data: recipientID.trimmingNullBytes(), encoding: .utf8),
-                   recipientIDString == myPeerID {
+                   let recipientIDString = String(data: recipientID.trimmingNullBytes(), encoding: .utf8) {
+                    print("[PRIVATE] Message recipient: \(recipientIDString), myPeerID: \(myPeerID)")
                     
-                    // Get sender ID
-                    if let senderID = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8) {
-                        // Ignore our own messages
-                        if senderID == myPeerID {
-                            return
-                        }
-                        
-                        // Store nickname mapping if we don't have it
-                        if peerNicknames[senderID] == nil {
-                            peerNicknames[senderID] = message.sender
+                    if recipientIDString == myPeerID {
+                        // Get sender ID
+                        if let senderID = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8) {
+                            // Ignore our own messages
+                            if senderID == myPeerID {
+                                print("[PRIVATE] Ignoring own message")
+                                return
+                            }
                             
-                            // Update peer list to show the new nickname
+                            print("[PRIVATE] Received private message from \(senderID): \(message.content)")
+                            
+                            // Store nickname mapping if we don't have it
+                            if peerNicknames[senderID] == nil {
+                                peerNicknames[senderID] = message.sender
+                                
+                                // Update peer list to show the new nickname
+                                DispatchQueue.main.async {
+                                    self.delegate?.didUpdatePeerList(self.getAllConnectedPeerIDs())
+                                }
+                            }
+                            
+                            
+                            // Create a new message with the sender peer ID
+                            let messageWithPeerID = BitchatMessage(
+                                sender: message.sender,
+                                content: message.content,
+                                timestamp: message.timestamp,
+                                isRelay: message.isRelay,
+                                originalSender: message.originalSender,
+                                isPrivate: message.isPrivate,
+                                recipientNickname: message.recipientNickname,
+                                senderPeerID: senderID
+                            )
+                            
                             DispatchQueue.main.async {
-                                self.delegate?.didUpdatePeerList(self.getAllConnectedPeerIDs())
+                                self.delegate?.didReceiveMessage(messageWithPeerID)
                             }
                         }
-                        
-                        
-                        // Create a new message with the sender peer ID
-                        let messageWithPeerID = BitchatMessage(
-                            sender: message.sender,
-                            content: message.content,
-                            timestamp: message.timestamp,
-                            isRelay: message.isRelay,
-                            originalSender: message.originalSender,
-                            isPrivate: message.isPrivate,
-                            recipientNickname: message.recipientNickname,
-                            senderPeerID: senderID
-                        )
-                        
-                        DispatchQueue.main.async {
-                            self.delegate?.didReceiveMessage(messageWithPeerID)
-                        }
+                    } else if packet.ttl > 0 {
+                        // Relay private messages that aren't for us
+                        print("[PRIVATE] Relaying message not meant for us (TTL: \(packet.ttl))")
+                        var relayPacket = packet
+                        relayPacket.ttl -= 1
+                        self.broadcastPacket(relayPacket)
                     }
-                } else if packet.ttl > 0 {
-                    // Relay private messages that aren't for us
-                    var relayPacket = packet
-                    relayPacket.ttl -= 1
-                    self.broadcastPacket(relayPacket)
+                } else {
+                    print("[PRIVATE] No recipient ID in packet")
                 }
+            } else {
+                print("[PRIVATE] Failed to decode message from payload")
             }
             
         case .voiceNote:
