@@ -999,7 +999,11 @@ extension BluetoothMeshService: CBPeripheralDelegate {
     }
     
     func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
-        // Handle write completion if needed
+        if let error = error {
+            print("[PERIPHERAL] Write failed: \(error)")
+        } else {
+            print("[PERIPHERAL] Write completed successfully")
+        }
     }
     
     func peripheral(_ peripheral: CBPeripheral, didModifyServices invalidatedServices: [CBService]) {
