@@ -31,15 +31,22 @@ class ChatViewModel: ObservableObject {
     let audioPlayer = AudioPlaybackService()
     private let userDefaults = UserDefaults.standard
     private let nicknameKey = "bitchat.nickname"
+    private let favoritesKey = "bitchat.favorites"
     private var nicknameSaveTimer: Timer?
     private var notificationTimer: Timer?
     
+    @Published var favoritePeers: Set<String> = []
+    
     init() {
         loadNickname()
+        loadFavorites()
         meshService.delegate = self
         
         // Start mesh service immediately
         meshService.startServices()
+        
+        // Request notification permission
+        NotificationService.shared.requestAuthorization()
     }
     
     private func loadNickname() {
@@ -54,6 +61,30 @@ class ChatViewModel: ObservableObject {
     func saveNickname() {
         userDefaults.set(nickname, forKey: nicknameKey)
         userDefaults.synchronize() // Force immediate save
+    }
+    
+    private func loadFavorites() {
+        if let savedFavorites = userDefaults.stringArray(forKey: favoritesKey) {
+            favoritePeers = Set(savedFavorites)
+        }
+    }
+    
+    private func saveFavorites() {
+        userDefaults.set(Array(favoritePeers), forKey: favoritesKey)
+        userDefaults.synchronize()
+    }
+    
+    func toggleFavorite(peerID: String) {
+        if favoritePeers.contains(peerID) {
+            favoritePeers.remove(peerID)
+        } else {
+            favoritePeers.insert(peerID)
+        }
+        saveFavorites()
+    }
+    
+    func isFavorite(peerID: String) -> Bool {
+        return favoritePeers.contains(peerID)
     }
     
     func sendMessage(_ content: String) {
@@ -200,10 +231,9 @@ class ChatViewModel: ObservableObject {
         
         let partial = String(beforeCursor[range]).lowercased()
         
-        // Get all available nicknames
+        // Get all available nicknames (excluding self)
         let peerNicknames = meshService.getPeerNicknames()
-        var allNicknames = Array(peerNicknames.values)
-        allNicknames.append(nickname) // Include self
+        let allNicknames = Array(peerNicknames.values)
         
         // Filter suggestions
         let suggestions = allNicknames.filter { nick in
@@ -278,6 +308,34 @@ class ChatViewModel: ObservableObject {
             senderStyle.foregroundColor = senderColor
             senderStyle.font = .system(size: 12, weight: .medium, design: .monospaced)
             result.append(sender.mergingAttributes(senderStyle))
+            
+            // Special handling for voice notes
+            if message.voiceNoteData != nil {
+                // Add the content (emoji + duration) with play button integrated
+                var contentStyle = AttributeContainer()
+                contentStyle.font = .system(size: 14, design: .monospaced)
+                contentStyle.foregroundColor = isDark ? Color.white : Color.black
+                
+                // Parse the emoji and duration from content
+                let parts = message.content.components(separatedBy: " ")
+                if parts.count >= 2 {
+                    // Emoji
+                    result.append(AttributedString(parts[0] + " ").mergingAttributes(contentStyle))
+                    
+                    // Play/pause button as text
+                    let playSymbol = audioPlayer.isPlaying && audioPlayer.currentPlayingMessageID == message.id ? "⏸" : "▶"
+                    var playStyle = AttributeContainer()
+                    playStyle.font = .system(size: 12, design: .monospaced)
+                    playStyle.foregroundColor = primaryColor
+                    result.append(AttributedString(playSymbol + " ").mergingAttributes(playStyle))
+                    
+                    // Duration
+                    result.append(AttributedString(parts[1]).mergingAttributes(contentStyle))
+                } else {
+                    result.append(AttributedString(message.content).mergingAttributes(contentStyle))
+                }
+                return result
+            }
             
             // Process content to highlight mentions
             let contentText = message.content
@@ -376,8 +434,10 @@ extension ChatViewModel: BitchatDelegate {
         // Check if we're mentioned
         let isMentioned = message.mentions?.contains(nickname) ?? false
         
-        // Different haptic feedback for mentions, private messages, and regular messages
+        // Send notifications for mentions and private messages when app is in background
         if isMentioned && message.sender != nickname {
+            NotificationService.shared.sendMentionNotification(from: message.sender, message: message.content)
+            
             // Very prominent haptic for @mentions - triple tap with heavy impact
             let impactFeedback = UIImpactFeedbackGenerator(style: .heavy)
             impactFeedback.prepare()
@@ -390,6 +450,8 @@ extension ChatViewModel: BitchatDelegate {
                 impactFeedback.impactOccurred()
             }
         } else if message.isPrivate && message.sender != nickname {
+            NotificationService.shared.sendPrivateMessageNotification(from: message.sender, message: message.content)
+            
             // Heavy haptic for private messages - more pronounced
             let impactFeedback = UIImpactFeedbackGenerator(style: .heavy)
             impactFeedback.prepare()
@@ -477,7 +539,7 @@ extension ChatViewModel: BitchatDelegate {
     func sendVoiceNote(_ audioData: Data, duration: TimeInterval) {
         let message = BitchatMessage(
             sender: nickname,
-            content: "🎤 Voice note (\(String(format: "%.1f", duration))s)",
+            content: "🎤 \(String(format: "%.1f", duration))s",
             timestamp: Date(),
             isRelay: false,
             originalSender: nil,

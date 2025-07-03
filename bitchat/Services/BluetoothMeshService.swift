@@ -7,6 +7,16 @@ import AppKit
 import UIKit
 #endif
 
+// Extension for hex encoding
+extension Data {
+    func hexEncodedString() -> String {
+        if self.isEmpty {
+            return ""
+        }
+        return self.map { String(format: "%02x", $0) }.joined()
+    }
+}
+
 class BluetoothMeshService: NSObject {
     static let serviceUUID = CBUUID(string: "F47B5E2D-4A9E-4C5A-9B3F-8E1D2C3A4B5C")
     static let characteristicUUID = CBUUID(string: "A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D")
@@ -30,6 +40,11 @@ class BluetoothMeshService: NSObject {
     private let maxTTL: UInt8 = 5
     private var announcedToPeers = Set<String>()  // Track which peers we've announced to
     private var announcedPeers = Set<String>()  // Track peers who have already been announced
+    
+    // Fragment handling
+    private var incomingFragments: [String: [Int: Data]] = [:]  // fragmentID -> [index: data]
+    private var fragmentMetadata: [String: (originalType: UInt8, totalFragments: Int, timestamp: Date)] = [:]
+    private let maxFragmentSize = 400  // Leave room for protocol overhead
     
     let myPeerID: String
     
@@ -183,12 +198,14 @@ class BluetoothMeshService: NSObject {
         messageQueue.async { [weak self] in
             guard let self = self else { return }
             
+            print("[VOICE] Sending voice note: audio size = \(audioData.count) bytes, duration = \(duration)s")
+            
             let nickname = self.delegate as? ChatViewModel
             let senderNick = nickname?.nickname ?? self.myPeerID
             
             let message = BitchatMessage(
                 sender: senderNick,
-                content: "🎤 Voice note (\(String(format: "%.1f", duration))s)",
+                content: "🎤 \(String(format: "%.1f", duration))s",
                 timestamp: Date(),
                 isRelay: false,
                 originalSender: nil,
@@ -197,6 +214,7 @@ class BluetoothMeshService: NSObject {
             )
             
             if let messageData = message.toBinaryPayload() {
+                print("[VOICE] Message payload size: \(messageData.count) bytes")
                 let packet = BitchatPacket(
                     type: MessageType.voiceNote.rawValue,
                     ttl: self.maxTTL,
@@ -204,7 +222,18 @@ class BluetoothMeshService: NSObject {
                     payload: messageData
                 )
                 
-                self.broadcastPacket(packet)
+                if let packetData = packet.toBinaryData() {
+                    print("[VOICE] Final packet size: \(packetData.count) bytes")
+                    if packetData.count > 512 {
+                        print("[VOICE] WARNING: Packet size exceeds typical BLE MTU of 512 bytes!")
+                        print("[VOICE] Fragmenting voice note into smaller packets...")
+                        self.sendFragmentedPacket(packet)
+                    } else {
+                        self.broadcastPacket(packet)
+                    }
+                } else {
+                    self.broadcastPacket(packet)
+                }
             }
         }
     }
@@ -340,7 +369,16 @@ class BluetoothMeshService: NSObject {
     private func handleReceivedPacket(_ packet: BitchatPacket, from peerID: String, peripheral: CBPeripheral? = nil) {
         messageQueue.async(flags: .barrier) { [weak self] in
             guard let self = self else { return }
-            guard packet.ttl > 0 else { return }
+            guard packet.ttl > 0 else { 
+                print("[PACKET] Dropping packet with TTL 0")
+                return 
+            }
+            
+            // Validate packet has payload
+            guard !packet.payload.isEmpty else {
+                print("[PACKET] Dropping packet with empty payload")
+                return
+            }
         
         let messageID = "\(packet.timestamp)-\(String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8) ?? "")"
         guard !processedMessages.contains(messageID) else { 
@@ -562,9 +600,206 @@ class BluetoothMeshService: NSObject {
                 }
             }
             
+        case .fragmentStart, .fragmentContinue, .fragmentEnd:
+            let fragmentTypeStr = packet.type == 10 ? "START" : (packet.type == 11 ? "CONTINUE" : "END")
+            print("[PACKET] Handling fragment type: \(fragmentTypeStr) (\(packet.type)), payload size: \(packet.payload.count), from: \(peerID)")
+            
+            // Validate fragment has minimum required size
+            if packet.payload.count < 13 {
+                print("[PACKET] Fragment payload too small: \(packet.payload.count) bytes, dropping")
+                return
+            }
+            
+            handleFragment(packet, from: peerID)
+            
+            // Relay fragments if TTL > 0
+            var relayPacket = packet
+            relayPacket.ttl -= 1
+            if relayPacket.ttl > 0 {
+                print("[PACKET] Relaying fragment with TTL: \(relayPacket.ttl)")
+                self.broadcastPacket(relayPacket)
+            }
+            
         default:
             break
         }
+        }
+    }
+    
+    private func sendFragmentedPacket(_ packet: BitchatPacket) {
+        guard let fullData = packet.toBinaryData() else { return }
+        
+        // Generate a fixed 8-byte fragment ID
+        var fragmentID = Data(count: 8)
+        fragmentID.withUnsafeMutableBytes { bytes in
+            arc4random_buf(bytes.baseAddress, 8)
+        }
+        
+        let fragments = stride(from: 0, to: fullData.count, by: maxFragmentSize).map { offset in
+            fullData[offset..<min(offset + maxFragmentSize, fullData.count)]
+        }
+        
+        print("[FRAGMENT] Splitting into \(fragments.count) fragments of max \(maxFragmentSize) bytes")
+        print("[FRAGMENT] Fragment ID: \(fragmentID.hexEncodedString())")
+        print("[FRAGMENT] Original packet size: \(fullData.count) bytes")
+        
+        // Send fragments in batches to avoid congestion
+        let batchSize = 5
+        let delayBetweenFragments: TimeInterval = 0.05  // 50ms between fragments
+        let delayBetweenBatches: TimeInterval = 0.2     // 200ms between batches
+        
+        for (index, fragmentData) in fragments.enumerated() {
+            var fragmentPayload = Data()
+            
+            // Fragment header: fragmentID (8) + index (2) + total (2) + originalType (1) + data
+            fragmentPayload.append(fragmentID)
+            fragmentPayload.append(UInt8((index >> 8) & 0xFF))
+            fragmentPayload.append(UInt8(index & 0xFF))
+            fragmentPayload.append(UInt8((fragments.count >> 8) & 0xFF))
+            fragmentPayload.append(UInt8(fragments.count & 0xFF))
+            fragmentPayload.append(packet.type)
+            fragmentPayload.append(fragmentData)
+            
+            let fragmentType: MessageType
+            if index == 0 {
+                fragmentType = .fragmentStart
+            } else if index == fragments.count - 1 {
+                fragmentType = .fragmentEnd
+            } else {
+                fragmentType = .fragmentContinue
+            }
+            
+            let fragmentPacket = BitchatPacket(
+                type: fragmentType.rawValue,
+                ttl: packet.ttl,
+                senderID: myPeerID,
+                payload: fragmentPayload
+            )
+            
+            // Calculate delay based on batch
+            let batchNumber = index / batchSize
+            let indexInBatch = index % batchSize
+            let totalDelay = (Double(batchNumber) * delayBetweenBatches) + (Double(indexInBatch) * delayBetweenFragments)
+            
+            // Send fragments on background queue with calculated delay
+            messageQueue.asyncAfter(deadline: .now() + totalDelay) { [weak self] in
+                self?.broadcastPacket(fragmentPacket)
+                print("[FRAGMENT] Sent fragment \(index + 1)/\(fragments.count) type: \(fragmentType) (batch \(batchNumber + 1))")
+            }
+        }
+        
+        let totalTime = Double((fragments.count - 1) / batchSize) * delayBetweenBatches + Double((fragments.count - 1) % batchSize) * delayBetweenFragments
+        print("[FRAGMENT] Total send time: \(totalTime)s for \(fragments.count) fragments")
+    }
+    
+    private func handleFragment(_ packet: BitchatPacket, from peerID: String) {
+        print("[FRAGMENT] Starting to handle fragment, payload size: \(packet.payload.count)")
+        
+        guard packet.payload.count >= 13 else { 
+            print("[FRAGMENT] Payload too small: \(packet.payload.count) bytes (need at least 13)")
+            return 
+        }
+        
+        // Convert to array for safer access
+        let payloadArray = Array(packet.payload)
+        var offset = 0
+        
+        // Extract fragment ID as binary data (8 bytes)
+        guard payloadArray.count >= 8 else {
+            print("[FRAGMENT] Payload too small for fragment ID")
+            return
+        }
+        
+        let fragmentIDData = Data(payloadArray[0..<8])
+        let fragmentID = fragmentIDData.hexEncodedString()
+        print("[FRAGMENT] Fragment ID: \(fragmentID)")
+        offset = 8
+        
+        // Safely extract index
+        guard payloadArray.count >= offset + 2 else { 
+            print("[FRAGMENT] Not enough data for index at offset \(offset)")
+            return 
+        }
+        let index = Int(payloadArray[offset]) << 8 | Int(payloadArray[offset + 1])
+        offset += 2
+        print("[FRAGMENT] Index: \(index)")
+        
+        // Safely extract total
+        guard payloadArray.count >= offset + 2 else { 
+            print("[FRAGMENT] Not enough data for total at offset \(offset)")
+            return 
+        }
+        let total = Int(payloadArray[offset]) << 8 | Int(payloadArray[offset + 1])
+        offset += 2
+        print("[FRAGMENT] Total fragments: \(total)")
+        
+        // Safely extract original type
+        guard payloadArray.count >= offset + 1 else { 
+            print("[FRAGMENT] Not enough data for type at offset \(offset)")
+            return 
+        }
+        let originalType = payloadArray[offset]
+        offset += 1
+        print("[FRAGMENT] Original type: \(originalType)")
+        
+        // Extract fragment data
+        let fragmentData: Data
+        if payloadArray.count > offset {
+            fragmentData = Data(payloadArray[offset...])
+        } else {
+            fragmentData = Data()
+        }
+        
+        print("[FRAGMENT] Received fragment \(index + 1)/\(total) for ID: \(fragmentID), data size: \(fragmentData.count)")
+        
+        // Initialize fragment collection if needed
+        if incomingFragments[fragmentID] == nil {
+            incomingFragments[fragmentID] = [:]
+            fragmentMetadata[fragmentID] = (originalType, total, Date())
+            print("[FRAGMENT] Started collecting fragments for ID: \(fragmentID), expecting \(total) fragments")
+        }
+        
+        // Store fragment
+        incomingFragments[fragmentID]?[index] = fragmentData
+        
+        print("[FRAGMENT] Progress for ID \(fragmentID): \(incomingFragments[fragmentID]?.count ?? 0)/\(total) fragments collected")
+        
+        // Check if we have all fragments
+        if let fragments = incomingFragments[fragmentID],
+           fragments.count == total {
+            
+            // Reassemble the original packet
+            var reassembledData = Data()
+            for i in 0..<total {
+                if let fragment = fragments[i] {
+                    reassembledData.append(fragment)
+                } else {
+                    print("[FRAGMENT] Missing fragment \(i) for ID: \(fragmentID)")
+                    return
+                }
+            }
+            
+            print("[FRAGMENT] Successfully reassembled \(total) fragments into \(reassembledData.count) bytes")
+            
+            // Parse and handle the reassembled packet
+            if let reassembledPacket = BitchatPacket.from(reassembledData) {
+                // Clean up
+                incomingFragments.removeValue(forKey: fragmentID)
+                fragmentMetadata.removeValue(forKey: fragmentID)
+                
+                // Handle the reassembled packet
+                handleReceivedPacket(reassembledPacket, from: peerID, peripheral: nil)
+            }
+        }
+        
+        // Clean up old fragments (older than 30 seconds)
+        let cutoffTime = Date().addingTimeInterval(-30)
+        for (fragID, metadata) in fragmentMetadata {
+            if metadata.timestamp < cutoffTime {
+                incomingFragments.removeValue(forKey: fragID)
+                fragmentMetadata.removeValue(forKey: fragID)
+                print("[FRAGMENT] Cleaned up expired fragments for ID: \(fragID)")
+            }
         }
     }
 }
@@ -717,8 +952,13 @@ extension BluetoothMeshService: CBPeripheralDelegate {
     }
     
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
-        guard let data = characteristic.value,
-              let packet = BitchatPacket.from(data) else { 
+        guard let data = characteristic.value else {
+            print("[PERIPHERAL] No data in characteristic")
+            return
+        }
+        
+        guard let packet = BitchatPacket.from(data) else { 
+            print("[PERIPHERAL] Failed to parse packet from data of size: \(data.count)")
             return 
         }
         
@@ -726,6 +966,14 @@ extension BluetoothMeshService: CBPeripheralDelegate {
         let localPeerID = connectedPeripherals.first(where: { $0.value == peripheral })?.key ?? "unknown"
         let packetSenderID = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8) ?? "unknown"
         print("[PERIPHERAL] Received data from localPeerID: \(localPeerID), packetSenderID: \(packetSenderID), packet type: \(packet.type)")
+        
+        // Handle fragments directly if it's a fragment type
+        if packet.type == MessageType.fragmentStart.rawValue || 
+           packet.type == MessageType.fragmentContinue.rawValue || 
+           packet.type == MessageType.fragmentEnd.rawValue {
+            print("[PERIPHERAL] Processing fragment directly")
+        }
+        
         handleReceivedPacket(packet, from: packetSenderID, peripheral: peripheral)
     }
     
@@ -796,6 +1044,8 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                let packet = BitchatPacket.from(data) {
                 // Try to identify peer from packet
                 let peerID = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8) ?? "unknown"
+                
+                print("[PERIPHERAL_MANAGER] Received write from peer: \(peerID), packet type: \(packet.type)")
                 
                 // Store the central for updates
                 if !subscribedCentrals.contains(request.central) {

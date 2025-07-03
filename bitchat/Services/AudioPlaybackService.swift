@@ -31,12 +31,20 @@ class AudioPlaybackService: NSObject, ObservableObject {
         // Stop any current playback
         stopPlayback()
         
+        print("[AUDIO] Attempting to play voice note with data size: \(audioData.count) bytes")
+        
         // Create temporary file for audio data
         let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("voice_note_\(messageID).m4a")
         
         do {
+            // Ensure directory exists
+            try FileManager.default.createDirectory(at: tempURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+            
+            // Write audio data
             try audioData.write(to: tempURL)
             audioFiles[messageID] = tempURL
+            
+            print("[AUDIO] Written audio file to: \(tempURL.path), size: \(try FileManager.default.attributesOfItem(atPath: tempURL.path)[.size] ?? 0)")
             
             audioPlayer = try AVAudioPlayer(contentsOf: tempURL)
             audioPlayer?.delegate = self
