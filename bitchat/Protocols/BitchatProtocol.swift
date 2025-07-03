@@ -11,6 +11,9 @@ enum MessageType: UInt8 {
     case leave = 0x07
     case privateMessage = 0x08
     case voiceNote = 0x09
+    case fragmentStart = 0x0A  // First fragment of a large message
+    case fragmentContinue = 0x0B  // Continuation fragment
+    case fragmentEnd = 0x0C  // Last fragment
 }
 
 struct BitchatPacket: Codable {

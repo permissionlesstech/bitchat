@@ -8,6 +8,10 @@ struct ContentView: View {
     @Environment(\.colorScheme) var colorScheme
     @State private var showPeerList = false
     @State private var isRecordingVoice = false
+    @State private var recordingPulse = false
+    @State private var recordingScale: CGFloat = 1.0
+    @State private var showSidebar = false
+    @State private var sidebarDragOffset: CGFloat = 0
     
     private var backgroundColor: Color {
         colorScheme == .dark ? Color.black : Color.white
@@ -23,15 +27,134 @@ struct ContentView: View {
     
     var body: some View {
         ZStack {
-            VStack(spacing: 0) {
-                headerView
-                Divider()
-                messagesView
-                Divider()
-                inputView
+            // Main content
+            GeometryReader { geometry in
+                ZStack {
+                    VStack(spacing: 0) {
+                        headerView
+                        Divider()
+                        messagesView
+                        Divider()
+                        inputView
+                    }
+                    .background(backgroundColor)
+                    .foregroundColor(textColor)
+                    .gesture(
+                        DragGesture()
+                            .onChanged { value in
+                                // Only respond to leftward swipes when sidebar is closed
+                                // or rightward swipes when sidebar is open
+                                if !showSidebar && value.translation.width < 0 {
+                                    sidebarDragOffset = max(value.translation.width, -geometry.size.width * 0.7)
+                                } else if showSidebar && value.translation.width > 0 {
+                                    sidebarDragOffset = min(-geometry.size.width * 0.7 + value.translation.width, 0)
+                                }
+                            }
+                            .onEnded { value in
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                    if !showSidebar {
+                                        // Opening gesture (swipe left)
+                                        if value.translation.width < -100 || (value.translation.width < -50 && value.velocity.width < -500) {
+                                            showSidebar = true
+                                            sidebarDragOffset = 0
+                                        } else {
+                                            sidebarDragOffset = 0
+                                        }
+                                    } else {
+                                        // Closing gesture (swipe right)
+                                        if value.translation.width > 100 || (value.translation.width > 50 && value.velocity.width > 500) {
+                                            showSidebar = false
+                                            sidebarDragOffset = 0
+                                        } else {
+                                            sidebarDragOffset = 0
+                                        }
+                                    }
+                                }
+                            }
+                    )
+                    
+                    // Sidebar overlay
+                    HStack(spacing: 0) {
+                        // Tap to dismiss area
+                        Color.black.opacity(showSidebar ? 0.3 : 0.3 * (-sidebarDragOffset / (geometry.size.width * 0.7)))
+                            .onTapGesture {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                    showSidebar = false
+                                    sidebarDragOffset = 0
+                                }
+                            }
+                        
+                        sidebarView
+                            .frame(width: geometry.size.width * 0.7)
+                            .transition(.move(edge: .trailing))
+                    }
+                    .offset(x: showSidebar ? -sidebarDragOffset : geometry.size.width - sidebarDragOffset)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showSidebar)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: sidebarDragOffset)
+                }
             }
-            .background(backgroundColor)
-            .foregroundColor(textColor)
+            
+                // Recording ripples overlay
+                if isRecordingVoice {
+                    GeometryReader { geometry in
+                        ZStack {
+                            ForEach(0..<6) { index in
+                                Circle()
+                                    .stroke(Color.red.opacity(0.4 - Double(index) * 0.05), lineWidth: 1.5)
+                                    .frame(width: 20, height: 20)  // Start at mic button size
+                                    .scaleEffect(1 + (recordingScale - 1) * (1.0 - Double(index) * 0.1))
+                                    .opacity(max(0, 1.0 - ((recordingScale - 1) / 40.0) * (1.0 - Double(index) * 0.1)))
+                                    .position(
+                                        // Position at mic button location
+                                        x: geometry.size.width - 70,  // Account for padding and button position
+                                        y: geometry.size.height - 32  // Account for input bar height
+                                    )
+                                    .animation(
+                                        Animation.easeOut(duration: 3.0)
+                                            .repeatForever(autoreverses: false)
+                                            .delay(Double(index) * 0.4),
+                                        value: recordingScale
+                                    )
+                            }
+                        }
+                    }
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+                }
+            
+            // Autocomplete overlay
+            if viewModel.showAutocomplete && !viewModel.autocompleteSuggestions.isEmpty {
+                VStack {
+                    Spacer()
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(viewModel.autocompleteSuggestions.enumerated()), id: \.element) { index, suggestion in
+                            Button(action: {
+                                _ = viewModel.completeNickname(suggestion, in: &messageText)
+                            }) {
+                                HStack {
+                                    Text("@\(suggestion)")
+                                        .font(.system(size: 12, design: .monospaced))
+                                        .foregroundColor(index == viewModel.selectedAutocompleteIndex ? backgroundColor : textColor)
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(index == viewModel.selectedAutocompleteIndex ? textColor : Color.clear)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .background(backgroundColor)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(secondaryTextColor.opacity(0.5), lineWidth: 1)
+                    )
+                    .frame(maxWidth: 200, alignment: .leading)
+                    .offset(x: 100) // Align with input field
+                    .padding(.bottom, 45) // Position just above input
+                    .padding(.horizontal, 12)
+                }
+            }
             
             // Private message notification overlay
             if let notification = viewModel.privateMessageNotification {
@@ -108,25 +231,18 @@ struct ContentView: View {
                 .opacity(0)
             } else {
                 // Public chat header
-                HStack(spacing: 8) {
+                HStack(spacing: 4) {
                     Text("bitchat")
                         .font(.system(size: 18, weight: .medium, design: .monospaced))
                         .foregroundColor(textColor)
                     
-                    // Peer status section
-                    peerStatusView
-                }
-                
-                Spacer()
-                
-                HStack(spacing: 4) {
                     Text("name:")
-                        .font(.system(size: 11, design: .monospaced))
+                        .font(.system(size: 14, design: .monospaced))
                         .foregroundColor(secondaryTextColor)
                     
                     TextField("nickname", text: $viewModel.nickname)
                         .textFieldStyle(.plain)
-                        .font(.system(size: 12, design: .monospaced))
+                        .font(.system(size: 14, design: .monospaced))
                         .frame(maxWidth: 100)
                         .foregroundColor(textColor)
                         .onChange(of: viewModel.nickname) { _ in
@@ -136,6 +252,20 @@ struct ContentView: View {
                             viewModel.saveNickname()
                         }
                 }
+                
+                Spacer()
+                
+                // People counter
+                let otherPeersCount = viewModel.connectedPeers.filter { $0 != viewModel.meshService.myPeerID }.count
+                Text(viewModel.isConnected ? "\(otherPeersCount) \(otherPeersCount == 1 ? "person" : "people")" : "alone :/")
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundColor(viewModel.isConnected ? textColor : Color.red)
+                    .onTapGesture {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            showSidebar.toggle()
+                            sidebarDragOffset = 0
+                        }
+                    }
             }
         }
         .frame(height: 44) // Fixed height to prevent bouncing
@@ -184,7 +314,7 @@ struct ContentView: View {
             HStack(spacing: 2) {
                 // Text
                 let otherPeersCount = viewModel.connectedPeers.filter { $0 != viewModel.meshService.myPeerID }.count
-                Text(viewModel.isConnected ? "\(otherPeersCount) \(otherPeersCount == 1 ? "person" : "people")" : "scanning")
+                Text(viewModel.isConnected ? "\(otherPeersCount) \(otherPeersCount == 1 ? "person" : "people")" : "alone :/")
                     #if os(iOS)
                     .font(.system(size: 12, design: .monospaced))
                     #else
@@ -229,32 +359,16 @@ struct ContentView: View {
                             // Check if current user is mentioned
                             let isMentioned = message.mentions?.contains(viewModel.nickname) ?? false
                             
-                            if message.voiceNoteData != nil {
-                                // Voice note message
-                                HStack(spacing: 8) {
-                                    Button(action: {
+                            Text(viewModel.formatMessage(message, colorScheme: colorScheme))
+                                .font(.system(size: 14, design: .monospaced))
+                                .fontWeight(isMentioned ? .bold : .regular)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .onTapGesture {
+                                    if message.voiceNoteData != nil {
                                         viewModel.playVoiceNote(message: message)
-                                    }) {
-                                        Image(systemName: viewModel.audioPlayer.isPlaying && viewModel.audioPlayer.currentPlayingMessageID == message.id ? "pause.circle.fill" : "play.circle.fill")
-                                            .font(.system(size: 20))
-                                            .foregroundColor(textColor)
                                     }
-                                    .buttonStyle(.plain)
-                                    
-                                    Text(viewModel.formatMessage(message, colorScheme: colorScheme))
-                                        .font(.system(size: 14, design: .monospaced))
-                                        .fontWeight(isMentioned ? .bold : .regular)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
                                 }
-                            } else {
-                                // Regular text message
-                                Text(viewModel.formatMessage(message, colorScheme: colorScheme))
-                                    .font(.system(size: 14, design: .monospaced))
-                                    .fontWeight(isMentioned ? .bold : .regular)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
                             
                         }
                         .padding(.horizontal, 12)
@@ -285,61 +399,21 @@ struct ContentView: View {
     }
     
     private var inputView: some View {
-        ZStack(alignment: .bottom) {
-            VStack(spacing: 0) {
-                // Autocomplete suggestions overlay
-                if viewModel.showAutocomplete && !viewModel.autocompleteSuggestions.isEmpty {
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(Array(viewModel.autocompleteSuggestions.enumerated()), id: \.element) { index, suggestion in
-                            Button(action: {
-                                _ = viewModel.completeNickname(suggestion, in: &messageText)
-                            }) {
-                                HStack {
-                                    Text("@\(suggestion)")
-                                        .font(.system(size: 12, design: .monospaced))
-                                        .foregroundColor(index == viewModel.selectedAutocompleteIndex ? backgroundColor : textColor)
-                                    Spacer()
-                                }
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(index == viewModel.selectedAutocompleteIndex ? textColor : Color.clear)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .background(backgroundColor)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 4)
-                            .stroke(secondaryTextColor.opacity(0.5), lineWidth: 1)
-                    )
-                    .frame(maxWidth: 200, alignment: .leading)
-                    .padding(.leading, 100) // Align with input field
-                    .padding(.bottom, 4)
-                }
-                
-                Spacer()
-            }
-            
-            HStack(spacing: 4) {
-            Text("[\(viewModel.formatTimestamp(Date()))]")
-                .font(.system(size: 12, design: .monospaced))
-                .foregroundColor(secondaryTextColor)
-                .lineLimit(1)
-                .fixedSize()
-                .padding(.leading, 12)
-            
+        HStack(alignment: .center, spacing: 4) {
             if viewModel.selectedPrivateChatPeer != nil {
                 Text("<\(viewModel.nickname)> →")
                     .font(.system(size: 12, weight: .medium, design: .monospaced))
                     .foregroundColor(Color.orange)
                     .lineLimit(1)
                     .fixedSize()
+                    .padding(.leading, 12)
             } else {
                 Text("<\(viewModel.nickname)>")
                     .font(.system(size: 12, weight: .medium, design: .monospaced))
                     .foregroundColor(textColor)
                     .lineLimit(1)
                     .fixedSize()
+                    .padding(.leading, 12)
             }
             
             TextField("", text: $messageText)
@@ -358,9 +432,29 @@ struct ContentView: View {
             
             // Push to talk button
             Button(action: {}) {
-                Image(systemName: "mic.circle.fill")
-                    .font(.system(size: 20))
-                    .foregroundColor(isRecordingVoice ? Color.red : textColor)
+                ZStack {
+                    // Mic icon
+                    Image(systemName: "mic.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(isRecordingVoice ? Color.red.opacity(0.8) : textColor)
+                    
+                    // Local ripples that start from the button itself
+                    if isRecordingVoice {
+                        ForEach(0..<4) { index in
+                            Circle()
+                                .stroke(Color.red.opacity(0.3), lineWidth: 1)
+                                .frame(width: 20, height: 20)
+                                .scaleEffect(1 + Double(index) * 0.5)
+                                .opacity(isRecordingVoice ? 0.5 - Double(index) * 0.1 : 0)
+                                .animation(
+                                    Animation.easeOut(duration: 1.5)
+                                        .repeatForever(autoreverses: false)
+                                        .delay(Double(index) * 0.2),
+                                    value: isRecordingVoice
+                                )
+                        }
+                    }
+                }
             }
             .buttonStyle(.plain)
             .simultaneousGesture(
@@ -378,16 +472,15 @@ struct ContentView: View {
             )
             
             Button(action: sendMessage) {
-                Image(systemName: "arrow.right.circle.fill")
+                Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 20))
                     .foregroundColor(textColor)
             }
             .buttonStyle(.plain)
             .padding(.trailing, 12)
             }
-            .padding(.vertical, 10)
+            .padding(.vertical, 8)
             .background(backgroundColor.opacity(0.95))
-        }
         .onAppear {
             isTextFieldFocused = true
         }
@@ -400,6 +493,9 @@ struct ContentView: View {
     
     private func startVoiceRecording() {
         isRecordingVoice = true
+        withAnimation(.easeOut(duration: 0.3)) {
+            recordingScale = 50.0  // Scale up to cover entire screen from mic button size
+        }
         #if os(iOS)
         // Light haptic feedback
         let impactFeedback = UIImpactFeedbackGenerator(style: .light)
@@ -412,15 +508,18 @@ struct ContentView: View {
     }
     
     private func stopVoiceRecording() {
+        // Capture duration before stopping
+        let duration = viewModel.audioRecorder.recordingTime
         isRecordingVoice = false
+        recordingScale = 1.0
         
         viewModel.audioRecorder.stopRecording { result in
             switch result {
             case .success(let audioURL):
                 // Read audio file and send as voice note
                 if let audioData = try? Data(contentsOf: audioURL) {
-                    let duration = viewModel.audioRecorder.recordingTime
-                    viewModel.sendVoiceNote(audioData, duration: duration)
+                    // Use the captured duration, ensure it's at least 0.1s
+                    viewModel.sendVoiceNote(audioData, duration: max(0.1, duration))
                     
                     // Clean up temporary file
                     try? FileManager.default.removeItem(at: audioURL)
@@ -428,6 +527,116 @@ struct ContentView: View {
             case .failure(let error):
                 print("[AUDIO] Recording failed: \(error)")
             }
+        }
+    }
+    
+    private var sidebarView: some View {
+        HStack(spacing: 0) {
+            // Grey vertical bar for visual continuity
+            Rectangle()
+                .fill(Color.gray.opacity(0.3))
+                .frame(width: 1)
+            
+            VStack(alignment: .leading, spacing: 0) {
+                // Header - match main toolbar height
+                HStack {
+                    Text("connected")
+                        .font(.system(size: 16, weight: .bold, design: .monospaced))
+                        .foregroundColor(textColor)
+                    Spacer()
+                }
+                .frame(height: 44) // Match header height
+                .padding(.horizontal, 12)
+                .background(backgroundColor.opacity(0.95))
+                
+                Divider()
+            
+            // People list
+            ScrollView {
+                VStack(alignment: .leading, spacing: 8) {
+                    if viewModel.connectedPeers.isEmpty {
+                        Text("No one connected")
+                            .font(.system(size: 14, design: .monospaced))
+                            .foregroundColor(secondaryTextColor)
+                            .padding(.horizontal)
+                    } else {
+                        let peerNicknames = viewModel.meshService.getPeerNicknames()
+                        let peerRSSI = viewModel.meshService.getPeerRSSI()
+                        let myPeerID = viewModel.meshService.myPeerID
+                        
+                        // Sort peers: favorites first, then alphabetically by nickname
+                        let sortedPeers = viewModel.connectedPeers.filter { $0 != myPeerID }.sorted { peer1, peer2 in
+                            let isFav1 = viewModel.isFavorite(peerID: peer1)
+                            let isFav2 = viewModel.isFavorite(peerID: peer2)
+                            
+                            if isFav1 != isFav2 {
+                                return isFav1 // Favorites come first
+                            }
+                            
+                            let name1 = peerNicknames[peer1] ?? "person-\(peer1.prefix(4))"
+                            let name2 = peerNicknames[peer2] ?? "person-\(peer2.prefix(4))"
+                            return name1 < name2
+                        }
+                        
+                        ForEach(sortedPeers, id: \.self) { peerID in
+                            let displayName = peerNicknames[peerID] ?? "person-\(peerID.prefix(4))"
+                            let rssi = peerRSSI[peerID]?.intValue ?? -100
+                            let isFavorite = viewModel.isFavorite(peerID: peerID)
+                            
+                            HStack(spacing: 8) {
+                                // Signal strength indicator
+                                Circle()
+                                    .fill(viewModel.getRSSIColor(rssi: rssi, colorScheme: colorScheme))
+                                    .frame(width: 8, height: 8)
+                                
+                                // Favorite star
+                                Button(action: {
+                                    viewModel.toggleFavorite(peerID: peerID)
+                                }) {
+                                    Image(systemName: isFavorite ? "star.fill" : "star")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(isFavorite ? Color.yellow : secondaryTextColor)
+                                }
+                                .buttonStyle(.plain)
+                                
+                                // Peer name button
+                                Button(action: {
+                                    if peerNicknames[peerID] != nil {
+                                        viewModel.startPrivateChat(with: peerID)
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                            showSidebar = false
+                                            sidebarDragOffset = 0
+                                        }
+                                    }
+                                }) {
+                                    HStack {
+                                        Text(displayName)
+                                            .font(.system(size: 14, design: .monospaced))
+                                            .foregroundColor(peerNicknames[peerID] != nil ? textColor : secondaryTextColor)
+                                        
+                                        Spacer()
+                                        
+                                        if viewModel.unreadPrivateMessages.contains(peerID) {
+                                            Circle()
+                                                .fill(Color.orange)
+                                                .frame(width: 8, height: 8)
+                                        }
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(peerNicknames[peerID] == nil)
+                            }
+                            .padding(.horizontal)
+                            .padding(.vertical, 8)
+                        }
+                    }
+                }
+                .padding(.vertical, 8)
+            }
+            
+                Spacer()
+            }
+            .background(backgroundColor)
         }
     }
 }
