@@ -1,9 +1,9 @@
 import Foundation
+import UserNotifications
 #if os(iOS)
 import UIKit
-import UserNotifications
-#else
-import UserNotifications
+#elseif os(macOS)
+import AppKit
 #endif
 
 class NotificationService {
@@ -12,7 +12,6 @@ class NotificationService {
     private init() {}
     
     func requestAuthorization() {
-        #if os(iOS)
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
             if granted {
                 print("[NOTIFICATIONS] Permission granted")
@@ -20,18 +19,24 @@ class NotificationService {
                 print("[NOTIFICATIONS] Permission error: \(error)")
             }
         }
-        #endif
     }
     
     func sendLocalNotification(title: String, body: String, identifier: String) {
+        // Check if app is in foreground
         #if os(iOS)
-        // Send notification if app is not active (background or inactive)
         guard UIApplication.shared.applicationState != .active else {
             print("[NOTIFICATIONS] App is active/foreground, skipping notification")
             return
         }
-        
         print("[NOTIFICATIONS] App state: \(UIApplication.shared.applicationState.rawValue), sending notification")
+        #elseif os(macOS)
+        // On macOS, check if app is active
+        guard !NSApplication.shared.isActive else {
+            print("[NOTIFICATIONS] App is active/foreground, skipping notification")
+            return
+        }
+        print("[NOTIFICATIONS] App is not active, sending notification")
+        #endif
         
         let content = UNMutableNotificationContent()
         content.title = title
@@ -51,7 +56,6 @@ class NotificationService {
                 print("[NOTIFICATIONS] Notification sent: \(title)")
             }
         }
-        #endif
     }
     
     func sendMentionNotification(from sender: String, message: String) {

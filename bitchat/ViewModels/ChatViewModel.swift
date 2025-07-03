@@ -430,14 +430,19 @@ extension ChatViewModel: BitchatDelegate {
             messages.append(message)
         }
         
-        #if os(iOS)
         // Check if we're mentioned
         let isMentioned = message.mentions?.contains(nickname) ?? false
         
         // Send notifications for mentions and private messages when app is in background
         if isMentioned && message.sender != nickname {
             NotificationService.shared.sendMentionNotification(from: message.sender, message: message.content)
-            
+        } else if message.isPrivate && message.sender != nickname {
+            NotificationService.shared.sendPrivateMessageNotification(from: message.sender, message: message.content)
+        }
+        
+        #if os(iOS)
+        // Haptic feedback for iOS only
+        if isMentioned && message.sender != nickname {
             // Very prominent haptic for @mentions - triple tap with heavy impact
             let impactFeedback = UIImpactFeedbackGenerator(style: .heavy)
             impactFeedback.prepare()
@@ -450,8 +455,6 @@ extension ChatViewModel: BitchatDelegate {
                 impactFeedback.impactOccurred()
             }
         } else if message.isPrivate && message.sender != nickname {
-            NotificationService.shared.sendPrivateMessageNotification(from: message.sender, message: message.content)
-            
             // Heavy haptic for private messages - more pronounced
             let impactFeedback = UIImpactFeedbackGenerator(style: .heavy)
             impactFeedback.prepare()
