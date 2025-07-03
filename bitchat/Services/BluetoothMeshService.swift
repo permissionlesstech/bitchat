@@ -1,6 +1,7 @@
 import Foundation
 import CoreBluetooth
 import Combine
+import CryptoKit
 #if os(macOS)
 import AppKit
 #else
@@ -37,9 +38,22 @@ class BluetoothMeshService: NSObject {
     private let encryptionService = EncryptionService()
     private let messageQueue = DispatchQueue(label: "bitchat.messageQueue", attributes: .concurrent)
     private var processedMessages = Set<String>()
-    private let maxTTL: UInt8 = 3  // Reduced for efficiency
+    private let maxTTL: UInt8 = 5  // Increased for better reach
     private var announcedToPeers = Set<String>()  // Track which peers we've announced to
     private var announcedPeers = Set<String>()  // Track peers who have already been announced
+    
+    // Store-and-forward message cache
+    private struct StoredMessage {
+        let packet: BitchatPacket
+        let timestamp: Date
+        let messageID: String
+        let isForFavorite: Bool  // Messages for favorites stored indefinitely
+    }
+    private var messageCache: [StoredMessage] = []
+    private let messageCacheTimeout: TimeInterval = 43200  // 12 hours for regular peers
+    private let maxCachedMessages = 100  // For regular peers
+    private let maxCachedMessagesForFavorites = 1000  // Much larger cache for favorites
+    private var favoriteMessageQueue: [String: [StoredMessage]] = [:]  // Per-favorite message queues
     
     // Battery and range optimizations
     private var scanDutyCycleTimer: Timer?
@@ -54,6 +68,16 @@ class BluetoothMeshService: NSObject {
     private let maxFragmentSize = 500  // Optimized for BLE 5.0 extended data length
     
     let myPeerID: String
+    
+    // Helper method to get fingerprint from public key data
+    private func getPublicKeyFingerprint(_ publicKeyData: Data) -> String {
+        let fingerprint = SHA256.hash(data: publicKeyData)
+            .compactMap { String(format: "%02x", $0) }
+            .joined()
+            .prefix(16)  // Use first 16 chars for brevity
+            .lowercased()
+        return String(fingerprint)
+    }
     
     override init() {
         // Generate ephemeral peer ID for each session to prevent tracking
@@ -475,6 +499,131 @@ class BluetoothMeshService: NSObject {
         return Array(announcedPeers).sorted()
     }
     
+    // MARK: - Store-and-Forward Methods
+    
+    private func cacheMessage(_ packet: BitchatPacket, messageID: String) {
+        messageQueue.async(flags: .barrier) { [weak self] in
+            guard let self = self else { return }
+            
+            // Don't cache certain message types
+            guard packet.type != MessageType.keyExchange.rawValue,
+                  packet.type != MessageType.announce.rawValue,
+                  packet.type != MessageType.leave.rawValue,
+                  packet.type != MessageType.ack.rawValue,
+                  packet.type != MessageType.fragmentStart.rawValue,
+                  packet.type != MessageType.fragmentContinue.rawValue,
+                  packet.type != MessageType.fragmentEnd.rawValue else {
+                return
+            }
+            
+            // Check if this is a private message for a favorite
+            var isForFavorite = false
+            if packet.type == MessageType.privateMessage.rawValue,
+               let recipientID = packet.recipientID,
+               let recipientPeerID = String(data: recipientID.trimmingNullBytes(), encoding: .utf8) {
+                // Check if recipient is a favorite via their public key fingerprint
+                if let publicKeyData = self.encryptionService.getPeerIdentityKey(recipientPeerID) {
+                    let fingerprint = self.getPublicKeyFingerprint(publicKeyData)
+                    isForFavorite = self.delegate?.isFavorite?(fingerprint: fingerprint) ?? false
+                }
+            }
+            
+            // Create stored message
+            let storedMessage = StoredMessage(
+                packet: packet,
+                timestamp: Date(),
+                messageID: messageID,
+                isForFavorite: isForFavorite
+            )
+            
+            if isForFavorite {
+                // Store in favorite-specific queue
+                if let recipientID = packet.recipientID,
+                   let recipientPeerID = String(data: recipientID.trimmingNullBytes(), encoding: .utf8) {
+                    if self.favoriteMessageQueue[recipientPeerID] == nil {
+                        self.favoriteMessageQueue[recipientPeerID] = []
+                    }
+                    self.favoriteMessageQueue[recipientPeerID]?.append(storedMessage)
+                    
+                    // Limit favorite queue size
+                    if let count = self.favoriteMessageQueue[recipientPeerID]?.count,
+                       count > self.maxCachedMessagesForFavorites {
+                        self.favoriteMessageQueue[recipientPeerID]?.removeFirst()
+                    }
+                    
+                    print("[CACHE] Cached message for favorite \(recipientPeerID), queue size: \(self.favoriteMessageQueue[recipientPeerID]?.count ?? 0)")
+                }
+            } else {
+                // Clean up old messages first (only for regular cache)
+                self.cleanupMessageCache()
+                
+                // Add to regular cache
+                self.messageCache.append(storedMessage)
+                
+                // Limit cache size
+                if self.messageCache.count > self.maxCachedMessages {
+                    self.messageCache.removeFirst()
+                }
+                
+                print("[CACHE] Cached message (type: \(packet.type)), cache size: \(self.messageCache.count)")
+            }
+        }
+    }
+    
+    private func cleanupMessageCache() {
+        let cutoffTime = Date().addingTimeInterval(-messageCacheTimeout)
+        // Only remove non-favorite messages that are older than timeout
+        messageCache.removeAll { !$0.isForFavorite && $0.timestamp < cutoffTime }
+    }
+    
+    private func sendCachedMessages(to peerID: String) {
+        messageQueue.async { [weak self] in
+            guard let self = self,
+                  let peripheral = self.connectedPeripherals[peerID],
+                  let characteristic = self.peripheralCharacteristics[peripheral] else {
+                return
+            }
+            
+            // Clean up old messages first
+            self.cleanupMessageCache()
+            
+            var messagesToSend: [StoredMessage] = []
+            
+            // First, check if this peer has any favorite messages waiting
+            if let favoriteMessages = self.favoriteMessageQueue[peerID] {
+                messagesToSend.append(contentsOf: favoriteMessages)
+                // Clear the favorite queue after adding to send list
+                self.favoriteMessageQueue[peerID] = nil
+                print("[CACHE] Found \(favoriteMessages.count) favorite messages for \(peerID)")
+            }
+            
+            // Then add regular cached messages
+            messagesToSend.append(contentsOf: self.messageCache)
+            
+            print("[CACHE] Sending \(messagesToSend.count) total cached messages to \(peerID)")
+            
+            // Send cached messages with slight delay between each
+            for (index, storedMessage) in messagesToSend.enumerated() {
+                let delay = Double(index) * 0.1 // 100ms between messages
+                
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self, weak peripheral] in
+                    guard let self = self,
+                          let peripheral = peripheral,
+                          peripheral.state == .connected else { return }
+                    
+                    // Create a new packet with fresh timestamp
+                    var packet = storedMessage.packet
+                    packet.timestamp = UInt64(Date().timeIntervalSince1970)
+                    
+                    if let data = packet.toBinaryData() {
+                        peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
+                        print("[CACHE] Sent cached message \(index + 1)/\(messagesToSend.count) to \(peerID)")
+                    }
+                }
+            }
+        }
+    }
+    
     private func estimateDistance(rssi: Int) -> Int {
         // Rough distance estimation based on RSSI
         // Using path loss formula: RSSI = TxPower - 10 * n * log10(distance)
@@ -683,6 +832,9 @@ class BluetoothMeshService: NSObject {
                     // Send announce with our nickname immediately
                     print("[KEY_EXCHANGE] Calling sendAnnouncementToPeer for \(senderID)")
                     self.sendAnnouncementToPeer(senderID)
+                    
+                    // Check if this peer has cached messages (especially for favorites)
+                    self.sendCachedMessages(to: senderID)
                 }
             }
             
@@ -724,9 +876,22 @@ class BluetoothMeshService: NSObject {
                             
                             // Check if this is a favorite peer and send notification
                             // Note: This might not work immediately if key exchange hasn't happened yet
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                if let viewModel = self.delegate as? ChatViewModel,
-                                   viewModel.isFavorite(peerID: senderID) {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                                guard let self = self else { return }
+                                
+                                // Check if this is a favorite using their public key fingerprint
+                                if let publicKeyData = self.encryptionService.getPeerIdentityKey(senderID) {
+                                    let fingerprint = self.getPublicKeyFingerprint(publicKeyData)
+                                    if self.delegate?.isFavorite?(fingerprint: fingerprint) ?? false {
+                                        NotificationService.shared.sendFavoriteOnlineNotification(nickname: nickname)
+                                        
+                                        // Send any cached messages for this favorite
+                                        print("[CACHE] Favorite peer \(senderID) came online, checking for cached messages")
+                                        self.sendCachedMessages(to: senderID)
+                                    }
+                                } else if let viewModel = self.delegate as? ChatViewModel,
+                                          viewModel.isFavorite(peerID: senderID) {
+                                    // Fallback for backwards compatibility
                                     NotificationService.shared.sendFavoriteOnlineNotification(nickname: nickname)
                                 }
                             }
@@ -845,6 +1010,17 @@ class BluetoothMeshService: NSObject {
                     print("[PRIVATE] Relaying message not meant for us (TTL: \(packet.ttl))")
                     var relayPacket = packet
                     relayPacket.ttl -= 1
+                    
+                    // Check if this message is for an offline favorite and cache it
+                    if let publicKeyData = self.encryptionService.getPeerIdentityKey(recipientIDString) {
+                        let fingerprint = self.getPublicKeyFingerprint(publicKeyData)
+                        if self.delegate?.isFavorite?(fingerprint: fingerprint) ?? false {
+                            // This is for a favorite peer - cache it even if they're offline
+                            print("[CACHE] Caching relayed message for offline favorite: \(recipientIDString)")
+                            self.cacheMessage(relayPacket, messageID: messageID)
+                        }
+                    }
+                    
                     self.broadcastPacket(relayPacket)
                 }
             } else {
