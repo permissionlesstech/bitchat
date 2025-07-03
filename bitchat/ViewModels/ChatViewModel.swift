@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import Combine
+import CryptoKit
 #if os(iOS)
 import UIKit
 #endif
@@ -24,18 +25,19 @@ class ChatViewModel: ObservableObject {
     @Published var showAutocomplete: Bool = false
     @Published var autocompleteRange: NSRange? = nil
     @Published var selectedAutocompleteIndex: Int = 0
-    @Published var privateMessageNotification: (sender: String, message: String)? = nil
     
     let meshService = BluetoothMeshService()
-    let audioRecorder = AudioRecordingService()
-    let audioPlayer = AudioPlaybackService()
     private let userDefaults = UserDefaults.standard
     private let nicknameKey = "bitchat.nickname"
     private let favoritesKey = "bitchat.favorites"
     private var nicknameSaveTimer: Timer?
-    private var notificationTimer: Timer?
     
-    @Published var favoritePeers: Set<String> = []
+    @Published var favoritePeers: Set<String> = []  // Now stores public key fingerprints instead of peer IDs
+    private var peerIDToPublicKeyFingerprint: [String: String] = [:]  // Maps ephemeral peer IDs to persistent fingerprints
+    
+    // Ephemeral message settings
+    private var messageAutoDeleteTimer: Timer?
+    private let messageRetentionTime: TimeInterval = 300  // 5 minutes
     
     init() {
         loadNickname()
@@ -47,6 +49,9 @@ class ChatViewModel: ObservableObject {
         
         // Request notification permission
         NotificationService.shared.requestAuthorization()
+        
+        // Start auto-delete timer for ephemeral messages
+        startAutoDeleteTimer()
     }
     
     private func loadNickname() {
@@ -78,16 +83,40 @@ class ChatViewModel: ObservableObject {
     }
     
     func toggleFavorite(peerID: String) {
-        if favoritePeers.contains(peerID) {
-            favoritePeers.remove(peerID)
+        // Use public key fingerprints for persistent favorites
+        guard let fingerprint = peerIDToPublicKeyFingerprint[peerID] else {
+            print("[FAVORITES] No public key fingerprint for peer \(peerID)")
+            return
+        }
+        
+        if favoritePeers.contains(fingerprint) {
+            favoritePeers.remove(fingerprint)
         } else {
-            favoritePeers.insert(peerID)
+            favoritePeers.insert(fingerprint)
         }
         saveFavorites()
+        
+        print("[FAVORITES] Toggled favorite for fingerprint: \(fingerprint)")
     }
     
     func isFavorite(peerID: String) -> Bool {
-        return favoritePeers.contains(peerID)
+        guard let fingerprint = peerIDToPublicKeyFingerprint[peerID] else {
+            return false
+        }
+        return favoritePeers.contains(fingerprint)
+    }
+    
+    // Called when we receive a peer's public key
+    func registerPeerPublicKey(peerID: String, publicKeyData: Data) {
+        // Create a fingerprint from the public key
+        let fingerprint = SHA256.hash(data: publicKeyData)
+            .compactMap { String(format: "%02x", $0) }
+            .joined()
+            .prefix(16)  // Use first 16 chars for brevity
+            .lowercased()
+        
+        peerIDToPublicKeyFingerprint[peerID] = String(fingerprint)
+        print("[FAVORITES] Registered fingerprint \(fingerprint) for peer \(peerID)")
     }
     
     func sendMessage(_ content: String) {
@@ -168,16 +197,65 @@ class ChatViewModel: ObservableObject {
         return nicknames.first(where: { $0.value == nickname })?.key
     }
     
-    private func showPrivateMessageNotification(from sender: String, content: String) {
-        // Show notification
-        privateMessageNotification = (sender: sender, message: content)
+    // PANIC: Emergency data clearing for activist safety
+    func panicClearAllData() {
+        // Clear all messages
+        messages.removeAll()
+        privateChats.removeAll()
+        unreadPrivateMessages.removeAll()
         
-        // Auto-dismiss after 3 seconds
-        notificationTimer?.invalidate()
-        notificationTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { [weak self] _ in
-            self?.privateMessageNotification = nil
+        // Reset nickname to anonymous
+        nickname = "anon\(Int.random(in: 1000...9999))"
+        saveNickname()
+        
+        // Clear favorites
+        favoritePeers.removeAll()
+        saveFavorites()
+        
+        // Clear autocomplete state
+        autocompleteSuggestions.removeAll()
+        showAutocomplete = false
+        
+        // Disconnect from all peers
+        meshService.emergencyDisconnectAll()
+        
+        // Force UI update
+        objectWillChange.send()
+        
+        print("[PANIC] All data cleared for safety")
+    }
+    
+    // Ephemeral message auto-deletion
+    private func startAutoDeleteTimer() {
+        messageAutoDeleteTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+            self?.deleteOldMessages()
         }
     }
+    
+    private func deleteOldMessages() {
+        let cutoffTime = Date().addingTimeInterval(-messageRetentionTime)
+        
+        // Delete old public messages
+        let beforeCount = messages.count
+        messages.removeAll { message in
+            message.timestamp < cutoffTime && message.sender != "system"
+        }
+        
+        if messages.count < beforeCount {
+            print("[EPHEMERAL] Deleted \(beforeCount - messages.count) old messages")
+        }
+        
+        // Delete old private messages
+        for (peerID, messageList) in privateChats {
+            let oldCount = messageList.count
+            privateChats[peerID] = messageList.filter { $0.timestamp >= cutoffTime }
+            
+            if let newCount = privateChats[peerID]?.count, newCount < oldCount {
+                print("[EPHEMERAL] Deleted \(oldCount - newCount) old private messages from \(peerID)")
+            }
+        }
+    }
+    
     
     
     func formatTimestamp(_ date: Date) -> String {
@@ -288,36 +366,6 @@ class ChatViewModel: ObservableObject {
         }
     }
     
-    func formatVoiceNoteContent(_ message: BitchatMessage, colorScheme: ColorScheme) -> AttributedString {
-        let isDark = colorScheme == .dark
-        let primaryColor = isDark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
-        
-        var result = AttributedString()
-        var contentStyle = AttributeContainer()
-        contentStyle.font = .system(size: 14, design: .monospaced)
-        contentStyle.foregroundColor = isDark ? Color.white : Color.black
-        
-        // Parse the emoji and duration from content
-        let parts = message.content.components(separatedBy: " ")
-        if parts.count >= 2 {
-            // Emoji
-            result.append(AttributedString(parts[0] + " ").mergingAttributes(contentStyle))
-            
-            // Play/pause button as text
-            let playSymbol = audioPlayer.isPlaying && audioPlayer.currentPlayingMessageID == message.id ? "⏸" : "▶"
-            var playStyle = AttributeContainer()
-            playStyle.font = .system(size: 12, design: .monospaced)
-            playStyle.foregroundColor = primaryColor
-            result.append(AttributedString(playSymbol + " ").mergingAttributes(playStyle))
-            
-            // Duration
-            result.append(AttributedString(parts[1]).mergingAttributes(contentStyle))
-        } else {
-            result.append(AttributedString(message.content).mergingAttributes(contentStyle))
-        }
-        
-        return result
-    }
     
     func formatMessageContent(_ message: BitchatMessage, colorScheme: ColorScheme) -> AttributedString {
         let isDark = colorScheme == .dark
@@ -403,33 +451,6 @@ class ChatViewModel: ObservableObject {
             senderStyle.font = .system(size: 12, weight: .medium, design: .monospaced)
             result.append(sender.mergingAttributes(senderStyle))
             
-            // Special handling for voice notes
-            if message.voiceNoteData != nil {
-                // Add the content (emoji + duration) with play button integrated
-                var contentStyle = AttributeContainer()
-                contentStyle.font = .system(size: 14, design: .monospaced)
-                contentStyle.foregroundColor = isDark ? Color.white : Color.black
-                
-                // Parse the emoji and duration from content
-                let parts = message.content.components(separatedBy: " ")
-                if parts.count >= 2 {
-                    // Emoji
-                    result.append(AttributedString(parts[0] + " ").mergingAttributes(contentStyle))
-                    
-                    // Play/pause button as text
-                    let playSymbol = audioPlayer.isPlaying && audioPlayer.currentPlayingMessageID == message.id ? "⏸" : "▶"
-                    var playStyle = AttributeContainer()
-                    playStyle.font = .system(size: 12, design: .monospaced)
-                    playStyle.foregroundColor = primaryColor
-                    result.append(AttributedString(playSymbol + " ").mergingAttributes(playStyle))
-                    
-                    // Duration
-                    result.append(AttributedString(parts[1]).mergingAttributes(contentStyle))
-                } else {
-                    result.append(AttributedString(message.content).mergingAttributes(contentStyle))
-                }
-                return result
-            }
             
             // Process content to highlight mentions
             let contentText = message.content
@@ -510,8 +531,6 @@ extension ChatViewModel: BitchatDelegate {
                 if selectedPrivateChatPeer != peerID {
                     unreadPrivateMessages.insert(peerID)
                     
-                    // Show notification banner
-                    showPrivateMessageNotification(from: message.sender, content: message.content)
                 } else {
                     // We're viewing this chat, make sure unread is cleared
                     unreadPrivateMessages.remove(peerID)
@@ -570,7 +589,7 @@ extension ChatViewModel: BitchatDelegate {
         isConnected = true
         let systemMessage = BitchatMessage(
             sender: "system",
-            content: "\(peerID) has joined the channel",
+            content: "\(peerID) connected",
             timestamp: Date(),
             isRelay: false,
             originalSender: nil
@@ -584,7 +603,7 @@ extension ChatViewModel: BitchatDelegate {
     func didDisconnectFromPeer(_ peerID: String) {
         let systemMessage = BitchatMessage(
             sender: "system",
-            content: "\(peerID) has left the channel",
+            content: "\(peerID) disconnected",
             timestamp: Date(),
             isRelay: false,
             originalSender: nil
@@ -633,33 +652,4 @@ extension ChatViewModel: BitchatDelegate {
         return Array(Set(mentions)) // Remove duplicates
     }
     
-    func sendVoiceNote(_ audioData: Data, duration: TimeInterval) {
-        print("[VIEWMODEL] sendVoiceNote called with audio data: \(audioData.count) bytes, duration: \(duration)s")
-        
-        let message = BitchatMessage(
-            sender: nickname,
-            content: "🎤 \(String(format: "%.1f", duration))s",
-            timestamp: Date(),
-            isRelay: false,
-            originalSender: nil,
-            voiceNoteData: audioData,
-            voiceNoteDuration: duration
-        )
-        messages.append(message)
-        
-        print("[VIEWMODEL] Added voice note to local messages, sending via mesh...")
-        
-        // Send via mesh
-        meshService.sendVoiceNote(audioData, duration: duration)
-    }
-    
-    func playVoiceNote(message: BitchatMessage) {
-        guard let audioData = message.voiceNoteData else { return }
-        
-        audioPlayer.togglePlayback(messageID: message.id, audioData: audioData) { result in
-            if case .failure(let error) = result {
-                print("[AUDIO] Failed to play voice note: \(error)")
-            }
-        }
-    }
 }
