@@ -85,7 +85,11 @@ struct ContentView: View {
                             }
                         
                         sidebarView
+                            #if os(macOS)
+                            .frame(width: min(300, geometry.size.width * 0.4))
+                            #else
                             .frame(width: geometry.size.width * 0.7)
+                            #endif
                             .transition(.move(edge: .trailing))
                     }
                     .offset(x: showSidebar ? -sidebarDragOffset : geometry.size.width - sidebarDragOffset)
