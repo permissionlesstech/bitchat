@@ -61,6 +61,9 @@ class ChatViewModel: ObservableObject {
     func saveNickname() {
         userDefaults.set(nickname, forKey: nicknameKey)
         userDefaults.synchronize() // Force immediate save
+        
+        // Send announce with new nickname to all peers
+        meshService.sendBroadcastAnnounce()
     }
     
     private func loadFavorites() {
