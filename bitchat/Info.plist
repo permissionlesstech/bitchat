@@ -28,6 +28,8 @@
 	<string>bitchat uses Bluetooth to discover and connect with other bitchat users nearby.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>bitchat needs access to your microphone to record voice notes.</string>
+	<key>NSUserNotificationsUsageDescription</key>
+	<string>bitchat needs permission to send notifications for mentions and private messages.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>bluetooth-central</string>
