@@ -370,7 +370,7 @@ struct ContentView: View {
                                 // Regular messages with tappable sender name
                                 HStack(alignment: .top, spacing: 0) {
                                     // Timestamp
-                                    Text("[\\(viewModel.formatTimestamp(message.timestamp))] ")
+                                    Text("[\(viewModel.formatTimestamp(message.timestamp))] ")
                                         .font(.system(size: 12, design: .monospaced))
                                         .foregroundColor(secondaryTextColor)
                                     
@@ -382,14 +382,14 @@ struct ContentView: View {
                                             }
                                         }) {
                                             let senderColor = viewModel.getSenderColor(for: message, colorScheme: colorScheme)
-                                            Text("<\\(message.sender)>")
+                                            Text("<\(message.sender)>")
                                                 .font(.system(size: 12, weight: .medium, design: .monospaced))
                                                 .foregroundColor(senderColor)
                                         }
                                         .buttonStyle(.plain)
                                     } else {
                                         // Own messages not tappable
-                                        Text("<\\(message.sender)>")
+                                        Text("<\(message.sender)>")
                                             .font(.system(size: 12, weight: .medium, design: .monospaced))
                                             .foregroundColor(textColor)
                                     }

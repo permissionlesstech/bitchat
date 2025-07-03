@@ -631,6 +631,8 @@ extension ChatViewModel: BitchatDelegate {
     }
     
     func sendVoiceNote(_ audioData: Data, duration: TimeInterval) {
+        print("[VIEWMODEL] sendVoiceNote called with audio data: \(audioData.count) bytes, duration: \(duration)s")
+        
         let message = BitchatMessage(
             sender: nickname,
             content: "🎤 \(String(format: "%.1f", duration))s",
@@ -641,6 +643,8 @@ extension ChatViewModel: BitchatDelegate {
             voiceNoteDuration: duration
         )
         messages.append(message)
+        
+        print("[VIEWMODEL] Added voice note to local messages, sending via mesh...")
         
         // Send via mesh
         meshService.sendVoiceNote(audioData, duration: duration)
