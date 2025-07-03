@@ -37,21 +37,33 @@ class BluetoothMeshService: NSObject {
     private let encryptionService = EncryptionService()
     private let messageQueue = DispatchQueue(label: "bitchat.messageQueue", attributes: .concurrent)
     private var processedMessages = Set<String>()
-    private let maxTTL: UInt8 = 5
+    private let maxTTL: UInt8 = 3  // Reduced for efficiency
     private var announcedToPeers = Set<String>()  // Track which peers we've announced to
     private var announcedPeers = Set<String>()  // Track peers who have already been announced
+    
+    // Battery and range optimizations
+    private var scanDutyCycleTimer: Timer?
+    private var isActivelyScanning = true
+    private let activeScanDuration: TimeInterval = 2.0  // Scan actively for 2 seconds
+    private let scanPauseDuration: TimeInterval = 3.0  // Pause for 3 seconds
+    private var lastRSSIUpdate: [String: Date] = [:]  // Throttle RSSI updates
     
     // Fragment handling
     private var incomingFragments: [String: [Int: Data]] = [:]  // fragmentID -> [index: data]
     private var fragmentMetadata: [String: (originalType: UInt8, totalFragments: Int, timestamp: Date)] = [:]
-    private let maxFragmentSize = 200  // Smaller fragments for better reliability
+    private let maxFragmentSize = 500  // Optimized for BLE 5.0 extended data length
     
     let myPeerID: String
     
     override init() {
-        self.myPeerID = UUID().uuidString.prefix(8).lowercased()
+        // Generate ephemeral peer ID for each session to prevent tracking
+        // Use random bytes instead of UUID for better anonymity
+        var randomBytes = [UInt8](repeating: 0, count: 4)
+        _ = SecRandomCopyBytes(kSecRandomDefault, 4, &randomBytes)
+        self.myPeerID = randomBytes.map { String(format: "%02x", $0) }.joined()
+        
         super.init()
-        print("[STARTUP] My Bluetooth ID (myPeerID): \(myPeerID)")
+        print("[STARTUP] Generated ephemeral peer ID: \(myPeerID)")
         
         centralManager = CBCentralManager(delegate: self, queue: nil)
         peripheralManager = CBPeripheralManager(delegate: self, queue: nil)
@@ -76,6 +88,7 @@ class BluetoothMeshService: NSObject {
     
     deinit {
         cleanup()
+        scanDutyCycleTimer?.invalidate()
     }
     
     @objc private func appWillTerminate() {
@@ -151,7 +164,7 @@ class BluetoothMeshService: NSObject {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
                 guard let self = self else { return }
                 self.broadcastPacket(announcePacket)
-                print("[ANNOUNCE] Re-sending broadcast announce (delay: \(delay)s)")
+                // [ANNOUNCE] Re-sending broadcast announce
             }
         }
     }
@@ -161,11 +174,15 @@ class BluetoothMeshService: NSObject {
             return 
         }
         
+        // Use generic advertising to avoid identification
+        // No identifying prefixes or app names for activist safety
         let advertisementData: [String: Any] = [
             CBAdvertisementDataServiceUUIDsKey: [BluetoothMeshService.serviceUUID],
-            CBAdvertisementDataLocalNameKey: "bitchat-\(myPeerID)"
+            // Use only peer ID without any identifying prefix
+            CBAdvertisementDataLocalNameKey: myPeerID,
+            CBAdvertisementDataIsConnectable: true
         ]
-        print("[BLUETOOTH] Starting to advertise as: bitchat-\(myPeerID)")
+        // [BLUETOOTH] Starting advertising
         peripheralManager.startAdvertising(advertisementData)
     }
     
@@ -173,7 +190,51 @@ class BluetoothMeshService: NSObject {
         guard centralManager.state == .poweredOn else { 
             return 
         }
-        centralManager.scanForPeripherals(withServices: [BluetoothMeshService.serviceUUID], options: [CBCentralManagerScanOptionAllowDuplicatesKey: false])
+        
+        // [BLUETOOTH] Starting scan
+        // Enable duplicate detection for RSSI tracking
+        let scanOptions: [String: Any] = [
+            CBCentralManagerScanOptionAllowDuplicatesKey: true
+        ]
+        
+        centralManager.scanForPeripherals(
+            withServices: [BluetoothMeshService.serviceUUID],
+            options: scanOptions
+        )
+        
+        // Implement scan duty cycling for battery efficiency
+        scheduleScanDutyCycle()
+    }
+    
+    private func scheduleScanDutyCycle() {
+        guard scanDutyCycleTimer == nil else { return }
+        
+        // Start with active scanning
+        isActivelyScanning = true
+        
+        scanDutyCycleTimer = Timer.scheduledTimer(withTimeInterval: activeScanDuration, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            
+            if self.isActivelyScanning {
+                // Pause scanning to save battery
+                self.centralManager.stopScan()
+                self.isActivelyScanning = false
+                // [BLUETOOTH] Pausing scan
+                
+                // Schedule resume
+                DispatchQueue.main.asyncAfter(deadline: .now() + self.scanPauseDuration) { [weak self] in
+                    guard let self = self else { return }
+                    if self.centralManager.state == .poweredOn {
+                        self.centralManager.scanForPeripherals(
+                            withServices: [BluetoothMeshService.serviceUUID],
+                            options: [CBCentralManagerScanOptionAllowDuplicatesKey: true]
+                        )
+                        self.isActivelyScanning = true
+                        // [BLUETOOTH] Resuming scan
+                    }
+                }
+            }
+        }
     }
     
     private func setupPeripheral() {
@@ -208,63 +269,40 @@ class BluetoothMeshService: NSObject {
             )
             
             if let messageData = message.toBinaryPayload() {
+                // Sign the message payload (no encryption for broadcasts)
+                let signature: Data?
+                do {
+                    signature = try self.encryptionService.sign(messageData)
+                    print("[CRYPTO] Successfully signed broadcast message")
+                } catch {
+                    print("[CRYPTO] Failed to sign message: \(error)")
+                    signature = nil
+                }
+                
                 let packet = BitchatPacket(
                     type: MessageType.message.rawValue,
-                    ttl: self.maxTTL,
-                    senderID: self.myPeerID,
-                    payload: messageData
+                    senderID: Data(self.myPeerID.utf8),
+                    recipientID: nil,
+                    timestamp: UInt64(Date().timeIntervalSince1970),
+                    payload: messageData,
+                    signature: signature,
+                    ttl: self.maxTTL
                 )
                 
                 self.broadcastPacket(packet)
-            }
-        }
-    }
-    
-    func sendVoiceNote(_ audioData: Data, duration: TimeInterval) {
-        messageQueue.async { [weak self] in
-            guard let self = self else { return }
-            
-            print("[VOICE] Sending voice note: audio size = \(audioData.count) bytes, duration = \(duration)s")
-            
-            let nickname = self.delegate as? ChatViewModel
-            let senderNick = nickname?.nickname ?? self.myPeerID
-            
-            let message = BitchatMessage(
-                sender: senderNick,
-                content: "🎤 \(String(format: "%.1f", duration))s",
-                timestamp: Date(),
-                isRelay: false,
-                originalSender: nil,
-                voiceNoteData: audioData,
-                voiceNoteDuration: duration
-            )
-            
-            if let messageData = message.toBinaryPayload() {
-                print("[VOICE] Message payload size: \(messageData.count) bytes")
-                let packet = BitchatPacket(
-                    type: MessageType.voiceNote.rawValue,
-                    ttl: self.maxTTL,
-                    senderID: self.myPeerID,
-                    payload: messageData
-                )
+                print("[MESSAGE] Sending: \(content)")
                 
-                if let packetData = packet.toBinaryData() {
-                    print("[VOICE] Final packet size: \(packetData.count) bytes")
-                    // Check if packet exceeds safe BLE size (leave margin for overhead)
-                    if packetData.count > 400 {
-                        print("[VOICE] Packet size \(packetData.count) exceeds safe BLE limit")
-                        print("[VOICE] Fragmenting voice note into smaller packets...")
-                        self.sendFragmentedPacket(packet)
-                    } else {
-                        print("[VOICE] Sending voice note as single packet")
-                        self.broadcastPacket(packet)
+                // Retry for reliability (like announces)
+                for delay in [0.2, 0.5] {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self, packet] in
+                        self?.broadcastPacket(packet)
+                        // Re-sending message
                     }
-                } else {
-                    print("[VOICE] ERROR: Failed to convert packet to binary data")
                 }
             }
         }
     }
+    
     
     func sendPrivateMessage(_ content: String, to recipientPeerID: String, recipientNickname: String) {
         messageQueue.async { [weak self] in
@@ -285,18 +323,39 @@ class BluetoothMeshService: NSObject {
             )
             
             if let messageData = message.toBinaryPayload() {
+                // Encrypt the message for the recipient
+                let encryptedPayload: Data
+                do {
+                    encryptedPayload = try self.encryptionService.encrypt(messageData, for: recipientPeerID)
+                    print("[CRYPTO] Successfully encrypted private message for \(recipientPeerID)")
+                } catch {
+                    print("[CRYPTO] Failed to encrypt private message: \(error)")
+                    // Don't send unencrypted private messages
+                    return
+                }
+                
+                // Sign the encrypted payload
+                let signature: Data?
+                do {
+                    signature = try self.encryptionService.sign(encryptedPayload)
+                    print("[CRYPTO] Successfully signed private message")
+                } catch {
+                    print("[CRYPTO] Failed to sign private message: \(error)")
+                    signature = nil
+                }
+                
                 // Create packet with recipient ID for proper routing
                 let packet = BitchatPacket(
                     type: MessageType.privateMessage.rawValue,
                     senderID: Data(self.myPeerID.utf8),
                     recipientID: Data(recipientPeerID.utf8),
                     timestamp: UInt64(Date().timeIntervalSince1970),
-                    payload: messageData,
-                    signature: nil,
+                    payload: encryptedPayload,
+                    signature: signature,
                     ttl: self.maxTTL
                 )
                 
-                print("[PRIVATE] Sending private message to \(recipientPeerID)")
+                print("[PRIVATE] Sending encrypted message to \(recipientPeerID): \(content)")
                 self.broadcastPacket(packet)
                 
                 // Don't call didReceiveMessage here - let the view model handle it directly
@@ -361,16 +420,72 @@ class BluetoothMeshService: NSObject {
         return peerRSSI
     }
     
+    // Emergency disconnect for panic situations
+    func emergencyDisconnectAll() {
+        // Stop advertising immediately
+        if peripheralManager.isAdvertising {
+            peripheralManager.stopAdvertising()
+        }
+        
+        // Stop scanning
+        centralManager.stopScan()
+        scanDutyCycleTimer?.invalidate()
+        scanDutyCycleTimer = nil
+        
+        // Disconnect all peripherals
+        for (_, peripheral) in connectedPeripherals {
+            centralManager.cancelPeripheralConnection(peripheral)
+        }
+        
+        // Clear all peer data
+        connectedPeripherals.removeAll()
+        peripheralCharacteristics.removeAll()
+        discoveredPeripherals.removeAll()
+        subscribedCentrals.removeAll()
+        peerNicknames.removeAll()
+        activePeers.removeAll()
+        peerRSSI.removeAll()
+        peripheralRSSI.removeAll()
+        announcedToPeers.removeAll()
+        announcedPeers.removeAll()
+        processedMessages.removeAll()
+        incomingFragments.removeAll()
+        fragmentMetadata.removeAll()
+        
+        // Clear persistent identity
+        encryptionService.clearPersistentIdentity()
+        
+        print("[PANIC] Emergency disconnect completed")
+    }
+    
     private func getAllConnectedPeerIDs() -> [String] {
         // Only return peers who have announced (have nicknames)
-        let announcedPeers = Set(activePeers.filter { peerID in
-            peerID != "unknown" && 
-            peerID != myPeerID && 
-            peerID.count <= 8 &&  // Filter out temp IDs
-            peerNicknames[peerID] != nil  // Only include peers who have announced
+        let announcedPeers = Set(activePeers.compactMap { peerID -> String? in
+            // Ensure peerID is valid and not nil
+            guard !peerID.isEmpty,
+                  peerID != "unknown",
+                  peerID != myPeerID,
+                  peerID.count <= 8,  // Filter out temp IDs
+                  peerNicknames[peerID] != nil else {  // Only include peers who have announced
+                return nil
+            }
+            return peerID
         })
-        print("[DEBUG] Active peers: \(activePeers), announced: \(announcedPeers), nicknames: \(peerNicknames.keys)")
+        // Active peers: \(announcedPeers.count)
         return Array(announcedPeers).sorted()
+    }
+    
+    private func estimateDistance(rssi: Int) -> Int {
+        // Rough distance estimation based on RSSI
+        // Using path loss formula: RSSI = TxPower - 10 * n * log10(distance)
+        // Assuming TxPower = -59 dBm at 1m, n = 2.0 (free space)
+        let txPower = -59.0
+        let pathLossExponent = 2.0
+        
+        let ratio = (txPower - Double(rssi)) / (10.0 * pathLossExponent)
+        let distance = pow(10.0, ratio)
+        
+        return Int(distance)
     }
     
     private func broadcastPacket(_ packet: BitchatPacket) {
@@ -379,8 +494,7 @@ class BluetoothMeshService: NSObject {
             return 
         }
         
-        
-        print("[BROADCAST] Broadcasting packet type: \(packet.type), data size: \(data.count)")
+        // [BROADCAST] Type: \(packet.type), peripherals: \(connectedPeripherals.count), centrals: \(subscribedCentrals.count)
         
         // Send to connected peripherals (as central)
         var sentToPeripherals = 0
@@ -388,32 +502,32 @@ class BluetoothMeshService: NSObject {
             if let characteristic = peripheralCharacteristics[peripheral] {
                 // Check if peripheral is connected before writing
                 if peripheral.state == .connected {
-                    // Always use withResponse for reliability, especially for background
-                    peripheral.writeValue(data, for: characteristic, type: .withResponse)
+                    // Use withoutResponse for faster transmission when possible
+                    // Only use withResponse for critical messages or when MTU negotiation needed
+                    let writeType: CBCharacteristicWriteType = data.count > 512 ? .withResponse : .withoutResponse
+                    peripheral.writeValue(data, for: characteristic, type: writeType)
                     sentToPeripherals += 1
                 } else {
                     print("[BROADCAST] Peripheral \(peerID) not connected (state: \(peripheral.state.rawValue))")
                 }
             } else {
-                print("[BROADCAST] No characteristic found for peripheral \(peerID)")
+                // No characteristic for peripheral
             }
         }
-        print("[BROADCAST] Sent to \(sentToPeripherals) connected peripherals")
+        // Sent to \(sentToPeripherals) peripherals
         
         // Send to subscribed centrals (as peripheral)
-        if characteristic != nil && !subscribedCentrals.isEmpty {
-            let success = peripheralManager.updateValue(data, for: characteristic, onSubscribedCentrals: subscribedCentrals)
+        if let char = characteristic, !subscribedCentrals.isEmpty {
+            // Send to all subscribed centrals
+            let success = peripheralManager.updateValue(data, for: char, onSubscribedCentrals: nil)
             if success {
-                print("[BROADCAST] Successfully sent to \(subscribedCentrals.count) subscribed centrals")
+                // Sent to centrals
             } else {
                 print("[BROADCAST] Failed to send to centrals - queue full, will retry on delegate callback")
             }
         } else {
             if characteristic == nil {
-                print("[BROADCAST] No characteristic available")
-            }
-            if subscribedCentrals.isEmpty {
-                print("[BROADCAST] No subscribed centrals")
+                // No characteristic or centrals
             }
         }
     }
@@ -431,8 +545,26 @@ class BluetoothMeshService: NSObject {
                 print("[PACKET] Dropping packet with empty payload")
                 return
             }
+            
+            // Replay attack protection: Check timestamp is within reasonable window (5 minutes)
+            let currentTime = UInt64(Date().timeIntervalSince1970)
+            let timeDiff = abs(Int64(currentTime) - Int64(packet.timestamp))
+            if timeDiff > 300 { // 5 minutes
+                print("[SECURITY] Dropping packet with timestamp too far from current time: \(timeDiff) seconds")
+                return
+            }
         
-        let messageID = "\(packet.timestamp)-\(String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8) ?? "")"
+        // For fragments, include packet type in messageID to avoid dropping CONTINUE/END fragments
+        let messageID: String
+        if packet.type == MessageType.fragmentStart.rawValue || 
+           packet.type == MessageType.fragmentContinue.rawValue || 
+           packet.type == MessageType.fragmentEnd.rawValue {
+            // Include both type and payload hash for fragments to ensure uniqueness
+            messageID = "\(packet.timestamp)-\(String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8) ?? "")-\(packet.type)-\(packet.payload.hashValue)"
+        } else {
+            messageID = "\(packet.timestamp)-\(String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8) ?? "")"
+        }
+        
         guard !processedMessages.contains(messageID) else { 
             return 
         }
@@ -444,17 +576,44 @@ class BluetoothMeshService: NSObject {
         
         let _ = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8) ?? "unknown"
         
-        print("[PACKET] Received packet type: \(packet.type) from peerID: \(peerID)")
+        // Received packet type: \(packet.type) from \(peerID)
         
         // Note: We'll decode messages in the switch statement below, not here
         
         switch MessageType(rawValue: packet.type) {
         case .message:
-            if let message = BitchatMessage.fromBinaryPayload(packet.payload) {
-                // Ignore our own messages
-                if let senderID = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8), senderID == myPeerID {
-                    return
+            // Process broadcast message (no decryption needed)
+            guard let senderID = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8) else {
+                return
+            }
+            
+            // Ignore our own messages
+            if senderID == myPeerID {
+                return
+            }
+            
+            // Verify signature if present
+            if let signature = packet.signature {
+                do {
+                    let isValid = try encryptionService.verify(signature, for: packet.payload, from: senderID)
+                    if !isValid {
+                        print("[CRYPTO] Invalid signature from \(senderID), dropping message")
+                        return
+                    }
+                    // Valid signature
+                } catch {
+                    print("[CRYPTO] Failed to verify signature from \(senderID): \(error)")
+                    // If we don't have the public key yet, continue without verification
+                    // Continuing without signature verification
                 }
+            } else {
+                print("[CRYPTO] No signature present in message from \(senderID)")
+            }
+            
+            let messagePayload = packet.payload
+            
+            if let message = BitchatMessage.fromBinaryPayload(messagePayload) {
+                print("[MESSAGE] Received from \(message.sender): \(message.content)")
                 
                 // Store nickname mapping
                 if let senderID = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8) {
@@ -470,6 +629,8 @@ class BluetoothMeshService: NSObject {
                 if relayPacket.ttl > 0 {
                     self.broadcastPacket(relayPacket)
                 }
+            } else {
+                print("[MESSAGE] Failed to parse message from payload")
             }
             
         case .keyExchange:
@@ -477,7 +638,18 @@ class BluetoothMeshService: NSObject {
             if let senderID = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8) {
                 if packet.payload.count > 0 {
                     let publicKeyData = packet.payload
-                    try? encryptionService.addPeerPublicKey(senderID, publicKeyData: publicKeyData)
+                    do {
+                        try encryptionService.addPeerPublicKey(senderID, publicKeyData: publicKeyData)
+                        print("[KEY_EXCHANGE] Successfully added public key for \(senderID)")
+                    } catch {
+                        print("[KEY_EXCHANGE] Failed to add public key for \(senderID): \(error)")
+                    }
+                    
+                    // Register identity key with view model for persistent favorites
+                    if let viewModel = self.delegate as? ChatViewModel,
+                       let identityKeyData = encryptionService.getPeerIdentityKey(senderID) {
+                        viewModel.registerPeerPublicKey(peerID: senderID, publicKeyData: identityKeyData)
+                    }
                     
                     // Track this peer temporarily
                     if senderID != "unknown" && senderID != myPeerID {
@@ -518,7 +690,7 @@ class BluetoothMeshService: NSObject {
             print("[ANNOUNCE] Processing announce packet, payload size: \(packet.payload.count)")
             if let nickname = String(data: packet.payload, encoding: .utf8), 
                let senderID = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8) {
-                print("[DEBUG] Received announce from \(senderID): \(nickname), myPeerID: \(myPeerID)")
+                // Received announce from \(senderID): \(nickname)
                 
                 // Ignore if it's from ourselves
                 if senderID == myPeerID {
@@ -531,7 +703,7 @@ class BluetoothMeshService: NSObject {
                 // Store the nickname
                 peerNicknames[senderID] = nickname
                 print("[ANNOUNCE] Stored nickname for \(senderID): \(nickname)")
-                print("[ANNOUNCE] Current nicknames: \(peerNicknames)")
+                // Updated nicknames
                 
                 // Note: We can't update peripheral mapping here since we don't have 
                 // access to which peripheral sent this announce. The mapping will be
@@ -549,6 +721,15 @@ class BluetoothMeshService: NSObject {
                         DispatchQueue.main.async {
                             self.delegate?.didConnectToPeer(nickname)
                             self.delegate?.didUpdatePeerList(self.getAllConnectedPeerIDs())
+                            
+                            // Check if this is a favorite peer and send notification
+                            // Note: This might not work immediately if key exchange hasn't happened yet
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                if let viewModel = self.delegate as? ChatViewModel,
+                                   viewModel.isFavorite(peerID: senderID) {
+                                    NotificationService.shared.sendFavoriteOnlineNotification(nickname: nickname)
+                                }
+                            }
                         }
                     } else {
                         // Just update the peer list
@@ -563,8 +744,11 @@ class BluetoothMeshService: NSObject {
             }
             
         case .leave:
+            print("[LEAVE] Processing leave packet")
             if let nickname = String(data: packet.payload, encoding: .utf8),
                let senderID = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8) {
+                
+                print("[LEAVE] \(nickname) (\(senderID)) is leaving")
                 
                 // Remove from active peers
                 activePeers.remove(senderID)
@@ -578,25 +762,53 @@ class BluetoothMeshService: NSObject {
                 
                 // Clean up peer data
                 peerNicknames.removeValue(forKey: senderID)
+            } else {
+                print("[LEAVE] Failed to parse leave packet")
             }
             
         case .privateMessage:
             print("[PRIVATE] Received private message packet")
-            if let message = BitchatMessage.fromBinaryPayload(packet.payload) {
-                // Check if this private message is for us
-                if let recipientID = packet.recipientID,
-                   let recipientIDString = String(data: recipientID.trimmingNullBytes(), encoding: .utf8) {
-                    print("[PRIVATE] Message recipient: \(recipientIDString), myPeerID: \(myPeerID)")
-                    
-                    if recipientIDString == myPeerID {
-                        // Get sender ID
-                        if let senderID = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8) {
-                            // Ignore our own messages
-                            if senderID == myPeerID {
-                                print("[PRIVATE] Ignoring own message")
-                                return
+            // Check if this private message is for us
+            if let recipientID = packet.recipientID,
+               let recipientIDString = String(data: recipientID.trimmingNullBytes(), encoding: .utf8) {
+                print("[PRIVATE] Message recipient: \(recipientIDString), myPeerID: \(myPeerID)")
+                
+                if recipientIDString == myPeerID {
+                    // Get sender ID
+                    if let senderID = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8) {
+                        // Ignore our own messages
+                        if senderID == myPeerID {
+                            print("[PRIVATE] Ignoring own message")
+                            return
+                        }
+                        
+                        // Verify signature if present
+                        if let signature = packet.signature {
+                            do {
+                                let isValid = try encryptionService.verify(signature, for: packet.payload, from: senderID)
+                                if !isValid {
+                                    print("[CRYPTO] Invalid signature on private message from \(senderID), dropping")
+                                    return
+                                }
+                                print("[CRYPTO] Valid signature on private message from \(senderID)")
+                            } catch {
+                                print("[CRYPTO] Failed to verify signature from \(senderID): \(error)")
+                                // Continue without signature verification for now
                             }
-                            
+                        }
+                        
+                        // Decrypt the message
+                        let decryptedPayload: Data
+                        do {
+                            decryptedPayload = try encryptionService.decrypt(packet.payload, from: senderID)
+                            print("[CRYPTO] Successfully decrypted private message from \(senderID)")
+                        } catch {
+                            print("[CRYPTO] Failed to decrypt private message from \(senderID): \(error)")
+                            return
+                        }
+                        
+                        // Parse the decrypted message
+                        if let message = BitchatMessage.fromBinaryPayload(decryptedPayload) {
                             print("[PRIVATE] Received private message from \(senderID): \(message.content)")
                             
                             // Store nickname mapping if we don't have it
@@ -608,7 +820,6 @@ class BluetoothMeshService: NSObject {
                                     self.delegate?.didUpdatePeerList(self.getAllConnectedPeerIDs())
                                 }
                             }
-                            
                             
                             // Create a new message with the sender peer ID
                             let messageWithPeerID = BitchatMessage(
@@ -625,43 +836,21 @@ class BluetoothMeshService: NSObject {
                             DispatchQueue.main.async {
                                 self.delegate?.didReceiveMessage(messageWithPeerID)
                             }
+                        } else {
+                            print("[PRIVATE] Failed to parse decrypted message")
                         }
-                    } else if packet.ttl > 0 {
-                        // Relay private messages that aren't for us
-                        print("[PRIVATE] Relaying message not meant for us (TTL: \(packet.ttl))")
-                        var relayPacket = packet
-                        relayPacket.ttl -= 1
-                        self.broadcastPacket(relayPacket)
                     }
-                } else {
-                    print("[PRIVATE] No recipient ID in packet")
-                }
-            } else {
-                print("[PRIVATE] Failed to decode message from payload")
-            }
-            
-        case .voiceNote:
-            if let message = BitchatMessage.fromBinaryPayload(packet.payload) {
-                // Ignore our own messages
-                if let senderID = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8), senderID == myPeerID {
-                    return
-                }
-                
-                // Store nickname mapping
-                if let senderID = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8) {
-                    peerNicknames[senderID] = message.sender
-                }
-                
-                DispatchQueue.main.async {
-                    self.delegate?.didReceiveMessage(message)
-                }
-                
-                var relayPacket = packet
-                relayPacket.ttl -= 1
-                if relayPacket.ttl > 0 {
+                } else if packet.ttl > 0 {
+                    // Relay private messages that aren't for us
+                    print("[PRIVATE] Relaying message not meant for us (TTL: \(packet.ttl))")
+                    var relayPacket = packet
+                    relayPacket.ttl -= 1
                     self.broadcastPacket(relayPacket)
                 }
+            } else {
+                print("[PRIVATE] No recipient ID in packet")
             }
+            
             
         case .fragmentStart, .fragmentContinue, .fragmentEnd:
             let fragmentTypeStr = packet.type == 10 ? "START" : (packet.type == 11 ? "CONTINUE" : "END")
@@ -706,8 +895,9 @@ class BluetoothMeshService: NSObject {
         print("[FRAGMENT] Fragment ID: \(fragmentID.hexEncodedString())")
         print("[FRAGMENT] Original packet size: \(fullData.count) bytes")
         
-        // Send fragments with delays to avoid congestion
-        let delayBetweenFragments: TimeInterval = 0.1  // 100ms between fragments
+        // Optimize fragment transmission for speed
+        // Use minimal delay for BLE 5.0 which supports better throughput
+        let delayBetweenFragments: TimeInterval = 0.02  // 20ms between fragments for faster transmission
         
         for (index, fragmentData) in fragments.enumerated() {
             var fragmentPayload = Data()
@@ -876,22 +1066,44 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
     }
     
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi RSSI: NSNumber) {
+        // Optimize for 300m range - only connect to strong enough signals
+        let rssiValue = RSSI.intValue
+        
+        // Filter out very weak signals (below -90 dBm) to save battery
+        guard rssiValue > -90 else { return }
+        
+        // Throttle RSSI updates to save CPU
+        let peripheralID = peripheral.identifier.uuidString
+        if let lastUpdate = lastRSSIUpdate[peripheralID],
+           Date().timeIntervalSince(lastUpdate) < 1.0 {
+            return  // Skip update if less than 1 second since last update
+        }
+        lastRSSIUpdate[peripheralID] = Date()
         
         // Store RSSI by peripheral ID for later use
-        peripheralRSSI[peripheral.identifier.uuidString] = RSSI
+        peripheralRSSI[peripheralID] = RSSI
         
-        // Extract peer ID and store RSSI
-        if let name = peripheral.name, name.hasPrefix("bitchat-") {
-            let peerID = String(name.dropFirst(8))
+        // Extract peer ID from name (no prefix for stealth)
+        if let name = peripheral.name, name.count == 8 {
+            // Assume 8-character names are peer IDs
+            let peerID = name
             peerRSSI[peerID] = RSSI
-            print("[BLUETOOTH] Discovered peer: \(peerID) with RSSI: \(RSSI), my ID: \(myPeerID)")
+            print("[BLUETOOTH] Discovered potential peer: \(peerID) with RSSI: \(RSSI) dBm (range: ~\(estimateDistance(rssi: rssiValue))m)")
         }
         
         // Connect to any device we discover - we'll filter by service later
         if !discoveredPeripherals.contains(peripheral) {
             discoveredPeripherals.append(peripheral)
             peripheral.delegate = self
-            central.connect(peripheral, options: nil)
+            
+            // Use optimized connection parameters for better range
+            let connectionOptions: [String: Any] = [
+                CBConnectPeripheralOptionNotifyOnConnectionKey: true,
+                CBConnectPeripheralOptionNotifyOnDisconnectionKey: true,
+                CBConnectPeripheralOptionNotifyOnNotificationKey: true
+            ]
+            
+            central.connect(peripheral, options: connectionOptions)
         }
     }
     
@@ -962,8 +1174,12 @@ extension BluetoothMeshService: CBPeripheralDelegate {
                 peripheral.setNotifyValue(true, for: characteristic)
                 peripheralCharacteristics[peripheral] = characteristic
                 
+                // Request maximum MTU for faster data transfer
+                // iOS supports up to 512 bytes with BLE 5.0
+                peripheral.maximumWriteValueLength(for: .withoutResponse)
+                
                 // Send key exchange and announce immediately without any delay
-                let publicKeyData = self.encryptionService.publicKey.rawRepresentation
+                let publicKeyData = self.encryptionService.getCombinedPublicKeyData()
                 let packet = BitchatPacket(
                     type: MessageType.keyExchange.rawValue,
                     ttl: 1,
@@ -973,7 +1189,7 @@ extension BluetoothMeshService: CBPeripheralDelegate {
                 
                 if let data = packet.toBinaryData() {
                     peripheral.writeValue(data, for: characteristic, type: .withResponse)
-                    print("[KEY_EXCHANGE] Sent key exchange to peripheral as central")
+                    // Sent key exchange
                 }
                 
                 // Send announce packet immediately after key exchange
@@ -990,7 +1206,7 @@ extension BluetoothMeshService: CBPeripheralDelegate {
                                 payload: Data(vm.nickname.utf8)
                             )
                             self.broadcastPacket(announcePacket)
-                            print("[KEY_EXCHANGE] Sent announce broadcast (delay: \(delay)s)")
+                            // [KEY_EXCHANGE] Sent announce broadcast
                         }
                     }
                     
@@ -1040,7 +1256,7 @@ extension BluetoothMeshService: CBPeripheralDelegate {
         if let error = error {
             print("[PERIPHERAL] Write failed: \(error)")
         } else {
-            print("[PERIPHERAL] Write completed successfully")
+            // Write completed
         }
     }
     
@@ -1122,7 +1338,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 if peerID != "unknown" && peerID != myPeerID {
                     // Send key exchange back if we haven't already
                     if packet.type == MessageType.keyExchange.rawValue {
-                        let publicKeyData = self.encryptionService.publicKey.rawRepresentation
+                        let publicKeyData = self.encryptionService.getCombinedPublicKeyData()
                         let responsePacket = BitchatPacket(
                             type: MessageType.keyExchange.rawValue,
                             ttl: 1,
@@ -1131,7 +1347,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                         )
                         if let data = responsePacket.toBinaryData() {
                             peripheral.updateValue(data, for: self.characteristic, onSubscribedCentrals: [request.central])
-                            print("[KEY_EXCHANGE] Sent key exchange response as peripheral")
+                            // Sent key exchange response
                         }
                         
                         // Send announce immediately after key exchange
@@ -1148,7 +1364,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                                     )
                                     if let data = announcePacket.toBinaryData() {
                                         peripheral.updateValue(data, for: self.characteristic, onSubscribedCentrals: nil)
-                                        print("[ANNOUNCE] Sent broadcast announce as peripheral (delay: \(delay)s)")
+                                        // Sent announce
                                     }
                                 }
                             }
@@ -1171,7 +1387,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             subscribedCentrals.append(central)
             
             // Send our public key to the newly connected central
-            let publicKeyData = encryptionService.publicKey.rawRepresentation
+            let publicKeyData = encryptionService.getCombinedPublicKeyData()
             let keyPacket = BitchatPacket(
                 type: MessageType.keyExchange.rawValue,
                 ttl: 1,

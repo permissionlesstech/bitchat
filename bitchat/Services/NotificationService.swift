@@ -73,4 +73,12 @@ class NotificationService {
         
         sendLocalNotification(title: title, body: body, identifier: identifier)
     }
+    
+    func sendFavoriteOnlineNotification(nickname: String) {
+        let title = "⭐ \(nickname) is online"
+        let body = "Your favorite peer just joined the chat"
+        let identifier = "favorite-online-\(UUID().uuidString)"
+        
+        sendLocalNotification(title: title, body: body, identifier: identifier)
+    }
 }

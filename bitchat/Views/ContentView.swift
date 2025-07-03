@@ -7,9 +7,6 @@ struct ContentView: View {
     @FocusState private var isTextFieldFocused: Bool
     @Environment(\.colorScheme) var colorScheme
     @State private var showPeerList = false
-    @State private var isRecordingVoice = false
-    @State private var recordingPulse = false
-    @State private var recordingScale: CGFloat = 1.0
     @State private var showSidebar = false
     @State private var sidebarDragOffset: CGFloat = 0
     
@@ -98,34 +95,6 @@ struct ContentView: View {
                 }
             }
             
-                // Recording ripples overlay
-                if isRecordingVoice {
-                    GeometryReader { geometry in
-                        ZStack {
-                            ForEach(0..<6) { index in
-                                Circle()
-                                    .stroke(Color.red.opacity(0.4 - Double(index) * 0.05), lineWidth: 1.5)
-                                    .frame(width: 20, height: 20)  // Start at mic button size
-                                    .scaleEffect(1 + (recordingScale - 1) * (1.0 - Double(index) * 0.1))
-                                    .opacity(max(0, 1.0 - ((recordingScale - 1) / 40.0) * (1.0 - Double(index) * 0.1)))
-                                    .position(
-                                        // Position at mic button location
-                                        x: geometry.size.width - 70,  // Account for padding and button position
-                                        y: geometry.size.height - 32  // Account for input bar height
-                                    )
-                                    .animation(
-                                        Animation.easeOut(duration: 3.0)
-                                            .repeatForever(autoreverses: false)
-                                            .delay(Double(index) * 0.4),
-                                        value: recordingScale
-                                    )
-                            }
-                        }
-                    }
-                    .ignoresSafeArea()
-                    .allowsHitTesting(false)
-                }
-            
             // Autocomplete overlay
             if viewModel.showAutocomplete && !viewModel.autocompleteSuggestions.isEmpty {
                 VStack {
@@ -158,39 +127,6 @@ struct ContentView: View {
                     .padding(.bottom, 45) // Position just above input
                     .padding(.horizontal, 12)
                 }
-            }
-            
-            // Private message notification overlay
-            if let notification = viewModel.privateMessageNotification {
-                VStack {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Message from \(notification.sender)")
-                                .font(.system(size: 14, weight: .medium, design: .monospaced))
-                                .foregroundColor(.white)
-                            Text(notification.message)
-                                .font(.system(size: 12, design: .monospaced))
-                                .foregroundColor(.white.opacity(0.9))
-                                .lineLimit(2)
-                        }
-                        Spacer()
-                    }
-                    .padding()
-                    .background(Color.orange)
-                    .cornerRadius(8)
-                    .shadow(radius: 4)
-                    .padding(.horizontal)
-                    .onTapGesture {
-                        if let peerID = viewModel.getPeerIDForNickname(notification.sender) {
-                            viewModel.startPrivateChat(with: peerID)
-                            viewModel.privateMessageNotification = nil
-                        }
-                    }
-                    Spacer()
-                }
-                .padding(.top, 60)
-                .transition(.move(edge: .top).combined(with: .opacity))
-                .animation(.easeInOut, value: viewModel.privateMessageNotification != nil)
             }
         }
         #if os(macOS)
@@ -240,115 +176,56 @@ struct ContentView: View {
                     Text("bitchat*")
                         .font(.system(size: 18, weight: .medium, design: .monospaced))
                         .foregroundColor(textColor)
-                    
-                    Text("name:")
-                        .font(.system(size: 14, design: .monospaced))
-                        .foregroundColor(secondaryTextColor)
-                    
-                    TextField("nickname", text: $viewModel.nickname)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 14, design: .monospaced))
-                        .frame(maxWidth: 100)
-                        .foregroundColor(textColor)
-                        .onChange(of: viewModel.nickname) { _ in
-                            viewModel.saveNickname()
+                        .onTapGesture(count: 3) {
+                            // PANIC: Triple-tap to clear all data
+                            viewModel.panicClearAllData()
                         }
-                        .onSubmit {
-                            viewModel.saveNickname()
-                        }
+                    
+                    HStack(spacing: 0) {
+                        Text("@")
+                            .font(.system(size: 14, design: .monospaced))
+                            .foregroundColor(secondaryTextColor)
+                        
+                        TextField("nickname", text: $viewModel.nickname)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 14, design: .monospaced))
+                            .frame(maxWidth: 100)
+                            .foregroundColor(textColor)
+                            .onChange(of: viewModel.nickname) { _ in
+                                viewModel.saveNickname()
+                            }
+                            .onSubmit {
+                                viewModel.saveNickname()
+                            }
+                    }
                 }
                 
                 Spacer()
                 
-                // People counter
-                let otherPeersCount = viewModel.connectedPeers.filter { $0 != viewModel.meshService.myPeerID }.count
-                Text(viewModel.isConnected ? "\(otherPeersCount) \(otherPeersCount == 1 ? "person" : "people")" : "alone :/")
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundColor(viewModel.isConnected ? textColor : Color.red)
-                    .onTapGesture {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            showSidebar.toggle()
-                            sidebarDragOffset = 0
-                        }
+                // People counter with unread indicator
+                HStack(spacing: 4) {
+                    if !viewModel.unreadPrivateMessages.isEmpty {
+                        Image(systemName: "envelope.fill")
+                            .font(.system(size: 12))
+                            .foregroundColor(Color.orange)
                     }
+                    
+                    let otherPeersCount = viewModel.connectedPeers.filter { $0 != viewModel.meshService.myPeerID }.count
+                    Text(viewModel.isConnected ? "\(otherPeersCount) \(otherPeersCount == 1 ? "person" : "people")" : "alone :/")
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundColor(viewModel.isConnected ? textColor : Color.red)
+                }
+                .onTapGesture {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showSidebar.toggle()
+                        sidebarDragOffset = 0
+                    }
+                }
             }
         }
         .frame(height: 44) // Fixed height to prevent bouncing
         .padding(.horizontal, 12)
         .background(backgroundColor.opacity(0.95))
-    }
-    
-    private var peerStatusView: some View {
-        Menu {
-            if viewModel.connectedPeers.isEmpty {
-                Text("No people connected")
-                    .font(.system(size: 12, design: .monospaced))
-            } else {
-                let peerNicknames = viewModel.meshService.getPeerNicknames()
-                let peerRSSI = viewModel.meshService.getPeerRSSI()
-                let myPeerID = viewModel.meshService.myPeerID
-                let _ = print("[UI DEBUG] connectedPeers: \(viewModel.connectedPeers), myPeerID: \(myPeerID), RSSI: \(peerRSSI)")
-                ForEach(viewModel.connectedPeers.filter { $0 != myPeerID }.sorted(), id: \.self) { peerID in
-                    let displayName = peerNicknames[peerID] ?? "person-\(peerID.prefix(4))"
-                    Button(action: {
-                        // Only allow private chat if peer has announced
-                        if peerNicknames[peerID] != nil {
-                            viewModel.startPrivateChat(with: peerID)
-                        }
-                    }) {
-                        HStack {
-                            Text(displayName)
-                                .font(.system(size: 12, design: .monospaced))
-                                .foregroundColor(peerNicknames[peerID] != nil ? textColor : secondaryTextColor)
-                            Spacer()
-                            if viewModel.unreadPrivateMessages.contains(peerID) {
-                                Circle()
-                                    .fill(Color.orange)
-                                    .frame(width: 6, height: 6)
-                            }
-                        }
-                        #if os(macOS)
-                        .frame(minWidth: 120)
-                        #endif
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(peerNicknames[peerID] == nil)
-                }
-            }
-        } label: {
-            HStack(spacing: 2) {
-                // Text
-                let otherPeersCount = viewModel.connectedPeers.filter { $0 != viewModel.meshService.myPeerID }.count
-                Text(viewModel.isConnected ? "\(otherPeersCount) \(otherPeersCount == 1 ? "person" : "people")" : "alone :/")
-                    #if os(iOS)
-                    .font(.system(size: 12, design: .monospaced))
-                    #else
-                    .font(.system(size: 14, design: .monospaced))
-                    #endif
-                    .foregroundColor(viewModel.isConnected ? textColor : Color.red)
-                
-                #if os(iOS)
-                // Add chevron for iOS
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 10))
-                    .foregroundColor(textColor.opacity(0.6))
-                #endif
-                
-                // Notification indicator (on the right after default chevron)
-                if !viewModel.unreadPrivateMessages.isEmpty {
-                    Circle()
-                        .fill(Color.orange)
-                        .frame(width: 5, height: 5)
-                }
-            }
-            .fixedSize()
-        }
-        #if os(macOS)
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.visible)
-        #else
-        .menuStyle(.automatic)
-        #endif
     }
     
     private var messagesView: some View {
@@ -401,20 +278,10 @@ struct ContentView: View {
                                     Text(" ")
                                     
                                     // Message content
-                                    if message.voiceNoteData != nil {
-                                        // Voice note with play button
-                                        Text(viewModel.formatVoiceNoteContent(message, colorScheme: colorScheme))
-                                            .font(.system(size: 14, design: .monospaced))
-                                            .fontWeight(isMentioned ? .bold : .regular)
-                                            .onTapGesture {
-                                                viewModel.playVoiceNote(message: message)
-                                            }
-                                    } else {
-                                        // Regular text content
-                                        Text(viewModel.formatMessageContent(message, colorScheme: colorScheme))
-                                            .font(.system(size: 14, design: .monospaced))
-                                            .fontWeight(isMentioned ? .bold : .regular)
-                                    }
+                                    // Regular text content
+                                    Text(viewModel.formatMessageContent(message, colorScheme: colorScheme))
+                                        .font(.system(size: 14, design: .monospaced))
+                                        .fontWeight(isMentioned ? .bold : .regular)
                                     
                                     Spacer()
                                 }
@@ -479,51 +346,10 @@ struct ContentView: View {
                     sendMessage()
                 }
             
-            // Push to talk button
-            ZStack {
-                // Mic icon
-                Image(systemName: "mic.circle.fill")
-                    .font(.system(size: 20))
-                    .foregroundColor(isRecordingVoice ? Color.red.opacity(0.8) : textColor)
-                
-                // Local ripples that start from the button itself
-                if isRecordingVoice {
-                    ForEach(0..<4) { index in
-                        Circle()
-                            .stroke(Color.red.opacity(0.3), lineWidth: 1)
-                            .frame(width: 20, height: 20)
-                            .scaleEffect(1 + Double(index) * 0.5)
-                            .opacity(isRecordingVoice ? 0.5 - Double(index) * 0.1 : 0)
-                            .animation(
-                                Animation.easeOut(duration: 1.5)
-                                    .repeatForever(autoreverses: false)
-                                    .delay(Double(index) * 0.2),
-                                value: isRecordingVoice
-                            )
-                    }
-                }
-            }
-            .contentShape(Rectangle()) // Make entire area tappable
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { _ in
-                        if !isRecordingVoice {
-                            print("[UI] Starting voice recording")
-                            startVoiceRecording()
-                        }
-                    }
-                    .onEnded { _ in
-                        if isRecordingVoice {
-                            print("[UI] Stopping voice recording")
-                            stopVoiceRecording()
-                        }
-                    }
-            )
-            
             Button(action: sendMessage) {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 20))
-                    .foregroundColor(textColor)
+                    .foregroundColor(viewModel.selectedPrivateChatPeer != nil ? Color.orange : textColor)
             }
             .buttonStyle(.plain)
             .padding(.trailing, 12)
@@ -538,54 +364,6 @@ struct ContentView: View {
     private func sendMessage() {
         viewModel.sendMessage(messageText)
         messageText = ""
-    }
-    
-    private func startVoiceRecording() {
-        isRecordingVoice = true
-        withAnimation(.easeOut(duration: 0.3)) {
-            recordingScale = 50.0  // Scale up to cover entire screen from mic button size
-        }
-        #if os(iOS)
-        // Light haptic feedback
-        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-        impactFeedback.impactOccurred()
-        #endif
-        
-        viewModel.audioRecorder.startRecording { result in
-            if case .failure(let error) = result {
-                print("[UI] Failed to start recording: \(error)")
-                isRecordingVoice = false
-                recordingScale = 1.0
-            }
-        }
-    }
-    
-    private func stopVoiceRecording() {
-        // Capture duration before stopping
-        let duration = viewModel.audioRecorder.recordingTime
-        isRecordingVoice = false
-        recordingScale = 1.0
-        
-        viewModel.audioRecorder.stopRecording { result in
-            switch result {
-            case .success(let audioURL):
-                // Read audio file and send as voice note
-                do {
-                    let audioData = try Data(contentsOf: audioURL)
-                    print("[UI] Read audio file: \(audioData.count) bytes, duration: \(duration)s")
-                    
-                    // Use the captured duration, ensure it's at least 0.1s
-                    viewModel.sendVoiceNote(audioData, duration: max(0.1, duration))
-                    
-                    // Clean up temporary file
-                    try FileManager.default.removeItem(at: audioURL)
-                } catch {
-                    print("[UI] Failed to read audio file: \(error)")
-                }
-            case .failure(let error):
-                print("[AUDIO] Recording failed: \(error)")
-            }
-        }
     }
     
     private var sidebarView: some View {
@@ -642,10 +420,16 @@ struct ContentView: View {
                             let isFavorite = viewModel.isFavorite(peerID: peerID)
                             
                             HStack(spacing: 8) {
-                                // Signal strength indicator
-                                Circle()
-                                    .fill(viewModel.getRSSIColor(rssi: rssi, colorScheme: colorScheme))
-                                    .frame(width: 8, height: 8)
+                                // Signal strength indicator or unread message icon
+                                if viewModel.unreadPrivateMessages.contains(peerID) {
+                                    Image(systemName: "envelope.fill")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(Color.orange)
+                                } else {
+                                    Circle()
+                                        .fill(viewModel.getRSSIColor(rssi: rssi, colorScheme: colorScheme))
+                                        .frame(width: 8, height: 8)
+                                }
                                 
                                 // Favorite star
                                 Button(action: {
@@ -673,12 +457,6 @@ struct ContentView: View {
                                             .foregroundColor(peerNicknames[peerID] != nil ? textColor : secondaryTextColor)
                                         
                                         Spacer()
-                                        
-                                        if viewModel.unreadPrivateMessages.contains(peerID) {
-                                            Circle()
-                                                .fill(Color.orange)
-                                                .frame(width: 8, height: 8)
-                                        }
                                     }
                                 }
                                 .buttonStyle(.plain)
