@@ -997,13 +997,7 @@ extension BluetoothMeshService: CBPeripheralDelegate {
         let packetSenderID = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8) ?? "unknown"
         print("[PERIPHERAL] Received data from localPeerID: \(localPeerID), packetSenderID: \(packetSenderID), packet type: \(packet.type)")
         
-        // Handle fragments directly if it's a fragment type
-        if packet.type == MessageType.fragmentStart.rawValue || 
-           packet.type == MessageType.fragmentContinue.rawValue || 
-           packet.type == MessageType.fragmentEnd.rawValue {
-            print("[PERIPHERAL] Processing fragment directly")
-        }
-        
+        // Always handle received packets
         handleReceivedPacket(packet, from: packetSenderID, peripheral: peripheral)
     }
     
