@@ -271,6 +271,97 @@ class ChatViewModel: ObservableObject {
         return range.location + nickname.count + 2
     }
     
+    func getSenderColor(for message: BitchatMessage, colorScheme: ColorScheme) -> Color {
+        let isDark = colorScheme == .dark
+        let primaryColor = isDark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
+        
+        if message.sender == nickname {
+            return primaryColor
+        } else if let peerID = message.senderPeerID ?? getPeerIDForNickname(message.sender),
+                  let rssi = meshService.getPeerRSSI()[peerID] {
+            return getRSSIColor(rssi: rssi.intValue, colorScheme: colorScheme)
+        } else {
+            return primaryColor.opacity(0.9)
+        }
+    }
+    
+    func formatVoiceNoteContent(_ message: BitchatMessage, colorScheme: ColorScheme) -> AttributedString {
+        let isDark = colorScheme == .dark
+        let primaryColor = isDark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
+        
+        var result = AttributedString()
+        var contentStyle = AttributeContainer()
+        contentStyle.font = .system(size: 14, design: .monospaced)
+        contentStyle.foregroundColor = isDark ? Color.white : Color.black
+        
+        // Parse the emoji and duration from content
+        let parts = message.content.components(separatedBy: " ")
+        if parts.count >= 2 {
+            // Emoji
+            result.append(AttributedString(parts[0] + " ").mergingAttributes(contentStyle))
+            
+            // Play/pause button as text
+            let playSymbol = audioPlayer.isPlaying && audioPlayer.currentPlayingMessageID == message.id ? "⏸" : "▶"
+            var playStyle = AttributeContainer()
+            playStyle.font = .system(size: 12, design: .monospaced)
+            playStyle.foregroundColor = primaryColor
+            result.append(AttributedString(playSymbol + " ").mergingAttributes(playStyle))
+            
+            // Duration
+            result.append(AttributedString(parts[1]).mergingAttributes(contentStyle))
+        } else {
+            result.append(AttributedString(message.content).mergingAttributes(contentStyle))
+        }
+        
+        return result
+    }
+    
+    func formatMessageContent(_ message: BitchatMessage, colorScheme: ColorScheme) -> AttributedString {
+        let isDark = colorScheme == .dark
+        let contentText = message.content
+        var processedContent = AttributedString()
+        
+        // Regular expression to find @mentions
+        let pattern = "@([a-zA-Z0-9_]+)"
+        let regex = try? NSRegularExpression(pattern: pattern, options: [])
+        let matches = regex?.matches(in: contentText, options: [], range: NSRange(location: 0, length: contentText.count)) ?? []
+        
+        var lastEndIndex = contentText.startIndex
+        
+        for match in matches {
+            // Add text before the mention
+            if let range = Range(match.range(at: 0), in: contentText) {
+                let beforeText = String(contentText[lastEndIndex..<range.lowerBound])
+                if !beforeText.isEmpty {
+                    var normalStyle = AttributeContainer()
+                    normalStyle.font = .system(size: 14, design: .monospaced)
+                    normalStyle.foregroundColor = isDark ? Color.white : Color.black
+                    processedContent.append(AttributedString(beforeText).mergingAttributes(normalStyle))
+                }
+                
+                // Add the mention with highlight
+                let mentionText = String(contentText[range])
+                var mentionStyle = AttributeContainer()
+                mentionStyle.font = .system(size: 14, weight: .semibold, design: .monospaced)
+                mentionStyle.foregroundColor = Color.orange
+                processedContent.append(AttributedString(mentionText).mergingAttributes(mentionStyle))
+                
+                lastEndIndex = range.upperBound
+            }
+        }
+        
+        // Add any remaining text
+        if lastEndIndex < contentText.endIndex {
+            let remainingText = String(contentText[lastEndIndex...])
+            var normalStyle = AttributeContainer()
+            normalStyle.font = .system(size: 14, design: .monospaced)
+            normalStyle.foregroundColor = isDark ? Color.white : Color.black
+            processedContent.append(AttributedString(remainingText).mergingAttributes(normalStyle))
+        }
+        
+        return processedContent
+    }
+    
     func formatMessage(_ message: BitchatMessage, colorScheme: ColorScheme) -> AttributedString {
         var result = AttributedString()
         

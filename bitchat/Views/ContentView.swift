@@ -221,14 +221,15 @@ struct ContentView: View {
                 
                 Spacer()
                 
-                // Invisible spacer to balance the back button
-                HStack(spacing: 4) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 12))
-                    Text("back")
-                        .font(.system(size: 14, design: .monospaced))
+                // Favorite button
+                Button(action: {
+                    viewModel.toggleFavorite(peerID: privatePeerID)
+                }) {
+                    Image(systemName: viewModel.isFavorite(peerID: privatePeerID) ? "star.fill" : "star")
+                        .font(.system(size: 16))
+                        .foregroundColor(viewModel.isFavorite(peerID: privatePeerID) ? Color.yellow : textColor)
                 }
-                .opacity(0)
+                .buttonStyle(.plain)
             } else {
                 // Public chat header
                 HStack(spacing: 4) {
@@ -359,17 +360,61 @@ struct ContentView: View {
                             // Check if current user is mentioned
                             let isMentioned = message.mentions?.contains(viewModel.nickname) ?? false
                             
-                            Text(viewModel.formatMessage(message, colorScheme: colorScheme))
-                                .font(.system(size: 14, design: .monospaced))
-                                .fontWeight(isMentioned ? .bold : .regular)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .onTapGesture {
-                                    if message.voiceNoteData != nil {
-                                        viewModel.playVoiceNote(message: message)
+                            if message.sender == "system" {
+                                // System messages
+                                Text(viewModel.formatMessage(message, colorScheme: colorScheme))
+                                    .font(.system(size: 14, design: .monospaced))
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            } else {
+                                // Regular messages with tappable sender name
+                                HStack(alignment: .top, spacing: 0) {
+                                    // Timestamp
+                                    Text("[\\(viewModel.formatTimestamp(message.timestamp))] ")
+                                        .font(.system(size: 12, design: .monospaced))
+                                        .foregroundColor(secondaryTextColor)
+                                    
+                                    // Tappable sender name
+                                    if message.sender != viewModel.nickname {
+                                        Button(action: {
+                                            if let peerID = message.senderPeerID ?? viewModel.getPeerIDForNickname(message.sender) {
+                                                viewModel.startPrivateChat(with: peerID)
+                                            }
+                                        }) {
+                                            let senderColor = viewModel.getSenderColor(for: message, colorScheme: colorScheme)
+                                            Text("<\\(message.sender)>")
+                                                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                                                .foregroundColor(senderColor)
+                                        }
+                                        .buttonStyle(.plain)
+                                    } else {
+                                        // Own messages not tappable
+                                        Text("<\\(message.sender)>")
+                                            .font(.system(size: 12, weight: .medium, design: .monospaced))
+                                            .foregroundColor(textColor)
                                     }
+                                    
+                                    Text(" ")
+                                    
+                                    // Message content
+                                    if message.voiceNoteData != nil {
+                                        // Voice note with play button
+                                        Text(viewModel.formatVoiceNoteContent(message, colorScheme: colorScheme))
+                                            .font(.system(size: 14, design: .monospaced))
+                                            .fontWeight(isMentioned ? .bold : .regular)
+                                            .onTapGesture {
+                                                viewModel.playVoiceNote(message: message)
+                                            }
+                                    } else {
+                                        // Regular text content
+                                        Text(viewModel.formatMessageContent(message, colorScheme: colorScheme))
+                                            .font(.system(size: 14, design: .monospaced))
+                                            .fontWeight(isMentioned ? .bold : .regular)
+                                    }
+                                    
+                                    Spacer()
                                 }
-                            
+                            }
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 2)
