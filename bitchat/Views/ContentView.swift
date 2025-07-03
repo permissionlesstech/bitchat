@@ -431,41 +431,41 @@ struct ContentView: View {
                 }
             
             // Push to talk button
-            Button(action: {}) {
-                ZStack {
-                    // Mic icon
-                    Image(systemName: "mic.circle.fill")
-                        .font(.system(size: 20))
-                        .foregroundColor(isRecordingVoice ? Color.red.opacity(0.8) : textColor)
-                    
-                    // Local ripples that start from the button itself
-                    if isRecordingVoice {
-                        ForEach(0..<4) { index in
-                            Circle()
-                                .stroke(Color.red.opacity(0.3), lineWidth: 1)
-                                .frame(width: 20, height: 20)
-                                .scaleEffect(1 + Double(index) * 0.5)
-                                .opacity(isRecordingVoice ? 0.5 - Double(index) * 0.1 : 0)
-                                .animation(
-                                    Animation.easeOut(duration: 1.5)
-                                        .repeatForever(autoreverses: false)
-                                        .delay(Double(index) * 0.2),
-                                    value: isRecordingVoice
-                                )
-                        }
+            ZStack {
+                // Mic icon
+                Image(systemName: "mic.circle.fill")
+                    .font(.system(size: 20))
+                    .foregroundColor(isRecordingVoice ? Color.red.opacity(0.8) : textColor)
+                
+                // Local ripples that start from the button itself
+                if isRecordingVoice {
+                    ForEach(0..<4) { index in
+                        Circle()
+                            .stroke(Color.red.opacity(0.3), lineWidth: 1)
+                            .frame(width: 20, height: 20)
+                            .scaleEffect(1 + Double(index) * 0.5)
+                            .opacity(isRecordingVoice ? 0.5 - Double(index) * 0.1 : 0)
+                            .animation(
+                                Animation.easeOut(duration: 1.5)
+                                    .repeatForever(autoreverses: false)
+                                    .delay(Double(index) * 0.2),
+                                value: isRecordingVoice
+                            )
                     }
                 }
             }
-            .buttonStyle(.plain)
-            .simultaneousGesture(
+            .contentShape(Rectangle()) // Make entire area tappable
+            .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { _ in
                         if !isRecordingVoice {
+                            print("[UI] Starting voice recording")
                             startVoiceRecording()
                         }
                     }
                     .onEnded { _ in
                         if isRecordingVoice {
+                            print("[UI] Stopping voice recording")
                             stopVoiceRecording()
                         }
                     }
@@ -503,7 +503,11 @@ struct ContentView: View {
         #endif
         
         viewModel.audioRecorder.startRecording { result in
-            // Will handle result in stopVoiceRecording
+            if case .failure(let error) = result {
+                print("[UI] Failed to start recording: \(error)")
+                isRecordingVoice = false
+                recordingScale = 1.0
+            }
         }
     }
     
@@ -517,12 +521,17 @@ struct ContentView: View {
             switch result {
             case .success(let audioURL):
                 // Read audio file and send as voice note
-                if let audioData = try? Data(contentsOf: audioURL) {
+                do {
+                    let audioData = try Data(contentsOf: audioURL)
+                    print("[UI] Read audio file: \(audioData.count) bytes, duration: \(duration)s")
+                    
                     // Use the captured duration, ensure it's at least 0.1s
                     viewModel.sendVoiceNote(audioData, duration: max(0.1, duration))
                     
                     // Clean up temporary file
-                    try? FileManager.default.removeItem(at: audioURL)
+                    try FileManager.default.removeItem(at: audioURL)
+                } catch {
+                    print("[UI] Failed to read audio file: \(error)")
                 }
             case .failure(let error):
                 print("[AUDIO] Recording failed: \(error)")

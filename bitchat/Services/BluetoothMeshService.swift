@@ -44,7 +44,7 @@ class BluetoothMeshService: NSObject {
     // Fragment handling
     private var incomingFragments: [String: [Int: Data]] = [:]  // fragmentID -> [index: data]
     private var fragmentMetadata: [String: (originalType: UInt8, totalFragments: Int, timestamp: Date)] = [:]
-    private let maxFragmentSize = 400  // Leave room for protocol overhead
+    private let maxFragmentSize = 200  // Smaller fragments for better reliability
     
     let myPeerID: String
     
@@ -224,15 +224,17 @@ class BluetoothMeshService: NSObject {
                 
                 if let packetData = packet.toBinaryData() {
                     print("[VOICE] Final packet size: \(packetData.count) bytes")
-                    if packetData.count > 512 {
-                        print("[VOICE] WARNING: Packet size exceeds typical BLE MTU of 512 bytes!")
+                    // Check if packet exceeds safe BLE size (leave margin for overhead)
+                    if packetData.count > 400 {
+                        print("[VOICE] Packet size \(packetData.count) exceeds safe BLE limit")
                         print("[VOICE] Fragmenting voice note into smaller packets...")
                         self.sendFragmentedPacket(packet)
                     } else {
+                        print("[VOICE] Sending voice note as single packet")
                         self.broadcastPacket(packet)
                     }
                 } else {
-                    self.broadcastPacket(packet)
+                    print("[VOICE] ERROR: Failed to convert packet to binary data")
                 }
             }
         }
@@ -348,11 +350,18 @@ class BluetoothMeshService: NSObject {
         
         // Send to connected peripherals (as central)
         var sentToPeripherals = 0
-        for (_, peripheral) in connectedPeripherals {
+        for (peerID, peripheral) in connectedPeripherals {
             if let characteristic = peripheralCharacteristics[peripheral] {
-                // Always use withResponse for reliability, especially for background
-                peripheral.writeValue(data, for: characteristic, type: .withResponse)
-                sentToPeripherals += 1
+                // Check if peripheral is connected before writing
+                if peripheral.state == .connected {
+                    // Always use withResponse for reliability, especially for background
+                    peripheral.writeValue(data, for: characteristic, type: .withResponse)
+                    sentToPeripherals += 1
+                } else {
+                    print("[BROADCAST] Peripheral \(peerID) not connected (state: \(peripheral.state.rawValue))")
+                }
+            } else {
+                print("[BROADCAST] No characteristic found for peripheral \(peerID)")
             }
         }
         print("[BROADCAST] Sent to \(sentToPeripherals) connected peripherals")
@@ -643,10 +652,8 @@ class BluetoothMeshService: NSObject {
         print("[FRAGMENT] Fragment ID: \(fragmentID.hexEncodedString())")
         print("[FRAGMENT] Original packet size: \(fullData.count) bytes")
         
-        // Send fragments in batches to avoid congestion
-        let batchSize = 5
-        let delayBetweenFragments: TimeInterval = 0.05  // 50ms between fragments
-        let delayBetweenBatches: TimeInterval = 0.2     // 200ms between batches
+        // Send fragments with delays to avoid congestion
+        let delayBetweenFragments: TimeInterval = 0.1  // 100ms between fragments
         
         for (index, fragmentData) in fragments.enumerated() {
             var fragmentPayload = Data()
@@ -676,19 +683,17 @@ class BluetoothMeshService: NSObject {
                 payload: fragmentPayload
             )
             
-            // Calculate delay based on batch
-            let batchNumber = index / batchSize
-            let indexInBatch = index % batchSize
-            let totalDelay = (Double(batchNumber) * delayBetweenBatches) + (Double(indexInBatch) * delayBetweenFragments)
+            // Send fragments with linear delay
+            let totalDelay = Double(index) * delayBetweenFragments
             
             // Send fragments on background queue with calculated delay
             messageQueue.asyncAfter(deadline: .now() + totalDelay) { [weak self] in
                 self?.broadcastPacket(fragmentPacket)
-                print("[FRAGMENT] Sent fragment \(index + 1)/\(fragments.count) type: \(fragmentType) (batch \(batchNumber + 1))")
+                print("[FRAGMENT] Sent fragment \(index + 1)/\(fragments.count) type: \(fragmentType) at +\(totalDelay)s")
             }
         }
         
-        let totalTime = Double((fragments.count - 1) / batchSize) * delayBetweenBatches + Double((fragments.count - 1) % batchSize) * delayBetweenFragments
+        let totalTime = Double(fragments.count - 1) * delayBetweenFragments
         print("[FRAGMENT] Total send time: \(totalTime)s for \(fragments.count) fragments")
     }
     

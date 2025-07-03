@@ -25,10 +25,13 @@ class NotificationService {
     
     func sendLocalNotification(title: String, body: String, identifier: String) {
         #if os(iOS)
-        guard UIApplication.shared.applicationState == .background else {
-            print("[NOTIFICATIONS] App is in foreground, skipping notification")
+        // Send notification if app is not active (background or inactive)
+        guard UIApplication.shared.applicationState != .active else {
+            print("[NOTIFICATIONS] App is active/foreground, skipping notification")
             return
         }
+        
+        print("[NOTIFICATIONS] App state: \(UIApplication.shared.applicationState.rawValue), sending notification")
         
         let content = UNMutableNotificationContent()
         content.title = title
