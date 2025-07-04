@@ -95,7 +95,7 @@ struct BitchatPacket: Codable {
         self.type = type
         self.senderID = senderID.data(using: .utf8)!
         self.recipientID = nil
-        self.timestamp = UInt64(Date().timeIntervalSince1970)
+        self.timestamp = UInt64(Date().timeIntervalSince1970 * 1000) // milliseconds
         self.payload = payload
         self.signature = nil
         self.ttl = ttl
