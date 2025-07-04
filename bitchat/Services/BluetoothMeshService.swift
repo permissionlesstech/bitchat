@@ -761,6 +761,12 @@ class BluetoothMeshService: NSObject {
                 return
             }
             
+            // Don't cache broadcast messages
+            if let recipientID = packet.recipientID,
+               recipientID == SpecialRecipients.broadcast {
+                return  // Never cache broadcast messages
+            }
+            
             // Check if this is a private message for a favorite
             var isForFavorite = false
             if packet.type == MessageType.message.rawValue,
@@ -842,10 +848,19 @@ class BluetoothMeshService: NSObject {
                 // Found favorite messages
             }
             
-            // Then add regular cached messages
-            messagesToSend.append(contentsOf: self.messageCache)
+            // Filter regular cached messages for this specific recipient
+            let recipientMessages = self.messageCache.filter { storedMessage in
+                // Check if this message is intended for this peer
+                if let recipientID = storedMessage.packet.recipientID,
+                   let recipientPeerID = String(data: recipientID.trimmingNullBytes(), encoding: .utf8) {
+                    return recipientPeerID == peerID
+                }
+                return false  // Don't forward broadcast messages
+            }
+            messagesToSend.append(contentsOf: recipientMessages)
             
-            // Sending cached messages
+            // Collect message IDs that we're about to send
+            let messageIDsToRemove = messagesToSend.map { $0.messageID }
             
             // Send cached messages with slight delay between each
             for (index, storedMessage) in messagesToSend.enumerated() {
@@ -856,13 +871,27 @@ class BluetoothMeshService: NSObject {
                           peripheral.state == .connected else { return }
                     
                     // Send the original packet with preserved timestamp
-                    // This maintains message ordering for store-and-forward
                     let packetToSend = storedMessage.packet
                     
                     if let data = packetToSend.toBinaryData(),
                        characteristic.properties.contains(.writeWithoutResponse) {
                         peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
-                        // Sent cached message with original timestamp
+                    }
+                }
+            }
+            
+            // Remove sent messages after allowing time for delivery
+            // Note: We remove optimistically since withoutResponse doesn't confirm delivery
+            if !messageIDsToRemove.isEmpty {
+                let removalDelay = Double(messagesToSend.count) * 0.1 + 1.0 // Extra second for safety
+                DispatchQueue.main.asyncAfter(deadline: .now() + removalDelay) { [weak self] in
+                    self?.messageQueue.async(flags: .barrier) {
+                        // Remove only the messages we sent to this specific peer
+                        self?.messageCache.removeAll { message in
+                            messageIDsToRemove.contains(message.messageID)
+                        }
+                        // Log removal
+                        // Removed \(messageIDsToRemove.count) delivered messages from cache
                     }
                 }
             }
@@ -1055,8 +1084,8 @@ class BluetoothMeshService: NSObject {
                     var relayPacket = packet
                     relayPacket.ttl -= 1
                     if relayPacket.ttl > 0 {
-                        // Cache message for store-and-forward
-                        self.cacheMessage(relayPacket, messageID: messageID)
+                        // Don't cache broadcast messages - they're not targeted
+                        // Only relay them while TTL > 0
                         
                         // Probabilistic flooding: relay with probability based on network density
                         let relayProb = self.adaptiveRelayProbability
@@ -1784,19 +1813,9 @@ extension BluetoothMeshService: CBPeripheralDelegate {
     
     func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
         if let error = error {
-            // Handle specific BLE errors
-            if let bleError = error as? CBATTError {
-                switch bleError.code {
-                case .invalidHandle, .invalidPdu, .insufficientAuthorization:
-                    // Characteristic might be invalid, rediscover services
-                    peripheral.discoverServices([BluetoothMeshService.serviceUUID])
-                case .connectionTimeout, .linkLost:
-                    // Connection issue, will be handled by disconnect
-                    break
-                default:
-                    print("[ERROR] Write failed: \(error)")
-                }
-            } else {
+            // Log error but don't spam for common errors
+            let errorCode = (error as NSError).code
+            if errorCode != 242 { // Don't log the common "Unknown ATT error"
                 print("[ERROR] Write failed: \(error)")
             }
         } else {
