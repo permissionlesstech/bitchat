@@ -59,6 +59,7 @@ class BluetoothMeshService: NSObject {
     private var favoriteMessageQueue: [String: [StoredMessage]] = [:]  // Per-favorite message queues
     private var deliveredMessages: Set<String> = []  // Track delivered message IDs to prevent duplicates
     private var cachedMessagesSentToPeer: Set<String> = []  // Track which peers have already received cached messages
+    private var receivedMessageTimestamps: [String: Date] = [:]  // Track timestamps of received messages for debugging
     
     // Battery and range optimizations
     private var scanDutyCycleTimer: Timer?
@@ -1068,12 +1069,14 @@ class BluetoothMeshService: NSObject {
         if messageBloomFilter.contains(messageID) {
             // Also check exact set for accuracy (bloom filter can have false positives)
             if processedMessages.contains(messageID) {
+                print("[STORE_FORWARD] Dropping duplicate message ID: \(messageID) from \(peerID)")
                 return
             }
         }
         
         messageBloomFilter.insert(messageID)
         processedMessages.insert(messageID)
+        print("[STORE_FORWARD] Processing new message ID: \(messageID) from \(peerID), type: \(packet.type)")
         
         // Reset bloom filter periodically to prevent saturation
         if processedMessages.count > 1000 {
@@ -1210,7 +1213,21 @@ class BluetoothMeshService: NSObject {
                             return  // Silently discard dummy messages
                         }
                         
-                        print("[STORE_FORWARD] Received private message from \(senderID) with timestamp: \(message.timestamp)")
+                        print("[STORE_FORWARD] Received private message from \(senderID) with timestamp: \(message.timestamp), content: \(message.content)")
+                        
+                        // Check if we've seen this exact message recently (within 5 seconds)
+                        let messageKey = "\(senderID)-\(message.content)-\(message.timestamp)"
+                        if let lastReceived = self.receivedMessageTimestamps[messageKey] {
+                            let timeSinceLastReceived = Date().timeIntervalSince(lastReceived)
+                            if timeSinceLastReceived < 5.0 {
+                                print("[STORE_FORWARD] WARNING: Duplicate message received from \(senderID) within \(timeSinceLastReceived)s")
+                            }
+                        }
+                        self.receivedMessageTimestamps[messageKey] = Date()
+                        
+                        // Clean up old entries (older than 1 minute)
+                        let cutoffTime = Date().addingTimeInterval(-60)
+                        self.receivedMessageTimestamps = self.receivedMessageTimestamps.filter { $0.value > cutoffTime }
                         
                         // Store nickname mapping if we don't have it
                         peerNicknamesLock.lock()
@@ -1323,8 +1340,11 @@ class BluetoothMeshService: NSObject {
                     print("[STORE_FORWARD] Key exchange received from \(senderID), sending announce and checking cached messages")
                     self.sendAnnouncementToPeer(senderID)
                     
-                    // Check if this peer has cached messages (especially for favorites)
-                    self.sendCachedMessages(to: senderID)
+                    // Delay sending cached messages to ensure connection is fully established
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                        // Check if this peer has cached messages (especially for favorites)
+                        self?.sendCachedMessages(to: senderID)
+                    }
                 }
             }
             
