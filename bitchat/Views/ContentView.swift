@@ -206,14 +206,13 @@ struct ContentView: View {
             } else if let currentRoom = viewModel.currentRoom {
                 // Room header
                 HStack(spacing: 4) {
-                    let memberCount = (viewModel.roomMembers[currentRoom]?.count ?? 0) + 1 // +1 for self
                     Button(action: {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                             showSidebar.toggle()
                             sidebarDragOffset = 0
                         }
                     }) {
-                        Text("\(currentRoom) (\(memberCount))")
+                        Text(currentRoom)
                             .font(.system(size: 18, weight: .medium, design: .monospaced))
                             .foregroundColor(Color.blue)
                     }
@@ -291,6 +290,15 @@ struct ContentView: View {
                 
                 // People counter with unread indicator
                 HStack(spacing: 4) {
+                    // Check for any unread room messages
+                    let hasUnreadRoomMessages = viewModel.unreadRoomMessages.values.contains { $0 > 0 }
+                    
+                    if hasUnreadRoomMessages {
+                        Image(systemName: "number")
+                            .font(.system(size: 12))
+                            .foregroundColor(Color.blue)
+                    }
+                    
                     if !viewModel.unreadPrivateMessages.isEmpty {
                         Image(systemName: "envelope.fill")
                             .font(.system(size: 12))
@@ -593,11 +601,18 @@ struct ContentView: View {
                                 if let currentRoom = viewModel.currentRoom,
                                    let roomMemberIDs = viewModel.roomMembers[currentRoom] {
                                     // Show only peers who have sent messages to this room (including self)
+                                    print("[DEBUG-VIEW] Room \(currentRoom) has members: \(roomMemberIDs)")
+                                    print("[DEBUG-VIEW] Connected peers: \(viewModel.connectedPeers)")
+                                    
                                     var memberPeers = viewModel.connectedPeers.filter { roomMemberIDs.contains($0) }
                                     // Always include ourselves if we're connected
-                                    if viewModel.connectedPeers.contains(myPeerID) {
-                                        memberPeers.append(myPeerID)
+                                    if viewModel.connectedPeers.contains(myPeerID) && roomMemberIDs.contains(myPeerID) {
+                                        if !memberPeers.contains(myPeerID) {
+                                            memberPeers.append(myPeerID)
+                                        }
                                     }
+                                    
+                                    print("[DEBUG-VIEW] Peers to show in room: \(memberPeers)")
                                     return Array(Set(memberPeers)) // Remove duplicates
                                 } else {
                                     // Show all connected peers in main chat

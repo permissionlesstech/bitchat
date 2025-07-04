@@ -251,6 +251,7 @@ class ChatViewModel: ObservableObject {
                     roomMembers[room] = []
                 }
                 roomMembers[room]?.insert(meshService.myPeerID)
+                print("[DEBUG-ROOM] Added self \(meshService.myPeerID) to room \(room), total members: \(roomMembers[room]?.count ?? 0)")
             } else {
                 // Add to main messages
                 messages.append(message)
@@ -676,6 +677,9 @@ extension ChatViewModel: BitchatDelegate {
             }
             if let senderPeerID = message.senderPeerID {
                 roomMembers[room]?.insert(senderPeerID)
+                print("[DEBUG-ROOM] Added member \(senderPeerID) to room \(room), total members: \(roomMembers[room]?.count ?? 0)")
+            } else {
+                print("[DEBUG-ROOM] No senderPeerID for message in room \(room)")
             }
             
             // Update unread count if not currently viewing this room
