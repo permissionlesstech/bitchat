@@ -261,10 +261,10 @@ class ChatViewModel: ObservableObject {
                 messages.append(message)
             }
             
-            // Auto-join any new rooms mentioned in the message
-            for room in rooms {
-                if !joinedRooms.contains(room) {
-                    joinRoom(room)
+            // Only auto-join rooms if we're sending TO that room
+            if let messageRoom = messageRoom {
+                if !joinedRooms.contains(messageRoom) {
+                    joinRoom(messageRoom)
                 }
             }
             
@@ -631,6 +631,8 @@ class ChatViewModel: ObservableObject {
 
 extension ChatViewModel: BitchatDelegate {
     func didReceiveMessage(_ message: BitchatMessage) {
+        bitchatLog("Received message from \(message.sender), room: \(message.room ?? "nil"), senderPeerID: \(message.senderPeerID ?? "nil")", category: "message")
+        
         if message.isPrivate {
             // Handle private message
             
@@ -675,7 +677,7 @@ extension ChatViewModel: BitchatDelegate {
             roomMessages[room]?.append(message)
             roomMessages[room]?.sort { $0.timestamp < $1.timestamp }
             
-            // Track room members
+            // Track room members - only track the sender as a member
             if roomMembers[room] == nil {
                 roomMembers[room] = []
             }
