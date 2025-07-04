@@ -88,10 +88,6 @@ class BluetoothMeshService: NSObject {
     private var peerListUpdateTimer: Timer?
     private let peerListUpdateDebounceInterval: TimeInterval = 0.1  // 100ms debounce for more responsive updates
     
-    // Stale peer cleanup
-    private var stalePeerCleanupTimer: Timer?
-    private var peerLastSeenTimestamps: [String: Date] = [:]  // Track when we last saw each peer
-    
     // Cover traffic for privacy
     private var coverTrafficTimer: Timer?
     private let coverTrafficPrefix = "☂DUMMY☂"  // Prefix to identify dummy messages after decryption
@@ -850,7 +846,7 @@ class BluetoothMeshService: NSObject {
             peerRSSI.removeValue(forKey: peerID)
             announcedPeers.remove(peerID)
             announcedToPeers.remove(peerID)
-            processedKeyExchanges.removeAll { $0.contains(peerID) }
+            processedKeyExchanges = processedKeyExchanges.filter { !$0.contains(peerID) }
             
             peerNicknamesLock.lock()
             let nickname = peerNicknames[peerID]
@@ -1504,7 +1500,7 @@ class BluetoothMeshService: NSObject {
                     peerLastSeenTimestamps.removeValue(forKey: stalePeerID)
                     
                     // Remove from processed key exchanges
-                    processedKeyExchanges.removeAll { $0.contains(stalePeerID) }
+                    processedKeyExchanges = processedKeyExchanges.filter { !$0.contains(stalePeerID) }
                 }
                 
                 // If we had stale peers, notify the UI immediately
@@ -2393,68 +2389,6 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         return coverTrafficPrefix + (templates.randomElement() ?? "ok")
     }
     
-    // MARK: - Stale Peer Cleanup
-    
-    private func cleanupStalePeers() {
-        let staleThreshold: TimeInterval = 60.0  // Consider peers stale after 60 seconds of no activity
-        let now = Date()
-        
-        var peersToRemove: [String] = []
-        
-        // Check for stale peers
-        activePeersLock.lock()
-        for peerID in activePeers {
-            if let lastSeen = peerLastSeenTimestamps[peerID] {
-                if now.timeIntervalSince(lastSeen) > staleThreshold {
-                    peersToRemove.append(peerID)
-                }
-            } else {
-                // No timestamp recorded, consider it stale
-                peersToRemove.append(peerID)
-            }
-        }
-        activePeersLock.unlock()
-        
-        // Remove stale peers
-        for peerID in peersToRemove {
-            print("[CLEANUP] Removing stale peer \(peerID) - last seen: \(peerLastSeenTimestamps[peerID]?.description ?? "never")")
-            
-            // Remove from all tracking structures
-            activePeersLock.lock()
-            activePeers.remove(peerID)
-            activePeersLock.unlock()
-            
-            peerNicknamesLock.lock()
-            let nickname = peerNicknames[peerID]
-            peerNicknames.removeValue(forKey: peerID)
-            peerNicknamesLock.unlock()
-            
-            // Remove from other tracking
-            announcedPeers.remove(peerID)
-            announcedToPeers.remove(peerID)
-            peerRSSI.removeValue(forKey: peerID)
-            peerLastSeenTimestamps.removeValue(forKey: peerID)
-            cachedMessagesSentToPeer.remove(peerID)
-            
-            // Disconnect any associated peripherals
-            if let peripheral = connectedPeripherals[peerID] {
-                intentionalDisconnects.insert(peripheral.identifier.uuidString)
-                centralManager.cancelPeripheralConnection(peripheral)
-                connectedPeripherals.removeValue(forKey: peerID)
-                peripheralCharacteristics.removeValue(forKey: peripheral)
-            }
-            
-            // Log the cleanup
-            if let nick = nickname {
-                print("[CLEANUP] Removed stale peer: \(nick) (\(peerID))")
-            }
-        }
-        
-        // Notify UI if any peers were removed
-        if !peersToRemove.isEmpty {
-            notifyPeerListUpdate()
-        }
-    }
     
     private func updatePeerLastSeen(_ peerID: String) {
         peerLastSeenTimestamps[peerID] = Date()

@@ -1,3 +1,11 @@
+//
+// NotificationService.swift
+// bitchat
+//
+// This is free and unencumbered software released into the public domain.
+// For more information, see <https://unlicense.org>
+//
+
 import Foundation
 import UserNotifications
 #if os(iOS)
@@ -12,11 +20,9 @@ class NotificationService {
     private init() {}
     
     func requestAuthorization() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
             if granted {
                 // Permission granted
-            } else if let error = error {
-                // print("[NOTIFICATIONS] Permission error: \(error)")
             }
         }
     }
@@ -49,12 +55,8 @@ class NotificationService {
             trigger: nil // Deliver immediately
         )
         
-        UNUserNotificationCenter.current().add(request) { error in
-            if let error = error {
-                // print("[NOTIFICATIONS] Error sending notification: \(error)")
-            } else {
-                // Notification sent
-            }
+        UNUserNotificationCenter.current().add(request) { _ in
+            // Notification added
         }
     }
     

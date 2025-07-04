@@ -1,6 +1,6 @@
 name: bitchat
 options:
-  bundleIdPrefix: com.bitchat
+  bundleIdPrefix: chat.bitchat
   deploymentTarget:
     iOS: 16.0
     macOS: 13.0
