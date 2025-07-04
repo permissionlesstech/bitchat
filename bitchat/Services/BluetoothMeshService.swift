@@ -395,18 +395,11 @@ class BluetoothMeshService: NSObject {
         // Use generic advertising to avoid identification
         // No identifying prefixes or app names for activist safety
         
-        // Include network size hint in manufacturer data for scaling decisions
-        var manufacturerData = Data()
-        manufacturerData.append(UInt8(estimatedNetworkSize))  // 1 byte network size
-        manufacturerData.append(UInt8(currentBatteryLevel * 100))  // 1 byte battery percentage
-        
+        // Only use allowed advertisement keys
         advertisementData = [
             CBAdvertisementDataServiceUUIDsKey: [BluetoothMeshService.serviceUUID],
             // Use only peer ID without any identifying prefix
-            CBAdvertisementDataLocalNameKey: myPeerID,
-            CBAdvertisementDataIsConnectable: true,
-            // Custom manufacturer data (using Apple's ID to blend in)
-            CBAdvertisementDataManufacturerDataKey: manufacturerData
+            CBAdvertisementDataLocalNameKey: myPeerID
         ]
         
         isAdvertising = true
@@ -876,7 +869,7 @@ class BluetoothMeshService: NSObject {
         
         // Send to connected peripherals (as central)
         var sentToPeripherals = 0
-        for (peerID, peripheral) in connectedPeripherals {
+        for (_, peripheral) in connectedPeripherals {
             if let characteristic = peripheralCharacteristics[peripheral] {
                 // Check if peripheral is connected before writing
                 if peripheral.state == .connected {
@@ -960,7 +953,7 @@ class BluetoothMeshService: NSObject {
             messageBloomFilter.reset()
         }
         
-        let _ = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8) ?? "unknown"
+        // let _ = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8) ?? "unknown"
         
         // Received packet type: \(packet.type) from \(peerID)
         
@@ -1284,8 +1277,8 @@ class BluetoothMeshService: NSObject {
             }
             
         case .fragmentStart, .fragmentContinue, .fragmentEnd:
-            let fragmentTypeStr = packet.type == MessageType.fragmentStart.rawValue ? "START" : 
-                               (packet.type == MessageType.fragmentContinue.rawValue ? "CONTINUE" : "END")
+            // let fragmentTypeStr = packet.type == MessageType.fragmentStart.rawValue ? "START" : 
+            //                    (packet.type == MessageType.fragmentContinue.rawValue ? "CONTINUE" : "END")
             // Handling fragment
             
             // Validate fragment has minimum required size
@@ -1369,7 +1362,7 @@ class BluetoothMeshService: NSObject {
             }
         }
         
-        let totalTime = Double(fragments.count - 1) * delayBetweenFragments
+        let _ = Double(fragments.count - 1) * delayBetweenFragments
         // Total fragment send time
     }
     
@@ -1524,7 +1517,7 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
         }
         
         // Connection pooling with exponential backoff
-        let peripheralID = peripheral.identifier.uuidString
+        // peripheralID already declared above
         
         // Check if we should attempt connection (considering backoff)
         if let backoffTime = connectionBackoff[peripheralID],
@@ -1536,7 +1529,7 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
         // Check if we already have this peripheral in our pool
         if let pooledPeripheral = connectionPool[peripheralID] {
             // Reuse existing peripheral from pool
-            if pooledPeripheral.state == .disconnected {
+            if pooledPeripheral.state == CBPeripheralState.disconnected {
                 // Reconnect if disconnected
                 central.connect(pooledPeripheral, options: [
                     CBConnectPeripheralOptionNotifyOnConnectionKey: true,
@@ -1723,7 +1716,7 @@ extension BluetoothMeshService: CBPeripheralDelegate {
         }
         
         // Use the sender ID from the packet, not our local mapping which might still be a temp ID
-        let localPeerID = connectedPeripherals.first(where: { $0.value == peripheral })?.key ?? "unknown"
+        let _ = connectedPeripherals.first(where: { $0.value == peripheral })?.key ?? "unknown"
         let packetSenderID = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8) ?? "unknown"
         // Received data from peer
         

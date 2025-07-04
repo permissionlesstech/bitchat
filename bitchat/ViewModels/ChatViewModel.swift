@@ -110,8 +110,13 @@ class ChatViewModel: ObservableObject {
             .prefix(16)  // Use first 16 chars for brevity
             .lowercased()
         
-        peerIDToPublicKeyFingerprint[peerID] = String(fingerprint)
-        print("[FAVORITES] Registered fingerprint \(fingerprint) for peer \(peerID)")
+        let fingerprintStr = String(fingerprint)
+        
+        // Only register if not already registered
+        if peerIDToPublicKeyFingerprint[peerID] != fingerprintStr {
+            peerIDToPublicKeyFingerprint[peerID] = fingerprintStr
+            print("[FAVORITES] Registered fingerprint \(fingerprint) for peer \(peerID)")
+        }
     }
     
     func sendMessage(_ content: String) {
