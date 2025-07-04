@@ -605,6 +605,7 @@ class BluetoothMeshService: NSObject {
                         if self.delegate?.isFavorite(fingerprint: fingerprint) ?? false {
                             // Recipient is offline favorite, cache the message
                             let messageID = "\(packet.timestamp)-\(self.myPeerID)"
+                            print("[STORE_FORWARD] Caching our message to offline favorite: \(recipientPeerID)")
                             self.cacheMessage(packet, messageID: messageID)
                         }
                     }
@@ -772,12 +773,14 @@ class BluetoothMeshService: NSObject {
                   packet.type != MessageType.fragmentStart.rawValue,
                   packet.type != MessageType.fragmentContinue.rawValue,
                   packet.type != MessageType.fragmentEnd.rawValue else {
+                print("[STORE_FORWARD] Skipping cache for message type: \(packet.type)")
                 return
             }
             
             // Don't cache broadcast messages
             if let recipientID = packet.recipientID,
                recipientID == SpecialRecipients.broadcast {
+                print("[STORE_FORWARD] Skipping cache for broadcast message")
                 return  // Never cache broadcast messages
             }
             
@@ -791,6 +794,7 @@ class BluetoothMeshService: NSObject {
                     let fingerprint = self.getPublicKeyFingerprint(publicKeyData)
                     isForFavorite = self.delegate?.isFavorite(fingerprint: fingerprint) ?? false
                 }
+                print("[STORE_FORWARD] Message for \(recipientPeerID), isForFavorite: \(isForFavorite)")
             }
             
             // Create stored message with original packet timestamp preserved
@@ -800,6 +804,8 @@ class BluetoothMeshService: NSObject {
                 messageID: messageID,
                 isForFavorite: isForFavorite
             )
+            
+            print("[STORE_FORWARD] Caching message ID: \(messageID), timestamp: \(storedMessage.timestamp), isForFavorite: \(isForFavorite)")
             
             if isForFavorite {
                 // Store in favorite-specific queue
@@ -816,7 +822,7 @@ class BluetoothMeshService: NSObject {
                         self.favoriteMessageQueue[recipientPeerID]?.removeFirst()
                     }
                     
-                    // Cached message for favorite
+                    print("[STORE_FORWARD] Cached message for favorite \(recipientPeerID), queue size: \(self.favoriteMessageQueue[recipientPeerID]?.count ?? 0)")
                 }
             } else {
                 // Clean up old messages first (only for regular cache)
@@ -830,7 +836,7 @@ class BluetoothMeshService: NSObject {
                     self.messageCache.removeFirst()
                 }
                 
-                // Cached message
+                print("[STORE_FORWARD] Cached message in regular cache, cache size: \(self.messageCache.count)")
             }
         }
     }
@@ -852,11 +858,15 @@ class BluetoothMeshService: NSObject {
             guard let self = self,
                   let peripheral = self.connectedPeripherals[peerID],
                   let characteristic = self.peripheralCharacteristics[peripheral] else {
+                print("[STORE_FORWARD] Cannot send cached messages to \(peerID) - no peripheral/characteristic")
                 return
             }
             
+            print("[STORE_FORWARD] Checking cached messages for peer: \(peerID)")
+            
             // Check if we've already sent cached messages to this peer in this session
             if self.cachedMessagesSentToPeer.contains(peerID) {
+                print("[STORE_FORWARD] Already sent cached messages to \(peerID) in this session")
                 return  // Already sent cached messages to this peer
             }
             
@@ -875,7 +885,7 @@ class BluetoothMeshService: NSObject {
                 messagesToSend.append(contentsOf: undeliveredFavoriteMessages)
                 // Clear the favorite queue after adding to send list
                 self.favoriteMessageQueue[peerID] = nil
-                // Found favorite messages
+                print("[STORE_FORWARD] Found \(undeliveredFavoriteMessages.count) undelivered favorite messages for \(peerID)")
             }
             
             // Filter regular cached messages for this specific recipient
@@ -893,8 +903,16 @@ class BluetoothMeshService: NSObject {
             }
             messagesToSend.append(contentsOf: recipientMessages)
             
+            print("[STORE_FORWARD] Found \(recipientMessages.count) regular cached messages for \(peerID)")
+            print("[STORE_FORWARD] Total messages to send: \(messagesToSend.count)")
+            
             // Sort messages by timestamp to ensure proper ordering
             messagesToSend.sort { $0.timestamp < $1.timestamp }
+            
+            // Log messages being sent
+            for msg in messagesToSend {
+                print("[STORE_FORWARD] Will send message ID: \(msg.messageID), timestamp: \(msg.timestamp), isForFavorite: \(msg.isForFavorite)")
+            }
             
             // Mark messages as delivered immediately to prevent duplicates
             let messageIDsToRemove = messagesToSend.map { $0.messageID }
@@ -906,7 +924,10 @@ class BluetoothMeshService: NSObject {
                 
                 DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak peripheral] in
                     guard let peripheral = peripheral,
-                          peripheral.state == .connected else { return }
+                          peripheral.state == .connected else {
+                        print("[STORE_FORWARD] Peripheral disconnected while sending message \(index + 1)/\(messagesToSend.count)")
+                        return
+                    }
                     
                     // Send the original packet with preserved timestamp
                     let packetToSend = storedMessage.packet
@@ -914,6 +935,7 @@ class BluetoothMeshService: NSObject {
                     if let data = packetToSend.toBinaryData(),
                        characteristic.properties.contains(.writeWithoutResponse) {
                         peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
+                        print("[STORE_FORWARD] Sent cached message \(index + 1)/\(messagesToSend.count) with ID: \(storedMessage.messageID)")
                     }
                 }
             }
@@ -922,17 +944,22 @@ class BluetoothMeshService: NSObject {
             if !messageIDsToRemove.isEmpty {
                 self.messageQueue.async(flags: .barrier) {
                     // Remove only the messages we sent to this specific peer
+                    let beforeCount = self.messageCache.count
                     self.messageCache.removeAll { message in
                         messageIDsToRemove.contains(message.messageID)
                     }
+                    let afterCount = self.messageCache.count
+                    
                     // Also remove from favorite queue if any
                     if var favoriteQueue = self.favoriteMessageQueue[peerID] {
+                        let beforeFavCount = favoriteQueue.count
                         favoriteQueue.removeAll { message in
                             messageIDsToRemove.contains(message.messageID)
                         }
                         self.favoriteMessageQueue[peerID] = favoriteQueue.isEmpty ? nil : favoriteQueue
+                        print("[STORE_FORWARD] Removed \(beforeFavCount - favoriteQueue.count) messages from favorite queue for \(peerID)")
                     }
-                    // Removed \(messageIDsToRemove.count) delivered messages from cache
+                    print("[STORE_FORWARD] Removed \(beforeCount - afterCount) delivered messages from regular cache")
                 }
             }
         }
@@ -1183,7 +1210,7 @@ class BluetoothMeshService: NSObject {
                             return  // Silently discard dummy messages
                         }
                         
-                        // Received private message
+                        print("[STORE_FORWARD] Received private message from \(senderID) with timestamp: \(message.timestamp)")
                         
                         // Store nickname mapping if we don't have it
                         peerNicknamesLock.lock()
@@ -1220,7 +1247,7 @@ class BluetoothMeshService: NSObject {
                         let fingerprint = self.getPublicKeyFingerprint(publicKeyData)
                         // Only cache if recipient is a favorite AND is currently offline
                         if (self.delegate?.isFavorite(fingerprint: fingerprint) ?? false) && !self.activePeers.contains(recipientIDString) {
-                            // Caching message for offline favorite
+                            print("[STORE_FORWARD] Caching relayed message for offline favorite: \(recipientIDString)")
                             self.cacheMessage(relayPacket, messageID: messageID)
                         }
                     }
@@ -1293,7 +1320,7 @@ class BluetoothMeshService: NSObject {
                     }
                     
                     // Send announce with our nickname immediately
-                    // Sending announcement to peer
+                    print("[STORE_FORWARD] Key exchange received from \(senderID), sending announce and checking cached messages")
                     self.sendAnnouncementToPeer(senderID)
                     
                     // Check if this peer has cached messages (especially for favorites)
@@ -1351,7 +1378,7 @@ class BluetoothMeshService: NSObject {
                                         NotificationService.shared.sendFavoriteOnlineNotification(nickname: nickname)
                                         
                                         // Send any cached messages for this favorite
-                                        // Favorite peer came online
+                                        print("[STORE_FORWARD] Favorite \(nickname) came online, checking for cached messages")
                                         self.sendCachedMessages(to: senderID)
                                     }
                                 } else if let viewModel = self.delegate as? ChatViewModel,
@@ -1728,6 +1755,7 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
             
             // Clear cached messages tracking for this peer to allow re-sending if they reconnect
             cachedMessagesSentToPeer.remove(peerID)
+            print("[STORE_FORWARD] Peer \(peerID) disconnected, cleared cache tracking")
             
             // Only show disconnect if we have a resolved nickname
             peerNicknamesLock.lock()
