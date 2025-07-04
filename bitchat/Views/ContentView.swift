@@ -74,7 +74,8 @@ struct ContentView: View {
                     // Sidebar overlay
                     HStack(spacing: 0) {
                         // Tap to dismiss area
-                        Color.black.opacity(showSidebar ? 0.3 : 0.3 * (-sidebarDragOffset / (geometry.size.width * 0.7)))
+                        Color.clear
+                            .contentShape(Rectangle())
                             .onTapGesture {
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                                     showSidebar = false
