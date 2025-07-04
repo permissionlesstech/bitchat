@@ -41,7 +41,7 @@ class BluetoothMeshService: NSObject {
     private let encryptionService = EncryptionService()
     private let messageQueue = DispatchQueue(label: "bitchat.messageQueue", attributes: .concurrent)
     private var processedMessages = Set<String>()
-    private let maxTTL: UInt8 = 5  // Increased for better reach
+    private let maxTTL: UInt8 = 7  // Maximum hops for long-distance delivery
     private var announcedToPeers = Set<String>()  // Track which peers we've announced to
     private var announcedPeers = Set<String>()  // Track peers who have already been announced
     
@@ -97,7 +97,7 @@ class BluetoothMeshService: NSObject {
     
     // Probabilistic flooding
     private var relayProbability: Double = 1.0  // Start at 100%, decrease with peer count
-    private let minRelayProbability: Double = 0.3  // Minimum 30% relay chance
+    private let minRelayProbability: Double = 0.4  // Minimum 40% relay chance - ensures coverage
     
     // Message aggregation
     private var pendingMessages: [(message: BitchatPacket, destination: String?)] = []
@@ -148,32 +148,32 @@ class BluetoothMeshService: NSObject {
     
     // Adaptive parameters based on network size
     private var adaptiveTTL: UInt8 {
-        // Reduce TTL for larger networks
+        // Keep TTL high enough for messages to travel far
         let networkSize = estimatedNetworkSize
-        if networkSize <= 10 {
-            return 5
-        } else if networkSize <= 30 {
-            return 4
+        if networkSize <= 20 {
+            return 6  // Small networks: max distance
         } else if networkSize <= 50 {
-            return 3
+            return 5  // Medium networks: still good reach
+        } else if networkSize <= 100 {
+            return 4  // Large networks: reasonable reach
         } else {
-            return 2
+            return 3  // Very large networks: minimum viable
         }
     }
     
     private var adaptiveRelayProbability: Double {
-        // Reduce relay probability as network grows
+        // Keep relay probability high enough to ensure delivery
         let networkSize = estimatedNetworkSize
-        if networkSize <= 5 {
+        if networkSize <= 10 {
             return 1.0  // 100% for small networks
-        } else if networkSize <= 15 {
-            return 0.8  // 80%
         } else if networkSize <= 30 {
-            return 0.6  // 60%
+            return 0.85 // 85% - most nodes relay
         } else if networkSize <= 50 {
-            return 0.4  // 40%
+            return 0.7  // 70% - still high probability
+        } else if networkSize <= 100 {
+            return 0.55 // 55% - over half relay
         } else {
-            return minRelayProbability  // 30% minimum
+            return 0.4  // 40% minimum - never go below this
         }
     }
     
@@ -606,7 +606,7 @@ class BluetoothMeshService: NSObject {
                         if self.delegate?.isFavorite(fingerprint: fingerprint) ?? false {
                             // Recipient is offline favorite, cache the message
                             let messageID = "\(packet.timestamp)-\(self.myPeerID)"
-                            print("[STORE_FORWARD] Caching our message to offline favorite: \(recipientPeerID)")
+                            // Caching for offline favorite
                             self.cacheMessage(packet, messageID: messageID)
                         }
                     }
@@ -774,14 +774,12 @@ class BluetoothMeshService: NSObject {
                   packet.type != MessageType.fragmentStart.rawValue,
                   packet.type != MessageType.fragmentContinue.rawValue,
                   packet.type != MessageType.fragmentEnd.rawValue else {
-                print("[STORE_FORWARD] Skipping cache for message type: \(packet.type)")
                 return
             }
             
             // Don't cache broadcast messages
             if let recipientID = packet.recipientID,
                recipientID == SpecialRecipients.broadcast {
-                print("[STORE_FORWARD] Skipping cache for broadcast message")
                 return  // Never cache broadcast messages
             }
             
@@ -795,7 +793,7 @@ class BluetoothMeshService: NSObject {
                     let fingerprint = self.getPublicKeyFingerprint(publicKeyData)
                     isForFavorite = self.delegate?.isFavorite(fingerprint: fingerprint) ?? false
                 }
-                print("[STORE_FORWARD] Message for \(recipientPeerID), isForFavorite: \(isForFavorite)")
+                // Message for recipient
             }
             
             // Create stored message with original packet timestamp preserved
@@ -806,7 +804,7 @@ class BluetoothMeshService: NSObject {
                 isForFavorite: isForFavorite
             )
             
-            print("[STORE_FORWARD] Caching message ID: \(messageID), timestamp: \(storedMessage.timestamp), isForFavorite: \(isForFavorite)")
+            // Caching message
             
             if isForFavorite {
                 // Store in favorite-specific queue
@@ -823,7 +821,7 @@ class BluetoothMeshService: NSObject {
                         self.favoriteMessageQueue[recipientPeerID]?.removeFirst()
                     }
                     
-                    print("[STORE_FORWARD] Cached message for favorite \(recipientPeerID), queue size: \(self.favoriteMessageQueue[recipientPeerID]?.count ?? 0)")
+                    // Cached message for favorite
                 }
             } else {
                 // Clean up old messages first (only for regular cache)
@@ -837,7 +835,7 @@ class BluetoothMeshService: NSObject {
                     self.messageCache.removeFirst()
                 }
                 
-                print("[STORE_FORWARD] Cached message in regular cache, cache size: \(self.messageCache.count)")
+                // Cached message
             }
         }
     }
@@ -859,16 +857,14 @@ class BluetoothMeshService: NSObject {
             guard let self = self,
                   let peripheral = self.connectedPeripherals[peerID],
                   let characteristic = self.peripheralCharacteristics[peripheral] else {
-                print("[STORE_FORWARD] Cannot send cached messages to \(peerID) - no peripheral/characteristic")
                 return
             }
             
-            print("[STORE_FORWARD] Checking cached messages for peer: \(peerID)")
+            // Checking cached messages
             
             // Check if we've already sent cached messages to this peer in this session
             if self.cachedMessagesSentToPeer.contains(peerID) {
-                print("[STORE_FORWARD] Already sent cached messages to \(peerID) in this session")
-                return  // Already sent cached messages to this peer
+                return  // Already sent cached messages to this peer in this session
             }
             
             // Mark that we're sending cached messages to this peer
@@ -886,7 +882,7 @@ class BluetoothMeshService: NSObject {
                 messagesToSend.append(contentsOf: undeliveredFavoriteMessages)
                 // Clear the favorite queue after adding to send list
                 self.favoriteMessageQueue[peerID] = nil
-                print("[STORE_FORWARD] Found \(undeliveredFavoriteMessages.count) undelivered favorite messages for \(peerID)")
+                // Found favorite messages
             }
             
             // Filter regular cached messages for this specific recipient
@@ -904,15 +900,13 @@ class BluetoothMeshService: NSObject {
             }
             messagesToSend.append(contentsOf: recipientMessages)
             
-            print("[STORE_FORWARD] Found \(recipientMessages.count) regular cached messages for \(peerID)")
-            print("[STORE_FORWARD] Total messages to send: \(messagesToSend.count)")
+            // Found cached messages
             
             // Sort messages by timestamp to ensure proper ordering
             messagesToSend.sort { $0.timestamp < $1.timestamp }
             
-            // Log messages being sent
-            for msg in messagesToSend {
-                print("[STORE_FORWARD] Will send message ID: \(msg.messageID), timestamp: \(msg.timestamp), isForFavorite: \(msg.isForFavorite)")
+            if !messagesToSend.isEmpty {
+                print("[STORE_FORWARD] Sending \(messagesToSend.count) cached messages to \(peerID)")
             }
             
             // Mark messages as delivered immediately to prevent duplicates
@@ -926,7 +920,6 @@ class BluetoothMeshService: NSObject {
                 DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak peripheral] in
                     guard let peripheral = peripheral,
                           peripheral.state == .connected else {
-                        print("[STORE_FORWARD] Peripheral disconnected while sending message \(index + 1)/\(messagesToSend.count)")
                         return
                     }
                     
@@ -936,7 +929,7 @@ class BluetoothMeshService: NSObject {
                     if let data = packetToSend.toBinaryData(),
                        characteristic.properties.contains(.writeWithoutResponse) {
                         peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
-                        print("[STORE_FORWARD] Sent cached message \(index + 1)/\(messagesToSend.count) with ID: \(storedMessage.messageID)")
+                        // Sent cached message
                     }
                 }
             }
@@ -958,9 +951,9 @@ class BluetoothMeshService: NSObject {
                             messageIDsToRemove.contains(message.messageID)
                         }
                         self.favoriteMessageQueue[peerID] = favoriteQueue.isEmpty ? nil : favoriteQueue
-                        print("[STORE_FORWARD] Removed \(beforeFavCount - favoriteQueue.count) messages from favorite queue for \(peerID)")
+                        // Removed from favorite queue
                     }
-                    print("[STORE_FORWARD] Removed \(beforeCount - afterCount) delivered messages from regular cache")
+                    // Removed from cache
                 }
             }
         }
@@ -1069,14 +1062,12 @@ class BluetoothMeshService: NSObject {
         if messageBloomFilter.contains(messageID) {
             // Also check exact set for accuracy (bloom filter can have false positives)
             if processedMessages.contains(messageID) {
-                print("[STORE_FORWARD] Dropping duplicate message ID: \(messageID) from \(peerID)")
                 return
             }
         }
         
         messageBloomFilter.insert(messageID)
         processedMessages.insert(messageID)
-        print("[STORE_FORWARD] Processing new message ID: \(messageID) from \(peerID), type: \(packet.type)")
         
         // Reset bloom filter periodically to prevent saturation
         if processedMessages.count > 1000 {
@@ -1150,16 +1141,18 @@ class BluetoothMeshService: NSObject {
                         }
                     }
                     
-                    // Probabilistic relay based on network size
+                    // Relay broadcast messages
                     var relayPacket = packet
                     relayPacket.ttl -= 1
                     if relayPacket.ttl > 0 {
-                        // Don't cache broadcast messages - they're not targeted
-                        // Only relay them while TTL > 0
-                        
-                        // Probabilistic flooding: relay with probability based on network density
+                        // Probabilistic flooding with smart relay decisions
                         let relayProb = self.adaptiveRelayProbability
-                        let shouldRelay = Double.random(in: 0...1) < relayProb
+                        
+                        // Always relay if TTL is high (fresh messages need to spread)
+                        // or if we have few peers (ensure coverage in sparse networks)
+                        let shouldRelay = relayPacket.ttl >= 4 || 
+                                         self.activePeers.count <= 3 ||
+                                         Double.random(in: 0...1) < relayProb
                         
                         if shouldRelay {
                             // Add random delay to prevent collision storms
@@ -1213,14 +1206,12 @@ class BluetoothMeshService: NSObject {
                             return  // Silently discard dummy messages
                         }
                         
-                        print("[STORE_FORWARD] Received private message from \(senderID) with timestamp: \(message.timestamp), content: \(message.content)")
-                        
                         // Check if we've seen this exact message recently (within 5 seconds)
                         let messageKey = "\(senderID)-\(message.content)-\(message.timestamp)"
                         if let lastReceived = self.receivedMessageTimestamps[messageKey] {
                             let timeSinceLastReceived = Date().timeIntervalSince(lastReceived)
                             if timeSinceLastReceived < 5.0 {
-                                print("[STORE_FORWARD] WARNING: Duplicate message received from \(senderID) within \(timeSinceLastReceived)s")
+                                print("[DUPLICATE] Message from \(senderID) received \(timeSinceLastReceived)s after first")
                             }
                         }
                         self.receivedMessageTimestamps[messageKey] = Date()
@@ -1264,14 +1255,18 @@ class BluetoothMeshService: NSObject {
                         let fingerprint = self.getPublicKeyFingerprint(publicKeyData)
                         // Only cache if recipient is a favorite AND is currently offline
                         if (self.delegate?.isFavorite(fingerprint: fingerprint) ?? false) && !self.activePeers.contains(recipientIDString) {
-                            print("[STORE_FORWARD] Caching relayed message for offline favorite: \(recipientIDString)")
+                            // Caching for offline favorite
                             self.cacheMessage(relayPacket, messageID: messageID)
                         }
                     }
                     
-                    // Probabilistic flooding for private message relay
-                    let relayProb = self.adaptiveRelayProbability
-                    let shouldRelay = Double.random(in: 0...1) < relayProb
+                    // Private messages are important - use higher relay probability
+                    let relayProb = min(self.adaptiveRelayProbability + 0.15, 1.0)  // Boost by 15%
+                    
+                    // Always relay if TTL is high or we have few peers
+                    let shouldRelay = relayPacket.ttl >= 4 || 
+                                     self.activePeers.count <= 3 ||
+                                     Double.random(in: 0...1) < relayProb
                     
                     if shouldRelay {
                         // Add random delay to prevent collision storms
@@ -1337,7 +1332,7 @@ class BluetoothMeshService: NSObject {
                     }
                     
                     // Send announce with our nickname immediately
-                    print("[STORE_FORWARD] Key exchange received from \(senderID), sending announce and checking cached messages")
+                    // Key exchange received
                     self.sendAnnouncementToPeer(senderID)
                     
                     // Delay sending cached messages to ensure connection is fully established
@@ -1398,7 +1393,7 @@ class BluetoothMeshService: NSObject {
                                         NotificationService.shared.sendFavoriteOnlineNotification(nickname: nickname)
                                         
                                         // Send any cached messages for this favorite
-                                        print("[STORE_FORWARD] Favorite \(nickname) came online, checking for cached messages")
+                                        // Favorite came online
                                         self.sendCachedMessages(to: senderID)
                                     }
                                 } else if let viewModel = self.delegate as? ChatViewModel,
@@ -1775,7 +1770,7 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
             
             // Clear cached messages tracking for this peer to allow re-sending if they reconnect
             cachedMessagesSentToPeer.remove(peerID)
-            print("[STORE_FORWARD] Peer \(peerID) disconnected, cleared cache tracking")
+            // Peer disconnected
             
             // Only show disconnect if we have a resolved nickname
             peerNicknamesLock.lock()
