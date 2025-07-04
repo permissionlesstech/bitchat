@@ -33,6 +33,7 @@ class BluetoothMeshService: NSObject {
     private var peerNicknames: [String: String] = [:]
     private let peerNicknamesLock = NSLock()
     private var activePeers: Set<String> = []  // Track all active peers
+    private let activePeersLock = NSLock()  // Thread safety for activePeers
     private var peerRSSI: [String: NSNumber] = [:] // Track RSSI values for peers
     private var peripheralRSSI: [String: NSNumber] = [:] // Track RSSI by peripheral ID during discovery
     private var loggedCryptoErrors = Set<String>()  // Track which peers we've logged crypto errors for
@@ -337,7 +338,9 @@ class BluetoothMeshService: NSObject {
         // Clear all tracking
         connectedPeripherals.removeAll()
         subscribedCentrals.removeAll()
+        activePeersLock.lock()
         activePeers.removeAll()
+        activePeersLock.unlock()
         announcedPeers.removeAll()
         
         // Clear announcement tracking
@@ -757,7 +760,11 @@ class BluetoothMeshService: NSObject {
     
     private func getAllConnectedPeerIDs() -> [String] {
         // Return all valid active peers
-        let validPeers = activePeers.filter { peerID in
+        activePeersLock.lock()
+        let peersCopy = activePeers
+        activePeersLock.unlock()
+        
+        let validPeers = peersCopy.filter { peerID in
             // Ensure peerID is valid
             return !peerID.isEmpty &&
                    peerID != "unknown" &&
@@ -765,6 +772,7 @@ class BluetoothMeshService: NSObject {
                    peerID.count <= 8  // Filter out temp IDs
         }
         
+        print("[DEBUG] Active peers: \(peersCopy), Valid peers: \(validPeers)")
         return Array(validPeers).sorted()
     }
     
@@ -1328,6 +1336,7 @@ class BluetoothMeshService: NSObject {
                         
                         // Add to active peers immediately on key exchange
                         activePeers.insert(senderID)
+                        print("[DEBUG] Added peer \(senderID) to active peers via key exchange")
                         let connectedPeerIDs = self.getAllConnectedPeerIDs()
                         DispatchQueue.main.async {
                             self.delegate?.didUpdatePeerList(connectedPeerIDs)
@@ -1373,8 +1382,11 @@ class BluetoothMeshService: NSObject {
                 
                 // Add to active peers if not already there
                 if senderID != "unknown" {
-                    if !activePeers.contains(senderID) {
-                        activePeers.insert(senderID)
+                    activePeersLock.lock()
+                    let wasInserted = activePeers.insert(senderID).inserted
+                    activePeersLock.unlock()
+                    if wasInserted {
+                        print("[DEBUG] Added peer \(senderID) to active peers via announce")
                     }
                     
                     // Show join message only for first announce

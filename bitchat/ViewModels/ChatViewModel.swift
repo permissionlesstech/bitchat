@@ -588,13 +588,12 @@ extension ChatViewModel: BitchatDelegate {
     }
     
     func didUpdatePeerList(_ peers: [String]) {
+        print("[DEBUG] Updating peer list: \(peers.count) peers: \(peers)")
         connectedPeers = peers
         isConnected = !peers.isEmpty
         
-        // If we just disconnected from all peers, ensure UI updates
-        if peers.isEmpty && isConnected {
-            isConnected = false
-        }
+        // Force UI update
+        objectWillChange.send()
         
         // If we're in a private chat with someone who disconnected, exit the chat
         if let currentChatPeer = selectedPrivateChatPeer,
