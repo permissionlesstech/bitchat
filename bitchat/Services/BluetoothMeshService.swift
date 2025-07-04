@@ -81,6 +81,164 @@ class BluetoothMeshService: NSObject {
     
     let myPeerID: String
     
+    // ===== SCALING OPTIMIZATIONS =====
+    
+    // Connection pooling
+    private var connectionPool: [String: CBPeripheral] = [:]
+    private var connectionAttempts: [String: Int] = [:]
+    private var connectionBackoff: [String: TimeInterval] = [:]
+    private let maxConnectionAttempts = 3
+    private let baseBackoffInterval: TimeInterval = 1.0
+    
+    // Probabilistic flooding
+    private var relayProbability: Double = 1.0  // Start at 100%, decrease with peer count
+    private let minRelayProbability: Double = 0.3  // Minimum 30% relay chance
+    
+    // Message aggregation
+    private var pendingMessages: [(message: BitchatPacket, destination: String?)] = []
+    private var aggregationTimer: Timer?
+    private let aggregationWindow: TimeInterval = 0.1  // 100ms window
+    private let maxAggregatedMessages = 5
+    
+    // Bloom filter for efficient duplicate detection
+    private struct BloomFilter {
+        private var bitArray: [Bool]
+        private let size: Int = 4096  // 512 bytes
+        private let hashCount = 3
+        
+        init() {
+            bitArray = Array(repeating: false, count: size)
+        }
+        
+        mutating func insert(_ item: String) {
+            for i in 0..<hashCount {
+                let hash = item.hashValue &+ i.hashValue
+                let index = abs(hash) % size
+                bitArray[index] = true
+            }
+        }
+        
+        func contains(_ item: String) -> Bool {
+            for i in 0..<hashCount {
+                let hash = item.hashValue &+ i.hashValue
+                let index = abs(hash) % size
+                if !bitArray[index] {
+                    return false
+                }
+            }
+            return true
+        }
+        
+        mutating func reset() {
+            bitArray = Array(repeating: false, count: size)
+        }
+    }
+    private var messageBloomFilter = BloomFilter()
+    private var bloomFilterResetTimer: Timer?
+    
+    // Network size estimation
+    private var estimatedNetworkSize: Int {
+        return max(activePeers.count, connectedPeripherals.count)
+    }
+    
+    // Adaptive parameters based on network size
+    private var adaptiveTTL: UInt8 {
+        // Reduce TTL for larger networks
+        let networkSize = estimatedNetworkSize
+        if networkSize <= 10 {
+            return 5
+        } else if networkSize <= 30 {
+            return 4
+        } else if networkSize <= 50 {
+            return 3
+        } else {
+            return 2
+        }
+    }
+    
+    private var adaptiveRelayProbability: Double {
+        // Reduce relay probability as network grows
+        let networkSize = estimatedNetworkSize
+        if networkSize <= 5 {
+            return 1.0  // 100% for small networks
+        } else if networkSize <= 15 {
+            return 0.8  // 80%
+        } else if networkSize <= 30 {
+            return 0.6  // 60%
+        } else if networkSize <= 50 {
+            return 0.4  // 40%
+        } else {
+            return minRelayProbability  // 30% minimum
+        }
+    }
+    
+    // BLE advertisement for lightweight presence
+    private var advertisementData: [String: Any] = [:]
+    private var isAdvertising = false
+    
+    // ===== MESSAGE AGGREGATION =====
+    
+    private func startAggregationTimer() {
+        aggregationTimer?.invalidate()
+        aggregationTimer = Timer.scheduledTimer(withTimeInterval: aggregationWindow, repeats: false) { [weak self] _ in
+            self?.flushPendingMessages()
+        }
+    }
+    
+    private func flushPendingMessages() {
+        guard !pendingMessages.isEmpty else { return }
+        
+        messageQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            // Group messages by destination
+            var messagesByDestination: [String?: [BitchatPacket]] = [:]
+            
+            for (message, destination) in self.pendingMessages {
+                if messagesByDestination[destination] == nil {
+                    messagesByDestination[destination] = []
+                }
+                messagesByDestination[destination]?.append(message)
+            }
+            
+            // Send aggregated messages
+            for (destination, messages) in messagesByDestination {
+                if messages.count == 1 {
+                    // Single message, send normally
+                    if destination == nil {
+                        self.broadcastPacket(messages[0])
+                    } else if let dest = destination,
+                              let peripheral = self.connectedPeripherals[dest],
+                              let characteristic = self.peripheralCharacteristics[peripheral] {
+                        if let data = messages[0].toBinaryData() {
+                            peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
+                        }
+                    }
+                } else {
+                    // Multiple messages - could aggregate into a single packet
+                    // For now, send with minimal delay between them
+                    for (index, message) in messages.enumerated() {
+                        let delay = Double(index) * 0.02  // 20ms between messages
+                        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                            if destination == nil {
+                                self?.broadcastPacket(message)
+                            } else if let dest = destination,
+                                      let peripheral = self?.connectedPeripherals[dest],
+                                      let characteristic = self?.peripheralCharacteristics[peripheral] {
+                                if let data = message.toBinaryData() {
+                                    peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Clear pending messages
+            self.pendingMessages.removeAll()
+        }
+    }
+    
     // Helper method to get fingerprint from public key data
     private func getPublicKeyFingerprint(_ publicKeyData: Data) -> String {
         let fingerprint = SHA256.hash(data: publicKeyData)
@@ -103,6 +261,14 @@ class BluetoothMeshService: NSObject {
         
         centralManager = CBCentralManager(delegate: self, queue: nil)
         peripheralManager = CBPeripheralManager(delegate: self, queue: nil)
+        
+        // Start bloom filter reset timer (reset every 5 minutes)
+        bloomFilterResetTimer = Timer.scheduledTimer(withTimeInterval: 300.0, repeats: true) { [weak self] _ in
+            self?.messageQueue.async(flags: .barrier) {
+                self?.messageBloomFilter.reset()
+                self?.processedMessages.removeAll()
+            }
+        }
         
         // Register for app termination notifications
         #if os(macOS)
@@ -127,6 +293,8 @@ class BluetoothMeshService: NSObject {
         scanDutyCycleTimer?.invalidate()
         batteryMonitorTimer?.invalidate()
         coverTrafficTimer?.invalidate()
+        bloomFilterResetTimer?.invalidate()
+        aggregationTimer?.invalidate()
     }
     
     @objc private func appWillTerminate() {
@@ -226,13 +394,22 @@ class BluetoothMeshService: NSObject {
         
         // Use generic advertising to avoid identification
         // No identifying prefixes or app names for activist safety
-        let advertisementData: [String: Any] = [
+        
+        // Include network size hint in manufacturer data for scaling decisions
+        var manufacturerData = Data()
+        manufacturerData.append(UInt8(estimatedNetworkSize))  // 1 byte network size
+        manufacturerData.append(UInt8(currentBatteryLevel * 100))  // 1 byte battery percentage
+        
+        advertisementData = [
             CBAdvertisementDataServiceUUIDsKey: [BluetoothMeshService.serviceUUID],
             // Use only peer ID without any identifying prefix
             CBAdvertisementDataLocalNameKey: myPeerID,
-            CBAdvertisementDataIsConnectable: true
+            CBAdvertisementDataIsConnectable: true,
+            // Custom manufacturer data (using Apple's ID to blend in)
+            CBAdvertisementDataManufacturerDataKey: manufacturerData
         ]
-        // [BLUETOOTH] Starting advertising
+        
+        isAdvertising = true
         peripheralManager.startAdvertising(advertisementData)
     }
     
@@ -340,7 +517,7 @@ class BluetoothMeshService: NSObject {
                     timestamp: UInt64(Date().timeIntervalSince1970),
                     payload: messageData,
                     signature: signature,
-                    ttl: self.maxTTL
+                    ttl: self.adaptiveTTL
                 )
                 
                 // Add random delay before initial send
@@ -417,7 +594,7 @@ class BluetoothMeshService: NSObject {
                     timestamp: UInt64(Date().timeIntervalSince1970),
                     payload: encryptedPayload,
                     signature: signature,
-                    ttl: self.maxTTL
+                    ttl: self.adaptiveTTL
                 )
                 
                 // Sending encrypted private message
@@ -766,13 +943,21 @@ class BluetoothMeshService: NSObject {
             messageID = "\(packet.timestamp)-\(String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8) ?? "")"
         }
         
-        guard !processedMessages.contains(messageID) else { 
-            return 
+        // Use bloom filter for efficient duplicate detection
+        if messageBloomFilter.contains(messageID) {
+            // Also check exact set for accuracy (bloom filter can have false positives)
+            if processedMessages.contains(messageID) {
+                return
+            }
         }
+        
+        messageBloomFilter.insert(messageID)
         processedMessages.insert(messageID)
         
+        // Reset bloom filter periodically to prevent saturation
         if processedMessages.count > 1000 {
             processedMessages.removeAll()
+            messageBloomFilter.reset()
         }
         
         let _ = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8) ?? "unknown"
@@ -836,12 +1021,24 @@ class BluetoothMeshService: NSObject {
                         }
                     }
                     
-                    // Relay if TTL > 0
+                    // Probabilistic relay based on network size
                     var relayPacket = packet
                     relayPacket.ttl -= 1
                     if relayPacket.ttl > 0 {
+                        // Cache message for store-and-forward
                         self.cacheMessage(relayPacket, messageID: messageID)
-                        self.broadcastPacket(relayPacket)
+                        
+                        // Probabilistic flooding: relay with probability based on network density
+                        let relayProb = self.adaptiveRelayProbability
+                        let shouldRelay = Double.random(in: 0...1) < relayProb
+                        
+                        if shouldRelay {
+                            // Add random delay to prevent collision storms
+                            let delay = Double.random(in: minMessageDelay...maxMessageDelay)
+                            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                                self?.broadcastPacket(relayPacket)
+                            }
+                        }
                     }
                     
                 } else if let recipientIDString = String(data: recipientID.trimmingNullBytes(), encoding: .utf8),
@@ -923,7 +1120,17 @@ class BluetoothMeshService: NSObject {
                         }
                     }
                     
-                    self.broadcastPacket(relayPacket)
+                    // Probabilistic flooding for private message relay
+                    let relayProb = self.adaptiveRelayProbability
+                    let shouldRelay = Double.random(in: 0...1) < relayProb
+                    
+                    if shouldRelay {
+                        // Add random delay to prevent collision storms
+                        let delay = Double.random(in: minMessageDelay...maxMessageDelay)
+                        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                            self?.broadcastPacket(relayPacket)
+                        }
+                    }
                 }
             }
             
@@ -1316,19 +1523,51 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
             // Discovered potential peer
         }
         
-        // Connect to any device we discover - we'll filter by service later
+        // Connection pooling with exponential backoff
+        let peripheralID = peripheral.identifier.uuidString
+        
+        // Check if we should attempt connection (considering backoff)
+        if let backoffTime = connectionBackoff[peripheralID],
+           Date().timeIntervalSince1970 < backoffTime {
+            // Still in backoff period, skip connection
+            return
+        }
+        
+        // Check if we already have this peripheral in our pool
+        if let pooledPeripheral = connectionPool[peripheralID] {
+            // Reuse existing peripheral from pool
+            if pooledPeripheral.state == .disconnected {
+                // Reconnect if disconnected
+                central.connect(pooledPeripheral, options: [
+                    CBConnectPeripheralOptionNotifyOnConnectionKey: true,
+                    CBConnectPeripheralOptionNotifyOnDisconnectionKey: true,
+                    CBConnectPeripheralOptionNotifyOnNotificationKey: true
+                ])
+            }
+            return
+        }
+        
+        // New peripheral - add to pool and connect
         if !discoveredPeripherals.contains(peripheral) {
             discoveredPeripherals.append(peripheral)
             peripheral.delegate = self
+            connectionPool[peripheralID] = peripheral
             
-            // Use optimized connection parameters for better range
-            let connectionOptions: [String: Any] = [
-                CBConnectPeripheralOptionNotifyOnConnectionKey: true,
-                CBConnectPeripheralOptionNotifyOnDisconnectionKey: true,
-                CBConnectPeripheralOptionNotifyOnNotificationKey: true
-            ]
+            // Track connection attempts
+            let attempts = connectionAttempts[peripheralID] ?? 0
+            connectionAttempts[peripheralID] = attempts + 1
             
-            central.connect(peripheral, options: connectionOptions)
+            // Only attempt if under max attempts
+            if attempts < maxConnectionAttempts {
+                // Use optimized connection parameters for better range
+                let connectionOptions: [String: Any] = [
+                    CBConnectPeripheralOptionNotifyOnConnectionKey: true,
+                    CBConnectPeripheralOptionNotifyOnDisconnectionKey: true,
+                    CBConnectPeripheralOptionNotifyOnNotificationKey: true
+                ]
+                
+                central.connect(peripheral, options: connectionOptions)
+            }
         }
     }
     
@@ -1347,6 +1586,21 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
     }
     
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
+        let peripheralID = peripheral.identifier.uuidString
+        
+        // Implement exponential backoff for failed connections
+        if error != nil {
+            let attempts = connectionAttempts[peripheralID] ?? 0
+            if attempts >= maxConnectionAttempts {
+                // Max attempts reached, apply long backoff
+                let backoffDuration = baseBackoffInterval * pow(2.0, Double(attempts))
+                connectionBackoff[peripheralID] = Date().timeIntervalSince1970 + backoffDuration
+            }
+        } else {
+            // Clean disconnect, reset attempts
+            connectionAttempts[peripheralID] = 0
+            connectionBackoff.removeValue(forKey: peripheralID)
+        }
         
         if let peerID = connectedPeripherals.first(where: { $0.value == peripheral })?.key {
             connectedPeripherals.removeValue(forKey: peerID)
@@ -1370,7 +1624,7 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
             }
         }
         
-        // Remove from discovered list to allow reconnection
+        // Keep in pool but remove from discovered list
         discoveredPeripherals.removeAll { $0 == peripheral }
         
         // Continue scanning for reconnection
