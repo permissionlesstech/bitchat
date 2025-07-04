@@ -2,6 +2,10 @@
 
 A secure, end-to-end encrypted Bluetooth mesh chat application with an IRC-style interface.
 
+## License
+
+This project is released into the public domain. See the [LICENSE](LICENSE) file for details.
+
 ## Features
 
 - End-to-end encryption using Curve25519 and AES-GCM
