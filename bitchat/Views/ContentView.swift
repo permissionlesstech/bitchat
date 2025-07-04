@@ -158,10 +158,15 @@ struct ContentView: View {
                 
                 Spacer()
                 
-                Text("private: \(privatePeerNick)")
-                    .font(.system(size: 16, weight: .medium, design: .monospaced))
-                    .foregroundColor(Color.orange)
-                    .frame(maxWidth: .infinity)
+                HStack(spacing: 6) {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 14))
+                        .foregroundColor(Color.orange)
+                    Text("private: \(privatePeerNick)")
+                        .font(.system(size: 16, weight: .medium, design: .monospaced))
+                        .foregroundColor(Color.orange)
+                }
+                .frame(maxWidth: .infinity)
                 
                 Spacer()
                 

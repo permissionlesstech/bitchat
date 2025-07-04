@@ -59,9 +59,6 @@ struct AppInfoView: View {
                         FeatureRow(icon: "antenna.radiowaves.left.and.right", title: "Extended Range",
                                   description: "Messages relay through peers, reaching 300m+")
                         
-                        FeatureRow(icon: "clock.arrow.circlepath", title: "Ephemeral Messages",
-                                  description: "Messages auto-delete after 5 minutes")
-                        
                         FeatureRow(icon: "star.fill", title: "Favorites System",
                                   description: "Store-and-forward messages for favorites indefinitely")
                         
@@ -158,9 +155,6 @@ struct AppInfoView: View {
                         
                         FeatureRow(icon: "antenna.radiowaves.left.and.right", title: "Extended Range",
                                   description: "Messages relay through peers, reaching 300m+")
-                        
-                        FeatureRow(icon: "clock.arrow.circlepath", title: "Ephemeral Messages",
-                                  description: "Messages auto-delete after 5 minutes")
                         
                         FeatureRow(icon: "star.fill", title: "Favorites System",
                                   description: "Store-and-forward messages for favorites indefinitely")
