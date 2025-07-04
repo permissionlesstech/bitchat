@@ -57,6 +57,8 @@ class BluetoothMeshService: NSObject {
     private let maxCachedMessages = 100  // For regular peers
     private let maxCachedMessagesForFavorites = 1000  // Much larger cache for favorites
     private var favoriteMessageQueue: [String: [StoredMessage]] = [:]  // Per-favorite message queues
+    private var deliveredMessages: Set<String> = []  // Track delivered message IDs to prevent duplicates
+    private var cachedMessagesSentToPeer: Set<String> = []  // Track which peers have already received cached messages
     
     // Battery and range optimizations
     private var scanDutyCycleTimer: Timer?
@@ -596,6 +598,18 @@ class BluetoothMeshService: NSObject {
                 
                 // Sending encrypted private message
                 
+                // Check if recipient is offline and cache if they're a favorite
+                if !self.activePeers.contains(recipientPeerID) {
+                    if let publicKeyData = self.encryptionService.getPeerIdentityKey(recipientPeerID) {
+                        let fingerprint = self.getPublicKeyFingerprint(publicKeyData)
+                        if self.delegate?.isFavorite(fingerprint: fingerprint) ?? false {
+                            // Recipient is offline favorite, cache the message
+                            let messageID = "\(packet.timestamp)-\(self.myPeerID)"
+                            self.cacheMessage(packet, messageID: messageID)
+                        }
+                    }
+                }
+                
                 // Add random delay for timing obfuscation
                 let delay = self.randomDelay()
                 DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
@@ -825,6 +839,12 @@ class BluetoothMeshService: NSObject {
         let cutoffTime = Date().addingTimeInterval(-messageCacheTimeout)
         // Only remove non-favorite messages that are older than timeout
         messageCache.removeAll { !$0.isForFavorite && $0.timestamp < cutoffTime }
+        
+        // Clean up delivered messages set periodically (keep recent 1000 entries)
+        if deliveredMessages.count > 1000 {
+            // Clear older entries while keeping recent ones
+            deliveredMessages.removeAll()
+        }
     }
     
     private func sendCachedMessages(to peerID: String) {
@@ -835,6 +855,14 @@ class BluetoothMeshService: NSObject {
                 return
             }
             
+            // Check if we've already sent cached messages to this peer in this session
+            if self.cachedMessagesSentToPeer.contains(peerID) {
+                return  // Already sent cached messages to this peer
+            }
+            
+            // Mark that we're sending cached messages to this peer
+            self.cachedMessagesSentToPeer.insert(peerID)
+            
             // Clean up old messages first
             self.cleanupMessageCache()
             
@@ -842,7 +870,9 @@ class BluetoothMeshService: NSObject {
             
             // First, check if this peer has any favorite messages waiting
             if let favoriteMessages = self.favoriteMessageQueue[peerID] {
-                messagesToSend.append(contentsOf: favoriteMessages)
+                // Filter out already delivered messages
+                let undeliveredFavoriteMessages = favoriteMessages.filter { !self.deliveredMessages.contains($0.messageID) }
+                messagesToSend.append(contentsOf: undeliveredFavoriteMessages)
                 // Clear the favorite queue after adding to send list
                 self.favoriteMessageQueue[peerID] = nil
                 // Found favorite messages
@@ -850,6 +880,10 @@ class BluetoothMeshService: NSObject {
             
             // Filter regular cached messages for this specific recipient
             let recipientMessages = self.messageCache.filter { storedMessage in
+                // Skip if already delivered
+                if self.deliveredMessages.contains(storedMessage.messageID) {
+                    return false
+                }
                 // Check if this message is intended for this peer
                 if let recipientID = storedMessage.packet.recipientID,
                    let recipientPeerID = String(data: recipientID.trimmingNullBytes(), encoding: .utf8) {
@@ -859,8 +893,12 @@ class BluetoothMeshService: NSObject {
             }
             messagesToSend.append(contentsOf: recipientMessages)
             
-            // Collect message IDs that we're about to send
+            // Sort messages by timestamp to ensure proper ordering
+            messagesToSend.sort { $0.timestamp < $1.timestamp }
+            
+            // Mark messages as delivered immediately to prevent duplicates
             let messageIDsToRemove = messagesToSend.map { $0.messageID }
+            self.deliveredMessages.formUnion(messageIDsToRemove)
             
             // Send cached messages with slight delay between each
             for (index, storedMessage) in messagesToSend.enumerated() {
@@ -880,19 +918,21 @@ class BluetoothMeshService: NSObject {
                 }
             }
             
-            // Remove sent messages after allowing time for delivery
-            // Note: We remove optimistically since withoutResponse doesn't confirm delivery
+            // Remove sent messages immediately
             if !messageIDsToRemove.isEmpty {
-                let removalDelay = Double(messagesToSend.count) * 0.1 + 1.0 // Extra second for safety
-                DispatchQueue.main.asyncAfter(deadline: .now() + removalDelay) { [weak self] in
-                    self?.messageQueue.async(flags: .barrier) {
-                        // Remove only the messages we sent to this specific peer
-                        self?.messageCache.removeAll { message in
+                self.messageQueue.async(flags: .barrier) {
+                    // Remove only the messages we sent to this specific peer
+                    self.messageCache.removeAll { message in
+                        messageIDsToRemove.contains(message.messageID)
+                    }
+                    // Also remove from favorite queue if any
+                    if var favoriteQueue = self.favoriteMessageQueue[peerID] {
+                        favoriteQueue.removeAll { message in
                             messageIDsToRemove.contains(message.messageID)
                         }
-                        // Log removal
-                        // Removed \(messageIDsToRemove.count) delivered messages from cache
+                        self.favoriteMessageQueue[peerID] = favoriteQueue.isEmpty ? nil : favoriteQueue
                     }
+                    // Removed \(messageIDsToRemove.count) delivered messages from cache
                 }
             }
         }
@@ -1178,7 +1218,8 @@ class BluetoothMeshService: NSObject {
                     if let recipientIDString = String(data: recipientID.trimmingNullBytes(), encoding: .utf8),
                        let publicKeyData = self.encryptionService.getPeerIdentityKey(recipientIDString) {
                         let fingerprint = self.getPublicKeyFingerprint(publicKeyData)
-                        if self.delegate?.isFavorite(fingerprint: fingerprint) ?? false {
+                        // Only cache if recipient is a favorite AND is currently offline
+                        if (self.delegate?.isFavorite(fingerprint: fingerprint) ?? false) && !self.activePeers.contains(recipientIDString) {
                             // Caching message for offline favorite
                             self.cacheMessage(relayPacket, messageID: messageID)
                         }
@@ -1684,6 +1725,9 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
             activePeers.remove(peerID)
             announcedPeers.remove(peerID)
             announcedToPeers.remove(peerID)
+            
+            // Clear cached messages tracking for this peer to allow re-sending if they reconnect
+            cachedMessagesSentToPeer.remove(peerID)
             
             // Only show disconnect if we have a resolved nickname
             peerNicknamesLock.lock()
