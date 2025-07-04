@@ -492,6 +492,8 @@ extension ChatViewModel: BitchatDelegate {
                     privateChats[peerID] = []
                 }
                 privateChats[peerID]?.append(message)
+                // Sort messages by timestamp to ensure proper ordering
+                privateChats[peerID]?.sort { $0.timestamp < $1.timestamp }
                 
                 // Trigger UI update for private chats
                 objectWillChange.send()
@@ -510,6 +512,8 @@ extension ChatViewModel: BitchatDelegate {
         } else {
             // Regular public message
             messages.append(message)
+            // Sort messages by timestamp to ensure proper ordering
+            messages.sort { $0.timestamp < $1.timestamp }
         }
         
         // Check if we're mentioned
