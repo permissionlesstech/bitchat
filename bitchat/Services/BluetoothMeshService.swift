@@ -45,6 +45,7 @@ class BluetoothMeshService: NSObject {
     private let maxTTL: UInt8 = 7  // Maximum hops for long-distance delivery
     private var announcedToPeers = Set<String>()  // Track which peers we've announced to
     private var announcedPeers = Set<String>()  // Track peers who have already been announced
+    private var processedKeyExchanges = Set<String>()  // Track processed key exchanges to prevent duplicates
     
     // Store-and-forward message cache
     private struct StoredMessage {
@@ -71,6 +72,10 @@ class BluetoothMeshService: NSObject {
     private var lastRSSIUpdate: [String: Date] = [:]  // Throttle RSSI updates
     private var batteryMonitorTimer: Timer?
     private var currentBatteryLevel: Float = 1.0  // Default to full battery
+    
+    // Peer list update debouncing
+    private var peerListUpdateTimer: Timer?
+    private let peerListUpdateDebounceInterval: TimeInterval = 0.5  // 500ms debounce
     
     // Cover traffic for privacy
     private var coverTrafficTimer: Timer?
@@ -276,6 +281,7 @@ class BluetoothMeshService: NSObject {
             self?.messageQueue.async(flags: .barrier) {
                 self?.messageBloomFilter.reset()
                 self?.processedMessages.removeAll()
+                self?.processedKeyExchanges.removeAll()
             }
         }
         
@@ -774,6 +780,24 @@ class BluetoothMeshService: NSObject {
         
         print("[DEBUG] Active peers: \(peersCopy), Valid peers: \(validPeers)")
         return Array(validPeers).sorted()
+    }
+    
+    // Debounced peer list update notification
+    private func notifyPeerListUpdate() {
+        // Cancel any pending update
+        peerListUpdateTimer?.invalidate()
+        
+        // Schedule a new update after debounce interval
+        peerListUpdateTimer = Timer.scheduledTimer(withTimeInterval: peerListUpdateDebounceInterval, repeats: false) { [weak self] _ in
+            guard let self = self else { return }
+            
+            let connectedPeerIDs = self.getAllConnectedPeerIDs()
+            print("[DEBUG] Notifying peer list update after debounce: \(connectedPeerIDs.count) peers")
+            
+            DispatchQueue.main.async {
+                self.delegate?.didUpdatePeerList(connectedPeerIDs)
+            }
+        }
     }
     
     // MARK: - Store-and-Forward Methods
@@ -1294,6 +1318,18 @@ class BluetoothMeshService: NSObject {
             if let senderID = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8) {
                 if packet.payload.count > 0 {
                     let publicKeyData = packet.payload
+                    
+                    // Create a unique key for this exchange
+                    let exchangeKey = "\(senderID)-\(publicKeyData.hexEncodedString().prefix(16))"
+                    
+                    // Check if we've already processed this key exchange
+                    if processedKeyExchanges.contains(exchangeKey) {
+                        print("[DEBUG] Ignoring duplicate key exchange from \(senderID)")
+                        return
+                    }
+                    
+                    // Mark this key exchange as processed
+                    processedKeyExchanges.insert(exchangeKey)
                     do {
                         try encryptionService.addPeerPublicKey(senderID, publicKeyData: publicKeyData)
                         // Added public key
@@ -1334,12 +1370,18 @@ class BluetoothMeshService: NSObject {
                             }
                         }
                         
-                        // Add to active peers immediately on key exchange
-                        activePeers.insert(senderID)
-                        print("[DEBUG] Added peer \(senderID) to active peers via key exchange")
-                        let connectedPeerIDs = self.getAllConnectedPeerIDs()
-                        DispatchQueue.main.async {
-                            self.delegate?.didUpdatePeerList(connectedPeerIDs)
+                        // Add to active peers with proper locking
+                        activePeersLock.lock()
+                        let wasNewPeer = !activePeers.contains(senderID)
+                        if wasNewPeer {
+                            activePeers.insert(senderID)
+                            print("[DEBUG] Added peer \(senderID) to active peers via key exchange")
+                        }
+                        activePeersLock.unlock()
+                        
+                        // Only notify if this was actually a new peer
+                        if wasNewPeer {
+                            self.notifyPeerListUpdate()
                         }
                     }
                     
@@ -1394,8 +1436,10 @@ class BluetoothMeshService: NSObject {
                         announcedPeers.insert(senderID)
                         DispatchQueue.main.async {
                             self.delegate?.didConnectToPeer(nickname)
-                            self.delegate?.didUpdatePeerList(self.getAllConnectedPeerIDs())
-                            
+                        }
+                        self.notifyPeerListUpdate()
+                        
+                        DispatchQueue.main.async {
                             // Check if this is a favorite peer and send notification
                             // Note: This might not work immediately if key exchange hasn't happened yet
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
@@ -1416,9 +1460,7 @@ class BluetoothMeshService: NSObject {
                         }
                     } else {
                         // Just update the peer list
-                        DispatchQueue.main.async {
-                            self.delegate?.didUpdatePeerList(self.getAllConnectedPeerIDs())
-                        }
+                        self.notifyPeerListUpdate()
                     }
                 } else {
                 }
@@ -1445,15 +1487,18 @@ class BluetoothMeshService: NSObject {
                 
                 // Peer is leaving
                 
-                // Remove from active peers
+                // Remove from active peers with proper locking
+                activePeersLock.lock()
                 activePeers.remove(senderID)
+                activePeersLock.unlock()
+                
                 announcedPeers.remove(senderID)
                 
                 // Show leave message
                 DispatchQueue.main.async {
                     self.delegate?.didDisconnectFromPeer(nickname)
-                    self.delegate?.didUpdatePeerList(self.getAllConnectedPeerIDs())
                 }
+                self.notifyPeerListUpdate()
                 
                 // Clean up peer data
                 peerNicknamesLock.lock()
@@ -1792,8 +1837,11 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
             connectedPeripherals.removeValue(forKey: peerID)
             peripheralCharacteristics.removeValue(forKey: peripheral)
             
-            // Remove from active peers
+            // Remove from active peers with proper locking
+            activePeersLock.lock()
             activePeers.remove(peerID)
+            activePeersLock.unlock()
+            
             announcedPeers.remove(peerID)
             announcedToPeers.remove(peerID)
             
@@ -1809,13 +1857,9 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
             if let nickname = nickname, nickname != peerID {
                 DispatchQueue.main.async {
                     self.delegate?.didDisconnectFromPeer(nickname)
-                    self.delegate?.didUpdatePeerList(self.getAllConnectedPeerIDs())
-                }
-            } else {
-                DispatchQueue.main.async {
-                    self.delegate?.didUpdatePeerList(self.getAllConnectedPeerIDs())
                 }
             }
+            self.notifyPeerListUpdate()
         }
         
         // Keep in pool but remove from discovered list
@@ -1967,7 +2011,7 @@ extension BluetoothMeshService: CBPeripheralDelegate {
                     // It's a real peer ID, store it
                     self.peerRSSI[peerID] = RSSI
                     // Force UI update when we have a real peer ID
-                    self.delegate?.didUpdatePeerList(self.getAllConnectedPeerIDs())
+                    self.notifyPeerListUpdate()
                 }
             }
             
@@ -2050,9 +2094,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                         }
                     }
                     
-                    DispatchQueue.main.async {
-                        self.delegate?.didUpdatePeerList(self.getAllConnectedPeerIDs())
-                    }
+                    self.notifyPeerListUpdate()
                 }
                 
                 handleReceivedPacket(packet, from: peerID)
@@ -2082,9 +2124,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             }
             
             // Update peer list to show we're connected (even without peer ID yet)
-            DispatchQueue.main.async {
-                self.delegate?.didUpdatePeerList(self.getAllConnectedPeerIDs())
-            }
+            self.notifyPeerListUpdate()
         }
     }
     
@@ -2094,6 +2134,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         // If no more centrals are subscribed, clear all central-connected peers
         if subscribedCentrals.isEmpty {
             // Find and remove peers that were connected as centrals only
+            activePeersLock.lock()
             let peersToRemove = activePeers.filter { peerID in
                 !connectedPeripherals.keys.contains(peerID)
             }
@@ -2111,10 +2152,9 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                     }
                 }
             }
+            activePeersLock.unlock()
             
-            DispatchQueue.main.async {
-                self.delegate?.didUpdatePeerList(self.getAllConnectedPeerIDs())
-            }
+            self.notifyPeerListUpdate()
         }
         
         // Ensure advertising continues for reconnection
