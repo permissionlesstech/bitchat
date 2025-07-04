@@ -39,6 +39,7 @@ class ChatViewModel: ObservableObject {
     @Published var currentRoom: String? = nil  // Currently selected room
     @Published var roomMessages: [String: [BitchatMessage]] = [:]  // room -> messages
     @Published var unreadRoomMessages: [String: Int] = [:]  // room -> unread count
+    @Published var roomMembers: [String: Set<String>] = [:]  // room -> set of peer IDs who have sent messages
     
     let meshService = BluetoothMeshService()
     private let userDefaults = UserDefaults.standard
@@ -132,8 +133,10 @@ class ChatViewModel: ObservableObject {
             currentRoom = nil
         }
         
-        // Keep messages for now (could clear if desired)
+        // Clean up room data
         unreadRoomMessages.removeValue(forKey: room)
+        roomMessages.removeValue(forKey: room)
+        roomMembers.removeValue(forKey: room)
     }
     
     func switchToRoom(_ room: String?) {
@@ -229,6 +232,9 @@ class ChatViewModel: ObservableObject {
                 timestamp: Date(),
                 isRelay: false,
                 originalSender: nil,
+                isPrivate: false,
+                recipientNickname: nil,
+                senderPeerID: meshService.myPeerID,
                 mentions: mentions.isEmpty ? nil : mentions,
                 room: messageRoom
             )
@@ -239,6 +245,12 @@ class ChatViewModel: ObservableObject {
                     roomMessages[room] = []
                 }
                 roomMessages[room]?.append(message)
+                
+                // Track ourselves as a room member
+                if roomMembers[room] == nil {
+                    roomMembers[room] = []
+                }
+                roomMembers[room]?.insert(meshService.myPeerID)
             } else {
                 // Add to main messages
                 messages.append(message)
@@ -657,6 +669,14 @@ extension ChatViewModel: BitchatDelegate {
             }
             roomMessages[room]?.append(message)
             roomMessages[room]?.sort { $0.timestamp < $1.timestamp }
+            
+            // Track room members
+            if roomMembers[room] == nil {
+                roomMembers[room] = []
+            }
+            if let senderPeerID = message.senderPeerID {
+                roomMembers[room]?.insert(senderPeerID)
+            }
             
             // Update unread count if not currently viewing this room
             if currentRoom != room {
