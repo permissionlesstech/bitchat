@@ -1053,7 +1053,7 @@ class BluetoothMeshService: NSObject {
             let currentTime = UInt64(Date().timeIntervalSince1970 * 1000) // milliseconds
             let timeDiff = abs(Int64(currentTime) - Int64(packet.timestamp))
             if timeDiff > 300000 { // 5 minutes in milliseconds
-                print("[SECURITY] Dropping packet with timestamp too far from current time: \(timeDiff/1000) seconds")
+                print("[SECURITY] Dropping packet from \(peerID) type:\(packet.type) - timestamp diff: \(timeDiff/1000)s (packet:\(packet.timestamp) vs current:\(currentTime))")
                 return
             }
         

@@ -196,11 +196,11 @@ extension BitchatMessage {
         
         data.append(flags)
         
-        // Timestamp
-        let timestampSeconds = UInt64(timestamp.timeIntervalSince1970)
+        // Timestamp (in milliseconds)
+        let timestampMillis = UInt64(timestamp.timeIntervalSince1970 * 1000)
         // Encode as 8 bytes, big-endian
         for i in (0..<8).reversed() {
-            data.append(UInt8((timestampSeconds >> (i * 8)) & 0xFF))
+            data.append(UInt8((timestampMillis >> (i * 8)) & 0xFF))
         }
         
         // ID
@@ -290,11 +290,11 @@ extension BitchatMessage {
             return nil 
         }
         let timestampData = dataCopy[offset..<offset+8]
-        let timestampSeconds = timestampData.reduce(0) { result, byte in
+        let timestampMillis = timestampData.reduce(0) { result, byte in
             (result << 8) | UInt64(byte)
         }
         offset += 8
-        let timestamp = Date(timeIntervalSince1970: TimeInterval(timestampSeconds))
+        let timestamp = Date(timeIntervalSince1970: TimeInterval(timestampMillis) / 1000.0)
         
         // ID
         guard offset < dataCopy.count else { 
