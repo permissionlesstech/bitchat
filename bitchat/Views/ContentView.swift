@@ -99,35 +99,47 @@ struct ContentView: View {
             
             // Autocomplete overlay
             if viewModel.showAutocomplete && !viewModel.autocompleteSuggestions.isEmpty {
-                VStack {
-                    Spacer()
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(Array(viewModel.autocompleteSuggestions.enumerated()), id: \.element) { index, suggestion in
-                            Button(action: {
-                                _ = viewModel.completeNickname(suggestion, in: &messageText)
-                            }) {
-                                HStack {
-                                    Text("@\(suggestion)")
-                                        .font(.system(size: 12, design: .monospaced))
-                                        .foregroundColor(index == viewModel.selectedAutocompleteIndex ? backgroundColor : textColor)
-                                    Spacer()
+                GeometryReader { geometry in
+                    VStack {
+                        Spacer()
+                        HStack {
+                            // Calculate approximate position based on nickname length and @ position
+                            let nicknameWidth: CGFloat = viewModel.selectedPrivateChatPeer != nil ? 90 : 80
+                            let charWidth: CGFloat = 8.5 // Approximate width of monospace character
+                            let atPosition = viewModel.autocompleteRange?.location ?? 0
+                            let offsetX = nicknameWidth + (CGFloat(atPosition) * charWidth)
+                            
+                            VStack(alignment: .leading, spacing: 0) {
+                                ForEach(Array(viewModel.autocompleteSuggestions.enumerated()), id: \.element) { index, suggestion in
+                                    Button(action: {
+                                        _ = viewModel.completeNickname(suggestion, in: &messageText)
+                                    }) {
+                                        HStack {
+                                            Text("@\(suggestion)")
+                                                .font(.system(size: 12, design: .monospaced))
+                                                .foregroundColor(index == viewModel.selectedAutocompleteIndex ? backgroundColor : textColor)
+                                            Spacer()
+                                        }
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(index == viewModel.selectedAutocompleteIndex ? textColor : Color.clear)
+                                    }
+                                    .buttonStyle(.plain)
                                 }
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(index == viewModel.selectedAutocompleteIndex ? textColor : Color.clear)
                             }
-                            .buttonStyle(.plain)
+                            .background(backgroundColor)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 4)
+                                    .stroke(secondaryTextColor.opacity(0.5), lineWidth: 1)
+                            )
+                            .frame(width: 150, alignment: .leading)
+                            .offset(x: min(offsetX, geometry.size.width - 180)) // Prevent going off-screen
+                            .padding(.bottom, 45) // Position just above input
+                            
+                            Spacer()
                         }
+                        .padding(.horizontal, 12)
                     }
-                    .background(backgroundColor)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 4)
-                            .stroke(secondaryTextColor.opacity(0.5), lineWidth: 1)
-                    )
-                    .frame(maxWidth: 200, alignment: .leading)
-                    .offset(x: 100) // Align with input field
-                    .padding(.bottom, 45) // Position just above input
-                    .padding(.horizontal, 12)
                 }
             }
         }

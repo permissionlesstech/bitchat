@@ -407,9 +407,7 @@ class BluetoothMeshService: NSObject {
         advertisementData = [
             CBAdvertisementDataServiceUUIDsKey: [BluetoothMeshService.serviceUUID],
             // Use only peer ID without any identifying prefix
-            CBAdvertisementDataLocalNameKey: myPeerID,
-            // Request max TX power for better range (system may adjust)
-            CBAdvertisementDataTxPowerLevelKey: NSNumber(value: 1)
+            CBAdvertisementDataLocalNameKey: myPeerID
         ]
         
         isAdvertising = true
@@ -960,22 +958,17 @@ class BluetoothMeshService: NSObject {
             if !messageIDsToRemove.isEmpty {
                 self.messageQueue.async(flags: .barrier) {
                     // Remove only the messages we sent to this specific peer
-                    let beforeCount = self.messageCache.count
                     self.messageCache.removeAll { message in
                         messageIDsToRemove.contains(message.messageID)
                     }
-                    let afterCount = self.messageCache.count
                     
                     // Also remove from favorite queue if any
                     if var favoriteQueue = self.favoriteMessageQueue[peerID] {
-                        let beforeFavCount = favoriteQueue.count
                         favoriteQueue.removeAll { message in
                             messageIDsToRemove.contains(message.messageID)
                         }
                         self.favoriteMessageQueue[peerID] = favoriteQueue.isEmpty ? nil : favoriteQueue
-                        // Removed from favorite queue
                     }
-                    // Removed from cache
                 }
             }
         }
