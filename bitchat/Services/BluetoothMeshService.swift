@@ -779,17 +779,6 @@ class BluetoothMeshService: NSObject {
                    peerID != myPeerID
         }
         
-        // Get nicknames for logging
-        peerNicknamesLock.lock()
-        let peerNicknamesCopy = peerNicknames
-        peerNicknamesLock.unlock()
-        
-        let peerInfo = validPeers.map { peerID in
-            let nickname = peerNicknamesCopy[peerID] ?? "unknown"
-            return "\(peerID):\(nickname)"
-        }
-        
-        print("[PEERS] Active peers: \(peerInfo.joined(separator: ", "))")
         return Array(validPeers).sorted()
     }
     
@@ -849,7 +838,7 @@ class BluetoothMeshService: NSObject {
             processedKeyExchanges = processedKeyExchanges.filter { !$0.contains(peerID) }
             
             peerNicknamesLock.lock()
-            let nickname = peerNicknames[peerID]
+            _ = peerNicknames[peerID]
             peerNicknames.removeValue(forKey: peerID)
             peerNicknamesLock.unlock()
             
@@ -1524,7 +1513,7 @@ class BluetoothMeshService: NSObject {
                     let wasInserted = activePeers.insert(senderID).inserted
                     activePeersLock.unlock()
                     if wasInserted {
-                        print("[ANNOUNCE] Added peer \(senderID) (\(nickname)) to active peers")
+                        // Added peer \(senderID) (\(nickname)) to active peers
                     }
                     
                     // Show join message only for first announce
@@ -2031,6 +2020,7 @@ extension BluetoothMeshService: CBPeripheralDelegate {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self, weak peripheral] in
                         guard let self = self,
                               let peripheral = peripheral,
+                              peripheral.state == .connected,
                               let characteristic = peripheral.services?.first(where: { $0.uuid == BluetoothMeshService.serviceUUID })?.characteristics?.first(where: { $0.uuid == BluetoothMeshService.characteristicUUID }) else { return }
                         
                         let announcePacket = BitchatPacket(
