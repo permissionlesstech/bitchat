@@ -1,18 +1,71 @@
 import Foundation
 import CryptoKit
 
+// Privacy-preserving padding utilities
+struct MessagePadding {
+    // Standard block sizes for padding
+    static let blockSizes = [256, 512, 1024, 2048]
+    
+    // Add PKCS#7-style padding to reach target size
+    static func pad(_ data: Data, toSize targetSize: Int) -> Data {
+        guard data.count < targetSize else { return data }
+        
+        var padded = data
+        let paddingNeeded = targetSize - data.count
+        
+        // Add random padding bytes (more secure than zeros)
+        var randomBytes = [UInt8](repeating: 0, count: paddingNeeded - 1)
+        _ = SecRandomCopyBytes(kSecRandomDefault, paddingNeeded - 1, &randomBytes)
+        padded.append(contentsOf: randomBytes)
+        
+        // Last byte indicates padding length (PKCS#7 style)
+        padded.append(UInt8(paddingNeeded))
+        
+        return padded
+    }
+    
+    // Remove padding from data
+    static func unpad(_ data: Data) -> Data {
+        guard !data.isEmpty else { return data }
+        
+        // Last byte tells us how much padding to remove
+        let paddingLength = Int(data[data.count - 1])
+        guard paddingLength > 0 && paddingLength <= data.count else { return data }
+        
+        return data.prefix(data.count - paddingLength)
+    }
+    
+    // Find optimal block size for data
+    static func optimalBlockSize(for dataSize: Int) -> Int {
+        // Account for encryption overhead (~16 bytes for AES-GCM tag)
+        let totalSize = dataSize + 16
+        
+        // Find smallest block that fits
+        for blockSize in blockSizes {
+            if totalSize <= blockSize {
+                return blockSize
+            }
+        }
+        
+        // For very large messages, just use the original size
+        // (will be fragmented anyway)
+        return dataSize
+    }
+}
+
 enum MessageType: UInt8 {
-    case handshake = 0x01
-    case message = 0x02
-    case ack = 0x03
-    case relay = 0x04
-    case announce = 0x05
-    case keyExchange = 0x06
-    case leave = 0x07
-    case privateMessage = 0x08
-    case fragmentStart = 0x0A  // First fragment of a large message
-    case fragmentContinue = 0x0B  // Continuation fragment
-    case fragmentEnd = 0x0C  // Last fragment
+    case announce = 0x01
+    case keyExchange = 0x02
+    case leave = 0x03
+    case message = 0x04  // All user messages (private and broadcast)
+    case fragmentStart = 0x05
+    case fragmentContinue = 0x06
+    case fragmentEnd = 0x07
+}
+
+// Special recipient ID for broadcast messages
+struct SpecialRecipients {
+    static let broadcast = Data(repeating: 0xFF, count: 8)  // All 0xFF = broadcast
 }
 
 struct BitchatPacket: Codable {

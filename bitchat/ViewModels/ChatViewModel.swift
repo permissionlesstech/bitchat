@@ -35,9 +35,7 @@ class ChatViewModel: ObservableObject {
     @Published var favoritePeers: Set<String> = []  // Now stores public key fingerprints instead of peer IDs
     private var peerIDToPublicKeyFingerprint: [String: String] = [:]  // Maps ephemeral peer IDs to persistent fingerprints
     
-    // Ephemeral message settings
-    private var messageAutoDeleteTimer: Timer?
-    private let messageRetentionTime: TimeInterval = 300  // 5 minutes
+    // Messages are naturally ephemeral - no persistent storage
     
     init() {
         loadNickname()
@@ -49,9 +47,6 @@ class ChatViewModel: ObservableObject {
         
         // Request notification permission
         NotificationService.shared.requestAuthorization()
-        
-        // Start auto-delete timer for ephemeral messages
-        startAutoDeleteTimer()
     }
     
     private func loadNickname() {
@@ -223,37 +218,6 @@ class ChatViewModel: ObservableObject {
         objectWillChange.send()
         
         print("[PANIC] All data cleared for safety")
-    }
-    
-    // Ephemeral message auto-deletion
-    private func startAutoDeleteTimer() {
-        messageAutoDeleteTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
-            self?.deleteOldMessages()
-        }
-    }
-    
-    private func deleteOldMessages() {
-        let cutoffTime = Date().addingTimeInterval(-messageRetentionTime)
-        
-        // Delete old public messages
-        let beforeCount = messages.count
-        messages.removeAll { message in
-            message.timestamp < cutoffTime && message.sender != "system"
-        }
-        
-        if messages.count < beforeCount {
-            print("[EPHEMERAL] Deleted \(beforeCount - messages.count) old messages")
-        }
-        
-        // Delete old private messages
-        for (peerID, messageList) in privateChats {
-            let oldCount = messageList.count
-            privateChats[peerID] = messageList.filter { $0.timestamp >= cutoffTime }
-            
-            if let newCount = privateChats[peerID]?.count, newCount < oldCount {
-                print("[EPHEMERAL] Deleted \(oldCount - newCount) old private messages from \(peerID)")
-            }
-        }
     }
     
     
