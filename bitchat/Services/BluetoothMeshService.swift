@@ -30,7 +30,15 @@ class BluetoothMeshService: NSObject {
     private var peripheralCharacteristics: [CBPeripheral: CBCharacteristic] = [:]
     private var characteristic: CBMutableCharacteristic!
     private var subscribedCentrals: [CBCentral] = []
-    private var peerNicknames: [String: String] = [:]
+    private var _peerNicknames: [String: String] = [:]
+    private var peerNicknames: [String: String] {
+        get {
+            messageQueue.sync { _peerNicknames }
+        }
+        set {
+            messageQueue.async(flags: .barrier) { self._peerNicknames = newValue }
+        }
+    }
     private var activePeers: Set<String> = []  // Track all active peers
     private var peerRSSI: [String: NSNumber] = [:] // Track RSSI values for peers
     private var peripheralRSSI: [String: NSNumber] = [:] // Track RSSI by peripheral ID during discovery
@@ -717,11 +725,17 @@ class BluetoothMeshService: NSObject {
             guard !peerID.isEmpty,
                   peerID != "unknown",
                   peerID != myPeerID,
-                  peerID.count <= 8,  // Filter out temp IDs
-                  peerNicknames[peerID] != nil else {  // Only include peers who have announced
+                  peerID.count <= 8 else {  // Filter out temp IDs
                 return nil
             }
-            return peerID
+            
+            // Safely check if peer has a nickname (thread-safe)
+            let hasNickname = self._peerNicknames[peerID] != nil
+            if hasNickname {
+                return peerID
+            }
+            
+            return nil
         })
         // Active peers: \(announcedPeers.count)
         return Array(announcedPeers).sorted()
@@ -848,7 +862,8 @@ class BluetoothMeshService: NSObject {
                         ttl: storedMessage.packet.ttl
                     )
                     
-                    if let data = updatedPacket.toBinaryData() {
+                    if let data = updatedPacket.toBinaryData(),
+                       characteristic.properties.contains(.writeWithoutResponse) {
                         peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
                         // Sent cached message
                     }
@@ -887,10 +902,19 @@ class BluetoothMeshService: NSObject {
                     // Use withoutResponse for faster transmission when possible
                     // Only use withResponse for critical messages or when MTU negotiation needed
                     let writeType: CBCharacteristicWriteType = data.count > 512 ? .withResponse : .withoutResponse
-                    peripheral.writeValue(data, for: characteristic, type: writeType)
-                    sentToPeripherals += 1
+                    
+                    // Additional safety check for characteristic properties
+                    if characteristic.properties.contains(.write) || 
+                       characteristic.properties.contains(.writeWithoutResponse) {
+                        peripheral.writeValue(data, for: characteristic, type: writeType)
+                        sentToPeripherals += 1
+                    }
                 } else {
-                    // Peripheral not connected
+                    // Peripheral not connected - remove from our tracking
+                    if let peerID = connectedPeripherals.first(where: { $0.value == peripheral })?.key {
+                        connectedPeripherals.removeValue(forKey: peerID)
+                        peripheralCharacteristics.removeValue(forKey: peripheral)
+                    }
                 }
             } else {
                 // No characteristic for peripheral
