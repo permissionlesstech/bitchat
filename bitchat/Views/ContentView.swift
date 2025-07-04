@@ -585,8 +585,8 @@ struct ContentView: View {
                                 .foregroundColor(secondaryTextColor)
                                 .padding(.horizontal)
                         } else if let currentRoom = viewModel.currentRoom,
-                                  viewModel.roomMembers[currentRoom]?.isEmpty ?? true,
-                                  !viewModel.connectedPeers.contains(viewModel.meshService.myPeerID) {
+                                  let roomMemberIDs = viewModel.roomMembers[currentRoom],
+                                  roomMemberIDs.isEmpty {
                             Text("No one in this room yet")
                                 .font(.system(size: 14, design: .monospaced))
                                 .foregroundColor(secondaryTextColor)
@@ -603,17 +603,18 @@ struct ContentView: View {
                                     // Show only peers who have sent messages to this room (including self)
                                     print("[DEBUG-VIEW] Room \(currentRoom) has members: \(roomMemberIDs)")
                                     print("[DEBUG-VIEW] Connected peers: \(viewModel.connectedPeers)")
+                                    print("[DEBUG-VIEW] My peer ID: \(myPeerID)")
                                     
+                                    // Start with room members who are also connected
                                     var memberPeers = viewModel.connectedPeers.filter { roomMemberIDs.contains($0) }
-                                    // Always include ourselves if we're connected
-                                    if viewModel.connectedPeers.contains(myPeerID) && roomMemberIDs.contains(myPeerID) {
-                                        if !memberPeers.contains(myPeerID) {
-                                            memberPeers.append(myPeerID)
-                                        }
+                                    
+                                    // Always include ourselves if we're a room member
+                                    if roomMemberIDs.contains(myPeerID) && !memberPeers.contains(myPeerID) {
+                                        memberPeers.append(myPeerID)
                                     }
                                     
                                     print("[DEBUG-VIEW] Peers to show in room: \(memberPeers)")
-                                    return Array(Set(memberPeers)) // Remove duplicates
+                                    return memberPeers
                                 } else {
                                     // Show all connected peers in main chat
                                     return viewModel.connectedPeers
