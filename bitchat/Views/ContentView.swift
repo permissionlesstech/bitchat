@@ -203,6 +203,30 @@ struct ContentView: View {
                         .foregroundColor(viewModel.isFavorite(peerID: privatePeerID) ? Color.yellow : textColor)
                 }
                 .buttonStyle(.plain)
+            } else if let currentRoom = viewModel.currentRoom {
+                // Room header
+                HStack(spacing: 4) {
+                    Text(currentRoom)
+                        .font(.system(size: 18, weight: .medium, design: .monospaced))
+                        .foregroundColor(Color.orange)
+                    
+                    Spacer()
+                    
+                    Button(action: {
+                        viewModel.switchToRoom(nil)
+                    }) {
+                        Text("main")
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundColor(textColor)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 2)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 4)
+                                    .stroke(textColor.opacity(0.5), lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
             } else {
                 // Public chat header
                 HStack(spacing: 4) {
@@ -269,9 +293,15 @@ struct ContentView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {
-                    let messages = viewModel.selectedPrivateChatPeer != nil 
-                        ? viewModel.getPrivateChatMessages(for: viewModel.selectedPrivateChatPeer!)
-                        : viewModel.messages
+                    let messages: [BitchatMessage] = {
+                        if let privatePeer = viewModel.selectedPrivateChatPeer {
+                            return viewModel.getPrivateChatMessages(for: privatePeer)
+                        } else if let currentRoom = viewModel.currentRoom {
+                            return viewModel.getRoomMessages(currentRoom)
+                        } else {
+                            return viewModel.messages
+                        }
+                    }()
                     
                     ForEach(Array(messages.enumerated()), id: \.offset) { index, message in
                         VStack(alignment: .leading, spacing: 4) {
@@ -314,11 +344,13 @@ struct ContentView: View {
                                     
                                     Text(" ")
                                     
-                                    // Message content
-                                    // Regular text content
-                                    Text(viewModel.formatMessageContent(message, colorScheme: colorScheme))
-                                        .font(.system(size: 14, design: .monospaced))
-                                        .fontWeight(isMentioned ? .bold : .regular)
+                                    // Message content with clickable hashtags
+                                    MessageContentView(
+                                        message: message,
+                                        viewModel: viewModel,
+                                        colorScheme: colorScheme,
+                                        isMentioned: isMentioned
+                                    )
                                     
                                     Spacer()
                                 }
@@ -424,19 +456,91 @@ struct ContentView: View {
                 
                 Divider()
             
-            // People list
+            // Rooms and People list
             ScrollView {
-                VStack(alignment: .leading, spacing: 8) {
-                    if viewModel.connectedPeers.isEmpty {
-                        Text("No one connected")
-                            .font(.system(size: 14, design: .monospaced))
-                            .foregroundColor(secondaryTextColor)
-                            .padding(.horizontal)
-                    } else {
-                        let peerNicknames = viewModel.meshService.getPeerNicknames()
-                        let peerRSSI = viewModel.meshService.getPeerRSSI()
-                        let myPeerID = viewModel.meshService.myPeerID
+                VStack(alignment: .leading, spacing: 12) {
+                    // Joined Rooms section
+                    if !viewModel.joinedRooms.isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("ROOMS")
+                                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                                .foregroundColor(secondaryTextColor)
+                                .padding(.horizontal, 12)
+                            
+                            ForEach(Array(viewModel.joinedRooms).sorted(), id: \.self) { room in
+                                Button(action: {
+                                    viewModel.switchToRoom(room)
+                                    withAnimation(.spring()) {
+                                        showSidebar = false
+                                    }
+                                }) {
+                                    HStack {
+                                        Text(room)
+                                            .font(.system(size: 14, design: .monospaced))
+                                            .foregroundColor(viewModel.currentRoom == room ? Color.orange : textColor)
+                                        
+                                        Spacer()
+                                        
+                                        // Unread count
+                                        if let unreadCount = viewModel.unreadRoomMessages[room], unreadCount > 0 {
+                                            Text("\(unreadCount)")
+                                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                                .foregroundColor(backgroundColor)
+                                                .padding(.horizontal, 6)
+                                                .padding(.vertical, 2)
+                                                .background(Color.orange)
+                                                .clipShape(Capsule())
+                                        }
+                                        
+                                        // Leave button
+                                        if viewModel.currentRoom == room {
+                                            Button(action: {
+                                                viewModel.leaveRoom(room)
+                                            }) {
+                                                Text("leave")
+                                                    .font(.system(size: 10, design: .monospaced))
+                                                    .foregroundColor(secondaryTextColor)
+                                                    .padding(.horizontal, 8)
+                                                    .padding(.vertical, 2)
+                                                    .overlay(
+                                                        RoundedRectangle(cornerRadius: 4)
+                                                            .stroke(secondaryTextColor.opacity(0.5), lineWidth: 1)
+                                                    )
+                                            }
+                                            .buttonStyle(.plain)
+                                        }
+                                    }
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 4)
+                                    .background(viewModel.currentRoom == room ? backgroundColor.opacity(0.5) : Color.clear)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
                         
+                        Divider()
+                            .padding(.vertical, 4)
+                    }
+                    
+                    // People section
+                    VStack(alignment: .leading, spacing: 8) {
+                        if !viewModel.connectedPeers.isEmpty {
+                            Text("PEOPLE")
+                                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                                .foregroundColor(secondaryTextColor)
+                                .padding(.horizontal, 12)
+                        }
+                        
+                        if viewModel.connectedPeers.isEmpty {
+                            Text("No one connected")
+                                .font(.system(size: 14, design: .monospaced))
+                                .foregroundColor(secondaryTextColor)
+                                .padding(.horizontal)
+                        } else {
+                            let peerNicknames = viewModel.meshService.getPeerNicknames()
+                            let peerRSSI = viewModel.meshService.getPeerRSSI()
+                            let myPeerID = viewModel.meshService.myPeerID
+                            
                         // Sort peers: favorites first, then alphabetically by nickname
                         let sortedPeers = viewModel.connectedPeers.filter { $0 != myPeerID }.sorted { peer1, peer2 in
                             let isFav1 = viewModel.isFavorite(peerID: peer1)
@@ -502,14 +606,123 @@ struct ContentView: View {
                             .padding(.horizontal)
                             .padding(.vertical, 8)
                         }
+                        }
                     }
                 }
                 .padding(.vertical, 8)
             }
             
-                Spacer()
-            }
-            .background(backgroundColor)
+            Spacer()
         }
+        .background(backgroundColor)
+        }
+    }
+}
+
+// Helper view for rendering message content with clickable hashtags
+struct MessageContentView: View {
+    let message: BitchatMessage
+    let viewModel: ChatViewModel
+    let colorScheme: ColorScheme
+    let isMentioned: Bool
+    
+    var body: some View {
+        let content = message.content
+        let hashtagPattern = "#([a-zA-Z0-9_]+)"
+        let mentionPattern = "@([a-zA-Z0-9_]+)"
+        
+        let hashtagRegex = try? NSRegularExpression(pattern: hashtagPattern, options: [])
+        let mentionRegex = try? NSRegularExpression(pattern: mentionPattern, options: [])
+        
+        let hashtagMatches = hashtagRegex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
+        let mentionMatches = mentionRegex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
+        
+        // Combine all matches and sort by location
+        var allMatches: [(range: NSRange, type: String)] = []
+        for match in hashtagMatches {
+            allMatches.append((match.range(at: 0), "hashtag"))
+        }
+        for match in mentionMatches {
+            allMatches.append((match.range(at: 0), "mention"))
+        }
+        allMatches.sort { $0.range.location < $1.range.location }
+        
+        // Build the text view with clickable hashtags
+        return HStack(spacing: 0) {
+            ForEach(Array(buildTextSegments().enumerated()), id: \.offset) { _, segment in
+                if segment.type == "hashtag" {
+                    Button(action: {
+                        viewModel.joinRoom(segment.text)
+                    }) {
+                        Text(segment.text)
+                            .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                            .foregroundColor(Color.blue)
+                            .underline()
+                    }
+                    .buttonStyle(.plain)
+                } else if segment.type == "mention" {
+                    Text(segment.text)
+                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                        .foregroundColor(Color.orange)
+                } else {
+                    Text(segment.text)
+                        .font(.system(size: 14, design: .monospaced))
+                        .fontWeight(isMentioned ? .bold : .regular)
+                }
+            }
+        }
+    }
+    
+    private func buildTextSegments() -> [(text: String, type: String)] {
+        var segments: [(text: String, type: String)] = []
+        let content = message.content
+        var lastEnd = content.startIndex
+        
+        let hashtagPattern = "#([a-zA-Z0-9_]+)"
+        let mentionPattern = "@([a-zA-Z0-9_]+)"
+        
+        let hashtagRegex = try? NSRegularExpression(pattern: hashtagPattern, options: [])
+        let mentionRegex = try? NSRegularExpression(pattern: mentionPattern, options: [])
+        
+        let hashtagMatches = hashtagRegex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
+        let mentionMatches = mentionRegex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
+        
+        // Combine all matches and sort by location
+        var allMatches: [(range: NSRange, type: String)] = []
+        for match in hashtagMatches {
+            allMatches.append((match.range(at: 0), "hashtag"))
+        }
+        for match in mentionMatches {
+            allMatches.append((match.range(at: 0), "mention"))
+        }
+        allMatches.sort { $0.range.location < $1.range.location }
+        
+        for (matchRange, matchType) in allMatches {
+            if let range = Range(matchRange, in: content) {
+                // Add text before the match
+                if lastEnd < range.lowerBound {
+                    let beforeText = String(content[lastEnd..<range.lowerBound])
+                    if !beforeText.isEmpty {
+                        segments.append((beforeText, "text"))
+                    }
+                }
+                
+                // Add the match
+                let matchText = String(content[range])
+                segments.append((matchText, matchType))
+                
+                lastEnd = range.upperBound
+            }
+        }
+        
+        // Add any remaining text
+        if lastEnd < content.endIndex {
+            let remainingText = String(content[lastEnd...])
+            if !remainingText.isEmpty {
+                segments.append((remainingText, "text"))
+            }
+        }
+        
+        return segments
     }
 }
