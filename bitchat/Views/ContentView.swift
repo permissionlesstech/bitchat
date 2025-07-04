@@ -106,8 +106,11 @@ struct ContentView: View {
                             // Calculate approximate position based on nickname length and @ position
                             let nicknameWidth: CGFloat = viewModel.selectedPrivateChatPeer != nil ? 90 : 80
                             let charWidth: CGFloat = 8.5 // Approximate width of monospace character
-                            let atPosition = viewModel.autocompleteRange?.location ?? 0
-                            let offsetX = nicknameWidth + (CGFloat(atPosition) * charWidth)
+                            let atPosition = CGFloat(viewModel.autocompleteRange?.location ?? 0)
+                            let offsetX = nicknameWidth + (atPosition * charWidth)
+                            
+                            // Ensure offsetX is valid (not NaN or infinite)
+                            let safeOffsetX = offsetX.isFinite ? offsetX : nicknameWidth
                             
                             VStack(alignment: .leading, spacing: 0) {
                                 ForEach(Array(viewModel.autocompleteSuggestions.enumerated()), id: \.element) { index, suggestion in
@@ -133,7 +136,7 @@ struct ContentView: View {
                                     .stroke(secondaryTextColor.opacity(0.5), lineWidth: 1)
                             )
                             .frame(width: 150, alignment: .leading)
-                            .offset(x: min(offsetX, geometry.size.width - 180)) // Prevent going off-screen
+                            .offset(x: min(safeOffsetX, max(0, geometry.size.width - 180))) // Prevent going off-screen
                             .padding(.bottom, 45) // Position just above input
                             
                             Spacer()
