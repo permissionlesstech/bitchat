@@ -22,6 +22,8 @@ class LoggingService {
         dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"
         
+        #if os(macOS)
+        // Only create log files on macOS
         // Get documents directory
         let documentsPath = FileManager.default.urls(for: .documentDirectory, 
                                                     in: .userDomainMask).first!
@@ -45,6 +47,10 @@ class LoggingService {
         
         log("=== BitChat Started ===")
         log("Log file: \(fileURL.path)")
+        #else
+        // On iOS, just create a dummy URL since we won't write to disk
+        fileURL = URL(fileURLWithPath: "/dev/null")
+        #endif
     }
     
     func log(_ message: String, category: String = "general") {
