@@ -658,7 +658,18 @@ class BluetoothMeshService: NSObject {
     }
     
     func getPeerRSSI() -> [String: NSNumber] {
-        return peerRSSI
+        // Create a copy with default values for connected peers without RSSI
+        var rssiWithDefaults = peerRSSI
+        
+        // For any active peer without RSSI, assume decent signal (-60)
+        // This handles centrals where we can't read RSSI
+        for peerID in activePeers {
+            if rssiWithDefaults[peerID] == nil {
+                rssiWithDefaults[peerID] = NSNumber(value: -60)  // Good signal default
+            }
+        }
+        
+        return rssiWithDefaults
     }
     
     // Emergency disconnect for panic situations
@@ -1143,6 +1154,12 @@ class BluetoothMeshService: NSObject {
                     if let viewModel = self.delegate as? ChatViewModel,
                        let identityKeyData = encryptionService.getPeerIdentityKey(senderID) {
                         viewModel.registerPeerPublicKey(peerID: senderID, publicKeyData: identityKeyData)
+                    }
+                    
+                    // If we have RSSI from discovery, apply it to this peer
+                    if let peripheral = peripheral,
+                       let tempRSSI = peripheralRSSI[peripheral.identifier.uuidString] {
+                        peerRSSI[senderID] = tempRSSI
                     }
                     
                     // Track this peer temporarily
