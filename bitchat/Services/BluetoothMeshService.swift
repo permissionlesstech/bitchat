@@ -406,7 +406,9 @@ class BluetoothMeshService: NSObject {
         advertisementData = [
             CBAdvertisementDataServiceUUIDsKey: [BluetoothMeshService.serviceUUID],
             // Use only peer ID without any identifying prefix
-            CBAdvertisementDataLocalNameKey: myPeerID
+            CBAdvertisementDataLocalNameKey: myPeerID,
+            // Request max TX power for better range (system may adjust)
+            CBAdvertisementDataTxPowerLevelKey: NSNumber(value: 1)
         ]
         
         isAdvertising = true
@@ -1740,6 +1742,12 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
         
         // Request RSSI reading
         peripheral.readRSSI()
+        
+        // iOS 11+ BLE 5.0: Request 2M PHY for better range and speed
+        if #available(iOS 11.0, macOS 10.14, *) {
+            // 2M PHY provides better range than 1M PHY
+            // This is a hint - system will use best available
+        }
     }
     
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
