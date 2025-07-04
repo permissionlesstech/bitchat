@@ -520,6 +520,9 @@ class BluetoothMeshService: NSObject {
                 timestamp: Date(),
                 isRelay: false,
                 originalSender: nil,
+                isPrivate: false,
+                recipientNickname: nil,
+                senderPeerID: self.myPeerID,
                 mentions: mentions.isEmpty ? nil : mentions,
                 room: room
             )
