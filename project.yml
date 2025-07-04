@@ -34,11 +34,8 @@ targets:
           UIColorName: Black
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
-          - UIInterfaceOrientationPortraitUpsideDown
-          - UIInterfaceOrientationLandscapeLeft
-          - UIInterfaceOrientationLandscapeRight
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.bitchat.app
+      PRODUCT_BUNDLE_IDENTIFIER: chat.bitchat
       INFOPLIST_FILE: bitchat/Info.plist
       ENABLE_PREVIEWS: YES
       SWIFT_VERSION: 5.0

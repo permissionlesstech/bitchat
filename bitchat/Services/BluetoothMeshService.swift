@@ -54,6 +54,7 @@ class BluetoothMeshService: NSObject {
     private var announcedToPeers = Set<String>()  // Track which peers we've announced to
     private var announcedPeers = Set<String>()  // Track peers who have already been announced
     private var processedKeyExchanges = Set<String>()  // Track processed key exchanges to prevent duplicates
+    private var intentionalDisconnects = Set<String>()  // Track peripherals we're disconnecting intentionally
     
     // Store-and-forward message cache
     private struct StoredMessage {
@@ -1322,6 +1323,16 @@ class BluetoothMeshService: NSObject {
                     if senderID != "unknown" && senderID != myPeerID {
                         // Check if we need to update peripheral mapping from the specific peripheral that sent this
                         if let peripheral = peripheral {
+                            // Check if we already have a different peripheral connected for this peer
+                            if let existingPeripheral = self.connectedPeripherals[senderID],
+                               existingPeripheral != peripheral {
+                                // We have a duplicate connection - disconnect the newer one
+                                // print("[DEBUG] Duplicate connection detected for \(senderID), keeping existing")
+                                intentionalDisconnects.insert(peripheral.identifier.uuidString)
+                                centralManager.cancelPeripheralConnection(peripheral)
+                                return
+                            }
+                            
                             // Find if this peripheral is currently mapped with a temp ID
                             if let tempID = self.connectedPeripherals.first(where: { $0.value == peripheral })?.key,
                                tempID.count > 8 { // It's a temp ID
@@ -1748,6 +1759,8 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
         let tempID = peripheral.identifier.uuidString
         connectedPeripherals[tempID] = peripheral
         
+        // Don't show connected message yet - wait for key exchange
+        // This prevents the connect/disconnect/connect pattern
         
         // Request RSSI reading
         peripheral.readRSSI()
@@ -1761,6 +1774,13 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
     
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
         let peripheralID = peripheral.identifier.uuidString
+        
+        // Check if this was an intentional disconnect
+        if intentionalDisconnects.contains(peripheralID) {
+            intentionalDisconnects.remove(peripheralID)
+            // Don't process this disconnect further
+            return
+        }
         
         // Implement exponential backoff for failed connections
         if error != nil {
