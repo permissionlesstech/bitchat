@@ -215,7 +215,7 @@ struct ContentView: View {
                     }) {
                         Text("\(currentRoom) (\(memberCount))")
                             .font(.system(size: 18, weight: .medium, design: .monospaced))
-                            .foregroundColor(Color.orange)
+                            .foregroundColor(Color.blue)
                     }
                     .buttonStyle(.plain)
                     
@@ -511,7 +511,7 @@ struct ContentView: View {
                                     HStack {
                                         Text(room)
                                             .font(.system(size: 14, design: .monospaced))
-                                            .foregroundColor(viewModel.currentRoom == room ? Color.orange : textColor)
+                                            .foregroundColor(viewModel.currentRoom == room ? Color.blue : textColor)
                                         
                                         Spacer()
                                         
