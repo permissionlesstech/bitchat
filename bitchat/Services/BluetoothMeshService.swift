@@ -756,29 +756,16 @@ class BluetoothMeshService: NSObject {
     }
     
     private func getAllConnectedPeerIDs() -> [String] {
-        // Only return peers who have announced (have nicknames)
-        let announcedPeers = Set(activePeers.compactMap { peerID -> String? in
-            // Ensure peerID is valid and not nil
-            guard !peerID.isEmpty,
-                  peerID != "unknown",
-                  peerID != myPeerID,
-                  peerID.count <= 8 else {  // Filter out temp IDs
-                return nil
-            }
-            
-            // Safely check if peer has a nickname (thread-safe)
-            peerNicknamesLock.lock()
-            let hasNickname = peerNicknames[peerID] != nil
-            peerNicknamesLock.unlock()
-            
-            if hasNickname {
-                return peerID
-            }
-            
-            return nil
-        })
-        // Active peers: \(announcedPeers.count)
-        return Array(announcedPeers).sorted()
+        // Return all valid active peers
+        let validPeers = activePeers.filter { peerID in
+            // Ensure peerID is valid
+            return !peerID.isEmpty &&
+                   peerID != "unknown" &&
+                   peerID != myPeerID &&
+                   peerID.count <= 8  // Filter out temp IDs
+        }
+        
+        return Array(validPeers).sorted()
     }
     
     // MARK: - Store-and-Forward Methods
@@ -817,9 +804,19 @@ class BluetoothMeshService: NSObject {
             }
             
             // Create stored message with original packet timestamp preserved
+            // Handle both seconds and milliseconds timestamps
+            let timestampInSeconds: TimeInterval
+            if packet.timestamp > 1_000_000_000_000 {
+                // Already in milliseconds
+                timestampInSeconds = TimeInterval(packet.timestamp) / 1000.0
+            } else {
+                // Already in seconds
+                timestampInSeconds = TimeInterval(packet.timestamp)
+            }
+            
             let storedMessage = StoredMessage(
                 packet: packet,
-                timestamp: Date(timeIntervalSince1970: TimeInterval(packet.timestamp) / 1000.0), // convert from milliseconds
+                timestamp: Date(timeIntervalSince1970: timestampInSeconds),
                 messageID: messageID,
                 isForFavorite: isForFavorite
             )
@@ -1056,7 +1053,18 @@ class BluetoothMeshService: NSObject {
             
             // Replay attack protection: Check timestamp is within reasonable window (5 minutes)
             let currentTime = UInt64(Date().timeIntervalSince1970 * 1000) // milliseconds
-            let timeDiff = abs(Int64(currentTime) - Int64(packet.timestamp))
+            
+            // Handle both seconds and milliseconds timestamps for compatibility
+            let packetTime: UInt64
+            if packet.timestamp > 1_000_000_000_000 {
+                // Already in milliseconds
+                packetTime = packet.timestamp
+            } else {
+                // Convert seconds to milliseconds
+                packetTime = packet.timestamp * 1000
+            }
+            
+            let timeDiff = abs(Int64(currentTime) - Int64(packetTime))
             if timeDiff > 300000 { // 5 minutes in milliseconds
                 print("[SECURITY] Dropping packet with timestamp too far from current time: \(timeDiff/1000) seconds")
                 return
