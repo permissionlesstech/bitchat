@@ -59,6 +59,10 @@ class ChatViewModel: ObservableObject {
         loadJoinedRooms()
         meshService.delegate = self
         
+        // Log startup info
+        bitchatLog("ChatViewModel initialized", category: "startup")
+        bitchatLog("Nickname: \(nickname)", category: "startup")
+        
         // Start mesh service immediately
         meshService.startServices()
         
@@ -251,7 +255,7 @@ class ChatViewModel: ObservableObject {
                     roomMembers[room] = []
                 }
                 roomMembers[room]?.insert(meshService.myPeerID)
-                print("[DEBUG-ROOM] Added self \(meshService.myPeerID) to room \(room), total members: \(roomMembers[room]?.count ?? 0)")
+                bitchatLog("Added self \(meshService.myPeerID) to room \(room), total members: \(roomMembers[room]?.count ?? 0)", category: "room")
             } else {
                 // Add to main messages
                 messages.append(message)
@@ -677,9 +681,9 @@ extension ChatViewModel: BitchatDelegate {
             }
             if let senderPeerID = message.senderPeerID {
                 roomMembers[room]?.insert(senderPeerID)
-                print("[DEBUG-ROOM] Added member \(senderPeerID) to room \(room), total members: \(roomMembers[room]?.count ?? 0)")
+                bitchatLog("Added member \(senderPeerID) to room \(room), total members: \(roomMembers[room]?.count ?? 0)", category: "room")
             } else {
-                print("[DEBUG-ROOM] No senderPeerID for message in room \(room)")
+                bitchatLog("No senderPeerID for message in room \(room)", category: "room")
             }
             
             // Update unread count if not currently viewing this room
