@@ -34,10 +34,17 @@ class ChatViewModel: ObservableObject {
     @Published var autocompleteRange: NSRange? = nil
     @Published var selectedAutocompleteIndex: Int = 0
     
+    // Room support
+    @Published var joinedRooms: Set<String> = []  // Set of room hashtags
+    @Published var currentRoom: String? = nil  // Currently selected room
+    @Published var roomMessages: [String: [BitchatMessage]] = [:]  // room -> messages
+    @Published var unreadRoomMessages: [String: Int] = [:]  // room -> unread count
+    
     let meshService = BluetoothMeshService()
     private let userDefaults = UserDefaults.standard
     private let nicknameKey = "bitchat.nickname"
     private let favoritesKey = "bitchat.favorites"
+    private let joinedRoomsKey = "bitchat.joinedRooms"
     private var nicknameSaveTimer: Timer?
     
     @Published var favoritePeers: Set<String> = []  // Now stores public key fingerprints instead of peer IDs
@@ -48,6 +55,7 @@ class ChatViewModel: ObservableObject {
     init() {
         loadNickname()
         loadFavorites()
+        loadJoinedRooms()
         meshService.delegate = self
         
         // Start mesh service immediately
@@ -83,6 +91,79 @@ class ChatViewModel: ObservableObject {
     private func saveFavorites() {
         userDefaults.set(Array(favoritePeers), forKey: favoritesKey)
         userDefaults.synchronize()
+    }
+    
+    private func loadJoinedRooms() {
+        if let savedRooms = userDefaults.stringArray(forKey: joinedRoomsKey) {
+            joinedRooms = Set(savedRooms)
+        }
+    }
+    
+    private func saveJoinedRooms() {
+        userDefaults.set(Array(joinedRooms), forKey: joinedRoomsKey)
+        userDefaults.synchronize()
+    }
+    
+    func joinRoom(_ room: String) {
+        // Ensure room starts with #
+        let roomTag = room.hasPrefix("#") ? room : "#\(room)"
+        joinedRooms.insert(roomTag)
+        saveJoinedRooms()
+        
+        // Switch to the room
+        currentRoom = roomTag
+        selectedPrivateChatPeer = nil  // Exit private chat if in one
+        
+        // Clear unread count for this room
+        unreadRoomMessages[roomTag] = 0
+        
+        // Initialize room messages if needed
+        if roomMessages[roomTag] == nil {
+            roomMessages[roomTag] = []
+        }
+    }
+    
+    func leaveRoom(_ room: String) {
+        joinedRooms.remove(room)
+        saveJoinedRooms()
+        
+        // If we're currently in this room, exit to main chat
+        if currentRoom == room {
+            currentRoom = nil
+        }
+        
+        // Keep messages for now (could clear if desired)
+        unreadRoomMessages.removeValue(forKey: room)
+    }
+    
+    func switchToRoom(_ room: String?) {
+        currentRoom = room
+        selectedPrivateChatPeer = nil  // Exit private chat
+        
+        // Clear unread count for this room
+        if let room = room {
+            unreadRoomMessages[room] = 0
+        }
+    }
+    
+    func getRoomMessages(_ room: String) -> [BitchatMessage] {
+        return roomMessages[room] ?? []
+    }
+    
+    func parseRooms(from content: String) -> Set<String> {
+        let pattern = "#([a-zA-Z0-9_]+)"
+        let regex = try? NSRegularExpression(pattern: pattern, options: [])
+        let matches = regex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
+        
+        var rooms = Set<String>()
+        for match in matches {
+            if let range = Range(match.range(at: 0), in: content) {
+                let room = String(content[range])
+                rooms.insert(room)
+            }
+        }
+        
+        return rooms
     }
     
     func toggleFavorite(peerID: String) {
@@ -134,8 +215,12 @@ class ChatViewModel: ObservableObject {
             // Send as private message
             sendPrivateMessage(content, to: selectedPeer)
         } else {
-            // Parse mentions from the content
+            // Parse mentions and rooms from the content
             let mentions = parseMentions(from: content)
+            let rooms = parseRooms(from: content)
+            
+            // Determine which room this message belongs to
+            let messageRoom = currentRoom  // Use current room if we're in one
             
             // Add message to local display
             let message = BitchatMessage(
@@ -144,12 +229,30 @@ class ChatViewModel: ObservableObject {
                 timestamp: Date(),
                 isRelay: false,
                 originalSender: nil,
-                mentions: mentions.isEmpty ? nil : mentions
+                mentions: mentions.isEmpty ? nil : mentions,
+                room: messageRoom
             )
-            messages.append(message)
             
-            // Send via mesh with mentions
-            meshService.sendMessage(content, mentions: mentions)
+            if let room = messageRoom {
+                // Add to room messages
+                if roomMessages[room] == nil {
+                    roomMessages[room] = []
+                }
+                roomMessages[room]?.append(message)
+            } else {
+                // Add to main messages
+                messages.append(message)
+            }
+            
+            // Auto-join any new rooms mentioned in the message
+            for room in rooms {
+                if !joinedRooms.contains(room) {
+                    joinRoom(room)
+                }
+            }
+            
+            // Send via mesh with mentions and room
+            meshService.sendMessage(content, mentions: mentions, room: messageRoom)
         }
     }
     
@@ -349,16 +452,31 @@ class ChatViewModel: ObservableObject {
         let contentText = message.content
         var processedContent = AttributedString()
         
-        // Regular expression to find @mentions
-        let pattern = "@([a-zA-Z0-9_]+)"
-        let regex = try? NSRegularExpression(pattern: pattern, options: [])
-        let matches = regex?.matches(in: contentText, options: [], range: NSRange(location: 0, length: contentText.count)) ?? []
+        // Regular expressions for mentions and hashtags
+        let mentionPattern = "@([a-zA-Z0-9_]+)"
+        let hashtagPattern = "#([a-zA-Z0-9_]+)"
+        
+        let mentionRegex = try? NSRegularExpression(pattern: mentionPattern, options: [])
+        let hashtagRegex = try? NSRegularExpression(pattern: hashtagPattern, options: [])
+        
+        let mentionMatches = mentionRegex?.matches(in: contentText, options: [], range: NSRange(location: 0, length: contentText.count)) ?? []
+        let hashtagMatches = hashtagRegex?.matches(in: contentText, options: [], range: NSRange(location: 0, length: contentText.count)) ?? []
+        
+        // Combine and sort all matches
+        var allMatches: [(range: NSRange, type: String)] = []
+        for match in mentionMatches {
+            allMatches.append((match.range(at: 0), "mention"))
+        }
+        for match in hashtagMatches {
+            allMatches.append((match.range(at: 0), "hashtag"))
+        }
+        allMatches.sort { $0.range.location < $1.range.location }
         
         var lastEndIndex = contentText.startIndex
         
-        for match in matches {
-            // Add text before the mention
-            if let range = Range(match.range(at: 0), in: contentText) {
+        for (matchRange, matchType) in allMatches {
+            // Add text before the match
+            if let range = Range(matchRange, in: contentText) {
                 let beforeText = String(contentText[lastEndIndex..<range.lowerBound])
                 if !beforeText.isEmpty {
                     var normalStyle = AttributeContainer()
@@ -367,12 +485,20 @@ class ChatViewModel: ObservableObject {
                     processedContent.append(AttributedString(beforeText).mergingAttributes(normalStyle))
                 }
                 
-                // Add the mention with highlight
-                let mentionText = String(contentText[range])
-                var mentionStyle = AttributeContainer()
-                mentionStyle.font = .system(size: 14, weight: .semibold, design: .monospaced)
-                mentionStyle.foregroundColor = Color.orange
-                processedContent.append(AttributedString(mentionText).mergingAttributes(mentionStyle))
+                // Add the match with appropriate styling
+                let matchText = String(contentText[range])
+                var matchStyle = AttributeContainer()
+                matchStyle.font = .system(size: 14, weight: .semibold, design: .monospaced)
+                
+                if matchType == "mention" {
+                    matchStyle.foregroundColor = Color.orange
+                } else {
+                    // Hashtag
+                    matchStyle.foregroundColor = Color.blue
+                    matchStyle.underlineStyle = .single
+                }
+                
+                processedContent.append(AttributedString(matchText).mergingAttributes(matchStyle))
                 
                 lastEndIndex = range.upperBound
             }
@@ -517,8 +643,27 @@ extension ChatViewModel: BitchatDelegate {
             } else if message.sender == nickname {
                 // Our own message that was echoed back - ignore it since we already added it locally
             }
+        } else if let room = message.room {
+            // Room message
+            
+            // Auto-join room if we see a message for it
+            if !joinedRooms.contains(room) {
+                joinRoom(room)
+            }
+            
+            // Add to room messages
+            if roomMessages[room] == nil {
+                roomMessages[room] = []
+            }
+            roomMessages[room]?.append(message)
+            roomMessages[room]?.sort { $0.timestamp < $1.timestamp }
+            
+            // Update unread count if not currently viewing this room
+            if currentRoom != room {
+                unreadRoomMessages[room] = (unreadRoomMessages[room] ?? 0) + 1
+            }
         } else {
-            // Regular public message
+            // Regular public message (main chat)
             messages.append(message)
             // Sort messages by timestamp to ensure proper ordering
             messages.sort { $0.timestamp < $1.timestamp }

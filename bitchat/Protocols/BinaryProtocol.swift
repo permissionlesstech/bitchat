@@ -193,6 +193,7 @@ extension BitchatMessage {
         // - Recipient nickname length + data
         // - Sender peer ID length + data
         // - Mentions array
+        // - Room hashtag
         
         var flags: UInt8 = 0
         if isRelay { flags |= 0x01 }
@@ -201,6 +202,7 @@ extension BitchatMessage {
         if recipientNickname != nil { flags |= 0x08 }
         if senderPeerID != nil { flags |= 0x10 }
         if mentions != nil && !mentions!.isEmpty { flags |= 0x20 }
+        if room != nil { flags |= 0x40 }
         
         data.append(flags)
         
@@ -267,6 +269,12 @@ extension BitchatMessage {
             }
         }
         
+        // Room hashtag
+        if let room = room, let roomData = room.data(using: .utf8) {
+            data.append(UInt8(min(roomData.count, 255)))
+            data.append(roomData.prefix(255))
+        }
+        
         return data
     }
     
@@ -292,6 +300,7 @@ extension BitchatMessage {
         let hasRecipientNickname = (flags & 0x08) != 0
         let hasSenderPeerID = (flags & 0x10) != 0
         let hasMentions = (flags & 0x20) != 0
+        let hasRoom = (flags & 0x40) != 0
         
         // Timestamp
         guard offset + 8 <= dataCopy.count else { 
@@ -389,6 +398,16 @@ extension BitchatMessage {
             }
         }
         
+        // Room
+        var room: String? = nil
+        if hasRoom && offset < dataCopy.count {
+            let length = Int(dataCopy[offset]); offset += 1
+            if offset + length <= dataCopy.count {
+                room = String(data: dataCopy[offset..<offset+length], encoding: .utf8)
+                offset += length
+            }
+        }
+        
         let message = BitchatMessage(
             sender: sender,
             content: content,
@@ -398,7 +417,8 @@ extension BitchatMessage {
             isPrivate: isPrivate,
             recipientNickname: recipientNickname,
             senderPeerID: senderPeerID,
-            mentions: mentions
+            mentions: mentions,
+            room: room
         )
         return message
     }

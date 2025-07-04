@@ -507,7 +507,7 @@ class BluetoothMeshService: NSObject {
         self.characteristic = characteristic
     }
     
-    func sendMessage(_ content: String, mentions: [String] = [], to recipientID: String? = nil) {
+    func sendMessage(_ content: String, mentions: [String] = [], room: String? = nil, to recipientID: String? = nil) {
         messageQueue.async { [weak self] in
             guard let self = self else { return }
             
@@ -520,7 +520,8 @@ class BluetoothMeshService: NSObject {
                 timestamp: Date(),
                 isRelay: false,
                 originalSender: nil,
-                mentions: mentions.isEmpty ? nil : mentions
+                mentions: mentions.isEmpty ? nil : mentions,
+                room: room
             )
             
             if let messageData = message.toBinaryPayload() {
@@ -847,11 +848,9 @@ class BluetoothMeshService: NSObject {
             processedKeyExchanges = processedKeyExchanges.filter { !$0.contains(peerID) }
             
             peerNicknamesLock.lock()
-            let nickname = peerNicknames[peerID]
             peerNicknames.removeValue(forKey: peerID)
             peerNicknamesLock.unlock()
             
-            let lastSeenAgo = peerLastSeenTimestamps[peerID].map { now.timeIntervalSince($0) } ?? 999
             // Removed stale peer
         }
         activePeersLock.unlock()
