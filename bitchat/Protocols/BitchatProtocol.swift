@@ -133,8 +133,9 @@ struct BitchatMessage: Codable, Equatable {
     let recipientNickname: String?
     let senderPeerID: String?
     let mentions: [String]?  // Array of mentioned nicknames
+    let room: String?  // Room hashtag (e.g., "#general")
     
-    init(sender: String, content: String, timestamp: Date, isRelay: Bool, originalSender: String? = nil, isPrivate: Bool = false, recipientNickname: String? = nil, senderPeerID: String? = nil, mentions: [String]? = nil) {
+    init(sender: String, content: String, timestamp: Date, isRelay: Bool, originalSender: String? = nil, isPrivate: Bool = false, recipientNickname: String? = nil, senderPeerID: String? = nil, mentions: [String]? = nil, room: String? = nil) {
         self.id = UUID().uuidString
         self.sender = sender
         self.content = content
@@ -145,6 +146,7 @@ struct BitchatMessage: Codable, Equatable {
         self.recipientNickname = recipientNickname
         self.senderPeerID = senderPeerID
         self.mentions = mentions
+        self.room = room
     }
 }
 
