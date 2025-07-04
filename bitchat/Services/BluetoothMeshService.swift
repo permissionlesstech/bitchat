@@ -60,6 +60,7 @@ class BluetoothMeshService: NSObject {
     private var deliveredMessages: Set<String> = []  // Track delivered message IDs to prevent duplicates
     private var cachedMessagesSentToPeer: Set<String> = []  // Track which peers have already received cached messages
     private var receivedMessageTimestamps: [String: Date] = [:]  // Track timestamps of received messages for debugging
+    private var recentlySentMessages: Set<String> = []  // Short-term cache to prevent any duplicate sends
     
     // Battery and range optimizations
     private var scanDutyCycleTimer: Timer?
@@ -516,26 +517,34 @@ class BluetoothMeshService: NSObject {
                     type: MessageType.message.rawValue,
                     senderID: Data(self.myPeerID.utf8),
                     recipientID: SpecialRecipients.broadcast,  // Special broadcast ID
-                    timestamp: UInt64(Date().timeIntervalSince1970),
+                    timestamp: UInt64(Date().timeIntervalSince1970 * 1000), // milliseconds
                     payload: messageData,
                     signature: signature,
                     ttl: self.adaptiveTTL
                 )
                 
-                // Add random delay before initial send
-                let initialDelay = self.randomDelay()
-                DispatchQueue.main.asyncAfter(deadline: .now() + initialDelay) { [weak self] in
-                    self?.broadcastPacket(packet)
-                    // Sending message
-                }
-                
-                // Retry with randomized delays for reliability
-                let baseDelays = [0.2, 0.5]
-                for baseDelay in baseDelays {
-                    let jitteredDelay = baseDelay + self.randomDelay()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + jitteredDelay) { [weak self] in
+                // Track this message to prevent duplicate sends
+                let msgID = "\(packet.timestamp)-\(self.myPeerID)-\(packet.payload.prefix(32).hashValue)"
+                if !self.recentlySentMessages.contains(msgID) {
+                    self.recentlySentMessages.insert(msgID)
+                    
+                    // Clean up old entries after 10 seconds
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 10.0) { [weak self] in
+                        self?.recentlySentMessages.remove(msgID)
+                    }
+                    
+                    // Add random delay before initial send
+                    let initialDelay = self.randomDelay()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + initialDelay) { [weak self] in
                         self?.broadcastPacket(packet)
-                        // Re-sending message with jitter
+                        // Sending message
+                    }
+                    
+                    // Single retry for reliability
+                    let retryDelay = 0.3 + self.randomDelay()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + retryDelay) { [weak self] in
+                        self?.broadcastPacket(packet)
+                        // Re-sending message
                     }
                 }
             }
@@ -593,7 +602,7 @@ class BluetoothMeshService: NSObject {
                     type: MessageType.message.rawValue,
                     senderID: Data(self.myPeerID.utf8),
                     recipientID: Data(recipientPeerID.utf8),
-                    timestamp: UInt64(Date().timeIntervalSince1970),
+                    timestamp: UInt64(Date().timeIntervalSince1970 * 1000), // milliseconds
                     payload: encryptedPayload,
                     signature: signature,
                     ttl: self.adaptiveTTL
@@ -614,14 +623,25 @@ class BluetoothMeshService: NSObject {
                     }
                 }
                 
-                // Add random delay for timing obfuscation
-                let delay = self.randomDelay()
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-                    self?.broadcastPacket(packet)
-                    // Private message sent with timing delay
+                // Track to prevent duplicate sends
+                let msgID = "\(packet.timestamp)-\(self.myPeerID)-\(packet.payload.prefix(32).hashValue)"
+                if !self.recentlySentMessages.contains(msgID) {
+                    self.recentlySentMessages.insert(msgID)
+                    
+                    // Clean up after 10 seconds
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 10.0) { [weak self] in
+                        self?.recentlySentMessages.remove(msgID)
+                    }
+                    
+                    // Add random delay for timing obfuscation
+                    let delay = self.randomDelay()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                        self?.broadcastPacket(packet)
+                        // Private message sent with timing delay
+                    }
+                    
+                    // Don't call didReceiveMessage here - let the view model handle it directly
                 }
-                
-                // Don't call didReceiveMessage here - let the view model handle it directly
             }
         }
     }
@@ -801,7 +821,7 @@ class BluetoothMeshService: NSObject {
             // Create stored message with original packet timestamp preserved
             let storedMessage = StoredMessage(
                 packet: packet,
-                timestamp: Date(timeIntervalSince1970: TimeInterval(packet.timestamp)),
+                timestamp: Date(timeIntervalSince1970: TimeInterval(packet.timestamp) / 1000.0), // convert from milliseconds
                 messageID: messageID,
                 isForFavorite: isForFavorite
             )
@@ -1042,10 +1062,10 @@ class BluetoothMeshService: NSObject {
             }
             
             // Replay attack protection: Check timestamp is within reasonable window (5 minutes)
-            let currentTime = UInt64(Date().timeIntervalSince1970)
+            let currentTime = UInt64(Date().timeIntervalSince1970 * 1000) // milliseconds
             let timeDiff = abs(Int64(currentTime) - Int64(packet.timestamp))
-            if timeDiff > 300 { // 5 minutes
-                print("[SECURITY] Dropping packet with timestamp too far from current time: \(timeDiff) seconds")
+            if timeDiff > 300000 { // 5 minutes in milliseconds
+                print("[SECURITY] Dropping packet with timestamp too far from current time: \(timeDiff/1000) seconds")
                 return
             }
         
@@ -1057,7 +1077,8 @@ class BluetoothMeshService: NSObject {
             // Include both type and payload hash for fragments to ensure uniqueness
             messageID = "\(packet.timestamp)-\(String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8) ?? "")-\(packet.type)-\(packet.payload.hashValue)"
         } else {
-            messageID = "\(packet.timestamp)-\(String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8) ?? "")"
+            // Include payload hash for absolute uniqueness (handles same-second messages)
+            messageID = "\(packet.timestamp)-\(String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8) ?? "")-\(packet.payload.prefix(64).hashValue)"
         }
         
         // Use bloom filter for efficient duplicate detection
