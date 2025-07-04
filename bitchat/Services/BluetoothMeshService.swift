@@ -35,6 +35,7 @@ class BluetoothMeshService: NSObject {
     private var activePeers: Set<String> = []  // Track all active peers
     private var peerRSSI: [String: NSNumber] = [:] // Track RSSI values for peers
     private var peripheralRSSI: [String: NSNumber] = [:] // Track RSSI by peripheral ID during discovery
+    private var loggedCryptoErrors = Set<String>()  // Track which peers we've logged crypto errors for
     
     weak var delegate: BitchatDelegate?
     private let encryptionService = EncryptionService()
@@ -210,6 +211,7 @@ class BluetoothMeshService: NSObject {
                         self.broadcastPacket(messages[0])
                     } else if let dest = destination,
                               let peripheral = self.connectedPeripherals[dest],
+                              peripheral.state == .connected,
                               let characteristic = self.peripheralCharacteristics[peripheral] {
                         if let data = messages[0].toBinaryData() {
                             peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
@@ -225,6 +227,7 @@ class BluetoothMeshService: NSObject {
                                 self?.broadcastPacket(message)
                             } else if let dest = destination,
                                       let peripheral = self?.connectedPeripherals[dest],
+                                      peripheral.state == .connected,
                                       let characteristic = self?.peripheralCharacteristics[peripheral] {
                                 if let data = message.toBinaryData() {
                                     peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
@@ -627,9 +630,11 @@ class BluetoothMeshService: NSObject {
             
             // Also try targeted send if we have the peripheral
             if let peripheral = connectedPeripherals[peerID],
+               peripheral.state == .connected,
                let characteristic = peripheral.services?.first(where: { $0.uuid == BluetoothMeshService.serviceUUID })?.characteristics?.first(where: { $0.uuid == BluetoothMeshService.characteristicUUID }) {
                 // Also sending targeted announce
-                peripheral.writeValue(data, for: characteristic, type: .withResponse)
+                let writeType: CBCharacteristicWriteType = characteristic.properties.contains(.write) ? .withResponse : .withoutResponse
+                peripheral.writeValue(data, for: characteristic, type: writeType)
             } else {
                 // No peripheral found for targeted send
             }
@@ -768,10 +773,10 @@ class BluetoothMeshService: NSObject {
                 }
             }
             
-            // Create stored message
+            // Create stored message with original packet timestamp preserved
             let storedMessage = StoredMessage(
                 packet: packet,
-                timestamp: Date(),
+                timestamp: Date(timeIntervalSince1970: TimeInterval(packet.timestamp)),
                 messageID: messageID,
                 isForFavorite: isForFavorite
             )
@@ -850,21 +855,14 @@ class BluetoothMeshService: NSObject {
                     guard let peripheral = peripheral,
                           peripheral.state == .connected else { return }
                     
-                    // Create a new packet with fresh timestamp
-                    let updatedPacket = BitchatPacket(
-                        type: storedMessage.packet.type,
-                        senderID: storedMessage.packet.senderID,
-                        recipientID: storedMessage.packet.recipientID,
-                        timestamp: UInt64(Date().timeIntervalSince1970),
-                        payload: storedMessage.packet.payload,
-                        signature: storedMessage.packet.signature,
-                        ttl: storedMessage.packet.ttl
-                    )
+                    // Send the original packet with preserved timestamp
+                    // This maintains message ordering for store-and-forward
+                    let packetToSend = storedMessage.packet
                     
-                    if let data = updatedPacket.toBinaryData(),
+                    if let data = packetToSend.toBinaryData(),
                        characteristic.properties.contains(.writeWithoutResponse) {
                         peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
-                        // Sent cached message
+                        // Sent cached message with original timestamp
                     }
                 }
             }
@@ -1020,7 +1018,10 @@ class BluetoothMeshService: NSObject {
                                 return
                             }
                         } catch {
-                            print("[CRYPTO] Failed to verify signature from \(senderID): \(error)")
+                            if !loggedCryptoErrors.contains(senderID) {
+                                print("[CRYPTO] Failed to verify signature from \(senderID): \(error)")
+                                loggedCryptoErrors.insert(senderID)
+                            }
                         }
                     }
                     
@@ -1084,7 +1085,10 @@ class BluetoothMeshService: NSObject {
                                 return
                             }
                         } catch {
-                            print("[CRYPTO] Failed to verify signature from \(senderID): \(error)")
+                            if !loggedCryptoErrors.contains(senderID) {
+                                print("[CRYPTO] Failed to verify signature from \(senderID): \(error)")
+                                loggedCryptoErrors.insert(senderID)
+                            }
                         }
                     }
                     
