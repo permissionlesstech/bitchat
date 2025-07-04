@@ -296,7 +296,7 @@ class BluetoothMeshService: NSObject {
         }
         
         // Start stale peer cleanup timer (every 30 seconds)
-        cleanupTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
+        cleanupTimer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { [weak self] _ in
             self?.cleanupStalePeers()
         }
         
@@ -815,7 +815,7 @@ class BluetoothMeshService: NSObject {
     
     // Clean up stale peers that haven't been seen in a while
     private func cleanupStalePeers() {
-        let staleThreshold: TimeInterval = 60.0 // 60 seconds
+        let staleThreshold: TimeInterval = 180.0 // 3 minutes - increased for better stability
         let now = Date()
         
         activePeersLock.lock()
@@ -827,6 +827,14 @@ class BluetoothMeshService: NSObject {
         }
         
         for peerID in peersToRemove {
+            // Check if this peer has an active peripheral connection
+            if let peripheral = connectedPeripherals[peerID], peripheral.state == .connected {
+                print("[DEBUG-CLEANUP] Skipping removal of \(peerID) - still has active connection")
+                // Update last seen time to prevent immediate re-removal
+                peerLastSeenTimestamps[peerID] = Date()
+                continue
+            }
+            
             activePeers.remove(peerID)
             peerLastSeenTimestamps.removeValue(forKey: peerID)
             
@@ -838,11 +846,12 @@ class BluetoothMeshService: NSObject {
             processedKeyExchanges = processedKeyExchanges.filter { !$0.contains(peerID) }
             
             peerNicknamesLock.lock()
-            _ = peerNicknames[peerID]
+            let nickname = peerNicknames[peerID]
             peerNicknames.removeValue(forKey: peerID)
             peerNicknamesLock.unlock()
             
-            // print("[CLEANUP] Removed stale peer \(peerID) (\(nickname ?? "unknown"))")
+            let lastSeenAgo = peerLastSeenTimestamps[peerID].map { now.timeIntervalSince($0) } ?? 999
+            print("[DEBUG-CLEANUP] Removed stale peer \(peerID) (\(nickname ?? "unknown")), last seen \(Int(lastSeenAgo))s ago")
         }
         activePeersLock.unlock()
         
@@ -1451,15 +1460,21 @@ class BluetoothMeshService: NSObject {
                 var stalePeerIDs: [String] = []
                 for (existingPeerID, existingNickname) in peerNicknames {
                     if existingNickname == nickname && existingPeerID != senderID {
-                        // Found a stale peer ID with the same nickname
-                        stalePeerIDs.append(existingPeerID)
-                        // print("[ANNOUNCE] Found stale peer ID \(existingPeerID) with same nickname '\(nickname)' as new peer \(senderID)")
+                        // Check if this peer was seen very recently (within 10 seconds)
+                        let wasRecentlySeen = peerLastSeenTimestamps[existingPeerID].map { Date().timeIntervalSince($0) < 10.0 } ?? false
+                        if !wasRecentlySeen {
+                            // Found a stale peer ID with the same nickname
+                            stalePeerIDs.append(existingPeerID)
+                            print("[DEBUG-DUPLICATE] Found stale peer ID \(existingPeerID) with same nickname '\(nickname)' as new peer \(senderID)")
+                        } else {
+                            print("[DEBUG-DUPLICATE] Peer \(existingPeerID) has same nickname '\(nickname)' but was seen recently, keeping both")
+                        }
                     }
                 }
                 
                 // Remove stale peer IDs
                 for stalePeerID in stalePeerIDs {
-                    // print("[ANNOUNCE] Removing stale peer \(stalePeerID) -> '\(nickname)' (replaced by \(senderID))")
+                    print("[DEBUG-DUPLICATE] Removing stale peer \(stalePeerID) -> '\(nickname)' (replaced by \(senderID))")
                     peerNicknames.removeValue(forKey: stalePeerID)
                     
                     // Also remove from active peers
@@ -1866,6 +1881,8 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
         let tempID = peripheral.identifier.uuidString
         connectedPeripherals[tempID] = peripheral
         
+        print("[DEBUG-CONNECT] Connected to peripheral \(peripheral.name ?? "unknown") with temp ID \(tempID)")
+        
         // Don't show connected message yet - wait for key exchange
         // This prevents the connect/disconnect/connect pattern
         
@@ -1882,9 +1899,12 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
         let peripheralID = peripheral.identifier.uuidString
         
+        print("[DEBUG-DISCONNECT] Peripheral \(peripheralID) disconnected, error: \(error?.localizedDescription ?? "none")")
+        
         // Check if this was an intentional disconnect
         if intentionalDisconnects.contains(peripheralID) {
             intentionalDisconnects.remove(peripheralID)
+            print("[DEBUG-DISCONNECT] Was intentional disconnect")
             // Don't process this disconnect further
             return
         }
