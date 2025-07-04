@@ -206,9 +206,18 @@ struct ContentView: View {
             } else if let currentRoom = viewModel.currentRoom {
                 // Room header
                 HStack(spacing: 4) {
-                    Text(currentRoom)
-                        .font(.system(size: 18, weight: .medium, design: .monospaced))
-                        .foregroundColor(Color.orange)
+                    let memberCount = (viewModel.roomMembers[currentRoom]?.count ?? 0) + 1 // +1 for self
+                    Button(action: {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            showSidebar.toggle()
+                            sidebarDragOffset = 0
+                        }
+                    }) {
+                        Text("\(currentRoom) (\(memberCount))")
+                            .font(.system(size: 18, weight: .medium, design: .monospaced))
+                            .foregroundColor(Color.orange)
+                    }
+                    .buttonStyle(.plain)
                     
                     Spacer()
                     
@@ -568,7 +577,8 @@ struct ContentView: View {
                                 .foregroundColor(secondaryTextColor)
                                 .padding(.horizontal)
                         } else if let currentRoom = viewModel.currentRoom,
-                                  (viewModel.roomMembers[currentRoom]?.isEmpty ?? true) {
+                                  viewModel.roomMembers[currentRoom]?.isEmpty ?? true,
+                                  !viewModel.connectedPeers.contains(viewModel.meshService.myPeerID) {
                             Text("No one in this room yet")
                                 .font(.system(size: 14, design: .monospaced))
                                 .foregroundColor(secondaryTextColor)
@@ -579,14 +589,21 @@ struct ContentView: View {
                             let myPeerID = viewModel.meshService.myPeerID
                             
                             // Filter peers based on current room
-                            let peersToShow = if let currentRoom = viewModel.currentRoom,
-                                               let roomMemberIDs = viewModel.roomMembers[currentRoom] {
-                                // Show only peers who have sent messages to this room
-                                viewModel.connectedPeers.filter { roomMemberIDs.contains($0) && $0 != myPeerID }
-                            } else {
-                                // Show all connected peers in main chat
-                                viewModel.connectedPeers.filter { $0 != myPeerID }
-                            }
+                            let peersToShow: [String] = {
+                                if let currentRoom = viewModel.currentRoom,
+                                   let roomMemberIDs = viewModel.roomMembers[currentRoom] {
+                                    // Show only peers who have sent messages to this room (including self)
+                                    var memberPeers = viewModel.connectedPeers.filter { roomMemberIDs.contains($0) }
+                                    // Always include ourselves if we're connected
+                                    if viewModel.connectedPeers.contains(myPeerID) {
+                                        memberPeers.append(myPeerID)
+                                    }
+                                    return Array(Set(memberPeers)) // Remove duplicates
+                                } else {
+                                    // Show all connected peers in main chat
+                                    return viewModel.connectedPeers
+                                }
+                            }()
                             
                         // Sort peers: favorites first, then alphabetically by nickname
                         let sortedPeers = peersToShow.sorted { peer1, peer2 in
@@ -603,13 +620,18 @@ struct ContentView: View {
                         }
                         
                         ForEach(sortedPeers, id: \.self) { peerID in
-                            let displayName = peerNicknames[peerID] ?? "person-\(peerID.prefix(4))"
+                            let displayName = peerID == myPeerID ? viewModel.nickname : (peerNicknames[peerID] ?? "person-\(peerID.prefix(4))")
                             let rssi = peerRSSI[peerID]?.intValue ?? -100
                             let isFavorite = viewModel.isFavorite(peerID: peerID)
+                            let isMe = peerID == myPeerID
                             
                             HStack(spacing: 8) {
                                 // Signal strength indicator or unread message icon
-                                if viewModel.unreadPrivateMessages.contains(peerID) {
+                                if isMe {
+                                    Text("•")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(textColor)
+                                } else if viewModel.unreadPrivateMessages.contains(peerID) {
                                     Image(systemName: "envelope.fill")
                                         .font(.system(size: 12))
                                         .foregroundColor(Color.orange)
@@ -619,36 +641,48 @@ struct ContentView: View {
                                         .frame(width: 8, height: 8)
                                 }
                                 
-                                // Favorite star
-                                Button(action: {
-                                    viewModel.toggleFavorite(peerID: peerID)
-                                }) {
-                                    Image(systemName: isFavorite ? "star.fill" : "star")
-                                        .font(.system(size: 12))
-                                        .foregroundColor(isFavorite ? Color.yellow : secondaryTextColor)
-                                }
-                                .buttonStyle(.plain)
-                                
-                                // Peer name button
-                                Button(action: {
-                                    if peerNicknames[peerID] != nil {
-                                        viewModel.startPrivateChat(with: peerID)
-                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                            showSidebar = false
-                                            sidebarDragOffset = 0
-                                        }
+                                // Favorite star (not for self)
+                                if !isMe {
+                                    Button(action: {
+                                        viewModel.toggleFavorite(peerID: peerID)
+                                    }) {
+                                        Image(systemName: isFavorite ? "star.fill" : "star")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(isFavorite ? Color.yellow : secondaryTextColor)
                                     }
-                                }) {
+                                    .buttonStyle(.plain)
+                                }
+                                
+                                // Peer name
+                                if isMe {
                                     HStack {
-                                        Text(displayName)
+                                        Text(displayName + " (you)")
                                             .font(.system(size: 14, design: .monospaced))
-                                            .foregroundColor(peerNicknames[peerID] != nil ? textColor : secondaryTextColor)
+                                            .foregroundColor(textColor)
                                         
                                         Spacer()
                                     }
+                                } else {
+                                    Button(action: {
+                                        if peerNicknames[peerID] != nil {
+                                            viewModel.startPrivateChat(with: peerID)
+                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                                showSidebar = false
+                                                sidebarDragOffset = 0
+                                            }
+                                        }
+                                    }) {
+                                        HStack {
+                                            Text(displayName)
+                                                .font(.system(size: 14, design: .monospaced))
+                                                .foregroundColor(peerNicknames[peerID] != nil ? textColor : secondaryTextColor)
+                                            
+                                            Spacer()
+                                        }
+                                    }
+                                    .buttonStyle(.plain)
+                                    .disabled(peerNicknames[peerID] == nil)
                                 }
-                                .buttonStyle(.plain)
-                                .disabled(peerNicknames[peerID] == nil)
                             }
                             .padding(.horizontal)
                             .padding(.vertical, 8)
