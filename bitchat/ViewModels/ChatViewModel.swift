@@ -765,6 +765,17 @@ extension ChatViewModel: BitchatDelegate {
         connectedPeers = peers
         isConnected = !peers.isEmpty
         
+        // Clean up room members who disconnected
+        for (room, memberIDs) in roomMembers {
+            // Remove disconnected peers from room members
+            let activeMembers = memberIDs.filter { memberID in
+                memberID == meshService.myPeerID || peers.contains(memberID)
+            }
+            if activeMembers != memberIDs {
+                roomMembers[room] = activeMembers
+            }
+        }
+        
         // Force UI update
         objectWillChange.send()
         
