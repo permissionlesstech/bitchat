@@ -94,5 +94,12 @@ protocol BitchatDelegate: AnyObject {
     func didUpdatePeerList(_ peers: [String])
     
     // Optional method to check if a fingerprint belongs to a favorite peer
-    @objc optional func isFavorite(fingerprint: String) -> Bool
+    func isFavorite(fingerprint: String) -> Bool
+}
+
+// Provide default implementation to make it effectively optional
+extension BitchatDelegate {
+    func isFavorite(fingerprint: String) -> Bool {
+        return false
+    }
 }

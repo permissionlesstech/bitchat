@@ -4,6 +4,7 @@ import Combine
 import CryptoKit
 #if os(macOS)
 import AppKit
+import IOKit.ps
 #else
 import UIKit
 #endif
@@ -58,9 +59,11 @@ class BluetoothMeshService: NSObject {
     // Battery and range optimizations
     private var scanDutyCycleTimer: Timer?
     private var isActivelyScanning = true
-    private let activeScanDuration: TimeInterval = 2.0  // Scan actively for 2 seconds
-    private let scanPauseDuration: TimeInterval = 3.0  // Pause for 3 seconds
+    private var activeScanDuration: TimeInterval = 2.0  // Scan actively for 2 seconds - will be adjusted based on battery
+    private var scanPauseDuration: TimeInterval = 3.0  // Pause for 3 seconds - will be adjusted based on battery
     private var lastRSSIUpdate: [String: Date] = [:]  // Throttle RSSI updates
+    private var batteryMonitorTimer: Timer?
+    private var currentBatteryLevel: Float = 1.0  // Default to full battery
     
     // Fragment handling
     private var incomingFragments: [String: [Int: Data]] = [:]  // fragmentID -> [index: data]
@@ -225,6 +228,9 @@ class BluetoothMeshService: NSObject {
             withServices: [BluetoothMeshService.serviceUUID],
             options: scanOptions
         )
+        
+        // Update scan parameters based on battery before starting
+        updateScanParametersForBattery()
         
         // Implement scan duty cycling for battery efficiency
         scheduleScanDutyCycle()
@@ -524,7 +530,7 @@ class BluetoothMeshService: NSObject {
                 // Check if recipient is a favorite via their public key fingerprint
                 if let publicKeyData = self.encryptionService.getPeerIdentityKey(recipientPeerID) {
                     let fingerprint = self.getPublicKeyFingerprint(publicKeyData)
-                    isForFavorite = self.delegate?.isFavorite?(fingerprint: fingerprint) ?? false
+                    isForFavorite = self.delegate?.isFavorite(fingerprint: fingerprint) ?? false
                 }
             }
             
@@ -612,10 +618,17 @@ class BluetoothMeshService: NSObject {
                           peripheral.state == .connected else { return }
                     
                     // Create a new packet with fresh timestamp
-                    var packet = storedMessage.packet
-                    packet.timestamp = UInt64(Date().timeIntervalSince1970)
+                    let updatedPacket = BitchatPacket(
+                        type: storedMessage.packet.type,
+                        senderID: storedMessage.packet.senderID,
+                        recipientID: storedMessage.packet.recipientID,
+                        timestamp: UInt64(Date().timeIntervalSince1970),
+                        payload: storedMessage.packet.payload,
+                        signature: storedMessage.packet.signature,
+                        ttl: storedMessage.packet.ttl
+                    )
                     
-                    if let data = packet.toBinaryData() {
+                    if let data = updatedPacket.toBinaryData() {
                         peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
                         print("[CACHE] Sent cached message \(index + 1)/\(messagesToSend.count) to \(peerID)")
                     }
@@ -882,7 +895,7 @@ class BluetoothMeshService: NSObject {
                                 // Check if this is a favorite using their public key fingerprint
                                 if let publicKeyData = self.encryptionService.getPeerIdentityKey(senderID) {
                                     let fingerprint = self.getPublicKeyFingerprint(publicKeyData)
-                                    if self.delegate?.isFavorite?(fingerprint: fingerprint) ?? false {
+                                    if self.delegate?.isFavorite(fingerprint: fingerprint) ?? false {
                                         NotificationService.shared.sendFavoriteOnlineNotification(nickname: nickname)
                                         
                                         // Send any cached messages for this favorite
@@ -1014,7 +1027,7 @@ class BluetoothMeshService: NSObject {
                     // Check if this message is for an offline favorite and cache it
                     if let publicKeyData = self.encryptionService.getPeerIdentityKey(recipientIDString) {
                         let fingerprint = self.getPublicKeyFingerprint(publicKeyData)
-                        if self.delegate?.isFavorite?(fingerprint: fingerprint) ?? false {
+                        if self.delegate?.isFavorite(fingerprint: fingerprint) ?? false {
                             // This is for a favorite peer - cache it even if they're offline
                             print("[CACHE] Caching relayed message for offline favorite: \(recipientIDString)")
                             self.cacheMessage(relayPacket, messageID: messageID)
@@ -1613,6 +1626,93 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         // Ensure advertising continues for reconnection
         if peripheralManager.state == .poweredOn && !peripheralManager.isAdvertising {
             startAdvertising()
+        }
+    }
+    
+    // MARK: - Battery Monitoring
+    
+    private func startBatteryMonitoring() {
+        // Update battery level immediately
+        updateBatteryLevel()
+        
+        // Monitor battery level every 30 seconds
+        batteryMonitorTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
+            self?.updateBatteryLevel()
+        }
+    }
+    
+    private func updateBatteryLevel() {
+        #if os(iOS)
+        UIDevice.current.isBatteryMonitoringEnabled = true
+        currentBatteryLevel = UIDevice.current.batteryLevel
+        
+        // Battery level is -1 when unknown (e.g., in simulator)
+        if currentBatteryLevel < 0 {
+            currentBatteryLevel = 1.0  // Assume full battery when unknown
+        }
+        #else
+        // macOS battery monitoring
+        if let batteryInfo = getMacOSBatteryInfo() {
+            currentBatteryLevel = batteryInfo
+        } else {
+            currentBatteryLevel = 1.0  // Assume full battery when unknown
+        }
+        #endif
+        
+        print("[BATTERY] Current battery level: \(Int(currentBatteryLevel * 100))%")
+        updateScanParametersForBattery()
+    }
+    
+    #if os(macOS)
+    private func getMacOSBatteryInfo() -> Float? {
+        let snapshot = IOPSCopyPowerSourcesInfo().takeRetainedValue()
+        let sources = IOPSCopyPowerSourcesList(snapshot).takeRetainedValue() as Array
+        
+        for source in sources {
+            if let description = IOPSGetPowerSourceDescription(snapshot, source).takeUnretainedValue() as? [String: Any] {
+                if let currentCapacity = description[kIOPSCurrentCapacityKey] as? Int,
+                   let maxCapacity = description[kIOPSMaxCapacityKey] as? Int {
+                    return Float(currentCapacity) / Float(maxCapacity)
+                }
+            }
+        }
+        return nil
+    }
+    #endif
+    
+    private func updateScanParametersForBattery() {
+        // Adaptive scanning based on battery level
+        // High battery (80%+): Normal scanning
+        // Medium battery (40-80%): Moderate power saving
+        // Low battery (20-40%): Aggressive power saving  
+        // Critical battery (<20%): Maximum power saving
+        
+        if currentBatteryLevel > 0.8 {
+            // High battery: Normal operation
+            activeScanDuration = 2.0
+            scanPauseDuration = 3.0
+            print("[BATTERY] High battery mode: normal scanning")
+        } else if currentBatteryLevel > 0.4 {
+            // Medium battery: Moderate power saving
+            activeScanDuration = 1.5
+            scanPauseDuration = 4.5
+            print("[BATTERY] Medium battery mode: moderate power saving")
+        } else if currentBatteryLevel > 0.2 {
+            // Low battery: Aggressive power saving
+            activeScanDuration = 1.0
+            scanPauseDuration = 8.0
+            print("[BATTERY] Low battery mode: aggressive power saving")
+        } else {
+            // Critical battery: Maximum power saving
+            activeScanDuration = 0.5
+            scanPauseDuration = 15.0
+            print("[BATTERY] Critical battery mode: maximum power saving")
+        }
+        
+        // If we're currently in a duty cycle, restart it with new parameters
+        if scanDutyCycleTimer != nil {
+            scanDutyCycleTimer?.invalidate()
+            scheduleScanDutyCycle()
         }
     }
 }
