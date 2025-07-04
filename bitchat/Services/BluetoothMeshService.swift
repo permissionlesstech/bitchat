@@ -83,7 +83,7 @@ class BluetoothMeshService: NSObject {
     
     // Peer list update debouncing
     private var peerListUpdateTimer: Timer?
-    private let peerListUpdateDebounceInterval: TimeInterval = 0.5  // 500ms debounce
+    private let peerListUpdateDebounceInterval: TimeInterval = 0.1  // 100ms debounce for more responsive updates
     
     // Cover traffic for privacy
     private var coverTrafficTimer: Timer?
@@ -782,8 +782,7 @@ class BluetoothMeshService: NSObject {
             // Ensure peerID is valid
             return !peerID.isEmpty &&
                    peerID != "unknown" &&
-                   peerID != myPeerID &&
-                   peerID.count <= 8  // Filter out temp IDs
+                   peerID != myPeerID
         }
         
         print("[DEBUG] Active peers: \(peersCopy), Valid peers: \(validPeers)")
@@ -791,19 +790,29 @@ class BluetoothMeshService: NSObject {
     }
     
     // Debounced peer list update notification
-    private func notifyPeerListUpdate() {
-        // Cancel any pending update
-        peerListUpdateTimer?.invalidate()
-        
-        // Schedule a new update after debounce interval
-        peerListUpdateTimer = Timer.scheduledTimer(withTimeInterval: peerListUpdateDebounceInterval, repeats: false) { [weak self] _ in
-            guard let self = self else { return }
-            
+    private func notifyPeerListUpdate(immediate: Bool = false) {
+        if immediate {
+            // For initial connections, update immediately
             let connectedPeerIDs = self.getAllConnectedPeerIDs()
-            print("[DEBUG] Notifying peer list update after debounce: \(connectedPeerIDs.count) peers")
+            print("[DEBUG] Notifying peer list update immediately: \(connectedPeerIDs.count) peers")
             
             DispatchQueue.main.async {
                 self.delegate?.didUpdatePeerList(connectedPeerIDs)
+            }
+        } else {
+            // Cancel any pending update
+            peerListUpdateTimer?.invalidate()
+            
+            // Schedule a new update after debounce interval
+            peerListUpdateTimer = Timer.scheduledTimer(withTimeInterval: peerListUpdateDebounceInterval, repeats: false) { [weak self] _ in
+                guard let self = self else { return }
+                
+                let connectedPeerIDs = self.getAllConnectedPeerIDs()
+                print("[DEBUG] Notifying peer list update after debounce: \(connectedPeerIDs.count) peers")
+                
+                DispatchQueue.main.async {
+                    self.delegate?.didUpdatePeerList(connectedPeerIDs)
+                }
             }
         }
     }
@@ -1364,16 +1373,22 @@ class BluetoothMeshService: NSObject {
                             // Find if this peripheral is currently mapped with a temp ID
                             if let tempID = self.connectedPeripherals.first(where: { $0.value == peripheral })?.key,
                                tempID.count > 8 { // It's a temp ID
-                                // Remove temp mapping and add real peer ID mapping
-                                self.connectedPeripherals.removeValue(forKey: tempID)
+                                // Add real peer ID mapping BEFORE removing temp mapping
                                 self.connectedPeripherals[senderID] = peripheral
-                                // Updated peripheral mapping
+                                // Then remove temp mapping
+                                self.connectedPeripherals.removeValue(forKey: tempID)
+                                print("[DEBUG] Updated peripheral mapping from \(tempID) to \(senderID)")
                                 
                                 // Transfer RSSI from temp ID to peer ID
                                 if let rssi = self.peripheralRSSI[tempID] {
                                     self.peerRSSI[senderID] = rssi
                                     self.peripheralRSSI.removeValue(forKey: tempID)
                                     // Transferred RSSI to peer
+                                }
+                            } else {
+                                // Peripheral already has correct mapping or doesn't exist
+                                if !self.connectedPeripherals.keys.contains(senderID) {
+                                    self.connectedPeripherals[senderID] = peripheral
                                 }
                             }
                         }
@@ -1389,7 +1404,7 @@ class BluetoothMeshService: NSObject {
                         
                         // Only notify if this was actually a new peer
                         if wasNewPeer {
-                            self.notifyPeerListUpdate()
+                            self.notifyPeerListUpdate(immediate: true)
                         }
                     }
                     
@@ -1445,7 +1460,7 @@ class BluetoothMeshService: NSObject {
                         DispatchQueue.main.async {
                             self.delegate?.didConnectToPeer(nickname)
                         }
-                        self.notifyPeerListUpdate()
+                        self.notifyPeerListUpdate(immediate: true)
                         
                         DispatchQueue.main.async {
                             // Check if this is a favorite peer and send notification
@@ -1841,17 +1856,37 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
             connectionBackoff.removeValue(forKey: peripheralID)
         }
         
-        if let peerID = connectedPeripherals.first(where: { $0.value == peripheral })?.key {
+        // Find peer ID for this peripheral (could be temp ID or real ID)
+        var foundPeerID: String? = nil
+        for (id, per) in connectedPeripherals {
+            if per == peripheral {
+                foundPeerID = id
+                break
+            }
+        }
+        
+        if let peerID = foundPeerID {
             connectedPeripherals.removeValue(forKey: peerID)
             peripheralCharacteristics.removeValue(forKey: peripheral)
             
-            // Remove from active peers with proper locking
-            activePeersLock.lock()
-            activePeers.remove(peerID)
-            activePeersLock.unlock()
+            print("[DEBUG] Peripheral disconnected with ID: \(peerID)")
             
-            announcedPeers.remove(peerID)
-            announcedToPeers.remove(peerID)
+            // Only remove from active peers if it's not a temp ID
+            // Temp IDs shouldn't be in activePeers anyway
+            if peerID.count <= 8 {  // Real peer ID
+                activePeersLock.lock()
+                let wasRemoved = activePeers.remove(peerID) != nil
+                activePeersLock.unlock()
+                
+                if wasRemoved {
+                    print("[DEBUG] Removed peer \(peerID) from active peers due to disconnect")
+                }
+                
+                announcedPeers.remove(peerID)
+                announcedToPeers.remove(peerID)
+            } else {
+                print("[DEBUG] Peripheral with temp ID \(peerID) disconnected, not removing from active peers")
+            }
             
             // Clear cached messages tracking for this peer to allow re-sending if they reconnect
             cachedMessagesSentToPeer.remove(peerID)
@@ -2139,31 +2174,9 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
     func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didUnsubscribeFrom characteristic: CBCharacteristic) {
         subscribedCentrals.removeAll { $0 == central }
         
-        // If no more centrals are subscribed, clear all central-connected peers
-        if subscribedCentrals.isEmpty {
-            // Find and remove peers that were connected as centrals only
-            activePeersLock.lock()
-            let peersToRemove = activePeers.filter { peerID in
-                !connectedPeripherals.keys.contains(peerID)
-            }
-            
-            for peerID in peersToRemove {
-                activePeers.remove(peerID)
-                announcedToPeers.remove(peerID)
-                peerNicknamesLock.lock()
-                let nickname = peerNicknames[peerID]
-                peerNicknamesLock.unlock()
-                
-                if let nickname = nickname {
-                    DispatchQueue.main.async {
-                        self.delegate?.didDisconnectFromPeer(nickname)
-                    }
-                }
-            }
-            activePeersLock.unlock()
-            
-            self.notifyPeerListUpdate()
-        }
+        // Don't aggressively remove peers when centrals unsubscribe
+        // This was causing issues where valid peers were being removed during connection setup
+        // TODO: Track which peers are connected through which central for proper cleanup
         
         // Ensure advertising continues for reconnection
         if peripheralManager.state == .poweredOn && !peripheralManager.isAdvertising {
