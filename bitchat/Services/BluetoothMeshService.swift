@@ -30,15 +30,8 @@ class BluetoothMeshService: NSObject {
     private var peripheralCharacteristics: [CBPeripheral: CBCharacteristic] = [:]
     private var characteristic: CBMutableCharacteristic!
     private var subscribedCentrals: [CBCentral] = []
-    private var _peerNicknames: [String: String] = [:]
-    private var peerNicknames: [String: String] {
-        get {
-            messageQueue.sync { _peerNicknames }
-        }
-        set {
-            messageQueue.async(flags: .barrier) { self._peerNicknames = newValue }
-        }
-    }
+    private var peerNicknames: [String: String] = [:]
+    private let peerNicknamesLock = NSLock()
     private var activePeers: Set<String> = []  // Track all active peers
     private var peerRSSI: [String: NSNumber] = [:] // Track RSSI values for peers
     private var peripheralRSSI: [String: NSNumber] = [:] // Track RSSI by peripheral ID during discovery
@@ -662,7 +655,10 @@ class BluetoothMeshService: NSObject {
     
     
     func getPeerNicknames() -> [String: String] {
-        return peerNicknames
+        peerNicknamesLock.lock()
+        let copy = peerNicknames
+        peerNicknamesLock.unlock()
+        return copy
     }
     
     func getPeerRSSI() -> [String: NSNumber] {
@@ -730,7 +726,10 @@ class BluetoothMeshService: NSObject {
             }
             
             // Safely check if peer has a nickname (thread-safe)
-            let hasNickname = self._peerNicknames[peerID] != nil
+            peerNicknamesLock.lock()
+            let hasNickname = peerNicknames[peerID] != nil
+            peerNicknamesLock.unlock()
+            
             if hasNickname {
                 return peerID
             }
@@ -1030,7 +1029,9 @@ class BluetoothMeshService: NSObject {
                         // Received broadcast message
                         
                         // Store nickname mapping
+                        peerNicknamesLock.lock()
                         peerNicknames[senderID] = message.sender
+                        peerNicknamesLock.unlock()
                         
                         let messageWithPeerID = BitchatMessage(
                             sender: message.sender,
@@ -1112,9 +1113,11 @@ class BluetoothMeshService: NSObject {
                         // Received private message
                         
                         // Store nickname mapping if we don't have it
+                        peerNicknamesLock.lock()
                         if peerNicknames[senderID] == nil {
                             peerNicknames[senderID] = message.sender
                         }
+                        peerNicknamesLock.unlock()
                         
                         let messageWithPeerID = BitchatMessage(
                             sender: message.sender,
@@ -1239,7 +1242,9 @@ class BluetoothMeshService: NSObject {
                 let isFirstAnnounce = !announcedPeers.contains(senderID)
                 
                 // Store the nickname
+                peerNicknamesLock.lock()
                 peerNicknames[senderID] = nickname
+                peerNicknamesLock.unlock()
                 // Stored nickname
                 // Updated nicknames
                 
@@ -1312,7 +1317,9 @@ class BluetoothMeshService: NSObject {
                 }
                 
                 // Clean up peer data
+                peerNicknamesLock.lock()
                 peerNicknames.removeValue(forKey: senderID)
+                peerNicknamesLock.unlock()
             } else {
                 // Failed to parse leave packet
             }
@@ -1646,7 +1653,11 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
             announcedToPeers.remove(peerID)
             
             // Only show disconnect if we have a resolved nickname
-            if let nickname = peerNicknames[peerID], nickname != peerID {
+            peerNicknamesLock.lock()
+            let nickname = peerNicknames[peerID]
+            peerNicknamesLock.unlock()
+            
+            if let nickname = nickname, nickname != peerID {
                 DispatchQueue.main.async {
                     self.delegate?.didDisconnectFromPeer(nickname)
                     self.delegate?.didUpdatePeerList(self.getAllConnectedPeerIDs())
@@ -1935,7 +1946,11 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             for peerID in peersToRemove {
                 activePeers.remove(peerID)
                 announcedToPeers.remove(peerID)
-                if let nickname = peerNicknames[peerID] {
+                peerNicknamesLock.lock()
+                let nickname = peerNicknames[peerID]
+                peerNicknamesLock.unlock()
+                
+                if let nickname = nickname {
                     DispatchQueue.main.async {
                         self.delegate?.didDisconnectFromPeer(nickname)
                     }
@@ -2085,7 +2100,11 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         // Sending cover traffic
         
         // Send as a private message so it's encrypted
-        sendPrivateMessage(dummyContent, to: randomPeer, recipientNickname: peerNicknames[randomPeer] ?? "unknown")
+        peerNicknamesLock.lock()
+        let recipientNickname = peerNicknames[randomPeer] ?? "unknown"
+        peerNicknamesLock.unlock()
+        
+        sendPrivateMessage(dummyContent, to: randomPeer, recipientNickname: recipientNickname)
     }
     
     private func generateDummyContent() -> String {
