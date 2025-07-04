@@ -212,6 +212,23 @@ struct ContentView: View {
                     
                     Spacer()
                     
+                    // Leave room button
+                    Button(action: {
+                        viewModel.leaveRoom(currentRoom)
+                    }) {
+                        Text("leave")
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundColor(Color.red)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 2)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 4)
+                                    .stroke(Color.red.opacity(0.5), lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    
+                    // Back to main button
                     Button(action: {
                         viewModel.switchToRoom(nil)
                     }) {
@@ -272,7 +289,15 @@ struct ContentView: View {
                     }
                     
                     let otherPeersCount = viewModel.connectedPeers.filter { $0 != viewModel.meshService.myPeerID }.count
-                    Text(viewModel.isConnected ? "\(otherPeersCount) \(otherPeersCount == 1 ? "person" : "people")" : "alone :/")
+                    let roomCount = viewModel.joinedRooms.count
+                    let statusText = if !viewModel.isConnected {
+                        "alone :/"
+                    } else if roomCount > 0 {
+                        "\(otherPeersCount) \(otherPeersCount == 1 ? "person" : "people") / \(roomCount) \(roomCount == 1 ? "room" : "rooms")"
+                    } else {
+                        "\(otherPeersCount) \(otherPeersCount == 1 ? "person" : "people")"
+                    }
+                    Text(statusText)
                         .font(.system(size: 12, design: .monospaced))
                         .foregroundColor(viewModel.isConnected ? textColor : Color.red)
                 }
@@ -524,7 +549,13 @@ struct ContentView: View {
                     
                     // People section
                     VStack(alignment: .leading, spacing: 8) {
-                        if !viewModel.connectedPeers.isEmpty {
+                        // Show appropriate header based on context
+                        if let currentRoom = viewModel.currentRoom {
+                            Text("IN \(currentRoom.uppercased())")
+                                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                                .foregroundColor(secondaryTextColor)
+                                .padding(.horizontal, 12)
+                        } else if !viewModel.connectedPeers.isEmpty {
                             Text("PEOPLE")
                                 .font(.system(size: 11, weight: .semibold, design: .monospaced))
                                 .foregroundColor(secondaryTextColor)
@@ -536,13 +567,29 @@ struct ContentView: View {
                                 .font(.system(size: 14, design: .monospaced))
                                 .foregroundColor(secondaryTextColor)
                                 .padding(.horizontal)
+                        } else if let currentRoom = viewModel.currentRoom,
+                                  (viewModel.roomMembers[currentRoom]?.isEmpty ?? true) {
+                            Text("No one in this room yet")
+                                .font(.system(size: 14, design: .monospaced))
+                                .foregroundColor(secondaryTextColor)
+                                .padding(.horizontal)
                         } else {
                             let peerNicknames = viewModel.meshService.getPeerNicknames()
                             let peerRSSI = viewModel.meshService.getPeerRSSI()
                             let myPeerID = viewModel.meshService.myPeerID
                             
+                            // Filter peers based on current room
+                            let peersToShow = if let currentRoom = viewModel.currentRoom,
+                                               let roomMemberIDs = viewModel.roomMembers[currentRoom] {
+                                // Show only peers who have sent messages to this room
+                                viewModel.connectedPeers.filter { roomMemberIDs.contains($0) && $0 != myPeerID }
+                            } else {
+                                // Show all connected peers in main chat
+                                viewModel.connectedPeers.filter { $0 != myPeerID }
+                            }
+                            
                         // Sort peers: favorites first, then alphabetically by nickname
-                        let sortedPeers = viewModel.connectedPeers.filter { $0 != myPeerID }.sorted { peer1, peer2 in
+                        let sortedPeers = peersToShow.sorted { peer1, peer2 in
                             let isFav1 = viewModel.isFavorite(peerID: peer1)
                             let isFav2 = viewModel.isFavorite(peerID: peer2)
                             
