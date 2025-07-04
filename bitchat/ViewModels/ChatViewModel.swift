@@ -264,6 +264,7 @@ class ChatViewModel: ObservableObject {
             }
             
             // Send via mesh with mentions and room
+            print("[DEBUG] Sending message with room: \(messageRoom ?? "nil"), content: \(content)")
             meshService.sendMessage(content, mentions: mentions, room: messageRoom)
         }
     }
@@ -657,6 +658,7 @@ extension ChatViewModel: BitchatDelegate {
             }
         } else if let room = message.room {
             // Room message
+            print("[DEBUG] Received room message for room: \(room), content: \(message.content)")
             
             // Auto-join room if we see a message for it
             if !joinedRooms.contains(room) {
@@ -684,6 +686,7 @@ extension ChatViewModel: BitchatDelegate {
             }
         } else {
             // Regular public message (main chat)
+            print("[DEBUG] Received main chat message, no room specified. Content: \(message.content)")
             messages.append(message)
             // Sort messages by timestamp to ensure proper ordering
             messages.sort { $0.timestamp < $1.timestamp }
