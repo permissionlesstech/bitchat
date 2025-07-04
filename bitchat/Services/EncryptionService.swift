@@ -63,7 +63,7 @@ class EncryptionService {
         let keyBytes = [UInt8](publicKeyData)
         
         guard keyBytes.count == 96 else {
-            print("[CRYPTO] Invalid public key data size: \(keyBytes.count), expected 96")
+            // print("[CRYPTO] Invalid public key data size: \(keyBytes.count), expected 96")
             throw EncryptionError.invalidPublicKey
         }
         
@@ -104,7 +104,7 @@ class EncryptionService {
     // Clear persistent identity (for panic mode)
     func clearPersistentIdentity() {
         UserDefaults.standard.removeObject(forKey: "bitchat.identityKey")
-        print("[CRYPTO] Cleared persistent identity key")
+        // print("[CRYPTO] Cleared persistent identity key")
     }
     
     func encrypt(_ data: Data, for peerID: String) throws -> Data {

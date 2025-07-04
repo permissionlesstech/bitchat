@@ -1,3 +1,11 @@
+//
+// BloomFilterTests.swift
+// bitchatTests
+//
+// This is free and unencumbered software released into the public domain.
+// For more information, see <https://unlicense.org>
+//
+
 import XCTest
 @testable import bitchat
 
