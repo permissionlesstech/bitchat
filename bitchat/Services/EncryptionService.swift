@@ -73,7 +73,7 @@ class EncryptionService {
         let identityKey = try Curve25519.Signing.PublicKey(rawRepresentation: identityKeyData)
         peerIdentityKeys[peerID] = identityKey
         
-        print("[CRYPTO] Stored all three keys for peer \(peerID)")
+        // Stored all three keys for peer
         
         // Generate shared secret for encryption
         if let publicKey = peerPublicKeys[peerID] {

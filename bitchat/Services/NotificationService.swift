@@ -14,7 +14,7 @@ class NotificationService {
     func requestAuthorization() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
             if granted {
-                print("[NOTIFICATIONS] Permission granted")
+                // Permission granted
             } else if let error = error {
                 print("[NOTIFICATIONS] Permission error: \(error)")
             }
@@ -25,17 +25,17 @@ class NotificationService {
         // Check if app is in foreground
         #if os(iOS)
         guard UIApplication.shared.applicationState != .active else {
-            print("[NOTIFICATIONS] App is active/foreground, skipping notification")
+            // App is active/foreground, skipping notification
             return
         }
-        print("[NOTIFICATIONS] App state: \(UIApplication.shared.applicationState.rawValue), sending notification")
+        // App state checked, sending notification
         #elseif os(macOS)
         // On macOS, check if app is active
         guard !NSApplication.shared.isActive else {
-            print("[NOTIFICATIONS] App is active/foreground, skipping notification")
+            // App is active/foreground, skipping notification
             return
         }
-        print("[NOTIFICATIONS] App is not active, sending notification")
+        // App is not active, sending notification
         #endif
         
         let content = UNMutableNotificationContent()
@@ -53,7 +53,7 @@ class NotificationService {
             if let error = error {
                 print("[NOTIFICATIONS] Error sending notification: \(error)")
             } else {
-                print("[NOTIFICATIONS] Notification sent: \(title)")
+                // Notification sent
             }
         }
     }
