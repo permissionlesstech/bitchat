@@ -644,8 +644,8 @@ struct ContentView: View {
                             HStack(spacing: 8) {
                                 // Signal strength indicator or unread message icon
                                 if isMe {
-                                    Text("•")
-                                        .font(.system(size: 12))
+                                    Image(systemName: "person.fill")
+                                        .font(.system(size: 10))
                                         .foregroundColor(textColor)
                                 } else if viewModel.unreadPrivateMessages.contains(peerID) {
                                     Image(systemName: "envelope.fill")

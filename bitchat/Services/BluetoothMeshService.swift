@@ -665,6 +665,26 @@ class BluetoothMeshService: NSObject {
         }
     }
     
+    func sendRoomLeaveNotification(_ room: String) {
+        messageQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            // Create a leave packet with room hashtag as payload
+            let packet = BitchatPacket(
+                type: MessageType.leave.rawValue,
+                senderID: Data(self.myPeerID.utf8),
+                recipientID: SpecialRecipients.broadcast,  // Broadcast to all
+                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                payload: Data(room.utf8),  // Room hashtag as payload
+                signature: nil,
+                ttl: 3  // Short TTL for leave notifications
+            )
+            
+            bitchatLog("Sending room leave notification for \(room)", category: "room")
+            self.broadcastPacket(packet)
+        }
+    }
+    
     private func sendAnnouncementToPeer(_ peerID: String) {
         guard let vm = delegate as? ChatViewModel else { return }
         
@@ -1585,28 +1605,45 @@ class BluetoothMeshService: NSObject {
             }
             
         case .leave:
-            if let nickname = String(data: packet.payload, encoding: .utf8),
-               let senderID = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8) {
-                
-                
-                // Remove from active peers with proper locking
-                activePeersLock.lock()
-                activePeers.remove(senderID)
-                activePeersLock.unlock()
-                
-                announcedPeers.remove(senderID)
-                
-                // Show leave message
-                DispatchQueue.main.async {
-                    self.delegate?.didDisconnectFromPeer(nickname)
+            if let senderID = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8) {
+                // Check if payload contains a room hashtag
+                if let room = String(data: packet.payload, encoding: .utf8),
+                   room.hasPrefix("#") {
+                    // Room leave notification
+                    bitchatLog("Received room leave notification from \(senderID) for room \(room)", category: "room")
+                    
+                    DispatchQueue.main.async {
+                        self.delegate?.didReceiveRoomLeave(room, from: senderID)
+                    }
+                    
+                    // Relay if TTL > 0
+                    if packet.ttl > 1 {
+                        var relayPacket = packet
+                        relayPacket.ttl -= 1
+                        self.broadcastPacket(relayPacket)
+                    }
+                } else {
+                    // Legacy peer disconnect (keeping for backwards compatibility)
+                    if let nickname = String(data: packet.payload, encoding: .utf8) {
+                        // Remove from active peers with proper locking
+                        activePeersLock.lock()
+                        activePeers.remove(senderID)
+                        activePeersLock.unlock()
+                        
+                        announcedPeers.remove(senderID)
+                        
+                        // Show leave message
+                        DispatchQueue.main.async {
+                            self.delegate?.didDisconnectFromPeer(nickname)
+                        }
+                        self.notifyPeerListUpdate()
+                        
+                        // Clean up peer data
+                        peerNicknamesLock.lock()
+                        peerNicknames.removeValue(forKey: senderID)
+                        peerNicknamesLock.unlock()
+                    }
                 }
-                self.notifyPeerListUpdate()
-                
-                // Clean up peer data
-                peerNicknamesLock.lock()
-                peerNicknames.removeValue(forKey: senderID)
-                peerNicknamesLock.unlock()
-            } else {
             }
             
         case .fragmentStart, .fragmentContinue, .fragmentEnd:

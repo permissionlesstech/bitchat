@@ -132,6 +132,9 @@ class ChatViewModel: ObservableObject {
         joinedRooms.remove(room)
         saveJoinedRooms()
         
+        // Send leave notification to other peers
+        meshService.sendRoomLeaveNotification(room)
+        
         // If we're currently in this room, exit to main chat
         if currentRoom == room {
             currentRoom = nil
@@ -630,6 +633,17 @@ class ChatViewModel: ObservableObject {
 }
 
 extension ChatViewModel: BitchatDelegate {
+    func didReceiveRoomLeave(_ room: String, from peerID: String) {
+        // Remove peer from room members
+        if roomMembers[room] != nil {
+            roomMembers[room]?.remove(peerID)
+            bitchatLog("Removed peer \(peerID) from room \(room) members", category: "room")
+            
+            // Force UI update
+            objectWillChange.send()
+        }
+    }
+    
     func didReceiveMessage(_ message: BitchatMessage) {
         bitchatLog("Received message from \(message.sender), room: \(message.room ?? "nil"), senderPeerID: \(message.senderPeerID ?? "nil")", category: "message")
         
