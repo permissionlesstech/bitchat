@@ -1716,15 +1716,16 @@ extension BluetoothMeshService: CBPeripheralDelegate {
                 )
                 
                 if let data = packet.toBinaryData() {
-                    peripheral.writeValue(data, for: characteristic, type: .withResponse)
+                    let writeType: CBCharacteristicWriteType = characteristic.properties.contains(.write) ? .withResponse : .withoutResponse
+                    peripheral.writeValue(data, for: characteristic, type: writeType)
                     // Sent key exchange
                 }
                 
-                // Send announce packet immediately after key exchange
+                // Send announce packet after a short delay to avoid overwhelming the connection
                 // Send multiple times for reliability
                 if let vm = self.delegate as? ChatViewModel {
                     // Send announces multiple times with delays
-                    for delay in [0.1, 0.5, 1.0] {
+                    for delay in [0.3, 0.8, 1.5] {
                         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
                             guard let self = self else { return }
                             let announcePacket = BitchatPacket(
@@ -1751,7 +1752,8 @@ extension BluetoothMeshService: CBPeripheralDelegate {
                             payload: Data(vm.nickname.utf8)
                         )
                         if let data = announcePacket.toBinaryData() {
-                            peripheral.writeValue(data, for: characteristic, type: .withResponse)
+                            let writeType: CBCharacteristicWriteType = characteristic.properties.contains(.write) ? .withResponse : .withoutResponse
+                            peripheral.writeValue(data, for: characteristic, type: writeType)
                             // Sent targeted announce
                         }
                     }
@@ -1782,7 +1784,21 @@ extension BluetoothMeshService: CBPeripheralDelegate {
     
     func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
         if let error = error {
-            print("[ERROR] Write failed: \(error)")
+            // Handle specific BLE errors
+            if let bleError = error as? CBATTError {
+                switch bleError.code {
+                case .invalidHandle, .invalidPdu, .insufficientAuthorization:
+                    // Characteristic might be invalid, rediscover services
+                    peripheral.discoverServices([BluetoothMeshService.serviceUUID])
+                case .connectionTimeout, .linkLost:
+                    // Connection issue, will be handled by disconnect
+                    break
+                default:
+                    print("[ERROR] Write failed: \(error)")
+                }
+            } else {
+                print("[ERROR] Write failed: \(error)")
+            }
         } else {
             // Write completed
         }
