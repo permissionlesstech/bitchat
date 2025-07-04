@@ -55,6 +55,8 @@ class BluetoothMeshService: NSObject {
     private var announcedPeers = Set<String>()  // Track peers who have already been announced
     private var processedKeyExchanges = Set<String>()  // Track processed key exchanges to prevent duplicates
     private var intentionalDisconnects = Set<String>()  // Track peripherals we're disconnecting intentionally
+    private var peerLastSeenTimestamps: [String: Date] = [:]  // Track when we last heard from each peer
+    private var cleanupTimer: Timer?  // Timer to clean up stale peers
     
     // Store-and-forward message cache
     private struct StoredMessage {
@@ -85,6 +87,10 @@ class BluetoothMeshService: NSObject {
     // Peer list update debouncing
     private var peerListUpdateTimer: Timer?
     private let peerListUpdateDebounceInterval: TimeInterval = 0.1  // 100ms debounce for more responsive updates
+    
+    // Stale peer cleanup
+    private var stalePeerCleanupTimer: Timer?
+    private var peerLastSeenTimestamps: [String: Date] = [:]  // Track when we last saw each peer
     
     // Cover traffic for privacy
     private var coverTrafficTimer: Timer?
@@ -293,6 +299,11 @@ class BluetoothMeshService: NSObject {
             }
         }
         
+        // Start stale peer cleanup timer (every 30 seconds)
+        cleanupTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
+            self?.cleanupStalePeers()
+        }
+        
         // Register for app termination notifications
         #if os(macOS)
         NotificationCenter.default.addObserver(
@@ -318,6 +329,7 @@ class BluetoothMeshService: NSObject {
         coverTrafficTimer?.invalidate()
         bloomFilterResetTimer?.invalidate()
         aggregationTimer?.invalidate()
+        cleanupTimer?.invalidate()
     }
     
     @objc private func appWillTerminate() {
@@ -359,6 +371,9 @@ class BluetoothMeshService: NSObject {
         
         // Clear announcement tracking
         announcedToPeers.removeAll()
+        
+        // Clear last seen timestamps
+        peerLastSeenTimestamps.removeAll()
     }
     
     func startServices() {
@@ -768,7 +783,17 @@ class BluetoothMeshService: NSObject {
                    peerID != myPeerID
         }
         
-        // print("[DEBUG] Active peers: \(peersCopy), Valid peers: \(validPeers)")
+        // Get nicknames for logging
+        peerNicknamesLock.lock()
+        let peerNicknamesCopy = peerNicknames
+        peerNicknamesLock.unlock()
+        
+        let peerInfo = validPeers.map { peerID in
+            let nickname = peerNicknamesCopy[peerID] ?? "unknown"
+            return "\(peerID):\(nickname)"
+        }
+        
+        print("[PEERS] Active peers: \(peerInfo.joined(separator: ", "))")
         return Array(validPeers).sorted()
     }
     
@@ -800,6 +825,44 @@ class BluetoothMeshService: NSObject {
                     self.delegate?.didUpdatePeerList(connectedPeerIDs)
                 }
             }
+        }
+    }
+    
+    // Clean up stale peers that haven't been seen in a while
+    private func cleanupStalePeers() {
+        let staleThreshold: TimeInterval = 60.0 // 60 seconds
+        let now = Date()
+        
+        activePeersLock.lock()
+        let peersToRemove = activePeers.filter { peerID in
+            if let lastSeen = peerLastSeenTimestamps[peerID] {
+                return now.timeIntervalSince(lastSeen) > staleThreshold
+            }
+            return false // Keep peers we haven't tracked yet
+        }
+        
+        for peerID in peersToRemove {
+            activePeers.remove(peerID)
+            peerLastSeenTimestamps.removeValue(forKey: peerID)
+            
+            // Clean up all associated data
+            connectedPeripherals.removeValue(forKey: peerID)
+            peerRSSI.removeValue(forKey: peerID)
+            announcedPeers.remove(peerID)
+            announcedToPeers.remove(peerID)
+            processedKeyExchanges.removeAll { $0.contains(peerID) }
+            
+            peerNicknamesLock.lock()
+            let nickname = peerNicknames[peerID]
+            peerNicknames.removeValue(forKey: peerID)
+            peerNicknamesLock.unlock()
+            
+            // print("[CLEANUP] Removed stale peer \(peerID) (\(nickname ?? "unknown"))")
+        }
+        activePeersLock.unlock()
+        
+        if !peersToRemove.isEmpty {
+            notifyPeerListUpdate()
         }
     }
     
@@ -1054,6 +1117,12 @@ class BluetoothMeshService: NSObject {
             // Validate packet has payload
             guard !packet.payload.isEmpty else {
                 return
+            }
+            
+            // Update last seen timestamp for this peer
+            if let senderID = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8),
+               senderID != "unknown" && senderID != self.myPeerID {
+                peerLastSeenTimestamps[senderID] = Date()
             }
             
             // Replay attack protection: Check timestamp is within reasonable window (5 minutes)
@@ -1392,7 +1461,60 @@ class BluetoothMeshService: NSObject {
                 // Check if we've already announced this peer
                 let isFirstAnnounce = !announcedPeers.contains(senderID)
                 
+                // Clean up stale peer IDs with the same nickname
                 peerNicknamesLock.lock()
+                var stalePeerIDs: [String] = []
+                for (existingPeerID, existingNickname) in peerNicknames {
+                    if existingNickname == nickname && existingPeerID != senderID {
+                        // Found a stale peer ID with the same nickname
+                        stalePeerIDs.append(existingPeerID)
+                        // print("[ANNOUNCE] Found stale peer ID \(existingPeerID) with same nickname '\(nickname)' as new peer \(senderID)")
+                    }
+                }
+                
+                // Remove stale peer IDs
+                for stalePeerID in stalePeerIDs {
+                    // print("[ANNOUNCE] Removing stale peer \(stalePeerID) -> '\(nickname)' (replaced by \(senderID))")
+                    peerNicknames.removeValue(forKey: stalePeerID)
+                    
+                    // Also remove from active peers
+                    activePeersLock.lock()
+                    activePeers.remove(stalePeerID)
+                    activePeersLock.unlock()
+                    
+                    // Remove from announced peers
+                    announcedPeers.remove(stalePeerID)
+                    announcedToPeers.remove(stalePeerID)
+                    
+                    // Disconnect any peripherals associated with stale ID
+                    if let peripheral = connectedPeripherals[stalePeerID] {
+                        intentionalDisconnects.insert(peripheral.identifier.uuidString)
+                        centralManager.cancelPeripheralConnection(peripheral)
+                        connectedPeripherals.removeValue(forKey: stalePeerID)
+                        peripheralCharacteristics.removeValue(forKey: peripheral)
+                    }
+                    
+                    // Remove RSSI data
+                    peerRSSI.removeValue(forKey: stalePeerID)
+                    
+                    // Clear cached messages tracking
+                    cachedMessagesSentToPeer.remove(stalePeerID)
+                    
+                    // Remove from last seen timestamps
+                    peerLastSeenTimestamps.removeValue(forKey: stalePeerID)
+                    
+                    // Remove from processed key exchanges
+                    processedKeyExchanges.removeAll { $0.contains(stalePeerID) }
+                }
+                
+                // If we had stale peers, notify the UI immediately
+                if !stalePeerIDs.isEmpty {
+                    DispatchQueue.main.async { [weak self] in
+                        self?.notifyPeerListUpdate(immediate: true)
+                    }
+                }
+                
+                // Now add the new peer ID with the nickname
                 peerNicknames[senderID] = nickname
                 peerNicknamesLock.unlock()
                 
@@ -1406,7 +1528,7 @@ class BluetoothMeshService: NSObject {
                     let wasInserted = activePeers.insert(senderID).inserted
                     activePeersLock.unlock()
                     if wasInserted {
-                        // print("[DEBUG] Added peer \(senderID) to active peers via announce")
+                        print("[ANNOUNCE] Added peer \(senderID) (\(nickname)) to active peers")
                     }
                     
                     // Show join message only for first announce
@@ -2269,5 +2391,72 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         
         // Prefix with dummy marker (will be encrypted)
         return coverTrafficPrefix + (templates.randomElement() ?? "ok")
+    }
+    
+    // MARK: - Stale Peer Cleanup
+    
+    private func cleanupStalePeers() {
+        let staleThreshold: TimeInterval = 60.0  // Consider peers stale after 60 seconds of no activity
+        let now = Date()
+        
+        var peersToRemove: [String] = []
+        
+        // Check for stale peers
+        activePeersLock.lock()
+        for peerID in activePeers {
+            if let lastSeen = peerLastSeenTimestamps[peerID] {
+                if now.timeIntervalSince(lastSeen) > staleThreshold {
+                    peersToRemove.append(peerID)
+                }
+            } else {
+                // No timestamp recorded, consider it stale
+                peersToRemove.append(peerID)
+            }
+        }
+        activePeersLock.unlock()
+        
+        // Remove stale peers
+        for peerID in peersToRemove {
+            print("[CLEANUP] Removing stale peer \(peerID) - last seen: \(peerLastSeenTimestamps[peerID]?.description ?? "never")")
+            
+            // Remove from all tracking structures
+            activePeersLock.lock()
+            activePeers.remove(peerID)
+            activePeersLock.unlock()
+            
+            peerNicknamesLock.lock()
+            let nickname = peerNicknames[peerID]
+            peerNicknames.removeValue(forKey: peerID)
+            peerNicknamesLock.unlock()
+            
+            // Remove from other tracking
+            announcedPeers.remove(peerID)
+            announcedToPeers.remove(peerID)
+            peerRSSI.removeValue(forKey: peerID)
+            peerLastSeenTimestamps.removeValue(forKey: peerID)
+            cachedMessagesSentToPeer.remove(peerID)
+            
+            // Disconnect any associated peripherals
+            if let peripheral = connectedPeripherals[peerID] {
+                intentionalDisconnects.insert(peripheral.identifier.uuidString)
+                centralManager.cancelPeripheralConnection(peripheral)
+                connectedPeripherals.removeValue(forKey: peerID)
+                peripheralCharacteristics.removeValue(forKey: peripheral)
+            }
+            
+            // Log the cleanup
+            if let nick = nickname {
+                print("[CLEANUP] Removed stale peer: \(nick) (\(peerID))")
+            }
+        }
+        
+        // Notify UI if any peers were removed
+        if !peersToRemove.isEmpty {
+            notifyPeerListUpdate()
+        }
+    }
+    
+    private func updatePeerLastSeen(_ peerID: String) {
+        peerLastSeenTimestamps[peerID] = Date()
     }
 }
