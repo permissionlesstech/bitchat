@@ -9,6 +9,7 @@ struct ContentView: View {
     @State private var showPeerList = false
     @State private var showSidebar = false
     @State private var sidebarDragOffset: CGFloat = 0
+    @State private var showAppInfo = false
     
     private var backgroundColor: Color {
         colorScheme == .dark ? Color.black : Color.white
@@ -132,6 +133,9 @@ struct ContentView: View {
         #if os(macOS)
         .frame(minWidth: 600, minHeight: 400)
         #endif
+        .sheet(isPresented: $showAppInfo) {
+            AppInfoView()
+        }
     }
     
     private var headerView: some View {
@@ -179,6 +183,10 @@ struct ContentView: View {
                         .onTapGesture(count: 3) {
                             // PANIC: Triple-tap to clear all data
                             viewModel.panicClearAllData()
+                        }
+                        .onTapGesture(count: 1) {
+                            // Single tap for app info
+                            showAppInfo = true
                         }
                     
                     HStack(spacing: 0) {
