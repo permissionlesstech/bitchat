@@ -782,17 +782,20 @@ class BluetoothMeshService: NSObject {
                 self.delegate?.didUpdatePeerList(connectedPeerIDs)
             }
         } else {
-            // Cancel any pending update
-            peerListUpdateTimer?.invalidate()
-            
-            // Schedule a new update after debounce interval
-            peerListUpdateTimer = Timer.scheduledTimer(withTimeInterval: peerListUpdateDebounceInterval, repeats: false) { [weak self] _ in
+            // Must schedule timer on main thread
+            DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
                 
-                let connectedPeerIDs = self.getAllConnectedPeerIDs()
-                // print("[DEBUG] Notifying peer list update after debounce: \(connectedPeerIDs.count) peers")
+                // Cancel any pending update
+                self.peerListUpdateTimer?.invalidate()
                 
-                DispatchQueue.main.async {
+                // Schedule a new update after debounce interval
+                self.peerListUpdateTimer = Timer.scheduledTimer(withTimeInterval: self.peerListUpdateDebounceInterval, repeats: false) { [weak self] _ in
+                    guard let self = self else { return }
+                    
+                    let connectedPeerIDs = self.getAllConnectedPeerIDs()
+                    // print("[DEBUG] Notifying peer list update after debounce: \(connectedPeerIDs.count) peers")
+                    
                     self.delegate?.didUpdatePeerList(connectedPeerIDs)
                 }
             }
