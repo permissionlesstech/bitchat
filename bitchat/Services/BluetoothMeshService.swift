@@ -527,6 +527,8 @@ class BluetoothMeshService: NSObject {
                 room: room
             )
             
+            print("[DEBUG-SEND] Creating message with room: \(room ?? "nil")")
+            
             if let messageData = message.toBinaryPayload() {
                 // Sign the message payload (no encryption for broadcasts)
                 let signature: Data?
@@ -1198,6 +1200,7 @@ class BluetoothMeshService: NSObject {
                     
                     // Parse broadcast message (not encrypted)
                     if let message = BitchatMessage.fromBinaryPayload(packet.payload) {
+                        print("[DEBUG-RECV] Received message with room: \(message.room ?? "nil"), content: \(message.content)")
                             
                         // Store nickname mapping
                         peerNicknamesLock.lock()
@@ -1213,7 +1216,8 @@ class BluetoothMeshService: NSObject {
                             isPrivate: false,
                             recipientNickname: nil,
                             senderPeerID: senderID,
-                            mentions: message.mentions
+                            mentions: message.mentions,
+                            room: message.room
                         )
                         
                         DispatchQueue.main.async {
@@ -1309,7 +1313,9 @@ class BluetoothMeshService: NSObject {
                             originalSender: message.originalSender,
                             isPrivate: message.isPrivate,
                             recipientNickname: message.recipientNickname,
-                            senderPeerID: senderID
+                            senderPeerID: senderID,
+                            mentions: message.mentions,
+                            room: message.room
                         )
                         
                         DispatchQueue.main.async {
