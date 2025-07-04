@@ -804,19 +804,9 @@ class BluetoothMeshService: NSObject {
             }
             
             // Create stored message with original packet timestamp preserved
-            // Handle both seconds and milliseconds timestamps
-            let timestampInSeconds: TimeInterval
-            if packet.timestamp > 1_000_000_000_000 {
-                // Already in milliseconds
-                timestampInSeconds = TimeInterval(packet.timestamp) / 1000.0
-            } else {
-                // Already in seconds
-                timestampInSeconds = TimeInterval(packet.timestamp)
-            }
-            
             let storedMessage = StoredMessage(
                 packet: packet,
-                timestamp: Date(timeIntervalSince1970: timestampInSeconds),
+                timestamp: Date(timeIntervalSince1970: TimeInterval(packet.timestamp) / 1000.0), // convert from milliseconds
                 messageID: messageID,
                 isForFavorite: isForFavorite
             )
@@ -1053,18 +1043,7 @@ class BluetoothMeshService: NSObject {
             
             // Replay attack protection: Check timestamp is within reasonable window (5 minutes)
             let currentTime = UInt64(Date().timeIntervalSince1970 * 1000) // milliseconds
-            
-            // Handle both seconds and milliseconds timestamps for compatibility
-            let packetTime: UInt64
-            if packet.timestamp > 1_000_000_000_000 {
-                // Already in milliseconds
-                packetTime = packet.timestamp
-            } else {
-                // Convert seconds to milliseconds
-                packetTime = packet.timestamp * 1000
-            }
-            
-            let timeDiff = abs(Int64(currentTime) - Int64(packetTime))
+            let timeDiff = abs(Int64(currentTime) - Int64(packet.timestamp))
             if timeDiff > 300000 { // 5 minutes in milliseconds
                 print("[SECURITY] Dropping packet with timestamp too far from current time: \(timeDiff/1000) seconds")
                 return
@@ -1420,10 +1399,6 @@ class BluetoothMeshService: NSObject {
                                         // Favorite came online
                                         self.sendCachedMessages(to: senderID)
                                     }
-                                } else if let viewModel = self.delegate as? ChatViewModel,
-                                          viewModel.isFavorite(peerID: senderID) {
-                                    // Fallback for backwards compatibility
-                                    NotificationService.shared.sendFavoriteOnlineNotification(nickname: nickname)
                                 }
                             }
                         }
