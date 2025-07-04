@@ -371,7 +371,7 @@ class BluetoothMeshService: NSObject {
         
         let announcePacket = BitchatPacket(
             type: MessageType.announce.rawValue,
-            ttl: 1,
+            ttl: 3,  // Increase TTL so announce reaches all peers
             senderID: myPeerID,
             payload: Data(vm.nickname.utf8)
         )
@@ -654,7 +654,7 @@ class BluetoothMeshService: NSObject {
         
         let packet = BitchatPacket(
             type: MessageType.announce.rawValue,
-            ttl: 1,
+            ttl: 3,  // Allow relay for better reach
             senderID: myPeerID,
             payload: Data(vm.nickname.utf8)
         )
@@ -1410,6 +1410,18 @@ class BluetoothMeshService: NSObject {
                     }
                 } else {
                 }
+                
+                // Relay announce if TTL > 0
+                if packet.ttl > 1 {
+                    var relayPacket = packet
+                    relayPacket.ttl -= 1
+                    
+                    // Add small delay to prevent collision
+                    let delay = Double.random(in: 0.1...0.3)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                        self?.broadcastPacket(relayPacket)
+                    }
+                }
             } else {
                 // Failed to decode announce packet
             }
@@ -1851,7 +1863,7 @@ extension BluetoothMeshService: CBPeripheralDelegate {
                             guard let self = self else { return }
                             let announcePacket = BitchatPacket(
                                 type: MessageType.announce.rawValue,
-                                ttl: 1,
+                                ttl: 3,
                                 senderID: self.myPeerID,
                                 payload: Data(vm.nickname.utf8)
                             )
@@ -1868,7 +1880,7 @@ extension BluetoothMeshService: CBPeripheralDelegate {
                         
                         let announcePacket = BitchatPacket(
                             type: MessageType.announce.rawValue,
-                            ttl: 1,
+                            ttl: 3,
                             senderID: self.myPeerID,
                             payload: Data(vm.nickname.utf8)
                         )
@@ -2013,7 +2025,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                                     guard let self = self else { return }
                                     let announcePacket = BitchatPacket(
                                         type: MessageType.announce.rawValue,
-                                        ttl: 1,
+                                        ttl: 3,
                                         senderID: self.myPeerID,
                                         payload: Data(vm.nickname.utf8)
                                     )
