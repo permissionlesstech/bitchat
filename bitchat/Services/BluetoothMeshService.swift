@@ -373,6 +373,7 @@ class BluetoothMeshService: NSObject {
     }
     
     func startServices() {
+        // Starting services
         // Start both central and peripheral services
         if centralManager.state == .poweredOn {
             startScanning()
@@ -829,7 +830,7 @@ class BluetoothMeshService: NSObject {
         for peerID in peersToRemove {
             // Check if this peer has an active peripheral connection
             if let peripheral = connectedPeripherals[peerID], peripheral.state == .connected {
-                print("[DEBUG-CLEANUP] Skipping removal of \(peerID) - still has active connection")
+                // Skipping removal - still has active connection
                 // Update last seen time to prevent immediate re-removal
                 peerLastSeenTimestamps[peerID] = Date()
                 continue
@@ -851,7 +852,7 @@ class BluetoothMeshService: NSObject {
             peerNicknamesLock.unlock()
             
             let lastSeenAgo = peerLastSeenTimestamps[peerID].map { now.timeIntervalSince($0) } ?? 999
-            print("[DEBUG-CLEANUP] Removed stale peer \(peerID) (\(nickname ?? "unknown")), last seen \(Int(lastSeenAgo))s ago")
+            // Removed stale peer
         }
         activePeersLock.unlock()
         
@@ -1465,16 +1466,16 @@ class BluetoothMeshService: NSObject {
                         if !wasRecentlySeen {
                             // Found a stale peer ID with the same nickname
                             stalePeerIDs.append(existingPeerID)
-                            print("[DEBUG-DUPLICATE] Found stale peer ID \(existingPeerID) with same nickname '\(nickname)' as new peer \(senderID)")
+                            // Found stale peer ID
                         } else {
-                            print("[DEBUG-DUPLICATE] Peer \(existingPeerID) has same nickname '\(nickname)' but was seen recently, keeping both")
+                            // Peer was seen recently, keeping both
                         }
                     }
                 }
                 
                 // Remove stale peer IDs
                 for stalePeerID in stalePeerIDs {
-                    print("[DEBUG-DUPLICATE] Removing stale peer \(stalePeerID) -> '\(nickname)' (replaced by \(senderID))")
+                    // Removing stale peer
                     peerNicknames.removeValue(forKey: stalePeerID)
                     
                     // Also remove from active peers
@@ -1789,6 +1790,7 @@ class BluetoothMeshService: NSObject {
 
 extension BluetoothMeshService: CBCentralManagerDelegate {
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
+        // Central manager state updated
         if central.state == .poweredOn {
             startScanning()
             
@@ -1881,7 +1883,7 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
         let tempID = peripheral.identifier.uuidString
         connectedPeripherals[tempID] = peripheral
         
-        print("[DEBUG-CONNECT] Connected to peripheral \(peripheral.name ?? "unknown") with temp ID \(tempID)")
+        // Connected to peripheral
         
         // Don't show connected message yet - wait for key exchange
         // This prevents the connect/disconnect/connect pattern
@@ -1899,12 +1901,9 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
         let peripheralID = peripheral.identifier.uuidString
         
-        print("[DEBUG-DISCONNECT] Peripheral \(peripheralID) disconnected, error: \(error?.localizedDescription ?? "none")")
-        
         // Check if this was an intentional disconnect
         if intentionalDisconnects.contains(peripheralID) {
             intentionalDisconnects.remove(peripheralID)
-            print("[DEBUG-DISCONNECT] Was intentional disconnect")
             // Don't process this disconnect further
             return
         }
@@ -2130,6 +2129,7 @@ extension BluetoothMeshService: CBPeripheralDelegate {
 
 extension BluetoothMeshService: CBPeripheralManagerDelegate {
     func peripheralManagerDidUpdateState(_ peripheral: CBPeripheralManager) {
+        // Peripheral manager state updated
         switch peripheral.state {
         case .poweredOn:
             setupPeripheral()
