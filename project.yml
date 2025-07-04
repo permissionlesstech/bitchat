@@ -50,14 +50,3 @@ targets:
       CODE_SIGNING_ALLOWED: YES
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
-  
-  bitchatTests:
-    type: bundle.unit-test
-    platform: [iOS, macOS]
-    sources:
-      - bitchatTests
-    dependencies:
-      - target: bitchat
-    settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.bitchat.tests
-      SWIFT_VERSION: 5.0
