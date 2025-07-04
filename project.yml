@@ -16,6 +16,8 @@ targets:
     platform: [iOS, macOS]
     sources: 
       - bitchat
+    resources:
+      - bitchat/Assets.xcassets
     info:
       path: bitchat/Info.plist
       properties:

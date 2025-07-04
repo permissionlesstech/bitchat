@@ -88,7 +88,7 @@ class ChatViewModel: ObservableObject {
     func toggleFavorite(peerID: String) {
         // Use public key fingerprints for persistent favorites
         guard let fingerprint = peerIDToPublicKeyFingerprint[peerID] else {
-            print("[FAVORITES] No public key fingerprint for peer \(peerID)")
+            // print("[FAVORITES] No public key fingerprint for peer \(peerID)")
             return
         }
         
@@ -99,7 +99,7 @@ class ChatViewModel: ObservableObject {
         }
         saveFavorites()
         
-        print("[FAVORITES] Toggled favorite for fingerprint: \(fingerprint)")
+        // print("[FAVORITES] Toggled favorite for fingerprint: \(fingerprint)")
     }
     
     func isFavorite(peerID: String) -> Bool {
@@ -123,7 +123,7 @@ class ChatViewModel: ObservableObject {
         // Only register if not already registered
         if peerIDToPublicKeyFingerprint[peerID] != fingerprintStr {
             peerIDToPublicKeyFingerprint[peerID] = fingerprintStr
-            print("[FAVORITES] Registered fingerprint \(fingerprint) for peer \(peerID)")
+            // print("[FAVORITES] Registered fingerprint \(fingerprint) for peer \(peerID)")
         }
     }
     
@@ -230,7 +230,7 @@ class ChatViewModel: ObservableObject {
         // Force UI update
         objectWillChange.send()
         
-        print("[PANIC] All data cleared for safety")
+        // print("[PANIC] All data cleared for safety")
     }
     
     
@@ -596,7 +596,7 @@ extension ChatViewModel: BitchatDelegate {
     }
     
     func didUpdatePeerList(_ peers: [String]) {
-        print("[DEBUG] Updating peer list: \(peers.count) peers: \(peers)")
+        // print("[DEBUG] Updating peer list: \(peers.count) peers: \(peers)")
         connectedPeers = peers
         isConnected = !peers.isEmpty
         

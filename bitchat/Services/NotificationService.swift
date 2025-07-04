@@ -16,7 +16,7 @@ class NotificationService {
             if granted {
                 // Permission granted
             } else if let error = error {
-                print("[NOTIFICATIONS] Permission error: \(error)")
+                // print("[NOTIFICATIONS] Permission error: \(error)")
             }
         }
     }
@@ -51,7 +51,7 @@ class NotificationService {
         
         UNUserNotificationCenter.current().add(request) { error in
             if let error = error {
-                print("[NOTIFICATIONS] Error sending notification: \(error)")
+                // print("[NOTIFICATIONS] Error sending notification: \(error)")
             } else {
                 // Notification sent
             }
