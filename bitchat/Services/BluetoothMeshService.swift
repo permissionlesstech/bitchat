@@ -662,7 +662,6 @@ class BluetoothMeshService: NSObject {
                 ttl: 3  // Short TTL for leave notifications
             )
             
-            bitchatLog("Sending room leave notification for \(room)", category: "room")
             self.broadcastPacket(packet)
         }
     }
@@ -687,7 +686,6 @@ class BluetoothMeshService: NSObject {
                 ttl: 5  // Allow wider propagation for room announcements
             )
             
-            bitchatLog("Announcing room \(room) protection status: \(isProtected)", category: "room")
             self.broadcastPacket(packet)
         }
     }
@@ -710,7 +708,6 @@ class BluetoothMeshService: NSObject {
                 ttl: 5  // Allow wider propagation for room announcements
             )
             
-            bitchatLog("Announcing room \(room) retention status: \(enabled)", category: "room")
             self.broadcastPacket(packet)
         }
     }
@@ -727,12 +724,10 @@ class BluetoothMeshService: NSObject {
             
             // Debug logging
             let keyData = roomKey.withUnsafeBytes { Data($0) }
-            bitchatLog("Encrypting message for room \(room) with key hash: \(keyData.prefix(8).hexEncodedString())", category: "crypto")
             
             do {
                 let sealedBox = try AES.GCM.seal(contentData, using: roomKey)
                 let encryptedData = sealedBox.combined!
-                bitchatLog("Successfully encrypted message, size: \(encryptedData.count) bytes", category: "crypto")
                 
                 // Create message with encrypted content
                 let message = BitchatMessage(
@@ -770,10 +765,8 @@ class BluetoothMeshService: NSObject {
                     )
                     
                     self.broadcastPacket(packet)
-                    bitchatLog("Sent encrypted message to room \(room)", category: "room")
                 }
             } catch {
-                bitchatLog("Failed to encrypt room message: \(error)", category: "crypto")
             }
         }
     }
@@ -1253,7 +1246,6 @@ class BluetoothMeshService: NSObject {
                     recipientNickname: message.recipientNickname,
                     roomKey: roomKeyData
                 )
-                bitchatLog("No peers available, added message to retry queue", category: "mesh")
             }
         }
     }
@@ -1370,15 +1362,12 @@ class BluetoothMeshService: NSObject {
                         // Handle encrypted room messages
                         var finalContent = message.content
                         if message.isEncrypted, let room = message.room, let encryptedData = message.encryptedContent {
-                            bitchatLog("Processing encrypted message in room \(room), encrypted data size: \(encryptedData.count)", category: "crypto")
                             // Try to decrypt the content
                             if let decryptedContent = self.delegate?.decryptRoomMessage(encryptedData, room: room) {
                                 finalContent = decryptedContent
-                                bitchatLog("Successfully decrypted message in room \(room): \(decryptedContent.prefix(20))...", category: "crypto")
                             } else {
                                 // Unable to decrypt - show placeholder
                                 finalContent = "[Encrypted message - password required]"
-                                bitchatLog("Failed to decrypt message in room \(room) - will pass to ChatViewModel for re-attempt", category: "crypto")
                             }
                         }
                         
@@ -1780,7 +1769,6 @@ class BluetoothMeshService: NSObject {
                 if let room = String(data: packet.payload, encoding: .utf8),
                    room.hasPrefix("#") {
                     // Room leave notification
-                    bitchatLog("Received room leave notification from \(senderID) for room \(room)", category: "room")
                     
                     DispatchQueue.main.async {
                         self.delegate?.didReceiveRoomLeave(room, from: senderID)
@@ -1844,7 +1832,6 @@ class BluetoothMeshService: NSObject {
                     let creatorID = components[2]
                     let keyCommitment = components.count >= 4 ? components[3] : nil
                     
-                    bitchatLog("Received room announcement: \(room) is \(isProtected ? "protected" : "public") by \(creatorID)" + (keyCommitment != nil ? " with commitment" : ""), category: "room")
                     
                     DispatchQueue.main.async {
                         self.delegate?.didReceivePasswordProtectedRoomAnnouncement(room, isProtected: isProtected, creatorID: creatorID, keyCommitment: keyCommitment)
@@ -1868,7 +1855,6 @@ class BluetoothMeshService: NSObject {
                     let enabled = components[1] == "1"
                     let creatorID = components[2]
                     
-                    bitchatLog("Received room retention announcement: \(room) retention \(enabled ? "enabled" : "disabled") by \(creatorID)", category: "room")
                     
                     DispatchQueue.main.async {
                         self.delegate?.didReceiveRoomRetentionAnnouncement(room, enabled: enabled, creatorID: creatorID)

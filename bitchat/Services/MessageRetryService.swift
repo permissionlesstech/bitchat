@@ -59,7 +59,6 @@ class MessageRetryService {
     ) {
         // Don't queue if we're at capacity
         guard retryQueue.count < maxQueueSize else {
-            bitchatLog("Retry queue full, dropping message", category: "retry")
             return
         }
         
@@ -77,7 +76,6 @@ class MessageRetryService {
         )
         
         retryQueue.append(retryMessage)
-        bitchatLog("Added message to retry queue: \(content.prefix(20))...", category: "retry")
     }
     
     private func processRetryQueue() {
@@ -100,7 +98,6 @@ class MessageRetryService {
         for message in messagesToRetry {
             // Check if we should still retry
             if message.retryCount >= message.maxRetries {
-                bitchatLog("Max retries reached for message: \(message.content.prefix(20))...", category: "retry")
                 continue
             }
             
@@ -118,7 +115,6 @@ class MessageRetryService {
                         to: recipientID,
                         recipientNickname: message.recipientNickname ?? "unknown"
                     )
-                    bitchatLog("Retried private message to \(recipientID)", category: "retry")
                 } else {
                     // Recipient not connected, keep in queue with updated retry time
                     var updatedMessage = message
@@ -147,7 +143,6 @@ class MessageRetryService {
                         room: room,
                         roomKey: roomKey
                     )
-                    bitchatLog("Retried encrypted room message to \(room)", category: "retry")
                 } else {
                     // No peers connected, keep in queue
                     var updatedMessage = message
@@ -173,7 +168,6 @@ class MessageRetryService {
                         mentions: message.mentions ?? [],
                         room: message.room
                     )
-                    bitchatLog("Retried regular message", category: "retry")
                 } else {
                     // No peers connected, keep in queue
                     var updatedMessage = message
@@ -197,7 +191,6 @@ class MessageRetryService {
     
     func clearRetryQueue() {
         retryQueue.removeAll()
-        bitchatLog("Cleared retry queue", category: "retry")
     }
     
     func getRetryQueueCount() -> Int {
