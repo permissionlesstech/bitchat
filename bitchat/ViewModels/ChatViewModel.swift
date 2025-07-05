@@ -1445,25 +1445,54 @@ extension ChatViewModel: BitchatDelegate {
                 )
                 messages.append(systemMessage)
             }
-        case "/list":
-            if joinedRooms.isEmpty {
+        case "/rooms":
+            // Discover all rooms (both joined and not joined)
+            var allRooms: Set<String> = Set()
+            
+            // Add joined rooms
+            allRooms.formUnion(joinedRooms)
+            
+            // Find rooms from messages we've seen
+            for msg in messages {
+                if let room = msg.room {
+                    allRooms.insert(room)
+                }
+            }
+            
+            // Also check room messages we've cached
+            for (room, _) in roomMessages {
+                allRooms.insert(room)
+            }
+            
+            // Add password protected rooms we know about
+            allRooms.formUnion(passwordProtectedRooms)
+            
+            if allRooms.isEmpty {
                 let systemMessage = BitchatMessage(
                     sender: "system",
-                    content: "you haven't joined any rooms yet. use /create or /join to get started.",
+                    content: "no rooms discovered yet. rooms appear as people use them.",
                     timestamp: Date(),
                     isRelay: false
                 )
                 messages.append(systemMessage)
             } else {
-                let roomList = joinedRooms.sorted().map { room in
-                    let isProtected = passwordProtectedRooms.contains(room) ? " 🔒" : ""
-                    let isCreator = roomCreators[room] == meshService.myPeerID ? " (owner)" : ""
-                    return "\(room)\(isProtected)\(isCreator)"
+                let roomList = allRooms.sorted().map { room in
+                    var status = ""
+                    if joinedRooms.contains(room) {
+                        status += " ✓"
+                    }
+                    if passwordProtectedRooms.contains(room) {
+                        status += " 🔒"
+                    }
+                    if roomCreators[room] == meshService.myPeerID {
+                        status += " (owner)"
+                    }
+                    return "\(room)\(status)"
                 }.joined(separator: "\n")
                 
                 let systemMessage = BitchatMessage(
                     sender: "system",
-                    content: "your rooms:\n\(roomList)",
+                    content: "discovered rooms:\n\(roomList)\n\n✓ = joined",
                     timestamp: Date(),
                     isRelay: false
                 )
@@ -1492,59 +1521,6 @@ extension ChatViewModel: BitchatDelegate {
                 )
                 messages.append(systemMessage)
             }
-        case "/discover":
-            // Discover public rooms
-            var publicRooms: [String] = []
-            var protectedRooms: [String] = []
-            
-            // Find rooms from messages we've seen
-            for msg in messages {
-                if let room = msg.room {
-                    if passwordProtectedRooms.contains(room) {
-                        if !protectedRooms.contains(room) {
-                            protectedRooms.append(room)
-                        }
-                    } else {
-                        if !publicRooms.contains(room) {
-                            publicRooms.append(room)
-                        }
-                    }
-                }
-            }
-            
-            // Also check room messages we've cached
-            for (room, _) in roomMessages {
-                if passwordProtectedRooms.contains(room) {
-                    if !protectedRooms.contains(room) {
-                        protectedRooms.append(room)
-                    }
-                } else {
-                    if !publicRooms.contains(room) {
-                        publicRooms.append(room)
-                    }
-                }
-            }
-            
-            var discoveryMessage = ""
-            if publicRooms.isEmpty && protectedRooms.isEmpty {
-                discoveryMessage = "no rooms discovered yet. rooms appear as people use them."
-            } else {
-                if !publicRooms.isEmpty {
-                    discoveryMessage += "public rooms:\n" + publicRooms.sorted().joined(separator: ", ")
-                }
-                if !protectedRooms.isEmpty {
-                    if !discoveryMessage.isEmpty { discoveryMessage += "\n\n" }
-                    discoveryMessage += "protected rooms:\n" + protectedRooms.sorted().map { "\($0) 🔒" }.joined(separator: ", ")
-                }
-            }
-            
-            let systemMessage = BitchatMessage(
-                sender: "system",
-                content: discoveryMessage,
-                timestamp: Date(),
-                isRelay: false
-            )
-            messages.append(systemMessage)
         case "/transfer":
             // Transfer room ownership
             let parts = command.split(separator: " ", maxSplits: 1).map(String.init)
@@ -1598,12 +1574,12 @@ extension ChatViewModel: BitchatDelegate {
                 messages.removeAll()
                 bitchatLog("cleared main chat", category: "chat")
             }
-        case "/favorite", "/fav":
-            // Toggle favorite status for current room
+        case "/save":
+            // Toggle save status for current room
             guard let room = currentRoom else {
                 let systemMessage = BitchatMessage(
                     sender: "system",
-                    content: "you must be in a room to mark it as favorite.",
+                    content: "you must be in a room to save it.",
                     timestamp: Date(),
                     isRelay: false
                 )
@@ -1612,7 +1588,7 @@ extension ChatViewModel: BitchatDelegate {
             }
             
             let isFavorite = MessageRetentionService.shared.toggleFavoriteRoom(room)
-            let status = isFavorite ? "added to" : "removed from"
+            let status = isFavorite ? "saved" : "unsaved"
             
             // If just marked as favorite, load any previously saved messages
             if isFavorite {
@@ -1634,7 +1610,7 @@ extension ChatViewModel: BitchatDelegate {
                     
                     let systemMessage = BitchatMessage(
                         sender: "system",
-                        content: "room \(room) \(status) favorites. loaded \(savedMessages.count) saved messages.",
+                        content: "room \(room) \(status). loaded \(savedMessages.count) saved messages.",
                         timestamp: Date(),
                         isRelay: false
                     )
@@ -1642,7 +1618,7 @@ extension ChatViewModel: BitchatDelegate {
                 } else {
                     let systemMessage = BitchatMessage(
                         sender: "system",
-                        content: "room \(room) \(status) favorites.",
+                        content: "room \(room) \(status).",
                         timestamp: Date(),
                         isRelay: false
                     )
@@ -1651,7 +1627,7 @@ extension ChatViewModel: BitchatDelegate {
             } else {
                 let systemMessage = BitchatMessage(
                     sender: "system",
-                    content: "room \(room) \(status) favorites.",
+                    content: "room \(room) \(status).",
                     timestamp: Date(),
                     isRelay: false
                 )

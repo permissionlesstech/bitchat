@@ -506,17 +506,23 @@ struct ContentView: View {
             // Command suggestions
             if showCommandSuggestions && !commandSuggestions.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
-                    let commandDescriptions = [
+                    let baseCommands: [String: String] = [
                         "/j": "join or create a room",
-                        "/list": "show your joined rooms",
+                        "/rooms": "show all discovered rooms",
                         "/w": "see who's online",
                         "/m": "send private message",
-                        "/clear": "clear chat messages",
+                        "/clear": "clear chat messages"
+                    ]
+                    
+                    let roomCommands: [String: String] = [
                         "/transfer": "transfer room ownership",
                         "/pass": "change room password",
-                        "/favorite": "toggle room retention",
-                        "/discover": "find active rooms"
+                        "/save": "save room messages locally"
                     ]
+                    
+                    let commandDescriptions = viewModel.currentRoom != nil 
+                        ? baseCommands.merging(roomCommands) { (_, new) in new }
+                        : baseCommands
                     
                     ForEach(commandSuggestions, id: \.self) { command in
                         Button(action: {
@@ -590,17 +596,22 @@ struct ContentView: View {
                     
                     // Check for command autocomplete
                     if newValue.hasPrefix("/") && newValue.count >= 1 {
-                        let commandDescriptions = [
+                        // Build context-aware command list
+                        var commandDescriptions = [
                             ("/j", "join or create a room"),
-                            ("/list", "show your joined rooms"),
+                            ("/rooms", "show all discovered rooms"),
                             ("/w", "see who's online"),
                             ("/m", "send private message"),
-                            ("/clear", "clear chat messages"),
-                            ("/transfer", "transfer room ownership"),
-                            ("/pass", "change room password"),
-                            ("/favorite", "toggle room retention"),
-                            ("/discover", "find active rooms")
+                            ("/clear", "clear chat messages")
                         ]
+                        
+                        // Add room-specific commands if in a room
+                        if viewModel.currentRoom != nil {
+                            commandDescriptions.append(("/transfer", "transfer room ownership"))
+                            commandDescriptions.append(("/pass", "change room password"))
+                            commandDescriptions.append(("/save", "save room messages locally"))
+                        }
+                        
                         let input = newValue.lowercased()
                         commandSuggestions = commandDescriptions
                             .filter { $0.0.starts(with: input) }
