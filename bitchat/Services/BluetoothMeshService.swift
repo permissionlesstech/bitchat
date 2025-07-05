@@ -126,7 +126,7 @@ class BluetoothMeshService: NSObject {
     // Message aggregation
     private var pendingMessages: [(message: BitchatPacket, destination: String?)] = []
     private var aggregationTimer: Timer?
-    private let aggregationWindow: TimeInterval = 0.1  // 100ms window
+    private var aggregationWindow: TimeInterval = 0.1  // 100ms window
     private let maxAggregatedMessages = 5
     
     // Optimized Bloom filter for efficient duplicate detection
@@ -2557,7 +2557,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             scheduleAdvertisingCycle(interval: powerMode.advertisingInterval)
         } else {
             // Continuous advertising for performance mode
-            startAdvertisingIfNeeded()
+            startAdvertising()
         }
     }
     
@@ -2574,7 +2574,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         // Disconnect the least active ones
         let toDisconnect = sortedPeripherals.dropFirst(keepCount)
         for peripheral in toDisconnect {
-            centralManager.cancelPeripheralConnection(peripheral)
+            centralManager?.cancelPeripheralConnection(peripheral)
         }
     }
     
@@ -2583,7 +2583,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         
         // Stop advertising
         if isAdvertising {
-            peripheralManager.stopAdvertising()
+            peripheralManager?.stopAdvertising()
             isAdvertising = false
         }
         
@@ -2598,12 +2598,12 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             return // Skip advertising in ultra low power + background
         }
         
-        startAdvertisingIfNeeded()
+        startAdvertising()
         
         // Stop advertising after a short burst (1 second)
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
             if self?.batteryOptimizer.currentPowerMode.advertisingInterval ?? 0 > 0 {
-                self?.peripheralManager.stopAdvertising()
+                self?.peripheralManager?.stopAdvertising()
                 self?.isAdvertising = false
             }
         }
