@@ -722,8 +722,7 @@ class BluetoothMeshService: NSObject {
             // Encrypt the content
             guard let contentData = content.data(using: .utf8) else { return }
             
-            // Debug logging
-            let keyData = roomKey.withUnsafeBytes { Data($0) }
+            // Debug logging removed
             
             do {
                 let sealedBox = try AES.GCM.seal(contentData, using: roomKey)

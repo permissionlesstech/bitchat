@@ -648,9 +648,6 @@ class ChatViewModel: ObservableObject {
         // Use PBKDF2 to derive a key from the password
         let salt = roomName.data(using: .utf8)!  // Use room name as salt for consistency
         let keyData = pbkdf2(password: password, salt: salt, iterations: 100000, keyLength: 32)
-        
-        // Debug logging
-        
         return SymmetricKey(data: keyData)
     }
     
@@ -1295,8 +1292,7 @@ extension ChatViewModel: BitchatDelegate {
             return nil
         }
         
-        // Debug logging
-        let keyData = key.withUnsafeBytes { Data($0) }
+        // Debug logging removed
         
         do {
             let sealedBox = try AES.GCM.SealedBox(combined: encryptedContent)
