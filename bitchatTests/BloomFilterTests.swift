@@ -12,7 +12,7 @@ import XCTest
 class BloomFilterTests: XCTestCase {
     
     func testBasicBloomFilter() {
-        let filter = BloomFilter(size: 1024, hashCount: 3)
+        var filter = OptimizedBloomFilter(expectedItems: 100, falsePositiveRate: 0.01)
         
         // Test insertion and lookup
         let testStrings = ["message1", "message2", "message3", "test123"]
@@ -25,7 +25,7 @@ class BloomFilterTests: XCTestCase {
     }
     
     func testFalsePositiveRate() {
-        let filter = BloomFilter(size: 4096, hashCount: 3)
+        var filter = OptimizedBloomFilter(expectedItems: 100, falsePositiveRate: 0.01)
         let itemCount = 100
         
         // Insert items
@@ -45,13 +45,12 @@ class BloomFilterTests: XCTestCase {
         
         let falsePositiveRate = Double(falsePositives) / Double(testCount)
         
-        // With 4096 bits and 3 hash functions, for 100 items,
-        // false positive rate should be around 0.05% (very low)
-        XCTAssertLessThan(falsePositiveRate, 0.05)
+        // With optimized bloom filter targeting 1% false positive rate
+        XCTAssertLessThan(falsePositiveRate, 0.02) // Allow some margin
     }
     
     func testReset() {
-        let filter = BloomFilter(size: 1024, hashCount: 3)
+        var filter = OptimizedBloomFilter(expectedItems: 100, falsePositiveRate: 0.01)
         
         // Insert some items
         filter.insert("test1")
@@ -72,26 +71,31 @@ class BloomFilterTests: XCTestCase {
     }
     
     func testHashDistribution() {
-        let filter = BloomFilter(size: 4096, hashCount: 3)
+        var filter = OptimizedBloomFilter(expectedItems: 1000, falsePositiveRate: 0.01)
         
-        // Insert many items and check bit distribution
+        // Insert many items
         for i in 0..<500 {
             filter.insert("message-\(i)")
         }
         
-        // Count set bits
-        var setBits = 0
-        for i in 0..<filter.bitArray.count {
-            setBits += filter.bitArray[i].nonzeroBitCount
-        }
+        // Check false positive rate
+        let estimatedRate = filter.estimatedFalsePositiveRate
         
-        // Should have reasonable distribution (not all bits set)
-        let totalBits = filter.bitArray.count * 64
-        let utilization = Double(setBits) / Double(totalBits)
+        // Should be well below target since we're at 50% capacity
+        XCTAssertLessThan(estimatedRate, 0.01)
         
-        // With 500 items, 3 hashes each, we expect around 1500 bits set
-        // In a 4096 bit filter, that's about 37% utilization
-        XCTAssertGreaterThan(utilization, 0.2)
-        XCTAssertLessThan(utilization, 0.6)
+        // Test memory efficiency
+        let memoryBytes = filter.memorySizeBytes
+        XCTAssertLessThan(memoryBytes, 2048) // Should be under 2KB for this size
+    }
+    
+    func testAdaptiveBloomFilter() {
+        // Test small network
+        let smallFilter = OptimizedBloomFilter.adaptive(for: 20)
+        XCTAssertLessThan(smallFilter.memorySizeBytes, 1024)
+        
+        // Test large network
+        let largeFilter = OptimizedBloomFilter.adaptive(for: 1000)
+        XCTAssertGreaterThan(largeFilter.memorySizeBytes, 2048)
     }
 }
