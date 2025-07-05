@@ -97,6 +97,7 @@ class BluetoothMeshService: NSObject {
     private var coverTrafficTimer: Timer?
     private let coverTrafficPrefix = "☂DUMMY☂"  // Prefix to identify dummy messages after decryption
     private var lastCoverTrafficTime = Date()
+    private var advertisingTimer: Timer?  // Timer for interval-based advertising
     
     // Timing randomization for privacy
     private let minMessageDelay: TimeInterval = 0.05  // 50ms minimum
@@ -1396,6 +1397,11 @@ class BluetoothMeshService: NSObject {
                             isEncrypted: message.isEncrypted
                         )
                         
+                        // Track last message time from this peer
+                        if let peerID = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8) {
+                            self.lastMessageFromPeer[peerID] = Date()
+                        }
+                        
                         DispatchQueue.main.async {
                             self.delegate?.didReceiveMessage(messageWithPeerID)
                         }
@@ -1493,6 +1499,11 @@ class BluetoothMeshService: NSObject {
                             mentions: message.mentions,
                             room: message.room
                         )
+                        
+                        // Track last message time from this peer
+                        if let peerID = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8) {
+                            self.lastMessageFromPeer[peerID] = Date()
+                        }
                         
                         DispatchQueue.main.async {
                             self.delegate?.didReceiveMessage(messageWithPeerID)
@@ -2566,8 +2577,6 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             centralManager.cancelPeripheralConnection(peripheral)
         }
     }
-    
-    private var advertisingTimer: Timer?
     
     private func scheduleAdvertisingCycle(interval: TimeInterval) {
         advertisingTimer?.invalidate()
