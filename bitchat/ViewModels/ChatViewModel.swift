@@ -10,6 +10,7 @@ import Foundation
 import SwiftUI
 import Combine
 import CryptoKit
+import CommonCrypto
 #if os(iOS)
 import UIKit
 #endif
@@ -40,12 +41,21 @@ class ChatViewModel: ObservableObject {
     @Published var roomMessages: [String: [BitchatMessage]] = [:]  // room -> messages
     @Published var unreadRoomMessages: [String: Int] = [:]  // room -> unread count
     @Published var roomMembers: [String: Set<String>] = [:]  // room -> set of peer IDs who have sent messages
+    @Published var roomPasswords: [String: String] = [:]  // room -> password (stored locally only)
+    @Published var roomKeys: [String: SymmetricKey] = [:]  // room -> derived encryption key
+    @Published var passwordProtectedRooms: Set<String> = []  // Set of rooms that require passwords
+    @Published var roomCreators: [String: String] = [:]  // room -> creator peerID
+    @Published var showPasswordPrompt: Bool = false
+    @Published var passwordPromptRoom: String? = nil
     
     let meshService = BluetoothMeshService()
     private let userDefaults = UserDefaults.standard
     private let nicknameKey = "bitchat.nickname"
     private let favoritesKey = "bitchat.favorites"
     private let joinedRoomsKey = "bitchat.joinedRooms"
+    private let passwordProtectedRoomsKey = "bitchat.passwordProtectedRooms"
+    private let roomCreatorsKey = "bitchat.roomCreators"
+    private let roomPasswordsKey = "bitchat.roomPasswords"
     private var nicknameSaveTimer: Timer?
     
     @Published var favoritePeers: Set<String> = []  // Now stores public key fingerprints instead of peer IDs
@@ -57,6 +67,7 @@ class ChatViewModel: ObservableObject {
         loadNickname()
         loadFavorites()
         loadJoinedRooms()
+        loadRoomData()
         meshService.delegate = self
         
         // Log startup info
@@ -109,9 +120,53 @@ class ChatViewModel: ObservableObject {
         userDefaults.synchronize()
     }
     
-    func joinRoom(_ room: String) {
+    private func loadRoomData() {
+        // Load password protected rooms
+        if let savedProtectedRooms = userDefaults.stringArray(forKey: passwordProtectedRoomsKey) {
+            passwordProtectedRooms = Set(savedProtectedRooms)
+        }
+        
+        // Load room creators
+        if let savedCreators = userDefaults.dictionary(forKey: roomCreatorsKey) as? [String: String] {
+            roomCreators = savedCreators
+        }
+        
+        // Load room passwords (encrypted would be better, but keeping simple for now)
+        if let savedPasswords = userDefaults.dictionary(forKey: roomPasswordsKey) as? [String: String] {
+            roomPasswords = savedPasswords
+            // Derive keys for all saved passwords
+            for (room, password) in savedPasswords {
+                roomKeys[room] = deriveRoomKey(from: password, roomName: room)
+            }
+        }
+    }
+    
+    private func saveRoomData() {
+        userDefaults.set(Array(passwordProtectedRooms), forKey: passwordProtectedRoomsKey)
+        userDefaults.set(roomCreators, forKey: roomCreatorsKey)
+        userDefaults.set(roomPasswords, forKey: roomPasswordsKey)
+        userDefaults.synchronize()
+    }
+    
+    func joinRoom(_ room: String, password: String? = nil) {
         // Ensure room starts with #
         let roomTag = room.hasPrefix("#") ? room : "#\(room)"
+        
+        // If room is password protected and we don't have the key yet
+        if passwordProtectedRooms.contains(roomTag) && roomKeys[roomTag] == nil {
+            if let password = password {
+                // Derive key from password
+                let key = deriveRoomKey(from: password, roomName: roomTag)
+                roomKeys[roomTag] = key
+                roomPasswords[roomTag] = password  // Store for convenience (local only)
+            } else {
+                // Show password prompt
+                passwordPromptRoom = roomTag
+                showPasswordPrompt = true
+                return
+            }
+        }
+        
         joinedRooms.insert(roomTag)
         saveJoinedRooms()
         
@@ -144,6 +199,87 @@ class ChatViewModel: ObservableObject {
         unreadRoomMessages.removeValue(forKey: room)
         roomMessages.removeValue(forKey: room)
         roomMembers.removeValue(forKey: room)
+        roomKeys.removeValue(forKey: room)
+        roomPasswords.removeValue(forKey: room)
+    }
+    
+    // Password management
+    func setRoomPassword(_ password: String, for room: String) {
+        guard joinedRooms.contains(room) else { return }
+        
+        // If room has no creator yet, make current user the creator
+        if roomCreators[room] == nil {
+            roomCreators[room] = meshService.myPeerID
+        }
+        
+        // Only room creator can set password
+        guard roomCreators[room] == meshService.myPeerID else {
+            bitchatLog("Only room creator can set password", category: "room")
+            return
+        }
+        
+        // Derive encryption key from password
+        let key = deriveRoomKey(from: password, roomName: room)
+        roomKeys[room] = key
+        roomPasswords[room] = password
+        passwordProtectedRooms.insert(room)
+        
+        // Save room data
+        saveRoomData()
+        
+        // Announce that this room is now password protected
+        meshService.announcePasswordProtectedRoom(room, creatorID: meshService.myPeerID)
+        
+        bitchatLog("Set password for room \(room)", category: "room")
+    }
+    
+    func removeRoomPassword(for room: String) {
+        // Only room creator can remove password
+        guard roomCreators[room] == meshService.myPeerID else {
+            bitchatLog("Only room creator can remove password", category: "room")
+            return
+        }
+        
+        roomKeys.removeValue(forKey: room)
+        roomPasswords.removeValue(forKey: room)
+        passwordProtectedRooms.remove(room)
+        
+        // Save room data
+        saveRoomData()
+        
+        // Announce that this room is no longer password protected
+        meshService.announcePasswordProtectedRoom(room, isProtected: false, creatorID: meshService.myPeerID)
+        
+        bitchatLog("Removed password for room \(room)", category: "room")
+    }
+    
+    private func deriveRoomKey(from password: String, roomName: String) -> SymmetricKey {
+        // Use PBKDF2 to derive a key from the password
+        let salt = roomName.data(using: .utf8)!  // Use room name as salt for consistency
+        let keyData = pbkdf2(password: password, salt: salt, iterations: 100000, keyLength: 32)
+        return SymmetricKey(data: keyData)
+    }
+    
+    private func pbkdf2(password: String, salt: Data, iterations: Int, keyLength: Int) -> Data {
+        var derivedKey = Data(count: keyLength)
+        let passwordData = password.data(using: .utf8)!
+        
+        derivedKey.withUnsafeMutableBytes { derivedKeyBytes in
+            salt.withUnsafeBytes { saltBytes in
+                passwordData.withUnsafeBytes { passwordBytes in
+                    CCKeyDerivationPBKDF(
+                        CCPBKDFAlgorithm(kCCPBKDF2),
+                        passwordBytes.baseAddress, passwordData.count,
+                        saltBytes.baseAddress, salt.count,
+                        CCPseudoRandomAlgorithm(kCCPRFHmacAlgSHA256),
+                        UInt32(iterations),
+                        derivedKeyBytes.baseAddress, keyLength
+                    )
+                }
+            }
+        }
+        
+        return derivedKey
     }
     
     func switchToRoom(_ room: String?) {
@@ -271,8 +407,14 @@ class ChatViewModel: ObservableObject {
                 }
             }
             
-            // Send via mesh with mentions and room
-            meshService.sendMessage(content, mentions: mentions, room: messageRoom)
+            // Check if room is password protected and encrypt if needed
+            if let room = messageRoom, roomKeys[room] != nil {
+                // Send encrypted room message
+                meshService.sendEncryptedRoomMessage(content, mentions: mentions, room: room, roomKey: roomKeys[room]!)
+            } else {
+                // Send via mesh with mentions and room (unencrypted)
+                meshService.sendMessage(content, mentions: mentions, room: messageRoom)
+            }
         }
     }
     
@@ -641,6 +783,41 @@ extension ChatViewModel: BitchatDelegate {
             
             // Force UI update
             objectWillChange.send()
+        }
+    }
+    
+    func didReceivePasswordProtectedRoomAnnouncement(_ room: String, isProtected: Bool, creatorID: String?) {
+        if isProtected {
+            passwordProtectedRooms.insert(room)
+            if let creator = creatorID {
+                roomCreators[room] = creator
+            }
+        } else {
+            passwordProtectedRooms.remove(room)
+            // If we're in this room and it's no longer protected, clear the key
+            roomKeys.removeValue(forKey: room)
+            roomPasswords.removeValue(forKey: room)
+        }
+        
+        // Save updated room data
+        saveRoomData()
+        
+        bitchatLog("Room \(room) is now \(isProtected ? "password protected" : "public")", category: "room")
+    }
+    
+    func decryptRoomMessage(_ encryptedContent: Data, room: String) -> String? {
+        guard let roomKey = roomKeys[room] else {
+            bitchatLog("No key available for encrypted room \(room)", category: "room")
+            return nil
+        }
+        
+        do {
+            let sealedBox = try AES.GCM.SealedBox(combined: encryptedContent)
+            let decryptedData = try AES.GCM.open(sealedBox, using: roomKey)
+            return String(data: decryptedData, encoding: .utf8)
+        } catch {
+            bitchatLog("Failed to decrypt room message: \(error)", category: "crypto")
+            return nil
         }
     }
     

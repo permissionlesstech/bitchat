@@ -18,6 +18,11 @@ struct ContentView: View {
     @State private var showSidebar = false
     @State private var sidebarDragOffset: CGFloat = 0
     @State private var showAppInfo = false
+    @State private var showPasswordInput = false
+    @State private var passwordInputRoom: String? = nil
+    @State private var passwordInput = ""
+    @State private var showPasswordPrompt = false
+    @State private var passwordPromptInput = ""
     
     private var backgroundColor: Color {
         colorScheme == .dark ? Color.black : Color.white
@@ -159,6 +164,40 @@ struct ContentView: View {
         #endif
         .sheet(isPresented: $showAppInfo) {
             AppInfoView()
+        }
+        .alert("Set Room Password", isPresented: $showPasswordInput) {
+            SecureField("Password", text: $passwordInput)
+            Button("Cancel", role: .cancel) {
+                passwordInput = ""
+                passwordInputRoom = nil
+            }
+            Button("Set Password") {
+                if let room = passwordInputRoom, !passwordInput.isEmpty {
+                    viewModel.setRoomPassword(passwordInput, for: room)
+                    passwordInput = ""
+                    passwordInputRoom = nil
+                }
+            }
+        } message: {
+            Text("Enter a password to protect \(passwordInputRoom ?? "room"). Others will need this password to read messages.")
+        }
+        .alert("Enter Room Password", isPresented: Binding(
+            get: { viewModel.showPasswordPrompt },
+            set: { viewModel.showPasswordPrompt = $0 }
+        )) {
+            SecureField("Password", text: $passwordPromptInput)
+            Button("Cancel", role: .cancel) {
+                passwordPromptInput = ""
+                viewModel.passwordPromptRoom = nil
+            }
+            Button("Join") {
+                if let room = viewModel.passwordPromptRoom, !passwordPromptInput.isEmpty {
+                    viewModel.joinRoom(room, password: passwordPromptInput)
+                    passwordPromptInput = ""
+                }
+            }
+        } message: {
+            Text("This room is password protected. Enter the password to join.")
         }
     }
     
@@ -517,6 +556,13 @@ struct ContentView: View {
                                     }
                                 }) {
                                     HStack {
+                                        // Lock icon for password protected rooms
+                                        if viewModel.passwordProtectedRooms.contains(room) {
+                                            Image(systemName: "lock.fill")
+                                                .font(.system(size: 10))
+                                                .foregroundColor(secondaryTextColor)
+                                        }
+                                        
                                         Text(room)
                                             .font(.system(size: 14, design: .monospaced))
                                             .foregroundColor(viewModel.currentRoom == room ? Color.blue : textColor)
@@ -534,22 +580,49 @@ struct ContentView: View {
                                                 .clipShape(Capsule())
                                         }
                                         
-                                        // Leave button
+                                        // Room controls
                                         if viewModel.currentRoom == room {
-                                            Button(action: {
-                                                viewModel.leaveRoom(room)
-                                            }) {
-                                                Text("leave")
-                                                    .font(.system(size: 10, design: .monospaced))
-                                                    .foregroundColor(secondaryTextColor)
-                                                    .padding(.horizontal, 8)
-                                                    .padding(.vertical, 2)
-                                                    .overlay(
-                                                        RoundedRectangle(cornerRadius: 4)
-                                                            .stroke(secondaryTextColor.opacity(0.5), lineWidth: 1)
-                                                    )
+                                            HStack(spacing: 4) {
+                                                // Password button for room creator
+                                                if viewModel.roomCreators[room] == viewModel.meshService.myPeerID {
+                                                    Button(action: {
+                                                        // Toggle password protection
+                                                        if viewModel.passwordProtectedRooms.contains(room) {
+                                                            viewModel.removeRoomPassword(for: room)
+                                                        } else {
+                                                            // Show password input
+                                                            showPasswordInput = true
+                                                            passwordInputRoom = room
+                                                        }
+                                                    }) {
+                                                        Image(systemName: viewModel.passwordProtectedRooms.contains(room) ? "lock.open" : "lock")
+                                                            .font(.system(size: 10))
+                                                            .foregroundColor(secondaryTextColor)
+                                                            .padding(4)
+                                                            .overlay(
+                                                                RoundedRectangle(cornerRadius: 4)
+                                                                    .stroke(secondaryTextColor.opacity(0.5), lineWidth: 1)
+                                                            )
+                                                    }
+                                                    .buttonStyle(.plain)
+                                                }
+                                                
+                                                // Leave button
+                                                Button(action: {
+                                                    viewModel.leaveRoom(room)
+                                                }) {
+                                                    Text("leave")
+                                                        .font(.system(size: 10, design: .monospaced))
+                                                        .foregroundColor(secondaryTextColor)
+                                                        .padding(.horizontal, 8)
+                                                        .padding(.vertical, 2)
+                                                        .overlay(
+                                                            RoundedRectangle(cornerRadius: 4)
+                                                                .stroke(secondaryTextColor.opacity(0.5), lineWidth: 1)
+                                                        )
+                                                }
+                                                .buttonStyle(.plain)
                                             }
-                                            .buttonStyle(.plain)
                                         }
                                     }
                                     .padding(.horizontal, 12)
