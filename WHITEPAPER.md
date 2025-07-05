@@ -161,8 +161,10 @@ sequenceDiagram
     C->>B: Scan & Connect (Central)
     
     Note over A,C: Communication Phase
-    A<-->B: Bidirectional Communication
-    B<-->C: Bidirectional Communication
+    A->>B: Message
+    B->>A: Response
+    B->>C: Message
+    C->>B: Response
     
     Note over A: Acts as both<br/>Central & Peripheral
     Note over B: Acts as both<br/>Central & Peripheral
@@ -325,7 +327,8 @@ sequenceDiagram
     Alice->>Bob: Key Exchange Response<br/>(Encrypted with shared secret)
     Note over Bob: Derives shared secret<br/>verifies response
     
-    Alice<-->Bob: Encrypted Communication<br/>(AES-256-GCM)
+    Alice->>Bob: Encrypted Message<br/>(AES-256-GCM)
+    Bob->>Alice: Encrypted Response<br/>(AES-256-GCM)
     
     Note over Alice,Bob: Forward Secrecy Achieved
 ```
