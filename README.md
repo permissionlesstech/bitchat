@@ -1,7 +1,7 @@
 ![ChatGPT Image Jul 5, 2025 at 06_07_31 PM](https://github.com/user-attachments/assets/2660f828-49c7-444d-beca-d8b01854667a)
 # bitchat
 
-A secure, end-to-end encrypted Bluetooth mesh chat application with an IRC-style interface.
+A secure, decentralized, peer-to-peer messaging app that works over Bluetooth mesh networks. No internet required, no servers, no phone numbers - just pure encrypted communication.
 
 ## License
 
@@ -9,13 +9,16 @@ This project is released into the public domain. See the [LICENSE](LICENSE) file
 
 ## Features
 
-- End-to-end encryption using Curve25519 and AES-GCM
-- Bluetooth mesh networking with automatic peer discovery
-- Message relay capability (TTL-based flooding)
-- IRC-style terminal interface
-- Persistent nickname storage
-- Universal app (iOS and macOS)
-- No internet connection required
+- **Decentralized Mesh Network**: Automatic peer discovery and multi-hop message relay over Bluetooth LE
+- **End-to-End Encryption**: X25519 key exchange + AES-256-GCM for private messages
+- **Room-Based Chats**: Topic-based group messaging with optional password protection
+- **Store & Forward**: Messages cached for offline peers and delivered when they reconnect
+- **Privacy First**: No accounts, no phone numbers, no persistent identifiers
+- **IRC-Style Commands**: Familiar `/join`, `/msg`, `/who` style interface
+- **Message Retention**: Optional room-wide message saving controlled by room owners
+- **Universal App**: Native support for iOS and macOS
+- **Cover Traffic**: Timing obfuscation and dummy messages for enhanced privacy
+- **Emergency Wipe**: Triple-tap to instantly clear all data
 
 ## Setup
 
@@ -56,25 +59,63 @@ This project is released into the public domain. See the [LICENSE](LICENSE) file
 
 ## Usage
 
-1. Launch the app on multiple devices
-2. Choose or modify your nickname
-3. The app will automatically discover nearby peers
-4. Start chatting! Messages are relayed through the mesh network
+### Basic Commands
 
-## Security
+- `/j #room` - Join or create a room
+- `/m @user message` - Send a private message
+- `/w` - List online users
+- `/rooms` - Show all discovered rooms
+- `/clear` - Clear chat messages
+- `/pass [password]` - Set/change room password (owner only)
+- `/transfer @user` - Transfer room ownership
+- `/save` - Toggle message retention for room (owner only)
 
-- All messages are end-to-end encrypted
-- Public key exchange happens automatically on connection
-- Messages are signed to prevent tampering
-- TTL prevents infinite message loops
+### Getting Started
 
-## Protocol
+1. Launch bitchat on your device
+2. Set your nickname (or use the auto-generated one)
+3. You'll automatically connect to nearby peers
+4. Join a room with `/j #general` or start chatting in public
+5. Messages relay through the mesh network to reach distant peers
 
-The bitchat protocol uses JSON-encoded packets with the following structure:
-- Packet versioning for future compatibility
-- Message types: handshake, message, ack, relay, announce, keyExchange
-- TTL-based flooding for mesh relay
-- Signature verification for authenticity
+### Room Features
+
+- **Password Protection**: Room owners can set passwords with `/pass`
+- **Message Retention**: Owners can enable mandatory message saving with `/save`
+- **@ Mentions**: Use `@nickname` to mention users (with autocomplete)
+- **Ownership Transfer**: Pass control to trusted users with `/transfer`
+
+## Security & Privacy
+
+### Encryption
+- **Private Messages**: X25519 key exchange + AES-256-GCM encryption
+- **Room Messages**: Argon2id password derivation + AES-256-GCM
+- **Digital Signatures**: Ed25519 for message authenticity
+- **Forward Secrecy**: New key pairs generated each session
+
+### Privacy Features
+- **No Registration**: No accounts, emails, or phone numbers required
+- **Ephemeral by Default**: Messages exist only in device memory
+- **Cover Traffic**: Random delays and dummy messages prevent traffic analysis
+- **Emergency Wipe**: Triple-tap logo to instantly clear all data
+- **Local-First**: Works completely offline, no servers involved
+
+## Technical Architecture
+
+### Binary Protocol
+bitchat uses an efficient binary protocol optimized for Bluetooth LE:
+- Compact packet format with 1-byte type field
+- TTL-based message routing (max 7 hops)
+- Automatic fragmentation for large messages
+- Message deduplication via unique IDs
+
+### Mesh Networking
+- Each device acts as both client and peripheral
+- Automatic peer discovery and connection management
+- Store-and-forward for offline message delivery
+- Adaptive duty cycling for battery optimization
+
+For detailed protocol documentation, see the [Technical Whitepaper](WHITEPAPER.md).
 
 ## Building for Production
 

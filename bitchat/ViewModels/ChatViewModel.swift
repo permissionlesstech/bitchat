@@ -49,6 +49,7 @@ class ChatViewModel: ObservableObject {
     @Published var showPasswordPrompt: Bool = false
     @Published var passwordPromptRoom: String? = nil
     @Published var savedRooms: Set<String> = []  // Rooms saved for message retention
+    @Published var retentionEnabledRooms: Set<String> = []  // Rooms where owner enabled retention for all members
     
     let meshService = BluetoothMeshService()
     private let userDefaults = UserDefaults.standard
@@ -59,6 +60,7 @@ class ChatViewModel: ObservableObject {
     private let roomCreatorsKey = "bitchat.roomCreators"
     // private let roomPasswordsKey = "bitchat.roomPasswords" // Now using Keychain
     private let roomKeyCommitmentsKey = "bitchat.roomKeyCommitments"
+    private let retentionEnabledRoomsKey = "bitchat.retentionEnabledRooms"
     private var nicknameSaveTimer: Timer?
     
     @Published var favoritePeers: Set<String> = []  // Now stores public key fingerprints instead of peer IDs
@@ -129,8 +131,8 @@ class ChatViewModel: ObservableObject {
                     roomMembers[room] = Set()
                 }
                 
-                // Load saved messages if this is a saved room
-                if MessageRetentionService.shared.getFavoriteRooms().contains(room) {
+                // Load saved messages if this room has retention enabled
+                if retentionEnabledRooms.contains(room) {
                     let savedMessages = MessageRetentionService.shared.loadMessagesForRoom(room)
                     if !savedMessages.isEmpty {
                         roomMessages[room] = savedMessages
@@ -162,6 +164,11 @@ class ChatViewModel: ObservableObject {
             roomKeyCommitments = savedCommitments
         }
         
+        // Load retention-enabled rooms
+        if let savedRetentionRooms = userDefaults.stringArray(forKey: retentionEnabledRoomsKey) {
+            retentionEnabledRooms = Set(savedRetentionRooms)
+        }
+        
         // Load room passwords from Keychain
         let savedPasswords = KeychainManager.shared.getAllRoomPasswords()
         roomPasswords = savedPasswords
@@ -179,6 +186,7 @@ class ChatViewModel: ObservableObject {
             _ = KeychainManager.shared.saveRoomPassword(password, for: room)
         }
         userDefaults.set(roomKeyCommitments, forKey: roomKeyCommitmentsKey)
+        userDefaults.set(Array(retentionEnabledRooms), forKey: retentionEnabledRoomsKey)
         userDefaults.synchronize()
     }
     
@@ -830,8 +838,8 @@ class ChatViewModel: ObservableObject {
                 }
                 roomMessages[room]?.append(message)
                 
-                // Save message if room is a favorite
-                if MessageRetentionService.shared.getFavoriteRooms().contains(room) {
+                // Save message if room has retention enabled
+                if retentionEnabledRooms.contains(room) {
                     MessageRetentionService.shared.saveMessage(message, forRoom: room)
                 }
                 
@@ -943,6 +951,7 @@ class ChatViewModel: ObservableObject {
         // Clear all retained messages
         MessageRetentionService.shared.deleteAllStoredMessages()
         savedRooms.removeAll()
+        retentionEnabledRooms.removeAll()
         
         // Clear message retry queue
         MessageRetryService.shared.clearRetryQueue()
@@ -952,6 +961,7 @@ class ChatViewModel: ObservableObject {
         userDefaults.removeObject(forKey: passwordProtectedRoomsKey)
         userDefaults.removeObject(forKey: roomCreatorsKey)
         userDefaults.removeObject(forKey: roomKeyCommitmentsKey)
+        userDefaults.removeObject(forKey: retentionEnabledRoomsKey)
         
         // Reset nickname to anonymous
         nickname = "anon\(Int.random(in: 1000...9999))"
@@ -1342,6 +1352,74 @@ extension ChatViewModel: BitchatDelegate {
         }
     }
     
+    func didReceiveRoomRetentionAnnouncement(_ room: String, enabled: Bool, creatorID: String?) {
+        bitchatLog("Received retention announcement for room \(room): \(enabled ? "enabled" : "disabled") by \(creatorID ?? "unknown")", category: "room")
+        
+        // Only process if we're a member of this room
+        guard joinedRooms.contains(room) else { return }
+        
+        // Verify the announcement is from the room owner
+        if let creatorID = creatorID, roomCreators[room] != creatorID {
+            bitchatLog("Ignoring retention announcement from non-owner \(creatorID) for room \(room)", category: "room")
+            return
+        }
+        
+        // Update retention status
+        if enabled {
+            retentionEnabledRooms.insert(room)
+            savedRooms.insert(room)
+            // Ensure room is in favorites if not already
+            if !MessageRetentionService.shared.getFavoriteRooms().contains(room) {
+                _ = MessageRetentionService.shared.toggleFavoriteRoom(room)
+            }
+            
+            // Show system message
+            let systemMessage = BitchatMessage(
+                sender: "system",
+                content: "room owner enabled message retention for \(room). all messages will be saved locally.",
+                timestamp: Date(),
+                isRelay: false
+            )
+            if currentRoom == room {
+                messages.append(systemMessage)
+            } else if var roomMsgs = roomMessages[room] {
+                roomMsgs.append(systemMessage)
+                roomMessages[room] = roomMsgs
+            } else {
+                roomMessages[room] = [systemMessage]
+            }
+        } else {
+            retentionEnabledRooms.remove(room)
+            savedRooms.remove(room)
+            
+            // Delete all saved messages for this room
+            MessageRetentionService.shared.deleteMessagesForRoom(room)
+            // Remove from favorites if currently set
+            if MessageRetentionService.shared.getFavoriteRooms().contains(room) {
+                _ = MessageRetentionService.shared.toggleFavoriteRoom(room)
+            }
+            
+            // Show system message
+            let systemMessage = BitchatMessage(
+                sender: "system",
+                content: "room owner disabled message retention for \(room). all saved messages have been deleted.",
+                timestamp: Date(),
+                isRelay: false
+            )
+            if currentRoom == room {
+                messages.append(systemMessage)
+            } else if var roomMsgs = roomMessages[room] {
+                roomMsgs.append(systemMessage)
+                roomMessages[room] = roomMsgs
+            } else {
+                roomMessages[room] = [systemMessage]
+            }
+        }
+        
+        // Persist retention status
+        userDefaults.set(Array(retentionEnabledRooms), forKey: retentionEnabledRoomsKey)
+    }
+    
     private func handleCommand(_ command: String) {
         let parts = command.split(separator: " ")
         guard let cmd = parts.first else { return }
@@ -1402,7 +1480,7 @@ extension ChatViewModel: BitchatDelegate {
                 // Show usage hint
                 let systemMessage = BitchatMessage(
                     sender: "system",
-                    content: "usage: /join #roomname",
+                    content: "usage: /j #roomname",
                     timestamp: Date(),
                     isRelay: false
                 )
@@ -1452,7 +1530,7 @@ extension ChatViewModel: BitchatDelegate {
             } else {
                 let systemMessage = BitchatMessage(
                     sender: "system",
-                    content: "usage: /msg @nickname [message] or /msg nickname [message]",
+                    content: "usage: /m @nickname [message] or /m nickname [message]",
                     timestamp: Date(),
                     isRelay: false
                 )
@@ -1497,6 +1575,9 @@ extension ChatViewModel: BitchatDelegate {
                     if passwordProtectedRooms.contains(room) {
                         status += " 🔒"
                     }
+                    if retentionEnabledRooms.contains(room) {
+                        status += " 📌"
+                    }
                     if roomCreators[room] == meshService.myPeerID {
                         status += " (owner)"
                     }
@@ -1505,7 +1586,7 @@ extension ChatViewModel: BitchatDelegate {
                 
                 let systemMessage = BitchatMessage(
                     sender: "system",
-                    content: "discovered rooms:\n\(roomList)\n\n✓ = joined",
+                    content: "discovered rooms:\n\(roomList)\n\n✓ = joined, 🔒 = password protected, 📌 = retention enabled",
                     timestamp: Date(),
                     isRelay: false
                 )
@@ -1588,11 +1669,11 @@ extension ChatViewModel: BitchatDelegate {
                 bitchatLog("cleared main chat", category: "chat")
             }
         case "/save":
-            // Toggle save status for current room
+            // Toggle retention for current room (owner only)
             guard let room = currentRoom else {
                 let systemMessage = BitchatMessage(
                     sender: "system",
-                    content: "you must be in a room to save it.",
+                    content: "you must be in a room to toggle message retention.",
                     timestamp: Date(),
                     isRelay: false
                 )
@@ -1600,18 +1681,39 @@ extension ChatViewModel: BitchatDelegate {
                 break
             }
             
-            let isFavorite = MessageRetentionService.shared.toggleFavoriteRoom(room)
-            let status = isFavorite ? "saved" : "unsaved"
-            
-            // Update published property
-            if isFavorite {
-                savedRooms.insert(room)
-            } else {
-                savedRooms.remove(room)
+            // Check if user is the room owner
+            guard roomCreators[room] == meshService.myPeerID else {
+                let systemMessage = BitchatMessage(
+                    sender: "system",
+                    content: "only the room owner can toggle message retention.",
+                    timestamp: Date(),
+                    isRelay: false
+                )
+                messages.append(systemMessage)
+                break
             }
             
-            // If just marked as favorite, load any previously saved messages
-            if isFavorite {
+            // Toggle retention status
+            let isEnabling = !retentionEnabledRooms.contains(room)
+            
+            if isEnabling {
+                // Enable retention for this room
+                retentionEnabledRooms.insert(room)
+                savedRooms.insert(room)
+                _ = MessageRetentionService.shared.toggleFavoriteRoom(room) // Enable if not already
+                
+                // Announce to all members that retention is enabled
+                meshService.sendRoomRetentionAnnouncement(room, enabled: true)
+                
+                let systemMessage = BitchatMessage(
+                    sender: "system",
+                    content: "message retention enabled for room \(room). all members will save messages locally.",
+                    timestamp: Date(),
+                    isRelay: false
+                )
+                messages.append(systemMessage)
+                
+                // Load any previously saved messages
                 let savedMessages = MessageRetentionService.shared.loadMessagesForRoom(room)
                 if !savedMessages.isEmpty {
                     // Merge saved messages with current messages, avoiding duplicates
@@ -1627,32 +1729,30 @@ extension ChatViewModel: BitchatDelegate {
                     }
                     // Sort by timestamp
                     roomMessages[room]?.sort { $0.timestamp < $1.timestamp }
-                    
-                    let systemMessage = BitchatMessage(
-                        sender: "system",
-                        content: "room \(room) \(status). loaded \(savedMessages.count) saved messages.",
-                        timestamp: Date(),
-                        isRelay: false
-                    )
-                    messages.append(systemMessage)
-                } else {
-                    let systemMessage = BitchatMessage(
-                        sender: "system",
-                        content: "room \(room) \(status).",
-                        timestamp: Date(),
-                        isRelay: false
-                    )
-                    messages.append(systemMessage)
                 }
             } else {
+                // Disable retention for this room
+                retentionEnabledRooms.remove(room)
+                savedRooms.remove(room)
+                
+                // Delete all saved messages for this room
+                MessageRetentionService.shared.deleteMessagesForRoom(room)
+                _ = MessageRetentionService.shared.toggleFavoriteRoom(room) // Disable if enabled
+                
+                // Announce to all members that retention is disabled
+                meshService.sendRoomRetentionAnnouncement(room, enabled: false)
+                
                 let systemMessage = BitchatMessage(
                     sender: "system",
-                    content: "room \(room) \(status).",
+                    content: "message retention disabled for room \(room). all saved messages will be deleted on all devices.",
                     timestamp: Date(),
                     isRelay: false
                 )
                 messages.append(systemMessage)
             }
+            
+            // Save the updated room data
+            saveRoomData()
         default:
             // Unknown command
             let systemMessage = BitchatMessage(
@@ -1840,8 +1940,8 @@ extension ChatViewModel: BitchatDelegate {
                 roomMessages[room]?.append(messageToAdd)
                 roomMessages[room]?.sort { $0.timestamp < $1.timestamp }
                 
-                // Save message if room is a favorite
-                if MessageRetentionService.shared.getFavoriteRooms().contains(room) {
+                // Save message if room has retention enabled
+                if retentionEnabledRooms.contains(room) {
                     MessageRetentionService.shared.saveMessage(messageToAdd, forRoom: room)
                 }
                 
