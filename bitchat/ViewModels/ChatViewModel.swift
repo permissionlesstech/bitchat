@@ -78,8 +78,6 @@ class ChatViewModel: ObservableObject {
         meshService.delegate = self
         
         // Log startup info
-        bitchatLog("ChatViewModel initialized", category: "startup")
-        bitchatLog("Nickname: \(nickname)", category: "startup")
         
         // Start mesh service immediately
         meshService.startServices()
@@ -136,7 +134,6 @@ class ChatViewModel: ObservableObject {
                     let savedMessages = MessageRetentionService.shared.loadMessagesForRoom(room)
                     if !savedMessages.isEmpty {
                         roomMessages[room] = savedMessages
-                        bitchatLog("Loaded \(savedMessages.count) saved messages for room \(room) on startup", category: "retention")
                     }
                 }
             }
@@ -194,7 +191,6 @@ class ChatViewModel: ObservableObject {
         // Ensure room starts with #
         let roomTag = room.hasPrefix("#") ? room : "#\(room)"
         
-        bitchatLog("joinRoom called for \(roomTag), password provided: \(password != nil), is protected: \(passwordProtectedRooms.contains(roomTag)), has key: \(roomKeys[roomTag] != nil)", category: "room")
         
         // Check if room is already joined and we can access it
         if joinedRooms.contains(roomTag) {
@@ -202,7 +198,6 @@ class ChatViewModel: ObservableObject {
             if passwordProtectedRooms.contains(roomTag) && roomKeys[roomTag] == nil {
                 if let password = password {
                     // User provided password for already-joined room - verify it
-                    bitchatLog("Verifying password for already-joined room \(roomTag)", category: "room")
                     
                     // Derive key and try to verify
                     let key = deriveRoomKey(from: password, roomName: roomTag)
@@ -211,10 +206,8 @@ class ChatViewModel: ObservableObject {
                     if let expectedCommitment = roomKeyCommitments[roomTag] {
                         let actualCommitment = computeKeyCommitment(for: key)
                         if actualCommitment != expectedCommitment {
-                            bitchatLog("Password verification failed - key commitment mismatch for already-joined room \(roomTag)", category: "room")
                             return false
                         }
-                        bitchatLog("Password verified via key commitment for already-joined room \(roomTag)", category: "room")
                     }
                     
                     // Check if we have messages to verify against
@@ -224,10 +217,8 @@ class ChatViewModel: ObservableObject {
                            let encryptedData = encryptedMsg.encryptedContent {
                             let testDecrypted = decryptRoomMessage(encryptedData, room: roomTag, testKey: key)
                             if testDecrypted == nil {
-                                bitchatLog("Password verification failed for already-joined room", category: "room")
                                 return false
                             }
-                            bitchatLog("Password verified for already-joined room", category: "room")
                         }
                     }
                     
@@ -242,7 +233,6 @@ class ChatViewModel: ObservableObject {
                     // Need password to access
                     passwordPromptRoom = roomTag
                     showPasswordPrompt = true
-                    bitchatLog("Room \(roomTag) already joined but needs password, showing prompt", category: "room")
                     return false
                 }
             }
@@ -255,7 +245,6 @@ class ChatViewModel: ObservableObject {
         if passwordProtectedRooms.contains(roomTag) && roomKeys[roomTag] == nil {
             // Allow room creator to bypass password check
             if roomCreators[roomTag] == meshService.myPeerID {
-                bitchatLog("Room creator bypassing password check for room \(roomTag)", category: "room")
                 // Room creator should already have the key set when they created the password
                 // This is a failsafe - just proceed without password
             } else if let password = password {
@@ -266,11 +255,8 @@ class ChatViewModel: ObservableObject {
                 if let expectedCommitment = roomKeyCommitments[roomTag] {
                     let actualCommitment = computeKeyCommitment(for: key)
                     if actualCommitment != expectedCommitment {
-                        bitchatLog("Password verification failed - key commitment mismatch for room \(roomTag)", category: "room")
-                        bitchatLog("Expected: \(expectedCommitment), Got: \(actualCommitment)", category: "room")
                         return false
                     }
-                    bitchatLog("Password verified via key commitment for room \(roomTag)", category: "room")
                 }
                 
                 // Try to verify password if there are existing encrypted messages
@@ -280,24 +266,19 @@ class ChatViewModel: ObservableObject {
                 if let roomMsgs = roomMessages[roomTag], !roomMsgs.isEmpty {
                     // Look for encrypted messages to verify against
                     let encryptedMessages = roomMsgs.filter { $0.isEncrypted && $0.encryptedContent != nil }
-                    bitchatLog("Found \(encryptedMessages.count) encrypted messages in room \(roomTag) to verify against", category: "room")
                     
                     if let encryptedMsg = encryptedMessages.first,
                        let encryptedData = encryptedMsg.encryptedContent {
                         // Test decryption with the derived key
-                        bitchatLog("Testing password by decrypting message from \(encryptedMsg.sender)", category: "room")
                         let testDecrypted = decryptRoomMessage(encryptedData, room: roomTag, testKey: key)
                         if testDecrypted == nil {
                             // Password is wrong, can't decrypt
-                            bitchatLog("WRONG PASSWORD - decryption failed for room \(roomTag)", category: "room")
                             shouldProceed = false
                         } else {
-                            bitchatLog("Password VERIFIED - successfully decrypted message: \(testDecrypted?.prefix(20) ?? "")", category: "room")
                             passwordVerified = true
                         }
                     } else {
                         // No encrypted messages yet - accept tentatively
-                        bitchatLog("No encrypted messages to verify password for room \(roomTag) - accepting tentatively", category: "room")
                         
                         // Add warning message
                         let warningMsg = BitchatMessage(
@@ -310,7 +291,6 @@ class ChatViewModel: ObservableObject {
                     }
                 } else {
                     // Empty room - accept tentatively
-                    bitchatLog("Room \(roomTag) is empty - accepting password tentatively", category: "room")
                     
                     // Add info message
                     let infoMsg = BitchatMessage(
@@ -334,21 +314,17 @@ class ChatViewModel: ObservableObject {
                 _ = KeychainManager.shared.saveRoomPassword(password, for: roomTag)
                 
                 if passwordVerified {
-                    bitchatLog("Password stored for room \(roomTag) - verified", category: "room")
                 } else {
-                    bitchatLog("Password stored for room \(roomTag) - tentative, awaiting verification", category: "room")
                 }
             } else {
                 // Show password prompt and return early - don't join the room yet
                 passwordPromptRoom = roomTag
                 showPasswordPrompt = true
-                bitchatLog("Room \(roomTag) is password protected, showing prompt", category: "room")
                 return false
             }
         }
         
         // At this point, room is either not password protected or we don't know yet
-        bitchatLog("Joining room \(roomTag) - not known to be password protected or have key", category: "room")
         
         joinedRooms.insert(roomTag)
         saveJoinedRooms()
@@ -358,7 +334,6 @@ class ChatViewModel: ObservableObject {
         if roomCreators[roomTag] == nil && !passwordProtectedRooms.contains(roomTag) {
             roomCreators[roomTag] = meshService.myPeerID
             saveRoomData()
-            bitchatLog("Set room creator for new room \(roomTag) to \(meshService.myPeerID)", category: "room")
         }
         
         // Add ourselves as a member
@@ -393,7 +368,6 @@ class ChatViewModel: ObservableObject {
                 }
                 // Sort by timestamp
                 roomMessages[roomTag]?.sort { $0.timestamp < $1.timestamp }
-                bitchatLog("Loaded \(savedMessages.count) saved messages for favorite room \(roomTag)", category: "retention")
             }
         }
         
@@ -432,13 +406,11 @@ class ChatViewModel: ObservableObject {
         
         // Check if room already has a creator
         if let existingCreator = roomCreators[room], existingCreator != meshService.myPeerID {
-            bitchatLog("Cannot set password - room \(room) already has creator: \(existingCreator)", category: "room")
             return
         }
         
         // If room is already password protected by someone else, we can't claim it
         if passwordProtectedRooms.contains(room) && roomCreators[room] != meshService.myPeerID {
-            bitchatLog("Cannot set password - room \(room) is already password protected by another user", category: "room")
             return
         }
         
@@ -482,13 +454,11 @@ class ChatViewModel: ObservableObject {
         let initMessage = "🔐 Room \(room) initialized | Protected room created by \(nickname) | Metadata: \(metadataStr)"
         meshService.sendEncryptedRoomMessage(initMessage, mentions: [], room: room, roomKey: key)
         
-        bitchatLog("Set password for room \(room) and sent init message", category: "room")
     }
     
     func removeRoomPassword(for room: String) {
         // Only room creator can remove password
         guard roomCreators[room] == meshService.myPeerID else {
-            bitchatLog("Only room creator can remove password", category: "room")
             return
         }
         
@@ -505,7 +475,6 @@ class ChatViewModel: ObservableObject {
         // Announce that this room is no longer password protected
         meshService.announcePasswordProtectedRoom(room, isProtected: false, creatorID: meshService.myPeerID)
         
-        bitchatLog("Removed password for room \(room)", category: "room")
     }
     
     // Transfer room ownership to another user
@@ -576,7 +545,6 @@ class ChatViewModel: ObservableObject {
             meshService.sendMessage(transferMsg.content, mentions: [targetNick])
         }
         
-        bitchatLog("Transferred ownership of room \(currentRoom) to \(targetPeerID)", category: "room")
     }
     
     // Change password for current room
@@ -667,7 +635,6 @@ class ChatViewModel: ObservableObject {
         )
         messages.append(successMsg)
         
-        bitchatLog("Changed password for room \(currentRoom)", category: "room")
     }
     
     // Compute SHA256 hash of the derived key for public verification
@@ -683,7 +650,6 @@ class ChatViewModel: ObservableObject {
         let keyData = pbkdf2(password: password, salt: salt, iterations: 100000, keyLength: 32)
         
         // Debug logging
-        bitchatLog("Derived key for room \(roomName) with password '\(password)' - key hash: \(keyData.prefix(8).hexEncodedString())", category: "crypto")
         
         return SymmetricKey(data: keyData)
     }
@@ -848,7 +814,6 @@ class ChatViewModel: ObservableObject {
                     roomMembers[room] = Set()
                 }
                 roomMembers[room]?.insert(meshService.myPeerID)
-                bitchatLog("Added self \(meshService.myPeerID) to room \(room), total members: \(roomMembers[room]?.count ?? 0)", category: "room")
             } else {
                 // Add to main messages
                 messages.append(message)
@@ -990,7 +955,6 @@ class ChatViewModel: ObservableObject {
         // Force UI update
         objectWillChange.send()
         
-        bitchatLog("PANIC: All data cleared for safety", category: "security")
     }
     
     
@@ -1274,7 +1238,6 @@ extension ChatViewModel: BitchatDelegate {
         // Remove peer from room members
         if roomMembers[room] != nil {
             roomMembers[room]?.remove(peerID)
-            bitchatLog("Removed peer \(peerID) from room \(room) members", category: "room")
             
             // Force UI update
             objectWillChange.send()
@@ -1293,12 +1256,10 @@ extension ChatViewModel: BitchatDelegate {
             // Store the key commitment if provided
             if let commitment = keyCommitment {
                 roomKeyCommitments[room] = commitment
-                bitchatLog("Stored key commitment for room \(room): \(commitment)", category: "room")
             }
             
             // If we just learned this room is protected and we're in it without a key, prompt for password
             if !wasAlreadyProtected && joinedRooms.contains(room) && roomKeys[room] == nil {
-                bitchatLog("Just learned room \(room) is password protected, need to prompt for password", category: "room")
                 
                 // Add system message
                 let systemMessage = BitchatMessage(
@@ -1326,41 +1287,34 @@ extension ChatViewModel: BitchatDelegate {
         // Save updated room data
         saveRoomData()
         
-        bitchatLog("Room \(room) is now \(isProtected ? "password protected" : "public")", category: "room")
     }
     
     func decryptRoomMessage(_ encryptedContent: Data, room: String, testKey: SymmetricKey? = nil) -> String? {
         let key = testKey ?? roomKeys[room]
         guard let key = key else {
-            bitchatLog("No key available for encrypted room \(room)", category: "room")
             return nil
         }
         
         // Debug logging
         let keyData = key.withUnsafeBytes { Data($0) }
-        bitchatLog("Attempting to decrypt with key hash: \(keyData.prefix(8).hexEncodedString()) for room \(room)", category: "crypto")
         
         do {
             let sealedBox = try AES.GCM.SealedBox(combined: encryptedContent)
             let decryptedData = try AES.GCM.open(sealedBox, using: key)
             let decryptedString = String(data: decryptedData, encoding: .utf8)
-            bitchatLog("Successfully decrypted message: \(decryptedString?.prefix(20) ?? "nil")", category: "crypto")
             return decryptedString
         } catch {
-            bitchatLog("Failed to decrypt room message: \(error)", category: "crypto")
             return nil
         }
     }
     
     func didReceiveRoomRetentionAnnouncement(_ room: String, enabled: Bool, creatorID: String?) {
-        bitchatLog("Received retention announcement for room \(room): \(enabled ? "enabled" : "disabled") by \(creatorID ?? "unknown")", category: "room")
         
         // Only process if we're a member of this room
         guard joinedRooms.contains(room) else { return }
         
         // Verify the announcement is from the room owner
         if let creatorID = creatorID, roomCreators[room] != creatorID {
-            bitchatLog("Ignoring retention announcement from non-owner \(creatorID) for room \(room)", category: "room")
             return
         }
         
@@ -1658,15 +1612,12 @@ extension ChatViewModel: BitchatDelegate {
             if let room = currentRoom {
                 // Clear room messages
                 roomMessages[room]?.removeAll()
-                bitchatLog("cleared messages in room \(room)", category: "chat")
             } else if let peerID = selectedPrivateChatPeer {
                 // Clear private chat
                 privateChats[peerID]?.removeAll()
-                bitchatLog("cleared private chat with \(peerID)", category: "chat")
             } else {
                 // Clear main messages
                 messages.removeAll()
-                bitchatLog("cleared main chat", category: "chat")
             }
         case "/save":
             // Toggle retention for current room (owner only)
@@ -1766,7 +1717,6 @@ extension ChatViewModel: BitchatDelegate {
     }
     
     func didReceiveMessage(_ message: BitchatMessage) {
-        bitchatLog("Received message from \(message.sender), room: \(message.room ?? "nil"), senderPeerID: \(message.senderPeerID ?? "nil")", category: "message")
         
         if message.isPrivate {
             // Handle private message
@@ -1812,7 +1762,6 @@ extension ChatViewModel: BitchatDelegate {
                     if wasNewlyDiscovered {
                         passwordProtectedRooms.insert(room)
                         saveRoomData()
-                        bitchatLog("Discovered room \(room) is password protected from encrypted message", category: "room")
                         
                         // Add a system message to indicate the room is password protected (only once)
                         let systemMessage = BitchatMessage(
@@ -1831,11 +1780,9 @@ extension ChatViewModel: BitchatDelegate {
                     if currentRoom == room {
                         passwordPromptRoom = room
                         showPasswordPrompt = true
-                        bitchatLog("Showing password prompt for encrypted message in current room \(room)", category: "room")
                     }
                 } else if message.isEncrypted && roomKeys[room] != nil && message.content == "[Encrypted message - password required]" {
                     // We have a key but the message shows as encrypted - try to decrypt it again
-                    bitchatLog("Received encrypted message placeholder but we have a key - attempting re-decryption", category: "room")
                     
                     // Check if this is the first encrypted message in the room (password verification opportunity)
                     let isFirstEncryptedMessage = roomMessages[room]?.filter { $0.isEncrypted }.isEmpty ?? true
@@ -1843,10 +1790,8 @@ extension ChatViewModel: BitchatDelegate {
                     if let encryptedData = message.encryptedContent {
                         if let decryptedContent = decryptRoomMessage(encryptedData, room: room) {
                             // Successfully decrypted - update the message content
-                            bitchatLog("Re-decryption successful! Content: \(decryptedContent.prefix(20))", category: "room")
                             
                             if isFirstEncryptedMessage {
-                                bitchatLog("First encrypted message successfully decrypted - password VERIFIED for room \(room)", category: "room")
                                 
                                 // Add success message
                                 let verifiedMsg = BitchatMessage(
@@ -1878,7 +1823,6 @@ extension ChatViewModel: BitchatDelegate {
                             messageToAdd = decryptedMessage
                         } else {
                             // Decryption really failed - wrong password
-                            bitchatLog("Re-decryption failed - password is actually wrong", category: "room")
                             
                             // Clear the wrong password
                             roomKeys.removeValue(forKey: room)
@@ -1886,7 +1830,6 @@ extension ChatViewModel: BitchatDelegate {
                             
                             // If this was the first encrypted message, we need to kick the user out
                             if isFirstEncryptedMessage {
-                                bitchatLog("First encrypted message failed to decrypt - WRONG PASSWORD, removing user from room", category: "room")
                                 
                                 // Leave the room
                                 joinedRooms.remove(room)
@@ -1951,9 +1894,7 @@ extension ChatViewModel: BitchatDelegate {
                 }
                 if let senderPeerID = message.senderPeerID {
                     roomMembers[room]?.insert(senderPeerID)
-                    bitchatLog("Added member \(senderPeerID) to room \(room), total members: \(roomMembers[room]?.count ?? 0)", category: "room")
                 } else {
-                    bitchatLog("No senderPeerID for message in room \(room)", category: "room")
                 }
                 
                 // Update unread count if not currently viewing this room
@@ -1962,7 +1903,6 @@ extension ChatViewModel: BitchatDelegate {
                 }
             } else {
                 // We're not in this room, ignore the message
-                bitchatLog("Ignoring message for room \(room) - not joined", category: "room")
             }
         } else {
             // Regular public message (main chat)
