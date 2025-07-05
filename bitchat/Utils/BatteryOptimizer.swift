@@ -7,8 +7,10 @@
 //
 
 import Foundation
+import Combine
+#if os(iOS)
 import UIKit
-#if os(macOS)
+#elseif os(macOS)
 import IOKit.ps
 #endif
 
