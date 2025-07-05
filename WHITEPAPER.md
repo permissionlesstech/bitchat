@@ -161,8 +161,8 @@ sequenceDiagram
     C->>B: Scan & Connect (Central)
     
     Note over A,C: Communication Phase
-    A<<->>B: Bidirectional Communication
-    B<<->>C: Bidirectional Communication
+    A<-->B: Bidirectional Communication
+    B<-->C: Bidirectional Communication
     
     Note over A: Acts as both<br/>Central & Peripheral
     Note over B: Acts as both<br/>Central & Peripheral
@@ -325,7 +325,7 @@ sequenceDiagram
     Alice->>Bob: Key Exchange Response<br/>(Encrypted with shared secret)
     Note over Bob: Derives shared secret<br/>verifies response
     
-    Alice<<->>Bob: Encrypted Communication<br/>(AES-256-GCM)
+    Alice<-->Bob: Encrypted Communication<br/>(AES-256-GCM)
     
     Note over Alice,Bob: Forward Secrecy Achieved
 ```
@@ -348,10 +348,10 @@ graph LR
     A --> K[256-bit Key]
     K --> AES[AES-256-GCM]
     
-    S["Salt: SHA256(roomName)"] --> A
-    I["Iterations: 10"] --> A
-    M["Memory: 64MB"] --> A
-    T["Parallelism: 4"] --> A
+    S[Salt - SHA256 of roomName] --> A
+    I[Iterations - 10] --> A
+    M[Memory - 64MB] --> A
+    T[Parallelism - 4] --> A
     
     style P fill:#ffccbc
     style A fill:#b3e5fc
