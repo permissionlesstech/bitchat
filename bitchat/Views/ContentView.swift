@@ -259,11 +259,35 @@ struct ContentView: View {
                     
                     Spacer()
                     
+                    // Password button for room creator
+                    if viewModel.roomCreators[currentRoom] == viewModel.meshService.myPeerID || viewModel.roomCreators[currentRoom] == nil {
+                        Button(action: {
+                            // Toggle password protection
+                            if viewModel.passwordProtectedRooms.contains(currentRoom) {
+                                viewModel.removeRoomPassword(for: currentRoom)
+                            } else {
+                                // Show password input
+                                showPasswordInput = true
+                                passwordInputRoom = currentRoom
+                            }
+                        }) {
+                            Image(systemName: viewModel.passwordProtectedRooms.contains(currentRoom) ? "lock.open" : "lock")
+                                .font(.system(size: 14))
+                                .foregroundColor(secondaryTextColor)
+                                .padding(6)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .stroke(secondaryTextColor.opacity(0.5), lineWidth: 1)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    
                     // Leave room button
                     Button(action: {
                         viewModel.leaveRoom(currentRoom)
                     }) {
-                        Text("leave")
+                        Text("leave room")
                             .font(.system(size: 12, design: .monospaced))
                             .foregroundColor(Color.red)
                             .padding(.horizontal, 8)
@@ -611,7 +635,7 @@ struct ContentView: View {
                                                 Button(action: {
                                                     viewModel.leaveRoom(room)
                                                 }) {
-                                                    Text("leave")
+                                                    Text("leave room")
                                                         .font(.system(size: 10, design: .monospaced))
                                                         .foregroundColor(secondaryTextColor)
                                                         .padding(.horizontal, 8)
