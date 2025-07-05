@@ -296,6 +296,16 @@ struct ContentView: View {
                 Spacer()
                 
                 HStack(spacing: 8) {
+                    // Save button
+                    Button(action: {
+                        viewModel.sendMessage("/save")
+                    }) {
+                        Image(systemName: viewModel.savedRooms.contains(currentRoom) ? "bookmark.fill" : "bookmark")
+                            .font(.system(size: 16))
+                            .foregroundColor(viewModel.savedRooms.contains(currentRoom) ? Color.yellow : textColor)
+                    }
+                    .buttonStyle(.plain)
+                    
                     // Password button for room creator only
                     if viewModel.roomCreators[currentRoom] == viewModel.meshService.myPeerID {
                         Button(action: {
