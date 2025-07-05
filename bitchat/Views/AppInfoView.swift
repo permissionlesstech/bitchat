@@ -70,9 +70,6 @@ struct AppInfoView: View {
                         
                         FeatureRow(icon: "lock.fill", title: "Password Rooms",
                                   description: "Secure rooms with passwords and AES encryption")
-                        
-                        FeatureRow(icon: "mic.fill", title: "Voice Notes",
-                                  description: "Push-to-talk voice messages with compression")
                     }
                     
                     // Privacy
@@ -117,7 +114,6 @@ struct AppInfoView: View {
                             Text("Battery: Adaptive scanning based on level")
                             Text("Platform: Universal (iOS, iPadOS, macOS)")
                             Text("Rooms: Password-protected with key commitments")
-                            Text("Commands: /j /m /w /list /pass /favorite /discover")
                             Text("Storage: Keychain for passwords, encrypted retention")
                         }
                         .font(.system(size: 14, design: .monospaced))
@@ -203,9 +199,6 @@ struct AppInfoView: View {
                         
                         FeatureRow(icon: "lock.fill", title: "Password Rooms",
                                   description: "Secure rooms with passwords and AES encryption")
-                        
-                        FeatureRow(icon: "mic.fill", title: "Voice Notes",
-                                  description: "Push-to-talk voice messages with compression")
                     }
                     
                     // Privacy
@@ -250,7 +243,6 @@ struct AppInfoView: View {
                             Text("Battery: Adaptive scanning based on level")
                             Text("Platform: Universal (iOS, iPadOS, macOS)")
                             Text("Rooms: Password-protected with key commitments")
-                            Text("Commands: /j /m /w /list /pass /favorite /discover")
                             Text("Storage: Keychain for passwords, encrypted retention")
                         }
                         .font(.system(size: 14, design: .monospaced))
