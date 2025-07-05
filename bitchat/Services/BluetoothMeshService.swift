@@ -685,6 +685,88 @@ class BluetoothMeshService: NSObject {
         }
     }
     
+    func announcePasswordProtectedRoom(_ room: String, isProtected: Bool = true, creatorID: String? = nil) {
+        messageQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            // Payload format: room|isProtected|creatorID
+            let protectedFlag = isProtected ? "1" : "0"
+            let creator = creatorID ?? self.myPeerID
+            let payload = "\(room)|\(protectedFlag)|\(creator)"
+            
+            let packet = BitchatPacket(
+                type: MessageType.roomAnnounce.rawValue,
+                senderID: Data(self.myPeerID.utf8),
+                recipientID: SpecialRecipients.broadcast,
+                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                payload: Data(payload.utf8),
+                signature: nil,
+                ttl: 5  // Allow wider propagation for room announcements
+            )
+            
+            bitchatLog("Announcing room \(room) protection status: \(isProtected)", category: "room")
+            self.broadcastPacket(packet)
+        }
+    }
+    
+    func sendEncryptedRoomMessage(_ content: String, mentions: [String], room: String, roomKey: SymmetricKey) {
+        messageQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            let nickname = self.delegate as? ChatViewModel
+            let senderNick = nickname?.nickname ?? self.myPeerID
+            
+            // Encrypt the content
+            guard let contentData = content.data(using: .utf8) else { return }
+            
+            do {
+                let sealedBox = try AES.GCM.seal(contentData, using: roomKey)
+                let encryptedData = sealedBox.combined!
+                
+                // Create message with encrypted content
+                let message = BitchatMessage(
+                    sender: senderNick,
+                    content: "",  // Empty placeholder since actual content is encrypted
+                    timestamp: Date(),
+                    isRelay: false,
+                    originalSender: nil,
+                    isPrivate: false,
+                    recipientNickname: nil,
+                    senderPeerID: self.myPeerID,
+                    mentions: mentions.isEmpty ? nil : mentions,
+                    room: room,
+                    encryptedContent: encryptedData,
+                    isEncrypted: true
+                )
+                
+                if let messageData = message.toBinaryPayload() {
+                    // Sign the message payload
+                    let signature: Data?
+                    do {
+                        signature = try self.encryptionService.sign(messageData)
+                    } catch {
+                        signature = nil
+                    }
+                    
+                    let packet = BitchatPacket(
+                        type: MessageType.message.rawValue,
+                        senderID: Data(self.myPeerID.utf8),
+                        recipientID: SpecialRecipients.broadcast,
+                        timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                        payload: messageData,
+                        signature: signature,
+                        ttl: self.adaptiveTTL
+                    )
+                    
+                    self.broadcastPacket(packet)
+                    bitchatLog("Sent encrypted message to room \(room)", category: "room")
+                }
+            } catch {
+                bitchatLog("Failed to encrypt room message: \(error)", category: "crypto")
+            }
+        }
+    }
+    
     private func sendAnnouncementToPeer(_ peerID: String) {
         guard let vm = delegate as? ChatViewModel else { return }
         
@@ -1224,9 +1306,21 @@ class BluetoothMeshService: NSObject {
                         peerNicknames[senderID] = message.sender
                         peerNicknamesLock.unlock()
                         
+                        // Handle encrypted room messages
+                        var finalContent = message.content
+                        if message.isEncrypted, let room = message.room, let encryptedData = message.encryptedContent {
+                            // Try to decrypt the content
+                            if let decryptedContent = self.delegate?.decryptRoomMessage(encryptedData, room: room) {
+                                finalContent = decryptedContent
+                            } else {
+                                // Unable to decrypt - show placeholder
+                                finalContent = "[Encrypted message - password required]"
+                            }
+                        }
+                        
                         let messageWithPeerID = BitchatMessage(
                             sender: message.sender,
-                            content: message.content,
+                            content: finalContent,
                             timestamp: message.timestamp,
                             isRelay: message.isRelay,
                             originalSender: message.originalSender,
@@ -1234,7 +1328,9 @@ class BluetoothMeshService: NSObject {
                             recipientNickname: nil,
                             senderPeerID: senderID,
                             mentions: message.mentions,
-                            room: message.room
+                            room: message.room,
+                            encryptedContent: message.encryptedContent,
+                            isEncrypted: message.isEncrypted
                         )
                         
                         DispatchQueue.main.async {
@@ -1662,6 +1758,30 @@ class BluetoothMeshService: NSObject {
             relayPacket.ttl -= 1
             if relayPacket.ttl > 0 {
                 self.broadcastPacket(relayPacket)
+            }
+            
+        case .roomAnnounce:
+            if let payloadStr = String(data: packet.payload, encoding: .utf8) {
+                // Parse payload: room|isProtected|creatorID
+                let components = payloadStr.split(separator: "|").map(String.init)
+                if components.count >= 3 {
+                    let room = components[0]
+                    let isProtected = components[1] == "1"
+                    let creatorID = components[2]
+                    
+                    bitchatLog("Received room announcement: \(room) is \(isProtected ? "protected" : "public") by \(creatorID)", category: "room")
+                    
+                    DispatchQueue.main.async {
+                        self.delegate?.didReceivePasswordProtectedRoomAnnouncement(room, isProtected: isProtected, creatorID: creatorID)
+                    }
+                    
+                    // Relay announcement
+                    if packet.ttl > 1 {
+                        var relayPacket = packet
+                        relayPacket.ttl -= 1
+                        self.broadcastPacket(relayPacket)
+                    }
+                }
             }
             
         default:
