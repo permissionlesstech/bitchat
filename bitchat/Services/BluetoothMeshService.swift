@@ -685,14 +685,15 @@ class BluetoothMeshService: NSObject {
         }
     }
     
-    func announcePasswordProtectedRoom(_ room: String, isProtected: Bool = true, creatorID: String? = nil) {
+    func announcePasswordProtectedRoom(_ room: String, isProtected: Bool = true, creatorID: String? = nil, keyCommitment: String? = nil) {
         messageQueue.async { [weak self] in
             guard let self = self else { return }
             
-            // Payload format: room|isProtected|creatorID
+            // Payload format: room|isProtected|creatorID|keyCommitment
             let protectedFlag = isProtected ? "1" : "0"
             let creator = creatorID ?? self.myPeerID
-            let payload = "\(room)|\(protectedFlag)|\(creator)"
+            let commitment = keyCommitment ?? ""
+            let payload = "\(room)|\(protectedFlag)|\(creator)|\(commitment)"
             
             let packet = BitchatPacket(
                 type: MessageType.roomAnnounce.rawValue,
@@ -719,9 +720,14 @@ class BluetoothMeshService: NSObject {
             // Encrypt the content
             guard let contentData = content.data(using: .utf8) else { return }
             
+            // Debug logging
+            let keyData = roomKey.withUnsafeBytes { Data($0) }
+            bitchatLog("Encrypting message for room \(room) with key hash: \(keyData.prefix(8).hexEncodedString())", category: "crypto")
+            
             do {
                 let sealedBox = try AES.GCM.seal(contentData, using: roomKey)
                 let encryptedData = sealedBox.combined!
+                bitchatLog("Successfully encrypted message, size: \(encryptedData.count) bytes", category: "crypto")
                 
                 // Create message with encrypted content
                 let message = BitchatMessage(
@@ -1309,12 +1315,15 @@ class BluetoothMeshService: NSObject {
                         // Handle encrypted room messages
                         var finalContent = message.content
                         if message.isEncrypted, let room = message.room, let encryptedData = message.encryptedContent {
+                            bitchatLog("Processing encrypted message in room \(room), encrypted data size: \(encryptedData.count)", category: "crypto")
                             // Try to decrypt the content
                             if let decryptedContent = self.delegate?.decryptRoomMessage(encryptedData, room: room) {
                                 finalContent = decryptedContent
+                                bitchatLog("Successfully decrypted message in room \(room): \(decryptedContent.prefix(20))...", category: "crypto")
                             } else {
                                 // Unable to decrypt - show placeholder
                                 finalContent = "[Encrypted message - password required]"
+                                bitchatLog("Failed to decrypt message in room \(room) - will pass to ChatViewModel for re-attempt", category: "crypto")
                             }
                         }
                         
@@ -1762,17 +1771,18 @@ class BluetoothMeshService: NSObject {
             
         case .roomAnnounce:
             if let payloadStr = String(data: packet.payload, encoding: .utf8) {
-                // Parse payload: room|isProtected|creatorID
+                // Parse payload: room|isProtected|creatorID|keyCommitment
                 let components = payloadStr.split(separator: "|").map(String.init)
                 if components.count >= 3 {
                     let room = components[0]
                     let isProtected = components[1] == "1"
                     let creatorID = components[2]
+                    let keyCommitment = components.count >= 4 ? components[3] : nil
                     
-                    bitchatLog("Received room announcement: \(room) is \(isProtected ? "protected" : "public") by \(creatorID)", category: "room")
+                    bitchatLog("Received room announcement: \(room) is \(isProtected ? "protected" : "public") by \(creatorID)" + (keyCommitment != nil ? " with commitment" : ""), category: "room")
                     
                     DispatchQueue.main.async {
-                        self.delegate?.didReceivePasswordProtectedRoomAnnouncement(room, isProtected: isProtected, creatorID: creatorID)
+                        self.delegate?.didReceivePasswordProtectedRoomAnnouncement(room, isProtected: isProtected, creatorID: creatorID, keyCommitment: keyCommitment)
                     }
                     
                     // Relay announcement

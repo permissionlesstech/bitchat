@@ -18,15 +18,18 @@ struct MessagePadding {
     static func pad(_ data: Data, toSize targetSize: Int) -> Data {
         guard data.count < targetSize else { return data }
         
-        var padded = data
         let paddingNeeded = targetSize - data.count
         
-        // Add random padding bytes (more secure than zeros)
+        // PKCS#7 only supports padding up to 255 bytes
+        // If we need more padding than that, don't pad - return original data
+        guard paddingNeeded <= 255 else { return data }
+        
+        var padded = data
+        
+        // Standard PKCS#7 padding
         var randomBytes = [UInt8](repeating: 0, count: paddingNeeded - 1)
         _ = SecRandomCopyBytes(kSecRandomDefault, paddingNeeded - 1, &randomBytes)
         padded.append(contentsOf: randomBytes)
-        
-        // Last byte indicates padding length (PKCS#7 style)
         padded.append(UInt8(paddingNeeded))
         
         return padded
@@ -161,7 +164,7 @@ protocol BitchatDelegate: AnyObject {
     func didDisconnectFromPeer(_ peerID: String)
     func didUpdatePeerList(_ peers: [String])
     func didReceiveRoomLeave(_ room: String, from peerID: String)
-    func didReceivePasswordProtectedRoomAnnouncement(_ room: String, isProtected: Bool, creatorID: String?)
+    func didReceivePasswordProtectedRoomAnnouncement(_ room: String, isProtected: Bool, creatorID: String?, keyCommitment: String?)
     func decryptRoomMessage(_ encryptedContent: Data, room: String) -> String?
     
     // Optional method to check if a fingerprint belongs to a favorite peer
@@ -178,7 +181,7 @@ extension BitchatDelegate {
         // Default empty implementation
     }
     
-    func didReceivePasswordProtectedRoomAnnouncement(_ room: String, isProtected: Bool, creatorID: String?) {
+    func didReceivePasswordProtectedRoomAnnouncement(_ room: String, isProtected: Bool, creatorID: String?, keyCommitment: String?) {
         // Default empty implementation
     }
     

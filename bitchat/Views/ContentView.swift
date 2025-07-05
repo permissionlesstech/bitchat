@@ -23,6 +23,9 @@ struct ContentView: View {
     @State private var passwordInput = ""
     @State private var showPasswordPrompt = false
     @State private var passwordPromptInput = ""
+    @State private var showPasswordError = false
+    @State private var showCommandSuggestions = false
+    @State private var commandSuggestions: [String] = []
     
     private var backgroundColor: Color {
         colorScheme == .dark ? Color.black : Color.white
@@ -192,12 +195,23 @@ struct ContentView: View {
             }
             Button("Join") {
                 if let room = viewModel.passwordPromptRoom, !passwordPromptInput.isEmpty {
-                    viewModel.joinRoom(room, password: passwordPromptInput)
-                    passwordPromptInput = ""
+                    let success = viewModel.joinRoom(room, password: passwordPromptInput)
+                    if success {
+                        passwordPromptInput = ""
+                    } else {
+                        // Wrong password - show error
+                        passwordPromptInput = ""
+                        showPasswordError = true
+                    }
                 }
             }
         } message: {
-            Text("This room is password protected. Enter the password to join.")
+            Text("Room \(viewModel.passwordPromptRoom ?? "") is password protected. Enter the password to join.")
+        }
+        .alert("Wrong Password", isPresented: $showPasswordError) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("The password you entered is incorrect. Please try again.")
         }
     }
     
@@ -244,23 +258,46 @@ struct ContentView: View {
                 .buttonStyle(.plain)
             } else if let currentRoom = viewModel.currentRoom {
                 // Room header
-                HStack(spacing: 4) {
-                    Button(action: {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            showSidebar.toggle()
-                            sidebarDragOffset = 0
-                        }
-                    }) {
-                        Text(currentRoom)
-                            .font(.system(size: 18, weight: .medium, design: .monospaced))
-                            .foregroundColor(Color.blue)
+                Button(action: {
+                    viewModel.switchToRoom(nil)
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 12))
+                        Text("back")
+                            .font(.system(size: 14, design: .monospaced))
                     }
-                    .buttonStyle(.plain)
-                    
-                    Spacer()
-                    
-                    // Password button for room creator
-                    if viewModel.roomCreators[currentRoom] == viewModel.meshService.myPeerID || viewModel.roomCreators[currentRoom] == nil {
+                    .foregroundColor(textColor)
+                }
+                .buttonStyle(.plain)
+                
+                Spacer()
+                
+                Button(action: {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showSidebar.toggle()
+                        sidebarDragOffset = 0
+                    }
+                }) {
+                    HStack(spacing: 6) {
+                        if viewModel.passwordProtectedRooms.contains(currentRoom) {
+                            Image(systemName: "lock.fill")
+                                .font(.system(size: 14))
+                                .foregroundColor(Color.orange)
+                        }
+                        Text("room: \(currentRoom)")
+                            .font(.system(size: 16, weight: .medium, design: .monospaced))
+                            .foregroundColor(viewModel.passwordProtectedRooms.contains(currentRoom) ? Color.orange : Color.blue)
+                    }
+                }
+                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity)
+                
+                Spacer()
+                
+                HStack(spacing: 8) {
+                    // Password button for room creator only
+                    if viewModel.roomCreators[currentRoom] == viewModel.meshService.myPeerID {
                         Button(action: {
                             // Toggle password protection
                             if viewModel.passwordProtectedRooms.contains(currentRoom) {
@@ -271,14 +308,9 @@ struct ContentView: View {
                                 passwordInputRoom = currentRoom
                             }
                         }) {
-                            Image(systemName: viewModel.passwordProtectedRooms.contains(currentRoom) ? "lock.open" : "lock")
-                                .font(.system(size: 14))
-                                .foregroundColor(secondaryTextColor)
-                                .padding(6)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 4)
-                                        .stroke(secondaryTextColor.opacity(0.5), lineWidth: 1)
-                                )
+                            Image(systemName: viewModel.passwordProtectedRooms.contains(currentRoom) ? "lock.fill" : "lock")
+                                .font(.system(size: 16))
+                                .foregroundColor(viewModel.passwordProtectedRooms.contains(currentRoom) ? Color.yellow : textColor)
                         }
                         .buttonStyle(.plain)
                     }
@@ -287,31 +319,9 @@ struct ContentView: View {
                     Button(action: {
                         viewModel.leaveRoom(currentRoom)
                     }) {
-                        Text("leave room")
+                        Text("leave")
                             .font(.system(size: 12, design: .monospaced))
                             .foregroundColor(Color.red)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 2)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 4)
-                                    .stroke(Color.red.opacity(0.5), lineWidth: 1)
-                            )
-                    }
-                    .buttonStyle(.plain)
-                    
-                    // Back to main button
-                    Button(action: {
-                        viewModel.switchToRoom(nil)
-                    }) {
-                        Text("main")
-                            .font(.system(size: 12, design: .monospaced))
-                            .foregroundColor(textColor)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 2)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 4)
-                                    .stroke(textColor.opacity(0.5), lineWidth: 1)
-                            )
                     }
                     .buttonStyle(.plain)
                 }
@@ -373,7 +383,7 @@ struct ContentView: View {
                     let statusText = if !viewModel.isConnected {
                         "alone :/"
                     } else if roomCount > 0 {
-                        "\(otherPeersCount) \(otherPeersCount == 1 ? "person" : "people") / \(roomCount) \(roomCount == 1 ? "room" : "rooms")"
+                        "\(otherPeersCount) \(otherPeersCount == 1 ? "person" : "people")/\(roomCount) \(roomCount == 1 ? "room" : "rooms")"
                     } else {
                         "\(otherPeersCount) \(otherPeersCount == 1 ? "person" : "people")"
                     }
@@ -419,6 +429,7 @@ struct ContentView: View {
                                     .font(.system(size: 14, design: .monospaced))
                                     .fixedSize(horizontal: false, vertical: true)
                                     .frame(maxWidth: .infinity, alignment: .leading)
+                                    .textSelection(.enabled)
                             } else {
                                 // Regular messages with tappable sender name
                                 HStack(alignment: .top, spacing: 0) {
@@ -426,6 +437,7 @@ struct ContentView: View {
                                     Text("[\(viewModel.formatTimestamp(message.timestamp))] ")
                                         .font(.system(size: 12, design: .monospaced))
                                         .foregroundColor(secondaryTextColor)
+                                        .textSelection(.enabled)
                                     
                                     // Tappable sender name
                                     if message.sender != viewModel.nickname {
@@ -445,6 +457,7 @@ struct ContentView: View {
                                         Text("<\(message.sender)>")
                                             .font(.system(size: 12, weight: .medium, design: .monospaced))
                                             .foregroundColor(textColor)
+                                            .textSelection(.enabled)
                                     }
                                     
                                     Text(" ")
@@ -489,8 +502,65 @@ struct ContentView: View {
     }
     
     private var inputView: some View {
-        HStack(alignment: .center, spacing: 4) {
+        VStack(spacing: 0) {
+            // Command suggestions
+            if showCommandSuggestions && !commandSuggestions.isEmpty {
+                VStack(alignment: .leading, spacing: 0) {
+                    let commandDescriptions = [
+                        "/j": "join or create a room",
+                        "/list": "show your joined rooms",
+                        "/w": "see who's online",
+                        "/m": "send private message",
+                        "/clear": "clear chat messages",
+                        "/transfer": "transfer room ownership",
+                        "/pass": "change room password"
+                    ]
+                    
+                    ForEach(commandSuggestions, id: \.self) { command in
+                        Button(action: {
+                            // Replace current text with selected command
+                            messageText = command + " "
+                            showCommandSuggestions = false
+                            commandSuggestions = []
+                        }) {
+                            HStack {
+                                Text(command)
+                                    .font(.system(size: 11, design: .monospaced))
+                                    .foregroundColor(textColor)
+                                    .fontWeight(.medium)
+                                Spacer()
+                                if let description = commandDescriptions[command] {
+                                    Text(description)
+                                        .font(.system(size: 10, design: .monospaced))
+                                        .foregroundColor(secondaryTextColor)
+                                }
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 3)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .buttonStyle(.plain)
+                        .background(Color.gray.opacity(0.1))
+                    }
+                }
+                .background(backgroundColor)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(secondaryTextColor.opacity(0.3), lineWidth: 1)
+                )
+                .padding(.horizontal, 12)
+                .padding(.bottom, 4)
+            }
+            
+            HStack(alignment: .center, spacing: 4) {
             if viewModel.selectedPrivateChatPeer != nil {
+                Text("<\(viewModel.nickname)> →")
+                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .foregroundColor(Color.orange)
+                    .lineLimit(1)
+                    .fixedSize()
+                    .padding(.leading, 12)
+            } else if let currentRoom = viewModel.currentRoom, viewModel.passwordProtectedRooms.contains(currentRoom) {
                 Text("<\(viewModel.nickname)> →")
                     .font(.system(size: 12, weight: .medium, design: .monospaced))
                     .foregroundColor(Color.orange)
@@ -515,6 +585,27 @@ struct ContentView: View {
                     // Get cursor position (approximate - end of text for now)
                     let cursorPosition = newValue.count
                     viewModel.updateAutocomplete(for: newValue, cursorPosition: cursorPosition)
+                    
+                    // Check for command autocomplete
+                    if newValue.hasPrefix("/") && newValue.count >= 1 {
+                        let commandDescriptions = [
+                            ("/j", "join or create a room"),
+                            ("/list", "show your joined rooms"),
+                            ("/w", "see who's online"),
+                            ("/m", "send private message"),
+                            ("/clear", "clear chat messages"),
+                            ("/transfer", "transfer room ownership"),
+                            ("/pass", "change room password")
+                        ]
+                        let input = newValue.lowercased()
+                        commandSuggestions = commandDescriptions
+                            .filter { $0.0.starts(with: input) }
+                            .map { $0.0 }
+                        showCommandSuggestions = !commandSuggestions.isEmpty
+                    } else {
+                        showCommandSuggestions = false
+                        commandSuggestions = []
+                    }
                 }
                 .onSubmit {
                     sendMessage()
@@ -523,13 +614,16 @@ struct ContentView: View {
             Button(action: sendMessage) {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 20))
-                    .foregroundColor(viewModel.selectedPrivateChatPeer != nil ? Color.orange : textColor)
+                    .foregroundColor((viewModel.selectedPrivateChatPeer != nil || 
+                                     (viewModel.currentRoom != nil && viewModel.passwordProtectedRooms.contains(viewModel.currentRoom ?? ""))) 
+                                     ? Color.orange : textColor)
             }
             .buttonStyle(.plain)
             .padding(.trailing, 12)
             }
             .padding(.vertical, 8)
             .background(backgroundColor.opacity(0.95))
+        }
         .onAppear {
             isTextFieldFocused = true
         }
@@ -574,9 +668,17 @@ struct ContentView: View {
                             
                             ForEach(Array(viewModel.joinedRooms).sorted(), id: \.self) { room in
                                 Button(action: {
-                                    viewModel.switchToRoom(room)
-                                    withAnimation(.spring()) {
-                                        showSidebar = false
+                                    // Check if room needs password and we don't have it
+                                    if viewModel.passwordProtectedRooms.contains(room) && viewModel.roomKeys[room] == nil {
+                                        // Need password
+                                        viewModel.passwordPromptRoom = room
+                                        viewModel.showPasswordPrompt = true
+                                    } else {
+                                        // Can enter room
+                                        viewModel.switchToRoom(room)
+                                        withAnimation(.spring()) {
+                                            showSidebar = false
+                                        }
                                     }
                                 }) {
                                     HStack {
@@ -607,7 +709,7 @@ struct ContentView: View {
                                         // Room controls
                                         if viewModel.currentRoom == room {
                                             HStack(spacing: 4) {
-                                                // Password button for room creator
+                                                // Password button for room creator only
                                                 if viewModel.roomCreators[room] == viewModel.meshService.myPeerID {
                                                     Button(action: {
                                                         // Toggle password protection
@@ -619,14 +721,18 @@ struct ContentView: View {
                                                             passwordInputRoom = room
                                                         }
                                                     }) {
-                                                        Image(systemName: viewModel.passwordProtectedRooms.contains(room) ? "lock.open" : "lock")
-                                                            .font(.system(size: 10))
-                                                            .foregroundColor(secondaryTextColor)
-                                                            .padding(4)
-                                                            .overlay(
-                                                                RoundedRectangle(cornerRadius: 4)
-                                                                    .stroke(secondaryTextColor.opacity(0.5), lineWidth: 1)
-                                                            )
+                                                        HStack(spacing: 2) {
+                                                            Image(systemName: viewModel.passwordProtectedRooms.contains(room) ? "lock.fill" : "lock")
+                                                                .font(.system(size: 10))
+                                                        }
+                                                        .foregroundColor(viewModel.passwordProtectedRooms.contains(room) ? backgroundColor : secondaryTextColor)
+                                                        .padding(.horizontal, 8)
+                                                        .padding(.vertical, 2)
+                                                        .background(viewModel.passwordProtectedRooms.contains(room) ? Color.orange : Color.clear)
+                                                        .overlay(
+                                                            RoundedRectangle(cornerRadius: 4)
+                                                                .stroke(viewModel.passwordProtectedRooms.contains(room) ? Color.orange : secondaryTextColor.opacity(0.5), lineWidth: 1)
+                                                        )
                                                     }
                                                     .buttonStyle(.plain)
                                                 }
@@ -846,22 +952,25 @@ struct MessageContentView: View {
             ForEach(Array(buildTextSegments().enumerated()), id: \.offset) { _, segment in
                 if segment.type == "hashtag" {
                     Button(action: {
-                        viewModel.joinRoom(segment.text)
+                        _ = viewModel.joinRoom(segment.text)
                     }) {
                         Text(segment.text)
                             .font(.system(size: 14, weight: .semibold, design: .monospaced))
                             .foregroundColor(Color.blue)
                             .underline()
+                            .textSelection(.enabled)
                     }
                     .buttonStyle(.plain)
                 } else if segment.type == "mention" {
                     Text(segment.text)
                         .font(.system(size: 14, weight: .semibold, design: .monospaced))
                         .foregroundColor(Color.orange)
+                        .textSelection(.enabled)
                 } else {
                     Text(segment.text)
                         .font(.system(size: 14, design: .monospaced))
                         .fontWeight(isMentioned ? .bold : .regular)
+                        .textSelection(.enabled)
                 }
             }
         }

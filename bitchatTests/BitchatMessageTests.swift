@@ -42,6 +42,68 @@ class BitchatMessageTests: XCTestCase {
         XCTAssertTrue(decoded.mentions?.contains("bob") ?? false)
     }
     
+    func testRoomMessage() {
+        let roomMessage = BitchatMessage(
+            sender: "alice",
+            content: "Hello #general",
+            timestamp: Date(),
+            isRelay: false,
+            originalSender: nil,
+            isPrivate: false,
+            recipientNickname: nil,
+            senderPeerID: "alice123",
+            mentions: nil,
+            room: "#general"
+        )
+        
+        guard let encoded = roomMessage.toBinaryPayload() else {
+            XCTFail("Failed to encode room message")
+            return
+        }
+        
+        guard let decoded = BitchatMessage.fromBinaryPayload(encoded) else {
+            XCTFail("Failed to decode room message")
+            return
+        }
+        
+        XCTAssertEqual(decoded.room, "#general")
+        XCTAssertEqual(decoded.content, roomMessage.content)
+    }
+    
+    func testEncryptedRoomMessage() {
+        let encryptedData = Data([1, 2, 3, 4, 5, 6, 7, 8]) // Mock encrypted content
+        
+        let encryptedMessage = BitchatMessage(
+            sender: "bob",
+            content: "", // Empty for encrypted messages
+            timestamp: Date(),
+            isRelay: false,
+            originalSender: nil,
+            isPrivate: false,
+            recipientNickname: nil,
+            senderPeerID: "bob456",
+            mentions: nil,
+            room: "#secret",
+            encryptedContent: encryptedData,
+            isEncrypted: true
+        )
+        
+        guard let encoded = encryptedMessage.toBinaryPayload() else {
+            XCTFail("Failed to encode encrypted message")
+            return
+        }
+        
+        guard let decoded = BitchatMessage.fromBinaryPayload(encoded) else {
+            XCTFail("Failed to decode encrypted message")
+            return
+        }
+        
+        XCTAssertTrue(decoded.isEncrypted)
+        XCTAssertEqual(decoded.encryptedContent, encryptedData)
+        XCTAssertEqual(decoded.room, "#secret")
+        XCTAssertEqual(decoded.content, "") // Content should be empty for encrypted messages
+    }
+    
     func testPrivateMessage() {
         let privateMessage = BitchatMessage(
             sender: "alice",

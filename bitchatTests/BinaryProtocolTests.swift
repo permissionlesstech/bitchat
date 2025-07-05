@@ -14,7 +14,6 @@ class BinaryProtocolTests: XCTestCase {
     func testPacketEncodingDecoding() {
         // Test basic packet
         let packet = BitchatPacket(
-            version: 1,
             type: MessageType.message.rawValue,
             senderID: Data("testuser".utf8),
             recipientID: Data("recipient".utf8),
