@@ -64,6 +64,15 @@ struct AppInfoView: View {
                         
                         FeatureRow(icon: "at", title: "Mentions",
                                   description: "Use @nickname to notify specific users")
+                        
+                        FeatureRow(icon: "number", title: "Rooms",
+                                  description: "Create #rooms for topic-based conversations")
+                        
+                        FeatureRow(icon: "lock.fill", title: "Password Rooms",
+                                  description: "Secure rooms with passwords and AES encryption")
+                        
+                        FeatureRow(icon: "mic.fill", title: "Voice Notes",
+                                  description: "Push-to-talk voice messages with compression")
                     }
                     
                     // Privacy
@@ -86,9 +95,10 @@ struct AppInfoView: View {
                         
                         VStack(alignment: .leading, spacing: 8) {
                             Text("• Set your nickname in the header")
-                            Text("• Tap the people counter to see connected peers")
+                            Text("• Swipe left or tap room name for sidebar")
                             Text("• Tap a peer to start a private chat")
                             Text("• Use @nickname to mention someone")
+                            Text("• Use #roomname to create/join rooms")
                             Text("• Triple-tap the logo for panic mode")
                         }
                         .font(.system(size: 14, design: .monospaced))
@@ -106,6 +116,9 @@ struct AppInfoView: View {
                             Text("Store & Forward: 12h for all, ∞ for favorites")
                             Text("Battery: Adaptive scanning based on level")
                             Text("Platform: Universal (iOS, iPadOS, macOS)")
+                            Text("Rooms: Password-protected with key commitments")
+                            Text("Commands: /j /m /w /list /pass /favorite /discover")
+                            Text("Storage: Keychain for passwords, encrypted retention")
                         }
                         .font(.system(size: 14, design: .monospaced))
                         .foregroundColor(textColor)
@@ -184,6 +197,15 @@ struct AppInfoView: View {
                         
                         FeatureRow(icon: "at", title: "Mentions",
                                   description: "Use @nickname to notify specific users")
+                        
+                        FeatureRow(icon: "number", title: "Rooms",
+                                  description: "Create #rooms for topic-based conversations")
+                        
+                        FeatureRow(icon: "lock.fill", title: "Password Rooms",
+                                  description: "Secure rooms with passwords and AES encryption")
+                        
+                        FeatureRow(icon: "mic.fill", title: "Voice Notes",
+                                  description: "Push-to-talk voice messages with compression")
                     }
                     
                     // Privacy
@@ -206,9 +228,10 @@ struct AppInfoView: View {
                         
                         VStack(alignment: .leading, spacing: 8) {
                             Text("• Set your nickname in the header")
-                            Text("• Tap the people counter to see connected peers")
+                            Text("• Swipe left or tap room name for sidebar")
                             Text("• Tap a peer to start a private chat")
                             Text("• Use @nickname to mention someone")
+                            Text("• Use #roomname to create/join rooms")
                             Text("• Triple-tap the logo for panic mode")
                         }
                         .font(.system(size: 14, design: .monospaced))
@@ -226,6 +249,9 @@ struct AppInfoView: View {
                             Text("Store & Forward: 12h for all, ∞ for favorites")
                             Text("Battery: Adaptive scanning based on level")
                             Text("Platform: Universal (iOS, iPadOS, macOS)")
+                            Text("Rooms: Password-protected with key commitments")
+                            Text("Commands: /j /m /w /list /pass /favorite /discover")
+                            Text("Storage: Keychain for passwords, encrypted retention")
                         }
                         .font(.system(size: 14, design: .monospaced))
                         .foregroundColor(textColor)

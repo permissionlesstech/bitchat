@@ -56,7 +56,7 @@ class ChatViewModel: ObservableObject {
     private let joinedRoomsKey = "bitchat.joinedRooms"
     private let passwordProtectedRoomsKey = "bitchat.passwordProtectedRooms"
     private let roomCreatorsKey = "bitchat.roomCreators"
-    private let roomPasswordsKey = "bitchat.roomPasswords"
+    // private let roomPasswordsKey = "bitchat.roomPasswords" // Now using Keychain
     private let roomKeyCommitmentsKey = "bitchat.roomKeyCommitments"
     private var nicknameSaveTimer: Timer?
     
@@ -78,6 +78,9 @@ class ChatViewModel: ObservableObject {
         
         // Start mesh service immediately
         meshService.startServices()
+        
+        // Set up message retry service
+        MessageRetryService.shared.meshService = meshService
         
         // Request notification permission
         NotificationService.shared.requestAuthorization()
@@ -147,20 +150,22 @@ class ChatViewModel: ObservableObject {
             roomKeyCommitments = savedCommitments
         }
         
-        // Load room passwords (encrypted would be better, but keeping simple for now)
-        if let savedPasswords = userDefaults.dictionary(forKey: roomPasswordsKey) as? [String: String] {
-            roomPasswords = savedPasswords
-            // Derive keys for all saved passwords
-            for (room, password) in savedPasswords {
-                roomKeys[room] = deriveRoomKey(from: password, roomName: room)
-            }
+        // Load room passwords from Keychain
+        let savedPasswords = KeychainManager.shared.getAllRoomPasswords()
+        roomPasswords = savedPasswords
+        // Derive keys for all saved passwords
+        for (room, password) in savedPasswords {
+            roomKeys[room] = deriveRoomKey(from: password, roomName: room)
         }
     }
     
     private func saveRoomData() {
         userDefaults.set(Array(passwordProtectedRooms), forKey: passwordProtectedRoomsKey)
         userDefaults.set(roomCreators, forKey: roomCreatorsKey)
-        userDefaults.set(roomPasswords, forKey: roomPasswordsKey)
+        // Save passwords to Keychain instead of UserDefaults
+        for (room, password) in roomPasswords {
+            _ = KeychainManager.shared.saveRoomPassword(password, for: room)
+        }
         userDefaults.set(roomKeyCommitments, forKey: roomKeyCommitmentsKey)
         userDefaults.synchronize()
     }
@@ -304,7 +309,9 @@ class ChatViewModel: ObservableObject {
                 
                 // Store the key (tentatively if not verified)
                 roomKeys[roomTag] = key
-                roomPasswords[roomTag] = password  // Store for convenience (local only)
+                roomPasswords[roomTag] = password
+                // Save password to Keychain
+                _ = KeychainManager.shared.saveRoomPassword(password, for: roomTag)
                 
                 if passwordVerified {
                     bitchatLog("Password stored for room \(roomTag) - verified", category: "room")
@@ -352,6 +359,24 @@ class ChatViewModel: ObservableObject {
             roomMessages[roomTag] = []
         }
         
+        // Load saved messages if this is a favorite room
+        if MessageRetentionService.shared.getFavoriteRooms().contains(roomTag) {
+            let savedMessages = MessageRetentionService.shared.loadMessagesForRoom(roomTag)
+            if !savedMessages.isEmpty {
+                // Merge saved messages with current messages, avoiding duplicates
+                var existingMessageIDs = Set(roomMessages[roomTag]?.map { $0.id } ?? [])
+                for savedMessage in savedMessages {
+                    if !existingMessageIDs.contains(savedMessage.id) {
+                        roomMessages[roomTag]?.append(savedMessage)
+                        existingMessageIDs.insert(savedMessage.id)
+                    }
+                }
+                // Sort by timestamp
+                roomMessages[roomTag]?.sort { $0.timestamp < $1.timestamp }
+                bitchatLog("Loaded \(savedMessages.count) saved messages for favorite room \(roomTag)", category: "retention")
+            }
+        }
+        
         // Hide password prompt if it was showing
         showPasswordPrompt = false
         passwordPromptRoom = nil
@@ -377,6 +402,8 @@ class ChatViewModel: ObservableObject {
         roomMembers.removeValue(forKey: room)
         roomKeys.removeValue(forKey: room)
         roomPasswords.removeValue(forKey: room)
+        // Delete password from Keychain
+        _ = KeychainManager.shared.deleteRoomPassword(for: room)
     }
     
     // Password management
@@ -406,6 +433,8 @@ class ChatViewModel: ObservableObject {
         roomKeys[room] = key
         roomPasswords[room] = password
         passwordProtectedRooms.insert(room)
+        // Save password to Keychain
+        _ = KeychainManager.shared.saveRoomPassword(password, for: room)
         
         // Compute and store key commitment for verification
         let commitment = computeKeyCommitment(for: key)
@@ -447,6 +476,8 @@ class ChatViewModel: ObservableObject {
         roomPasswords.removeValue(forKey: room)
         roomKeyCommitments.removeValue(forKey: room)
         passwordProtectedRooms.remove(room)
+        // Delete password from Keychain
+        _ = KeychainManager.shared.deleteRoomPassword(for: room)
         
         // Save room data
         saveRoomData()
@@ -572,6 +603,8 @@ class ChatViewModel: ObservableObject {
         let newKey = deriveRoomKey(from: newPassword, roomName: currentRoom)
         roomKeys[currentRoom] = newKey
         roomPasswords[currentRoom] = newPassword
+        // Update password in Keychain
+        _ = KeychainManager.shared.saveRoomPassword(newPassword, for: currentRoom)
         
         // Compute new key commitment
         let newCommitment = computeKeyCommitment(for: newKey)
@@ -785,6 +818,11 @@ class ChatViewModel: ObservableObject {
                 }
                 roomMessages[room]?.append(message)
                 
+                // Save message if room is a favorite
+                if MessageRetentionService.shared.getFavoriteRooms().contains(room) {
+                    MessageRetentionService.shared.saveMessage(message, forRoom: room)
+                }
+                
                 // Track ourselves as a room member
                 if roomMembers[room] == nil {
                     roomMembers[room] = Set()
@@ -873,25 +911,63 @@ class ChatViewModel: ObservableObject {
         privateChats.removeAll()
         unreadPrivateMessages.removeAll()
         
+        // Clear all room data
+        joinedRooms.removeAll()
+        currentRoom = nil
+        roomMessages.removeAll()
+        unreadRoomMessages.removeAll()
+        roomMembers.removeAll()
+        roomPasswords.removeAll()
+        roomKeys.removeAll()
+        passwordProtectedRooms.removeAll()
+        roomCreators.removeAll()
+        roomKeyCommitments.removeAll()
+        showPasswordPrompt = false
+        passwordPromptRoom = nil
+        
+        // Clear all keychain passwords
+        _ = KeychainManager.shared.deleteAllPasswords()
+        
+        // Clear all retained messages
+        MessageRetentionService.shared.deleteAllStoredMessages()
+        
+        // Clear message retry queue
+        MessageRetryService.shared.clearRetryQueue()
+        
+        // Clear persisted room data from UserDefaults
+        userDefaults.removeObject(forKey: joinedRoomsKey)
+        userDefaults.removeObject(forKey: passwordProtectedRoomsKey)
+        userDefaults.removeObject(forKey: roomCreatorsKey)
+        userDefaults.removeObject(forKey: roomKeyCommitmentsKey)
+        
         // Reset nickname to anonymous
         nickname = "anon\(Int.random(in: 1000...9999))"
         saveNickname()
         
         // Clear favorites
         favoritePeers.removeAll()
+        peerIDToPublicKeyFingerprint.removeAll()
         saveFavorites()
         
         // Clear autocomplete state
         autocompleteSuggestions.removeAll()
         showAutocomplete = false
+        autocompleteRange = nil
+        selectedAutocompleteIndex = 0
+        
+        // Clear selected private chat
+        selectedPrivateChatPeer = nil
         
         // Disconnect from all peers
         meshService.emergencyDisconnectAll()
         
+        // Force immediate UserDefaults synchronization
+        userDefaults.synchronize()
+        
         // Force UI update
         objectWillChange.send()
         
-        // print("[PANIC] All data cleared for safety")
+        bitchatLog("PANIC: All data cleared for safety", category: "security")
     }
     
     
@@ -1416,6 +1492,59 @@ extension ChatViewModel: BitchatDelegate {
                 )
                 messages.append(systemMessage)
             }
+        case "/discover":
+            // Discover public rooms
+            var publicRooms: [String] = []
+            var protectedRooms: [String] = []
+            
+            // Find rooms from messages we've seen
+            for msg in messages {
+                if let room = msg.room {
+                    if passwordProtectedRooms.contains(room) {
+                        if !protectedRooms.contains(room) {
+                            protectedRooms.append(room)
+                        }
+                    } else {
+                        if !publicRooms.contains(room) {
+                            publicRooms.append(room)
+                        }
+                    }
+                }
+            }
+            
+            // Also check room messages we've cached
+            for (room, _) in roomMessages {
+                if passwordProtectedRooms.contains(room) {
+                    if !protectedRooms.contains(room) {
+                        protectedRooms.append(room)
+                    }
+                } else {
+                    if !publicRooms.contains(room) {
+                        publicRooms.append(room)
+                    }
+                }
+            }
+            
+            var discoveryMessage = ""
+            if publicRooms.isEmpty && protectedRooms.isEmpty {
+                discoveryMessage = "no rooms discovered yet. rooms appear as people use them."
+            } else {
+                if !publicRooms.isEmpty {
+                    discoveryMessage += "public rooms:\n" + publicRooms.sorted().joined(separator: ", ")
+                }
+                if !protectedRooms.isEmpty {
+                    if !discoveryMessage.isEmpty { discoveryMessage += "\n\n" }
+                    discoveryMessage += "protected rooms:\n" + protectedRooms.sorted().map { "\($0) 🔒" }.joined(separator: ", ")
+                }
+            }
+            
+            let systemMessage = BitchatMessage(
+                sender: "system",
+                content: discoveryMessage,
+                timestamp: Date(),
+                isRelay: false
+            )
+            messages.append(systemMessage)
         case "/transfer":
             // Transfer room ownership
             let parts = command.split(separator: " ", maxSplits: 1).map(String.init)
@@ -1468,6 +1597,65 @@ extension ChatViewModel: BitchatDelegate {
                 // Clear main messages
                 messages.removeAll()
                 bitchatLog("cleared main chat", category: "chat")
+            }
+        case "/favorite", "/fav":
+            // Toggle favorite status for current room
+            guard let room = currentRoom else {
+                let systemMessage = BitchatMessage(
+                    sender: "system",
+                    content: "you must be in a room to mark it as favorite.",
+                    timestamp: Date(),
+                    isRelay: false
+                )
+                messages.append(systemMessage)
+                break
+            }
+            
+            let isFavorite = MessageRetentionService.shared.toggleFavoriteRoom(room)
+            let status = isFavorite ? "added to" : "removed from"
+            
+            // If just marked as favorite, load any previously saved messages
+            if isFavorite {
+                let savedMessages = MessageRetentionService.shared.loadMessagesForRoom(room)
+                if !savedMessages.isEmpty {
+                    // Merge saved messages with current messages, avoiding duplicates
+                    var existingMessageIDs = Set(roomMessages[room]?.map { $0.id } ?? [])
+                    for savedMessage in savedMessages {
+                        if !existingMessageIDs.contains(savedMessage.id) {
+                            if roomMessages[room] == nil {
+                                roomMessages[room] = []
+                            }
+                            roomMessages[room]?.append(savedMessage)
+                            existingMessageIDs.insert(savedMessage.id)
+                        }
+                    }
+                    // Sort by timestamp
+                    roomMessages[room]?.sort { $0.timestamp < $1.timestamp }
+                    
+                    let systemMessage = BitchatMessage(
+                        sender: "system",
+                        content: "room \(room) \(status) favorites. loaded \(savedMessages.count) saved messages.",
+                        timestamp: Date(),
+                        isRelay: false
+                    )
+                    messages.append(systemMessage)
+                } else {
+                    let systemMessage = BitchatMessage(
+                        sender: "system",
+                        content: "room \(room) \(status) favorites.",
+                        timestamp: Date(),
+                        isRelay: false
+                    )
+                    messages.append(systemMessage)
+                }
+            } else {
+                let systemMessage = BitchatMessage(
+                    sender: "system",
+                    content: "room \(room) \(status) favorites.",
+                    timestamp: Date(),
+                    isRelay: false
+                )
+                messages.append(systemMessage)
             }
         default:
             // Unknown command
@@ -1655,6 +1843,11 @@ extension ChatViewModel: BitchatDelegate {
                 }
                 roomMessages[room]?.append(messageToAdd)
                 roomMessages[room]?.sort { $0.timestamp < $1.timestamp }
+                
+                // Save message if room is a favorite
+                if MessageRetentionService.shared.getFavoriteRooms().contains(room) {
+                    MessageRetentionService.shared.saveMessage(messageToAdd, forRoom: room)
+                }
                 
                 // Track room members - only track the sender as a member
                 if roomMembers[room] == nil {
