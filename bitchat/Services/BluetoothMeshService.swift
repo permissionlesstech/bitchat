@@ -74,6 +74,7 @@ class BluetoothMeshService: NSObject {
     private var cachedMessagesSentToPeer: Set<String> = []  // Track which peers have already received cached messages
     private var receivedMessageTimestamps: [String: Date] = [:]  // Track timestamps of received messages for debugging
     private var recentlySentMessages: Set<String> = []  // Short-term cache to prevent any duplicate sends
+    private var lastMessageFromPeer: [String: Date] = [:]  // Track last message time from each peer for connection prioritization
     
     // Battery and range optimizations
     private var scanDutyCycleTimer: Timer?
@@ -83,6 +84,10 @@ class BluetoothMeshService: NSObject {
     private var lastRSSIUpdate: [String: Date] = [:]  // Throttle RSSI updates
     private var batteryMonitorTimer: Timer?
     private var currentBatteryLevel: Float = 1.0  // Default to full battery
+    
+    // Battery optimizer integration
+    private let batteryOptimizer = BatteryOptimizer.shared
+    private var batteryOptimizerCancellables = Set<AnyCancellable>()
     
     // Peer list update debouncing
     private var peerListUpdateTimer: Timer?
@@ -123,40 +128,8 @@ class BluetoothMeshService: NSObject {
     private let aggregationWindow: TimeInterval = 0.1  // 100ms window
     private let maxAggregatedMessages = 5
     
-    // Bloom filter for efficient duplicate detection
-    private struct BloomFilter {
-        private var bitArray: [Bool]
-        private let size: Int = 4096  // 512 bytes
-        private let hashCount = 3
-        
-        init() {
-            bitArray = Array(repeating: false, count: size)
-        }
-        
-        mutating func insert(_ item: String) {
-            for i in 0..<hashCount {
-                let hash = item.hashValue &+ i.hashValue
-                let index = abs(hash) % size
-                bitArray[index] = true
-            }
-        }
-        
-        func contains(_ item: String) -> Bool {
-            for i in 0..<hashCount {
-                let hash = item.hashValue &+ i.hashValue
-                let index = abs(hash) % size
-                if !bitArray[index] {
-                    return false
-                }
-            }
-            return true
-        }
-        
-        mutating func reset() {
-            bitArray = Array(repeating: false, count: size)
-        }
-    }
-    private var messageBloomFilter = BloomFilter()
+    // Optimized Bloom filter for efficient duplicate detection
+    private var messageBloomFilter = OptimizedBloomFilter(expectedItems: 2000, falsePositiveRate: 0.01)
     private var bloomFilterResetTimer: Timer?
     
     // Network size estimation
@@ -289,9 +262,17 @@ class BluetoothMeshService: NSObject {
         // Start bloom filter reset timer (reset every 5 minutes)
         bloomFilterResetTimer = Timer.scheduledTimer(withTimeInterval: 300.0, repeats: true) { [weak self] _ in
             self?.messageQueue.async(flags: .barrier) {
-                self?.messageBloomFilter.reset()
-                self?.processedMessages.removeAll()
-                self?.processedKeyExchanges.removeAll()
+                guard let self = self else { return }
+                
+                // Adapt Bloom filter size based on network size
+                let networkSize = self.estimatedNetworkSize
+                self.messageBloomFilter = OptimizedBloomFilter.adaptive(for: networkSize)
+                
+                // Clear other duplicate detection sets
+                self.processedMessages.removeAll()
+                self.processedKeyExchanges.removeAll()
+                
+                print("[BloomFilter] Reset with network size: \(networkSize), memory: \(self.messageBloomFilter.memorySizeBytes) bytes")
             }
         }
         
@@ -388,8 +369,8 @@ class BluetoothMeshService: NSObject {
             self?.sendBroadcastAnnounce()
         }
         
-        // Start battery monitoring
-        startBatteryMonitoring()
+        // Setup battery optimizer
+        setupBatteryOptimizer()
         
         // Start cover traffic for privacy
         startCoverTraffic()
@@ -1319,11 +1300,20 @@ class BluetoothMeshService: NSObject {
             // Also check exact set for accuracy (bloom filter can have false positives)
             if processedMessages.contains(messageID) {
                 return
+            } else {
+                // False positive from Bloom filter
+                print("[BloomFilter] False positive detected for message: \(messageID)")
             }
         }
         
         messageBloomFilter.insert(messageID)
         processedMessages.insert(messageID)
+        
+        // Log statistics periodically
+        if messageBloomFilter.insertCount % 100 == 0 {
+            let fpRate = messageBloomFilter.estimatedFalsePositiveRate
+            print("[BloomFilter] Items: \(messageBloomFilter.insertCount), Est. FP rate: \(String(format: "%.3f%%", fpRate * 100))")
+        }
         
         // Reset bloom filter periodically to prevent saturation
         if processedMessages.count > 1000 {
@@ -2509,84 +2499,117 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
     
     // MARK: - Battery Monitoring
     
-    private func startBatteryMonitoring() {
-        // Update battery level immediately
-        updateBatteryLevel()
-        
-        // Monitor battery level every 30 seconds
-        batteryMonitorTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
-            self?.updateBatteryLevel()
-        }
-    }
-    
-    private func updateBatteryLevel() {
-        #if os(iOS)
-        UIDevice.current.isBatteryMonitoringEnabled = true
-        currentBatteryLevel = UIDevice.current.batteryLevel
-        
-        // Battery level is -1 when unknown (e.g., in simulator)
-        if currentBatteryLevel < 0 {
-            currentBatteryLevel = 1.0  // Assume full battery when unknown
-        }
-        #else
-        // macOS battery monitoring
-        if let batteryInfo = getMacOSBatteryInfo() {
-            currentBatteryLevel = batteryInfo
-        } else {
-            currentBatteryLevel = 1.0  // Assume full battery when unknown
-        }
-        #endif
-        
-        updateScanParametersForBattery()
-    }
-    
-    #if os(macOS)
-    private func getMacOSBatteryInfo() -> Float? {
-        let snapshot = IOPSCopyPowerSourcesInfo().takeRetainedValue()
-        let sources = IOPSCopyPowerSourcesList(snapshot).takeRetainedValue() as Array
-        
-        for source in sources {
-            if let description = IOPSGetPowerSourceDescription(snapshot, source).takeUnretainedValue() as? [String: Any] {
-                if let currentCapacity = description[kIOPSCurrentCapacityKey] as? Int,
-                   let maxCapacity = description[kIOPSMaxCapacityKey] as? Int {
-                    return Float(currentCapacity) / Float(maxCapacity)
-                }
+    private func setupBatteryOptimizer() {
+        // Subscribe to power mode changes
+        batteryOptimizer.$currentPowerMode
+            .sink { [weak self] powerMode in
+                self?.handlePowerModeChange(powerMode)
             }
-        }
-        return nil
+            .store(in: &batteryOptimizerCancellables)
+        
+        // Subscribe to battery level changes
+        batteryOptimizer.$batteryLevel
+            .sink { [weak self] level in
+                self?.currentBatteryLevel = level
+            }
+            .store(in: &batteryOptimizerCancellables)
+        
+        // Initial update
+        handlePowerModeChange(batteryOptimizer.currentPowerMode)
     }
-    #endif
     
-    private func updateScanParametersForBattery() {
-        // Adaptive scanning based on battery level
-        // High battery (80%+): Normal scanning
-        // Medium battery (40-80%): Moderate power saving
-        // Low battery (20-40%): Aggressive power saving  
-        // Critical battery (<20%): Maximum power saving
+    private func handlePowerModeChange(_ powerMode: PowerMode) {
+        let params = batteryOptimizer.scanParameters
+        activeScanDuration = params.duration
+        scanPauseDuration = params.pause
         
-        if currentBatteryLevel > 0.8 {
-            // High battery: Normal operation
-            activeScanDuration = 2.0
-            scanPauseDuration = 3.0
-        } else if currentBatteryLevel > 0.4 {
-            // Medium battery: Moderate power saving
-            activeScanDuration = 1.5
-            scanPauseDuration = 4.5
-        } else if currentBatteryLevel > 0.2 {
-            // Low battery: Aggressive power saving
-            activeScanDuration = 1.0
-            scanPauseDuration = 8.0
-        } else {
-            // Critical battery: Maximum power saving
-            activeScanDuration = 0.5
-            scanPauseDuration = 15.0
+        // Update max connections
+        let maxConnections = powerMode.maxConnections
+        
+        // If we have too many connections, disconnect from the least important ones
+        if connectedPeripherals.count > maxConnections {
+            disconnectLeastImportantPeripherals(keepCount: maxConnections)
         }
         
-        // If we're currently in a duty cycle, restart it with new parameters
+        // Update message aggregation window
+        aggregationWindow = powerMode.messageAggregationWindow
+        
+        // If we're currently scanning, restart with new parameters
         if scanDutyCycleTimer != nil {
             scanDutyCycleTimer?.invalidate()
             scheduleScanDutyCycle()
         }
+        
+        // Handle advertising intervals
+        if powerMode.advertisingInterval > 0 {
+            // Stop continuous advertising and use interval-based
+            scheduleAdvertisingCycle(interval: powerMode.advertisingInterval)
+        } else {
+            // Continuous advertising for performance mode
+            startAdvertisingIfNeeded()
+        }
+    }
+    
+    private func disconnectLeastImportantPeripherals(keepCount: Int) {
+        // Disconnect peripherals with lowest activity/importance
+        let sortedPeripherals = connectedPeripherals.values
+            .sorted { peer1, peer2 in
+                // Keep peripherals we've recently communicated with
+                let peer1Activity = lastMessageFromPeer[peer1.identifier.uuidString] ?? Date.distantPast
+                let peer2Activity = lastMessageFromPeer[peer2.identifier.uuidString] ?? Date.distantPast
+                return peer1Activity > peer2Activity
+            }
+        
+        // Disconnect the least active ones
+        let toDisconnect = sortedPeripherals.dropFirst(keepCount)
+        for peripheral in toDisconnect {
+            centralManager.cancelPeripheralConnection(peripheral)
+        }
+    }
+    
+    private var advertisingTimer: Timer?
+    
+    private func scheduleAdvertisingCycle(interval: TimeInterval) {
+        advertisingTimer?.invalidate()
+        
+        // Stop advertising
+        if isAdvertising {
+            peripheralManager.stopAdvertising()
+            isAdvertising = false
+        }
+        
+        // Schedule next advertising burst
+        advertisingTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+            self?.advertiseBurst()
+        }
+    }
+    
+    private func advertiseBurst() {
+        guard batteryOptimizer.currentPowerMode != .ultraLowPower || !batteryOptimizer.isInBackground else {
+            return // Skip advertising in ultra low power + background
+        }
+        
+        startAdvertisingIfNeeded()
+        
+        // Stop advertising after a short burst (1 second)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            if self?.batteryOptimizer.currentPowerMode.advertisingInterval ?? 0 > 0 {
+                self?.peripheralManager.stopAdvertising()
+                self?.isAdvertising = false
+            }
+        }
+    }
+    
+    // Legacy battery monitoring methods - kept for compatibility
+    // Now handled by BatteryOptimizer
+    private func updateBatteryLevel() {
+        // This method is now handled by BatteryOptimizer
+        // Keeping empty implementation for compatibility
+    }
+    
+    private func updateScanParametersForBattery() {
+        // This method is now handled by BatteryOptimizer through handlePowerModeChange
+        // Keeping empty implementation for compatibility
     }
     
     // MARK: - Privacy Utilities

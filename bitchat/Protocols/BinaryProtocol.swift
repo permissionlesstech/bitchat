@@ -42,11 +42,25 @@ struct BinaryProtocol {
     struct Flags {
         static let hasRecipient: UInt8 = 0x01
         static let hasSignature: UInt8 = 0x02
+        static let isCompressed: UInt8 = 0x04
     }
     
     // Encode BitchatPacket to binary format
     static func encode(_ packet: BitchatPacket) -> Data? {
         var data = Data()
+        
+        // Try to compress payload if beneficial
+        var payload = packet.payload
+        var originalPayloadSize: UInt16? = nil
+        var isCompressed = false
+        
+        if CompressionUtil.shouldCompress(payload),
+           let compressedPayload = CompressionUtil.compress(payload) {
+            // Store original size for decompression (2 bytes after payload)
+            originalPayloadSize = UInt16(payload.count)
+            payload = compressedPayload
+            isCompressed = true
+        }
         
         // Header
         data.append(packet.version)
@@ -66,10 +80,14 @@ struct BinaryProtocol {
         if packet.signature != nil {
             flags |= Flags.hasSignature
         }
+        if isCompressed {
+            flags |= Flags.isCompressed
+        }
         data.append(flags)
         
-        // Payload length (2 bytes, big-endian)
-        let payloadLength = UInt16(packet.payload.count)
+        // Payload length (2 bytes, big-endian) - includes original size if compressed
+        let payloadDataSize = payload.count + (isCompressed ? 2 : 0)
+        let payloadLength = UInt16(payloadDataSize)
         data.append(UInt8((payloadLength >> 8) & 0xFF))
         data.append(UInt8(payloadLength & 0xFF))
         
@@ -89,8 +107,13 @@ struct BinaryProtocol {
             }
         }
         
-        // Payload
-        data.append(packet.payload)
+        // Payload (with original size prepended if compressed)
+        if isCompressed, let originalSize = originalPayloadSize {
+            // Prepend original size (2 bytes, big-endian)
+            data.append(UInt8((originalSize >> 8) & 0xFF))
+            data.append(UInt8(originalSize & 0xFF))
+        }
+        data.append(payload)
         
         // Signature (if present)
         if let signature = packet.signature {
@@ -124,6 +147,7 @@ struct BinaryProtocol {
         let flags = data[offset]; offset += 1
         let hasRecipient = (flags & Flags.hasRecipient) != 0
         let hasSignature = (flags & Flags.hasSignature) != 0
+        let isCompressed = (flags & Flags.isCompressed) != 0
         
         // Payload length
         let payloadLengthData = data[offset..<offset+2]
@@ -155,8 +179,29 @@ struct BinaryProtocol {
         }
         
         // Payload
-        let payload = data[offset..<offset+Int(payloadLength)]
-        offset += Int(payloadLength)
+        let payload: Data
+        if isCompressed {
+            // First 2 bytes are original size
+            guard Int(payloadLength) >= 2 else { return nil }
+            let originalSizeData = data[offset..<offset+2]
+            let originalSize = Int(originalSizeData.reduce(0) { result, byte in
+                (result << 8) | UInt16(byte)
+            })
+            offset += 2
+            
+            // Compressed payload
+            let compressedPayload = data[offset..<offset+Int(payloadLength)-2]
+            offset += Int(payloadLength) - 2
+            
+            // Decompress
+            guard let decompressedPayload = CompressionUtil.decompress(compressedPayload, originalSize: originalSize) else {
+                return nil
+            }
+            payload = decompressedPayload
+        } else {
+            payload = data[offset..<offset+Int(payloadLength)]
+            offset += Int(payloadLength)
+        }
         
         // Signature
         var signature: Data?
