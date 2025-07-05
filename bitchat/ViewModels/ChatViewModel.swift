@@ -112,6 +112,15 @@ class ChatViewModel: ObservableObject {
     private func loadJoinedRooms() {
         if let savedRooms = userDefaults.stringArray(forKey: joinedRoomsKey) {
             joinedRooms = Set(savedRooms)
+            // Initialize empty data structures for joined rooms
+            for room in joinedRooms {
+                if roomMessages[room] == nil {
+                    roomMessages[room] = []
+                }
+                if roomMembers[room] == nil {
+                    roomMembers[room] = []
+                }
+            }
         }
     }
     
@@ -856,32 +865,33 @@ extension ChatViewModel: BitchatDelegate {
         } else if let room = message.room {
             // Room message
             
-            // Auto-join room if we see a message for it
-            if !joinedRooms.contains(room) {
-                joinRoom(room)
-            }
-            
-            // Add to room messages
-            if roomMessages[room] == nil {
-                roomMessages[room] = []
-            }
-            roomMessages[room]?.append(message)
-            roomMessages[room]?.sort { $0.timestamp < $1.timestamp }
-            
-            // Track room members - only track the sender as a member
-            if roomMembers[room] == nil {
-                roomMembers[room] = []
-            }
-            if let senderPeerID = message.senderPeerID {
-                roomMembers[room]?.insert(senderPeerID)
-                bitchatLog("Added member \(senderPeerID) to room \(room), total members: \(roomMembers[room]?.count ?? 0)", category: "room")
+            // Only process room messages if we've joined this room
+            if joinedRooms.contains(room) {
+                // Add to room messages
+                if roomMessages[room] == nil {
+                    roomMessages[room] = []
+                }
+                roomMessages[room]?.append(message)
+                roomMessages[room]?.sort { $0.timestamp < $1.timestamp }
+                
+                // Track room members - only track the sender as a member
+                if roomMembers[room] == nil {
+                    roomMembers[room] = []
+                }
+                if let senderPeerID = message.senderPeerID {
+                    roomMembers[room]?.insert(senderPeerID)
+                    bitchatLog("Added member \(senderPeerID) to room \(room), total members: \(roomMembers[room]?.count ?? 0)", category: "room")
+                } else {
+                    bitchatLog("No senderPeerID for message in room \(room)", category: "room")
+                }
+                
+                // Update unread count if not currently viewing this room
+                if currentRoom != room {
+                    unreadRoomMessages[room] = (unreadRoomMessages[room] ?? 0) + 1
+                }
             } else {
-                bitchatLog("No senderPeerID for message in room \(room)", category: "room")
-            }
-            
-            // Update unread count if not currently viewing this room
-            if currentRoom != room {
-                unreadRoomMessages[room] = (unreadRoomMessages[room] ?? 0) + 1
+                // We're not in this room, ignore the message
+                bitchatLog("Ignoring message for room \(room) - not joined", category: "room")
             }
         } else {
             // Regular public message (main chat)
