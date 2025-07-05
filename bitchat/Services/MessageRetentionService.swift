@@ -135,7 +135,6 @@ class MessageRetentionService {
                 }
             }
         } catch {
-            bitchatLog("Failed to load messages for room \(room): \(error)", category: "retention")
         }
         
         return messages.sorted { $0.timestamp < $1.timestamp }
@@ -148,7 +147,6 @@ class MessageRetentionService {
             let sealedBox = try AES.GCM.seal(data, using: encryptionKey)
             return sealedBox.combined
         } catch {
-            bitchatLog("Failed to encrypt message: \(error)", category: "retention")
             return nil
         }
     }
@@ -158,7 +156,6 @@ class MessageRetentionService {
             let sealedBox = try AES.GCM.SealedBox(combined: data)
             return try AES.GCM.open(sealedBox, using: encryptionKey)
         } catch {
-            bitchatLog("Failed to decrypt message: \(error)", category: "retention")
             return nil
         }
     }
@@ -179,7 +176,6 @@ class MessageRetentionService {
                 }
             }
         } catch {
-            bitchatLog("Failed to cleanup old messages: \(error)", category: "retention")
         }
     }
     
@@ -192,7 +188,6 @@ class MessageRetentionService {
                 try? FileManager.default.removeItem(at: fileURL)
             }
         } catch {
-            bitchatLog("Failed to delete messages for room \(room): \(error)", category: "retention")
         }
     }
     
@@ -203,7 +198,6 @@ class MessageRetentionService {
                 try? FileManager.default.removeItem(at: fileURL)
             }
         } catch {
-            bitchatLog("Failed to delete all stored messages: \(error)", category: "retention")
         }
         
         // Clear favorite rooms
