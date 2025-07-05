@@ -48,6 +48,7 @@ class ChatViewModel: ObservableObject {
     @Published var roomKeyCommitments: [String: String] = [:]  // room -> SHA256(derivedKey) for verification
     @Published var showPasswordPrompt: Bool = false
     @Published var passwordPromptRoom: String? = nil
+    @Published var savedRooms: Set<String> = []  // Rooms saved for message retention
     
     let meshService = BluetoothMeshService()
     private let userDefaults = UserDefaults.standard
@@ -70,6 +71,7 @@ class ChatViewModel: ObservableObject {
         loadFavorites()
         loadJoinedRooms()
         loadRoomData()
+        savedRooms = MessageRetentionService.shared.getFavoriteRooms()
         meshService.delegate = self
         
         // Log startup info
@@ -930,6 +932,7 @@ class ChatViewModel: ObservableObject {
         
         // Clear all retained messages
         MessageRetentionService.shared.deleteAllStoredMessages()
+        savedRooms.removeAll()
         
         // Clear message retry queue
         MessageRetryService.shared.clearRetryQueue()
@@ -1589,6 +1592,13 @@ extension ChatViewModel: BitchatDelegate {
             
             let isFavorite = MessageRetentionService.shared.toggleFavoriteRoom(room)
             let status = isFavorite ? "saved" : "unsaved"
+            
+            // Update published property
+            if isFavorite {
+                savedRooms.insert(room)
+            } else {
+                savedRooms.remove(room)
+            }
             
             // If just marked as favorite, load any previously saved messages
             if isFavorite {
