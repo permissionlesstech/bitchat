@@ -73,6 +73,7 @@ enum MessageType: UInt8 {
     case fragmentContinue = 0x06
     case fragmentEnd = 0x07
     case roomAnnounce = 0x08  // Announce password-protected room status
+    case roomRetention = 0x09  // Announce room retention status
 }
 
 // Special recipient ID for broadcast messages
@@ -165,6 +166,7 @@ protocol BitchatDelegate: AnyObject {
     func didUpdatePeerList(_ peers: [String])
     func didReceiveRoomLeave(_ room: String, from peerID: String)
     func didReceivePasswordProtectedRoomAnnouncement(_ room: String, isProtected: Bool, creatorID: String?, keyCommitment: String?)
+    func didReceiveRoomRetentionAnnouncement(_ room: String, enabled: Bool, creatorID: String?)
     func decryptRoomMessage(_ encryptedContent: Data, room: String) -> String?
     
     // Optional method to check if a fingerprint belongs to a favorite peer
@@ -182,6 +184,10 @@ extension BitchatDelegate {
     }
     
     func didReceivePasswordProtectedRoomAnnouncement(_ room: String, isProtected: Bool, creatorID: String?, keyCommitment: String?) {
+        // Default empty implementation
+    }
+    
+    func didReceiveRoomRetentionAnnouncement(_ room: String, enabled: Bool, creatorID: String?) {
         // Default empty implementation
     }
     
