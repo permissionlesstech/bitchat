@@ -47,3 +47,33 @@ targets:
       CODE_SIGNING_ALLOWED: YES
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
+
+  bitchatTests_iOS:
+    type: bundle.unit-test
+    platform: iOS
+    sources: 
+      - bitchatTests
+    dependencies:
+      - target: bitchat_iOS
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: chat.bitchat.tests
+      INFOPLIST_FILE: bitchatTests/Info.plist
+      SWIFT_VERSION: 5.0
+      IPHONEOS_DEPLOYMENT_TARGET: 16.0
+      TEST_HOST: $(BUILT_PRODUCTS_DIR)/bitchat.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/bitchat
+      BUNDLE_LOADER: $(TEST_HOST)
+      
+  bitchatTests_macOS:
+    type: bundle.unit-test
+    platform: macOS
+    sources: 
+      - bitchatTests
+    dependencies:
+      - target: bitchat_macOS
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: chat.bitchat.tests
+      INFOPLIST_FILE: bitchatTests/Info.plist
+      SWIFT_VERSION: 5.0
+      MACOSX_DEPLOYMENT_TARGET: 13.0
+      TEST_HOST: $(BUILT_PRODUCTS_DIR)/bitchat.app/Contents/MacOS/bitchat
+      BUNDLE_LOADER: $(TEST_HOST)

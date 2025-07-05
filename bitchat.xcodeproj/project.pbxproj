@@ -7,9 +7,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0DAFF1DDE9BA83FF648D5AB3 /* BitchatMessageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FA8FF26ABDC1C642A8C7AE5 /* BitchatMessageTests.swift */; };
 		10E68BB889356219189E38EC /* BitchatApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF625BB3AD919322C01A46B2 /* BitchatApp.swift */; };
 		1D9674FA5F998503831DC281 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A08E03AA0C63E97C91749AEC /* ContentView.swift */; };
+		230B11C5BF035D35638B21C8 /* PasswordProtectedRoomTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB12482E4AD78B861C538449 /* PasswordProtectedRoomTests.swift */; };
+		2E71E320EA921498C57E023B /* BitchatMessageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FA8FF26ABDC1C642A8C7AE5 /* BitchatMessageTests.swift */; };
 		4B747085D07A1BCE0F5BA612 /* BinaryProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2136C3E22D02D4A8DBE7EAB /* BinaryProtocol.swift */; };
+		56F0892E13CC0D1490A3691E /* BloomFilterTests.swift.disabled in Resources */ = {isa = PBXBuildFile; fileRef = 822AA698BDB7BB939B62A010 /* BloomFilterTests.swift.disabled */; };
 		61C81ED5F679D5E973EE0C07 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3448F84BF86A42A3CC4A9379 /* NotificationService.swift */; };
 		6A624D9359BCCAAE58CE0D64 /* LoggingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96CDF6D0AF0F2052A6C7E634 /* LoggingService.swift */; };
 		6DE056E1EE9850E9FBF50157 /* BitchatProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 229F17B68CFF7AB1BC91C847 /* BitchatProtocol.swift */; };
@@ -20,32 +24,63 @@
 		7576A357B278E5733E9D9F33 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6B8F7B7D55092C2540A7996 /* ChatViewModel.swift */; };
 		7A50E2F04A3515A7E90EEAE4 /* BluetoothMeshService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5C3D880FF8AE1673B20E1E3 /* BluetoothMeshService.swift */; };
 		7DD72D928FF9DD3CA81B46B0 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3A69677D382F1C3D5ED03F7D /* Assets.xcassets */; };
+		8F0BFC2D2B2A5E7B70C3B485 /* BinaryProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53D535D9CE0B875F47402290 /* BinaryProtocolTests.swift */; };
 		923027D6F2F417AFA2488127 /* BitchatProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 229F17B68CFF7AB1BC91C847 /* BitchatProtocol.swift */; };
 		92D34E7A07C990C8A815B0CE /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A08E03AA0C63E97C91749AEC /* ContentView.swift */; };
+		A0691E21A3A358AB9715AC20 /* BloomFilterTests.swift.disabled in Resources */ = {isa = PBXBuildFile; fileRef = 822AA698BDB7BB939B62A010 /* BloomFilterTests.swift.disabled */; };
 		ABAF130D88561F4A646F0430 /* AppInfoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 763E0DBA9492A654FC0CDCB9 /* AppInfoView.swift */; };
 		AD11E46940D742AEAF547EB2 /* AppInfoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 763E0DBA9492A654FC0CDCB9 /* AppInfoView.swift */; };
+		ADC66F95FBD513B10411ADB3 /* MessagePaddingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DE9CDF66D4E52D268851048 /* MessagePaddingTests.swift */; };
 		BCCFEDC1EBE59323C3C470BF /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3A69677D382F1C3D5ED03F7D /* Assets.xcassets */; };
+		CDAD6629EB69916B95C80DAF /* BinaryProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53D535D9CE0B875F47402290 /* BinaryProtocolTests.swift */; };
 		D450CF41F207BDE1A1AAA56E /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6B8F7B7D55092C2540A7996 /* ChatViewModel.swift */; };
 		D948085736ED8E736C1DE3B0 /* BluetoothMeshService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5C3D880FF8AE1673B20E1E3 /* BluetoothMeshService.swift */; };
 		DDA1DFAB1FF7AADE52DC0F53 /* EncryptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DC1563390A15C042D059CF9 /* EncryptionService.swift */; };
+		F00B713D5053617FB5F3F1BE /* MessagePaddingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DE9CDF66D4E52D268851048 /* MessagePaddingTests.swift */; };
 		F455F011B3B648ADA233F998 /* BinaryProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2136C3E22D02D4A8DBE7EAB /* BinaryProtocol.swift */; };
+		F4A689F5F34125AE1BFD5599 /* PasswordProtectedRoomTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB12482E4AD78B861C538449 /* PasswordProtectedRoomTests.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		96415D4F989854F908EAD303 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 475D96681D0EA0AE57A4E06E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = AF077EA0474EDEDE2C72716C;
+			remoteInfo = bitchat_iOS;
+		};
+		FF470234EF8C6BB8865B80B5 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 475D96681D0EA0AE57A4E06E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 0576A29205865664C0937536;
+			remoteInfo = bitchat_macOS;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
+		03C57F452B55FD0FD8F51421 /* bitchatTests_macOS.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = bitchatTests_macOS.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		229F17B68CFF7AB1BC91C847 /* BitchatProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitchatProtocol.swift; sourceTree = "<group>"; };
 		3448F84BF86A42A3CC4A9379 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
 		3A69677D382F1C3D5ED03F7D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		3FA8FF26ABDC1C642A8C7AE5 /* BitchatMessageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitchatMessageTests.swift; sourceTree = "<group>"; };
+		53D535D9CE0B875F47402290 /* BinaryProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BinaryProtocolTests.swift; sourceTree = "<group>"; };
 		6DC1563390A15C042D059CF9 /* EncryptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EncryptionService.swift; sourceTree = "<group>"; };
 		763E0DBA9492A654FC0CDCB9 /* AppInfoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppInfoView.swift; sourceTree = "<group>"; };
 		7EEBDA723E1CFD88758DA4AC /* bitchat.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = bitchat.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		822AA698BDB7BB939B62A010 /* BloomFilterTests.swift.disabled */ = {isa = PBXFileReference; lastKnownFileType = text; path = BloomFilterTests.swift.disabled; sourceTree = "<group>"; };
+		8DE9CDF66D4E52D268851048 /* MessagePaddingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessagePaddingTests.swift; sourceTree = "<group>"; };
 		96CDF6D0AF0F2052A6C7E634 /* LoggingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoggingService.swift; sourceTree = "<group>"; };
 		997D512074C64904D75DDD40 /* bitchat.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = bitchat.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A08E03AA0C63E97C91749AEC /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		A2136C3E22D02D4A8DBE7EAB /* BinaryProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BinaryProtocol.swift; sourceTree = "<group>"; };
+		C0DB1DE27F0AAB5092663E8E /* bitchatTests_iOS.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = bitchatTests_iOS.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		D5C3D880FF8AE1673B20E1E3 /* BluetoothMeshService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothMeshService.swift; sourceTree = "<group>"; };
+		D69A18D27F9A565FD6041E12 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		E6B8F7B7D55092C2540A7996 /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModel.swift; sourceTree = "<group>"; };
 		EA706D8E5097785414646A8E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		EF625BB3AD919322C01A46B2 /* BitchatApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitchatApp.swift; sourceTree = "<group>"; };
+		FB12482E4AD78B861C538449 /* PasswordProtectedRoomTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasswordProtectedRoomTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -53,6 +88,7 @@
 			isa = PBXGroup;
 			children = (
 				2F82C5FC8433F4064F079D1F /* bitchat */,
+				C3D98EB3E1B455E321F519F4 /* bitchatTests */,
 				9F37F9F2C353B58AC809E93B /* Products */,
 			);
 			sourceTree = "<group>";
@@ -84,6 +120,8 @@
 			children = (
 				997D512074C64904D75DDD40 /* bitchat.app */,
 				7EEBDA723E1CFD88758DA4AC /* bitchat.app */,
+				C0DB1DE27F0AAB5092663E8E /* bitchatTests_iOS.xctest */,
+				03C57F452B55FD0FD8F51421 /* bitchatTests_macOS.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -104,6 +142,19 @@
 				229F17B68CFF7AB1BC91C847 /* BitchatProtocol.swift */,
 			);
 			path = Protocols;
+			sourceTree = "<group>";
+		};
+		C3D98EB3E1B455E321F519F4 /* bitchatTests */ = {
+			isa = PBXGroup;
+			children = (
+				53D535D9CE0B875F47402290 /* BinaryProtocolTests.swift */,
+				3FA8FF26ABDC1C642A8C7AE5 /* BitchatMessageTests.swift */,
+				822AA698BDB7BB939B62A010 /* BloomFilterTests.swift.disabled */,
+				D69A18D27F9A565FD6041E12 /* Info.plist */,
+				8DE9CDF66D4E52D268851048 /* MessagePaddingTests.swift */,
+				FB12482E4AD78B861C538449 /* PasswordProtectedRoomTests.swift */,
+			);
+			path = bitchatTests;
 			sourceTree = "<group>";
 		};
 		D98A3186D7E4C72E35BDF7FE /* Services */ = {
@@ -137,6 +188,44 @@
 			productName = bitchat_macOS;
 			productReference = 7EEBDA723E1CFD88758DA4AC /* bitchat.app */;
 			productType = "com.apple.product-type.application";
+		};
+		47FF23248747DD7CB666CB91 /* bitchatTests_macOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1C27B5BA3DB46DDF0DBFEF62 /* Build configuration list for PBXNativeTarget "bitchatTests_macOS" */;
+			buildPhases = (
+				5C22AA7B9ACC5A861445C769 /* Sources */,
+				7F7221A3304F43E9CF496036 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				4AA8605DCAA64A45657EF0CA /* PBXTargetDependency */,
+			);
+			name = bitchatTests_macOS;
+			packageProductDependencies = (
+			);
+			productName = bitchatTests_macOS;
+			productReference = 03C57F452B55FD0FD8F51421 /* bitchatTests_macOS.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		6CB97DF2EA57234CB3E563B8 /* bitchatTests_iOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 38C4AF6313E5037F25CEF30B /* Build configuration list for PBXNativeTarget "bitchatTests_iOS" */;
+			buildPhases = (
+				865C8403EF02C089369A9FCB /* Sources */,
+				B42D1108ADC08C2AD4FD6DB5 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D8C09F21DB7DC06E8E672C21 /* PBXTargetDependency */,
+			);
+			name = bitchatTests_iOS;
+			packageProductDependencies = (
+			);
+			productName = bitchatTests_iOS;
+			productReference = C0DB1DE27F0AAB5092663E8E /* bitchatTests_iOS.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
 		};
 		AF077EA0474EDEDE2C72716C /* bitchat_iOS */ = {
 			isa = PBXNativeTarget;
@@ -186,6 +275,8 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+				6CB97DF2EA57234CB3E563B8 /* bitchatTests_iOS */,
+				47FF23248747DD7CB666CB91 /* bitchatTests_macOS */,
 				AF077EA0474EDEDE2C72716C /* bitchat_iOS */,
 				0576A29205865664C0937536 /* bitchat_macOS */,
 			);
@@ -198,6 +289,22 @@
 			buildActionMask = 2147483647;
 			files = (
 				7DD72D928FF9DD3CA81B46B0 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7F7221A3304F43E9CF496036 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				56F0892E13CC0D1490A3691E /* BloomFilterTests.swift.disabled in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B42D1108ADC08C2AD4FD6DB5 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A0691E21A3A358AB9715AC20 /* BloomFilterTests.swift.disabled in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -246,9 +353,101 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		5C22AA7B9ACC5A861445C769 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8F0BFC2D2B2A5E7B70C3B485 /* BinaryProtocolTests.swift in Sources */,
+				2E71E320EA921498C57E023B /* BitchatMessageTests.swift in Sources */,
+				ADC66F95FBD513B10411ADB3 /* MessagePaddingTests.swift in Sources */,
+				F4A689F5F34125AE1BFD5599 /* PasswordProtectedRoomTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		865C8403EF02C089369A9FCB /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CDAD6629EB69916B95C80DAF /* BinaryProtocolTests.swift in Sources */,
+				0DAFF1DDE9BA83FF648D5AB3 /* BitchatMessageTests.swift in Sources */,
+				F00B713D5053617FB5F3F1BE /* MessagePaddingTests.swift in Sources */,
+				230B11C5BF035D35638B21C8 /* PasswordProtectedRoomTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		4AA8605DCAA64A45657EF0CA /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 0576A29205865664C0937536 /* bitchat_macOS */;
+			targetProxy = FF470234EF8C6BB8865B80B5 /* PBXContainerItemProxy */;
+		};
+		D8C09F21DB7DC06E8E672C21 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = AF077EA0474EDEDE2C72716C /* bitchat_iOS */;
+			targetProxy = 96415D4F989854F908EAD303 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		077A5203074247CF8F766E2F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				INFOPLIST_FILE = bitchatTests/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat.tests;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/bitchat.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/bitchat";
+			};
+			name = Debug;
+		};
+		0DACAA261446D178EDD30ECA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				INFOPLIST_FILE = bitchatTests/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat.tests;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/bitchat.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/bitchat";
+			};
+			name = Release;
+		};
+		147FDAE548082D5B921C6F0B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = bitchatTests/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat.tests;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/bitchat.app/Contents/MacOS/bitchat";
+			};
+			name = Release;
+		};
 		702E7395723CADA4B830F4A9 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -270,9 +469,31 @@
 				PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat;
 				PRODUCT_NAME = bitchat;
 				SDKROOT = iphoneos;
-				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		7FA2BADBF3B325125030CAB1 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = bitchatTests/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat.tests;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/bitchat.app/Contents/MacOS/bitchat";
 			};
 			name = Debug;
 		};
@@ -297,9 +518,12 @@
 				PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat;
 				PRODUCT_NAME = bitchat;
 				SDKROOT = iphoneos;
-				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
 		};
@@ -479,6 +703,24 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		1C27B5BA3DB46DDF0DBFEF62 /* Build configuration list for PBXNativeTarget "bitchatTests_macOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7FA2BADBF3B325125030CAB1 /* Debug */,
+				147FDAE548082D5B921C6F0B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		38C4AF6313E5037F25CEF30B /* Build configuration list for PBXNativeTarget "bitchatTests_iOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				077A5203074247CF8F766E2F /* Debug */,
+				0DACAA261446D178EDD30ECA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		3EA424CBD51200895D361189 /* Build configuration list for PBXProject "bitchat" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

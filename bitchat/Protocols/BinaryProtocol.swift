@@ -107,7 +107,9 @@ struct BinaryProtocol {
         var offset = 0
         
         // Header
-        _ = data[offset]; offset += 1 // version
+        let version = data[offset]; offset += 1
+        // Only support version 1
+        guard version == 1 else { return nil }
         let type = data[offset]; offset += 1
         let ttl = data[offset]; offset += 1
         
