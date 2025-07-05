@@ -69,6 +69,7 @@ enum MessageType: UInt8 {
     case fragmentStart = 0x05
     case fragmentContinue = 0x06
     case fragmentEnd = 0x07
+    case roomAnnounce = 0x08  // Announce password-protected room status
 }
 
 // Special recipient ID for broadcast messages
@@ -134,8 +135,10 @@ struct BitchatMessage: Codable, Equatable {
     let senderPeerID: String?
     let mentions: [String]?  // Array of mentioned nicknames
     let room: String?  // Room hashtag (e.g., "#general")
+    let encryptedContent: Data?  // For password-protected rooms
+    let isEncrypted: Bool  // Flag to indicate if content is encrypted
     
-    init(sender: String, content: String, timestamp: Date, isRelay: Bool, originalSender: String? = nil, isPrivate: Bool = false, recipientNickname: String? = nil, senderPeerID: String? = nil, mentions: [String]? = nil, room: String? = nil) {
+    init(sender: String, content: String, timestamp: Date, isRelay: Bool, originalSender: String? = nil, isPrivate: Bool = false, recipientNickname: String? = nil, senderPeerID: String? = nil, mentions: [String]? = nil, room: String? = nil, encryptedContent: Data? = nil, isEncrypted: Bool = false) {
         self.id = UUID().uuidString
         self.sender = sender
         self.content = content
@@ -147,6 +150,8 @@ struct BitchatMessage: Codable, Equatable {
         self.senderPeerID = senderPeerID
         self.mentions = mentions
         self.room = room
+        self.encryptedContent = encryptedContent
+        self.isEncrypted = isEncrypted
     }
 }
 
@@ -156,6 +161,8 @@ protocol BitchatDelegate: AnyObject {
     func didDisconnectFromPeer(_ peerID: String)
     func didUpdatePeerList(_ peers: [String])
     func didReceiveRoomLeave(_ room: String, from peerID: String)
+    func didReceivePasswordProtectedRoomAnnouncement(_ room: String, isProtected: Bool, creatorID: String?)
+    func decryptRoomMessage(_ encryptedContent: Data, room: String) -> String?
     
     // Optional method to check if a fingerprint belongs to a favorite peer
     func isFavorite(fingerprint: String) -> Bool
@@ -169,5 +176,14 @@ extension BitchatDelegate {
     
     func didReceiveRoomLeave(_ room: String, from peerID: String) {
         // Default empty implementation
+    }
+    
+    func didReceivePasswordProtectedRoomAnnouncement(_ room: String, isProtected: Bool, creatorID: String?) {
+        // Default empty implementation
+    }
+    
+    func decryptRoomMessage(_ encryptedContent: Data, room: String) -> String? {
+        // Default returns nil (unable to decrypt)
+        return nil
     }
 }

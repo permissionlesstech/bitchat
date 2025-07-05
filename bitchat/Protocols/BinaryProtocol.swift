@@ -180,14 +180,14 @@ extension BitchatMessage {
         var data = Data()
         
         // Message format:
-        // - Flags: 1 byte (bit 0: isRelay, bit 1: isPrivate, bit 2: hasOriginalSender, bit 3: hasRecipientNickname, bit 4: hasSenderPeerID, bit 5: hasMentions, bit 6: hasVoiceNote)
+        // - Flags: 1 byte (bit 0: isRelay, bit 1: isPrivate, bit 2: hasOriginalSender, bit 3: hasRecipientNickname, bit 4: hasSenderPeerID, bit 5: hasMentions, bit 6: hasRoom, bit 7: isEncrypted)
         // - Timestamp: 8 bytes (seconds since epoch)
         // - ID length: 1 byte
         // - ID: variable
         // - Sender length: 1 byte
         // - Sender: variable
         // - Content length: 2 bytes
-        // - Content: variable
+        // - Content: variable (or encrypted content if isEncrypted)
         // Optional fields based on flags:
         // - Original sender length + data
         // - Recipient nickname length + data
@@ -203,6 +203,7 @@ extension BitchatMessage {
         if senderPeerID != nil { flags |= 0x10 }
         if mentions != nil && !mentions!.isEmpty { flags |= 0x20 }
         if room != nil { flags |= 0x40 }
+        if isEncrypted { flags |= 0x80 }
         
         data.append(flags)
         
@@ -229,8 +230,14 @@ extension BitchatMessage {
             data.append(0)
         }
         
-        // Content
-        if let contentData = content.data(using: .utf8) {
+        // Content or encrypted content
+        if isEncrypted, let encryptedContent = encryptedContent {
+            let length = UInt16(min(encryptedContent.count, 65535))
+            // Encode length as 2 bytes, big-endian
+            data.append(UInt8((length >> 8) & 0xFF))
+            data.append(UInt8(length & 0xFF))
+            data.append(encryptedContent.prefix(Int(length)))
+        } else if let contentData = content.data(using: .utf8) {
             let length = UInt16(min(contentData.count, 65535))
             // Encode length as 2 bytes, big-endian
             data.append(UInt8((length >> 8) & 0xFF))
@@ -301,6 +308,7 @@ extension BitchatMessage {
         let hasSenderPeerID = (flags & 0x10) != 0
         let hasMentions = (flags & 0x20) != 0
         let hasRoom = (flags & 0x40) != 0
+        let isEncrypted = (flags & 0x80) != 0
         
         // Timestamp
         guard offset + 8 <= dataCopy.count else { 
@@ -347,7 +355,19 @@ extension BitchatMessage {
         guard offset + contentLength <= dataCopy.count else { 
             return nil 
         }
-        let content = String(data: dataCopy[offset..<offset+contentLength], encoding: .utf8) ?? ""
+        
+        let content: String
+        let encryptedContent: Data?
+        
+        if isEncrypted {
+            // Content is encrypted, store as Data
+            encryptedContent = dataCopy[offset..<offset+contentLength]
+            content = ""  // Empty placeholder
+        } else {
+            // Normal string content
+            content = String(data: dataCopy[offset..<offset+contentLength], encoding: .utf8) ?? ""
+            encryptedContent = nil
+        }
         offset += contentLength
         
         // Optional fields
@@ -418,7 +438,9 @@ extension BitchatMessage {
             recipientNickname: recipientNickname,
             senderPeerID: senderPeerID,
             mentions: mentions,
-            room: room
+            room: room,
+            encryptedContent: encryptedContent,
+            isEncrypted: isEncrypted
         )
         return message
     }
