@@ -31,12 +31,12 @@ class BluetoothMeshService: NSObject {
     static let serviceUUID = CBUUID(string: "F47B5E2D-4A9E-4C5A-9B3F-8E1D2C3A4B5C")
     static let characteristicUUID = CBUUID(string: "A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D")
     
-    private var centralManager: CBCentralManager!
-    private var peripheralManager: CBPeripheralManager!
+    private var centralManager: CBCentralManager?
+    private var peripheralManager: CBPeripheralManager?
     private var discoveredPeripherals: [CBPeripheral] = []
     private var connectedPeripherals: [String: CBPeripheral] = [:]
     private var peripheralCharacteristics: [CBPeripheral: CBCharacteristic] = [:]
-    private var characteristic: CBMutableCharacteristic!
+    private var characteristic: CBMutableCharacteristic?
     private var subscribedCentrals: [CBCentral] = []
     private var peerNicknames: [String: String] = [:]
     private let peerNicknamesLock = NSLock()
@@ -341,20 +341,20 @@ class BluetoothMeshService: NSObject {
         
         // First, disconnect all peripherals which will trigger disconnect delegates
         for (_, peripheral) in connectedPeripherals {
-            centralManager.cancelPeripheralConnection(peripheral)
+            centralManager?.cancelPeripheralConnection(peripheral)
         }
         
         // Stop advertising
-        if peripheralManager.isAdvertising {
-            peripheralManager.stopAdvertising()
+        if peripheralManager?.isAdvertising == true {
+            peripheralManager?.stopAdvertising()
         }
         
         // Stop scanning
-        centralManager.stopScan()
+        centralManager?.stopScan()
         
         // Remove all services - this will disconnect any connected centrals
-        if peripheralManager.state == .poweredOn {
-            peripheralManager.removeAllServices()
+        if peripheralManager?.state == .poweredOn {
+            peripheralManager?.removeAllServices()
         }
         
         // Clear all tracking
@@ -375,10 +375,10 @@ class BluetoothMeshService: NSObject {
     func startServices() {
         // Starting services
         // Start both central and peripheral services
-        if centralManager.state == .poweredOn {
+        if centralManager?.state == .poweredOn {
             startScanning()
         }
-        if peripheralManager.state == .poweredOn {
+        if peripheralManager?.state == .poweredOn {
             setupPeripheral()
             startAdvertising()
         }
@@ -423,7 +423,7 @@ class BluetoothMeshService: NSObject {
     }
     
     func startAdvertising() {
-        guard peripheralManager.state == .poweredOn else { 
+        guard peripheralManager?.state == .poweredOn else { 
             return 
         }
         
@@ -438,11 +438,11 @@ class BluetoothMeshService: NSObject {
         ]
         
         isAdvertising = true
-        peripheralManager.startAdvertising(advertisementData)
+        peripheralManager?.startAdvertising(advertisementData)
     }
     
     func startScanning() {
-        guard centralManager.state == .poweredOn else { 
+        guard centralManager?.state == .poweredOn else { 
             return 
         }
         
@@ -451,7 +451,7 @@ class BluetoothMeshService: NSObject {
             CBCentralManagerScanOptionAllowDuplicatesKey: true
         ]
         
-        centralManager.scanForPeripherals(
+        centralManager?.scanForPeripherals(
             withServices: [BluetoothMeshService.serviceUUID],
             options: scanOptions
         )
@@ -474,14 +474,14 @@ class BluetoothMeshService: NSObject {
             
             if self.isActivelyScanning {
                 // Pause scanning to save battery
-                self.centralManager.stopScan()
+                self.centralManager?.stopScan()
                 self.isActivelyScanning = false
                 
                 // Schedule resume
                 DispatchQueue.main.asyncAfter(deadline: .now() + self.scanPauseDuration) { [weak self] in
                     guard let self = self else { return }
-                    if self.centralManager.state == .poweredOn {
-                        self.centralManager.scanForPeripherals(
+                    if self.centralManager?.state == .poweredOn {
+                        self.centralManager?.scanForPeripherals(
                             withServices: [BluetoothMeshService.serviceUUID],
                             options: [CBCentralManagerScanOptionAllowDuplicatesKey: true]
                         )
@@ -503,7 +503,7 @@ class BluetoothMeshService: NSObject {
         let service = CBMutableService(type: BluetoothMeshService.serviceUUID, primary: true)
         service.characteristics = [characteristic]
         
-        peripheralManager.add(service)
+        peripheralManager?.add(service)
         self.characteristic = characteristic
     }
     
@@ -844,18 +844,18 @@ class BluetoothMeshService: NSObject {
     // Emergency disconnect for panic situations
     func emergencyDisconnectAll() {
         // Stop advertising immediately
-        if peripheralManager.isAdvertising {
-            peripheralManager.stopAdvertising()
+        if peripheralManager?.isAdvertising == true {
+            peripheralManager?.stopAdvertising()
         }
         
         // Stop scanning
-        centralManager.stopScan()
+        centralManager?.stopScan()
         scanDutyCycleTimer?.invalidate()
         scanDutyCycleTimer = nil
         
         // Disconnect all peripherals
         for (_, peripheral) in connectedPeripherals {
-            centralManager.cancelPeripheralConnection(peripheral)
+            centralManager?.cancelPeripheralConnection(peripheral)
         }
         
         // Clear all peer data
@@ -1169,6 +1169,18 @@ class BluetoothMeshService: NSObject {
     private func broadcastPacket(_ packet: BitchatPacket) {
         guard let data = packet.toBinaryData() else { 
             // print("[ERROR] Failed to convert packet to binary data")
+            // Add to retry queue if this is a message packet
+            if packet.type == MessageType.message.rawValue,
+               let message = BitchatMessage.fromBinaryPayload(packet.payload) {
+                MessageRetryService.shared.addMessageForRetry(
+                    content: message.content,
+                    mentions: message.mentions,
+                    room: message.room,
+                    isPrivate: message.isPrivate,
+                    recipientPeerID: nil,
+                    recipientNickname: message.recipientNickname
+                )
+            }
             return 
         }
         
@@ -1200,14 +1212,43 @@ class BluetoothMeshService: NSObject {
         }
         
         // Send to subscribed centrals (as peripheral)
+        var sentToCentrals = 0
         if let char = characteristic, !subscribedCentrals.isEmpty {
             // Send to all subscribed centrals
-            let success = peripheralManager.updateValue(data, for: char, onSubscribedCentrals: nil)
+            let success = peripheralManager?.updateValue(data, for: char, onSubscribedCentrals: nil) ?? false
             if success {
+                sentToCentrals = subscribedCentrals.count
             } else {
             }
         } else {
             if characteristic == nil {
+            }
+        }
+        
+        // If no peers received the message, add to retry queue
+        if sentToPeripherals == 0 && sentToCentrals == 0 {
+            if packet.type == MessageType.message.rawValue,
+               let message = BitchatMessage.fromBinaryPayload(packet.payload) {
+                // For encrypted room messages, we need to preserve the room key
+                var roomKeyData: Data? = nil
+                if let room = message.room, message.isEncrypted {
+                    // This is an encrypted room message
+                    if let viewModel = delegate as? ChatViewModel,
+                       let roomKey = viewModel.roomKeys[room] {
+                        roomKeyData = roomKey.withUnsafeBytes { Data($0) }
+                    }
+                }
+                
+                MessageRetryService.shared.addMessageForRetry(
+                    content: message.content,
+                    mentions: message.mentions,
+                    room: message.room,
+                    isPrivate: message.isPrivate,
+                    recipientPeerID: nil,
+                    recipientNickname: message.recipientNickname,
+                    roomKey: roomKeyData
+                )
+                bitchatLog("No peers available, added message to retry queue", category: "mesh")
             }
         }
     }
@@ -1523,7 +1564,7 @@ class BluetoothMeshService: NSObject {
                                 // We have a duplicate connection - disconnect the newer one
                                 // print("[DEBUG] Duplicate connection detected for \(senderID), keeping existing")
                                 intentionalDisconnects.insert(peripheral.identifier.uuidString)
-                                centralManager.cancelPeripheralConnection(peripheral)
+                                centralManager?.cancelPeripheralConnection(peripheral)
                                 return
                             }
                             
@@ -1620,7 +1661,7 @@ class BluetoothMeshService: NSObject {
                     // Disconnect any peripherals associated with stale ID
                     if let peripheral = connectedPeripherals[stalePeerID] {
                         intentionalDisconnects.insert(peripheral.identifier.uuidString)
-                        centralManager.cancelPeripheralConnection(peripheral)
+                        centralManager?.cancelPeripheralConnection(peripheral)
                         connectedPeripherals.removeValue(forKey: stalePeerID)
                         peripheralCharacteristics.removeValue(forKey: peripheral)
                     }
@@ -2147,10 +2188,10 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
         discoveredPeripherals.removeAll { $0 == peripheral }
         
         // Continue scanning for reconnection
-        if centralManager.state == .poweredOn {
+        if centralManager?.state == .poweredOn {
             // Stop and restart to ensure clean state
-            centralManager.stopScan()
-            centralManager.scanForPeripherals(withServices: [BluetoothMeshService.serviceUUID], options: [CBCentralManagerScanOptionAllowDuplicatesKey: false])
+            centralManager?.stopScan()
+            centralManager?.scanForPeripherals(withServices: [BluetoothMeshService.serviceUUID], options: [CBCentralManagerScanOptionAllowDuplicatesKey: false])
         }
     }
 }
@@ -2345,7 +2386,9 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                             payload: publicKeyData
                         )
                         if let data = responsePacket.toBinaryData() {
-                            peripheral.updateValue(data, for: self.characteristic, onSubscribedCentrals: [request.central])
+                            if let char = self.characteristic {
+                                peripheral.updateValue(data, for: char, onSubscribedCentrals: [request.central])
+                            }
                         }
                         
                         // Send announce immediately after key exchange
@@ -2361,7 +2404,9 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                                         payload: Data(vm.nickname.utf8)
                                     )
                                     if let data = announcePacket.toBinaryData() {
-                                        peripheral.updateValue(data, for: self.characteristic, onSubscribedCentrals: nil)
+                                        if let char = self.characteristic {
+                                            peripheral.updateValue(data, for: char, onSubscribedCentrals: nil)
+                                        }
                                     }
                                 }
                             }
@@ -2391,7 +2436,9 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             )
             
             if let data = keyPacket.toBinaryData() {
-                peripheral.updateValue(data, for: self.characteristic, onSubscribedCentrals: [central])
+                if let char = self.characteristic {
+                    peripheral.updateValue(data, for: char, onSubscribedCentrals: [central])
+                }
                 
                 // We'll send announce when we receive their key exchange
             }
@@ -2408,7 +2455,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         // Peers may be connected through multiple paths
         
         // Ensure advertising continues for reconnection
-        if peripheralManager.state == .poweredOn && !peripheralManager.isAdvertising {
+        if peripheralManager?.state == .poweredOn && peripheralManager?.isAdvertising == false {
             startAdvertising()
         }
     }

@@ -513,7 +513,9 @@ struct ContentView: View {
                         "/m": "send private message",
                         "/clear": "clear chat messages",
                         "/transfer": "transfer room ownership",
-                        "/pass": "change room password"
+                        "/pass": "change room password",
+                        "/favorite": "toggle room retention",
+                        "/discover": "find active rooms"
                     ]
                     
                     ForEach(commandSuggestions, id: \.self) { command in
@@ -595,7 +597,9 @@ struct ContentView: View {
                             ("/m", "send private message"),
                             ("/clear", "clear chat messages"),
                             ("/transfer", "transfer room ownership"),
-                            ("/pass", "change room password")
+                            ("/pass", "change room password"),
+                            ("/favorite", "toggle room retention"),
+                            ("/discover", "find active rooms")
                         ]
                         let input = newValue.lowercased()
                         commandSuggestions = commandDescriptions
