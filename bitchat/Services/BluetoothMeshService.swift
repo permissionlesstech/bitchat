@@ -710,6 +710,29 @@ class BluetoothMeshService: NSObject {
         }
     }
     
+    func sendRoomRetentionAnnouncement(_ room: String, enabled: Bool) {
+        messageQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            // Payload format: room|enabled|creatorID
+            let enabledFlag = enabled ? "1" : "0"
+            let payload = "\(room)|\(enabledFlag)|\(self.myPeerID)"
+            
+            let packet = BitchatPacket(
+                type: MessageType.roomRetention.rawValue,
+                senderID: Data(self.myPeerID.utf8),
+                recipientID: SpecialRecipients.broadcast,
+                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                payload: Data(payload.utf8),
+                signature: nil,
+                ttl: 5  // Allow wider propagation for room announcements
+            )
+            
+            bitchatLog("Announcing room \(room) retention status: \(enabled)", category: "room")
+            self.broadcastPacket(packet)
+        }
+    }
+    
     func sendEncryptedRoomMessage(_ content: String, mentions: [String], room: String, roomKey: SymmetricKey) {
         messageQueue.async { [weak self] in
             guard let self = self else { return }
@@ -1824,6 +1847,30 @@ class BluetoothMeshService: NSObject {
                     
                     DispatchQueue.main.async {
                         self.delegate?.didReceivePasswordProtectedRoomAnnouncement(room, isProtected: isProtected, creatorID: creatorID, keyCommitment: keyCommitment)
+                    }
+                    
+                    // Relay announcement
+                    if packet.ttl > 1 {
+                        var relayPacket = packet
+                        relayPacket.ttl -= 1
+                        self.broadcastPacket(relayPacket)
+                    }
+                }
+            }
+            
+        case .roomRetention:
+            if let payloadStr = String(data: packet.payload, encoding: .utf8) {
+                // Parse payload: room|enabled|creatorID
+                let components = payloadStr.split(separator: "|").map(String.init)
+                if components.count >= 3 {
+                    let room = components[0]
+                    let enabled = components[1] == "1"
+                    let creatorID = components[2]
+                    
+                    bitchatLog("Received room retention announcement: \(room) retention \(enabled ? "enabled" : "disabled") by \(creatorID)", category: "room")
+                    
+                    DispatchQueue.main.async {
+                        self.delegate?.didReceiveRoomRetentionAnnouncement(room, enabled: enabled, creatorID: creatorID)
                     }
                     
                     // Relay announcement

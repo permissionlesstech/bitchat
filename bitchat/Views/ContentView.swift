@@ -296,15 +296,26 @@ struct ContentView: View {
                 Spacer()
                 
                 HStack(spacing: 8) {
-                    // Save button
-                    Button(action: {
-                        viewModel.sendMessage("/save")
-                    }) {
-                        Image(systemName: viewModel.savedRooms.contains(currentRoom) ? "bookmark.fill" : "bookmark")
+                    // Show retention indicator for all users
+                    if viewModel.retentionEnabledRooms.contains(currentRoom) {
+                        Image(systemName: "bookmark.fill")
                             .font(.system(size: 16))
-                            .foregroundColor(viewModel.savedRooms.contains(currentRoom) ? Color.yellow : textColor)
+                            .foregroundColor(Color.yellow)
+                            .help("Messages in this room are being saved locally")
                     }
-                    .buttonStyle(.plain)
+                    
+                    // Save button - only for room owner
+                    if viewModel.roomCreators[currentRoom] == viewModel.meshService.myPeerID {
+                        Button(action: {
+                            viewModel.sendMessage("/save")
+                        }) {
+                            Image(systemName: viewModel.retentionEnabledRooms.contains(currentRoom) ? "bookmark.slash" : "bookmark")
+                                .font(.system(size: 16))
+                                .foregroundColor(textColor)
+                        }
+                        .buttonStyle(.plain)
+                        .help(viewModel.retentionEnabledRooms.contains(currentRoom) ? "Disable message retention" : "Enable message retention")
+                    }
                     
                     // Password button for room creator only
                     if viewModel.roomCreators[currentRoom] == viewModel.meshService.myPeerID {
@@ -442,10 +453,10 @@ struct ContentView: View {
                                     .textSelection(.enabled)
                             } else {
                                 // Regular messages with tappable sender name
-                                HStack(alignment: .top, spacing: 0) {
+                                HStack(alignment: .firstTextBaseline, spacing: 0) {
                                     // Timestamp
                                     Text("[\(viewModel.formatTimestamp(message.timestamp))] ")
-                                        .font(.system(size: 12, design: .monospaced))
+                                        .font(.system(size: 14, design: .monospaced))
                                         .foregroundColor(secondaryTextColor)
                                         .textSelection(.enabled)
                                     
@@ -457,15 +468,15 @@ struct ContentView: View {
                                             }
                                         }) {
                                             let senderColor = viewModel.getSenderColor(for: message, colorScheme: colorScheme)
-                                            Text("<\(message.sender)>")
-                                                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                                            Text("<@\(message.sender)>")
+                                                .font(.system(size: 14, weight: .medium, design: .monospaced))
                                                 .foregroundColor(senderColor)
                                         }
                                         .buttonStyle(.plain)
                                     } else {
                                         // Own messages not tappable
-                                        Text("<\(message.sender)>")
-                                            .font(.system(size: 12, weight: .medium, design: .monospaced))
+                                        Text("<@\(message.sender)>")
+                                            .font(.system(size: 14, weight: .medium, design: .monospaced))
                                             .foregroundColor(textColor)
                                             .textSelection(.enabled)
                                     }
@@ -572,21 +583,21 @@ struct ContentView: View {
             
             HStack(alignment: .center, spacing: 4) {
             if viewModel.selectedPrivateChatPeer != nil {
-                Text("<\(viewModel.nickname)> →")
+                Text("<@\(viewModel.nickname)> →")
                     .font(.system(size: 12, weight: .medium, design: .monospaced))
                     .foregroundColor(Color.orange)
                     .lineLimit(1)
                     .fixedSize()
                     .padding(.leading, 12)
             } else if let currentRoom = viewModel.currentRoom, viewModel.passwordProtectedRooms.contains(currentRoom) {
-                Text("<\(viewModel.nickname)> →")
+                Text("<@\(viewModel.nickname)> →")
                     .font(.system(size: 12, weight: .medium, design: .monospaced))
                     .foregroundColor(Color.orange)
                     .lineLimit(1)
                     .fixedSize()
                     .padding(.leading, 12)
             } else {
-                Text("<\(viewModel.nickname)>")
+                Text("<@\(viewModel.nickname)>")
                     .font(.system(size: 12, weight: .medium, design: .monospaced))
                     .foregroundColor(textColor)
                     .lineLimit(1)
