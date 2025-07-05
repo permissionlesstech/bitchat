@@ -71,6 +71,7 @@ class ChatViewModel: ObservableObject {
         loadFavorites()
         loadJoinedRooms()
         loadRoomData()
+        // Load saved rooms state
         savedRooms = MessageRetentionService.shared.getFavoriteRooms()
         meshService.delegate = self
         
@@ -117,8 +118,8 @@ class ChatViewModel: ObservableObject {
     }
     
     private func loadJoinedRooms() {
-        if let savedRooms = userDefaults.stringArray(forKey: joinedRoomsKey) {
-            joinedRooms = Set(savedRooms)
+        if let savedRoomsList = userDefaults.stringArray(forKey: joinedRoomsKey) {
+            joinedRooms = Set(savedRoomsList)
             // Initialize empty data structures for joined rooms
             for room in joinedRooms {
                 if roomMessages[room] == nil {
@@ -126,6 +127,15 @@ class ChatViewModel: ObservableObject {
                 }
                 if roomMembers[room] == nil {
                     roomMembers[room] = Set()
+                }
+                
+                // Load saved messages if this is a saved room
+                if MessageRetentionService.shared.getFavoriteRooms().contains(room) {
+                    let savedMessages = MessageRetentionService.shared.loadMessagesForRoom(room)
+                    if !savedMessages.isEmpty {
+                        roomMessages[room] = savedMessages
+                        bitchatLog("Loaded \(savedMessages.count) saved messages for room \(room) on startup", category: "retention")
+                    }
                 }
             }
         }
