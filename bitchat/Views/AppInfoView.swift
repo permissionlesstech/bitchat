@@ -120,29 +120,6 @@ struct AppInfoView: View {
                         .foregroundColor(textColor)
                     }
                     
-                    // Debug Info
-                    VStack(alignment: .leading, spacing: 16) {
-                        SectionHeader("Debug")
-                        
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Log Location:")
-                                .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                                .foregroundColor(textColor)
-                            
-                            Text(LoggingService.shared.getLogFileURL().path)
-                                .font(.system(size: 12, design: .monospaced))
-                                .foregroundColor(secondaryTextColor)
-                                .textSelection(.enabled)
-                            
-                            Button("Open in Finder") {
-                                NSWorkspace.shared.selectFile(LoggingService.shared.getLogFileURL().path, inFileViewerRootedAtPath: "")
-                            }
-                            .buttonStyle(.plain)
-                            .foregroundColor(.blue)
-                            .font(.system(size: 12, design: .monospaced))
-                        }
-                    }
-                    
                     // Version
                     HStack {
                         Spacer()
