@@ -840,9 +840,6 @@ struct ContentView: View {
                                 if let currentRoom = viewModel.currentRoom,
                                    let roomMemberIDs = viewModel.roomMembers[currentRoom] {
                                     // Show only peers who have sent messages to this room (including self)
-                                    bitchatLog("Room \(currentRoom) has members: \(roomMemberIDs)", category: "view")
-                                    bitchatLog("Connected peers: \(viewModel.connectedPeers)", category: "view")
-                                    bitchatLog("My peer ID: \(myPeerID)", category: "view")
                                     
                                     // Start with room members who are also connected
                                     var memberPeers = viewModel.connectedPeers.filter { roomMemberIDs.contains($0) }
@@ -852,7 +849,6 @@ struct ContentView: View {
                                         memberPeers.append(myPeerID)
                                     }
                                     
-                                    bitchatLog("Peers to show in room: \(memberPeers)", category: "view")
                                     return memberPeers
                                 } else {
                                     // Show all connected peers in main chat
