@@ -45,6 +45,7 @@ class ChatViewModel: ObservableObject {
     @Published var roomKeys: [String: SymmetricKey] = [:]  // room -> derived encryption key
     @Published var passwordProtectedRooms: Set<String> = []  // Set of rooms that require passwords
     @Published var roomCreators: [String: String] = [:]  // room -> creator peerID
+    @Published var roomKeyCommitments: [String: String] = [:]  // room -> SHA256(derivedKey) for verification
     @Published var showPasswordPrompt: Bool = false
     @Published var passwordPromptRoom: String? = nil
     
@@ -56,6 +57,7 @@ class ChatViewModel: ObservableObject {
     private let passwordProtectedRoomsKey = "bitchat.passwordProtectedRooms"
     private let roomCreatorsKey = "bitchat.roomCreators"
     private let roomPasswordsKey = "bitchat.roomPasswords"
+    private let roomKeyCommitmentsKey = "bitchat.roomKeyCommitments"
     private var nicknameSaveTimer: Timer?
     
     @Published var favoritePeers: Set<String> = []  // Now stores public key fingerprints instead of peer IDs
@@ -118,7 +120,7 @@ class ChatViewModel: ObservableObject {
                     roomMessages[room] = []
                 }
                 if roomMembers[room] == nil {
-                    roomMembers[room] = []
+                    roomMembers[room] = Set()
                 }
             }
         }
@@ -140,6 +142,11 @@ class ChatViewModel: ObservableObject {
             roomCreators = savedCreators
         }
         
+        // Load room key commitments
+        if let savedCommitments = userDefaults.dictionary(forKey: roomKeyCommitmentsKey) as? [String: String] {
+            roomKeyCommitments = savedCommitments
+        }
+        
         // Load room passwords (encrypted would be better, but keeping simple for now)
         if let savedPasswords = userDefaults.dictionary(forKey: roomPasswordsKey) as? [String: String] {
             roomPasswords = savedPasswords
@@ -154,30 +161,184 @@ class ChatViewModel: ObservableObject {
         userDefaults.set(Array(passwordProtectedRooms), forKey: passwordProtectedRoomsKey)
         userDefaults.set(roomCreators, forKey: roomCreatorsKey)
         userDefaults.set(roomPasswords, forKey: roomPasswordsKey)
+        userDefaults.set(roomKeyCommitments, forKey: roomKeyCommitmentsKey)
         userDefaults.synchronize()
     }
     
-    func joinRoom(_ room: String, password: String? = nil) {
+    func joinRoom(_ room: String, password: String? = nil) -> Bool {
         // Ensure room starts with #
         let roomTag = room.hasPrefix("#") ? room : "#\(room)"
         
+        bitchatLog("joinRoom called for \(roomTag), password provided: \(password != nil), is protected: \(passwordProtectedRooms.contains(roomTag)), has key: \(roomKeys[roomTag] != nil)", category: "room")
+        
+        // Check if room is already joined and we can access it
+        if joinedRooms.contains(roomTag) {
+            // Already joined, check if we need password verification
+            if passwordProtectedRooms.contains(roomTag) && roomKeys[roomTag] == nil {
+                if let password = password {
+                    // User provided password for already-joined room - verify it
+                    bitchatLog("Verifying password for already-joined room \(roomTag)", category: "room")
+                    
+                    // Derive key and try to verify
+                    let key = deriveRoomKey(from: password, roomName: roomTag)
+                    
+                    // First, check if we have a key commitment to verify against
+                    if let expectedCommitment = roomKeyCommitments[roomTag] {
+                        let actualCommitment = computeKeyCommitment(for: key)
+                        if actualCommitment != expectedCommitment {
+                            bitchatLog("Password verification failed - key commitment mismatch for already-joined room \(roomTag)", category: "room")
+                            return false
+                        }
+                        bitchatLog("Password verified via key commitment for already-joined room \(roomTag)", category: "room")
+                    }
+                    
+                    // Check if we have messages to verify against
+                    if let roomMsgs = roomMessages[roomTag], !roomMsgs.isEmpty {
+                        let encryptedMessages = roomMsgs.filter { $0.isEncrypted && $0.encryptedContent != nil }
+                        if let encryptedMsg = encryptedMessages.first,
+                           let encryptedData = encryptedMsg.encryptedContent {
+                            let testDecrypted = decryptRoomMessage(encryptedData, room: roomTag, testKey: key)
+                            if testDecrypted == nil {
+                                bitchatLog("Password verification failed for already-joined room", category: "room")
+                                return false
+                            }
+                            bitchatLog("Password verified for already-joined room", category: "room")
+                        }
+                    }
+                    
+                    // Store the verified key
+                    roomKeys[roomTag] = key
+                    roomPasswords[roomTag] = password
+                    
+                    // Now switch to the room
+                    switchToRoom(roomTag)
+                    return true
+                } else {
+                    // Need password to access
+                    passwordPromptRoom = roomTag
+                    showPasswordPrompt = true
+                    bitchatLog("Room \(roomTag) already joined but needs password, showing prompt", category: "room")
+                    return false
+                }
+            }
+            // Switch to the room (no password needed)
+            switchToRoom(roomTag)
+            return true
+        }
+        
         // If room is password protected and we don't have the key yet
         if passwordProtectedRooms.contains(roomTag) && roomKeys[roomTag] == nil {
-            if let password = password {
+            // Allow room creator to bypass password check
+            if roomCreators[roomTag] == meshService.myPeerID {
+                bitchatLog("Room creator bypassing password check for room \(roomTag)", category: "room")
+                // Room creator should already have the key set when they created the password
+                // This is a failsafe - just proceed without password
+            } else if let password = password {
                 // Derive key from password
                 let key = deriveRoomKey(from: password, roomName: roomTag)
+                
+                // First, check if we have a key commitment to verify against
+                if let expectedCommitment = roomKeyCommitments[roomTag] {
+                    let actualCommitment = computeKeyCommitment(for: key)
+                    if actualCommitment != expectedCommitment {
+                        bitchatLog("Password verification failed - key commitment mismatch for room \(roomTag)", category: "room")
+                        bitchatLog("Expected: \(expectedCommitment), Got: \(actualCommitment)", category: "room")
+                        return false
+                    }
+                    bitchatLog("Password verified via key commitment for room \(roomTag)", category: "room")
+                }
+                
+                // Try to verify password if there are existing encrypted messages
+                var passwordVerified = false
+                var shouldProceed = true
+                
+                if let roomMsgs = roomMessages[roomTag], !roomMsgs.isEmpty {
+                    // Look for encrypted messages to verify against
+                    let encryptedMessages = roomMsgs.filter { $0.isEncrypted && $0.encryptedContent != nil }
+                    bitchatLog("Found \(encryptedMessages.count) encrypted messages in room \(roomTag) to verify against", category: "room")
+                    
+                    if let encryptedMsg = encryptedMessages.first,
+                       let encryptedData = encryptedMsg.encryptedContent {
+                        // Test decryption with the derived key
+                        bitchatLog("Testing password by decrypting message from \(encryptedMsg.sender)", category: "room")
+                        let testDecrypted = decryptRoomMessage(encryptedData, room: roomTag, testKey: key)
+                        if testDecrypted == nil {
+                            // Password is wrong, can't decrypt
+                            bitchatLog("WRONG PASSWORD - decryption failed for room \(roomTag)", category: "room")
+                            shouldProceed = false
+                        } else {
+                            bitchatLog("Password VERIFIED - successfully decrypted message: \(testDecrypted?.prefix(20) ?? "")", category: "room")
+                            passwordVerified = true
+                        }
+                    } else {
+                        // No encrypted messages yet - accept tentatively
+                        bitchatLog("No encrypted messages to verify password for room \(roomTag) - accepting tentatively", category: "room")
+                        
+                        // Add warning message
+                        let warningMsg = BitchatMessage(
+                            sender: "system",
+                            content: "joined room \(roomTag). password will be verified when encrypted messages arrive.",
+                            timestamp: Date(),
+                            isRelay: false
+                        )
+                        messages.append(warningMsg)
+                    }
+                } else {
+                    // Empty room - accept tentatively
+                    bitchatLog("Room \(roomTag) is empty - accepting password tentatively", category: "room")
+                    
+                    // Add info message
+                    let infoMsg = BitchatMessage(
+                        sender: "system",
+                        content: "joined empty room \(roomTag). waiting for encrypted messages to verify password.",
+                        timestamp: Date(),
+                        isRelay: false
+                    )
+                    messages.append(infoMsg)
+                }
+                
+                // Only proceed if password verification didn't fail
+                if !shouldProceed {
+                    return false
+                }
+                
+                // Store the key (tentatively if not verified)
                 roomKeys[roomTag] = key
                 roomPasswords[roomTag] = password  // Store for convenience (local only)
+                
+                if passwordVerified {
+                    bitchatLog("Password stored for room \(roomTag) - verified", category: "room")
+                } else {
+                    bitchatLog("Password stored for room \(roomTag) - tentative, awaiting verification", category: "room")
+                }
             } else {
-                // Show password prompt
+                // Show password prompt and return early - don't join the room yet
                 passwordPromptRoom = roomTag
                 showPasswordPrompt = true
-                return
+                bitchatLog("Room \(roomTag) is password protected, showing prompt", category: "room")
+                return false
             }
         }
         
+        // At this point, room is either not password protected or we don't know yet
+        bitchatLog("Joining room \(roomTag) - not known to be password protected or have key", category: "room")
+        
         joinedRooms.insert(roomTag)
         saveJoinedRooms()
+        
+        // Only claim creator role if this is a brand new room (no one has announced it as protected)
+        // If it's password protected, someone else already created it
+        if roomCreators[roomTag] == nil && !passwordProtectedRooms.contains(roomTag) {
+            roomCreators[roomTag] = meshService.myPeerID
+            saveRoomData()
+            bitchatLog("Set room creator for new room \(roomTag) to \(meshService.myPeerID)", category: "room")
+        }
+        
+        // Add ourselves as a member
+        if roomMembers[roomTag] == nil {
+            roomMembers[roomTag] = Set()
+        }
+        roomMembers[roomTag]?.insert(meshService.myPeerID)
         
         // Switch to the room
         currentRoom = roomTag
@@ -190,6 +351,12 @@ class ChatViewModel: ObservableObject {
         if roomMessages[roomTag] == nil {
             roomMessages[roomTag] = []
         }
+        
+        // Hide password prompt if it was showing
+        showPasswordPrompt = false
+        passwordPromptRoom = nil
+        
+        return true
     }
     
     func leaveRoom(_ room: String) {
@@ -216,15 +383,22 @@ class ChatViewModel: ObservableObject {
     func setRoomPassword(_ password: String, for room: String) {
         guard joinedRooms.contains(room) else { return }
         
-        // If room has no creator yet, make current user the creator
-        if roomCreators[room] == nil {
-            roomCreators[room] = meshService.myPeerID
+        // Check if room already has a creator
+        if let existingCreator = roomCreators[room], existingCreator != meshService.myPeerID {
+            bitchatLog("Cannot set password - room \(room) already has creator: \(existingCreator)", category: "room")
+            return
         }
         
-        // Only room creator can set password
-        guard roomCreators[room] == meshService.myPeerID else {
-            bitchatLog("Only room creator can set password", category: "room")
+        // If room is already password protected by someone else, we can't claim it
+        if passwordProtectedRooms.contains(room) && roomCreators[room] != meshService.myPeerID {
+            bitchatLog("Cannot set password - room \(room) is already password protected by another user", category: "room")
             return
+        }
+        
+        // Claim creator role if not set and room is not already protected
+        if roomCreators[room] == nil && !passwordProtectedRooms.contains(room) {
+            roomCreators[room] = meshService.myPeerID
+            saveRoomData()
         }
         
         // Derive encryption key from password
@@ -233,13 +407,33 @@ class ChatViewModel: ObservableObject {
         roomPasswords[room] = password
         passwordProtectedRooms.insert(room)
         
+        // Compute and store key commitment for verification
+        let commitment = computeKeyCommitment(for: key)
+        roomKeyCommitments[room] = commitment
+        
         // Save room data
         saveRoomData()
         
-        // Announce that this room is now password protected
-        meshService.announcePasswordProtectedRoom(room, creatorID: meshService.myPeerID)
+        // Announce that this room is now password protected with commitment
+        meshService.announcePasswordProtectedRoom(room, creatorID: meshService.myPeerID, keyCommitment: commitment)
         
-        bitchatLog("Set password for room \(room)", category: "room")
+        // Send an encrypted initialization message with metadata
+        let timestamp = ISO8601DateFormatter().string(from: Date())
+        let metadata = [
+            "type": "room_init",
+            "room": room,
+            "creator": nickname,
+            "creatorID": meshService.myPeerID,
+            "timestamp": timestamp,
+            "version": "1.0"
+        ]
+        let jsonData = try? JSONSerialization.data(withJSONObject: metadata)
+        let metadataStr = jsonData?.base64EncodedString() ?? ""
+        
+        let initMessage = "🔐 Room \(room) initialized | Protected room created by \(nickname) | Metadata: \(metadataStr)"
+        meshService.sendEncryptedRoomMessage(initMessage, mentions: [], room: room, roomKey: key)
+        
+        bitchatLog("Set password for room \(room) and sent init message", category: "room")
     }
     
     func removeRoomPassword(for room: String) {
@@ -251,6 +445,7 @@ class ChatViewModel: ObservableObject {
         
         roomKeys.removeValue(forKey: room)
         roomPasswords.removeValue(forKey: room)
+        roomKeyCommitments.removeValue(forKey: room)
         passwordProtectedRooms.remove(room)
         
         // Save room data
@@ -262,10 +457,181 @@ class ChatViewModel: ObservableObject {
         bitchatLog("Removed password for room \(room)", category: "room")
     }
     
+    // Transfer room ownership to another user
+    func transferRoomOwnership(to nickname: String) {
+        guard let currentRoom = currentRoom else {
+            let msg = BitchatMessage(
+                sender: "system",
+                content: "you must be in a room to transfer ownership.",
+                timestamp: Date(),
+                isRelay: false
+            )
+            messages.append(msg)
+            return
+        }
+        
+        // Check if current user is the owner
+        guard roomCreators[currentRoom] == meshService.myPeerID else {
+            let msg = BitchatMessage(
+                sender: "system",
+                content: "only the room owner can transfer ownership.",
+                timestamp: Date(),
+                isRelay: false
+            )
+            messages.append(msg)
+            return
+        }
+        
+        // Remove @ prefix if present
+        let targetNick = nickname.hasPrefix("@") ? String(nickname.dropFirst()) : nickname
+        
+        // Find peer ID for the nickname
+        guard let targetPeerID = getPeerIDForNickname(targetNick) else {
+            let msg = BitchatMessage(
+                sender: "system",
+                content: "user \(targetNick) not found. they must be online to receive ownership.",
+                timestamp: Date(),
+                isRelay: false
+            )
+            messages.append(msg)
+            return
+        }
+        
+        // Update ownership
+        roomCreators[currentRoom] = targetPeerID
+        saveRoomData()
+        
+        // Announce the ownership transfer
+        if passwordProtectedRooms.contains(currentRoom) {
+            let commitment = roomKeyCommitments[currentRoom]
+            meshService.announcePasswordProtectedRoom(currentRoom, creatorID: targetPeerID, keyCommitment: commitment)
+        }
+        
+        // Send notification message
+        let transferMsg = BitchatMessage(
+            sender: "system",
+            content: "room ownership transferred from \(self.nickname) to \(targetNick).",
+            timestamp: Date(),
+            isRelay: false,
+            room: currentRoom
+        )
+        messages.append(transferMsg)
+        
+        // Send encrypted notification if room is protected
+        if let roomKey = roomKeys[currentRoom] {
+            let notifyMsg = "🔑 Room ownership transferred to \(targetNick) by \(self.nickname)"
+            meshService.sendEncryptedRoomMessage(notifyMsg, mentions: [targetNick], room: currentRoom, roomKey: roomKey)
+        } else {
+            meshService.sendMessage(transferMsg.content, mentions: [targetNick])
+        }
+        
+        bitchatLog("Transferred ownership of room \(currentRoom) to \(targetPeerID)", category: "room")
+    }
+    
+    // Change password for current room
+    func changeRoomPassword(to newPassword: String) {
+        guard let currentRoom = currentRoom else {
+            let msg = BitchatMessage(
+                sender: "system",
+                content: "you must be in a room to change its password.",
+                timestamp: Date(),
+                isRelay: false
+            )
+            messages.append(msg)
+            return
+        }
+        
+        // Check if current user is the owner
+        guard roomCreators[currentRoom] == meshService.myPeerID else {
+            let msg = BitchatMessage(
+                sender: "system",
+                content: "only the room owner can change the password.",
+                timestamp: Date(),
+                isRelay: false
+            )
+            messages.append(msg)
+            return
+        }
+        
+        // Check if room is currently password protected
+        guard passwordProtectedRooms.contains(currentRoom) else {
+            let msg = BitchatMessage(
+                sender: "system",
+                content: "room is not password protected. use the lock button to set a password.",
+                timestamp: Date(),
+                isRelay: false
+            )
+            messages.append(msg)
+            return
+        }
+        
+        // Store old key for re-encryption
+        let oldKey = roomKeys[currentRoom]
+        
+        // Derive new encryption key from new password
+        let newKey = deriveRoomKey(from: newPassword, roomName: currentRoom)
+        roomKeys[currentRoom] = newKey
+        roomPasswords[currentRoom] = newPassword
+        
+        // Compute new key commitment
+        let newCommitment = computeKeyCommitment(for: newKey)
+        roomKeyCommitments[currentRoom] = newCommitment
+        
+        // Save room data
+        saveRoomData()
+        
+        // Send password change notification with old key
+        if let oldKey = oldKey {
+            let changeNotice = "🔐 Password changed by room owner. Please update your password."
+            meshService.sendEncryptedRoomMessage(changeNotice, mentions: [], room: currentRoom, roomKey: oldKey)
+        }
+        
+        // Send new initialization message with new key
+        let timestamp = ISO8601DateFormatter().string(from: Date())
+        let metadata = [
+            "type": "password_change",
+            "room": currentRoom,
+            "changer": nickname,
+            "changerID": meshService.myPeerID,
+            "timestamp": timestamp,
+            "version": "1.0"
+        ]
+        let jsonData = try? JSONSerialization.data(withJSONObject: metadata)
+        let metadataStr = jsonData?.base64EncodedString() ?? ""
+        
+        let initMessage = "🔑 Password changed | Room \(currentRoom) password updated by \(nickname) | Metadata: \(metadataStr)"
+        meshService.sendEncryptedRoomMessage(initMessage, mentions: [], room: currentRoom, roomKey: newKey)
+        
+        // Announce the new commitment
+        meshService.announcePasswordProtectedRoom(currentRoom, creatorID: meshService.myPeerID, keyCommitment: newCommitment)
+        
+        // Add local success message
+        let successMsg = BitchatMessage(
+            sender: "system",
+            content: "password changed successfully. other users will need to re-enter the new password.",
+            timestamp: Date(),
+            isRelay: false
+        )
+        messages.append(successMsg)
+        
+        bitchatLog("Changed password for room \(currentRoom)", category: "room")
+    }
+    
+    // Compute SHA256 hash of the derived key for public verification
+    private func computeKeyCommitment(for key: SymmetricKey) -> String {
+        let keyData = key.withUnsafeBytes { Data($0) }
+        let hash = SHA256.hash(data: keyData)
+        return hash.compactMap { String(format: "%02x", $0) }.joined()
+    }
+    
     private func deriveRoomKey(from password: String, roomName: String) -> SymmetricKey {
         // Use PBKDF2 to derive a key from the password
         let salt = roomName.data(using: .utf8)!  // Use room name as salt for consistency
         let keyData = pbkdf2(password: password, salt: salt, iterations: 100000, keyLength: 32)
+        
+        // Debug logging
+        bitchatLog("Derived key for room \(roomName) with password '\(password)' - key hash: \(keyData.prefix(8).hexEncodedString())", category: "crypto")
+        
         return SymmetricKey(data: keyData)
     }
     
@@ -273,7 +639,7 @@ class ChatViewModel: ObservableObject {
         var derivedKey = Data(count: keyLength)
         let passwordData = password.data(using: .utf8)!
         
-        derivedKey.withUnsafeMutableBytes { derivedKeyBytes in
+        _ = derivedKey.withUnsafeMutableBytes { derivedKeyBytes in
             salt.withUnsafeBytes { saltBytes in
                 passwordData.withUnsafeBytes { passwordBytes in
                     CCKeyDerivationPBKDF(
@@ -292,6 +658,14 @@ class ChatViewModel: ObservableObject {
     }
     
     func switchToRoom(_ room: String?) {
+        // Check if room needs password
+        if let room = room, passwordProtectedRooms.contains(room) && roomKeys[room] == nil {
+            // Need password, show prompt instead
+            passwordPromptRoom = room
+            showPasswordPrompt = true
+            return
+        }
+        
         currentRoom = room
         selectedPrivateChatPeer = nil  // Exit private chat
         
@@ -366,6 +740,12 @@ class ChatViewModel: ObservableObject {
     func sendMessage(_ content: String) {
         guard !content.isEmpty else { return }
         
+        // Check for commands
+        if content.hasPrefix("/") {
+            handleCommand(content)
+            return
+        }
+        
         if let selectedPeer = selectedPrivateChatPeer {
             // Send as private message
             sendPrivateMessage(content, to: selectedPeer)
@@ -373,6 +753,13 @@ class ChatViewModel: ObservableObject {
             // Parse mentions and rooms from the content
             let mentions = parseMentions(from: content)
             let rooms = parseRooms(from: content)
+            
+            // Auto-join any rooms mentioned in the message
+            for room in rooms {
+                if !joinedRooms.contains(room) {
+                    let _ = joinRoom(room)
+                }
+            }
             
             // Determine which room this message belongs to
             let messageRoom = currentRoom  // Use current room if we're in one
@@ -400,7 +787,7 @@ class ChatViewModel: ObservableObject {
                 
                 // Track ourselves as a room member
                 if roomMembers[room] == nil {
-                    roomMembers[room] = []
+                    roomMembers[room] = Set()
                 }
                 roomMembers[room]?.insert(meshService.myPeerID)
                 bitchatLog("Added self \(meshService.myPeerID) to room \(room), total members: \(roomMembers[room]?.count ?? 0)", category: "room")
@@ -412,7 +799,7 @@ class ChatViewModel: ObservableObject {
             // Only auto-join rooms if we're sending TO that room
             if let messageRoom = messageRoom {
                 if !joinedRooms.contains(messageRoom) {
-                    joinRoom(messageRoom)
+                    let _ = joinRoom(messageRoom)
                 }
             }
             
@@ -795,17 +1182,46 @@ extension ChatViewModel: BitchatDelegate {
         }
     }
     
-    func didReceivePasswordProtectedRoomAnnouncement(_ room: String, isProtected: Bool, creatorID: String?) {
+    func didReceivePasswordProtectedRoomAnnouncement(_ room: String, isProtected: Bool, creatorID: String?, keyCommitment: String?) {
+        let wasAlreadyProtected = passwordProtectedRooms.contains(room)
+        
         if isProtected {
             passwordProtectedRooms.insert(room)
             if let creator = creatorID {
                 roomCreators[room] = creator
+            }
+            
+            // Store the key commitment if provided
+            if let commitment = keyCommitment {
+                roomKeyCommitments[room] = commitment
+                bitchatLog("Stored key commitment for room \(room): \(commitment)", category: "room")
+            }
+            
+            // If we just learned this room is protected and we're in it without a key, prompt for password
+            if !wasAlreadyProtected && joinedRooms.contains(room) && roomKeys[room] == nil {
+                bitchatLog("Just learned room \(room) is password protected, need to prompt for password", category: "room")
+                
+                // Add system message
+                let systemMessage = BitchatMessage(
+                    sender: "system",
+                    content: "room \(room) is password protected. you need the password to participate.",
+                    timestamp: Date(),
+                    isRelay: false
+                )
+                messages.append(systemMessage)
+                
+                // If currently viewing this room, show password prompt
+                if currentRoom == room {
+                    passwordPromptRoom = room
+                    showPasswordPrompt = true
+                }
             }
         } else {
             passwordProtectedRooms.remove(room)
             // If we're in this room and it's no longer protected, clear the key
             roomKeys.removeValue(forKey: room)
             roomPasswords.removeValue(forKey: room)
+            roomKeyCommitments.removeValue(forKey: room)
         }
         
         // Save updated room data
@@ -814,19 +1230,254 @@ extension ChatViewModel: BitchatDelegate {
         bitchatLog("Room \(room) is now \(isProtected ? "password protected" : "public")", category: "room")
     }
     
-    func decryptRoomMessage(_ encryptedContent: Data, room: String) -> String? {
-        guard let roomKey = roomKeys[room] else {
+    func decryptRoomMessage(_ encryptedContent: Data, room: String, testKey: SymmetricKey? = nil) -> String? {
+        let key = testKey ?? roomKeys[room]
+        guard let key = key else {
             bitchatLog("No key available for encrypted room \(room)", category: "room")
             return nil
         }
         
+        // Debug logging
+        let keyData = key.withUnsafeBytes { Data($0) }
+        bitchatLog("Attempting to decrypt with key hash: \(keyData.prefix(8).hexEncodedString()) for room \(room)", category: "crypto")
+        
         do {
             let sealedBox = try AES.GCM.SealedBox(combined: encryptedContent)
-            let decryptedData = try AES.GCM.open(sealedBox, using: roomKey)
-            return String(data: decryptedData, encoding: .utf8)
+            let decryptedData = try AES.GCM.open(sealedBox, using: key)
+            let decryptedString = String(data: decryptedData, encoding: .utf8)
+            bitchatLog("Successfully decrypted message: \(decryptedString?.prefix(20) ?? "nil")", category: "crypto")
+            return decryptedString
         } catch {
             bitchatLog("Failed to decrypt room message: \(error)", category: "crypto")
             return nil
+        }
+    }
+    
+    private func handleCommand(_ command: String) {
+        let parts = command.split(separator: " ")
+        guard let cmd = parts.first else { return }
+        
+        switch cmd {
+        case "/j":
+            if parts.count > 1 {
+                let roomName = String(parts[1])
+                // Ensure room name starts with #
+                let room = roomName.hasPrefix("#") ? roomName : "#\(roomName)"
+                
+                // Validate room name
+                let cleanedName = room.dropFirst()
+                let isValidName = !cleanedName.isEmpty && cleanedName.allSatisfy { $0.isLetter || $0.isNumber || $0 == "_" }
+                
+                if !isValidName {
+                    let systemMessage = BitchatMessage(
+                        sender: "system",
+                        content: "invalid room name. use only letters, numbers, and underscores.",
+                        timestamp: Date(),
+                        isRelay: false
+                    )
+                    messages.append(systemMessage)
+                } else {
+                    let wasAlreadyJoined = joinedRooms.contains(room)
+                    let wasPasswordProtected = passwordProtectedRooms.contains(room)
+                    let hadCreator = roomCreators[room] != nil
+                    
+                    let success = joinRoom(room)
+                    
+                    if success {
+                        if !wasAlreadyJoined {
+                            var message = "joined room \(room)"
+                            if !hadCreator && !wasPasswordProtected {
+                                message += " (created new room - you are the owner)"
+                            }
+                            let systemMessage = BitchatMessage(
+                                sender: "system",
+                                content: message,
+                                timestamp: Date(),
+                                isRelay: false
+                            )
+                            messages.append(systemMessage)
+                        } else {
+                            // Already in room, just switched to it
+                            let systemMessage = BitchatMessage(
+                                sender: "system",
+                                content: "switched to room \(room)",
+                                timestamp: Date(),
+                                isRelay: false
+                            )
+                            messages.append(systemMessage)
+                        }
+                    }
+                    // If not successful, password prompt will be shown
+                }
+            } else {
+                // Show usage hint
+                let systemMessage = BitchatMessage(
+                    sender: "system",
+                    content: "usage: /join #roomname",
+                    timestamp: Date(),
+                    isRelay: false
+                )
+                messages.append(systemMessage)
+            }
+        case "/create":
+            // /create is now just an alias for /join
+            let systemMessage = BitchatMessage(
+                sender: "system",
+                content: "use /join #roomname to join or create a room",
+                timestamp: Date(),
+                isRelay: false
+            )
+            messages.append(systemMessage)
+        case "/m":
+            if parts.count > 1 {
+                let targetName = String(parts[1])
+                // Remove @ if present
+                let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
+                
+                // Find peer ID for this nickname
+                if let peerID = getPeerIDForNickname(nickname) {
+                    startPrivateChat(with: peerID)
+                    
+                    // If there's a message after the nickname, send it
+                    if parts.count > 2 {
+                        let messageContent = parts[2...].joined(separator: " ")
+                        sendPrivateMessage(messageContent, to: peerID)
+                    } else {
+                        let systemMessage = BitchatMessage(
+                            sender: "system",
+                            content: "started private chat with \(nickname)",
+                            timestamp: Date(),
+                            isRelay: false
+                        )
+                        messages.append(systemMessage)
+                    }
+                } else {
+                    let systemMessage = BitchatMessage(
+                        sender: "system",
+                        content: "user '\(nickname)' not found. they may be offline or using a different nickname.",
+                        timestamp: Date(),
+                        isRelay: false
+                    )
+                    messages.append(systemMessage)
+                }
+            } else {
+                let systemMessage = BitchatMessage(
+                    sender: "system",
+                    content: "usage: /msg @nickname [message] or /msg nickname [message]",
+                    timestamp: Date(),
+                    isRelay: false
+                )
+                messages.append(systemMessage)
+            }
+        case "/list":
+            if joinedRooms.isEmpty {
+                let systemMessage = BitchatMessage(
+                    sender: "system",
+                    content: "you haven't joined any rooms yet. use /create or /join to get started.",
+                    timestamp: Date(),
+                    isRelay: false
+                )
+                messages.append(systemMessage)
+            } else {
+                let roomList = joinedRooms.sorted().map { room in
+                    let isProtected = passwordProtectedRooms.contains(room) ? " 🔒" : ""
+                    let isCreator = roomCreators[room] == meshService.myPeerID ? " (owner)" : ""
+                    return "\(room)\(isProtected)\(isCreator)"
+                }.joined(separator: "\n")
+                
+                let systemMessage = BitchatMessage(
+                    sender: "system",
+                    content: "your rooms:\n\(roomList)",
+                    timestamp: Date(),
+                    isRelay: false
+                )
+                messages.append(systemMessage)
+            }
+        case "/w":
+            let peerNicknames = meshService.getPeerNicknames()
+            if connectedPeers.isEmpty {
+                let systemMessage = BitchatMessage(
+                    sender: "system",
+                    content: "no one else is online right now.",
+                    timestamp: Date(),
+                    isRelay: false
+                )
+                messages.append(systemMessage)
+            } else {
+                let onlineList = connectedPeers.compactMap { peerID in
+                    peerNicknames[peerID]
+                }.sorted().joined(separator: ", ")
+                
+                let systemMessage = BitchatMessage(
+                    sender: "system",
+                    content: "online users: \(onlineList)",
+                    timestamp: Date(),
+                    isRelay: false
+                )
+                messages.append(systemMessage)
+            }
+        case "/transfer":
+            // Transfer room ownership
+            let parts = command.split(separator: " ", maxSplits: 1).map(String.init)
+            if parts.count < 2 {
+                let systemMessage = BitchatMessage(
+                    sender: "system",
+                    content: "usage: /transfer @nickname",
+                    timestamp: Date(),
+                    isRelay: false
+                )
+                messages.append(systemMessage)
+            } else {
+                transferRoomOwnership(to: parts[1])
+            }
+        case "/pass":
+            // Change room password (only available in rooms)
+            guard currentRoom != nil else {
+                let systemMessage = BitchatMessage(
+                    sender: "system",
+                    content: "you must be in a room to use /pass.",
+                    timestamp: Date(),
+                    isRelay: false
+                )
+                messages.append(systemMessage)
+                break
+            }
+            let parts = command.split(separator: " ", maxSplits: 1).map(String.init)
+            if parts.count < 2 {
+                let systemMessage = BitchatMessage(
+                    sender: "system",
+                    content: "usage: /pass <new password>",
+                    timestamp: Date(),
+                    isRelay: false
+                )
+                messages.append(systemMessage)
+            } else {
+                changeRoomPassword(to: parts[1])
+            }
+        case "/clear":
+            // Clear messages based on current context
+            if let room = currentRoom {
+                // Clear room messages
+                roomMessages[room]?.removeAll()
+                bitchatLog("cleared messages in room \(room)", category: "chat")
+            } else if let peerID = selectedPrivateChatPeer {
+                // Clear private chat
+                privateChats[peerID]?.removeAll()
+                bitchatLog("cleared private chat with \(peerID)", category: "chat")
+            } else {
+                // Clear main messages
+                messages.removeAll()
+                bitchatLog("cleared main chat", category: "chat")
+            }
+        default:
+            // Unknown command
+            let systemMessage = BitchatMessage(
+                sender: "system",
+                content: "unknown command: \(cmd).",
+                timestamp: Date(),
+                isRelay: false
+            )
+            messages.append(systemMessage)
         }
     }
     
@@ -867,16 +1518,147 @@ extension ChatViewModel: BitchatDelegate {
             
             // Only process room messages if we've joined this room
             if joinedRooms.contains(room) {
-                // Add to room messages
+                // Prepare the message to add (might be updated if decryption succeeds)
+                var messageToAdd = message
+                
+                // Check if this is an encrypted message and we don't have the key
+                if message.isEncrypted && roomKeys[room] == nil {
+                    // Mark room as password protected if not already
+                    let wasNewlyDiscovered = !passwordProtectedRooms.contains(room)
+                    if wasNewlyDiscovered {
+                        passwordProtectedRooms.insert(room)
+                        saveRoomData()
+                        bitchatLog("Discovered room \(room) is password protected from encrypted message", category: "room")
+                        
+                        // Add a system message to indicate the room is password protected (only once)
+                        let systemMessage = BitchatMessage(
+                            sender: "system",
+                            content: "room \(room) is password protected. you need the password to read messages.",
+                            timestamp: Date(),
+                            isRelay: false
+                        )
+                        if roomMessages[room] == nil {
+                            roomMessages[room] = []
+                        }
+                        roomMessages[room]?.append(systemMessage)
+                    }
+                    
+                    // If we're currently viewing this room, prompt for password
+                    if currentRoom == room {
+                        passwordPromptRoom = room
+                        showPasswordPrompt = true
+                        bitchatLog("Showing password prompt for encrypted message in current room \(room)", category: "room")
+                    }
+                } else if message.isEncrypted && roomKeys[room] != nil && message.content == "[Encrypted message - password required]" {
+                    // We have a key but the message shows as encrypted - try to decrypt it again
+                    bitchatLog("Received encrypted message placeholder but we have a key - attempting re-decryption", category: "room")
+                    
+                    // Check if this is the first encrypted message in the room (password verification opportunity)
+                    let isFirstEncryptedMessage = roomMessages[room]?.filter { $0.isEncrypted }.isEmpty ?? true
+                    
+                    if let encryptedData = message.encryptedContent {
+                        if let decryptedContent = decryptRoomMessage(encryptedData, room: room) {
+                            // Successfully decrypted - update the message content
+                            bitchatLog("Re-decryption successful! Content: \(decryptedContent.prefix(20))", category: "room")
+                            
+                            if isFirstEncryptedMessage {
+                                bitchatLog("First encrypted message successfully decrypted - password VERIFIED for room \(room)", category: "room")
+                                
+                                // Add success message
+                                let verifiedMsg = BitchatMessage(
+                                    sender: "system",
+                                    content: "password verified successfully for room \(room).",
+                                    timestamp: Date(),
+                                    isRelay: false
+                                )
+                                messages.append(verifiedMsg)
+                            }
+                            
+                            // Create a new message with decrypted content
+                            let decryptedMessage = BitchatMessage(
+                                sender: message.sender,
+                                content: decryptedContent,
+                                timestamp: message.timestamp,
+                                isRelay: message.isRelay,
+                                originalSender: message.originalSender,
+                                isPrivate: message.isPrivate,
+                                recipientNickname: message.recipientNickname,
+                                senderPeerID: message.senderPeerID,
+                                mentions: message.mentions,
+                                room: message.room,
+                                encryptedContent: message.encryptedContent,
+                                isEncrypted: message.isEncrypted
+                            )
+                            
+                            // Update the message we'll add
+                            messageToAdd = decryptedMessage
+                        } else {
+                            // Decryption really failed - wrong password
+                            bitchatLog("Re-decryption failed - password is actually wrong", category: "room")
+                            
+                            // Clear the wrong password
+                            roomKeys.removeValue(forKey: room)
+                            roomPasswords.removeValue(forKey: room)
+                            
+                            // If this was the first encrypted message, we need to kick the user out
+                            if isFirstEncryptedMessage {
+                                bitchatLog("First encrypted message failed to decrypt - WRONG PASSWORD, removing user from room", category: "room")
+                                
+                                // Leave the room
+                                joinedRooms.remove(room)
+                                saveJoinedRooms()
+                                
+                                // Clear room data
+                                roomMessages.removeValue(forKey: room)
+                                roomMembers.removeValue(forKey: room)
+                                unreadRoomMessages.removeValue(forKey: room)
+                                
+                                // If we're currently in this room, exit to main
+                                if currentRoom == room {
+                                    currentRoom = nil
+                                }
+                                
+                                // Add error message
+                                let errorMsg = BitchatMessage(
+                                    sender: "system",
+                                    content: "wrong password for room \(room). you have been removed from the room.",
+                                    timestamp: Date(),
+                                    isRelay: false
+                                )
+                                messages.append(errorMsg)
+                                
+                                // Don't show password prompt - user needs to rejoin
+                                return
+                            }
+                            
+                            // Add system message for subsequent failures
+                            let systemMessage = BitchatMessage(
+                                sender: "system",
+                                content: "wrong password for room \(room). please enter the correct password.",
+                                timestamp: Date(),
+                                isRelay: false
+                            )
+                            messages.append(systemMessage)
+                            
+                            // Show password prompt again
+                            if currentRoom == room {
+                                passwordPromptRoom = room
+                                showPasswordPrompt = true
+                            }
+                        }
+                    }
+                }
+                
+                // Add to room messages (using potentially decrypted version)
                 if roomMessages[room] == nil {
                     roomMessages[room] = []
                 }
-                roomMessages[room]?.append(message)
+                roomMessages[room]?.append(messageToAdd)
                 roomMessages[room]?.sort { $0.timestamp < $1.timestamp }
                 
                 // Track room members - only track the sender as a member
                 if roomMembers[room] == nil {
-                    roomMembers[room] = []
+                    roomMembers[room] = Set()
                 }
                 if let senderPeerID = message.senderPeerID {
                     roomMembers[room]?.insert(senderPeerID)
