@@ -879,16 +879,23 @@ class ChatViewModel: ObservableObject {
     }
     
     func startPrivateChat(with peerID: String) {
+        print("[Delivery] Starting private chat with peer \(peerID)")
         selectedPrivateChatPeer = peerID
         unreadPrivateMessages.remove(peerID)
         
         // Initialize chat history if needed
         if privateChats[peerID] == nil {
             privateChats[peerID] = []
+            print("[Delivery] Initialized empty chat history for peer \(peerID)")
+        } else {
+            print("[Delivery] Found existing chat history with \(privateChats[peerID]?.count ?? 0) messages for peer \(peerID)")
         }
         
         // Send read receipts for unread messages from this peer
-        markPrivateMessagesAsRead(from: peerID)
+        // Add a small delay to ensure UI has updated
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+            self?.markPrivateMessagesAsRead(from: peerID)
+        }
     }
     
     func endPrivateChat() {
@@ -901,15 +908,15 @@ class ChatViewModel: ObservableObject {
             return 
         }
         
-        print("[Delivery] Checking \(messages.count) messages from peer \(peerID) for read receipts")
+        print("[Delivery] Checking \(messages.count) messages in chat with peer \(peerID) for read receipts")
         
         // Find messages from the peer that haven't been read yet
         for message in messages {
             // Only send read receipts for messages from the other peer (not our own)
-            // and only if the status is delivered (not already read)
-            print("[Delivery] Message \(message.id) from \(message.sender), senderPeerID: \(message.senderPeerID ?? "nil"), status: \(message.deliveryStatus?.displayText ?? "none")")
+            print("[Delivery] Message \(message.id) from \(message.sender), senderPeerID: \(message.senderPeerID ?? "nil"), myNickname: \(nickname), status: \(message.deliveryStatus?.displayText ?? "none")")
             
-            if message.senderPeerID == peerID {
+            // Check if this is a message FROM the other person TO us
+            if message.sender != nickname && message.senderPeerID != nil {
                 if let status = message.deliveryStatus {
                     switch status {
                     case .sent, .delivered:
