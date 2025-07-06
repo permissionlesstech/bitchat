@@ -1,0 +1,18 @@
+Add delivery confirmation and read receipts for private messages
+
+- Implement full delivery status flow: sending → sent → delivered → read
+- Add visual indicators (gray/green/blue checkmarks) 
+- Create DeliveryTracker service for managing confirmations
+- Add end-to-end encrypted ACK and read receipt messages
+- Handle ephemeral peer ID changes with message migration
+- Fix message ID preservation in BinaryProtocol
+- Ensure proper delivery status for incoming messages
+- Add multiple triggers for sending read receipts
+- Maintain full backwards compatibility with older clients
+
+Visual indicators:
+- ○ Gray circle = Sending
+- ✓ Gray check = Sent
+- ✓✓ Green double checks = Delivered  
+- ✓✓ Blue double checks = Read
+- ⚠ Red triangle = Failed
