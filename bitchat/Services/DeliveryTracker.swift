@@ -68,9 +68,6 @@ class DeliveryTracker {
     // MARK: - Public Methods
     
     func trackMessage(_ message: BitchatMessage, recipientID: String, recipientNickname: String, isFavorite: Bool = false, expectedRecipients: Int = 1) {
-        pendingLock.lock()
-        defer { pendingLock.unlock() }
-        
         // Don't track broadcasts or certain message types
         guard message.isPrivate || message.room != nil else { return }
         
@@ -86,14 +83,17 @@ class DeliveryTracker {
             timeoutTimer: nil
         )
         
+        // Store the delivery with lock
+        pendingLock.lock()
         pendingDeliveries[message.id] = delivery
+        pendingLock.unlock()
         
         // Update status to sent
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
             self?.updateDeliveryStatus(message.id, status: .sent)
         }
         
-        // Schedule timeout
+        // Schedule timeout (outside of lock)
         scheduleTimeout(for: message.id)
     }
     
@@ -175,10 +175,18 @@ class DeliveryTracker {
     }
     
     private func scheduleTimeout(for messageID: String) {
-        guard let delivery = pendingDeliveries[messageID] else { return }
+        // Get delivery info with lock
+        pendingLock.lock()
+        guard let delivery = pendingDeliveries[messageID] else {
+            pendingLock.unlock()
+            return
+        }
+        let isFavorite = delivery.isFavorite
+        let isRoomMessage = delivery.isRoomMessage
+        pendingLock.unlock()
         
-        let timeout = delivery.isFavorite ? favoriteTimeout :
-                     (delivery.isRoomMessage ? roomMessageTimeout : privateMessageTimeout)
+        let timeout = isFavorite ? favoriteTimeout :
+                     (isRoomMessage ? roomMessageTimeout : privateMessageTimeout)
         
         let timer = Timer.scheduledTimer(withTimeInterval: timeout, repeats: false) { [weak self] _ in
             self?.handleTimeout(messageID: messageID)
@@ -194,23 +202,33 @@ class DeliveryTracker {
     
     private func handleTimeout(messageID: String) {
         pendingLock.lock()
-        defer { pendingLock.unlock() }
+        guard let delivery = pendingDeliveries[messageID] else {
+            pendingLock.unlock()
+            return
+        }
         
-        guard let delivery = pendingDeliveries[messageID] else { return }
+        let shouldRetry = delivery.shouldRetry
+        let isRoomMessage = delivery.isRoomMessage
         
-        if delivery.shouldRetry {
-            // Retry for favorites
+        if shouldRetry {
+            pendingLock.unlock()
+            // Retry for favorites (outside of lock)
             retryDelivery(messageID: messageID)
         } else {
             // Mark as failed
-            let reason = delivery.isRoomMessage ? "No response from room members" : "Message not delivered"
-            updateDeliveryStatus(messageID, status: .failed(reason: reason))
+            let reason = isRoomMessage ? "No response from room members" : "Message not delivered"
             pendingDeliveries.removeValue(forKey: messageID)
+            pendingLock.unlock()
+            updateDeliveryStatus(messageID, status: .failed(reason: reason))
         }
     }
     
     private func retryDelivery(messageID: String) {
-        guard let delivery = pendingDeliveries[messageID] else { return }
+        pendingLock.lock()
+        guard let delivery = pendingDeliveries[messageID] else {
+            pendingLock.unlock()
+            return
+        }
         
         // Increment retry count
         let newDelivery = PendingDelivery(
@@ -227,9 +245,11 @@ class DeliveryTracker {
         )
         
         pendingDeliveries[messageID] = newDelivery
+        let retryCount = delivery.retryCount
+        pendingLock.unlock()
         
         // Exponential backoff for retry
-        let delay = retryDelay * pow(2, Double(delivery.retryCount))
+        let delay = retryDelay * pow(2, Double(retryCount))
         
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
             // Trigger resend through delegate or notification
