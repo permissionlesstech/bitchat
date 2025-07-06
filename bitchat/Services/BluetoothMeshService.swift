@@ -708,6 +708,7 @@ class BluetoothMeshService: NSObject {
     }
     
     func sendReadReceipt(_ receipt: ReadReceipt, to recipientID: String) {
+        print("[DeliveryTracker] Sending read receipt for message \(receipt.originalMessageID) to \(recipientID)")
         messageQueue.async { [weak self] in
             guard let self = self else { return }
             
@@ -737,6 +738,7 @@ class BluetoothMeshService: NSObject {
                 ttl: 3  // Limited TTL for receipts
             )
             
+            print("[DeliveryTracker] Broadcasting read receipt packet to \(recipientID)")
             // Send immediately without delay
             self.broadcastPacket(packet)
         }
