@@ -2187,23 +2187,46 @@ extension ChatViewModel: BitchatDelegate {
     private func updateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) {
         print("[Delivery] Updating message \(messageID) to status: \(status)")
         
+        // Helper function to check if we should skip this update
+        func shouldSkipUpdate(currentStatus: DeliveryStatus?, newStatus: DeliveryStatus) -> Bool {
+            guard let current = currentStatus else { return false }
+            
+            // Don't downgrade from read to delivered
+            switch (current, newStatus) {
+            case (.read, .delivered):
+                print("[Delivery] Skipping update - message already marked as read")
+                return true
+            case (.read, .sent):
+                print("[Delivery] Skipping update - message already marked as read")
+                return true
+            default:
+                return false
+            }
+        }
+        
         // Update in main messages
         if let index = messages.firstIndex(where: { $0.id == messageID }) {
-            var updatedMessage = messages[index]
-            updatedMessage.deliveryStatus = status
-            messages[index] = updatedMessage
-            print("[Delivery] Updated message in main messages")
+            let currentStatus = messages[index].deliveryStatus
+            if !shouldSkipUpdate(currentStatus: currentStatus, newStatus: status) {
+                var updatedMessage = messages[index]
+                updatedMessage.deliveryStatus = status
+                messages[index] = updatedMessage
+                print("[Delivery] Updated message in main messages")
+            }
         }
         
         // Update in private chats
         var updatedPrivateChats = privateChats
         for (peerID, var chatMessages) in updatedPrivateChats {
             if let index = chatMessages.firstIndex(where: { $0.id == messageID }) {
-                var updatedMessage = chatMessages[index]
-                updatedMessage.deliveryStatus = status
-                chatMessages[index] = updatedMessage
-                updatedPrivateChats[peerID] = chatMessages
-                print("[Delivery] Updated message in private chat with \(peerID)")
+                let currentStatus = chatMessages[index].deliveryStatus
+                if !shouldSkipUpdate(currentStatus: currentStatus, newStatus: status) {
+                    var updatedMessage = chatMessages[index]
+                    updatedMessage.deliveryStatus = status
+                    chatMessages[index] = updatedMessage
+                    updatedPrivateChats[peerID] = chatMessages
+                    print("[Delivery] Updated message in private chat with \(peerID)")
+                }
             }
         }
         
@@ -2217,14 +2240,17 @@ extension ChatViewModel: BitchatDelegate {
         // Update in room messages
         for (room, var roomMsgs) in roomMessages {
             if let index = roomMsgs.firstIndex(where: { $0.id == messageID }) {
-                var updatedMessage = roomMsgs[index]
-                updatedMessage.deliveryStatus = status
-                roomMsgs[index] = updatedMessage
-                roomMessages[room] = roomMsgs
-                
-                // Force UI update
-                DispatchQueue.main.async { [weak self] in
-                    self?.objectWillChange.send()
+                let currentStatus = roomMsgs[index].deliveryStatus
+                if !shouldSkipUpdate(currentStatus: currentStatus, newStatus: status) {
+                    var updatedMessage = roomMsgs[index]
+                    updatedMessage.deliveryStatus = status
+                    roomMsgs[index] = updatedMessage
+                    roomMessages[room] = roomMsgs
+                    
+                    // Force UI update
+                    DispatchQueue.main.async { [weak self] in
+                        self?.objectWillChange.send()
+                    }
                 }
             }
         }
