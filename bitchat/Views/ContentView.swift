@@ -439,7 +439,7 @@ struct ContentView: View {
                         }
                     }()
                     
-                    ForEach(Array(messages.enumerated()), id: \.offset) { index, message in
+                    ForEach(messages, id: \.id) { message in
                         VStack(alignment: .leading, spacing: 4) {
                             // Check if current user is mentioned
                             let isMentioned = message.mentions?.contains(viewModel.nickname) ?? false
@@ -505,16 +505,16 @@ struct ContentView: View {
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 2)
-                        .id(index)
+                        .id(message.id)
                     }
                 }
                 .padding(.vertical, 8)
             }
             .background(backgroundColor)
             .onChange(of: viewModel.messages.count) { _ in
-                if viewModel.selectedPrivateChatPeer == nil {
+                if viewModel.selectedPrivateChatPeer == nil && !viewModel.messages.isEmpty {
                     withAnimation {
-                        proxy.scrollTo(viewModel.messages.count - 1, anchor: .bottom)
+                        proxy.scrollTo(viewModel.messages.last?.id, anchor: .bottom)
                     }
                 }
             }
@@ -523,7 +523,7 @@ struct ContentView: View {
                    let messages = viewModel.privateChats[peerID],
                    !messages.isEmpty {
                     withAnimation {
-                        proxy.scrollTo(messages.count - 1, anchor: .bottom)
+                        proxy.scrollTo(messages.last?.id, anchor: .bottom)
                     }
                 }
             }

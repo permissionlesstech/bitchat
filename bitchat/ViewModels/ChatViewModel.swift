@@ -2142,6 +2142,11 @@ extension ChatViewModel: BitchatDelegate {
                 chatMessages[index] = updatedMessage
                 privateChats[peerID] = chatMessages
                 print("[Delivery] Updated message in private chat with \(peerID)")
+                
+                // Force UI update by triggering objectWillChange
+                DispatchQueue.main.async { [weak self] in
+                    self?.objectWillChange.send()
+                }
             }
         }
         
@@ -2152,6 +2157,11 @@ extension ChatViewModel: BitchatDelegate {
                 updatedMessage.deliveryStatus = status
                 roomMsgs[index] = updatedMessage
                 roomMessages[room] = roomMsgs
+                
+                // Force UI update
+                DispatchQueue.main.async { [weak self] in
+                    self?.objectWillChange.send()
+                }
             }
         }
     }
