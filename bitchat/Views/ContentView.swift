@@ -531,7 +531,18 @@ struct ContentView: View {
             .onChange(of: viewModel.selectedPrivateChatPeer) { newPeerID in
                 // When switching to a private chat, send read receipts
                 if let peerID = newPeerID {
-                    viewModel.markPrivateMessagesAsRead(from: peerID)
+                    // Small delay to ensure messages are loaded
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        viewModel.markPrivateMessagesAsRead(from: peerID)
+                    }
+                }
+            }
+            .onAppear {
+                // Also check when view appears
+                if let peerID = viewModel.selectedPrivateChatPeer {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        viewModel.markPrivateMessagesAsRead(from: peerID)
+                    }
                 }
             }
         }
