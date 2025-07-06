@@ -558,14 +558,18 @@ class BluetoothMeshService: NSObject {
     }
     
     
-    func sendPrivateMessage(_ content: String, to recipientPeerID: String, recipientNickname: String) {
+    func sendPrivateMessage(_ content: String, to recipientPeerID: String, recipientNickname: String, messageID: String? = nil) {
         messageQueue.async { [weak self] in
             guard let self = self else { return }
             
             let nickname = self.delegate as? ChatViewModel
             let senderNick = nickname?.nickname ?? self.myPeerID
             
+            // Use provided message ID or generate a new one
+            let msgID = messageID ?? UUID().uuidString
+            
             let message = BitchatMessage(
+                id: msgID,
                 sender: senderNick,
                 content: content,
                 timestamp: Date(),
@@ -634,6 +638,8 @@ class BluetoothMeshService: NSObject {
                         self?.recentlySentMessages.remove(msgID)
                     }
                     
+                    // Message tracking is now done in ChatViewModel to ensure consistent message IDs
+                    
                     // Add random delay for timing obfuscation
                     let delay = self.randomDelay()
                     DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
@@ -662,6 +668,41 @@ class BluetoothMeshService: NSObject {
                 ttl: 3  // Short TTL for leave notifications
             )
             
+            self.broadcastPacket(packet)
+        }
+    }
+    
+    func sendDeliveryAck(_ ack: DeliveryAck, to recipientID: String) {
+        messageQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            // Encode the ACK
+            guard let ackData = ack.encode() else {
+                print("[DeliveryTracker] Failed to encode ACK")
+                return
+            }
+            
+            // Encrypt ACK for the original sender
+            let encryptedPayload: Data
+            do {
+                encryptedPayload = try self.encryptionService.encrypt(ackData, for: recipientID)
+            } catch {
+                print("[DeliveryTracker] Failed to encrypt ACK: \(error)")
+                return
+            }
+            
+            // Create ACK packet with direct routing to original sender
+            let packet = BitchatPacket(
+                type: MessageType.deliveryAck.rawValue,
+                senderID: Data(self.myPeerID.utf8),
+                recipientID: Data(recipientID.utf8),
+                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                payload: encryptedPayload,
+                signature: nil,  // ACKs don't need signatures
+                ttl: 3  // Limited TTL for ACKs
+            )
+            
+            // Send immediately without delay (ACKs should be fast)
             self.broadcastPacket(packet)
         }
     }
@@ -1371,6 +1412,7 @@ class BluetoothMeshService: NSObject {
                         }
                         
                         let messageWithPeerID = BitchatMessage(
+                            id: message.id,  // Preserve the original message ID
                             sender: message.sender,
                             content: finalContent,
                             timestamp: message.timestamp,
@@ -1392,6 +1434,22 @@ class BluetoothMeshService: NSObject {
                         
                         DispatchQueue.main.async {
                             self.delegate?.didReceiveMessage(messageWithPeerID)
+                        }
+                        
+                        // Generate and send ACK for room messages if we're mentioned or it's a small room
+                        let viewModel = self.delegate as? ChatViewModel
+                        let myNickname = viewModel?.nickname ?? self.myPeerID
+                        if let _ = message.room,
+                           let mentions = message.mentions,
+                           (mentions.contains(myNickname) || self.activePeers.count < 10) {
+                            if let ack = DeliveryTracker.shared.generateAck(
+                                for: messageWithPeerID,
+                                myPeerID: self.myPeerID,
+                                myNickname: myNickname,
+                                hopCount: UInt8(self.maxTTL - packet.ttl)
+                            ) {
+                                self.sendDeliveryAck(ack, to: senderID)
+                            }
                         }
                     }
                     
@@ -1476,6 +1534,7 @@ class BluetoothMeshService: NSObject {
                         peerNicknamesLock.unlock()
                         
                         let messageWithPeerID = BitchatMessage(
+                            id: message.id,  // Preserve the original message ID
                             sender: message.sender,
                             content: message.content,
                             timestamp: message.timestamp,
@@ -1495,6 +1554,18 @@ class BluetoothMeshService: NSObject {
                         
                         DispatchQueue.main.async {
                             self.delegate?.didReceiveMessage(messageWithPeerID)
+                        }
+                        
+                        // Generate and send ACK for private messages
+                        let viewModel = self.delegate as? ChatViewModel
+                        let myNickname = viewModel?.nickname ?? self.myPeerID
+                        if let ack = DeliveryTracker.shared.generateAck(
+                            for: messageWithPeerID,
+                            myPeerID: self.myPeerID,
+                            myNickname: myNickname,
+                            hopCount: UInt8(self.maxTTL - packet.ttl)
+                        ) {
+                            self.sendDeliveryAck(ack, to: senderID)
                         }
                     }
                     
@@ -1843,6 +1914,35 @@ class BluetoothMeshService: NSObject {
                         self.broadcastPacket(relayPacket)
                     }
                 }
+            }
+            
+        case .deliveryAck:
+            // Handle delivery acknowledgment
+            if let recipientIDData = packet.recipientID,
+               let recipientID = String(data: recipientIDData.trimmingNullBytes(), encoding: .utf8),
+               recipientID == myPeerID {
+                // This ACK is for us - decrypt it
+                if let senderID = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8) {
+                    do {
+                        let decryptedData = try encryptionService.decrypt(packet.payload, from: senderID)
+                        if let ack = DeliveryAck.decode(from: decryptedData) {
+                            // Process the ACK
+                            DeliveryTracker.shared.processDeliveryAck(ack)
+                            
+                            // Notify delegate
+                            DispatchQueue.main.async {
+                                self.delegate?.didReceiveDeliveryAck(ack)
+                            }
+                        }
+                    } catch {
+                        // Failed to decrypt ACK - might be from unknown sender
+                    }
+                }
+            } else if packet.ttl > 0 {
+                // Relay the ACK if not for us
+                var relayPacket = packet
+                relayPacket.ttl -= 1
+                self.broadcastPacket(relayPacket)
             }
             
         case .roomRetention:
