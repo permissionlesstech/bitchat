@@ -46,6 +46,8 @@ graph TB
         ENC[Encryption Service]
         RETRY[Message Retry Service]
         RETAIN[Message Retention Service]
+        COMP[Compression Service]
+        BATT[Battery Optimizer]
     end
     
     subgraph "Mesh Network Layer"
@@ -60,8 +62,8 @@ graph TB
         BLE[BLE Central/Peripheral]
     end
     
-    UI & CMD & ROOM --> ENC & RETRY & RETAIN
-    ENC & RETRY & RETAIN --> ROUTE & RELAY & STORE
+    UI & CMD & ROOM --> ENC & RETRY & RETAIN & COMP & BATT
+    ENC & RETRY & RETAIN & COMP & BATT --> ROUTE & RELAY & STORE
     ROUTE & RELAY & STORE --> PROTO & FRAG & BLE
     
     style UI fill:#e1f5fe
@@ -70,6 +72,8 @@ graph TB
     style ENC fill:#f3e5f5
     style RETRY fill:#f3e5f5
     style RETAIN fill:#f3e5f5
+    style COMP fill:#f3e5f5
+    style BATT fill:#f3e5f5
     style ROUTE fill:#e8f5e9
     style RELAY fill:#e8f5e9
     style STORE fill:#e8f5e9
@@ -466,6 +470,81 @@ classDiagram
 | ROOM_ANNOUNCE | 0x08 | Room status announcement |
 | ROOM_RETENTION | 0x09 | Room retention policy |
 
+## Performance Optimizations
+
+### Message Compression
+
+bitchat implements intelligent message compression to reduce bandwidth usage:
+
+<div align="center">
+
+```mermaid
+graph LR
+    M[Message] --> C{Size > 100 bytes?}
+    C -->|Yes| E[Entropy Check]
+    C -->|No| T[Transmit Raw]
+    E --> H{High Entropy?}
+    H -->|No| L[LZ4 Compress]
+    H -->|Yes| T
+    L --> S[30-70% Smaller]
+    S --> T
+    
+    style M fill:#e3f2fd
+    style L fill:#c8e6c9
+    style S fill:#a5d6a7
+```
+
+</div>
+
+The compression system:
+- **LZ4 Algorithm**: Fast compression/decompression optimized for real-time use
+- **Entropy detection**: Skips compression for already-compressed data
+- **Threshold-based**: Only compresses messages larger than 100 bytes
+- **Transparent**: Compression/decompression handled automatically
+
+### Battery-Aware Operation
+
+The system dynamically adjusts behavior based on battery state:
+
+<div align="center">
+
+```mermaid
+graph TD
+    B[Battery Monitor] --> C{Charging?}
+    C -->|Yes| P[Performance Mode]
+    C -->|No| L{Level?}
+    L -->|>60%| P
+    L -->|30-60%| BA[Balanced Mode]
+    L -->|10-30%| PS[Power Saver]
+    L -->|<10%| ULP[Ultra Low Power]
+    
+    P --> F1[3s scan, 2s pause<br/>20 connections<br/>Continuous advertising]
+    BA --> F2[2s scan, 3s pause<br/>10 connections<br/>5s advertising intervals]
+    PS --> F3[1s scan, 8s pause<br/>5 connections<br/>15s advertising intervals]
+    ULP --> F4[0.5s scan, 20s pause<br/>2 connections<br/>30s advertising intervals]
+    
+    style P fill:#4caf50,color:#fff
+    style BA fill:#8bc34a
+    style PS fill:#ffc107
+    style ULP fill:#f44336,color:#fff
+```
+
+</div>
+
+Power modes affect:
+- **Scan duty cycle**: How often and how long we scan for peers
+- **Connection limits**: Maximum simultaneous peer connections
+- **Advertising intervals**: How often we broadcast our presence
+- **Message aggregation**: Batching window for outgoing messages
+
+### Optimized Bloom Filters
+
+For efficient duplicate message detection:
+- **Bit-packed storage**: Uses UInt64 arrays for memory efficiency
+- **SHA256 hashing**: High-quality hash distribution
+- **Dynamic sizing**: Adapts to network size (small: 500 items, large: 5000 items)
+- **Low false positive rate**: 0.01 (1%) for accurate duplicate detection
+
 ## Privacy Features
 
 bitchat implements several privacy-enhancing mechanisms.
@@ -639,6 +718,44 @@ sequenceDiagram
 ```
 
 </div>
+
+## Future Performance Enhancements
+
+### WiFi Direct Transport
+
+A planned enhancement will add WiFi Direct as an alternative transport layer:
+
+- **100x bandwidth**: 250+ Mbps vs BLE's 1-3 Mbps  
+- **Extended range**: 100-200m vs BLE's 10-30m
+- **Automatic handoff**: Seamlessly switch between BLE and WiFi Direct
+- **Hybrid mesh**: Some nodes BLE-only, others WiFi-capable
+- **Battery-aware**: Only activate for large transfers or when charging
+
+### Alternative Transports
+
+Future transport options being considered:
+
+- **Ultrasonic Communication**: 1-10 kbps through air, works when radio is jammed
+- **LoRa (Long Range)**: 2-15km range for disaster scenarios
+- **Transport bonding**: Use multiple simultaneously for redundancy
+
+### Transport Protocol Interface
+
+The planned architecture will abstract transport selection:
+
+```swift
+protocol TransportProtocol {
+    var transportType: TransportType { get }
+    var isAvailable: Bool { get }
+    func send(_ packet: BitchatPacket, to peer: PeerID?)
+}
+
+class TransportManager {
+    func sendOptimal(_ packet: BitchatPacket, to peer: PeerID?) {
+        // Choose based on: message size, battery, available transports
+    }
+}
+```
 
 ## Future Considerations: Network Bridge Extension
 
