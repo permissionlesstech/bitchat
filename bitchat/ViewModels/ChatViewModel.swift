@@ -946,7 +946,14 @@ class ChatViewModel: ObservableObject {
     }
     
     func getPrivateChatMessages(for peerID: String) -> [BitchatMessage] {
-        return privateChats[peerID] ?? []
+        let messages = privateChats[peerID] ?? []
+        if !messages.isEmpty {
+            print("[UI] Getting \(messages.count) messages for peer \(peerID)")
+            if let lastMessage = messages.last {
+                print("[UI] Last message status: \(lastMessage.deliveryStatus?.displayText ?? "none")")
+            }
+        }
+        return messages
     }
     
     func getPeerIDForNickname(_ nickname: String) -> String? {
@@ -2135,19 +2142,22 @@ extension ChatViewModel: BitchatDelegate {
         }
         
         // Update in private chats
-        for (peerID, var chatMessages) in privateChats {
+        var updatedPrivateChats = privateChats
+        for (peerID, var chatMessages) in updatedPrivateChats {
             if let index = chatMessages.firstIndex(where: { $0.id == messageID }) {
                 var updatedMessage = chatMessages[index]
                 updatedMessage.deliveryStatus = status
                 chatMessages[index] = updatedMessage
-                privateChats[peerID] = chatMessages
+                updatedPrivateChats[peerID] = chatMessages
                 print("[Delivery] Updated message in private chat with \(peerID)")
-                
-                // Force UI update by triggering objectWillChange
-                DispatchQueue.main.async { [weak self] in
-                    self?.objectWillChange.send()
-                }
             }
+        }
+        
+        // Force complete reassignment to trigger SwiftUI update
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.privateChats = updatedPrivateChats
+            self.objectWillChange.send()
         }
         
         // Update in room messages
