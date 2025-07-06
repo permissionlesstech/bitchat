@@ -28,6 +28,9 @@ class EncryptionService {
     private let identityKey: Curve25519.Signing.PrivateKey
     public let identityPublicKey: Curve25519.Signing.PublicKey
     
+    // Thread safety
+    private let cryptoQueue = DispatchQueue(label: "chat.bitchat.crypto", attributes: .concurrent)
+    
     init() {
         // Generate ephemeral key pairs for this session
         self.privateKey = Curve25519.KeyAgreement.PrivateKey()
@@ -59,46 +62,50 @@ class EncryptionService {
     
     // Add peer's combined public keys
     func addPeerPublicKey(_ peerID: String, publicKeyData: Data) throws {
-        // Convert to array for safe access
-        let keyBytes = [UInt8](publicKeyData)
-        
-        guard keyBytes.count == 96 else {
-            // print("[CRYPTO] Invalid public key data size: \(keyBytes.count), expected 96")
-            throw EncryptionError.invalidPublicKey
-        }
-        
-        // Extract all three keys: 32 for key agreement + 32 for signing + 32 for identity
-        let keyAgreementData = Data(keyBytes[0..<32])
-        let signingKeyData = Data(keyBytes[32..<64])
-        let identityKeyData = Data(keyBytes[64..<96])
-        
-        let publicKey = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: keyAgreementData)
-        peerPublicKeys[peerID] = publicKey
-        
-        let signingKey = try Curve25519.Signing.PublicKey(rawRepresentation: signingKeyData)
-        peerSigningKeys[peerID] = signingKey
-        
-        let identityKey = try Curve25519.Signing.PublicKey(rawRepresentation: identityKeyData)
-        peerIdentityKeys[peerID] = identityKey
-        
-        // Stored all three keys for peer
-        
-        // Generate shared secret for encryption
-        if let publicKey = peerPublicKeys[peerID] {
-            let sharedSecret = try privateKey.sharedSecretFromKeyAgreement(with: publicKey)
-            let symmetricKey = sharedSecret.hkdfDerivedSymmetricKey(
-                using: SHA256.self,
-                salt: "bitchat-v1".data(using: .utf8)!,
-                sharedInfo: Data(),
-                outputByteCount: 32
-            )
-            sharedSecrets[peerID] = symmetricKey
+        try cryptoQueue.sync(flags: .barrier) {
+            // Convert to array for safe access
+            let keyBytes = [UInt8](publicKeyData)
+            
+            guard keyBytes.count == 96 else {
+                // print("[CRYPTO] Invalid public key data size: \(keyBytes.count), expected 96")
+                throw EncryptionError.invalidPublicKey
+            }
+            
+            // Extract all three keys: 32 for key agreement + 32 for signing + 32 for identity
+            let keyAgreementData = Data(keyBytes[0..<32])
+            let signingKeyData = Data(keyBytes[32..<64])
+            let identityKeyData = Data(keyBytes[64..<96])
+            
+            let publicKey = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: keyAgreementData)
+            peerPublicKeys[peerID] = publicKey
+            
+            let signingKey = try Curve25519.Signing.PublicKey(rawRepresentation: signingKeyData)
+            peerSigningKeys[peerID] = signingKey
+            
+            let identityKey = try Curve25519.Signing.PublicKey(rawRepresentation: identityKeyData)
+            peerIdentityKeys[peerID] = identityKey
+            
+            // Stored all three keys for peer
+            
+            // Generate shared secret for encryption
+            if let publicKey = peerPublicKeys[peerID] {
+                let sharedSecret = try privateKey.sharedSecretFromKeyAgreement(with: publicKey)
+                let symmetricKey = sharedSecret.hkdfDerivedSymmetricKey(
+                    using: SHA256.self,
+                    salt: "bitchat-v1".data(using: .utf8)!,
+                    sharedInfo: Data(),
+                    outputByteCount: 32
+                )
+                sharedSecrets[peerID] = symmetricKey
+            }
         }
     }
     
     // Get peer's persistent identity key for favorites
     func getPeerIdentityKey(_ peerID: String) -> Data? {
-        return peerIdentityKeys[peerID]?.rawRepresentation
+        return cryptoQueue.sync {
+            return peerIdentityKeys[peerID]?.rawRepresentation
+        }
     }
     
     // Clear persistent identity (for panic mode)
@@ -108,8 +115,11 @@ class EncryptionService {
     }
     
     func encrypt(_ data: Data, for peerID: String) throws -> Data {
-        guard let symmetricKey = sharedSecrets[peerID] else {
-            throw EncryptionError.noSharedSecret
+        let symmetricKey = try cryptoQueue.sync {
+            guard let key = sharedSecrets[peerID] else {
+                throw EncryptionError.noSharedSecret
+            }
+            return key
         }
         
         let sealedBox = try AES.GCM.seal(data, using: symmetricKey)
@@ -117,8 +127,11 @@ class EncryptionService {
     }
     
     func decrypt(_ data: Data, from peerID: String) throws -> Data {
-        guard let symmetricKey = sharedSecrets[peerID] else {
-            throw EncryptionError.noSharedSecret
+        let symmetricKey = try cryptoQueue.sync {
+            guard let key = sharedSecrets[peerID] else {
+                throw EncryptionError.noSharedSecret
+            }
+            return key
         }
         
         let sealedBox = try AES.GCM.SealedBox(combined: data)
@@ -126,12 +139,17 @@ class EncryptionService {
     }
     
     func sign(_ data: Data) throws -> Data {
-        return try signingPrivateKey.signature(for: data)
+        // Create a local copy of the key to avoid concurrent access
+        let key = signingPrivateKey
+        return try key.signature(for: data)
     }
     
     func verify(_ signature: Data, for data: Data, from peerID: String) throws -> Bool {
-        guard let verifyingKey = peerSigningKeys[peerID] else {
-            throw EncryptionError.noSharedSecret
+        let verifyingKey = try cryptoQueue.sync {
+            guard let key = peerSigningKeys[peerID] else {
+                throw EncryptionError.noSharedSecret
+            }
+            return key
         }
         
         return verifyingKey.isValidSignature(signature, for: data)
