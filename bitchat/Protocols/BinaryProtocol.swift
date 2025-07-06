@@ -376,7 +376,7 @@ extension BitchatMessage {
         guard offset + idLength <= dataCopy.count else { 
             return nil 
         }
-        let _ = String(data: dataCopy[offset..<offset+idLength], encoding: .utf8) ?? UUID().uuidString
+        let id = String(data: dataCopy[offset..<offset+idLength], encoding: .utf8) ?? UUID().uuidString
         offset += idLength
         
         // Sender
@@ -476,6 +476,7 @@ extension BitchatMessage {
         }
         
         let message = BitchatMessage(
+            id: id,
             sender: sender,
             content: content,
             timestamp: timestamp,
