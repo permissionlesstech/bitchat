@@ -958,7 +958,7 @@ class ChatViewModel: ObservableObject {
             }
         }
         
-        let messages = privateChats[peerID] ?? []
+        _ = privateChats[peerID] ?? []
         
         // Send read receipts for unread messages from this peer
         // Add a small delay to ensure UI has updated
@@ -995,7 +995,7 @@ class ChatViewModel: ObservableObject {
         } else {
             
             // Look through ALL private chats to find messages from this nickname
-            for (chatPeerID, chatMessages) in privateChats {
+            for (_, chatMessages) in privateChats {
                 let relevantMessages = chatMessages.filter { msg in
                     msg.sender == peerNickname && msg.sender != nickname
                 }
@@ -1011,7 +1011,7 @@ class ChatViewModel: ObservableObject {
         
         // Find messages from the peer that haven't been read yet
         var readReceiptsSent = 0
-        for (index, message) in messages.enumerated() {
+        for (_, message) in messages.enumerated() {
             // Only send read receipts for messages from the other peer (not our own)
             // Check multiple conditions to ensure we catch all messages from the peer
             let isOurMessage = message.sender == nickname
