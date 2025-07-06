@@ -2844,4 +2844,32 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
     private func updatePeerLastSeen(_ peerID: String) {
         peerLastSeenTimestamps[peerID] = Date()
     }
+    
+    // MARK: - Public Accessors for Transport Adapter
+    
+    func getActivePeers() -> Set<String> {
+        activePeersLock.lock()
+        let peers = activePeers
+        activePeersLock.unlock()
+        return peers
+    }
+    
+    func getPeerLastSeenTimestamps() -> [String: Date] {
+        return peerLastSeenTimestamps
+    }
+    
+    func disconnectFromPeer(_ peerID: String) {
+        if let peripheral = connectedPeripherals[peerID] {
+            intentionalDisconnects.insert(peripheral.identifier.uuidString)
+            centralManager?.cancelPeripheralConnection(peripheral)
+        }
+    }
+    
+    var isScanning: Bool {
+        return centralManager?.isScanning ?? false
+    }
+    
+    var isAdvertising: Bool {
+        return peripheralManager?.isAdvertising ?? false
+    }
 }

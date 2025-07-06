@@ -52,6 +52,7 @@ class ChatViewModel: ObservableObject {
     @Published var retentionEnabledRooms: Set<String> = []  // Rooms where owner enabled retention for all members
     
     let meshService = BluetoothMeshService()
+    private let transportManager = TransportManager.shared
     private let userDefaults = UserDefaults.standard
     private let nicknameKey = "bitchat.nickname"
     private let favoritesKey = "bitchat.favorites"
@@ -78,11 +79,12 @@ class ChatViewModel: ObservableObject {
         loadRoomData()
         // Load saved rooms state
         savedRooms = MessageRetentionService.shared.getFavoriteRooms()
+        
+        // Set up transport manager
+        setupTransportManager()
+        
+        // Start mesh service for backwards compatibility
         meshService.delegate = self
-        
-        // Log startup info
-        
-        // Start mesh service immediately
         meshService.startServices()
         
         // Set up message retry service
@@ -114,6 +116,24 @@ class ChatViewModel: ObservableObject {
             object: nil
         )
         #endif
+    }
+    
+    private func setupTransportManager() {
+        // Set ourselves as the delegate
+        transportManager.delegate = self
+        
+        // Create and register Bluetooth transport
+        let bluetoothTransport = BluetoothTransport(meshService: meshService)
+        transportManager.register(bluetoothTransport)
+        transportManager.activateTransport(.bluetooth)
+        
+        // Create and register WiFi Direct transport
+        let wifiDirectTransport = WiFiDirectTransport()
+        transportManager.register(wifiDirectTransport)
+        
+        // WiFi Direct will be activated based on user preference or when needed
+        // For now, keep it disabled by default
+        transportManager.enableWiFiDirect = false
     }
     
     private func loadNickname() {
