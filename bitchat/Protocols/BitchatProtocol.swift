@@ -76,6 +76,7 @@ enum MessageType: UInt8 {
     case roomRetention = 0x09  // Announce room retention status
     case deliveryAck = 0x0A  // Acknowledge message received
     case deliveryStatusRequest = 0x0B  // Request delivery status update
+    case readReceipt = 0x0C  // Message has been read/viewed
 }
 
 // Special recipient ID for broadcast messages
@@ -156,11 +157,37 @@ struct DeliveryAck: Codable {
     }
 }
 
+// Read receipt structure
+struct ReadReceipt: Codable {
+    let originalMessageID: String
+    let receiptID: String
+    let readerID: String  // Who read it
+    let readerNickname: String
+    let timestamp: Date
+    
+    init(originalMessageID: String, readerID: String, readerNickname: String) {
+        self.originalMessageID = originalMessageID
+        self.receiptID = UUID().uuidString
+        self.readerID = readerID
+        self.readerNickname = readerNickname
+        self.timestamp = Date()
+    }
+    
+    func encode() -> Data? {
+        try? JSONEncoder().encode(self)
+    }
+    
+    static func decode(from data: Data) -> ReadReceipt? {
+        try? JSONDecoder().decode(ReadReceipt.self, from: data)
+    }
+}
+
 // Delivery status for messages
 enum DeliveryStatus: Codable, Equatable {
     case sending
     case sent  // Left our device
     case delivered(to: String, at: Date)  // Confirmed by recipient
+    case read(by: String, at: Date)  // Seen by recipient
     case failed(reason: String)
     case partiallyDelivered(reached: Int, total: Int)  // For rooms
     
@@ -172,6 +199,8 @@ enum DeliveryStatus: Codable, Equatable {
             return "Sent"
         case .delivered(let nickname, _):
             return "Delivered to \(nickname)"
+        case .read(let nickname, _):
+            return "Read by \(nickname)"
         case .failed(let reason):
             return "Failed: \(reason)"
         case .partiallyDelivered(let reached, let total):
@@ -229,6 +258,7 @@ protocol BitchatDelegate: AnyObject {
     
     // Delivery confirmation methods
     func didReceiveDeliveryAck(_ ack: DeliveryAck)
+    func didReceiveReadReceipt(_ receipt: ReadReceipt)
     func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus)
 }
 
@@ -256,6 +286,10 @@ extension BitchatDelegate {
     }
     
     func didReceiveDeliveryAck(_ ack: DeliveryAck) {
+        // Default empty implementation
+    }
+    
+    func didReceiveReadReceipt(_ receipt: ReadReceipt) {
         // Default empty implementation
     }
     

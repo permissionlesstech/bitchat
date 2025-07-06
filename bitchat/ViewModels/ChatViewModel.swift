@@ -886,10 +886,33 @@ class ChatViewModel: ObservableObject {
         if privateChats[peerID] == nil {
             privateChats[peerID] = []
         }
+        
+        // Send read receipts for unread messages from this peer
+        markPrivateMessagesAsRead(from: peerID)
     }
     
     func endPrivateChat() {
         selectedPrivateChatPeer = nil
+    }
+    
+    private func markPrivateMessagesAsRead(from peerID: String) {
+        guard let messages = privateChats[peerID] else { return }
+        
+        // Find messages from the peer that haven't been read yet
+        for message in messages {
+            // Only send read receipts for messages from the other peer (not our own)
+            // and only if the status is delivered (not already read)
+            if message.senderPeerID == peerID,
+               case .delivered = message.deliveryStatus {
+                // Create and send read receipt
+                let receipt = ReadReceipt(
+                    originalMessageID: message.id,
+                    readerID: meshService.myPeerID,
+                    readerNickname: nickname
+                )
+                meshService.sendReadReceipt(receipt, to: peerID)
+            }
+        }
     }
     
     func getPrivateChatMessages(for peerID: String) -> [BitchatMessage] {
@@ -1754,6 +1777,16 @@ extension ChatViewModel: BitchatDelegate {
                 } else {
                     // We're viewing this chat, make sure unread is cleared
                     unreadPrivateMessages.remove(peerID)
+                    
+                    // Send read receipt immediately since we're viewing the chat
+                    if message.deliveryStatus != nil {
+                        let receipt = ReadReceipt(
+                            originalMessageID: message.id,
+                            readerID: meshService.myPeerID,
+                            readerNickname: nickname
+                        )
+                        meshService.sendReadReceipt(receipt, to: peerID)
+                    }
                 }
             } else if message.sender == nickname {
                 // Our own message that was echoed back - ignore it since we already added it locally
@@ -2048,6 +2081,11 @@ extension ChatViewModel: BitchatDelegate {
     func didReceiveDeliveryAck(_ ack: DeliveryAck) {
         // Find the message and update its delivery status
         updateMessageDeliveryStatus(ack.originalMessageID, status: .delivered(to: ack.recipientNickname, at: ack.timestamp))
+    }
+    
+    func didReceiveReadReceipt(_ receipt: ReadReceipt) {
+        // Find the message and update its read status
+        updateMessageDeliveryStatus(receipt.originalMessageID, status: .read(by: receipt.readerNickname, at: receipt.timestamp))
     }
     
     func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) {
