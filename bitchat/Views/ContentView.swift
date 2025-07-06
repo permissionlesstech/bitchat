@@ -494,6 +494,7 @@ struct ContentView: View {
                                     // Delivery status indicator for private messages
                                     if message.isPrivate && message.sender == viewModel.nickname,
                                        let status = message.deliveryStatus {
+                                        let _ = print("[UI] Message \(message.id) has status: \(status)")
                                         DeliveryStatusView(status: status, colorScheme: colorScheme)
                                             .padding(.leading, 4)
                                             .alignmentGuide(.firstTextBaseline) { _ in 12 }
@@ -1104,6 +1105,9 @@ struct DeliveryStatusView: View {
             }
             .foregroundColor(textColor.opacity(0.8))
             .help("Delivered to \(nickname)")
+            .onAppear {
+                print("[UI] Showing GREEN checkmarks for delivered status to \(nickname)")
+            }
             
         case .read(let nickname, _):
             HStack(spacing: -2) {
@@ -1114,6 +1118,9 @@ struct DeliveryStatusView: View {
             }
             .foregroundColor(Color.blue)
             .help("Read by \(nickname)")
+            .onAppear {
+                print("[UI] Showing BLUE checkmarks for read status by \(nickname)")
+            }
             
         case .failed(let reason):
             Image(systemName: "exclamationmark.triangle")
