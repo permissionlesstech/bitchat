@@ -433,12 +433,7 @@ struct ContentView: View {
                         if let privatePeer = viewModel.selectedPrivateChatPeer {
                             let msgs = viewModel.getPrivateChatMessages(for: privatePeer)
                             // Log what we're showing
-                            if !msgs.isEmpty {
-                                print("[UI] Showing \(msgs.count) messages in private chat with \(privatePeer)")
-                                for (idx, msg) in msgs.enumerated() {
-                                    print("[UI]   Message \(idx): from \(msg.sender), status: \(msg.deliveryStatus?.displayText ?? "none")")
-                                }
-                            }
+                            // Removed debug logging
                             return msgs
                         } else if let currentRoom = viewModel.currentRoom {
                             return viewModel.getRoomMessages(currentRoom)
@@ -502,7 +497,6 @@ struct ContentView: View {
                                     // Delivery status indicator for private messages
                                     if message.isPrivate && message.sender == viewModel.nickname,
                                        let status = message.deliveryStatus {
-                                        let _ = print("[UI] Message \(message.id) has status: \(status)")
                                         DeliveryStatusView(status: status, colorScheme: colorScheme)
                                             .padding(.leading, 4)
                                             .alignmentGuide(.firstTextBaseline) { _ in 12 }
@@ -539,10 +533,8 @@ struct ContentView: View {
             .onChange(of: viewModel.selectedPrivateChatPeer) { newPeerID in
                 // When switching to a private chat, send read receipts
                 if let peerID = newPeerID {
-                    print("[UI] Selected private chat peer changed to \(peerID)")
                     // Small delay to ensure messages are loaded
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        print("[UI] Triggering markPrivateMessagesAsRead for peer \(peerID)")
                         viewModel.markPrivateMessagesAsRead(from: peerID)
                     }
                 }
@@ -550,17 +542,14 @@ struct ContentView: View {
             .onAppear {
                 // Also check when view appears
                 if let peerID = viewModel.selectedPrivateChatPeer {
-                    print("[UI] Messages view appeared with selected peer \(peerID)")
                     // Try multiple times to ensure read receipts are sent
                     viewModel.markPrivateMessagesAsRead(from: peerID)
                     
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        print("[UI] Triggering markPrivateMessagesAsRead on appear (0.1s) for peer \(peerID)")
                         viewModel.markPrivateMessagesAsRead(from: peerID)
                     }
                     
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        print("[UI] Triggering markPrivateMessagesAsRead on appear (0.5s) for peer \(peerID)")
                         viewModel.markPrivateMessagesAsRead(from: peerID)
                     }
                 }
@@ -1142,9 +1131,6 @@ struct DeliveryStatusView: View {
             }
             .foregroundColor(textColor.opacity(0.8))
             .help("Delivered to \(nickname)")
-            .onAppear {
-                print("[UI] Showing GREEN checkmarks for delivered status to \(nickname)")
-            }
             
         case .read(let nickname, _):
             HStack(spacing: -2) {
@@ -1155,9 +1141,6 @@ struct DeliveryStatusView: View {
             }
             .foregroundColor(Color(red: 0.0, green: 0.478, blue: 1.0))  // Bright blue
             .help("Read by \(nickname)")
-            .onAppear {
-                print("[UI] Showing BLUE checkmarks for read status by \(nickname)")
-            }
             
         case .failed(let reason):
             Image(systemName: "exclamationmark.triangle")
