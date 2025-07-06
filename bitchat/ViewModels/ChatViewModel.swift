@@ -935,31 +935,31 @@ class ChatViewModel: ObservableObject {
             return 
         }
         
-        print("[Delivery] Checking \(messages.count) messages in chat with peer \(peerID) for read receipts")
+        // Get the nickname for this peer
+        let peerNickname = meshService.getPeerNicknames()[peerID] ?? ""
+        print("[Delivery] Checking \(messages.count) messages in chat with peer \(peerID) (\(peerNickname)) for read receipts")
         
         // Find messages from the peer that haven't been read yet
         for message in messages {
             // Only send read receipts for messages from the other peer (not our own)
-            print("[Delivery] Message \(message.id) from \(message.sender), senderPeerID: \(message.senderPeerID ?? "nil"), myNickname: \(nickname), status: \(message.deliveryStatus?.displayText ?? "none")")
+            print("[Delivery] Message \(message.id) from \(message.sender), senderPeerID: \(message.senderPeerID ?? "nil"), currentPeerID: \(peerID), myNickname: \(nickname), status: \(message.deliveryStatus?.displayText ?? "none")")
             
             // Check if this is a message FROM the other person TO us
-            if message.sender != nickname && message.senderPeerID != nil {
+            // Match by sender nickname since peer IDs change between sessions
+            let isFromPeer = message.sender == peerNickname || message.senderPeerID == peerID
+            if message.sender != nickname && isFromPeer {
                 if let status = message.deliveryStatus {
                     switch status {
                     case .sent, .delivered:
                         // Create and send read receipt for sent or delivered messages
-                        // Use the senderPeerID from the message to ensure it goes to the right peer
-                        if let messageSenderID = message.senderPeerID {
-                            let receipt = ReadReceipt(
-                                originalMessageID: message.id,
-                                readerID: meshService.myPeerID,
-                                readerNickname: nickname
-                            )
-                            meshService.sendReadReceipt(receipt, to: messageSenderID)
-                            print("[Delivery] Sending read receipt for message \(message.id) to peer \(messageSenderID)")
-                        } else {
-                            print("[Delivery] Cannot send read receipt for message \(message.id) - no senderPeerID")
-                        }
+                        // Send to the CURRENT peer ID, not the old senderPeerID which may have changed
+                        let receipt = ReadReceipt(
+                            originalMessageID: message.id,
+                            readerID: meshService.myPeerID,
+                            readerNickname: nickname
+                        )
+                        meshService.sendReadReceipt(receipt, to: peerID)
+                        print("[Delivery] Sending read receipt for message \(message.id) from \(message.sender) to current peer \(peerID)")
                     case .read:
                         // Already read, no need to send another receipt
                         print("[Delivery] Message \(message.id) already marked as read")
@@ -973,17 +973,13 @@ class ChatViewModel: ObservableObject {
                     // No delivery status - this might be an older message
                     // Send read receipt anyway for backwards compatibility
                     print("[Delivery] Message \(message.id) has no delivery status, sending read receipt anyway")
-                    if let messageSenderID = message.senderPeerID {
-                        let receipt = ReadReceipt(
-                            originalMessageID: message.id,
-                            readerID: meshService.myPeerID,
-                            readerNickname: nickname
-                        )
-                        meshService.sendReadReceipt(receipt, to: messageSenderID)
-                        print("[Delivery] Sending read receipt for old message \(message.id) to peer \(messageSenderID)")
-                    } else {
-                        print("[Delivery] Cannot send read receipt for old message \(message.id) - no senderPeerID")
-                    }
+                    let receipt = ReadReceipt(
+                        originalMessageID: message.id,
+                        readerID: meshService.myPeerID,
+                        readerNickname: nickname
+                    )
+                    meshService.sendReadReceipt(receipt, to: peerID)
+                    print("[Delivery] Sending read receipt for old message \(message.id) to current peer \(peerID)")
                 }
             }
         }
@@ -1860,22 +1856,18 @@ extension ChatViewModel: BitchatDelegate {
                     unreadPrivateMessages.remove(peerID)
                     
                     // Send read receipt immediately since we're viewing the chat
-                    // Use the senderPeerID from the message, not the current peerID
-                    if let messageSenderID = message.senderPeerID {
-                        let receipt = ReadReceipt(
-                            originalMessageID: message.id,
-                            readerID: meshService.myPeerID,
-                            readerNickname: nickname
-                        )
-                        meshService.sendReadReceipt(receipt, to: messageSenderID)
-                        print("[Delivery] Sending immediate read receipt for message \(message.id) from \(message.sender) to peer \(messageSenderID)")
-                        
-                        // Also check if there are other unread messages from this peer
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-                            self?.markPrivateMessagesAsRead(from: peerID)
-                        }
-                    } else {
-                        print("[Delivery] Cannot send read receipt - message has no senderPeerID")
+                    // Send to the current peer ID since peer IDs change between sessions
+                    let receipt = ReadReceipt(
+                        originalMessageID: message.id,
+                        readerID: meshService.myPeerID,
+                        readerNickname: nickname
+                    )
+                    meshService.sendReadReceipt(receipt, to: peerID)
+                    print("[Delivery] Sending immediate read receipt for message \(message.id) from \(message.sender) to current peer \(peerID)")
+                    
+                    // Also check if there are other unread messages from this peer
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                        self?.markPrivateMessagesAsRead(from: peerID)
                     }
                 }
             } else if message.sender == nickname {
