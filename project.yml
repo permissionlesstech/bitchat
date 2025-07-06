@@ -5,17 +5,62 @@ options:
     iOS: 16.0
     macOS: 13.0
   createIntermediateGroups: true
+  groupSortPosition: bottom
   
 settings:
   MARKETING_VERSION: 1.0.0
-  CURRENT_PROJECT_VERSION: 1
+  CURRENT_PROJECT_VERSION: 5
   
 targets:
-  bitchat:
+  bitchat_iOS:
     type: application
-    platform: [iOS, macOS]
+    platform: iOS
     sources: 
-      - bitchat
+      - path: bitchat
+        excludes:
+          - "**/.DS_Store"
+        createIntermediateGroups: true
+    resources:
+      - bitchat/Assets.xcassets
+    info:
+      path: bitchat/Info.plist
+      properties:
+        CFBundleDisplayName: bitchat
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSBluetoothAlwaysUsageDescription: bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users.
+        NSBluetoothPeripheralUsageDescription: bitchat uses Bluetooth to discover and connect with other bitchat users nearby.
+        NSUserNotificationAlertStyle: alert
+        UIBackgroundModes:
+          - bluetooth-central
+          - bluetooth-peripheral
+          - remote-notification
+        UILaunchScreen:
+          UIColorName: Black
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+    settings:
+      PRODUCT_NAME: bitchat
+      PRODUCT_BUNDLE_IDENTIFIER: chat.bitchat
+      INFOPLIST_FILE: bitchat/Info.plist
+      ENABLE_PREVIEWS: YES
+      SWIFT_VERSION: 5.0
+      IPHONEOS_DEPLOYMENT_TARGET: 16.0
+      SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+      CODE_SIGN_STYLE: Automatic
+      CODE_SIGNING_REQUIRED: YES
+      CODE_SIGNING_ALLOWED: YES
+      ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+      ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
+
+  bitchat_macOS:
+    type: application
+    platform: macOS
+    sources: 
+      - path: bitchat
+        excludes:
+          - "**/.DS_Store"
+        createIntermediateGroups: true
     resources:
       - bitchat/Assets.xcassets
     info:
@@ -27,35 +72,33 @@ targets:
         LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
         NSBluetoothAlwaysUsageDescription: bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users.
         NSBluetoothPeripheralUsageDescription: bitchat uses Bluetooth to discover and connect with other bitchat users nearby.
-        UIBackgroundModes:
-          - bluetooth-central
-          - bluetooth-peripheral
-        UILaunchScreen:
-          UIColorName: Black
-        UISupportedInterfaceOrientations:
-          - UIInterfaceOrientationPortrait
+        NSUserNotificationAlertStyle: alert
     settings:
+      PRODUCT_NAME: bitchat
       PRODUCT_BUNDLE_IDENTIFIER: chat.bitchat
       INFOPLIST_FILE: bitchat/Info.plist
       ENABLE_PREVIEWS: YES
       SWIFT_VERSION: 5.0
-      IPHONEOS_DEPLOYMENT_TARGET: 16.0
       MACOSX_DEPLOYMENT_TARGET: 13.0
-      SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: YES
       CODE_SIGN_STYLE: Automatic
       CODE_SIGNING_REQUIRED: YES
       CODE_SIGNING_ALLOWED: YES
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
+      ENABLE_HARDENED_RUNTIME: YES
 
   bitchatTests_iOS:
     type: bundle.unit-test
     platform: iOS
     sources: 
-      - bitchatTests
+      - path: bitchatTests
+        excludes:
+          - "**/.DS_Store"
+        createIntermediateGroups: true
     dependencies:
       - target: bitchat_iOS
     settings:
+      PRODUCT_NAME: bitchatTests
       PRODUCT_BUNDLE_IDENTIFIER: chat.bitchat.tests
       INFOPLIST_FILE: bitchatTests/Info.plist
       SWIFT_VERSION: 5.0
@@ -67,10 +110,14 @@ targets:
     type: bundle.unit-test
     platform: macOS
     sources: 
-      - bitchatTests
+      - path: bitchatTests
+        excludes:
+          - "**/.DS_Store"
+        createIntermediateGroups: true
     dependencies:
       - target: bitchat_macOS
     settings:
+      PRODUCT_NAME: bitchatTests
       PRODUCT_BUNDLE_IDENTIFIER: chat.bitchat.tests
       INFOPLIST_FILE: bitchatTests/Info.plist
       SWIFT_VERSION: 5.0

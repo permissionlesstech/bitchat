@@ -74,6 +74,8 @@ enum MessageType: UInt8 {
     case fragmentEnd = 0x07
     case roomAnnounce = 0x08  // Announce password-protected room status
     case roomRetention = 0x09  // Announce room retention status
+    case deliveryAck = 0x0A  // Acknowledge message received
+    case deliveryStatusRequest = 0x0B  // Request delivery status update
 }
 
 // Special recipient ID for broadcast messages
@@ -127,6 +129,57 @@ struct BitchatPacket: Codable {
     }
 }
 
+// Delivery acknowledgment structure
+struct DeliveryAck: Codable {
+    let originalMessageID: String
+    let ackID: String
+    let recipientID: String  // Who received it
+    let recipientNickname: String
+    let timestamp: Date
+    let hopCount: UInt8  // How many hops to reach recipient
+    
+    init(originalMessageID: String, recipientID: String, recipientNickname: String, hopCount: UInt8) {
+        self.originalMessageID = originalMessageID
+        self.ackID = UUID().uuidString
+        self.recipientID = recipientID
+        self.recipientNickname = recipientNickname
+        self.timestamp = Date()
+        self.hopCount = hopCount
+    }
+    
+    func encode() -> Data? {
+        try? JSONEncoder().encode(self)
+    }
+    
+    static func decode(from data: Data) -> DeliveryAck? {
+        try? JSONDecoder().decode(DeliveryAck.self, from: data)
+    }
+}
+
+// Delivery status for messages
+enum DeliveryStatus: Codable, Equatable {
+    case sending
+    case sent  // Left our device
+    case delivered(to: String, at: Date)  // Confirmed by recipient
+    case failed(reason: String)
+    case partiallyDelivered(reached: Int, total: Int)  // For rooms
+    
+    var displayText: String {
+        switch self {
+        case .sending:
+            return "Sending..."
+        case .sent:
+            return "Sent"
+        case .delivered(let nickname, _):
+            return "Delivered to \(nickname)"
+        case .failed(let reason):
+            return "Failed: \(reason)"
+        case .partiallyDelivered(let reached, let total):
+            return "Delivered to \(reached)/\(total)"
+        }
+    }
+}
+
 struct BitchatMessage: Codable, Equatable {
     let id: String
     let sender: String
@@ -141,9 +194,10 @@ struct BitchatMessage: Codable, Equatable {
     let room: String?  // Room hashtag (e.g., "#general")
     let encryptedContent: Data?  // For password-protected rooms
     let isEncrypted: Bool  // Flag to indicate if content is encrypted
+    var deliveryStatus: DeliveryStatus? // Delivery tracking
     
-    init(sender: String, content: String, timestamp: Date, isRelay: Bool, originalSender: String? = nil, isPrivate: Bool = false, recipientNickname: String? = nil, senderPeerID: String? = nil, mentions: [String]? = nil, room: String? = nil, encryptedContent: Data? = nil, isEncrypted: Bool = false) {
-        self.id = UUID().uuidString
+    init(id: String? = nil, sender: String, content: String, timestamp: Date, isRelay: Bool, originalSender: String? = nil, isPrivate: Bool = false, recipientNickname: String? = nil, senderPeerID: String? = nil, mentions: [String]? = nil, room: String? = nil, encryptedContent: Data? = nil, isEncrypted: Bool = false, deliveryStatus: DeliveryStatus? = nil) {
+        self.id = id ?? UUID().uuidString
         self.sender = sender
         self.content = content
         self.timestamp = timestamp
@@ -156,6 +210,7 @@ struct BitchatMessage: Codable, Equatable {
         self.room = room
         self.encryptedContent = encryptedContent
         self.isEncrypted = isEncrypted
+        self.deliveryStatus = deliveryStatus ?? (isPrivate ? .sending : nil)
     }
 }
 
@@ -171,6 +226,10 @@ protocol BitchatDelegate: AnyObject {
     
     // Optional method to check if a fingerprint belongs to a favorite peer
     func isFavorite(fingerprint: String) -> Bool
+    
+    // Delivery confirmation methods
+    func didReceiveDeliveryAck(_ ack: DeliveryAck)
+    func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus)
 }
 
 // Provide default implementation to make it effectively optional
@@ -194,5 +253,13 @@ extension BitchatDelegate {
     func decryptRoomMessage(_ encryptedContent: Data, room: String) -> String? {
         // Default returns nil (unable to decrypt)
         return nil
+    }
+    
+    func didReceiveDeliveryAck(_ ack: DeliveryAck) {
+        // Default empty implementation
+    }
+    
+    func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) {
+        // Default empty implementation
     }
 }

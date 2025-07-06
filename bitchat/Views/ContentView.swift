@@ -453,7 +453,7 @@ struct ContentView: View {
                                     .textSelection(.enabled)
                             } else {
                                 // Regular messages with tappable sender name
-                                HStack(alignment: .firstTextBaseline, spacing: 0) {
+                                HStack(alignment: .center, spacing: 0) {
                                     // Timestamp
                                     Text("[\(viewModel.formatTimestamp(message.timestamp))] ")
                                         .font(.system(size: 14, design: .monospaced))
@@ -490,6 +490,14 @@ struct ContentView: View {
                                         colorScheme: colorScheme,
                                         isMentioned: isMentioned
                                     )
+                                    
+                                    // Delivery status indicator for private messages
+                                    if message.isPrivate && message.sender == viewModel.nickname,
+                                       let status = message.deliveryStatus {
+                                        DeliveryStatusView(status: status, colorScheme: colorScheme)
+                                            .padding(.leading, 4)
+                                            .alignmentGuide(.firstTextBaseline) { _ in 12 }
+                                    }
                                     
                                     Spacer()
                                 }
@@ -1059,5 +1067,59 @@ struct MessageContentView: View {
         }
         
         return segments
+    }
+}
+
+// Delivery status indicator view
+struct DeliveryStatusView: View {
+    let status: DeliveryStatus
+    let colorScheme: ColorScheme
+    
+    private var textColor: Color {
+        colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
+    }
+    
+    private var secondaryTextColor: Color {
+        colorScheme == .dark ? Color.green.opacity(0.8) : Color(red: 0, green: 0.5, blue: 0).opacity(0.8)
+    }
+    
+    var body: some View {
+        switch status {
+        case .sending:
+            Image(systemName: "circle")
+                .font(.system(size: 10))
+                .foregroundColor(secondaryTextColor.opacity(0.6))
+            
+        case .sent:
+            Image(systemName: "checkmark")
+                .font(.system(size: 10))
+                .foregroundColor(secondaryTextColor.opacity(0.6))
+            
+        case .delivered(let nickname, _):
+            HStack(spacing: -2) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 10))
+                Image(systemName: "checkmark")
+                    .font(.system(size: 10))
+            }
+            .foregroundColor(textColor.opacity(0.8))
+            .help("Delivered to \(nickname)")
+            
+        case .failed(let reason):
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 10))
+                .foregroundColor(Color.red.opacity(0.8))
+                .help("Failed: \(reason)")
+            
+        case .partiallyDelivered(let reached, let total):
+            HStack(spacing: 1) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 10))
+                Text("\(reached)/\(total)")
+                    .font(.system(size: 10, design: .monospaced))
+            }
+            .foregroundColor(secondaryTextColor.opacity(0.6))
+            .help("Delivered to \(reached) of \(total) members")
+        }
     }
 }

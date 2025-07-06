@@ -68,6 +68,9 @@ class ChatViewModel: ObservableObject {
     
     // Messages are naturally ephemeral - no persistent storage
     
+    // Delivery tracking
+    private var deliveryTrackerCancellable: AnyCancellable?
+    
     init() {
         loadNickname()
         loadFavorites()
@@ -87,6 +90,13 @@ class ChatViewModel: ObservableObject {
         
         // Request notification permission
         NotificationService.shared.requestAuthorization()
+        
+        // Subscribe to delivery status updates
+        deliveryTrackerCancellable = DeliveryTracker.shared.deliveryStatusUpdated
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] (messageID, status) in
+                self?.updateMessageDeliveryStatus(messageID, status: status)
+            }
     }
     
     private func loadNickname() {
@@ -847,7 +857,8 @@ class ChatViewModel: ObservableObject {
             originalSender: nil,
             isPrivate: true,
             recipientNickname: recipientNickname,
-            senderPeerID: meshService.myPeerID
+            senderPeerID: meshService.myPeerID,
+            deliveryStatus: .sending
         )
         
         // Add to our private chat history
@@ -856,11 +867,15 @@ class ChatViewModel: ObservableObject {
         }
         privateChats[peerID]?.append(message)
         
+        // Track the message for delivery confirmation
+        let isFavorite = isFavorite(peerID: peerID)
+        DeliveryTracker.shared.trackMessage(message, recipientID: peerID, recipientNickname: recipientNickname, isFavorite: isFavorite)
+        
         // Trigger UI update
         objectWillChange.send()
         
-        // Send via mesh
-        meshService.sendPrivateMessage(content, to: peerID, recipientNickname: recipientNickname)
+        // Send via mesh with the same message ID
+        meshService.sendPrivateMessage(content, to: peerID, recipientNickname: recipientNickname, messageID: message.id)
     }
     
     func startPrivateChat(with peerID: String) {
@@ -2028,6 +2043,44 @@ extension ChatViewModel: BitchatDelegate {
     
     func isFavorite(fingerprint: String) -> Bool {
         return favoritePeers.contains(fingerprint)
+    }
+    
+    func didReceiveDeliveryAck(_ ack: DeliveryAck) {
+        // Find the message and update its delivery status
+        updateMessageDeliveryStatus(ack.originalMessageID, status: .delivered(to: ack.recipientNickname, at: ack.timestamp))
+    }
+    
+    func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) {
+        updateMessageDeliveryStatus(messageID, status: status)
+    }
+    
+    private func updateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) {
+        // Update in main messages
+        if let index = messages.firstIndex(where: { $0.id == messageID }) {
+            var updatedMessage = messages[index]
+            updatedMessage.deliveryStatus = status
+            messages[index] = updatedMessage
+        }
+        
+        // Update in private chats
+        for (peerID, var chatMessages) in privateChats {
+            if let index = chatMessages.firstIndex(where: { $0.id == messageID }) {
+                var updatedMessage = chatMessages[index]
+                updatedMessage.deliveryStatus = status
+                chatMessages[index] = updatedMessage
+                privateChats[peerID] = chatMessages
+            }
+        }
+        
+        // Update in room messages
+        for (room, var roomMsgs) in roomMessages {
+            if let index = roomMsgs.firstIndex(where: { $0.id == messageID }) {
+                var updatedMessage = roomMsgs[index]
+                updatedMessage.deliveryStatus = status
+                roomMsgs[index] = updatedMessage
+                roomMessages[room] = roomMsgs
+            }
+        }
     }
     
 }
