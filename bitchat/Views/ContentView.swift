@@ -531,8 +531,10 @@ struct ContentView: View {
             .onChange(of: viewModel.selectedPrivateChatPeer) { newPeerID in
                 // When switching to a private chat, send read receipts
                 if let peerID = newPeerID {
+                    print("[UI] Selected private chat peer changed to \(peerID)")
                     // Small delay to ensure messages are loaded
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        print("[UI] Triggering markPrivateMessagesAsRead for peer \(peerID)")
                         viewModel.markPrivateMessagesAsRead(from: peerID)
                     }
                 }
@@ -540,7 +542,9 @@ struct ContentView: View {
             .onAppear {
                 // Also check when view appears
                 if let peerID = viewModel.selectedPrivateChatPeer {
+                    print("[UI] Messages view appeared with selected peer \(peerID)")
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        print("[UI] Triggering markPrivateMessagesAsRead on appear for peer \(peerID)")
                         viewModel.markPrivateMessagesAsRead(from: peerID)
                     }
                 }
