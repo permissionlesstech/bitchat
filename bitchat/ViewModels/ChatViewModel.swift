@@ -1038,8 +1038,10 @@ class ChatViewModel: ObservableObject {
                         readReceiptsSent += 1
                     case .read:
                         // Already read, no need to send another receipt
+                        break
                     default:
                         // Message not yet delivered, can't mark as read
+                        break
                     }
                 } else {
                     // No delivery status - this might be an older message
