@@ -536,7 +536,7 @@ class BluetoothMeshService: NSObject {
                     self.recentlySentMessages.insert(msgID)
                     
                     // Clean up old entries after 10 seconds
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 10.0) { [weak self] in
+                    self.messageQueue.asyncAfter(deadline: .now() + 10.0) { [weak self] in
                         self?.recentlySentMessages.remove(msgID)
                     }
                     
@@ -634,7 +634,7 @@ class BluetoothMeshService: NSObject {
                     self.recentlySentMessages.insert(msgID)
                     
                     // Clean up after 10 seconds
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 10.0) { [weak self] in
+                    self.messageQueue.asyncAfter(deadline: .now() + 10.0) { [weak self] in
                         self?.recentlySentMessages.remove(msgID)
                     }
                     
