@@ -431,7 +431,15 @@ struct ContentView: View {
                 LazyVStack(alignment: .leading, spacing: 2) {
                     let messages: [BitchatMessage] = {
                         if let privatePeer = viewModel.selectedPrivateChatPeer {
-                            return viewModel.getPrivateChatMessages(for: privatePeer)
+                            let msgs = viewModel.getPrivateChatMessages(for: privatePeer)
+                            // Log what we're showing
+                            if !msgs.isEmpty {
+                                print("[UI] Showing \(msgs.count) messages in private chat with \(privatePeer)")
+                                for (idx, msg) in msgs.enumerated() {
+                                    print("[UI]   Message \(idx): from \(msg.sender), status: \(msg.deliveryStatus?.displayText ?? "none")")
+                                }
+                            }
+                            return msgs
                         } else if let currentRoom = viewModel.currentRoom {
                             return viewModel.getRoomMessages(currentRoom)
                         } else {
@@ -543,8 +551,16 @@ struct ContentView: View {
                 // Also check when view appears
                 if let peerID = viewModel.selectedPrivateChatPeer {
                     print("[UI] Messages view appeared with selected peer \(peerID)")
+                    // Try multiple times to ensure read receipts are sent
+                    viewModel.markPrivateMessagesAsRead(from: peerID)
+                    
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        print("[UI] Triggering markPrivateMessagesAsRead on appear for peer \(peerID)")
+                        print("[UI] Triggering markPrivateMessagesAsRead on appear (0.1s) for peer \(peerID)")
+                        viewModel.markPrivateMessagesAsRead(from: peerID)
+                    }
+                    
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        print("[UI] Triggering markPrivateMessagesAsRead on appear (0.5s) for peer \(peerID)")
                         viewModel.markPrivateMessagesAsRead(from: peerID)
                     }
                 }

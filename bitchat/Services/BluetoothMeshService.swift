@@ -1581,7 +1581,8 @@ class BluetoothMeshService: NSObject {
                             recipientNickname: message.recipientNickname,
                             senderPeerID: senderID,
                             mentions: message.mentions,
-                            room: message.room
+                            room: message.room,
+                            deliveryStatus: nil  // Will be set to .delivered in ChatViewModel
                         )
                         
                         // Track last message time from this peer
