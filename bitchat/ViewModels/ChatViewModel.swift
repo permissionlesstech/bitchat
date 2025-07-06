@@ -97,6 +97,23 @@ class ChatViewModel: ObservableObject {
             .sink { [weak self] (messageID, status) in
                 self?.updateMessageDeliveryStatus(messageID, status: status)
             }
+        
+        // When app becomes active, send read receipts for visible messages
+        #if os(macOS)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appDidBecomeActive),
+            name: NSApplication.didBecomeActiveNotification,
+            object: nil
+        )
+        #else
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appDidBecomeActive),
+            name: UIApplication.didBecomeActiveNotification,
+            object: nil
+        )
+        #endif
     }
     
     private func loadNickname() {
@@ -900,6 +917,16 @@ class ChatViewModel: ObservableObject {
     
     func endPrivateChat() {
         selectedPrivateChatPeer = nil
+    }
+    
+    @objc private func appDidBecomeActive() {
+        // When app becomes active, send read receipts for visible private chat
+        if let peerID = selectedPrivateChatPeer {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                print("[Delivery] App became active, checking for messages to mark as read in chat with \(peerID)")
+                self.markPrivateMessagesAsRead(from: peerID)
+            }
+        }
     }
     
     func markPrivateMessagesAsRead(from peerID: String) {
@@ -1842,6 +1869,11 @@ extension ChatViewModel: BitchatDelegate {
                         )
                         meshService.sendReadReceipt(receipt, to: messageSenderID)
                         print("[Delivery] Sending immediate read receipt for message \(message.id) from \(message.sender) to peer \(messageSenderID)")
+                        
+                        // Also check if there are other unread messages from this peer
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                            self?.markPrivateMessagesAsRead(from: peerID)
+                        }
                     } else {
                         print("[Delivery] Cannot send read receipt - message has no senderPeerID")
                     }
