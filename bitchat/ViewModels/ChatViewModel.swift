@@ -896,12 +896,19 @@ class ChatViewModel: ObservableObject {
     }
     
     private func markPrivateMessagesAsRead(from peerID: String) {
-        guard let messages = privateChats[peerID] else { return }
+        guard let messages = privateChats[peerID] else { 
+            print("[Delivery] No messages found for peer \(peerID)")
+            return 
+        }
+        
+        print("[Delivery] Checking \(messages.count) messages from peer \(peerID) for read receipts")
         
         // Find messages from the peer that haven't been read yet
         for message in messages {
             // Only send read receipts for messages from the other peer (not our own)
             // and only if the status is delivered (not already read)
+            print("[Delivery] Message \(message.id) from \(message.sender), senderPeerID: \(message.senderPeerID ?? "nil"), status: \(message.deliveryStatus?.displayText ?? "none")")
+            
             if message.senderPeerID == peerID {
                 if let status = message.deliveryStatus {
                     switch status {
@@ -916,11 +923,23 @@ class ChatViewModel: ObservableObject {
                         print("[Delivery] Sending read receipt for message \(message.id)")
                     case .read:
                         // Already read, no need to send another receipt
+                        print("[Delivery] Message \(message.id) already marked as read")
                         break
                     default:
                         // Message not yet delivered, can't mark as read
+                        print("[Delivery] Message \(message.id) has status \(status.displayText), not sending read receipt")
                         break
                     }
+                } else {
+                    // No delivery status - this might be an older message
+                    // Send read receipt anyway for backwards compatibility
+                    print("[Delivery] Message \(message.id) has no delivery status, sending read receipt anyway")
+                    let receipt = ReadReceipt(
+                        originalMessageID: message.id,
+                        readerID: meshService.myPeerID,
+                        readerNickname: nickname
+                    )
+                    meshService.sendReadReceipt(receipt, to: peerID)
                 }
             }
         }
