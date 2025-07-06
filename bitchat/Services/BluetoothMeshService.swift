@@ -678,7 +678,6 @@ class BluetoothMeshService: NSObject {
             
             // Encode the ACK
             guard let ackData = ack.encode() else {
-                print("[DeliveryTracker] Failed to encode ACK")
                 return
             }
             
@@ -687,7 +686,6 @@ class BluetoothMeshService: NSObject {
             do {
                 encryptedPayload = try self.encryptionService.encrypt(ackData, for: recipientID)
             } catch {
-                print("[DeliveryTracker] Failed to encrypt ACK: \(error)")
                 return
             }
             
@@ -708,13 +706,11 @@ class BluetoothMeshService: NSObject {
     }
     
     func sendReadReceipt(_ receipt: ReadReceipt, to recipientID: String) {
-        print("[DeliveryTracker] Sending read receipt for message \(receipt.originalMessageID) to \(recipientID)")
         messageQueue.async { [weak self] in
             guard let self = self else { return }
             
             // Encode the receipt
             guard let receiptData = receipt.encode() else {
-                print("[DeliveryTracker] Failed to encode read receipt")
                 return
             }
             
@@ -723,7 +719,6 @@ class BluetoothMeshService: NSObject {
             do {
                 encryptedPayload = try self.encryptionService.encrypt(receiptData, for: recipientID)
             } catch {
-                print("[DeliveryTracker] Failed to encrypt read receipt: \(error)")
                 return
             }
             
@@ -738,7 +733,6 @@ class BluetoothMeshService: NSObject {
                 ttl: 3  // Limited TTL for receipts
             )
             
-            print("[DeliveryTracker] Broadcasting read receipt packet to \(recipientID)")
             // Send immediately without delay
             self.broadcastPacket(packet)
         }
