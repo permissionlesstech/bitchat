@@ -902,15 +902,26 @@ class ChatViewModel: ObservableObject {
         for message in messages {
             // Only send read receipts for messages from the other peer (not our own)
             // and only if the status is delivered (not already read)
-            if message.senderPeerID == peerID,
-               case .delivered = message.deliveryStatus {
-                // Create and send read receipt
-                let receipt = ReadReceipt(
-                    originalMessageID: message.id,
-                    readerID: meshService.myPeerID,
-                    readerNickname: nickname
-                )
-                meshService.sendReadReceipt(receipt, to: peerID)
+            if message.senderPeerID == peerID {
+                if let status = message.deliveryStatus {
+                    switch status {
+                    case .delivered:
+                        // Create and send read receipt
+                        let receipt = ReadReceipt(
+                            originalMessageID: message.id,
+                            readerID: meshService.myPeerID,
+                            readerNickname: nickname
+                        )
+                        meshService.sendReadReceipt(receipt, to: peerID)
+                        print("[Delivery] Sending read receipt for message \(message.id)")
+                    case .read:
+                        // Already read, no need to send another receipt
+                        break
+                    default:
+                        // Message not yet delivered, can't mark as read
+                        break
+                    }
+                }
             }
         }
     }
@@ -1779,14 +1790,13 @@ extension ChatViewModel: BitchatDelegate {
                     unreadPrivateMessages.remove(peerID)
                     
                     // Send read receipt immediately since we're viewing the chat
-                    if message.deliveryStatus != nil {
-                        let receipt = ReadReceipt(
-                            originalMessageID: message.id,
-                            readerID: meshService.myPeerID,
-                            readerNickname: nickname
-                        )
-                        meshService.sendReadReceipt(receipt, to: peerID)
-                    }
+                    let receipt = ReadReceipt(
+                        originalMessageID: message.id,
+                        readerID: meshService.myPeerID,
+                        readerNickname: nickname
+                    )
+                    meshService.sendReadReceipt(receipt, to: peerID)
+                    print("[Delivery] Sending immediate read receipt for message \(message.id) from \(message.sender)")
                 }
             } else if message.sender == nickname {
                 // Our own message that was echoed back - ignore it since we already added it locally
@@ -2080,11 +2090,13 @@ extension ChatViewModel: BitchatDelegate {
     
     func didReceiveDeliveryAck(_ ack: DeliveryAck) {
         // Find the message and update its delivery status
+        print("[Delivery] Received ACK for message \(ack.originalMessageID) from \(ack.recipientNickname)")
         updateMessageDeliveryStatus(ack.originalMessageID, status: .delivered(to: ack.recipientNickname, at: ack.timestamp))
     }
     
     func didReceiveReadReceipt(_ receipt: ReadReceipt) {
         // Find the message and update its read status
+        print("[Delivery] Received READ receipt for message \(receipt.originalMessageID) from \(receipt.readerNickname)")
         updateMessageDeliveryStatus(receipt.originalMessageID, status: .read(by: receipt.readerNickname, at: receipt.timestamp))
     }
     
@@ -2093,11 +2105,14 @@ extension ChatViewModel: BitchatDelegate {
     }
     
     private func updateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) {
+        print("[Delivery] Updating message \(messageID) to status: \(status)")
+        
         // Update in main messages
         if let index = messages.firstIndex(where: { $0.id == messageID }) {
             var updatedMessage = messages[index]
             updatedMessage.deliveryStatus = status
             messages[index] = updatedMessage
+            print("[Delivery] Updated message in main messages")
         }
         
         // Update in private chats
@@ -2107,6 +2122,7 @@ extension ChatViewModel: BitchatDelegate {
                 updatedMessage.deliveryStatus = status
                 chatMessages[index] = updatedMessage
                 privateChats[peerID] = chatMessages
+                print("[Delivery] Updated message in private chat with \(peerID)")
             }
         }
         
