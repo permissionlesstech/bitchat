@@ -1105,6 +1105,16 @@ struct DeliveryStatusView: View {
             .foregroundColor(textColor.opacity(0.8))
             .help("Delivered to \(nickname)")
             
+        case .read(let nickname, _):
+            HStack(spacing: -2) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 10))
+                Image(systemName: "checkmark")
+                    .font(.system(size: 10))
+            }
+            .foregroundColor(Color.blue)
+            .help("Read by \(nickname)")
+            
         case .failed(let reason):
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 10))

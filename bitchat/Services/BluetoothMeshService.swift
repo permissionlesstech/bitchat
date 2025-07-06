@@ -707,6 +707,41 @@ class BluetoothMeshService: NSObject {
         }
     }
     
+    func sendReadReceipt(_ receipt: ReadReceipt, to recipientID: String) {
+        messageQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            // Encode the receipt
+            guard let receiptData = receipt.encode() else {
+                print("[DeliveryTracker] Failed to encode read receipt")
+                return
+            }
+            
+            // Encrypt receipt for the original sender
+            let encryptedPayload: Data
+            do {
+                encryptedPayload = try self.encryptionService.encrypt(receiptData, for: recipientID)
+            } catch {
+                print("[DeliveryTracker] Failed to encrypt read receipt: \(error)")
+                return
+            }
+            
+            // Create read receipt packet with direct routing to original sender
+            let packet = BitchatPacket(
+                type: MessageType.readReceipt.rawValue,
+                senderID: Data(self.myPeerID.utf8),
+                recipientID: Data(recipientID.utf8),
+                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                payload: encryptedPayload,
+                signature: nil,  // Read receipts don't need signatures
+                ttl: 3  // Limited TTL for receipts
+            )
+            
+            // Send immediately without delay
+            self.broadcastPacket(packet)
+        }
+    }
+    
     func announcePasswordProtectedRoom(_ room: String, isProtected: Bool = true, creatorID: String? = nil, keyCommitment: String? = nil) {
         messageQueue.async { [weak self] in
             guard let self = self else { return }
@@ -1966,6 +2001,32 @@ class BluetoothMeshService: NSObject {
                         self.broadcastPacket(relayPacket)
                     }
                 }
+            }
+            
+        case .readReceipt:
+            // Handle read receipt
+            if let recipientIDData = packet.recipientID,
+               let recipientID = String(data: recipientIDData.trimmingNullBytes(), encoding: .utf8),
+               recipientID == myPeerID {
+                // This read receipt is for us - decrypt it
+                if let senderID = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8) {
+                    do {
+                        let decryptedData = try encryptionService.decrypt(packet.payload, from: senderID)
+                        if let receipt = ReadReceipt.decode(from: decryptedData) {
+                            // Process the read receipt
+                            DispatchQueue.main.async {
+                                self.delegate?.didReceiveReadReceipt(receipt)
+                            }
+                        }
+                    } catch {
+                        // Failed to decrypt read receipt - might be from unknown sender
+                    }
+                }
+            } else if packet.ttl > 0 {
+                // Relay the read receipt if not for us
+                var relayPacket = packet
+                relayPacket.ttl -= 1
+                self.broadcastPacket(relayPacket)
             }
             
         default:
