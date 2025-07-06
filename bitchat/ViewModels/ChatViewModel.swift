@@ -867,7 +867,6 @@ class ChatViewModel: ObservableObject {
         
         // IMPORTANT: When sending a message, it means we're viewing this chat
         // Send read receipts for any delivered messages from this peer
-        print("[Delivery] Sending private message to \(peerID), checking for unread messages first")
         markPrivateMessagesAsRead(from: peerID)
         
         // Create the message locally
@@ -901,16 +900,13 @@ class ChatViewModel: ObservableObject {
     }
     
     func startPrivateChat(with peerID: String) {
-        print("[Delivery] Starting private chat with peer \(peerID)")
         let peerNickname = meshService.getPeerNicknames()[peerID] ?? "unknown"
-        print("[Delivery] My nickname: \(nickname), peer nickname: \(peerNickname)")
         selectedPrivateChatPeer = peerID
         unreadPrivateMessages.remove(peerID)
         
         // Check if we need to migrate messages from an old peer ID
         // This happens when peer IDs change between sessions
         if privateChats[peerID] == nil || privateChats[peerID]?.isEmpty == true {
-            print("[Delivery] No messages under current peer ID \(peerID), checking for messages from nickname \(peerNickname)")
             
             // Look for messages from this nickname under other peer IDs
             var migratedMessages: [BitchatMessage] = []
@@ -932,7 +928,6 @@ class ChatViewModel: ObservableObject {
                     }
                     
                     if !messagesWithPeer.isEmpty {
-                        print("[Delivery] Found \(messagesWithPeer.count) messages with \(peerNickname) under old peer ID \(oldPeerID)")
                         
                         // Check if ALL messages in this chat are between us and this peer
                         let allMessagesAreWithPeer = messages.allSatisfy { msg in
@@ -942,7 +937,6 @@ class ChatViewModel: ObservableObject {
                         
                         if allMessagesAreWithPeer {
                             // This entire chat history belongs to this peer, migrate it all
-                            print("[Delivery] Migrating entire chat history (\(messages.count) messages) from old peer ID \(oldPeerID) to new peer ID \(peerID)")
                             migratedMessages.append(contentsOf: messages)
                             oldPeerIDsToRemove.append(oldPeerID)
                         }
@@ -959,23 +953,16 @@ class ChatViewModel: ObservableObject {
             // Initialize chat history with migrated messages if any
             if !migratedMessages.isEmpty {
                 privateChats[peerID] = migratedMessages.sorted { $0.timestamp < $1.timestamp }
-                print("[Delivery] Migrated \(migratedMessages.count) messages to peer \(peerID)")
             } else {
                 privateChats[peerID] = []
-                print("[Delivery] Initialized empty chat history for peer \(peerID)")
             }
         }
         
         let messages = privateChats[peerID] ?? []
-        print("[Delivery] Chat with peer \(peerID) now has \(messages.count) messages")
-        for (index, msg) in messages.enumerated() {
-            print("[Delivery]   Message \(index): from \(msg.sender), status: \(msg.deliveryStatus?.displayText ?? "none")")
-        }
         
         // Send read receipts for unread messages from this peer
         // Add a small delay to ensure UI has updated
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
-            print("[Delivery] Delayed call to markPrivateMessagesAsRead for peer \(peerID)")
             self?.markPrivateMessagesAsRead(from: peerID)
         }
         
@@ -990,12 +977,10 @@ class ChatViewModel: ObservableObject {
     @objc private func appDidBecomeActive() {
         // When app becomes active, send read receipts for visible private chat
         if let peerID = selectedPrivateChatPeer {
-            print("[Delivery] App became active with selectedPrivateChatPeer = \(peerID)")
             // Try immediately
             self.markPrivateMessagesAsRead(from: peerID)
             // And again with a delay
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                print("[Delivery] App became active (delayed), checking for messages to mark as read in chat with \(peerID)")
                 self.markPrivateMessagesAsRead(from: peerID)
             }
         }
@@ -1004,15 +989,10 @@ class ChatViewModel: ObservableObject {
     func markPrivateMessagesAsRead(from peerID: String) {
         // Get the nickname for this peer
         let peerNickname = meshService.getPeerNicknames()[peerID] ?? ""
-        print("[Delivery] ========== markPrivateMessagesAsRead START ==========")
-        print("[Delivery] Called for peer \(peerID) (\(peerNickname))")
-        print("[Delivery] My nickname: \(nickname), My peerID: \(meshService.myPeerID)")
         
         // First ensure we have the latest messages (in case of migration)
         if let messages = privateChats[peerID], !messages.isEmpty {
-            print("[Delivery] Found \(messages.count) messages in privateChats[\(peerID)]")
         } else {
-            print("[Delivery] No messages found in privateChats[\(peerID)], checking all chats for messages from \(peerNickname)")
             
             // Look through ALL private chats to find messages from this nickname
             for (chatPeerID, chatMessages) in privateChats {
@@ -1020,18 +1000,14 @@ class ChatViewModel: ObservableObject {
                     msg.sender == peerNickname && msg.sender != nickname
                 }
                 if !relevantMessages.isEmpty {
-                    print("[Delivery] Found \(relevantMessages.count) messages from \(peerNickname) in privateChats[\(chatPeerID)]")
                 }
             }
         }
         
         guard let messages = privateChats[peerID], !messages.isEmpty else { 
-            print("[Delivery] No messages to process for peer \(peerID)")
-            print("[Delivery] ========== markPrivateMessagesAsRead END (no messages) ==========")
             return 
         }
         
-        print("[Delivery] Processing \(messages.count) messages in chat with peer \(peerID) (\(peerNickname)) for read receipts")
         
         // Find messages from the peer that haven't been read yet
         var readReceiptsSent = 0
@@ -1046,11 +1022,6 @@ class ChatViewModel: ObservableObject {
             // This is a message FROM the peer if it's not from us AND (matches nickname OR peer ID OR is private to us)
             let isFromPeer = !isOurMessage && (isFromPeerByNickname || isFromPeerByID || isPrivateToUs)
             
-            print("[Delivery] Message \(index): id=\(message.id)")
-            print("[Delivery]   from=\(message.sender), recipientNickname=\(message.recipientNickname ?? "nil")")
-            print("[Delivery]   senderPeerID=\(message.senderPeerID ?? "nil"), currentPeerID=\(peerID)")
-            print("[Delivery]   isPrivate=\(message.isPrivate), isOurMessage=\(isOurMessage), isFromPeer=\(isFromPeer)")
-            print("[Delivery]   status=\(message.deliveryStatus?.displayText ?? "none")")
             
             if isFromPeer {
                 if let status = message.deliveryStatus {
@@ -1064,45 +1035,31 @@ class ChatViewModel: ObservableObject {
                             readerNickname: nickname
                         )
                         meshService.sendReadReceipt(receipt, to: peerID)
-                        print("[Delivery] ✓ Sending read receipt for message \(message.id) from \(message.sender) to current peer \(peerID)")
                         readReceiptsSent += 1
                     case .read:
                         // Already read, no need to send another receipt
-                        print("[Delivery] Message \(message.id) already marked as read")
                     default:
                         // Message not yet delivered, can't mark as read
-                        print("[Delivery] Message \(message.id) has status \(status.displayText), not sending read receipt")
                     }
                 } else {
                     // No delivery status - this might be an older message
                     // Send read receipt anyway for backwards compatibility
-                    print("[Delivery] Message \(message.id) has no delivery status, sending read receipt anyway")
                     let receipt = ReadReceipt(
                         originalMessageID: message.id,
                         readerID: meshService.myPeerID,
                         readerNickname: nickname
                     )
                     meshService.sendReadReceipt(receipt, to: peerID)
-                    print("[Delivery] ✓ Sending read receipt for old message \(message.id) to current peer \(peerID)")
                     readReceiptsSent += 1
                 }
             } else {
-                print("[Delivery] Skipping message \(message.id) - it's from us (\(nickname))")
             }
         }
         
-        print("[Delivery] Sent \(readReceiptsSent) read receipts to peer \(peerID)")
-        print("[Delivery] ========== markPrivateMessagesAsRead END ==========")
     }
     
     func getPrivateChatMessages(for peerID: String) -> [BitchatMessage] {
         let messages = privateChats[peerID] ?? []
-        if !messages.isEmpty {
-            print("[UI] Getting \(messages.count) messages for peer \(peerID)")
-            if let lastMessage = messages.last {
-                print("[UI] Last message status: \(lastMessage.deliveryStatus?.displayText ?? "none")")
-            }
-        }
         return messages
     }
     
@@ -1964,7 +1921,6 @@ extension ChatViewModel: BitchatDelegate {
                             }
                             
                             if isRelevantChat {
-                                print("[Delivery] Found existing chat with \(senderNickname) under old peer ID \(oldPeerID), migrating to \(peerID)")
                                 migratedMessages.append(contentsOf: messages)
                                 oldPeerIDsToRemove.append(oldPeerID)
                             }
@@ -1992,7 +1948,6 @@ extension ChatViewModel: BitchatDelegate {
                     if messageToStore.deliveryStatus == nil || messageToStore.deliveryStatus == .sending {
                         // Mark it as delivered since we received it
                         messageToStore.deliveryStatus = .delivered(to: nickname, at: Date())
-                        print("[Delivery] Setting delivery status for incoming message \(message.id) to delivered (was: \(message.deliveryStatus?.displayText ?? "nil"))")
                     }
                 }
                 
@@ -2019,7 +1974,6 @@ extension ChatViewModel: BitchatDelegate {
                         readerNickname: nickname
                     )
                     meshService.sendReadReceipt(receipt, to: peerID)
-                    print("[Delivery] Sending immediate read receipt for message \(message.id) from \(message.sender) to current peer \(peerID)")
                     
                     // Also check if there are other unread messages from this peer
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
@@ -2318,13 +2272,11 @@ extension ChatViewModel: BitchatDelegate {
     
     func didReceiveDeliveryAck(_ ack: DeliveryAck) {
         // Find the message and update its delivery status
-        print("[Delivery] Received ACK for message \(ack.originalMessageID) from \(ack.recipientNickname)")
         updateMessageDeliveryStatus(ack.originalMessageID, status: .delivered(to: ack.recipientNickname, at: ack.timestamp))
     }
     
     func didReceiveReadReceipt(_ receipt: ReadReceipt) {
         // Find the message and update its read status
-        print("[Delivery] Received READ receipt for message \(receipt.originalMessageID) from \(receipt.readerNickname)")
         updateMessageDeliveryStatus(receipt.originalMessageID, status: .read(by: receipt.readerNickname, at: receipt.timestamp))
     }
     
@@ -2333,7 +2285,6 @@ extension ChatViewModel: BitchatDelegate {
     }
     
     private func updateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) {
-        print("[Delivery] Updating message \(messageID) to status: \(status)")
         
         // Helper function to check if we should skip this update
         func shouldSkipUpdate(currentStatus: DeliveryStatus?, newStatus: DeliveryStatus) -> Bool {
@@ -2342,10 +2293,8 @@ extension ChatViewModel: BitchatDelegate {
             // Don't downgrade from read to delivered
             switch (current, newStatus) {
             case (.read, .delivered):
-                print("[Delivery] Skipping update - message already marked as read")
                 return true
             case (.read, .sent):
-                print("[Delivery] Skipping update - message already marked as read")
                 return true
             default:
                 return false
@@ -2359,7 +2308,6 @@ extension ChatViewModel: BitchatDelegate {
                 var updatedMessage = messages[index]
                 updatedMessage.deliveryStatus = status
                 messages[index] = updatedMessage
-                print("[Delivery] Updated message in main messages")
             }
         }
         
@@ -2373,7 +2321,6 @@ extension ChatViewModel: BitchatDelegate {
                     updatedMessage.deliveryStatus = status
                     chatMessages[index] = updatedMessage
                     updatedPrivateChats[peerID] = chatMessages
-                    print("[Delivery] Updated message in private chat with \(peerID)")
                 }
             }
         }

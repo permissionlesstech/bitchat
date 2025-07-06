@@ -71,7 +71,6 @@ class DeliveryTracker {
         // Don't track broadcasts or certain message types
         guard message.isPrivate || message.room != nil else { return }
         
-        print("[DeliveryTracker] Tracking message \(message.id) to \(recipientNickname)")
         
         let delivery = PendingDelivery(
             messageID: message.id,
@@ -103,11 +102,9 @@ class DeliveryTracker {
         pendingLock.lock()
         defer { pendingLock.unlock() }
         
-        print("[DeliveryTracker] Processing ACK for message \(ack.originalMessageID) from \(ack.recipientNickname)")
         
         // Prevent duplicate ACK processing
         guard !receivedAckIDs.contains(ack.ackID) else {
-            print("[DeliveryTracker] Already processed ACK \(ack.ackID)")
             return
         }
         receivedAckIDs.insert(ack.ackID)
@@ -115,7 +112,6 @@ class DeliveryTracker {
         // Find the pending delivery
         guard var delivery = pendingDeliveries[ack.originalMessageID] else {
             // Message might have already been delivered or timed out
-            print("[DeliveryTracker] No pending delivery found for message \(ack.originalMessageID)")
             return
         }
         
@@ -156,7 +152,6 @@ class DeliveryTracker {
         guard !sentAckIDs.contains(message.id) else { return nil }
         sentAckIDs.insert(message.id)
         
-        print("[DeliveryTracker] Generating ACK for message \(message.id) from \(message.sender)")
         
         return DeliveryAck(
             originalMessageID: message.id,
