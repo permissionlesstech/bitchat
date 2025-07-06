@@ -528,6 +528,12 @@ struct ContentView: View {
                     }
                 }
             }
+            .onChange(of: viewModel.selectedPrivateChatPeer) { newPeerID in
+                // When switching to a private chat, send read receipts
+                if let peerID = newPeerID {
+                    viewModel.markPrivateMessagesAsRead(from: peerID)
+                }
+            }
         }
     }
     
@@ -1111,10 +1117,12 @@ struct DeliveryStatusView: View {
             
         case .read(let nickname, _):
             HStack(spacing: -2) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(Color(red: 0.0, green: 0.478, blue: 1.0))  // Bright blue
+                Image(systemName: "checkmark")
+                    .font(.system(size: 10, weight: .bold))
+                Image(systemName: "checkmark")
+                    .font(.system(size: 10, weight: .bold))
             }
+            .foregroundColor(Color(red: 0.0, green: 0.478, blue: 1.0))  // Bright blue
             .help("Read by \(nickname)")
             .onAppear {
                 print("[UI] Showing BLUE checkmarks for read status by \(nickname)")

@@ -895,7 +895,7 @@ class ChatViewModel: ObservableObject {
         selectedPrivateChatPeer = nil
     }
     
-    private func markPrivateMessagesAsRead(from peerID: String) {
+    func markPrivateMessagesAsRead(from peerID: String) {
         guard let messages = privateChats[peerID] else { 
             print("[Delivery] No messages found for peer \(peerID)")
             return 
@@ -912,8 +912,8 @@ class ChatViewModel: ObservableObject {
             if message.senderPeerID == peerID {
                 if let status = message.deliveryStatus {
                     switch status {
-                    case .delivered:
-                        // Create and send read receipt
+                    case .sent, .delivered:
+                        // Create and send read receipt for sent or delivered messages
                         // Use the senderPeerID from the message to ensure it goes to the right peer
                         if let messageSenderID = message.senderPeerID {
                             let receipt = ReadReceipt(
