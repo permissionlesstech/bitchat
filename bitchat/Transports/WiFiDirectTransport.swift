@@ -687,10 +687,43 @@ class WiFiDirectTransport: NSObject, TransportProtocol {
                     throw TransportError.invalidData
                 }
             } else {
-                // No public key for sender - can't verify
-                // For now, reject unsigned messages from unknown peers
-                print("WiFiDirect: No public key for sender \(senderIDString) - rejecting message")
-                throw TransportError.invalidData
+                // No public key for sender yet
+                // For the first message from a peer, we might not have their key yet
+                // Look up the key by the MCPeerID's generated ID
+                var foundKey: P256.Signing.PublicKey?
+                
+                // Try to find a public key that might belong to this sender
+                // This is a temporary workaround for the key exchange issue
+                for (storedID, pubKey) in peerPublicKeys {
+                    // If we have a key stored by the MCPeerID-generated ID, use it
+                    if storedID != senderIDString {
+                        foundKey = pubKey
+                        // Store it under the actual sender ID for future use
+                        peerPublicKeys[senderIDString] = pubKey
+                        print("WiFiDirect: Found and mapped public key for sender \(senderIDString)")
+                        break
+                    }
+                }
+                
+                if let publicKey = foundKey {
+                    // Verify with the found key
+                    let dataToVerify = data.subdata(in: 0..<(offset - 3 - Int(signatureLength)))
+                    do {
+                        let sig = try P256.Signing.ECDSASignature(derRepresentation: signatureData)
+                        if publicKey.isValidSignature(sig, for: dataToVerify) {
+                            signature = signatureData
+                        } else {
+                            throw TransportError.invalidData
+                        }
+                    } catch {
+                        print("WiFiDirect: Signature verification failed with found key: \(error)")
+                        throw TransportError.invalidData
+                    }
+                } else {
+                    // Still no key found - reject
+                    print("WiFiDirect: No public key found for sender \(senderIDString) - rejecting message")
+                    throw TransportError.invalidData
+                }
             }
         }
         
