@@ -39,6 +39,7 @@ class WiFiDirectTransport: NSObject, TransportProtocol {
     private var connectedPeers: [MCPeerID: PeerInfo] = [:]
     private var peerIDMapping: [String: MCPeerID] = [:]  // bitchat peerID -> MCPeerID
     private let queue = DispatchQueue(label: "bitchat.wifidirect", attributes: .concurrent)
+    private let queueKey = DispatchSpecificKey<Void>()
     private var isAdvertising = false
     private var isBrowsing = false
     
@@ -105,6 +106,8 @@ class WiFiDirectTransport: NSObject, TransportProtocol {
     
     override init() {
         super.init()
+        // Set queue specific so we can detect if we're on this queue
+        queue.setSpecific(key: queueKey, value: ())
         setupMultipeerConnectivity()
         
         // Monitor memory pressure
@@ -453,8 +456,13 @@ class WiFiDirectTransport: NSObject, TransportProtocol {
     // MARK: - Helper Methods
     
     private func getPeerMCID(for peerID: String) -> MCPeerID? {
-        return queue.sync {
-            peerIDMapping[peerID]
+        // If we're already on the queue, just access directly
+        if DispatchQueue.getSpecific(key: queueKey) != nil {
+            return peerIDMapping[peerID]
+        } else {
+            return queue.sync {
+                peerIDMapping[peerID]
+            }
         }
     }
     
@@ -471,20 +479,18 @@ class WiFiDirectTransport: NSObject, TransportProtocol {
         // Encode packet
         let data = try encodePacket(packet)
         
-        // Cache the result
-        queue.async(flags: .barrier) {
-            // Enforce cache size limit
-            if self.messageCache.count >= self.maxCacheEntries {
-                // Remove oldest entries
-                let toRemove = self.messageCache.count / 4
-                let oldestKeys = self.messageCache.sorted { $0.value.timestamp < $1.value.timestamp }.prefix(toRemove).map { $0.key }
-                for key in oldestKeys {
-                    self.messageCache.removeValue(forKey: key)
-                }
+        // Cache the result - we're already on the queue, so update directly
+        // Enforce cache size limit
+        if messageCache.count >= maxCacheEntries {
+            // Remove oldest entries
+            let toRemove = messageCache.count / 4
+            let oldestKeys = messageCache.sorted { $0.value.timestamp < $1.value.timestamp }.prefix(toRemove).map { $0.key }
+            for key in oldestKeys {
+                messageCache.removeValue(forKey: key)
             }
-            
-            self.messageCache[cacheKey] = (data, Date())
         }
+        
+        messageCache[cacheKey] = (data, Date())
         
         return data
     }
@@ -503,11 +509,9 @@ class WiFiDirectTransport: NSObject, TransportProtocol {
         }
         data.append(nonce)
         
-        // Sequence number
-        queue.sync(flags: .barrier) {
-            mySequenceNumber += 1
-        }
-        data.append(mySequenceNumber.bigEndianData)
+        // Sequence number - already on queue, just increment
+        mySequenceNumber += 1
+        data.append(UInt64(mySequenceNumber).bigEndianData)
         
         // Version
         data.append(packet.version)

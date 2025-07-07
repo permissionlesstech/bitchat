@@ -186,7 +186,12 @@ class BridgeManager: ObservableObject {
         let effectiveThreshold = isBridgeNode ? (bridgeScoreThreshold - 0.1) : bridgeScoreThreshold
         
         // Determine if we should be a bridge
-        if score >= effectiveThreshold && hasMultiTransport {
+        // Only activate bridge in auto mode when we have peers on multiple transports
+        let shouldBridge = score >= effectiveThreshold && 
+                          hasMultiTransport && 
+                          TransportManager.shared.autoSelectTransport
+        
+        if shouldBridge {
             // Check if state actually changed
             let wasActive = isBridgeNode
             isBridgeNode = true
