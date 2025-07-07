@@ -10,24 +10,18 @@ import Foundation
 import CryptoKit
 
 class EncryptionService {
-    // Key agreement keys for encryption (Curve25519)
+    // Key agreement keys for encryption
     private var privateKey: Curve25519.KeyAgreement.PrivateKey
     public let publicKey: Curve25519.KeyAgreement.PublicKey
     
-    // Legacy Curve25519 signing keys (for backwards compatibility)
+    // Signing keys for authentication
     private var signingPrivateKey: Curve25519.Signing.PrivateKey
     public let signingPublicKey: Curve25519.Signing.PublicKey
     
-    // P256 signing public keys from DeviceIdentity (for unified identity)
-    public var p256PublicKey: Data {
-        DeviceIdentity.shared.publicKeyData
-    }
-    
     // Storage for peer keys
     private var peerPublicKeys: [String: Curve25519.KeyAgreement.PublicKey] = [:]
-    private var peerSigningKeys: [String: Curve25519.Signing.PublicKey] = [:]  // Legacy Curve25519
-    private var peerIdentityKeys: [String: Curve25519.Signing.PublicKey] = [:]  // Legacy Curve25519
-    private var peerP256Keys: [String: P256.Signing.PublicKey] = [:]  // P256 public keys for unified identity
+    private var peerSigningKeys: [String: Curve25519.Signing.PublicKey] = [:]
+    private var peerIdentityKeys: [String: Curve25519.Signing.PublicKey] = [:]
     private var sharedSecrets: [String: SymmetricKey] = [:]
     
     // Persistent identity for favorites (separate from ephemeral keys)
@@ -61,62 +55,37 @@ class EncryptionService {
     func getCombinedPublicKeyData() -> Data {
         var data = Data()
         data.append(publicKey.rawRepresentation)  // 32 bytes - ephemeral encryption key
-        data.append(signingPublicKey.rawRepresentation)  // 32 bytes - ephemeral signing key (legacy)
-        data.append(identityPublicKey.rawRepresentation)  // 32 bytes - persistent identity key (legacy)
-        data.append(p256PublicKey)  // 65 bytes - P256 public key for unified identity
-        return data  // Total: 161 bytes
+        data.append(signingPublicKey.rawRepresentation)  // 32 bytes - ephemeral signing key
+        data.append(identityPublicKey.rawRepresentation)  // 32 bytes - persistent identity key
+        return data  // Total: 96 bytes
     }
     
     // Add peer's combined public keys
-    // Supports two formats:
-    // - Legacy: 96 bytes (32 + 32 + 32) - Curve25519 keys only
-    // - Unified: 161 bytes (32 + 32 + 32 + 65) - Curve25519 + P256 keys
     func addPeerPublicKey(_ peerID: String, publicKeyData: Data) throws {
         try cryptoQueue.sync(flags: .barrier) {
             // Convert to array for safe access
             let keyBytes = [UInt8](publicKeyData)
             
-            // Support both legacy (96 bytes) and new format (161 bytes)
-            if keyBytes.count == 96 {
-                // Legacy format: 32 + 32 + 32
-                let keyAgreementData = Data(keyBytes[0..<32])
-                let signingKeyData = Data(keyBytes[32..<64])
-                let identityKeyData = Data(keyBytes[64..<96])
-                
-                let publicKey = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: keyAgreementData)
-                peerPublicKeys[peerID] = publicKey
-                
-                let signingKey = try Curve25519.Signing.PublicKey(rawRepresentation: signingKeyData)
-                peerSigningKeys[peerID] = signingKey
-                
-                let identityKey = try Curve25519.Signing.PublicKey(rawRepresentation: identityKeyData)
-                peerIdentityKeys[peerID] = identityKey
-                
-                // No P256 key in legacy format
-                peerP256Keys.removeValue(forKey: peerID)
-                
-            } else if keyBytes.count == 161 {
-                // New format: 32 + 32 + 32 + 65
-                let keyAgreementData = Data(keyBytes[0..<32])
-                let signingKeyData = Data(keyBytes[32..<64])
-                let identityKeyData = Data(keyBytes[64..<96])
-                let p256KeyData = Data(keyBytes[96..<161])
-                
-                let publicKey = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: keyAgreementData)
-                peerPublicKeys[peerID] = publicKey
-                
-                let signingKey = try Curve25519.Signing.PublicKey(rawRepresentation: signingKeyData)
-                peerSigningKeys[peerID] = signingKey
-                
-                let identityKey = try Curve25519.Signing.PublicKey(rawRepresentation: identityKeyData)
-                peerIdentityKeys[peerID] = identityKey
-                
-                let p256Key = try P256.Signing.PublicKey(x963Representation: p256KeyData)
-                peerP256Keys[peerID] = p256Key
-                
-            } else {
+            guard keyBytes.count == 96 else {
+                // print("[CRYPTO] Invalid public key data size: \(keyBytes.count), expected 96")
                 throw EncryptionError.invalidPublicKey
             }
+            
+            // Extract all three keys: 32 for key agreement + 32 for signing + 32 for identity
+            let keyAgreementData = Data(keyBytes[0..<32])
+            let signingKeyData = Data(keyBytes[32..<64])
+            let identityKeyData = Data(keyBytes[64..<96])
+            
+            let publicKey = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: keyAgreementData)
+            peerPublicKeys[peerID] = publicKey
+            
+            let signingKey = try Curve25519.Signing.PublicKey(rawRepresentation: signingKeyData)
+            peerSigningKeys[peerID] = signingKey
+            
+            let identityKey = try Curve25519.Signing.PublicKey(rawRepresentation: identityKeyData)
+            peerIdentityKeys[peerID] = identityKey
+            
+            // Stored all three keys for peer
             
             // Generate shared secret for encryption
             if let publicKey = peerPublicKeys[peerID] {
@@ -184,36 +153,6 @@ class EncryptionService {
         }
         
         return verifyingKey.isValidSignature(signature, for: data)
-    }
-    
-    func getPublicKey(for peerID: String) -> Data? {
-        return cryptoQueue.sync {
-            // Return the raw public key data for the peer
-            // Note: This returns Curve25519 signing public key (32 bytes)
-            // which is incompatible with DeviceIdentity.verify() that expects P256 keys (65 bytes)
-            return peerSigningKeys[peerID]?.rawRepresentation
-        }
-    }
-    
-    // Get peer's P256 public key for unified identity verification
-    func getP256PublicKey(for peerID: String) -> P256.Signing.PublicKey? {
-        return cryptoQueue.sync {
-            return peerP256Keys[peerID]
-        }
-    }
-    
-    // Sign with P256 for unified identity
-    func signWithP256(_ data: Data) throws -> Data {
-        return try DeviceIdentity.shared.sign(data)
-    }
-    
-    // Verify P256 signature for unified identity
-    func verifyP256Signature(_ signature: Data, for data: Data, from peerID: String) -> Bool {
-        guard let publicKey = getP256PublicKey(for: peerID) else {
-            // Fallback to legacy verification if no P256 key
-            return (try? verify(signature, for: data, from: peerID)) ?? false
-        }
-        return DeviceIdentity.shared.verify(signature: signature, for: data, using: publicKey)
     }
     
 }

@@ -19,16 +19,13 @@ struct ContentView: View {
     @State private var sidebarDragOffset: CGFloat = 0
     @State private var showAppInfo = false
     @State private var showPasswordInput = false
-    @State private var passwordInputRoom: String? = nil
+    @State private var passwordInputChannel: String? = nil
     @State private var passwordInput = ""
     @State private var showPasswordPrompt = false
     @State private var passwordPromptInput = ""
     @State private var showPasswordError = false
     @State private var showCommandSuggestions = false
     @State private var commandSuggestions: [String] = []
-    @State private var showNetworkStatus = false
-    @State private var transportButtonFrame: CGRect = .zero
-    @State private var networkStatusDebounceTimer: Timer?
     
     private var backgroundColor: Color {
         colorScheme == .dark ? Color.black : Color.white
@@ -115,84 +112,6 @@ struct ContentView: View {
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: sidebarDragOffset)
                 }
             }
-            
-            // Network Status Overlay
-            if showNetworkStatus {
-                Color.black.opacity(0.001) // Invisible tap area
-                    .ignoresSafeArea()
-                    .onTapGesture {
-                        withAnimation(.easeOut(duration: 0.2)) {
-                            showNetworkStatus = false
-                        }
-                    }
-                
-                GeometryReader { geometry in
-                    VStack {
-                        HStack {
-                            Spacer()
-                            
-                            networkStatusView
-                                .fixedSize()
-                            .padding(.trailing, transportButtonFrame.width > 0 ? 
-                                geometry.size.width - transportButtonFrame.maxX + (transportButtonFrame.width / 2) - 140 : 25)
-                        }
-                        .padding(.top, transportButtonFrame.height > 0 ? 
-                            transportButtonFrame.maxY + 8 : 52)
-                        
-                        Spacer()
-                    }
-                    .transition(.scale(scale: 0.95, anchor: .topTrailing).combined(with: .opacity))
-                }
-            }
-            
-            // Autocomplete overlay
-            if viewModel.showAutocomplete && !viewModel.autocompleteSuggestions.isEmpty {
-                GeometryReader { geometry in
-                    VStack {
-                        Spacer()
-                        HStack {
-                            // Calculate approximate position based on nickname length and @ position
-                            let nicknameWidth: CGFloat = viewModel.selectedPrivateChatPeer != nil ? 90 : 80
-                            let charWidth: CGFloat = 8.5 // Approximate width of monospace character
-                            let atPosition = CGFloat(viewModel.autocompleteRange?.location ?? 0)
-                            let offsetX = nicknameWidth + (atPosition * charWidth)
-                            
-                            // Ensure offsetX is valid (not NaN or infinite)
-                            let safeOffsetX = offsetX.isFinite ? offsetX : nicknameWidth
-                            
-                            VStack(alignment: .leading, spacing: 0) {
-                                ForEach(Array(viewModel.autocompleteSuggestions.enumerated()), id: \.element) { index, suggestion in
-                                    Button(action: {
-                                        _ = viewModel.completeNickname(suggestion, in: &messageText)
-                                    }) {
-                                        HStack {
-                                            Text("@\(suggestion)")
-                                                .font(.system(size: 12, design: .monospaced))
-                                                .foregroundColor(index == viewModel.selectedAutocompleteIndex ? backgroundColor : textColor)
-                                            Spacer()
-                                        }
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(index == viewModel.selectedAutocompleteIndex ? textColor : Color.clear)
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                            .background(backgroundColor)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 4)
-                                    .stroke(secondaryTextColor.opacity(0.5), lineWidth: 1)
-                            )
-                            .frame(width: 150, alignment: .leading)
-                            .offset(x: min(safeOffsetX, max(0, geometry.size.width - 180))) // Prevent going off-screen
-                            .padding(.bottom, 45) // Position just above input
-                            
-                            Spacer()
-                        }
-                        .padding(.horizontal, 12)
-                    }
-                }
-            }
         }
         #if os(macOS)
         .frame(minWidth: 600, minHeight: 400)
@@ -200,34 +119,34 @@ struct ContentView: View {
         .sheet(isPresented: $showAppInfo) {
             AppInfoView()
         }
-        .alert("Set Room Password", isPresented: $showPasswordInput) {
+        .alert("Set Channel Password", isPresented: $showPasswordInput) {
             SecureField("Password", text: $passwordInput)
             Button("Cancel", role: .cancel) {
                 passwordInput = ""
-                passwordInputRoom = nil
+                passwordInputChannel = nil
             }
             Button("Set Password") {
-                if let room = passwordInputRoom, !passwordInput.isEmpty {
-                    viewModel.setRoomPassword(passwordInput, for: room)
+                if let channel = passwordInputChannel, !passwordInput.isEmpty {
+                    viewModel.setChannelPassword(passwordInput, for: channel)
                     passwordInput = ""
-                    passwordInputRoom = nil
+                    passwordInputChannel = nil
                 }
             }
         } message: {
-            Text("Enter a password to protect \(passwordInputRoom ?? "room"). Others will need this password to read messages.")
+            Text("Enter a password to protect \(passwordInputChannel ?? "channel"). Others will need this password to read messages.")
         }
-        .alert("Enter Room Password", isPresented: Binding(
+        .alert("Enter Channel Password", isPresented: Binding(
             get: { viewModel.showPasswordPrompt },
             set: { viewModel.showPasswordPrompt = $0 }
         )) {
             SecureField("Password", text: $passwordPromptInput)
             Button("Cancel", role: .cancel) {
                 passwordPromptInput = ""
-                viewModel.passwordPromptRoom = nil
+                viewModel.passwordPromptChannel = nil
             }
             Button("Join") {
-                if let room = viewModel.passwordPromptRoom, !passwordPromptInput.isEmpty {
-                    let success = viewModel.joinRoom(room, password: passwordPromptInput)
+                if let channel = viewModel.passwordPromptChannel, !passwordPromptInput.isEmpty {
+                    let success = viewModel.joinChannel(channel, password: passwordPromptInput)
                     if success {
                         passwordPromptInput = ""
                     } else {
@@ -238,14 +157,13 @@ struct ContentView: View {
                 }
             }
         } message: {
-            Text("Room \(viewModel.passwordPromptRoom ?? "") is password protected. Enter the password to join.")
+            Text("Channel \(viewModel.passwordPromptChannel ?? "") is password protected. Enter the password to join.")
         }
         .alert("Wrong Password", isPresented: $showPasswordError) {
             Button("OK", role: .cancel) { }
         } message: {
             Text("The password you entered is incorrect. Please try again.")
         }
-        .coordinateSpace(name: "ContentView")
     }
     
     private var headerView: some View {
@@ -289,10 +207,10 @@ struct ContentView: View {
                         .foregroundColor(viewModel.isFavorite(peerID: privatePeerID) ? Color.yellow : textColor)
                 }
                 .buttonStyle(.plain)
-            } else if let currentRoom = viewModel.currentRoom {
-                // Room header
+            } else if let currentChannel = viewModel.currentChannel {
+                // Channel header
                 Button(action: {
-                    viewModel.switchToRoom(nil)
+                    viewModel.switchToChannel(nil)
                 }) {
                     HStack(spacing: 4) {
                         Image(systemName: "chevron.left")
@@ -313,14 +231,14 @@ struct ContentView: View {
                     }
                 }) {
                     HStack(spacing: 6) {
-                        if viewModel.passwordProtectedRooms.contains(currentRoom) {
+                        if viewModel.passwordProtectedChannels.contains(currentChannel) {
                             Image(systemName: "lock.fill")
                                 .font(.system(size: 14))
                                 .foregroundColor(Color.orange)
                         }
-                        Text("room: \(currentRoom)")
+                        Text("channel: \(currentChannel)")
                             .font(.system(size: 16, weight: .medium, design: .monospaced))
-                            .foregroundColor(viewModel.passwordProtectedRooms.contains(currentRoom) ? Color.orange : Color.blue)
+                            .foregroundColor(viewModel.passwordProtectedChannels.contains(currentChannel) ? Color.orange : Color.blue)
                     }
                 }
                 .buttonStyle(.plain)
@@ -330,48 +248,48 @@ struct ContentView: View {
                 
                 HStack(spacing: 8) {
                     // Show retention indicator for all users
-                    if viewModel.retentionEnabledRooms.contains(currentRoom) {
+                    if viewModel.retentionEnabledChannels.contains(currentChannel) {
                         Image(systemName: "bookmark.fill")
                             .font(.system(size: 16))
                             .foregroundColor(Color.yellow)
-                            .help("Messages in this room are being saved locally")
+                            .help("Messages in this channel are being saved locally")
                     }
                     
-                    // Save button - only for room owner
-                    if viewModel.roomCreators[currentRoom] == viewModel.meshService.myPeerID {
+                    // Save button - only for channel owner
+                    if viewModel.channelCreators[currentChannel] == viewModel.meshService.myPeerID {
                         Button(action: {
                             viewModel.sendMessage("/save")
                         }) {
-                            Image(systemName: viewModel.retentionEnabledRooms.contains(currentRoom) ? "bookmark.slash" : "bookmark")
+                            Image(systemName: viewModel.retentionEnabledChannels.contains(currentChannel) ? "bookmark.slash" : "bookmark")
                                 .font(.system(size: 16))
                                 .foregroundColor(textColor)
                         }
                         .buttonStyle(.plain)
-                        .help(viewModel.retentionEnabledRooms.contains(currentRoom) ? "Disable message retention" : "Enable message retention")
+                        .help(viewModel.retentionEnabledChannels.contains(currentChannel) ? "Disable message retention" : "Enable message retention")
                     }
                     
-                    // Password button for room creator only
-                    if viewModel.roomCreators[currentRoom] == viewModel.meshService.myPeerID {
+                    // Password button for channel creator only
+                    if viewModel.channelCreators[currentChannel] == viewModel.meshService.myPeerID {
                         Button(action: {
                             // Toggle password protection
-                            if viewModel.passwordProtectedRooms.contains(currentRoom) {
-                                viewModel.removeRoomPassword(for: currentRoom)
+                            if viewModel.passwordProtectedChannels.contains(currentChannel) {
+                                viewModel.removeChannelPassword(for: currentChannel)
                             } else {
                                 // Show password input
                                 showPasswordInput = true
-                                passwordInputRoom = currentRoom
+                                passwordInputChannel = currentChannel
                             }
                         }) {
-                            Image(systemName: viewModel.passwordProtectedRooms.contains(currentRoom) ? "lock.fill" : "lock")
+                            Image(systemName: viewModel.passwordProtectedChannels.contains(currentChannel) ? "lock.fill" : "lock")
                                 .font(.system(size: 16))
-                                .foregroundColor(viewModel.passwordProtectedRooms.contains(currentRoom) ? Color.yellow : textColor)
+                                .foregroundColor(viewModel.passwordProtectedChannels.contains(currentChannel) ? Color.yellow : textColor)
                         }
                         .buttonStyle(.plain)
                     }
                     
-                    // Leave room button
+                    // Leave channel button
                     Button(action: {
-                        viewModel.leaveRoom(currentRoom)
+                        viewModel.leaveChannel(currentChannel)
                     }) {
                         Text("leave")
                             .font(.system(size: 12, design: .monospaced))
@@ -415,41 +333,12 @@ struct ContentView: View {
                 
                 Spacer()
                 
-                // Transport indicator
-                Button(action: {
-                    // Debounce rapid taps
-                    networkStatusDebounceTimer?.invalidate()
-                    networkStatusDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: false) { _ in
-                        withAnimation(.easeOut(duration: 0.2)) {
-                            showNetworkStatus.toggle()
-                        }
-                    }
-                }) {
-                    Image(systemName: viewModel.transportManager.currentTransportInfo.iconName)
-                        .font(.system(size: 14))
-                        .foregroundColor(viewModel.transportManager.currentTransportInfo.isBridging ? Color.purple : textColor)
-                }
-                .buttonStyle(.plain)
-                .help("Transport: \(viewModel.transportManager.currentTransportInfo.displayText)")
-                .background(
-                    GeometryReader { geometry in
-                        Color.clear
-                            .preference(key: TransportButtonFrameKey.self, value: geometry.frame(in: .named("ContentView")))
-                    }
-                )
-                .onPreferenceChange(TransportButtonFrameKey.self) { frame in
-                    transportButtonFrame = frame
-                }
-                
-                Divider()
-                    .frame(height: 16)
-                
                 // People counter with unread indicator
                 HStack(spacing: 4) {
-                    // Check for any unread room messages
-                    let hasUnreadRoomMessages = viewModel.unreadRoomMessages.values.contains { $0 > 0 }
+                    // Check for any unread channel messages
+                    let hasUnreadChannelMessages = viewModel.unreadChannelMessages.values.contains { $0 > 0 }
                     
-                    if hasUnreadRoomMessages {
+                    if hasUnreadChannelMessages {
                         Image(systemName: "number")
                             .font(.system(size: 12))
                             .foregroundColor(Color.blue)
@@ -462,17 +351,26 @@ struct ContentView: View {
                     }
                     
                     let otherPeersCount = viewModel.connectedPeers.filter { $0 != viewModel.meshService.myPeerID }.count
-                    let roomCount = viewModel.joinedRooms.count
-                    let statusText = if !viewModel.isConnected {
-                        "alone :/"
-                    } else if roomCount > 0 {
-                        "\(otherPeersCount) \(otherPeersCount == 1 ? "person" : "people")/\(roomCount) \(roomCount == 1 ? "room" : "rooms")"
-                    } else {
-                        "\(otherPeersCount) \(otherPeersCount == 1 ? "person" : "people")"
+                    let channelCount = viewModel.joinedChannels.count
+                    
+                    HStack(spacing: 4) {
+                        // People icon with count
+                        Image(systemName: "person.2.fill")
+                            .font(.system(size: 11))
+                        Text("\(otherPeersCount)")
+                            .font(.system(size: 12, design: .monospaced))
+                        
+                        // Channels icon with count (only if there are channels)
+                        if channelCount > 0 {
+                            Text("·")
+                                .font(.system(size: 12, design: .monospaced))
+                            Image(systemName: "square.split.2x2")
+                                .font(.system(size: 11))
+                            Text("\(channelCount)")
+                                .font(.system(size: 12, design: .monospaced))
+                        }
                     }
-                    Text(statusText)
-                        .font(.system(size: 12, design: .monospaced))
-                        .foregroundColor(viewModel.isConnected ? textColor : Color.red)
+                    .foregroundColor(viewModel.isConnected ? textColor : Color.red)
                 }
                 .onTapGesture {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
@@ -497,8 +395,8 @@ struct ContentView: View {
                             // Log what we're showing
                             // Removed debug logging
                             return msgs
-                        } else if let currentRoom = viewModel.currentRoom {
-                            return viewModel.getRoomMessages(currentRoom)
+                        } else if let currentChannel = viewModel.currentChannel {
+                            return viewModel.getChannelMessages(currentChannel)
                         } else {
                             return viewModel.messages
                         }
@@ -507,64 +405,29 @@ struct ContentView: View {
                     ForEach(messages, id: \.id) { message in
                         VStack(alignment: .leading, spacing: 4) {
                             // Check if current user is mentioned
-                            let isMentioned = message.mentions?.contains(viewModel.nickname) ?? false
+                            let _ = message.mentions?.contains(viewModel.nickname) ?? false
                             
                             if message.sender == "system" {
                                 // System messages
-                                Text(viewModel.formatMessage(message, colorScheme: colorScheme))
-                                    .font(.system(size: 14, design: .monospaced))
+                                Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme))
+                                    .textSelection(.enabled)
                                     .fixedSize(horizontal: false, vertical: true)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                    .textSelection(.enabled)
                             } else {
-                                // Regular messages with tappable sender name
-                                HStack(alignment: .center, spacing: 0) {
-                                    // Timestamp
-                                    Text("[\(viewModel.formatTimestamp(message.timestamp))] ")
-                                        .font(.system(size: 14, design: .monospaced))
-                                        .foregroundColor(secondaryTextColor)
+                                // Regular messages with natural text wrapping
+                                HStack(alignment: .top, spacing: 0) {
+                                    // Single text view for natural wrapping
+                                    Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme))
                                         .textSelection(.enabled)
-                                    
-                                    // Tappable sender name
-                                    if message.sender != viewModel.nickname {
-                                        Button(action: {
-                                            if let peerID = message.senderPeerID ?? viewModel.getPeerIDForNickname(message.sender) {
-                                                viewModel.startPrivateChat(with: peerID)
-                                            }
-                                        }) {
-                                            let senderColor = viewModel.getSenderColor(for: message, colorScheme: colorScheme)
-                                            Text("<@\(message.sender)>")
-                                                .font(.system(size: 14, weight: .medium, design: .monospaced))
-                                                .foregroundColor(senderColor)
-                                        }
-                                        .buttonStyle(.plain)
-                                    } else {
-                                        // Own messages not tappable
-                                        Text("<@\(message.sender)>")
-                                            .font(.system(size: 14, weight: .medium, design: .monospaced))
-                                            .foregroundColor(textColor)
-                                            .textSelection(.enabled)
-                                    }
-                                    
-                                    Text(" ")
-                                    
-                                    // Message content with clickable hashtags
-                                    MessageContentView(
-                                        message: message,
-                                        viewModel: viewModel,
-                                        colorScheme: colorScheme,
-                                        isMentioned: isMentioned
-                                    )
+                                        .fixedSize(horizontal: false, vertical: true)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
                                     
                                     // Delivery status indicator for private messages
                                     if message.isPrivate && message.sender == viewModel.nickname,
                                        let status = message.deliveryStatus {
                                         DeliveryStatusView(status: status, colorScheme: colorScheme)
                                             .padding(.leading, 4)
-                                            .alignmentGuide(.firstTextBaseline) { _ in 12 }
                                     }
-                                    
-                                    Spacer()
                                 }
                             }
                         }
@@ -621,45 +484,19 @@ struct ContentView: View {
     
     private var inputView: some View {
         VStack(spacing: 0) {
-            // Command suggestions
-            if showCommandSuggestions && !commandSuggestions.isEmpty {
+            // @mentions autocomplete
+            if viewModel.showAutocomplete && !viewModel.autocompleteSuggestions.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
-                    let baseCommands: [String: String] = [
-                        "/j": "join or create a room",
-                        "/rooms": "show all discovered rooms",
-                        "/w": "see who's online",
-                        "/m": "send private message",
-                        "/clear": "clear chat messages"
-                    ]
-                    
-                    let roomCommands: [String: String] = [
-                        "/transfer": "transfer room ownership",
-                        "/pass": "change room password",
-                        "/save": "save room messages locally"
-                    ]
-                    
-                    let commandDescriptions = viewModel.currentRoom != nil 
-                        ? baseCommands.merging(roomCommands) { (_, new) in new }
-                        : baseCommands
-                    
-                    ForEach(commandSuggestions, id: \.self) { command in
+                    ForEach(Array(viewModel.autocompleteSuggestions.enumerated()), id: \.element) { index, suggestion in
                         Button(action: {
-                            // Replace current text with selected command
-                            messageText = command + " "
-                            showCommandSuggestions = false
-                            commandSuggestions = []
+                            _ = viewModel.completeNickname(suggestion, in: &messageText)
                         }) {
                             HStack {
-                                Text(command)
+                                Text("@\(suggestion)")
                                     .font(.system(size: 11, design: .monospaced))
                                     .foregroundColor(textColor)
                                     .fontWeight(.medium)
                                 Spacer()
-                                if let description = commandDescriptions[command] {
-                                    Text(description)
-                                        .font(.system(size: 10, design: .monospaced))
-                                        .foregroundColor(secondaryTextColor)
-                                }
                             }
                             .padding(.horizontal, 12)
                             .padding(.vertical, 3)
@@ -675,7 +512,79 @@ struct ContentView: View {
                         .stroke(secondaryTextColor.opacity(0.3), lineWidth: 1)
                 )
                 .padding(.horizontal, 12)
-                .padding(.bottom, 4)
+            }
+            
+            // Command suggestions
+            if showCommandSuggestions && !commandSuggestions.isEmpty {
+                VStack(alignment: .leading, spacing: 0) {
+                    // Define commands with aliases and syntax
+                    let commandInfo: [(commands: [String], syntax: String?, description: String)] = [
+                        (["/clear"], nil, "clear chat messages"),
+                        (["/hug"], "<nickname>", "send someone a warm hug"),
+                        (["/j", "/join"], "<channel>", "join or create a channel"),
+                        (["/m", "/msg"], "<nickname> [message]", "send private message"),
+                        (["/channels"], nil, "show all discovered channels"),
+                        (["/slap"], "<nickname>", "slap someone with a trout"),
+                        (["/w"], nil, "see who's online")
+                    ]
+                    
+                    let channelCommandInfo: [(commands: [String], syntax: String?, description: String)] = [
+                        (["/pass"], "[password]", "change channel password"),
+                        (["/save"], nil, "save channel messages locally"),
+                        (["/transfer"], "<nickname>", "transfer channel ownership")
+                    ]
+                    
+                    // Build the display
+                    let allCommands = viewModel.currentChannel != nil 
+                        ? commandInfo + channelCommandInfo 
+                        : commandInfo
+                    
+                    // Show matching commands
+                    ForEach(commandSuggestions, id: \.self) { command in
+                        // Find the command info for this suggestion
+                        if let info = allCommands.first(where: { $0.commands.contains(command) }) {
+                            Button(action: {
+                                // Replace current text with selected command
+                                messageText = command + " "
+                                showCommandSuggestions = false
+                                commandSuggestions = []
+                            }) {
+                                HStack {
+                                    // Show all aliases together
+                                    Text(info.commands.joined(separator: ", "))
+                                        .font(.system(size: 11, design: .monospaced))
+                                        .foregroundColor(textColor)
+                                        .fontWeight(.medium)
+                                    
+                                    // Show syntax if any
+                                    if let syntax = info.syntax {
+                                        Text(syntax)
+                                            .font(.system(size: 10, design: .monospaced))
+                                            .foregroundColor(secondaryTextColor.opacity(0.8))
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    // Show description
+                                    Text(info.description)
+                                        .font(.system(size: 10, design: .monospaced))
+                                        .foregroundColor(secondaryTextColor)
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 3)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            .buttonStyle(.plain)
+                            .background(Color.gray.opacity(0.1))
+                        }
+                    }
+                }
+                .background(backgroundColor)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(secondaryTextColor.opacity(0.3), lineWidth: 1)
+                )
+                .padding(.horizontal, 12)
             }
             
             HStack(alignment: .center, spacing: 4) {
@@ -686,7 +595,7 @@ struct ContentView: View {
                     .lineLimit(1)
                     .fixedSize()
                     .padding(.leading, 12)
-            } else if let currentRoom = viewModel.currentRoom, viewModel.passwordProtectedRooms.contains(currentRoom) {
+            } else if let currentChannel = viewModel.currentChannel, viewModel.passwordProtectedChannels.contains(currentChannel) {
                 Text("<@\(viewModel.nickname)> →")
                     .font(.system(size: 12, weight: .medium, design: .monospaced))
                     .foregroundColor(Color.orange)
@@ -716,24 +625,46 @@ struct ContentView: View {
                     if newValue.hasPrefix("/") && newValue.count >= 1 {
                         // Build context-aware command list
                         var commandDescriptions = [
-                            ("/j", "join or create a room"),
-                            ("/rooms", "show all discovered rooms"),
-                            ("/w", "see who's online"),
+                            ("/clear", "clear chat messages"),
+                            ("/hug", "send someone a warm hug"),
+                            ("/j", "join or create a channel"),
                             ("/m", "send private message"),
-                            ("/clear", "clear chat messages")
+                            ("/channels", "show all discovered channels"),
+                            ("/slap", "slap someone with a trout"),
+                            ("/w", "see who's online")
                         ]
                         
-                        // Add room-specific commands if in a room
-                        if viewModel.currentRoom != nil {
-                            commandDescriptions.append(("/transfer", "transfer room ownership"))
-                            commandDescriptions.append(("/pass", "change room password"))
-                            commandDescriptions.append(("/save", "save room messages locally"))
+                        // Add channel-specific commands if in a channel
+                        if viewModel.currentChannel != nil {
+                            commandDescriptions.append(("/pass", "change channel password"))
+                            commandDescriptions.append(("/save", "save channel messages locally"))
+                            commandDescriptions.append(("/transfer", "transfer channel ownership"))
                         }
                         
                         let input = newValue.lowercased()
+                        
+                        // Map of aliases to primary commands
+                        let aliases: [String: String] = [
+                            "/join": "/j",
+                            "/msg": "/m"
+                        ]
+                        
+                        // Filter commands, but convert aliases to primary
                         commandSuggestions = commandDescriptions
                             .filter { $0.0.starts(with: input) }
                             .map { $0.0 }
+                        
+                        // Also check if input matches an alias
+                        for (alias, primary) in aliases {
+                            if alias.starts(with: input) && !commandSuggestions.contains(primary) {
+                                if commandDescriptions.contains(where: { $0.0 == primary }) {
+                                    commandSuggestions.append(primary)
+                                }
+                            }
+                        }
+                        
+                        // Remove duplicates and sort
+                        commandSuggestions = Array(Set(commandSuggestions)).sorted()
                         showCommandSuggestions = !commandSuggestions.isEmpty
                     } else {
                         showCommandSuggestions = false
@@ -748,7 +679,7 @@ struct ContentView: View {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 20))
                     .foregroundColor((viewModel.selectedPrivateChatPeer != nil || 
-                                     (viewModel.currentRoom != nil && viewModel.passwordProtectedRooms.contains(viewModel.currentRoom ?? ""))) 
+                                     (viewModel.currentChannel != nil && viewModel.passwordProtectedChannels.contains(viewModel.currentChannel ?? ""))) 
                                      ? Color.orange : textColor)
             }
             .buttonStyle(.plain)
@@ -767,6 +698,128 @@ struct ContentView: View {
         messageText = ""
     }
     
+    @ViewBuilder
+    private var channelsSection: some View {
+        if !viewModel.joinedChannels.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 4) {
+                    Image(systemName: "square.split.2x2")
+                        .font(.system(size: 10))
+                    Text("CHANNELS")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                }
+                .foregroundColor(secondaryTextColor)
+                .padding(.horizontal, 12)
+                
+                ForEach(Array(viewModel.joinedChannels).sorted(), id: \.self) { channel in
+                    channelButton(for: channel)
+                }
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func channelButton(for channel: String) -> some View {
+        Button(action: {
+            // Check if channel needs password and we don't have it
+            if viewModel.passwordProtectedChannels.contains(channel) && viewModel.channelKeys[channel] == nil {
+                // Need password
+                viewModel.passwordPromptChannel = channel
+                viewModel.showPasswordPrompt = true
+            } else {
+                // Can enter channel
+                viewModel.switchToChannel(channel)
+                withAnimation(.spring()) {
+                    showSidebar = false
+                }
+            }
+        }) {
+            HStack {
+                // Lock icon for password protected channels
+                if viewModel.passwordProtectedChannels.contains(channel) {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 10))
+                        .foregroundColor(secondaryTextColor)
+                }
+                
+                Text(channel)
+                    .font(.system(size: 14, design: .monospaced))
+                    .foregroundColor(viewModel.currentChannel == channel ? Color.blue : textColor)
+                
+                Spacer()
+                
+                // Unread count
+                if let unreadCount = viewModel.unreadChannelMessages[channel], unreadCount > 0 {
+                    Text("\(unreadCount)")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundColor(backgroundColor)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.orange)
+                        .clipShape(Capsule())
+                }
+                
+                // Channel controls
+                if viewModel.currentChannel == channel {
+                    channelControls(for: channel)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 4)
+        .background(viewModel.currentChannel == channel ? backgroundColor.opacity(0.5) : Color.clear)
+    }
+    
+    @ViewBuilder
+    private func channelControls(for channel: String) -> some View {
+        HStack(spacing: 4) {
+            // Password button for channel creator only
+            if viewModel.channelCreators[channel] == viewModel.meshService.myPeerID {
+                Button(action: {
+                    // Toggle password protection
+                    if viewModel.passwordProtectedChannels.contains(channel) {
+                        viewModel.removeChannelPassword(for: channel)
+                    } else {
+                        // Show password input
+                        showPasswordInput = true
+                        passwordInputChannel = channel
+                    }
+                }) {
+                    HStack(spacing: 2) {
+                        Image(systemName: viewModel.passwordProtectedChannels.contains(channel) ? "lock.fill" : "lock")
+                            .font(.system(size: 10))
+                    }
+                    .foregroundColor(viewModel.passwordProtectedChannels.contains(channel) ? backgroundColor : secondaryTextColor)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 2)
+                    .background(viewModel.passwordProtectedChannels.contains(channel) ? Color.orange : Color.clear)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(viewModel.passwordProtectedChannels.contains(channel) ? Color.orange : secondaryTextColor.opacity(0.5), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+            
+            // Leave button
+            Button(action: {
+                viewModel.leaveChannel(channel)
+            }) {
+                Text("leave channel")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(secondaryTextColor)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 2)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(secondaryTextColor.opacity(0.5), lineWidth: 1)
+                    )
+            }
+            .buttonStyle(.plain)
+        }
+    }
+    
     private var sidebarView: some View {
         HStack(spacing: 0) {
             // Grey vertical bar for visual continuity
@@ -777,7 +830,7 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 0) {
                 // Header - match main toolbar height
                 HStack {
-                    Text("connected")
+                    Text("YOUR NETWORK")
                         .font(.system(size: 16, weight: .bold, design: .monospaced))
                         .foregroundColor(textColor)
                     Spacer()
@@ -791,111 +844,10 @@ struct ContentView: View {
             // Rooms and People list
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    // Joined Rooms section
-                    if !viewModel.joinedRooms.isEmpty {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("ROOMS")
-                                .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                                .foregroundColor(secondaryTextColor)
-                                .padding(.horizontal, 12)
-                            
-                            ForEach(Array(viewModel.joinedRooms).sorted(), id: \.self) { room in
-                                Button(action: {
-                                    // Check if room needs password and we don't have it
-                                    if viewModel.passwordProtectedRooms.contains(room) && viewModel.roomKeys[room] == nil {
-                                        // Need password
-                                        viewModel.passwordPromptRoom = room
-                                        viewModel.showPasswordPrompt = true
-                                    } else {
-                                        // Can enter room
-                                        viewModel.switchToRoom(room)
-                                        withAnimation(.spring()) {
-                                            showSidebar = false
-                                        }
-                                    }
-                                }) {
-                                    HStack {
-                                        // Lock icon for password protected rooms
-                                        if viewModel.passwordProtectedRooms.contains(room) {
-                                            Image(systemName: "lock.fill")
-                                                .font(.system(size: 10))
-                                                .foregroundColor(secondaryTextColor)
-                                        }
-                                        
-                                        Text(room)
-                                            .font(.system(size: 14, design: .monospaced))
-                                            .foregroundColor(viewModel.currentRoom == room ? Color.blue : textColor)
-                                        
-                                        Spacer()
-                                        
-                                        // Unread count
-                                        if let unreadCount = viewModel.unreadRoomMessages[room], unreadCount > 0 {
-                                            Text("\(unreadCount)")
-                                                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                                .foregroundColor(backgroundColor)
-                                                .padding(.horizontal, 6)
-                                                .padding(.vertical, 2)
-                                                .background(Color.orange)
-                                                .clipShape(Capsule())
-                                        }
-                                        
-                                        // Room controls
-                                        if viewModel.currentRoom == room {
-                                            HStack(spacing: 4) {
-                                                // Password button for room creator only
-                                                if viewModel.roomCreators[room] == viewModel.meshService.myPeerID {
-                                                    Button(action: {
-                                                        // Toggle password protection
-                                                        if viewModel.passwordProtectedRooms.contains(room) {
-                                                            viewModel.removeRoomPassword(for: room)
-                                                        } else {
-                                                            // Show password input
-                                                            showPasswordInput = true
-                                                            passwordInputRoom = room
-                                                        }
-                                                    }) {
-                                                        HStack(spacing: 2) {
-                                                            Image(systemName: viewModel.passwordProtectedRooms.contains(room) ? "lock.fill" : "lock")
-                                                                .font(.system(size: 10))
-                                                        }
-                                                        .foregroundColor(viewModel.passwordProtectedRooms.contains(room) ? backgroundColor : secondaryTextColor)
-                                                        .padding(.horizontal, 8)
-                                                        .padding(.vertical, 2)
-                                                        .background(viewModel.passwordProtectedRooms.contains(room) ? Color.orange : Color.clear)
-                                                        .overlay(
-                                                            RoundedRectangle(cornerRadius: 4)
-                                                                .stroke(viewModel.passwordProtectedRooms.contains(room) ? Color.orange : secondaryTextColor.opacity(0.5), lineWidth: 1)
-                                                        )
-                                                    }
-                                                    .buttonStyle(.plain)
-                                                }
-                                                
-                                                // Leave button
-                                                Button(action: {
-                                                    viewModel.leaveRoom(room)
-                                                }) {
-                                                    Text("leave room")
-                                                        .font(.system(size: 10, design: .monospaced))
-                                                        .foregroundColor(secondaryTextColor)
-                                                        .padding(.horizontal, 8)
-                                                        .padding(.vertical, 2)
-                                                        .overlay(
-                                                            RoundedRectangle(cornerRadius: 4)
-                                                                .stroke(secondaryTextColor.opacity(0.5), lineWidth: 1)
-                                                        )
-                                                }
-                                                .buttonStyle(.plain)
-                                            }
-                                        }
-                                    }
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 4)
-                                    .background(viewModel.currentRoom == room ? backgroundColor.opacity(0.5) : Color.clear)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                        
+                    // Channels section
+                    channelsSection
+                    
+                    if !viewModel.joinedChannels.isEmpty {
                         Divider()
                             .padding(.vertical, 4)
                     }
@@ -903,16 +855,20 @@ struct ContentView: View {
                     // People section
                     VStack(alignment: .leading, spacing: 8) {
                         // Show appropriate header based on context
-                        if let currentRoom = viewModel.currentRoom {
-                            Text("IN \(currentRoom.uppercased())")
+                        if let currentChannel = viewModel.currentChannel {
+                            Text("IN \(currentChannel.uppercased())")
                                 .font(.system(size: 11, weight: .semibold, design: .monospaced))
                                 .foregroundColor(secondaryTextColor)
                                 .padding(.horizontal, 12)
                         } else if !viewModel.connectedPeers.isEmpty {
-                            Text("PEOPLE")
-                                .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                                .foregroundColor(secondaryTextColor)
-                                .padding(.horizontal, 12)
+                            HStack(spacing: 4) {
+                                Image(systemName: "person.2.fill")
+                                    .font(.system(size: 10))
+                                Text("PEOPLE")
+                                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            }
+                            .foregroundColor(secondaryTextColor)
+                            .padding(.horizontal, 12)
                         }
                         
                         if viewModel.connectedPeers.isEmpty {
@@ -920,10 +876,10 @@ struct ContentView: View {
                                 .font(.system(size: 14, design: .monospaced))
                                 .foregroundColor(secondaryTextColor)
                                 .padding(.horizontal)
-                        } else if let currentRoom = viewModel.currentRoom,
-                                  let roomMemberIDs = viewModel.roomMembers[currentRoom],
-                                  roomMemberIDs.isEmpty {
-                            Text("No one in this room yet")
+                        } else if let currentChannel = viewModel.currentChannel,
+                                  let channelMemberIDs = viewModel.channelMembers[currentChannel],
+                                  channelMemberIDs.isEmpty {
+                            Text("No one in this channel yet")
                                 .font(.system(size: 14, design: .monospaced))
                                 .foregroundColor(secondaryTextColor)
                                 .padding(.horizontal)
@@ -932,17 +888,17 @@ struct ContentView: View {
                             let peerRSSI = viewModel.meshService.getPeerRSSI()
                             let myPeerID = viewModel.meshService.myPeerID
                             
-                            // Filter peers based on current room
+                            // Filter peers based on current channel
                             let peersToShow: [String] = {
-                                if let currentRoom = viewModel.currentRoom,
-                                   let roomMemberIDs = viewModel.roomMembers[currentRoom] {
-                                    // Show only peers who have sent messages to this room (including self)
+                                if let currentChannel = viewModel.currentChannel,
+                                   let channelMemberIDs = viewModel.channelMembers[currentChannel] {
+                                    // Show only peers who have sent messages to this channel (including self)
                                     
-                                    // Start with room members who are also connected
-                                    var memberPeers = viewModel.connectedPeers.filter { roomMemberIDs.contains($0) }
+                                    // Start with channel members who are also connected
+                                    var memberPeers = viewModel.connectedPeers.filter { channelMemberIDs.contains($0) }
                                     
-                                    // Always include ourselves if we're a room member
-                                    if roomMemberIDs.contains(myPeerID) && !memberPeers.contains(myPeerID) {
+                                    // Always include ourselves if we're a channel member
+                                    if channelMemberIDs.contains(myPeerID) && !memberPeers.contains(myPeerID) {
                                         memberPeers.append(myPeerID)
                                     }
                                     
@@ -972,7 +928,6 @@ struct ContentView: View {
                             let rssi = peerRSSI[peerID]?.intValue ?? -100
                             let isFavorite = viewModel.isFavorite(peerID: peerID)
                             let isMe = peerID == myPeerID
-                            let peerTransports = viewModel.transportManager.getPeerTransports(peerID)
                             
                             HStack(spacing: 8) {
                                 // Signal strength indicator or unread message icon
@@ -1010,20 +965,6 @@ struct ContentView: View {
                                             .foregroundColor(textColor)
                                         
                                         Spacer()
-                                        
-                                        // Transport indicators
-                                        HStack(spacing: 2) {
-                                            if peerTransports.contains(.bluetooth) {
-                                                Image(systemName: "dot.radiowaves.left.and.right")
-                                                    .font(.system(size: 10))
-                                                    .foregroundColor(Color.blue.opacity(0.7))
-                                            }
-                                            if peerTransports.contains(.wifiDirect) {
-                                                Image(systemName: "wifi")
-                                                    .font(.system(size: 10))
-                                                    .foregroundColor(Color.green.opacity(0.7))
-                                            }
-                                        }
                                     }
                                 } else {
                                     Button(action: {
@@ -1041,20 +982,6 @@ struct ContentView: View {
                                                 .foregroundColor(peerNicknames[peerID] != nil ? textColor : secondaryTextColor)
                                             
                                             Spacer()
-                                            
-                                            // Transport indicators
-                                            HStack(spacing: 2) {
-                                                if peerTransports.contains(.bluetooth) {
-                                                    Image(systemName: "dot.radiowaves.left.and.right")
-                                                        .font(.system(size: 10))
-                                                        .foregroundColor(Color.blue.opacity(0.7))
-                                                }
-                                                if peerTransports.contains(.wifiDirect) {
-                                                    Image(systemName: "wifi")
-                                                        .font(.system(size: 10))
-                                                        .foregroundColor(Color.green.opacity(0.7))
-                                                }
-                                            }
                                         }
                                     }
                                     .buttonStyle(.plain)
@@ -1074,284 +1001,6 @@ struct ContentView: View {
         }
         .background(backgroundColor)
         }
-    }
-    
-    private var bridgeStatusSection: some View {
-        Group {
-            if viewModel.transportManager.currentTransportInfo.isBridging {
-                Divider()
-                
-                VStack(alignment: .leading, spacing: 8) {
-                    Label {
-                        Text("Bridge Mode Active")
-                            .font(.system(size: 12, weight: .medium, design: .monospaced))
-                    } icon: {
-                        Image(systemName: "network.badge.shield.half.filled")
-                            .font(.system(size: 12))
-                    }
-                    .foregroundColor(Color.purple)
-                    
-                    Text("Bridging \(viewModel.transportManager.currentTransportInfo.bridgedClusters) network clusters")
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundColor(secondaryTextColor)
-                }
-            }
-            
-            // Bridge Manager Status
-            let bridgeStatus = BridgeManager.shared.bridgeStatus
-            if case .evaluating = bridgeStatus {
-                Divider()
-                
-                HStack(spacing: 4) {
-                    ProgressView()
-                        .scaleEffect(0.7)
-                    Text("Evaluating bridge eligibility...")
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundColor(secondaryTextColor)
-                }
-            } else if case .lowBattery = bridgeStatus {
-                Divider()
-                
-                HStack(spacing: 4) {
-                    Image(systemName: "battery.25")
-                        .font(.system(size: 12))
-                        .foregroundColor(Color.orange)
-                    Text("Bridge disabled: Low battery")
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundColor(secondaryTextColor)
-                }
-            }
-        }
-    }
-    
-    private var connectionQualitySection: some View {
-        Group {
-            if viewModel.transportManager.currentTransportInfo.bluetoothPeerCount > 0 || 
-               viewModel.transportManager.currentTransportInfo.wifiDirectPeerCount > 0 {
-                Divider()
-                
-                VStack(alignment: .leading, spacing: 8) {
-                    Label {
-                        Text("Network Quality")
-                            .font(.system(size: 12, weight: .medium, design: .monospaced))
-                    } icon: {
-                        Image(systemName: "waveform")
-                            .font(.system(size: 12))
-                    }
-                    .foregroundColor(textColor)
-                    
-                    meshDensityDisplay
-                }
-            }
-        }
-    }
-    
-    private var meshDensityDisplay: some View {
-        let totalPeers = viewModel.connectedPeers.count
-        let meshDensity = totalPeers > 10 ? "High" : (totalPeers > 5 ? "Medium" : "Low")
-        let densityColor = meshDensity == "High" ? Color.green : (meshDensity == "Medium" ? Color.orange : Color.red)
-        
-        return HStack {
-            Text("Mesh Density:")
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundColor(secondaryTextColor)
-            Text(meshDensity)
-                .font(.system(size: 11, weight: .medium, design: .monospaced))
-                .foregroundColor(densityColor)
-        }
-    }
-    
-    private var transportControlsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Divider()
-            
-            Text("Transport Mode")
-                .font(.system(size: 11, weight: .medium, design: .monospaced))
-                .foregroundColor(secondaryTextColor)
-            
-            HStack(spacing: 8) {
-                transportModeButton(mode: .bluetoothOnly)
-                transportModeButton(mode: .wifiOnly)
-                transportModeButton(mode: .auto)
-            }
-        }
-    }
-    
-    private enum TransportMode {
-        case bluetoothOnly, wifiOnly, auto
-    }
-    
-    private func transportModeButton(mode: TransportMode) -> some View {
-        let isActive: Bool
-        let iconName: String
-        let label: String
-        let color: Color
-        
-        switch mode {
-        case .bluetoothOnly:
-            isActive = !viewModel.transportManager.enableWiFiDirect && !viewModel.transportManager.autoSelectTransport
-            iconName = "dot.radiowaves.left.and.right"
-            label = "BT Only"
-            color = Color.blue
-        case .wifiOnly:
-            isActive = viewModel.transportManager.enableWiFiDirect && 
-                      !viewModel.transportManager.autoSelectTransport && 
-                      viewModel.transportManager.primaryTransport == .wifiDirect
-            iconName = "wifi"
-            label = "WiFi"
-            color = Color.green
-        case .auto:
-            isActive = viewModel.transportManager.autoSelectTransport
-            iconName = "wand.and.rays"
-            label = "Auto"
-            color = Color.purple
-        }
-        
-        return Button(action: {
-            switch mode {
-            case .bluetoothOnly:
-                viewModel.transportManager.autoSelectTransport = false
-                viewModel.transportManager.primaryTransport = .bluetooth
-                viewModel.transportManager.enableWiFiDirect = false
-            case .wifiOnly:
-                viewModel.transportManager.autoSelectTransport = false
-                viewModel.transportManager.primaryTransport = .wifiDirect
-                viewModel.transportManager.enableWiFiDirect = true
-                viewModel.transportManager.deactivateTransport(.bluetooth)
-            case .auto:
-                viewModel.transportManager.autoSelectTransport = true
-                viewModel.transportManager.enableWiFiDirect = true
-                viewModel.transportManager.activateTransport(.bluetooth)
-            }
-            viewModel.transportManager.updateTransportInfo()
-        }) {
-            HStack(spacing: 4) {
-                Image(systemName: iconName)
-                    .font(.system(size: 10))
-                Text(label)
-                    .font(.system(size: 10, design: .monospaced))
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(isActive ? color : Color.gray.opacity(0.3))
-            .foregroundColor(.white)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-    
-    private var batteryStatusSection: some View {
-        Group {
-            let batteryLevel = Int(BatteryOptimizer.shared.batteryLevel * 100)
-            Divider()
-            
-            HStack(spacing: 4) {
-                batteryIcon(level: batteryLevel)
-                Text("\(batteryLevel)% battery")
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(secondaryTextColor)
-            }
-        }
-    }
-    
-    private func batteryIcon(level: Int) -> some View {
-        let iconName = level > 80 ? "battery.100" : (level > 50 ? "battery.75" : (level > 20 ? "battery.50" : "battery.25"))
-        let iconColor = level > 50 ? Color.green : (level > 20 ? Color.orange : Color.red)
-        
-        return Image(systemName: iconName)
-            .font(.system(size: 12))
-            .foregroundColor(iconColor)
-    }
-    
-    private var transportStatusSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label {
-                Text("Active Transports")
-                    .font(.system(size: 12, weight: .medium, design: .monospaced))
-            } icon: {
-                Image(systemName: "network")
-                    .font(.system(size: 12))
-            }
-            .foregroundColor(textColor)
-            
-            HStack(spacing: 4) {
-                // Combined peer count display
-                let btCount = viewModel.transportManager.currentTransportInfo.bluetoothPeerCount
-                let wifiCount = viewModel.transportManager.currentTransportInfo.wifiDirectPeerCount
-                let isWiFiActive = viewModel.transportManager.currentTransportInfo.isWiFiDirectActive
-                
-                bluetoothPeerDisplay(count: btCount)
-                
-                // Only show WiFi Direct peer count if it's enabled
-                if isWiFiActive {
-                    Text("  ")
-                    wifiPeerDisplay(count: wifiCount)
-                }
-            }
-        }
-    }
-    
-    private func bluetoothPeerDisplay(count: Int) -> some View {
-        HStack(spacing: 0) {
-            Image(systemName: "dot.radiowaves.left.and.right")
-                .font(.system(size: 12))
-                .foregroundColor(count > 0 ? Color.blue : Color.gray)
-            Text(" \(count) ")
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundColor(textColor)
-            Text("BT")
-                .font(.system(size: 11, weight: .medium, design: .monospaced))
-                .foregroundColor(Color.blue)
-            Text(" \(count == 1 ? "peer" : "peers")")
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundColor(secondaryTextColor)
-        }
-    }
-    
-    private func wifiPeerDisplay(count: Int) -> some View {
-        HStack(spacing: 0) {
-            Image(systemName: "wifi")
-                .font(.system(size: 12))
-                .foregroundColor(count > 0 ? Color.green : Color.gray)
-            Text(" \(count) WiFi \(count == 1 ? "peer" : "peers")")
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundColor(secondaryTextColor)
-        }
-    }
-    
-    private var networkStatusView: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Title
-            Text("Network Status")
-                .font(.system(size: 16, weight: .semibold, design: .monospaced))
-                .foregroundColor(textColor)
-            
-            Divider()
-            
-            // Transport Status
-            transportStatusSection
-            
-            // Bridge Status
-            bridgeStatusSection
-            
-            // Connection Quality
-            connectionQualitySection
-            
-            // Battery status
-            batteryStatusSection
-            
-            // Transport Controls
-            transportControlsSection
-        }
-        .padding(16)
-        .frame(width: 280)
-        .background(colorScheme == .dark ? Color(white: 0.15).opacity(0.92) : Color(white: 0.95).opacity(0.92))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(textColor.opacity(0.2), lineWidth: 1)
-        )
-        .shadow(color: Color.black.opacity(0.15), radius: 10, x: 0, y: 4)
     }
 }
 
@@ -1383,33 +1032,30 @@ struct MessageContentView: View {
         }
         allMatches.sort { $0.range.location < $1.range.location }
         
-        // Build the text view with clickable hashtags
-        return HStack(spacing: 0) {
-            ForEach(Array(buildTextSegments().enumerated()), id: \.offset) { _, segment in
-                if segment.type == "hashtag" {
-                    Button(action: {
-                        _ = viewModel.joinRoom(segment.text)
-                    }) {
-                        Text(segment.text)
-                            .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                            .foregroundColor(Color.blue)
-                            .underline()
-                            .textSelection(.enabled)
-                    }
-                    .buttonStyle(.plain)
-                } else if segment.type == "mention" {
-                    Text(segment.text)
-                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                        .foregroundColor(Color.orange)
-                        .textSelection(.enabled)
-                } else {
-                    Text(segment.text)
-                        .font(.system(size: 14, design: .monospaced))
-                        .fontWeight(isMentioned ? .bold : .regular)
-                        .textSelection(.enabled)
-                }
+        // Build the text as a concatenated Text view for natural wrapping
+        let segments = buildTextSegments()
+        var result = Text("")
+        
+        for segment in segments {
+            if segment.type == "hashtag" {
+                // Note: We can't have clickable links in concatenated Text, so hashtags won't be clickable
+                result = result + Text(segment.text)
+                    .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                    .foregroundColor(Color.blue)
+                    .underline()
+            } else if segment.type == "mention" {
+                result = result + Text(segment.text)
+                    .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                    .foregroundColor(Color.orange)
+            } else {
+                result = result + Text(segment.text)
+                    .font(.system(size: 14, design: .monospaced))
+                    .fontWeight(isMentioned ? .bold : .regular)
             }
         }
+        
+        return result
+            .textSelection(.enabled)
     }
     
     private func buildTextSegments() -> [(text: String, type: String)] {
@@ -1527,25 +1173,5 @@ struct DeliveryStatusView: View {
             .foregroundColor(secondaryTextColor.opacity(0.6))
             .help("Delivered to \(reached) of \(total) members")
         }
-    }
-}
-
-// Triangle shape for popover arrow
-struct Triangle: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.move(to: CGPoint(x: rect.midX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
-        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
-        path.closeSubpath()
-        return path
-    }
-}
-
-// Preference key for transport button frame
-struct TransportButtonFrameKey: PreferenceKey {
-    static var defaultValue: CGRect = .zero
-    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
-        value = nextValue()
     }
 }
