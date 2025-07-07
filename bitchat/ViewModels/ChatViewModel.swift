@@ -983,22 +983,17 @@ class ChatViewModel: ObservableObject {
             isPrivate: false,
             recipientNickname: nil,
             senderPeerID: meshService.myPeerID,
-            deliveryStatus: .sent,
             mentions: mentions,
-            room: room
+            room: room,
+            deliveryStatus: .sent
         )
         
         do {
             let payload: Data
             if let roomKey = roomKey {
-                // Encrypt room message
-                let roomMessage = BitchatRoomMessage(
-                    content: content,
-                    mentions: mentions,
-                    timestamp: Date()
-                )
-                let jsonData = try JSONEncoder().encode(roomMessage)
-                let encryptedData = try CryptoKit.AES.GCM.seal(jsonData, using: roomKey).combined!
+                // For encrypted rooms, we need to encrypt the content
+                let messageData = content.data(using: .utf8) ?? Data()
+                let encryptedData = try CryptoKit.AES.GCM.seal(messageData, using: roomKey).combined!
                 
                 let encryptedMessage = BitchatMessage(
                     sender: nickname,
@@ -1011,7 +1006,8 @@ class ChatViewModel: ObservableObject {
                     senderPeerID: meshService.myPeerID,
                     mentions: [],  // Don't expose mentions in encrypted message
                     room: room,
-                    encryptedRoomData: encryptedData
+                    encryptedContent: encryptedData,
+                    isEncrypted: true
                 )
                 payload = try JSONEncoder().encode(encryptedMessage)
             } else {
@@ -1019,14 +1015,13 @@ class ChatViewModel: ObservableObject {
             }
             
             let packet = BitchatPacket(
-                version: 1,
                 type: MessageType.message.rawValue,
                 senderID: meshService.myPeerID.data(using: .utf8) ?? Data(),
                 recipientID: nil,  // Broadcast
                 timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-                ttl: 7,
                 payload: payload,
-                signature: nil
+                signature: nil,
+                ttl: 7
             )
             
             transportManager.send(packet, to: nil)
@@ -1053,14 +1048,13 @@ class ChatViewModel: ObservableObject {
         do {
             let payload = try JSONEncoder().encode(message)
             let packet = BitchatPacket(
-                version: 1,
                 type: MessageType.message.rawValue,
                 senderID: meshService.myPeerID.data(using: .utf8) ?? Data(),
                 recipientID: peerID.data(using: .utf8),
                 timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-                ttl: 7,
                 payload: payload,
-                signature: nil
+                signature: nil,
+                ttl: 7
             )
             
             transportManager.send(packet, to: peerID)
