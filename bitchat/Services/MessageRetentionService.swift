@@ -15,7 +15,7 @@ struct StoredMessage: Codable {
     let senderPeerID: String?
     let content: String
     let timestamp: Date
-    let roomTag: String?
+    let channelTag: String?
     let isPrivate: Bool
     let recipientPeerID: String?
 }
@@ -25,7 +25,7 @@ class MessageRetentionService {
     
     private let documentsDirectory: URL
     private let messagesDirectory: URL
-    private let favoriteRoomsKey = "bitchat.favoriteRooms"
+    private let favoriteChannelsKey = "bitchat.favoriteChannels"
     private let retentionDays = 7 // Messages retained for 7 days
     private let encryptionKey: SymmetricKey
     
@@ -50,32 +50,32 @@ class MessageRetentionService {
         cleanupOldMessages()
     }
     
-    // MARK: - Favorite Rooms Management
+    // MARK: - Favorite Channels Management
     
-    func getFavoriteRooms() -> Set<String> {
-        let rooms = UserDefaults.standard.stringArray(forKey: favoriteRoomsKey) ?? []
-        return Set(rooms)
+    func getFavoriteChannels() -> Set<String> {
+        let channels = UserDefaults.standard.stringArray(forKey: favoriteChannelsKey) ?? []
+        return Set(channels)
     }
     
-    func toggleFavoriteRoom(_ room: String) -> Bool {
-        var favorites = getFavoriteRooms()
-        if favorites.contains(room) {
-            favorites.remove(room)
-            // Clean up messages for this room
-            deleteMessagesForRoom(room)
+    func toggleFavoriteChannel(_ channel: String) -> Bool {
+        var favorites = getFavoriteChannels()
+        if favorites.contains(channel) {
+            favorites.remove(channel)
+            // Clean up messages for this channel
+            deleteMessagesForChannel(channel)
         } else {
-            favorites.insert(room)
+            favorites.insert(channel)
         }
-        UserDefaults.standard.set(Array(favorites), forKey: favoriteRoomsKey)
-        return favorites.contains(room)
+        UserDefaults.standard.set(Array(favorites), forKey: favoriteChannelsKey)
+        return favorites.contains(channel)
     }
     
     // MARK: - Message Storage
     
-    func saveMessage(_ message: BitchatMessage, forRoom room: String?) {
-        // Only save messages for favorite rooms
-        guard let room = room ?? message.room,
-              getFavoriteRooms().contains(room) else {
+    func saveMessage(_ message: BitchatMessage, forChannel channel: String?) {
+        // Only save messages for favorite channels
+        guard let channel = channel ?? message.channel,
+              getFavoriteChannels().contains(channel) else {
             return
         }
         
@@ -86,7 +86,7 @@ class MessageRetentionService {
             senderPeerID: message.senderPeerID,
             content: message.content,
             timestamp: message.timestamp,
-            roomTag: message.room,
+            channelTag: message.channel,
             isPrivate: message.isPrivate,
             recipientPeerID: message.senderPeerID
         )
@@ -98,22 +98,22 @@ class MessageRetentionService {
         guard let encryptedData = encrypt(messageData) else { return }
         
         // Save to file
-        let fileName = "\(room)_\(message.timestamp.timeIntervalSince1970)_\(message.id).enc"
+        let fileName = "\(channel)_\(message.timestamp.timeIntervalSince1970)_\(message.id).enc"
         let fileURL = messagesDirectory.appendingPathComponent(fileName)
         
         try? encryptedData.write(to: fileURL)
     }
     
-    func loadMessagesForRoom(_ room: String) -> [BitchatMessage] {
-        guard getFavoriteRooms().contains(room) else { return [] }
+    func loadMessagesForChannel(_ channel: String) -> [BitchatMessage] {
+        guard getFavoriteChannels().contains(channel) else { return [] }
         
         var messages: [BitchatMessage] = []
         
         do {
             let files = try FileManager.default.contentsOfDirectory(at: messagesDirectory, includingPropertiesForKeys: nil)
-            let roomFiles = files.filter { $0.lastPathComponent.hasPrefix("\(room)_") }
+            let channelFiles = files.filter { $0.lastPathComponent.hasPrefix("\(channel)_") }
             
-            for fileURL in roomFiles {
+            for fileURL in channelFiles {
                 if let encryptedData = try? Data(contentsOf: fileURL),
                    let decryptedData = decrypt(encryptedData),
                    let storedMessage = try? JSONDecoder().decode(StoredMessage.self, from: decryptedData) {
@@ -128,7 +128,7 @@ class MessageRetentionService {
                         recipientNickname: nil,
                         senderPeerID: storedMessage.senderPeerID,
                         mentions: nil,
-                        room: storedMessage.roomTag
+                        channel: storedMessage.channelTag
                     )
                     
                     messages.append(message)
@@ -179,12 +179,12 @@ class MessageRetentionService {
         }
     }
     
-    func deleteMessagesForRoom(_ room: String) {
+    func deleteMessagesForChannel(_ channel: String) {
         do {
             let files = try FileManager.default.contentsOfDirectory(at: messagesDirectory, includingPropertiesForKeys: nil)
-            let roomFiles = files.filter { $0.lastPathComponent.hasPrefix("\(room)_") }
+            let channelFiles = files.filter { $0.lastPathComponent.hasPrefix("\(channel)_") }
             
-            for fileURL in roomFiles {
+            for fileURL in channelFiles {
                 try? FileManager.default.removeItem(at: fileURL)
             }
         } catch {
@@ -200,7 +200,7 @@ class MessageRetentionService {
         } catch {
         }
         
-        // Clear favorite rooms
-        UserDefaults.standard.removeObject(forKey: favoriteRoomsKey)
+        // Clear favorite channels
+        UserDefaults.standard.removeObject(forKey: favoriteChannelsKey)
     }
 }
