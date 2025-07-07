@@ -565,10 +565,9 @@ extension TransportManager: TransportDelegate {
         }
         
         // Forward packet to our delegate for processing
-        // In the future, we'll need to ensure the ChatViewModel processes these packets
-        // For now, if it's from Bluetooth transport, it's already handled by BluetoothMeshService
+        // Only forward non-Bluetooth packets since BluetoothMeshService handles its own
         if transport.transportType != .bluetooth {
-            // WiFi Direct packets need to be forwarded to ChatViewModel
+            // WiFi Direct and other transport packets need to be forwarded to ChatViewModel
             if let btchatMessage = decodeBitchatMessage(from: packet) {
                 delegate?.didReceiveMessage(btchatMessage)
             }
