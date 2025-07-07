@@ -294,22 +294,26 @@ class WiFiDirectTransport: NSObject, TransportProtocol {
     }
     
     func send(_ packet: BitchatPacket, to peerID: String?) throws {
+        // Rewrite packet with our WiFi Direct sender ID for proper signature verification
+        var wifiPacket = packet
+        wifiPacket.senderID = getDeviceIdentifier().data(using: .utf8) ?? Data()
+        
         // Check if this is a critical message that needs acknowledgment
         let needsAck = packet.type == MessageType.message.rawValue && peerID != nil
         
         if needsAck {
             // Generate message ID for tracking
-            let messageID = "\(packet.timestamp)-\(packet.senderID.prefix(8).hexEncodedString())"
+            let messageID = "\(wifiPacket.timestamp)-\(wifiPacket.senderID.prefix(8).hexEncodedString())"
             
             queue.async(flags: .barrier) {
                 // Track for acknowledgment
-                self.awaitingAcks[messageID] = (packet, Date(), 0)
+                self.awaitingAcks[messageID] = (wifiPacket, Date(), 0)
             }
         }
         
         // Add to batch for efficient sending
         queue.async(flags: .barrier) {
-            self.messageBatch.append((packet, peerID))
+            self.messageBatch.append((wifiPacket, peerID))
             
             // Send immediately if batch is full
             if self.messageBatch.count >= self.maxBatchSize {
@@ -404,9 +408,13 @@ class WiFiDirectTransport: NSObject, TransportProtocol {
     }
     
     func broadcast(_ packet: BitchatPacket) throws {
+        // Rewrite packet with our WiFi Direct sender ID for proper signature verification
+        var wifiPacket = packet
+        wifiPacket.senderID = getDeviceIdentifier().data(using: .utf8) ?? Data()
+        
         // Add to batch
         queue.async(flags: .barrier) {
-            self.messageBatch.append((packet, nil))
+            self.messageBatch.append((wifiPacket, nil))
             
             if self.messageBatch.count >= self.maxBatchSize {
                 self.processBatch()
