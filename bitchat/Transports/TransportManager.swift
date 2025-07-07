@@ -54,6 +54,8 @@ class TransportManager: ObservableObject {
     private var wifiActivationTimer: Timer?
     private var lastPeerCountCheck = Date()
     private var isSmartActivationEnabled = true
+    private var wifiActivationScheduled = false
+    private var lastLoggedPeerCount = -1
     
     private init() {
         // Start smart activation monitoring
@@ -138,7 +140,7 @@ class TransportManager: ObservableObject {
             } else {
                 // Broadcast: use all active transports
                 let activeTransportTypes = self.activeTransports.sorted(by: { $0.rawValue < $1.rawValue })
-                print("📡 Broadcasting message via: \(activeTransportTypes.map { $0.rawValue }.joined(separator: ", "))")
+                // print("📡 Broadcasting message via: \(activeTransportTypes.map { $0.rawValue }.joined(separator: ", "))")
                 for transport in self.transports.values where self.activeTransports.contains(transport.transportType) {
                     try? transport.broadcast(packet)
                 }
@@ -400,11 +402,6 @@ class TransportManager: ObservableObject {
                 info.activeTransport = .bluetooth
             }
             
-            // Check for smart activation
-            if self.isSmartActivationEnabled && self.autoSelectTransport {
-                self.checkSmartActivation(bluetoothPeerCount: info.bluetoothPeerCount)
-            }
-            
             // Check if this is a transport state change (immediate update)
             let isTransportStateChange = self.currentTransportInfo.isWiFiDirectActive != info.isWiFiDirectActive ||
                                        self.currentTransportInfo.activeTransport != info.activeTransport
@@ -453,29 +450,48 @@ class TransportManager: ObservableObject {
     
     private func startSmartActivation() {
         // Check peer count periodically
-        Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+        Timer.scheduledTimer(withTimeInterval: 15.0, repeats: true) { [weak self] _ in
             self?.evaluateSmartActivation()
         }
     }
     
     private func checkSmartActivation(bluetoothPeerCount: Int) {
-        // Cancel any pending WiFi activation
-        wifiActivationTimer?.invalidate()
+        // Only log when peer count changes
+        let shouldLog = bluetoothPeerCount != lastLoggedPeerCount
+        lastLoggedPeerCount = bluetoothPeerCount
         
         if bluetoothPeerCount < minPeersForBluetooth && !enableWiFiDirect {
             // Not enough Bluetooth peers, schedule WiFi Direct activation
-            print("TransportManager: Only \(bluetoothPeerCount) Bluetooth peers found, scheduling WiFi Direct activation...")
-            
-            wifiActivationTimer = Timer.scheduledTimer(withTimeInterval: wifiActivationDelay, repeats: false) { [weak self] _ in
-                guard let self = self else { return }
-                if self.autoSelectTransport && !self.enableWiFiDirect {
-                    print("TransportManager: Activating WiFi Direct to find more distant peers")
-                    self.enableWiFiDirect = true
+            if !wifiActivationScheduled {
+                wifiActivationScheduled = true
+                if shouldLog {
+                    print("TransportManager: Only \(bluetoothPeerCount) Bluetooth peers, will activate WiFi Direct in \(Int(wifiActivationDelay))s")
+                }
+                
+                // Cancel any existing timer
+                wifiActivationTimer?.invalidate()
+                
+                wifiActivationTimer = Timer.scheduledTimer(withTimeInterval: wifiActivationDelay, repeats: false) { [weak self] _ in
+                    guard let self = self else { return }
+                    self.wifiActivationScheduled = false
+                    if self.autoSelectTransport && !self.enableWiFiDirect {
+                        print("TransportManager: Activating WiFi Direct to find more distant peers")
+                        self.enableWiFiDirect = true
+                    }
                 }
             }
+        } else if bluetoothPeerCount >= minPeersForBluetooth && wifiActivationScheduled {
+            // Cancel scheduled activation
+            wifiActivationTimer?.invalidate()
+            wifiActivationScheduled = false
+            if shouldLog {
+                print("TransportManager: \(bluetoothPeerCount) Bluetooth peers found, canceling WiFi Direct activation")
+            }
         } else if bluetoothPeerCount >= minPeersForBluetooth * 2 && enableWiFiDirect {
-            // Plenty of Bluetooth peers, consider deactivating WiFi Direct to save power
-            print("TransportManager: \(bluetoothPeerCount) Bluetooth peers found, deactivating WiFi Direct to save power")
+            // Plenty of Bluetooth peers, deactivate WiFi Direct to save power
+            if shouldLog {
+                print("TransportManager: \(bluetoothPeerCount) Bluetooth peers found, deactivating WiFi Direct to save power")
+            }
             enableWiFiDirect = false
         }
     }

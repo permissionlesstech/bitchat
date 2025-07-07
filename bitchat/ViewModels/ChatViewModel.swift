@@ -75,6 +75,7 @@ class ChatViewModel: ObservableObject {
     // Bridge status monitoring
     private var bridgeStatusCancellable: AnyCancellable?
     private var transportUpdateTimer: Timer?
+    private var lastBridgeStatus: BridgeManager.BridgeStatus?
     
     init() {
         loadNickname()
@@ -148,13 +149,13 @@ class ChatViewModel: ObservableObject {
         }
         
         // Monitor bridge status changes
-        var lastBridgeStatus: BridgeManager.BridgeStatus?
         bridgeStatusCancellable = BridgeManager.shared.$bridgeStatus
             .receive(on: DispatchQueue.main)
             .sink { [weak self] status in
+                guard let self = self else { return }
                 // Only log if status actually changed
-                if !(self?.isBridgeStatusEqual(status, lastBridgeStatus) ?? false) {
-                    lastBridgeStatus = status
+                if !self.isBridgeStatusEqual(status, self.lastBridgeStatus) {
+                    self.lastBridgeStatus = status
                     
                     // Log bridge status changes for debugging
                     switch status {

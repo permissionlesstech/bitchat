@@ -66,9 +66,14 @@ class BluetoothTransport: NSObject, TransportProtocol {
     }
     
     func send(_ packet: BitchatPacket, to peerID: String?) throws {
-        // The mesh service expects to handle higher-level operations
-        // For now, we'll throw an error indicating this should be handled elsewhere
-        throw TransportError.invalidState("BluetoothTransport.send not implemented - use BluetoothMeshService directly")
+        // Use the mesh service's existing broadcastPacket method
+        // The mesh service handles all the Bluetooth-specific details
+        meshService.broadcastPacket(packet)
+    }
+    
+    func broadcast(_ packet: BitchatPacket) throws {
+        // Use the mesh service's optimized broadcast implementation
+        meshService.broadcastPacket(packet)
     }
     
     func connect(to peerID: String) throws {

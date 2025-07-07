@@ -41,7 +41,7 @@ class BridgeManager: ObservableObject {
     private var peerLastSeen: [String: Date] = [:]  // peerID -> last seen timestamp
     private var bridgeScore: Float = 0.0
     private var evaluationTimer: Timer?
-    private let evaluationInterval: TimeInterval = 20.0  // Re-evaluate every 20 seconds
+    private let evaluationInterval: TimeInterval = 30.0  // Re-evaluate every 30 seconds
     private var lastEvaluationState: String = ""  // For detecting changes
     
     private init() {
@@ -137,20 +137,9 @@ class BridgeManager: ObservableObject {
     }
     
     private func evaluateBridgeStatus() {
-        // Don't spam the logs - only set evaluating on first run
-        var shouldSetEvaluating = false
-        if case .inactive = bridgeStatus {
-            shouldSetEvaluating = true
-        }
-        
         // Calculate bridge score based on multiple factors
         var score: Float = 0.0
         var factors: [Float] = []
-        
-        // Set evaluating status only on first run
-        if shouldSetEvaluating {
-            bridgeStatus = .evaluating
-        }
         
         // Factor 1: Battery level (0-25 points)
         let batteryLevel = BatteryOptimizer.shared.batteryLevel
