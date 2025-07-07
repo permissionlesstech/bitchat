@@ -115,16 +115,20 @@ class TransportManager: ObservableObject {
             if let peerID = peerID {
                 // Unicast: select optimal transport for specific peer
                 let transport = self.selectTransport(for: packet, to: peerID)
+                print("📡 Sending message to \(peerID) via \(transport.transportType)")
                 do {
                     try transport.send(packet, to: peerID)
                 } catch {
                     // Try fallback transport
                     if let fallback = self.getFallbackTransport(for: transport.transportType) {
+                        print("📡 Primary transport failed, trying fallback \(fallback.transportType) for \(peerID)")
                         try? fallback.send(packet, to: peerID)
                     }
                 }
             } else {
                 // Broadcast: use all active transports
+                let activeTransportTypes = self.activeTransports.sorted(by: { $0.rawValue < $1.rawValue })
+                print("📡 Broadcasting message via: \(activeTransportTypes.map { $0.rawValue }.joined(separator: ", "))")
                 for transport in self.transports.values where self.activeTransports.contains(transport.transportType) {
                     try? transport.broadcast(packet)
                 }
@@ -149,15 +153,18 @@ class TransportManager: ObservableObject {
         
         // Select based on criteria
         if autoSelectTransport {
-            return selectOptimalTransport(
+            let selected = selectOptimalTransport(
                 messageSize: messageSize,
                 batteryLevel: batteryLevel,
                 availableTransports: availableForPeer
             )
+            print("📡 Auto-selected \(selected.transportType) for peer \(peerID) (size: \(messageSize) bytes, battery: \(Int(batteryLevel * 100))%)")
+            return selected
         } else {
             // Use primary transport if available
             if availableForPeer.contains(primaryTransport),
                let transport = transports[primaryTransport] {
+                print("📡 Using primary transport \(transport.transportType) for peer \(peerID)")
                 return transport
             }
         }

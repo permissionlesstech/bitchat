@@ -1238,9 +1238,11 @@ struct ContentView: View {
                 HStack(spacing: 8) {
                     // Bluetooth Only
                     Button(action: {
-                        viewModel.transportManager.enableWiFiDirect = false
                         viewModel.transportManager.autoSelectTransport = false
                         viewModel.transportManager.primaryTransport = .bluetooth
+                        viewModel.transportManager.enableWiFiDirect = false  // This will deactivate WiFi Direct
+                        // Force update UI
+                        viewModel.transportManager.updateTransportInfo()
                     }) {
                         HStack(spacing: 4) {
                             Image(systemName: "dot.radiowaves.left.and.right")
@@ -1258,9 +1260,13 @@ struct ContentView: View {
                     
                     // WiFi Direct
                     Button(action: {
-                        viewModel.transportManager.enableWiFiDirect = true
                         viewModel.transportManager.autoSelectTransport = false
                         viewModel.transportManager.primaryTransport = .wifiDirect
+                        viewModel.transportManager.enableWiFiDirect = true  // This will activate WiFi Direct
+                        // Deactivate Bluetooth when in WiFi-only mode
+                        viewModel.transportManager.deactivateTransport(.bluetooth)
+                        // Force update UI
+                        viewModel.transportManager.updateTransportInfo()
                     }) {
                         HStack(spacing: 4) {
                             Image(systemName: "wifi")
@@ -1278,8 +1284,12 @@ struct ContentView: View {
                     
                     // Auto
                     Button(action: {
-                        viewModel.transportManager.enableWiFiDirect = true
                         viewModel.transportManager.autoSelectTransport = true
+                        viewModel.transportManager.enableWiFiDirect = true
+                        // Re-activate Bluetooth in auto mode
+                        viewModel.transportManager.activateTransport(.bluetooth)
+                        // Force update UI
+                        viewModel.transportManager.updateTransportInfo()
                     }) {
                         HStack(spacing: 4) {
                             Image(systemName: "wand.and.rays")

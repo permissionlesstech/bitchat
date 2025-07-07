@@ -540,17 +540,25 @@ class BluetoothMeshService: NSObject {
                         self?.recentlySentMessages.remove(msgID)
                     }
                     
-                    // Add random delay before initial send
-                    let initialDelay = self.randomDelay()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + initialDelay) { [weak self] in
-                        self?.broadcastPacket(packet)
-                    }
-                    
-                    // Single retry for reliability
-                    let retryDelay = 0.3 + self.randomDelay()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + retryDelay) { [weak self] in
-                        self?.broadcastPacket(packet)
-                        // Re-sending message
+                    // Use TransportManager if WiFi Direct is active, otherwise use Bluetooth
+                    if TransportManager.shared.activeTransports.contains(.wifiDirect) || 
+                       (!TransportManager.shared.autoSelectTransport && TransportManager.shared.primaryTransport == .wifiDirect) {
+                        // Send via TransportManager for multi-transport support
+                        TransportManager.shared.send(packet, to: recipientID)
+                    } else {
+                        // Use traditional Bluetooth broadcasting
+                        // Add random delay before initial send
+                        let initialDelay = self.randomDelay()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + initialDelay) { [weak self] in
+                            self?.broadcastPacket(packet)
+                        }
+                        
+                        // Single retry for reliability
+                        let retryDelay = 0.3 + self.randomDelay()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + retryDelay) { [weak self] in
+                            self?.broadcastPacket(packet)
+                            // Re-sending message
+                        }
                     }
                 }
             }

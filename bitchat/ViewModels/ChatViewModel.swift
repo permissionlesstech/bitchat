@@ -135,10 +135,9 @@ class ChatViewModel: ObservableObject {
         let wifiDirectTransport = WiFiDirectTransport()
         transportManager.register(wifiDirectTransport)
         
-        // WiFi Direct will be activated based on user preference or when needed
-        // Start with it disabled to avoid initialization issues
-        transportManager.enableWiFiDirect = false
+        // Start with auto-select enabled which will enable WiFi Direct
         transportManager.autoSelectTransport = true
+        transportManager.enableWiFiDirect = true  // Enable WiFi Direct by default in auto mode
         
         // Update transport info to get initial peer counts
         transportManager.updateTransportInfo()
