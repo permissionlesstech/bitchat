@@ -306,13 +306,14 @@ class WiFiDirectTransport: NSObject, TransportProtocol {
     
     func send(_ packet: BitchatPacket, to peerID: String?) throws {
         // Create new packet with our WiFi Direct sender ID for proper signature verification
+        // IMPORTANT: Set signature to nil so it gets re-signed with our WiFi Direct key
         let wifiPacket = BitchatPacket(
             type: packet.type,
             senderID: myConsistentPeerID.data(using: .utf8) ?? Data(),
             recipientID: packet.recipientID,
             timestamp: packet.timestamp,
             payload: packet.payload,
-            signature: packet.signature,
+            signature: nil,  // Will be signed during encoding with our key
             ttl: packet.ttl
         )
         
@@ -427,13 +428,14 @@ class WiFiDirectTransport: NSObject, TransportProtocol {
     
     func broadcast(_ packet: BitchatPacket) throws {
         // Create new packet with our WiFi Direct sender ID for proper signature verification
+        // IMPORTANT: Set signature to nil so it gets re-signed with our WiFi Direct key
         let wifiPacket = BitchatPacket(
             type: packet.type,
             senderID: myConsistentPeerID.data(using: .utf8) ?? Data(),
             recipientID: packet.recipientID,
             timestamp: packet.timestamp,
             payload: packet.payload,
-            signature: packet.signature,
+            signature: nil,  // Will be signed during encoding with our key
             ttl: packet.ttl
         )
         
@@ -561,6 +563,10 @@ class WiFiDirectTransport: NSObject, TransportProtocol {
         
         // Sender ID
         let senderData = packet.senderID
+        let senderIDString = String(data: senderData, encoding: .utf8) ?? ""
+        if packet.type == MessageType.message.rawValue {
+            print("WiFiDirect: Encoding packet with sender ID: \(senderIDString)")
+        }
         data.append(UInt16(senderData.count).bigEndianData)
         data.append(senderData)
         
@@ -724,6 +730,7 @@ class WiFiDirectTransport: NSObject, TransportProtocol {
                 } catch {
                     // Signature verification failed
                     print("WiFiDirect: Signature verification failed from \(senderIDString): \(error)")
+                    print("WiFiDirect: Available keys: \(peerPublicKeys.keys.joined(separator: ", "))")
                     throw TransportError.invalidData
                 }
             } else {
