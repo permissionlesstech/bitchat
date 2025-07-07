@@ -36,7 +36,7 @@ class WiFiDirectTransport: NSObject, TransportProtocol {
     private var session: MCSession!
     private var advertiser: MCNearbyServiceAdvertiser?
     private var browser: MCNearbyServiceBrowser?
-    private var myConsistentPeerID: String = ""  // Consistent ID used for signing
+    private(set) var myConsistentPeerID: String = ""  // Consistent ID used for signing
     
     // Constants
     private let serviceType = "bitchat-w"  // Must be 1-15 characters, lowercase letters, numbers, and hyphens
@@ -305,17 +305,8 @@ class WiFiDirectTransport: NSObject, TransportProtocol {
     }
     
     func send(_ packet: BitchatPacket, to peerID: String?) throws {
-        // Create new packet with our WiFi Direct sender ID for proper signature verification
-        // IMPORTANT: Set signature to nil so it gets re-signed with our WiFi Direct key
-        let wifiPacket = BitchatPacket(
-            type: packet.type,
-            senderID: myConsistentPeerID.data(using: .utf8) ?? Data(),
-            recipientID: packet.recipientID,
-            timestamp: packet.timestamp,
-            payload: packet.payload,
-            signature: nil,  // Will be signed during encoding with our key
-            ttl: packet.ttl
-        )
+        // Just use the packet as-is now that it comes with the correct sender ID
+        let wifiPacket = packet
         
         // Check if this is a critical message that needs acknowledgment
         let needsAck = packet.type == MessageType.message.rawValue && peerID != nil
@@ -427,17 +418,8 @@ class WiFiDirectTransport: NSObject, TransportProtocol {
     }
     
     func broadcast(_ packet: BitchatPacket) throws {
-        // Create new packet with our WiFi Direct sender ID for proper signature verification
-        // IMPORTANT: Set signature to nil so it gets re-signed with our WiFi Direct key
-        let wifiPacket = BitchatPacket(
-            type: packet.type,
-            senderID: myConsistentPeerID.data(using: .utf8) ?? Data(),
-            recipientID: packet.recipientID,
-            timestamp: packet.timestamp,
-            payload: packet.payload,
-            signature: nil,  // Will be signed during encoding with our key
-            ttl: packet.ttl
-        )
+        // Just use the packet as-is now that it comes with the correct sender ID
+        let wifiPacket = packet
         
         // Add to batch
         queue.async(flags: .barrier) {
@@ -691,6 +673,10 @@ class WiFiDirectTransport: NSObject, TransportProtocol {
             if let publicKey = peerPublicKeys[senderIDString] {
                 // Data to verify is everything from nonce to before signature flag
                 let dataToVerify = data.subdata(in: 0..<(offset - 3 - Int(signatureLength)))
+                
+                print("WiFiDirect: Verifying signature for sender \(senderIDString)")
+                print("WiFiDirect: Data to verify length: \(dataToVerify.count), signature length: \(signatureData.count)")
+                print("WiFiDirect: Full data length: \(data.count), offset before sig: \(offset - 3 - Int(signatureLength))")
                 
                 do {
                     let sig = try P256.Signing.ECDSASignature(derRepresentation: signatureData)

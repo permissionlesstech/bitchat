@@ -22,7 +22,7 @@ class TransportManager: ObservableObject {
     @Published var currentTransportInfo: TransportInfo = TransportInfo()
     
     // Private properties
-    private var transports: [TransportType: TransportProtocol] = [:]
+    private(set) var transports: [TransportType: TransportProtocol] = [:]
     private var routingTable: [String: TransportType] = [:]  // peerID -> preferred transport
     private var peerTransports: [String: Set<TransportType>] = [:]  // peerID -> available transports
     private let transportQueue = DispatchQueue(label: "bitchat.transportManager", attributes: .concurrent)

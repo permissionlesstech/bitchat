@@ -13,6 +13,8 @@ import CryptoKit
 import CommonCrypto
 #if os(iOS)
 import UIKit
+#elseif os(macOS)
+import IOKit
 #endif
 
 class ChatViewModel: ObservableObject {
@@ -53,6 +55,7 @@ class ChatViewModel: ObservableObject {
     
     let meshService = BluetoothMeshService()
     let transportManager = TransportManager.shared
+    
     private let userDefaults = UserDefaults.standard
     private let nicknameKey = "bitchat.nickname"
     private let favoritesKey = "bitchat.favorites"
@@ -1014,9 +1017,19 @@ class ChatViewModel: ObservableObject {
                 payload = try JSONEncoder().encode(message)
             }
             
+            // Use WiFi Direct identity when forcing WiFi Direct
+            let senderID: Data
+            if transportManager.forceWiFiDirect,
+               let wifiTransport = transportManager.transports[.wifiDirect] as? WiFiDirectTransport {
+                senderID = wifiTransport.myConsistentPeerID.data(using: .utf8) ?? Data()
+                print("TransportManager: Using WiFi Direct sender ID: \(wifiTransport.myConsistentPeerID)")
+            } else {
+                senderID = meshService.myPeerID.data(using: .utf8) ?? Data()
+            }
+            
             let packet = BitchatPacket(
                 type: MessageType.message.rawValue,
-                senderID: meshService.myPeerID.data(using: .utf8) ?? Data(),
+                senderID: senderID,
                 recipientID: nil,  // Broadcast
                 timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                 payload: payload,
@@ -1047,9 +1060,18 @@ class ChatViewModel: ObservableObject {
         
         do {
             let payload = try JSONEncoder().encode(message)
+            // Use WiFi Direct identity when forcing WiFi Direct
+            let senderID: Data
+            if transportManager.forceWiFiDirect,
+               let wifiTransport = transportManager.transports[.wifiDirect] as? WiFiDirectTransport {
+                senderID = wifiTransport.myConsistentPeerID.data(using: .utf8) ?? Data()
+            } else {
+                senderID = meshService.myPeerID.data(using: .utf8) ?? Data()
+            }
+            
             let packet = BitchatPacket(
                 type: MessageType.message.rawValue,
-                senderID: meshService.myPeerID.data(using: .utf8) ?? Data(),
+                senderID: senderID,
                 recipientID: peerID.data(using: .utf8),
                 timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                 payload: payload,
