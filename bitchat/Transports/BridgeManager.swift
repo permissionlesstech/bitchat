@@ -215,15 +215,25 @@ class BridgeManager: ObservableObject {
                 return peerPrefix < myPrefix
             }
             
+            // Check if state actually changed
+            let wasActive = isBridgeNode
+            
             if shouldBecomeBridge {
-                // Check if state actually changed
-                let wasActive = isBridgeNode
                 isBridgeNode = true
                 bridgeStatus = .active(clusters: clusterCount)
                 connectedClusters = clusterCount
+                
+                // Enable WiFi Direct if not already enabled
+                if !TransportManager.shared.enableWiFiDirect {
+                    TransportManager.shared.enableWiFiDirect = true
+                }
+                
+                // Log state change
+                if !wasActive {
+                    print("BridgeManager: Became active bridge node (score: \(score))")
+                }
             } else {
                 // Another device should be the bridge
-                let wasActive = isBridgeNode
                 isBridgeNode = false
                 bridgeStatus = .inactive
                 connectedClusters = 0
@@ -231,17 +241,6 @@ class BridgeManager: ObservableObject {
                 if wasActive {
                     print("BridgeManager: Yielding bridge role to peer with lower ID")
                 }
-                return
-            }
-            
-            // Enable WiFi Direct if not already enabled
-            if !TransportManager.shared.enableWiFiDirect {
-                TransportManager.shared.enableWiFiDirect = true
-            }
-            
-            // Log state change
-            if !wasActive {
-                print("BridgeManager: Became active bridge node (score: \(score))")
             }
         } else {
             let wasActive = isBridgeNode
