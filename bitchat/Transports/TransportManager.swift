@@ -130,7 +130,11 @@ class TransportManager: ObservableObject {
             if let peerID = peerID {
                 // Unicast: select optimal transport for specific peer
                 let transport = self.selectTransport(for: packet, to: peerID)
-                print("📡 Sending message to \(peerID) via \(transport.transportType)")
+                if self.forceWiFiDirect && transport.transportType == .wifiDirect {
+                    print("📡 Forcing WiFi Direct for message to \(peerID)")
+                } else {
+                    print("📡 Sending message to \(peerID) via \(transport.transportType)")
+                }
                 do {
                     try transport.send(packet, to: peerID)
                 } catch {
@@ -143,9 +147,18 @@ class TransportManager: ObservableObject {
             } else {
                 // Broadcast: use all active transports
                 let activeTransportTypes = self.activeTransports.sorted(by: { $0.rawValue < $1.rawValue })
-                // print("📡 Broadcasting message via: \(activeTransportTypes.map { $0.rawValue }.joined(separator: ", "))")
-                for transport in self.transports.values where self.activeTransports.contains(transport.transportType) {
-                    try? transport.broadcast(packet)
+                if self.forceWiFiDirect {
+                    // When forcing WiFi Direct, only broadcast through WiFi Direct
+                    if let wifiTransport = self.transports[.wifiDirect], wifiTransport.isAvailable {
+                        print("📡 Forcing broadcast via WiFi Direct only")
+                        try? wifiTransport.broadcast(packet)
+                    }
+                } else {
+                    // Normal broadcast through all active transports
+                    // print("📡 Broadcasting message via: \(activeTransportTypes.map { $0.rawValue }.joined(separator: ", "))")
+                    for transport in self.transports.values where self.activeTransports.contains(transport.transportType) {
+                        try? transport.broadcast(packet)
+                    }
                 }
             }
         }
