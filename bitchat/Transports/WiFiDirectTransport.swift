@@ -294,9 +294,16 @@ class WiFiDirectTransport: NSObject, TransportProtocol {
     }
     
     func send(_ packet: BitchatPacket, to peerID: String?) throws {
-        // Rewrite packet with our WiFi Direct sender ID for proper signature verification
-        var wifiPacket = packet
-        wifiPacket.senderID = getDeviceIdentifier().data(using: .utf8) ?? Data()
+        // Create new packet with our WiFi Direct sender ID for proper signature verification
+        let wifiPacket = BitchatPacket(
+            type: packet.type,
+            senderID: getDeviceIdentifier().data(using: .utf8) ?? Data(),
+            recipientID: packet.recipientID,
+            timestamp: packet.timestamp,
+            payload: packet.payload,
+            signature: packet.signature,
+            ttl: packet.ttl
+        )
         
         // Check if this is a critical message that needs acknowledgment
         let needsAck = packet.type == MessageType.message.rawValue && peerID != nil
@@ -408,9 +415,16 @@ class WiFiDirectTransport: NSObject, TransportProtocol {
     }
     
     func broadcast(_ packet: BitchatPacket) throws {
-        // Rewrite packet with our WiFi Direct sender ID for proper signature verification
-        var wifiPacket = packet
-        wifiPacket.senderID = getDeviceIdentifier().data(using: .utf8) ?? Data()
+        // Create new packet with our WiFi Direct sender ID for proper signature verification
+        let wifiPacket = BitchatPacket(
+            type: packet.type,
+            senderID: getDeviceIdentifier().data(using: .utf8) ?? Data(),
+            recipientID: packet.recipientID,
+            timestamp: packet.timestamp,
+            payload: packet.payload,
+            signature: packet.signature,
+            ttl: packet.ttl
+        )
         
         // Add to batch
         queue.async(flags: .barrier) {
