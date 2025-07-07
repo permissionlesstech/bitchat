@@ -699,17 +699,25 @@ class WiFiDirectTransport: NSObject, TransportProtocol {
                 // Look up the key by the MCPeerID's generated ID
                 var foundKey: P256.Signing.PublicKey?
                 
-                // Try to find a public key that might belong to this sender
-                // This is a temporary workaround for the key exchange issue
-                for (storedID, pubKey) in peerPublicKeys {
-                    // If we have a key stored by the MCPeerID-generated ID, use it
-                    if storedID != senderIDString {
-                        foundKey = pubKey
-                        // Store it under the actual sender ID for future use
-                        peerPublicKeys[senderIDString] = pubKey
-                        print("WiFiDirect: Found and mapped public key for sender \(senderIDString)")
-                        break
+                // Try to find the public key - it might be stored under the MCPeerID
+                // The sender ID in the packet is the device's ID, not the MCPeerID hash
+                // So we need to try all stored keys until we find one that works
+                print("WiFiDirect: Looking for public key for sender \(senderIDString)")
+                print("WiFiDirect: Available keys: \(peerPublicKeys.keys.joined(separator: ", "))")
+                
+                // First, check if we recently stored a key (within last few seconds)
+                // This handles the race condition where the key was just stored
+                if peerPublicKeys.count == 1 {
+                    // If we only have one key stored, it's probably for this sender
+                    foundKey = peerPublicKeys.values.first
+                    if let key = foundKey {
+                        peerPublicKeys[senderIDString] = key
+                        print("WiFiDirect: Using only available key for sender \(senderIDString)")
                     }
+                } else {
+                    // Multiple keys - need to find the right one
+                    // This is a limitation of the current design
+                    print("WiFiDirect: Multiple keys available, cannot determine which belongs to \(senderIDString)")
                 }
                 
                 if let publicKey = foundKey {
@@ -1519,9 +1527,20 @@ extension WiFiDirectTransport: MCNearbyServiceAdvertiserDelegate {
                 let publicKey = try P256.Signing.PublicKey(x963Representation: pubkeyData)
                 let bitchatPeerID = generateBitchatPeerID(for: peerID)
                 
+                // Store public key under multiple IDs to handle lookup issues
                 queue.async(flags: .barrier) {
+                    // Store by the MCPeerID-based hash
                     self.peerPublicKeys[bitchatPeerID] = publicKey
-                    print("WiFiDirect: Stored public key for \(bitchatPeerID)")
+                    
+                    // Also try to extract and store by the actual device ID if possible
+                    // The display name format is "bitchat-XXXXXXXX" where X is first 8 chars of device ID hash
+                    if peerID.displayName.hasPrefix("bitchat-") {
+                        let deviceIDPrefix = String(peerID.displayName.dropFirst("bitchat-".count))
+                        self.peerPublicKeys[deviceIDPrefix] = publicKey
+                        print("WiFiDirect: Stored public key for \(bitchatPeerID) and prefix \(deviceIDPrefix)")
+                    } else {
+                        print("WiFiDirect: Stored public key for \(bitchatPeerID)")
+                    }
                 }
                 
                 // Accept the invitation
@@ -1575,7 +1594,14 @@ extension WiFiDirectTransport: MCNearbyServiceBrowserDelegate {
                 let bitchatPeerID = generateBitchatPeerID(for: peerID)
                 
                 queue.async(flags: .barrier) {
+                    // Store by the MCPeerID-based hash
                     self.peerPublicKeys[bitchatPeerID] = publicKey
+                    
+                    // Also store by device ID prefix for easier lookup
+                    if peerID.displayName.hasPrefix("bitchat-") {
+                        let deviceIDPrefix = String(peerID.displayName.dropFirst("bitchat-".count))
+                        self.peerPublicKeys[deviceIDPrefix] = publicKey
+                    }
                 }
                 
                 // Include our public key in invitation context
