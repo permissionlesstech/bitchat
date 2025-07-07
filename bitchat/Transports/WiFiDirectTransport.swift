@@ -891,6 +891,7 @@ extension WiFiDirectTransport: MCSessionDelegate {
     }
     
     func session(_ session: MCSession, didReceive data: Data, fromPeer peerID: MCPeerID) {
+        print("WiFiDirect: Received \(data.count) bytes from \(peerID.displayName)")
         queue.async {
             do {
                 // Check if this is a batch
@@ -1464,9 +1465,29 @@ extension WiFiDirectTransport: MCSessionDelegate {
 
 extension WiFiDirectTransport: MCNearbyServiceAdvertiserDelegate {
     func advertiser(_ advertiser: MCNearbyServiceAdvertiser, didReceiveInvitationFromPeer peerID: MCPeerID, withContext context: Data?, invitationHandler: @escaping (Bool, MCSession?) -> Void) {
-        // Auto-accept invitations for now
-        // In a production app, you'd want to verify the peer
-        invitationHandler(true, session)
+        print("WiFiDirect: Received invitation from \(peerID.displayName)")
+        
+        // Extract and store the inviter's public key from context
+        if let pubkeyData = context {
+            do {
+                let publicKey = try P256.Signing.PublicKey(x963Representation: pubkeyData)
+                let bitchatPeerID = generateBitchatPeerID(for: peerID)
+                
+                queue.async(flags: .barrier) {
+                    self.peerPublicKeys[bitchatPeerID] = publicKey
+                    print("WiFiDirect: Stored public key for \(bitchatPeerID)")
+                }
+                
+                // Accept the invitation
+                invitationHandler(true, session)
+            } catch {
+                print("WiFiDirect: Invalid public key from inviter \(peerID.displayName): \(error)")
+                invitationHandler(false, nil)
+            }
+        } else {
+            print("WiFiDirect: No public key in invitation from \(peerID.displayName)")
+            invitationHandler(false, nil)
+        }
     }
     
     func advertiser(_ advertiser: MCNearbyServiceAdvertiser, didNotStartAdvertisingPeer error: Error) {

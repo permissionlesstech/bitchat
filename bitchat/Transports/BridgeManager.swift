@@ -8,6 +8,11 @@
 
 import Foundation
 import Combine
+#if os(iOS)
+import UIKit
+#elseif os(macOS)
+import IOKit
+#endif
 
 // MARK: - Bridge Node Management
 
@@ -187,16 +192,47 @@ class BridgeManager: ObservableObject {
         
         // Determine if we should be a bridge
         // Only activate bridge in auto mode when we have peers on multiple transports
-        let shouldBridge = score >= effectiveThreshold && 
-                          hasMultiTransport && 
-                          TransportManager.shared.autoSelectTransport
+        let meetsRequirements = score >= effectiveThreshold && 
+                               hasMultiTransport && 
+                               TransportManager.shared.autoSelectTransport
         
-        if shouldBridge {
-            // Check if state actually changed
-            let wasActive = isBridgeNode
-            isBridgeNode = true
-            bridgeStatus = .active(clusters: clusterCount)
-            connectedClusters = clusterCount
+        if meetsRequirements {
+            // Bridge election: If multiple devices could be bridges, use device ID to break ties
+            // Generate a consistent device ID (same approach as WiFiDirectTransport)
+            let myDeviceID: String
+            #if os(iOS)
+            myDeviceID = UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString
+            #else
+            myDeviceID = getHardwareUUID() ?? UUID().uuidString
+            #endif
+            
+            // For now, simple election: device with lower ID becomes bridge
+            // This prevents both devices from being bridges simultaneously
+            let shouldBecomeBridge = !bluetoothPeers.union(wifiDirectPeers).contains { peerID in
+                // Use first 8 chars of peer ID for comparison
+                let peerPrefix = String(peerID.prefix(8))
+                let myPrefix = String(myDeviceID.prefix(8))
+                return peerPrefix < myPrefix
+            }
+            
+            if shouldBecomeBridge {
+                // Check if state actually changed
+                let wasActive = isBridgeNode
+                isBridgeNode = true
+                bridgeStatus = .active(clusters: clusterCount)
+                connectedClusters = clusterCount
+            } else {
+                // Another device should be the bridge
+                let wasActive = isBridgeNode
+                isBridgeNode = false
+                bridgeStatus = .inactive
+                connectedClusters = 0
+                
+                if wasActive {
+                    print("BridgeManager: Yielding bridge role to peer with lower ID")
+                }
+                return
+            }
             
             // Enable WiFi Direct if not already enabled
             if !TransportManager.shared.enableWiFiDirect {
@@ -267,6 +303,32 @@ class BridgeManager: ObservableObject {
     }
     
     // MARK: - Bridge Routing
+    
+    #if os(macOS)
+    private func getHardwareUUID() -> String? {
+        let mainPort: mach_port_t
+        if #available(macOS 12.0, *) {
+            mainPort = kIOMainPortDefault
+        } else {
+            mainPort = kIOMasterPortDefault
+        }
+        
+        let platformExpert = IOServiceGetMatchingService(mainPort, IOServiceMatching("IOPlatformExpertDevice"))
+        guard platformExpert != 0 else { return nil }
+        defer { IOObjectRelease(platformExpert) }
+        
+        if let cfProperty = IORegistryEntryCreateCFProperty(
+            platformExpert,
+            kIOPlatformUUIDKey as CFString,
+            kCFAllocatorDefault,
+            0
+        ) {
+            return (cfProperty.takeRetainedValue() as? String)
+        }
+        
+        return nil
+    }
+    #endif
     
     func shouldBridgeMessage(_ packet: BitchatPacket, from sourceTransport: TransportType) -> Set<TransportType> {
         guard isBridgeNode else { return [] }
