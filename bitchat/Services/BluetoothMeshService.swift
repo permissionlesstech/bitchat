@@ -1264,7 +1264,13 @@ class BluetoothMeshService: NSObject {
         
         // Send to connected peripherals (as central)
         var sentToPeripherals = 0
-        for (_, peripheral) in connectedPeripherals {
+        // Create a copy of peripherals to avoid mutation during iteration
+        let peripheralsCopy = Array(connectedPeripherals)
+        
+        for (peerID, peripheral) in peripheralsCopy {
+            // Double-check peripheral is still in our connected list
+            guard connectedPeripherals[peerID] != nil else { continue }
+            
             if let characteristic = peripheralCharacteristics[peripheral] {
                 // Check if peripheral is connected before writing
                 if peripheral.state == .connected {
@@ -1275,16 +1281,24 @@ class BluetoothMeshService: NSObject {
                     // Additional safety check for characteristic properties
                     if characteristic.properties.contains(.write) || 
                        characteristic.properties.contains(.writeWithoutResponse) {
-                        peripheral.writeValue(data, for: characteristic, type: writeType)
+                        // Ensure we're on the main queue for CoreBluetooth operations
+                        DispatchQueue.main.async { [weak self] in
+                            // Re-check state on main queue to avoid race condition
+                            guard peripheral.state == .connected else {
+                                self?.connectedPeripherals.removeValue(forKey: peerID)
+                                self?.peripheralCharacteristics.removeValue(forKey: peripheral)
+                                return
+                            }
+                            
+                            peripheral.writeValue(data, for: characteristic, type: writeType)
+                        }
                         sentToPeripherals += 1
                     }
                 } else {
-                    if let peerID = connectedPeripherals.first(where: { $0.value == peripheral })?.key {
-                        connectedPeripherals.removeValue(forKey: peerID)
-                        peripheralCharacteristics.removeValue(forKey: peripheral)
-                    }
+                    // Peripheral disconnected, clean up immediately
+                    connectedPeripherals.removeValue(forKey: peerID)
+                    peripheralCharacteristics.removeValue(forKey: peripheral)
                 }
-            } else {
             }
         }
         
@@ -2312,6 +2326,9 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
     
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
         let peripheralID = peripheral.identifier.uuidString
+        
+        // Immediately clean up the peripheral to prevent API misuse
+        peripheralCharacteristics.removeValue(forKey: peripheral)
         
         // Check if this was an intentional disconnect
         if intentionalDisconnects.contains(peripheralID) {
