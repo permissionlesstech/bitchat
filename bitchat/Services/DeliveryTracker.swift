@@ -41,19 +41,19 @@ class DeliveryTracker {
         let recipientID: String
         let recipientNickname: String
         let retryCount: Int
-        let isRoomMessage: Bool
+        let isChannelMessage: Bool
         let isFavorite: Bool
-        var ackedBy: Set<String> = []  // For tracking partial room delivery
-        let expectedRecipients: Int  // For room messages
+        var ackedBy: Set<String> = []  // For tracking partial channel delivery
+        let expectedRecipients: Int  // For channel messages
         var timeoutTimer: Timer?
         
         var isTimedOut: Bool {
-            let timeout: TimeInterval = isFavorite ? 300 : (isRoomMessage ? 60 : 30)
+            let timeout: TimeInterval = isFavorite ? 300 : (isChannelMessage ? 60 : 30)
             return Date().timeIntervalSince(sentAt) > timeout
         }
         
         var shouldRetry: Bool {
-            return retryCount < 3 && isFavorite && !isRoomMessage
+            return retryCount < 3 && isFavorite && !isChannelMessage
         }
     }
     
@@ -69,7 +69,7 @@ class DeliveryTracker {
     
     func trackMessage(_ message: BitchatMessage, recipientID: String, recipientNickname: String, isFavorite: Bool = false, expectedRecipients: Int = 1) {
         // Don't track broadcasts or certain message types
-        guard message.isPrivate || message.room != nil else { return }
+        guard message.isPrivate || message.channel != nil else { return }
         
         
         let delivery = PendingDelivery(
@@ -78,7 +78,7 @@ class DeliveryTracker {
             recipientID: recipientID,
             recipientNickname: recipientNickname,
             retryCount: 0,
-            isRoomMessage: message.room != nil,
+            isChannelMessage: message.channel != nil,
             isFavorite: isFavorite,
             expectedRecipients: expectedRecipients,
             timeoutTimer: nil
@@ -118,8 +118,8 @@ class DeliveryTracker {
         // Cancel timeout timer
         delivery.timeoutTimer?.invalidate()
         
-        if delivery.isRoomMessage {
-            // Track partial delivery for room messages
+        if delivery.isChannelMessage {
+            // Track partial delivery for channel messages
             delivery.ackedBy.insert(ack.recipientID)
             pendingDeliveries[ack.originalMessageID] = delivery
             
@@ -146,7 +146,7 @@ class DeliveryTracker {
         guard message.senderPeerID != myPeerID else { return nil }
         
         // Don't ACK broadcasts or system messages
-        guard message.isPrivate || message.room != nil else { return nil }
+        guard message.isPrivate || message.channel != nil else { return nil }
         
         // Don't ACK if we've already sent an ACK for this message
         guard !sentAckIDs.contains(message.id) else { return nil }
@@ -187,11 +187,11 @@ class DeliveryTracker {
             return
         }
         let isFavorite = delivery.isFavorite
-        let isRoomMessage = delivery.isRoomMessage
+        let isChannelMessage = delivery.isChannelMessage
         pendingLock.unlock()
         
         let timeout = isFavorite ? favoriteTimeout :
-                     (isRoomMessage ? roomMessageTimeout : privateMessageTimeout)
+                     (isChannelMessage ? roomMessageTimeout : privateMessageTimeout)
         
         let timer = Timer.scheduledTimer(withTimeInterval: timeout, repeats: false) { [weak self] _ in
             self?.handleTimeout(messageID: messageID)
@@ -213,7 +213,7 @@ class DeliveryTracker {
         }
         
         let shouldRetry = delivery.shouldRetry
-        let isRoomMessage = delivery.isRoomMessage
+        let isChannelMessage = delivery.isChannelMessage
         
         if shouldRetry {
             pendingLock.unlock()
@@ -221,7 +221,7 @@ class DeliveryTracker {
             retryDelivery(messageID: messageID)
         } else {
             // Mark as failed
-            let reason = isRoomMessage ? "No response from room members" : "Message not delivered"
+            let reason = isChannelMessage ? "No response from channel members" : "Message not delivered"
             pendingDeliveries.removeValue(forKey: messageID)
             pendingLock.unlock()
             updateDeliveryStatus(messageID, status: .failed(reason: reason))
@@ -242,7 +242,7 @@ class DeliveryTracker {
             recipientID: delivery.recipientID,
             recipientNickname: delivery.recipientNickname,
             retryCount: delivery.retryCount + 1,
-            isRoomMessage: delivery.isRoomMessage,
+            isChannelMessage: delivery.isChannelMessage,
             isFavorite: delivery.isFavorite,
             ackedBy: delivery.ackedBy,
             expectedRecipients: delivery.expectedRecipients,
