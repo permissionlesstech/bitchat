@@ -151,3 +151,6 @@ The protocol is designed to be platform-agnostic. An Android client can be built
 - Bluetooth LE APIs
 - Same packet structure and encryption
 - Compatible service/characteristic UUIDs
+
+## Preview Screenshot
+![image](https://github.com/user-attachments/assets/73bcead9-f5bc-491d-b882-d6263eb6867c)
