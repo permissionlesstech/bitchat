@@ -38,8 +38,10 @@ class TransportManager: ObservableObject {
     var enableWiFiDirect = false {
         didSet {
             if enableWiFiDirect {
+                print("TransportManager: WiFi Direct enabled, activating transport")
                 activateTransport(.wifiDirect)
             } else {
+                print("TransportManager: WiFi Direct disabled, deactivating transport")
                 deactivateTransport(.wifiDirect)
             }
         }
@@ -477,6 +479,8 @@ class TransportManager: ObservableObject {
                     if self.autoSelectTransport && !self.enableWiFiDirect {
                         print("TransportManager: Activating WiFi Direct to find more distant peers")
                         self.enableWiFiDirect = true
+                    } else {
+                        print("TransportManager: WiFi activation timer fired but conditions not met (auto: \(self.autoSelectTransport), enabled: \(self.enableWiFiDirect))")
                     }
                 }
             }
