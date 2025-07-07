@@ -50,7 +50,7 @@ class BridgeManager: ObservableObject {
     
     // MARK: - Bridge Status
     
-    enum BridgeStatus {
+    enum BridgeStatus: Equatable {
         case inactive
         case evaluating
         case active(clusters: Int)
