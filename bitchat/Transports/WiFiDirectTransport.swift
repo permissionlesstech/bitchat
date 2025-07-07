@@ -705,19 +705,28 @@ class WiFiDirectTransport: NSObject, TransportProtocol {
                 print("WiFiDirect: Looking for public key for sender \(senderIDString)")
                 print("WiFiDirect: Available keys: \(peerPublicKeys.keys.joined(separator: ", "))")
                 
-                // First, check if we recently stored a key (within last few seconds)
-                // This handles the race condition where the key was just stored
-                if peerPublicKeys.count == 1 {
-                    // If we only have one key stored, it's probably for this sender
-                    foundKey = peerPublicKeys.values.first
-                    if let key = foundKey {
-                        peerPublicKeys[senderIDString] = key
-                        print("WiFiDirect: Using only available key for sender \(senderIDString)")
+                // Try each stored key until we find one that verifies the signature
+                let dataToVerify = data.subdata(in: 0..<(offset - 3 - Int(signatureLength)))
+                
+                for (keyID, candidateKey) in peerPublicKeys {
+                    do {
+                        let sig = try P256.Signing.ECDSASignature(derRepresentation: signatureData)
+                        if candidateKey.isValidSignature(sig, for: dataToVerify) {
+                            // Found the right key!
+                            foundKey = candidateKey
+                            // Store it under the sender ID for faster lookup next time
+                            peerPublicKeys[senderIDString] = candidateKey
+                            print("WiFiDirect: Found valid key for sender \(senderIDString) (was stored as \(keyID))")
+                            break
+                        }
+                    } catch {
+                        // Try next key
+                        continue
                     }
-                } else {
-                    // Multiple keys - need to find the right one
-                    // This is a limitation of the current design
-                    print("WiFiDirect: Multiple keys available, cannot determine which belongs to \(senderIDString)")
+                }
+                
+                if foundKey == nil {
+                    print("WiFiDirect: Tried all \(peerPublicKeys.count) keys, none verified the signature")
                 }
                 
                 if let publicKey = foundKey {
