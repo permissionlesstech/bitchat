@@ -31,6 +31,7 @@ class WiFiDirectTransport: NSObject, TransportProtocol {
     private var session: MCSession!
     private var advertiser: MCNearbyServiceAdvertiser?
     private var browser: MCNearbyServiceBrowser?
+    private var myConsistentPeerID: String = ""  // Consistent ID used for signing
     
     // Constants
     private let serviceType = "bitchat-w"  // Must be 1-15 characters, lowercase letters, numbers, and hyphens
@@ -158,8 +159,12 @@ class WiFiDirectTransport: NSObject, TransportProtocol {
         // Create peer ID using hash of device identifier for consistency
         let deviceID = getDeviceIdentifier()
         let hashedID = SHA256.hash(data: deviceID.data(using: .utf8)!)
-        let shortID = hashedID.compactMap { String(format: "%02x", $0) }.joined().prefix(8)
+        let fullHashString = hashedID.compactMap { String(format: "%02x", $0) }.joined()
+        let shortID = String(fullHashString.prefix(8))
         let displayName = "bitchat-\(shortID)"
+        
+        // Store the full hash as our consistent peer ID for signing
+        myConsistentPeerID = String(fullHashString.prefix(16))
         
         peerID = MCPeerID(displayName: displayName)
         
@@ -229,7 +234,8 @@ class WiFiDirectTransport: NSObject, TransportProtocol {
                         let discoveryInfo: [String: String] = [
                             "version": "1.0",
                             "transport": "wifi",
-                            "pubkey": publicKeyData.base64EncodedString()
+                            "pubkey": publicKeyData.base64EncodedString(),
+                            "peerid": self.myConsistentPeerID  // Include our consistent peer ID
                         ]
                         self.advertiser = MCNearbyServiceAdvertiser(
                             peer: self.peerID,
@@ -297,7 +303,7 @@ class WiFiDirectTransport: NSObject, TransportProtocol {
         // Create new packet with our WiFi Direct sender ID for proper signature verification
         let wifiPacket = BitchatPacket(
             type: packet.type,
-            senderID: getDeviceIdentifier().data(using: .utf8) ?? Data(),
+            senderID: myConsistentPeerID.data(using: .utf8) ?? Data(),
             recipientID: packet.recipientID,
             timestamp: packet.timestamp,
             payload: packet.payload,
@@ -418,7 +424,7 @@ class WiFiDirectTransport: NSObject, TransportProtocol {
         // Create new packet with our WiFi Direct sender ID for proper signature verification
         let wifiPacket = BitchatPacket(
             type: packet.type,
-            senderID: getDeviceIdentifier().data(using: .utf8) ?? Data(),
+            senderID: myConsistentPeerID.data(using: .utf8) ?? Data(),
             recipientID: packet.recipientID,
             timestamp: packet.timestamp,
             payload: packet.payload,
@@ -1483,8 +1489,14 @@ extension WiFiDirectTransport: MCSessionDelegate {
                         print("WiFiDirect: Attempting reconnection to \(peerID.displayName) (attempt \(attempts + 1))")
                         
                         // Re-invite the peer
-                        let pubkeyData = self.signingKey.publicKey.x963Representation
-                        self.browser?.invitePeer(peerID, to: self.session, withContext: pubkeyData, timeout: 30)
+                        let ourPubKey = self.signingKey.publicKey.x963Representation
+                        let contextData: [String: String] = [
+                            "pubkey": ourPubKey.base64EncodedString(),
+                            "peerid": self.myConsistentPeerID
+                        ]
+                        if let jsonData = try? JSONEncoder().encode(contextData) {
+                            self.browser?.invitePeer(peerID, to: self.session, withContext: jsonData, timeout: 30)
+                        }
                     }
                 }
             } else {
@@ -1553,10 +1565,35 @@ extension WiFiDirectTransport: MCNearbyServiceAdvertiserDelegate {
         print("WiFiDirect: Received invitation from \(peerID.displayName)")
         
         // Extract and store the inviter's public key from context
-        if let pubkeyData = context {
+        if let contextData = context {
             do {
-                let publicKey = try P256.Signing.PublicKey(x963Representation: pubkeyData)
-                let bitchatPeerID = generateBitchatPeerID(for: peerID)
+                // Try to decode as JSON first (new format)
+                if let contextDict = try? JSONDecoder().decode([String: String].self, from: contextData),
+                   let pubkeyString = contextDict["pubkey"],
+                   let pubkeyData = Data(base64Encoded: pubkeyString),
+                   let peerConsistentID = contextDict["peerid"] {
+                    let publicKey = try P256.Signing.PublicKey(x963Representation: pubkeyData)
+                    
+                    // Store public key under the peer's consistent ID
+                    queue.async(flags: .barrier) {
+                        self.peerPublicKeys[peerConsistentID] = publicKey
+                        
+                        // Also store under MCPeerID-based hash for compatibility
+                        let bitchatPeerID = self.generateBitchatPeerID(for: peerID)
+                        self.peerPublicKeys[bitchatPeerID] = publicKey
+                        
+                        // Store under display name prefix
+                        if peerID.displayName.hasPrefix("bitchat-") {
+                            let deviceIDPrefix = String(peerID.displayName.dropFirst("bitchat-".count))
+                            self.peerPublicKeys[deviceIDPrefix] = publicKey
+                        }
+                        
+                        print("WiFiDirect: Stored public key for consistent ID \(peerConsistentID)")
+                    }
+                } else {
+                    // Fall back to old format (raw public key data)
+                    let publicKey = try P256.Signing.PublicKey(x963Representation: contextData)
+                    let bitchatPeerID = generateBitchatPeerID(for: peerID)
                 
                 // Store public key under multiple IDs to handle lookup issues
                 queue.async(flags: .barrier) {
@@ -1625,6 +1662,12 @@ extension WiFiDirectTransport: MCNearbyServiceBrowserDelegate {
                 let bitchatPeerID = generateBitchatPeerID(for: peerID)
                 
                 queue.async(flags: .barrier) {
+                    // Store by the peer's consistent ID if provided
+                    if let peerConsistentID = info?["peerid"] {
+                        self.peerPublicKeys[peerConsistentID] = publicKey
+                        print("WiFiDirect: Stored public key for \(peerConsistentID) from discovery")
+                    }
+                    
                     // Store by the MCPeerID-based hash
                     self.peerPublicKeys[bitchatPeerID] = publicKey
                     
@@ -1635,12 +1678,17 @@ extension WiFiDirectTransport: MCNearbyServiceBrowserDelegate {
                     }
                 }
                 
-                // Include our public key in invitation context
+                // Include our public key and peer ID in invitation context
                 let ourPubKey = signingKey.publicKey.x963Representation
+                let contextData: [String: String] = [
+                    "pubkey": ourPubKey.base64EncodedString(),
+                    "peerid": myConsistentPeerID
+                ]
+                let jsonData = try JSONEncoder().encode(contextData)
                 
                 // Invite the peer to join our session
                 print("WiFiDirect: Inviting peer \(peerID.displayName) to join session")
-                browser.invitePeer(peerID, to: session, withContext: ourPubKey, timeout: 30)
+                browser.invitePeer(peerID, to: session, withContext: jsonData, timeout: 30)
             } catch {
                 // Invalid public key - don't connect
                 print("WiFiDirect: Invalid public key from peer \(peerID.displayName)")
