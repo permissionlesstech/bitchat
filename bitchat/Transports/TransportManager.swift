@@ -571,22 +571,16 @@ struct TransportInfo: Equatable {
     var iconName: String {
         if isBridging {
             return "network.badge.shield.half.filled"
-        } else if isWiFiDirectActive && bluetoothPeerCount > 0 {
-            // When both are active, show WiFi as primary
-            return "wifi"
-        } else if isWiFiDirectActive {
+        } else if activeTransport == .wifiDirect {
             return "wifi"
         } else {
-            // Try different Bluetooth-related icons
+            // Bluetooth
             return "dot.radiowaves.left.and.right"
         }
     }
     
     var secondaryIconName: String? {
-        // Show Bluetooth icon when both transports are active
-        if isWiFiDirectActive && bluetoothPeerCount > 0 {
-            return "dot.radiowaves.left.and.right"
-        }
+        // No secondary icon - we only show one
         return nil
     }
 }

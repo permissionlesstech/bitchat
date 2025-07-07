@@ -425,18 +425,9 @@ struct ContentView: View {
                         }
                     }
                 }) {
-                    HStack(spacing: 2) {
-                        Image(systemName: viewModel.transportManager.currentTransportInfo.iconName)
-                            .font(.system(size: 14))
-                            .foregroundColor(viewModel.transportManager.currentTransportInfo.isBridging ? Color.purple : textColor)
-                        
-                        // Show secondary icon if both transports are active
-                        if let secondaryIcon = viewModel.transportManager.currentTransportInfo.secondaryIconName {
-                            Image(systemName: secondaryIcon)
-                                .font(.system(size: 14))
-                                .foregroundColor(textColor.opacity(0.7))
-                        }
-                    }
+                    Image(systemName: viewModel.transportManager.currentTransportInfo.iconName)
+                        .font(.system(size: 14))
+                        .foregroundColor(viewModel.transportManager.currentTransportInfo.isBridging ? Color.purple : textColor)
                 }
                 .buttonStyle(.plain)
                 .help("Transport: \(viewModel.transportManager.currentTransportInfo.displayText)")
