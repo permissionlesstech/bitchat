@@ -10,6 +10,11 @@ import Foundation
 import MultipeerConnectivity
 import CryptoKit
 import Compression
+#if os(iOS)
+import UIKit
+#elseif os(macOS)
+import IOKit
+#endif
 
 // MARK: - WiFi Direct Transport Implementation
 
@@ -1594,20 +1599,21 @@ extension WiFiDirectTransport: MCNearbyServiceAdvertiserDelegate {
                     // Fall back to old format (raw public key data)
                     let publicKey = try P256.Signing.PublicKey(x963Representation: contextData)
                     let bitchatPeerID = generateBitchatPeerID(for: peerID)
-                
-                // Store public key under multiple IDs to handle lookup issues
-                queue.async(flags: .barrier) {
-                    // Store by the MCPeerID-based hash
-                    self.peerPublicKeys[bitchatPeerID] = publicKey
                     
-                    // Also try to extract and store by the actual device ID if possible
-                    // The display name format is "bitchat-XXXXXXXX" where X is first 8 chars of device ID hash
-                    if peerID.displayName.hasPrefix("bitchat-") {
-                        let deviceIDPrefix = String(peerID.displayName.dropFirst("bitchat-".count))
-                        self.peerPublicKeys[deviceIDPrefix] = publicKey
-                        print("WiFiDirect: Stored public key for \(bitchatPeerID) and prefix \(deviceIDPrefix)")
-                    } else {
-                        print("WiFiDirect: Stored public key for \(bitchatPeerID)")
+                    // Store public key under multiple IDs to handle lookup issues
+                    queue.async(flags: .barrier) {
+                        // Store by the MCPeerID-based hash
+                        self.peerPublicKeys[bitchatPeerID] = publicKey
+                        
+                        // Also try to extract and store by the actual device ID if possible
+                        // The display name format is "bitchat-XXXXXXXX" where X is first 8 chars of device ID hash
+                        if peerID.displayName.hasPrefix("bitchat-") {
+                            let deviceIDPrefix = String(peerID.displayName.dropFirst("bitchat-".count))
+                            self.peerPublicKeys[deviceIDPrefix] = publicKey
+                            print("WiFiDirect: Stored public key for \(bitchatPeerID) and prefix \(deviceIDPrefix)")
+                        } else {
+                            print("WiFiDirect: Stored public key for \(bitchatPeerID)")
+                        }
                     }
                 }
                 
@@ -1771,10 +1777,3 @@ extension Data {
         }
     }
 }
-
-// Platform-specific imports
-#if os(iOS)
-import UIKit
-#elseif os(macOS)
-import IOKit
-#endif
