@@ -2868,8 +2868,4 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
     var isScanning: Bool {
         return centralManager?.isScanning ?? false
     }
-    
-    var isAdvertising: Bool {
-        return peripheralManager?.isAdvertising ?? false
-    }
 }

@@ -166,6 +166,7 @@ enum TransportError: LocalizedError {
     case peerNotFound(String)
     case timeout
     case invalidState(String)
+    case invalidData
     
     var errorDescription: String? {
         switch self {
@@ -183,6 +184,8 @@ enum TransportError: LocalizedError {
             return "Operation timed out"
         case .invalidState(let state):
             return "Invalid state: \(state)"
+        case .invalidData:
+            return "Invalid or corrupted data"
         }
     }
 }

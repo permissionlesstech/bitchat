@@ -26,6 +26,13 @@
 	<string>bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users.</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
 	<string>bitchat uses Bluetooth to discover and connect with other bitchat users nearby.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>bitchat uses WiFi Direct to create high-speed connections with nearby users for faster file sharing and messaging.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_bitchat-w._tcp</string>
+		<string>_bitchat-w._udp</string>
+	</array>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>bluetooth-central</string>

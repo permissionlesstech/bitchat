@@ -26,6 +26,9 @@ struct ContentView: View {
     @State private var showPasswordError = false
     @State private var showCommandSuggestions = false
     @State private var commandSuggestions: [String] = []
+    @State private var showNetworkStatus = false
+    @State private var transportButtonFrame: CGRect = .zero
+    @State private var networkStatusDebounceTimer: Timer?
     
     private var backgroundColor: Color {
         colorScheme == .dark ? Color.black : Color.white
@@ -110,6 +113,35 @@ struct ContentView: View {
                     .offset(x: showSidebar ? -sidebarDragOffset : geometry.size.width - sidebarDragOffset)
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showSidebar)
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: sidebarDragOffset)
+                }
+            }
+            
+            // Network Status Overlay
+            if showNetworkStatus {
+                Color.black.opacity(0.001) // Invisible tap area
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            showNetworkStatus = false
+                        }
+                    }
+                
+                GeometryReader { geometry in
+                    VStack {
+                        HStack {
+                            Spacer()
+                            
+                            networkStatusView
+                                .fixedSize()
+                            .padding(.trailing, transportButtonFrame.width > 0 ? 
+                                geometry.size.width - transportButtonFrame.maxX + (transportButtonFrame.width / 2) - 140 : 25)
+                        }
+                        .padding(.top, transportButtonFrame.height > 0 ? 
+                            transportButtonFrame.maxY + 8 : 52)
+                        
+                        Spacer()
+                    }
+                    .transition(.scale(scale: 0.95, anchor: .topTrailing).combined(with: .opacity))
                 }
             }
             
@@ -213,6 +245,7 @@ struct ContentView: View {
         } message: {
             Text("The password you entered is incorrect. Please try again.")
         }
+        .coordinateSpace(name: "ContentView")
     }
     
     private var headerView: some View {
@@ -381,6 +414,44 @@ struct ContentView: View {
                 }
                 
                 Spacer()
+                
+                // Transport indicator
+                Button(action: {
+                    // Debounce rapid taps
+                    networkStatusDebounceTimer?.invalidate()
+                    networkStatusDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: false) { _ in
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            showNetworkStatus.toggle()
+                        }
+                    }
+                }) {
+                    HStack(spacing: 2) {
+                        Image(systemName: viewModel.transportManager.currentTransportInfo.iconName)
+                            .font(.system(size: 14))
+                            .foregroundColor(viewModel.transportManager.currentTransportInfo.isBridging ? Color.purple : textColor)
+                        
+                        // Show secondary icon if both transports are active
+                        if let secondaryIcon = viewModel.transportManager.currentTransportInfo.secondaryIconName {
+                            Image(systemName: secondaryIcon)
+                                .font(.system(size: 14))
+                                .foregroundColor(textColor.opacity(0.7))
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .help("Transport: \(viewModel.transportManager.currentTransportInfo.displayText)")
+                .background(
+                    GeometryReader { geometry in
+                        Color.clear
+                            .preference(key: TransportButtonFrameKey.self, value: geometry.frame(in: .named("ContentView")))
+                    }
+                )
+                .onPreferenceChange(TransportButtonFrameKey.self) { frame in
+                    transportButtonFrame = frame
+                }
+                
+                Divider()
+                    .frame(height: 16)
                 
                 // People counter with unread indicator
                 HStack(spacing: 4) {
@@ -910,6 +981,7 @@ struct ContentView: View {
                             let rssi = peerRSSI[peerID]?.intValue ?? -100
                             let isFavorite = viewModel.isFavorite(peerID: peerID)
                             let isMe = peerID == myPeerID
+                            let peerTransports = viewModel.transportManager.getPeerTransports(peerID)
                             
                             HStack(spacing: 8) {
                                 // Signal strength indicator or unread message icon
@@ -947,6 +1019,20 @@ struct ContentView: View {
                                             .foregroundColor(textColor)
                                         
                                         Spacer()
+                                        
+                                        // Transport indicators
+                                        HStack(spacing: 2) {
+                                            if peerTransports.contains(.bluetooth) {
+                                                Image(systemName: "dot.radiowaves.left.and.right")
+                                                    .font(.system(size: 10))
+                                                    .foregroundColor(Color.blue.opacity(0.7))
+                                            }
+                                            if peerTransports.contains(.wifiDirect) {
+                                                Image(systemName: "wifi")
+                                                    .font(.system(size: 10))
+                                                    .foregroundColor(Color.green.opacity(0.7))
+                                            }
+                                        }
                                     }
                                 } else {
                                     Button(action: {
@@ -964,6 +1050,20 @@ struct ContentView: View {
                                                 .foregroundColor(peerNicknames[peerID] != nil ? textColor : secondaryTextColor)
                                             
                                             Spacer()
+                                            
+                                            // Transport indicators
+                                            HStack(spacing: 2) {
+                                                if peerTransports.contains(.bluetooth) {
+                                                    Image(systemName: "dot.radiowaves.left.and.right")
+                                                        .font(.system(size: 10))
+                                                        .foregroundColor(Color.blue.opacity(0.7))
+                                                }
+                                                if peerTransports.contains(.wifiDirect) {
+                                                    Image(systemName: "wifi")
+                                                        .font(.system(size: 10))
+                                                        .foregroundColor(Color.green.opacity(0.7))
+                                                }
+                                            }
                                         }
                                     }
                                     .buttonStyle(.plain)
@@ -983,6 +1083,229 @@ struct ContentView: View {
         }
         .background(backgroundColor)
         }
+    }
+    
+    private var networkStatusView: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Title
+            Text("Network Status")
+                .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                .foregroundColor(textColor)
+            
+            Divider()
+            
+            // Transport Status
+            VStack(alignment: .leading, spacing: 8) {
+                Label {
+                    Text("Active Transports")
+                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                } icon: {
+                    Image(systemName: "network")
+                        .font(.system(size: 12))
+                }
+                .foregroundColor(textColor)
+                
+                HStack(spacing: 4) {
+                    // Combined peer count display
+                    let btCount = viewModel.transportManager.currentTransportInfo.bluetoothPeerCount
+                    let wifiCount = viewModel.transportManager.currentTransportInfo.wifiDirectPeerCount
+                    let isWiFiActive = viewModel.transportManager.currentTransportInfo.isWiFiDirectActive
+                    
+                    HStack(spacing: 0) {
+                        Image(systemName: "dot.radiowaves.left.and.right")
+                            .font(.system(size: 12))
+                            .foregroundColor(btCount > 0 ? Color.blue : Color.gray)
+                        Text(" \(btCount) ")
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundColor(textColor)
+                        Text("BT")
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .foregroundColor(Color.blue)
+                        Text(" \(btCount == 1 ? "peer" : "peers")")
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundColor(secondaryTextColor)
+                        
+                        // Only show WiFi Direct peer count if it's enabled
+                        if isWiFiActive {
+                            Text("  ")
+                            Image(systemName: "wifi")
+                                .font(.system(size: 12))
+                                .foregroundColor(wifiCount > 0 ? Color.green : Color.gray)
+                            Text(" \(wifiCount) WiFi \(wifiCount == 1 ? "peer" : "peers")")
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundColor(secondaryTextColor)
+                        }
+                    }
+                }
+            }
+            
+            // Bridge Status
+            if viewModel.transportManager.currentTransportInfo.isBridging {
+                Divider()
+                
+                VStack(alignment: .leading, spacing: 8) {
+                    Label {
+                        Text("Bridge Mode Active")
+                            .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    } icon: {
+                        Image(systemName: "network.badge.shield.half.filled")
+                            .font(.system(size: 12))
+                    }
+                    .foregroundColor(Color.purple)
+                    
+                    Text("Bridging \(viewModel.transportManager.currentTransportInfo.bridgedClusters) network clusters")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(secondaryTextColor)
+                }
+            }
+            
+            // Bridge Manager Status
+            let bridgeStatus = BridgeManager.shared.bridgeStatus
+            if case .evaluating = bridgeStatus {
+                Divider()
+                
+                HStack(spacing: 4) {
+                    ProgressView()
+                        .scaleEffect(0.7)
+                    Text("Evaluating bridge eligibility...")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(secondaryTextColor)
+                }
+            } else if case .lowBattery = bridgeStatus {
+                Divider()
+                
+                HStack(spacing: 4) {
+                    Image(systemName: "battery.25")
+                        .font(.system(size: 12))
+                        .foregroundColor(Color.orange)
+                    Text("Bridge disabled: Low battery")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(secondaryTextColor)
+                }
+            }
+            
+            // Connection Quality
+            if viewModel.transportManager.currentTransportInfo.bluetoothPeerCount > 0 || 
+               viewModel.transportManager.currentTransportInfo.wifiDirectPeerCount > 0 {
+                Divider()
+                
+                VStack(alignment: .leading, spacing: 8) {
+                    Label {
+                        Text("Network Quality")
+                            .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    } icon: {
+                        Image(systemName: "waveform")
+                            .font(.system(size: 12))
+                    }
+                    .foregroundColor(textColor)
+                    
+                    // Show mesh network info
+                    let totalPeers = viewModel.connectedPeers.count
+                    let meshDensity = totalPeers > 10 ? "High" : (totalPeers > 5 ? "Medium" : "Low")
+                    
+                    HStack {
+                        Text("Mesh Density:")
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundColor(secondaryTextColor)
+                        Text(meshDensity)
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .foregroundColor(meshDensity == "High" ? Color.green : (meshDensity == "Medium" ? Color.orange : Color.red))
+                    }
+                }
+            }
+            
+            // Battery status
+            let batteryLevel = Int(BatteryOptimizer.shared.batteryLevel * 100)
+            Divider()
+            
+            HStack(spacing: 4) {
+                Image(systemName: batteryLevel > 80 ? "battery.100" : (batteryLevel > 50 ? "battery.75" : (batteryLevel > 20 ? "battery.50" : "battery.25")))
+                    .font(.system(size: 12))
+                    .foregroundColor(batteryLevel > 50 ? Color.green : (batteryLevel > 20 ? Color.orange : Color.red))
+                Text("\(batteryLevel)% battery")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(secondaryTextColor)
+            }
+            
+            // Transport Controls (for testing)
+            Divider()
+            
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Transport Mode")
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundColor(secondaryTextColor)
+                
+                HStack(spacing: 8) {
+                    // Bluetooth Only
+                    Button(action: {
+                        viewModel.transportManager.enableWiFiDirect = false
+                        viewModel.transportManager.autoSelectTransport = false
+                        viewModel.transportManager.primaryTransport = .bluetooth
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "dot.radiowaves.left.and.right")
+                                .font(.system(size: 10))
+                            Text("BT Only")
+                                .font(.system(size: 10, design: .monospaced))
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(!viewModel.transportManager.enableWiFiDirect && !viewModel.transportManager.autoSelectTransport ? Color.blue : Color.gray.opacity(0.3))
+                        .foregroundColor(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    
+                    // WiFi Direct
+                    Button(action: {
+                        viewModel.transportManager.enableWiFiDirect = true
+                        viewModel.transportManager.autoSelectTransport = false
+                        viewModel.transportManager.primaryTransport = .wifiDirect
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "wifi")
+                                .font(.system(size: 10))
+                            Text("WiFi")
+                                .font(.system(size: 10, design: .monospaced))
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(viewModel.transportManager.enableWiFiDirect && !viewModel.transportManager.autoSelectTransport && viewModel.transportManager.primaryTransport == .wifiDirect ? Color.green : Color.gray.opacity(0.3))
+                        .foregroundColor(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    
+                    // Auto
+                    Button(action: {
+                        viewModel.transportManager.enableWiFiDirect = true
+                        viewModel.transportManager.autoSelectTransport = true
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "wand.and.rays")
+                                .font(.system(size: 10))
+                            Text("Auto")
+                                .font(.system(size: 10, design: .monospaced))
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(viewModel.transportManager.autoSelectTransport ? Color.purple : Color.gray.opacity(0.3))
+                        .foregroundColor(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+            }
+        }
+        .padding(16)
+        .frame(width: 280)
+        .background(colorScheme == .dark ? Color(white: 0.15).opacity(0.92) : Color(white: 0.95).opacity(0.92))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(textColor.opacity(0.2), lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.15), radius: 10, x: 0, y: 4)
     }
 }
 
@@ -1158,5 +1481,25 @@ struct DeliveryStatusView: View {
             .foregroundColor(secondaryTextColor.opacity(0.6))
             .help("Delivered to \(reached) of \(total) members")
         }
+    }
+}
+
+// Triangle shape for popover arrow
+struct Triangle: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.midX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+        path.closeSubpath()
+        return path
+    }
+}
+
+// Preference key for transport button frame
+struct TransportButtonFrameKey: PreferenceKey {
+    static var defaultValue: CGRect = .zero
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        value = nextValue()
     }
 }

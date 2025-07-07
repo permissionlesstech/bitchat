@@ -52,7 +52,7 @@ class ChatViewModel: ObservableObject {
     @Published var retentionEnabledRooms: Set<String> = []  // Rooms where owner enabled retention for all members
     
     let meshService = BluetoothMeshService()
-    private let transportManager = TransportManager.shared
+    let transportManager = TransportManager.shared
     private let userDefaults = UserDefaults.standard
     private let nicknameKey = "bitchat.nickname"
     private let favoritesKey = "bitchat.favorites"
@@ -71,6 +71,10 @@ class ChatViewModel: ObservableObject {
     
     // Delivery tracking
     private var deliveryTrackerCancellable: AnyCancellable?
+    
+    // Bridge status monitoring
+    private var bridgeStatusCancellable: AnyCancellable?
+    private var transportUpdateTimer: Timer?
     
     init() {
         loadNickname()
@@ -132,8 +136,42 @@ class ChatViewModel: ObservableObject {
         transportManager.register(wifiDirectTransport)
         
         // WiFi Direct will be activated based on user preference or when needed
-        // For now, keep it disabled by default
+        // Start with it disabled to avoid initialization issues
         transportManager.enableWiFiDirect = false
+        transportManager.autoSelectTransport = true
+        
+        // Update transport info to get initial peer counts
+        transportManager.updateTransportInfo()
+        
+        // Update transport info periodically to reflect BluetoothMeshService changes
+        transportUpdateTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+            self?.transportManager.updateTransportInfo()
+        }
+        
+        // Monitor bridge status changes
+        var lastBridgeStatus: BridgeManager.BridgeStatus?
+        bridgeStatusCancellable = BridgeManager.shared.$bridgeStatus
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] status in
+                // Only log if status actually changed
+                if !(self?.isBridgeStatusEqual(status, lastBridgeStatus) ?? false) {
+                    lastBridgeStatus = status
+                    
+                    // Log bridge status changes for debugging
+                    switch status {
+                    case .active(let clusters):
+                        print("🌉 Bridge active: bridging \(clusters) clusters")
+                    case .evaluating:
+                        print("🌉 Bridge evaluating network...")
+                    case .inactive:
+                        print("🌉 Bridge inactive")
+                    case .lowBattery:
+                        print("🌉 Bridge disabled: low battery")
+                    case .insufficientConnections:
+                        print("🌉 Bridge disabled: insufficient connections")
+                    }
+                }
+            }
     }
     
     private func loadNickname() {
@@ -1336,6 +1374,27 @@ class ChatViewModel: ObservableObject {
         }
         
         return processedContent
+    }
+    
+    private func isBridgeStatusEqual(_ lhs: BridgeManager.BridgeStatus?, _ rhs: BridgeManager.BridgeStatus?) -> Bool {
+        guard let lhs = lhs, let rhs = rhs else {
+            return lhs == nil && rhs == nil
+        }
+        
+        switch (lhs, rhs) {
+        case (.active(let l), .active(let r)):
+            return l == r
+        case (.evaluating, .evaluating):
+            return true
+        case (.inactive, .inactive):
+            return true
+        case (.lowBattery, .lowBattery):
+            return true
+        case (.insufficientConnections, .insufficientConnections):
+            return true
+        default:
+            return false
+        }
     }
     
     func formatMessage(_ message: BitchatMessage, colorScheme: ColorScheme) -> AttributedString {

@@ -19,6 +19,7 @@ class TransportManager: ObservableObject {
     @Published var activeTransports: Set<TransportType> = []
     @Published var allPeers: [PeerInfo] = []
     @Published var primaryTransport: TransportType = .bluetooth
+    @Published var currentTransportInfo: TransportInfo = TransportInfo()
     
     // Private properties
     private var transports: [TransportType: TransportProtocol] = [:]
@@ -26,6 +27,9 @@ class TransportManager: ObservableObject {
     private var peerTransports: [String: Set<TransportType>] = [:]  // peerID -> available transports
     private let transportQueue = DispatchQueue(label: "bitchat.transportManager", attributes: .concurrent)
     private var cancellables = Set<AnyCancellable>()
+    private let bridgeManager = BridgeManager.shared
+    private var updateDebounceTimer: Timer?
+    private var pendingUpdateInfo: TransportInfo?
     
     // Delegate
     weak var delegate: BitchatDelegate?
@@ -75,13 +79,17 @@ class TransportManager: ObservableObject {
     
     func activateTransport(_ type: TransportType) {
         transportQueue.async {
-            guard let transport = self.transports[type] else { return }
+            guard let transport = self.transports[type] else {
+                print("TransportManager: Transport \(type) not registered")
+                return
+            }
             
+            print("TransportManager: Activating \(type) transport")
             transport.start()
-            transport.startDiscovery()
             
             DispatchQueue.main.async {
                 self.activeTransports.insert(type)
+                self.updateTransportInfo()
             }
         }
     }
@@ -95,6 +103,7 @@ class TransportManager: ObservableObject {
             
             DispatchQueue.main.async {
                 self.activeTransports.remove(type)
+                self.updateTransportInfo()
             }
         }
     }
@@ -260,6 +269,153 @@ class TransportManager: ObservableObject {
         
         return stats
     }
+    
+    // MARK: - Bridge Support
+    
+    private func bridgeBroadcast(_ packet: BitchatPacket, from sourceTransport: TransportType) {
+        let targetTransports = bridgeManager.shouldBridgeMessage(packet, from: sourceTransport)
+        
+        for targetType in targetTransports {
+            if let transport = transports[targetType], transport.isAvailable {
+                // Mark packet as bridged by decrementing TTL
+                var bridgedPacket = packet
+                bridgedPacket.ttl = max(1, packet.ttl - 1)  // Extra hop for bridge
+                
+                try? transport.broadcast(bridgedPacket)
+            }
+        }
+    }
+    
+    private func updateBridgeManagerPeers() {
+        // Collect peers by transport type
+        var bluetoothPeers: [String] = []
+        var wifiDirectPeers: [String] = []
+        
+        transportQueue.sync {
+            for (peerID, transports) in peerTransports {
+                if transports.contains(.bluetooth) {
+                    bluetoothPeers.append(peerID)
+                }
+                if transports.contains(.wifiDirect) {
+                    wifiDirectPeers.append(peerID)
+                }
+            }
+        }
+        
+        // Update BridgeManager
+        bridgeManager.updateBluetoothPeers(bluetoothPeers)
+        bridgeManager.updateWiFiDirectPeers(wifiDirectPeers)
+        
+        // Update transport info for UI
+        updateTransportInfo()
+    }
+    
+    func updateTransportInfo() {
+        // Collect info on background queue
+        transportQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            var info = TransportInfo()
+            info.isWiFiDirectActive = self.activeTransports.contains(.wifiDirect)
+            info.isBridging = self.bridgeManager.isBridgeNode
+            info.bridgedClusters = self.bridgeManager.connectedClusters
+            
+            // Always get the actual peer count from each transport
+            if let bluetoothTransport = self.transports[.bluetooth] {
+                info.bluetoothPeerCount = bluetoothTransport.currentPeers.count
+            }
+            
+            // Only show WiFi Direct peer count if it's active
+            if info.isWiFiDirectActive {
+                if let wifiDirectTransport = self.transports[.wifiDirect] {
+                    info.wifiDirectPeerCount = wifiDirectTransport.currentPeers.count
+                }
+            }
+            
+            // Update peer transport tracking based on actual connected peers
+            for (type, transport) in self.transports {
+                for peer in transport.currentPeers {
+                    var transports = self.peerTransports[peer.peerID] ?? []
+                    transports.insert(type)
+                    self.peerTransports[peer.peerID] = transports
+                }
+            }
+            
+            // Clean up disconnected peers
+            let allConnectedPeerIDs = Set(self.transports.values.flatMap { $0.currentPeers.map { $0.peerID } })
+            self.peerTransports = self.peerTransports.filter { allConnectedPeerIDs.contains($0.key) }
+            
+            // Update allPeers list with unique peers from all transports
+            var uniquePeers: [String: PeerInfo] = [:]
+            for transport in self.transports.values {
+                for peer in transport.currentPeers {
+                    if let existing = uniquePeers[peer.peerID] {
+                        // Merge transport types - create new PeerInfo since it's immutable
+                        let merged = PeerInfo(
+                            peerID: existing.peerID,
+                            nickname: existing.nickname ?? peer.nickname,
+                            publicKey: existing.publicKey ?? peer.publicKey,
+                            transportTypes: existing.transportTypes.union(peer.transportTypes),
+                            rssi: existing.rssi ?? peer.rssi,
+                            lastSeen: peer.lastSeen // Use most recent timestamp
+                        )
+                        uniquePeers[peer.peerID] = merged
+                    } else {
+                        uniquePeers[peer.peerID] = peer
+                    }
+                }
+            }
+            
+            // Determine active transport
+            if info.isWiFiDirectActive && info.wifiDirectPeerCount > 0 {
+                info.activeTransport = .wifiDirect
+            } else {
+                info.activeTransport = .bluetooth
+            }
+            
+            // Check if this is a transport state change (immediate update)
+            let isTransportStateChange = self.currentTransportInfo.isWiFiDirectActive != info.isWiFiDirectActive ||
+                                       self.currentTransportInfo.activeTransport != info.activeTransport
+            
+            DispatchQueue.main.async {
+                if isTransportStateChange {
+                    // Update immediately for transport state changes
+                    self.currentTransportInfo = info
+                    self.allPeers = Array(uniquePeers.values)
+                    self.updateBridgeManagerPeers()
+                } else {
+                    // Apply debouncing for peer count changes
+                    self.pendingUpdateInfo = info
+                    self.pendingAllPeers = Array(uniquePeers.values)
+                    
+                    // Cancel existing timer
+                    self.updateDebounceTimer?.invalidate()
+                    
+                    // Create new timer with short delay
+                    self.updateDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { _ in
+                        if let pendingInfo = self.pendingUpdateInfo {
+                            // Only update if values actually changed
+                            if self.currentTransportInfo != pendingInfo {
+                                self.currentTransportInfo = pendingInfo
+                            }
+                            
+                            if let pendingPeers = self.pendingAllPeers {
+                                self.allPeers = pendingPeers
+                            }
+                            
+                            // Update bridge manager with current peer lists
+                            self.updateBridgeManagerPeers()
+                        }
+                        
+                        self.pendingUpdateInfo = nil
+                        self.pendingAllPeers = nil
+                    }
+                }
+            }
+        }
+    }
+    
+    private var pendingAllPeers: [PeerInfo]?
 }
 
 // MARK: - Transport Delegate
@@ -278,6 +434,9 @@ extension TransportManager: TransportDelegate {
             if !self.allPeers.contains(where: { $0.peerID == peer.peerID }) {
                 self.allPeers.append(peer)
             }
+            
+            // Update BridgeManager peer lists
+            self.updateBridgeManagerPeers()
         }
         
         // Forward to delegate - use correct method
@@ -304,15 +463,40 @@ extension TransportManager: TransportDelegate {
         if peerTransports[peerID] == nil {
             DispatchQueue.main.async {
                 self.allPeers.removeAll { $0.peerID == peerID }
+                
+                // Update BridgeManager peer lists
+                self.updateBridgeManagerPeers()
             }
             delegate?.didDisconnectFromPeer(peerID)
         }
     }
     
     func transport(_ transport: TransportProtocol, didReceivePacket packet: BitchatPacket, from peerID: String) {
-        // Handle packet based on type - convert to appropriate delegate call
-        // This would typically be handled by the BluetoothMeshService
-        // For now, just log that we received it
+        // Check if we should bridge this message
+        if bridgeManager.isBridgeNode && packet.ttl > 1 {
+            bridgeBroadcast(packet, from: transport.transportType)
+        }
+        
+        // Forward packet to our delegate for processing
+        // In the future, we'll need to ensure the ChatViewModel processes these packets
+        // For now, if it's from Bluetooth transport, it's already handled by BluetoothMeshService
+        if transport.transportType != .bluetooth {
+            // WiFi Direct packets need to be forwarded to ChatViewModel
+            if let btchatMessage = decodeBitchatMessage(from: packet) {
+                delegate?.didReceiveMessage(btchatMessage)
+            }
+        }
+    }
+    
+    private func decodeBitchatMessage(from packet: BitchatPacket) -> BitchatMessage? {
+        // Decode BitchatPacket payload into BitchatMessage
+        do {
+            let decoder = JSONDecoder()
+            return try decoder.decode(BitchatMessage.self, from: packet.payload)
+        } catch {
+            print("TransportManager: Failed to decode BitchatMessage: \(error)")
+            return nil
+        }
     }
     
     func transport(_ transport: TransportProtocol, didUpdatePeer peer: PeerInfo) {
@@ -326,7 +510,7 @@ extension TransportManager: TransportDelegate {
     
     func transport(_ transport: TransportProtocol, didFailToSend messageID: String, to peerID: String, error: Error) {
         // Try fallback transport
-        if let fallback = getFallbackTransport(for: transport.transportType) {
+        if getFallbackTransport(for: transport.transportType) != nil {
             // Attempt to resend with fallback
             // This would need access to the original packet, which could be cached
         }
@@ -340,6 +524,7 @@ extension TransportManager: TransportDelegate {
                 self.availableTransports.remove(transport.transportType)
                 self.activeTransports.remove(transport.transportType)
             }
+            self.updateTransportInfo()
         }
     }
 }
@@ -352,4 +537,49 @@ struct TransportStatistics {
     var messagesSent: [TransportType: Int] = [:]
     var messagesReceived: [TransportType: Int] = [:]
     var bytesTransferred: [TransportType: Int] = [:]
+}
+
+// MARK: - Transport Info for UI
+
+struct TransportInfo: Equatable {
+    var activeTransport: TransportType = .bluetooth
+    var isWiFiDirectActive: Bool = false
+    var isBridging: Bool = false
+    var bridgedClusters: Int = 0
+    var bluetoothPeerCount: Int = 0
+    var wifiDirectPeerCount: Int = 0
+    
+    var displayText: String {
+        if isBridging {
+            return "Bridging \(bridgedClusters) clusters"
+        } else if isWiFiDirectActive && bluetoothPeerCount > 0 {
+            return "Dual mode"
+        } else if isWiFiDirectActive {
+            return "WiFi Direct"
+        } else {
+            return "Bluetooth"
+        }
+    }
+    
+    var iconName: String {
+        if isBridging {
+            return "network.badge.shield.half.filled"
+        } else if isWiFiDirectActive && bluetoothPeerCount > 0 {
+            // When both are active, show WiFi as primary
+            return "wifi"
+        } else if isWiFiDirectActive {
+            return "wifi"
+        } else {
+            // Try different Bluetooth-related icons
+            return "dot.radiowaves.left.and.right"
+        }
+    }
+    
+    var secondaryIconName: String? {
+        // Show Bluetooth icon when both transports are active
+        if isWiFiDirectActive && bluetoothPeerCount > 0 {
+            return "dot.radiowaves.left.and.right"
+        }
+        return nil
+    }
 }
