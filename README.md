@@ -11,11 +11,11 @@ This project is released into the public domain. See the [LICENSE](LICENSE) file
 
 - **Decentralized Mesh Network**: Automatic peer discovery and multi-hop message relay over Bluetooth LE
 - **End-to-End Encryption**: X25519 key exchange + AES-256-GCM for private messages
-- **Room-Based Chats**: Topic-based group messaging with optional password protection
+- **Channel-Based Chats**: Topic-based group messaging with optional password protection
 - **Store & Forward**: Messages cached for offline peers and delivered when they reconnect
 - **Privacy First**: No accounts, no phone numbers, no persistent identifiers
 - **IRC-Style Commands**: Familiar `/join`, `/msg`, `/who` style interface
-- **Message Retention**: Optional room-wide message saving controlled by room owners
+- **Message Retention**: Optional channel-wide message saving controlled by channel owners
 - **Universal App**: Native support for iOS and macOS
 - **Cover Traffic**: Timing obfuscation and dummy messages for enhanced privacy
 - **Emergency Wipe**: Triple-tap to instantly clear all data
@@ -62,26 +62,26 @@ This project is released into the public domain. See the [LICENSE](LICENSE) file
 
 ### Basic Commands
 
-- `/j #room` - Join or create a room
+- `/j #channel` - Join or create a channel
 - `/m @user message` - Send a private message
 - `/w` - List online users
-- `/rooms` - Show all discovered rooms
+- `/channels` - Show all discovered channels
 - `/clear` - Clear chat messages
-- `/pass [password]` - Set/change room password (owner only)
-- `/transfer @user` - Transfer room ownership
-- `/save` - Toggle message retention for room (owner only)
+- `/pass [password]` - Set/change channel password (owner only)
+- `/transfer @user` - Transfer channel ownership
+- `/save` - Toggle message retention for channel (owner only)
 
 ### Getting Started
 
 1. Launch bitchat on your device
 2. Set your nickname (or use the auto-generated one)
 3. You'll automatically connect to nearby peers
-4. Join a room with `/j #general` or start chatting in public
+4. Join a channel with `/j #general` or start chatting in public
 5. Messages relay through the mesh network to reach distant peers
 
-### Room Features
+### Channel Features
 
-- **Password Protection**: Room owners can set passwords with `/pass`
+- **Password Protection**: Channel owners can set passwords with `/pass`
 - **Message Retention**: Owners can enable mandatory message saving with `/save`
 - **@ Mentions**: Use `@nickname` to mention users (with autocomplete)
 - **Ownership Transfer**: Pass control to trusted users with `/transfer`
@@ -90,7 +90,7 @@ This project is released into the public domain. See the [LICENSE](LICENSE) file
 
 ### Encryption
 - **Private Messages**: X25519 key exchange + AES-256-GCM encryption
-- **Room Messages**: Argon2id password derivation + AES-256-GCM
+- **Channel Messages**: Argon2id password derivation + AES-256-GCM
 - **Digital Signatures**: Ed25519 for message authenticity
 - **Forward Secrecy**: New key pairs generated each session
 
