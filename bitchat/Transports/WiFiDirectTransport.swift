@@ -31,12 +31,15 @@ class WiFiDirectTransport: NSObject, TransportProtocol {
     )
     weak var delegate: TransportDelegate?
     
+    // Encryption service for key exchange
+    private let encryptionService = EncryptionService()
+    
     // MultipeerConnectivity components
     private var peerID: MCPeerID!
     private var session: MCSession!
     private var advertiser: MCNearbyServiceAdvertiser?
     private var browser: MCNearbyServiceBrowser?
-    private(set) var myConsistentPeerID: String = ""  // Consistent ID used for signing
+    private(set) var myConsistentPeerID: String = ""  // 8-character consistent ID used for signing
     
     // Constants
     private let serviceType = "bitchat-w"  // Must be 1-15 characters, lowercase letters, numbers, and hyphens
@@ -44,6 +47,7 @@ class WiFiDirectTransport: NSObject, TransportProtocol {
     // State tracking
     private var connectedPeers: [MCPeerID: PeerInfo] = [:]
     private var peerIDMapping: [String: MCPeerID] = [:]  // bitchat peerID -> MCPeerID
+    private var mcPeerIDMapping: [MCPeerID: String] = [:]  // MCPeerID -> actual bitchat peerID
     private let queue = DispatchQueue(label: "bitchat.wifidirect", attributes: .concurrent)
     private let queueKey = DispatchSpecificKey<Void>()
     private var isAdvertising = false
@@ -53,7 +57,6 @@ class WiFiDirectTransport: NSObject, TransportProtocol {
     private var peerPublicKeys: [String: P256.Signing.PublicKey] = [:]  // peerID -> public key
     private var messageSequenceNumbers: [String: UInt64] = [:]  // peerID -> last seen sequence
     private var mySequenceNumber: UInt64 = 0
-    private let signingKey = P256.Signing.PrivateKey()
     private var nonceSeen = Set<Data>()  // Track seen nonces to prevent replay
     private let nonceExpirationTime: TimeInterval = 300  // 5 minutes
     private weak var nonceCleanupTimer: Timer?
@@ -161,15 +164,9 @@ class WiFiDirectTransport: NSObject, TransportProtocol {
     }
     
     private func setupMultipeerConnectivity() {
-        // Create peer ID using hash of device identifier for consistency
-        let deviceID = getDeviceIdentifier()
-        let hashedID = SHA256.hash(data: deviceID.data(using: .utf8)!)
-        let fullHashString = hashedID.compactMap { String(format: "%02x", $0) }.joined()
-        let shortID = String(fullHashString.prefix(8))
-        let displayName = "bitchat-\(shortID)"
-        
-        // Store the full hash as our consistent peer ID for signing
-        myConsistentPeerID = String(fullHashString.prefix(16))
+        // Use unified device identity - always use 8-character ID for consistency with Bluetooth
+        myConsistentPeerID = String(DeviceIdentity.shared.deviceID.prefix(8))
+        let displayName = "bitchat-\(myConsistentPeerID)"
         
         peerID = MCPeerID(displayName: displayName)
         
@@ -203,9 +200,21 @@ class WiFiDirectTransport: NSObject, TransportProtocol {
         isAvailable = false
         
         queue.async(flags: .barrier) {
+            // Clear all state
             self.connectedPeers.removeAll()
             self.peerIDMapping.removeAll()
+            self.mcPeerIDMapping.removeAll()
             self.pendingMessages.removeAll()
+            self.messageCache.removeAll()
+            self.peerPublicKeys.removeAll()
+            self.messageSequenceNumbers.removeAll()
+            self.nonceSeen.removeAll()
+            self.awaitingAcks.removeAll()
+            self.connectionState.removeAll()
+            self.reconnectionAttempts.removeAll()
+            self.routingTable.removeAll()
+            self.messageHistory.removeAll()
+            
             self.updateCurrentPeers()
         }
     }
@@ -235,11 +244,12 @@ class WiFiDirectTransport: NSObject, TransportProtocol {
                     
                     // Create advertiser if needed
                     if self.advertiser == nil {
-                        let publicKeyData = self.signingKey.publicKey.x963Representation
+                        // Get the full 161-byte key exchange data
+                        let fullKeyData = self.encryptionService.getCombinedPublicKeyData()
                         let discoveryInfo: [String: String] = [
-                            "version": "1.0",
+                            "version": "2.0",  // Updated version for new format
                             "transport": "wifi",
-                            "pubkey": publicKeyData.base64EncodedString(),
+                            "keys": fullKeyData.base64EncodedString(),  // Full 161-byte key data
                             "peerid": self.myConsistentPeerID  // Include our consistent peer ID
                         ]
                         self.advertiser = MCNearbyServiceAdvertiser(
@@ -261,26 +271,16 @@ class WiFiDirectTransport: NSObject, TransportProtocol {
                     
                     // Start advertising
                     if !self.isAdvertising {
-                        do {
-                            self.advertiser?.startAdvertisingPeer()
-                            self.isAdvertising = true
-                            print("WiFiDirect: Started advertising with service type: \(self.serviceType)")
-                        } catch {
-                            print("WiFiDirect: Error starting advertiser: \(error)")
-                            self.isAdvertising = false
-                        }
+                        self.advertiser?.startAdvertisingPeer()
+                        self.isAdvertising = true
+                        print("WiFiDirect: Started advertising with service type: \(self.serviceType)")
                     }
                     
                     // Start browsing
                     if !self.isBrowsing {
-                        do {
-                            self.browser?.startBrowsingForPeers()
-                            self.isBrowsing = true
-                            print("WiFiDirect: Started browsing for peers with service type: \(self.serviceType)")
-                        } catch {
-                            print("WiFiDirect: Error starting browser: \(error)")
-                            self.isBrowsing = false
-                        }
+                        self.browser?.startBrowsingForPeers()
+                        self.isBrowsing = true
+                        print("WiFiDirect: Started browsing for peers with service type: \(self.serviceType)")
                     }
                     
                     self.lastDiscoveryTime = Date()
@@ -572,12 +572,12 @@ class WiFiDirectTransport: NSObject, TransportProtocol {
         data.append(packet.payload)
         
         // Sign the entire message (excluding the signature itself)
-        let signature = try signingKey.signature(for: data)
+        let signature = try DeviceIdentity.shared.sign(data)
         
         // Append signature
         data.append(1)  // Has signature
-        data.append(UInt16(signature.derRepresentation.count).bigEndianData)
-        data.append(signature.derRepresentation)
+        data.append(UInt16(signature.count).bigEndianData)
+        data.append(signature)
         
         return data
     }
@@ -678,9 +678,8 @@ class WiFiDirectTransport: NSObject, TransportProtocol {
                 print("WiFiDirect: Data to verify length: \(dataToVerify.count), signature length: \(signatureData.count)")
                 print("WiFiDirect: Full data length: \(data.count), offset before sig: \(offset - 3 - Int(signatureLength))")
                 
-                do {
-                    let sig = try P256.Signing.ECDSASignature(derRepresentation: signatureData)
-                    if publicKey.isValidSignature(sig, for: dataToVerify) {
+                // Use DeviceIdentity to verify
+                if DeviceIdentity.shared.verify(signature: signatureData, for: dataToVerify, using: publicKey.x963Representation) {
                         // Valid signature - check sequence number
                         var isSequenceValid = true
                         queue.sync(flags: .barrier) {
@@ -709,72 +708,23 @@ class WiFiDirectTransport: NSObject, TransportProtocol {
                             throw TransportError.invalidData
                         }
                         signature = signatureData
-                    } else {
-                        // Invalid signature
-                        throw TransportError.invalidData
-                    }
-                } catch {
-                    // Signature verification failed
-                    print("WiFiDirect: Signature verification failed from \(senderIDString): \(error)")
+                } else {
+                    // Invalid signature
+                    print("WiFiDirect: Signature verification failed from \(senderIDString)")
                     print("WiFiDirect: Available keys: \(peerPublicKeys.keys.joined(separator: ", "))")
                     throw TransportError.invalidData
                 }
             } else {
-                // No public key for sender yet
-                // For the first message from a peer, we might not have their key yet
-                // Look up the key by the MCPeerID's generated ID
-                var foundKey: P256.Signing.PublicKey?
-                
-                // Try to find the public key - it might be stored under the MCPeerID
-                // The sender ID in the packet is the device's ID, not the MCPeerID hash
-                // So we need to try all stored keys until we find one that works
-                print("WiFiDirect: Looking for public key for sender \(senderIDString)")
+                // No public key for sender yet - this is normal for the first packet
+                print("WiFiDirect: No public key yet for sender \(senderIDString) - deferring signature verification")
                 print("WiFiDirect: Available keys: \(peerPublicKeys.keys.joined(separator: ", "))")
                 
-                // Try each stored key until we find one that verifies the signature
-                let dataToVerify = data.subdata(in: 0..<(offset - 3 - Int(signatureLength)))
-                
-                for (keyID, candidateKey) in peerPublicKeys {
-                    do {
-                        let sig = try P256.Signing.ECDSASignature(derRepresentation: signatureData)
-                        if candidateKey.isValidSignature(sig, for: dataToVerify) {
-                            // Found the right key!
-                            foundKey = candidateKey
-                            // Store it under the sender ID for faster lookup next time
-                            peerPublicKeys[senderIDString] = candidateKey
-                            print("WiFiDirect: Found valid key for sender \(senderIDString) (was stored as \(keyID))")
-                            break
-                        }
-                    } catch {
-                        // Try next key
-                        continue
-                    }
-                }
-                
-                if foundKey == nil {
-                    print("WiFiDirect: Tried all \(peerPublicKeys.count) keys, none verified the signature")
-                }
-                
-                if let publicKey = foundKey {
-                    // Verify with the found key
-                    let dataToVerify = data.subdata(in: 0..<(offset - 3 - Int(signatureLength)))
-                    do {
-                        let sig = try P256.Signing.ECDSASignature(derRepresentation: signatureData)
-                        if publicKey.isValidSignature(sig, for: dataToVerify) {
-                            signature = signatureData
-                            print("WiFiDirect: Signature verified successfully using found key")
-                        } else {
-                            print("WiFiDirect: Signature invalid - data to verify: \(dataToVerify.count) bytes, sig: \(signatureData.count) bytes")
-                            throw TransportError.invalidData
-                        }
-                    } catch {
-                        print("WiFiDirect: Signature verification failed with found key: \(error)")
-                        print("WiFiDirect: Signature data length: \(signatureData.count), expected DER format")
-                        throw TransportError.invalidData
-                    }
+                // For key exchange messages, we'll verify the signature after storing the key
+                if type == MessageType.keyExchange.rawValue {
+                    signature = signatureData  // Store for later verification
                 } else {
-                    // Still no key found - reject
-                    print("WiFiDirect: No public key found for sender \(senderIDString) - rejecting message")
+                    // For other message types, we need the key first
+                    print("WiFiDirect: Cannot verify non-key-exchange message without public key")
                     throw TransportError.invalidData
                 }
             }
@@ -792,10 +742,10 @@ class WiFiDirectTransport: NSObject, TransportProtocol {
     }
     
     private func generateBitchatPeerID(for mcPeerID: MCPeerID) -> String {
-        // Generate consistent ID from MCPeerID
+        // Generate consistent 8-character ID from MCPeerID
         let data = mcPeerID.displayName.data(using: .utf8) ?? Data()
         let hash = SHA256.hash(data: data)
-        return hash.compactMap { String(format: "%02x", $0) }.joined().prefix(16).lowercased()
+        return hash.compactMap { String(format: "%02x", $0) }.joined().prefix(8).lowercased()
     }
     
     private func getDeviceIdentifier() -> String {
@@ -926,13 +876,29 @@ extension WiFiDirectTransport: MCSessionDelegate {
                     return
                 }
                 
-                let bitchatPeerID = self.generateBitchatPeerID(for: peerID)
-                self.peerIDMapping[bitchatPeerID] = peerID
+                // Extract the actual peer ID from the display name
+                // Format is "bitchat-XXXXXXXX" where X is the 8-char device ID
+                var actualPeerID: String = ""
+                if peerID.displayName.hasPrefix("bitchat-") {
+                    // Use the 8-character ID directly
+                    actualPeerID = String(peerID.displayName.dropFirst("bitchat-".count))
+                    print("WiFiDirect: Extracted peer ID: \(actualPeerID)")
+                } else {
+                    // Fall back to generated ID if format is unexpected
+                    actualPeerID = self.generateBitchatPeerID(for: peerID)
+                    print("WiFiDirect: Warning - using generated ID for \(peerID.displayName)")
+                }
+                
+                self.peerIDMapping[actualPeerID] = peerID
+                self.mcPeerIDMapping[peerID] = actualPeerID
+                
+                // Get the public key if we have it
+                let publicKeyData = self.peerPublicKeys[actualPeerID]?.x963Representation
                 
                 let peerInfo = PeerInfo(
-                    peerID: bitchatPeerID,
+                    peerID: actualPeerID,
                     nickname: nil,
-                    publicKey: nil,
+                    publicKey: publicKeyData,
                     transportTypes: [.wifiDirect],
                     rssi: nil,
                     lastSeen: Date()
@@ -942,12 +908,18 @@ extension WiFiDirectTransport: MCSessionDelegate {
                 self.reconnectionAttempts.removeValue(forKey: peerID)
                 self.updateCurrentPeers()
                 
+                // Report to PeerManager
+                PeerManager.shared.updatePeerVisibility(peerID: actualPeerID, on: .wifiDirect, rssi: nil)
+                
                 DispatchQueue.main.async {
                     self.delegate?.transport(self, didDiscoverPeer: peerInfo)
                 }
                 
+                // Send key exchange to newly connected peer
+                self.sendKeyExchange(to: actualPeerID)
+                
                 // Retry any pending messages to this peer
-                self.retryPendingMessages(for: bitchatPeerID)
+                self.retryPendingMessages(for: actualPeerID)
                 
             case .notConnected:
                 print("WiFiDirect: Disconnected from peer \(peerID.displayName)")
@@ -956,10 +928,13 @@ extension WiFiDirectTransport: MCSessionDelegate {
                 if let peerInfo = self.connectedPeers[peerID] {
                     self.connectedPeers.removeValue(forKey: peerID)
                     self.peerIDMapping.removeValue(forKey: peerInfo.peerID)
+                    self.mcPeerIDMapping.removeValue(forKey: peerID)
                     self.updateCurrentPeers()
                     
                     // Clear any pending acks for this peer
                     self.clearPendingAcks(for: peerInfo.peerID)
+                    
+                    // PeerManager will clean up stale peers automatically
                     
                     DispatchQueue.main.async {
                         self.delegate?.transport(self, didLosePeer: peerInfo.peerID)
@@ -992,9 +967,12 @@ extension WiFiDirectTransport: MCSessionDelegate {
                             if self.shouldProcessPacket(packet, from: peerInfo.peerID) {
                                 self.updateRoutingInfo(for: packet, from: peerInfo.peerID)
                                 
-                                // Handle acknowledgments
+                                // Handle different message types
                                 if packet.type == MessageType.deliveryAck.rawValue {
                                     self.handleAcknowledgment(packet, from: peerInfo.peerID)
+                                } else if packet.type == MessageType.keyExchange.rawValue {
+                                    // Handle key exchange
+                                    self.handleKeyExchange(packet, from: peerInfo.peerID)
                                 } else {
                                     // Send acknowledgment for regular messages
                                     if packet.type == MessageType.message.rawValue && packet.recipientID != nil {
@@ -1016,9 +994,12 @@ extension WiFiDirectTransport: MCSessionDelegate {
                         if self.shouldProcessPacket(packet, from: peerInfo.peerID) {
                             self.updateRoutingInfo(for: packet, from: peerInfo.peerID)
                             
-                            // Handle acknowledgments
+                            // Handle different message types
                             if packet.type == MessageType.deliveryAck.rawValue {
                                 self.handleAcknowledgment(packet, from: peerInfo.peerID)
+                            } else if packet.type == MessageType.keyExchange.rawValue {
+                                // Handle key exchange
+                                self.handleKeyExchange(packet, from: peerInfo.peerID)
                             } else {
                                 // Send acknowledgment for regular messages
                                 if packet.type == MessageType.message.rawValue && packet.recipientID != nil {
@@ -1405,6 +1386,75 @@ extension WiFiDirectTransport: MCSessionDelegate {
         }
     }
     
+    // MARK: - Key Exchange Handling
+    
+    private func sendKeyExchange(to peerID: String) {
+        // Get the full 161-byte key exchange data
+        let fullKeyData = encryptionService.getCombinedPublicKeyData()
+        
+        let keyExchangePacket = BitchatPacket(
+            type: MessageType.keyExchange.rawValue,
+            senderID: myConsistentPeerID.data(using: .utf8) ?? Data(),
+            recipientID: peerID.data(using: .utf8),
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: fullKeyData,
+            signature: nil,
+            ttl: 3  // Low TTL for key exchange
+        )
+        
+        do {
+            try send(keyExchangePacket, to: peerID)
+            print("WiFiDirect: Sent 161-byte key exchange to \(peerID)")
+        } catch {
+            print("WiFiDirect: Failed to send key exchange to \(peerID): \(error)")
+        }
+    }
+    
+    private func handleKeyExchange(_ packet: BitchatPacket, from peerID: String) {
+        guard packet.payload.count > 0 else {
+            print("WiFiDirect: Empty key exchange payload from \(peerID)")
+            return
+        }
+        
+        let publicKeyData = packet.payload
+        print("WiFiDirect: Received key exchange from \(peerID), key data size: \(publicKeyData.count)")
+        
+        // Check if this is P256 key (65 bytes) or combined key data
+        if publicKeyData.count == 65 {
+            // Direct P256 public key - store for signature verification
+            if let publicKey = try? P256.Signing.PublicKey(x963Representation: publicKeyData) {
+                queue.async(flags: .barrier) {
+                    self.peerPublicKeys[peerID] = publicKey
+                    print("WiFiDirect: Stored 65-byte P256 key for \(peerID)")
+                }
+            }
+        } else if publicKeyData.count == 161 {
+            // Combined key data (32 + 32 + 32 + 65)
+            let p256KeyData = publicKeyData.subdata(in: 96..<161)
+            if let publicKey = try? P256.Signing.PublicKey(x963Representation: p256KeyData) {
+                queue.async(flags: .barrier) {
+                    self.peerPublicKeys[peerID] = publicKey
+                    print("WiFiDirect: Extracted and stored 65-byte P256 key from 161-byte format for \(peerID)")
+                    
+                    // Add full key set to encryption service
+                    do {
+                        try self.encryptionService.addPeerPublicKey(peerID, publicKeyData: publicKeyData)
+                        print("WiFiDirect: Added full key set to encryption service for \(peerID)")
+                    } catch {
+                        print("WiFiDirect: Failed to add keys to encryption service: \(error)")
+                    }
+                }
+            }
+        } else {
+            print("WiFiDirect: Unexpected key data size: \(publicKeyData.count) from \(peerID)")
+        }
+        
+        // Forward the key exchange packet to the delegate for further processing
+        DispatchQueue.main.async {
+            self.delegate?.transport(self, didReceivePacket: packet, from: peerID)
+        }
+    }
+    
     // MARK: - Reliability and Acknowledgments
     
     private func sendAcknowledgment(for packet: BitchatPacket, to peerID: String) {
@@ -1414,7 +1464,7 @@ extension WiFiDirectTransport: MCSessionDelegate {
         
         let ackPacket = BitchatPacket(
             type: MessageType.deliveryAck.rawValue,
-            senderID: getDeviceIdentifier().data(using: .utf8) ?? Data(),
+            senderID: myConsistentPeerID.data(using: .utf8) ?? Data(),
             recipientID: packet.senderID,
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
             payload: ackData,
@@ -1487,7 +1537,7 @@ extension WiFiDirectTransport: MCSessionDelegate {
                         print("WiFiDirect: Attempting reconnection to \(peerID.displayName) (attempt \(attempts + 1))")
                         
                         // Re-invite the peer
-                        let ourPubKey = self.signingKey.publicKey.x963Representation
+                        let ourPubKey = DeviceIdentity.shared.publicKeyData
                         let contextData: [String: String] = [
                             "pubkey": ourPubKey.base64EncodedString(),
                             "peerid": self.myConsistentPeerID
@@ -1562,58 +1612,57 @@ extension WiFiDirectTransport: MCNearbyServiceAdvertiserDelegate {
     func advertiser(_ advertiser: MCNearbyServiceAdvertiser, didReceiveInvitationFromPeer peerID: MCPeerID, withContext context: Data?, invitationHandler: @escaping (Bool, MCSession?) -> Void) {
         print("WiFiDirect: Received invitation from \(peerID.displayName)")
         
-        // Extract and store the inviter's public key from context
+        // Extract and store the inviter's keys from context
         if let contextData = context {
-            do {
-                // Try to decode as JSON first (new format)
-                if let contextDict = try? JSONDecoder().decode([String: String].self, from: contextData),
-                   let pubkeyString = contextDict["pubkey"],
-                   let pubkeyData = Data(base64Encoded: pubkeyString),
-                   let peerConsistentID = contextDict["peerid"] {
-                    let publicKey = try P256.Signing.PublicKey(x963Representation: pubkeyData)
-                    
-                    // Store public key under the peer's consistent ID
-                    queue.async(flags: .barrier) {
-                        self.peerPublicKeys[peerConsistentID] = publicKey
-                        
-                        // Also store under MCPeerID-based hash for compatibility
-                        let bitchatPeerID = self.generateBitchatPeerID(for: peerID)
-                        self.peerPublicKeys[bitchatPeerID] = publicKey
-                        
-                        // Store under display name prefix
-                        if peerID.displayName.hasPrefix("bitchat-") {
-                            let deviceIDPrefix = String(peerID.displayName.dropFirst("bitchat-".count))
-                            self.peerPublicKeys[deviceIDPrefix] = publicKey
-                        }
-                        
-                        print("WiFiDirect: Stored public key for consistent ID \(peerConsistentID)")
-                    }
-                } else {
-                    // Fall back to old format (raw public key data)
-                    let publicKey = try P256.Signing.PublicKey(x963Representation: contextData)
-                    let bitchatPeerID = generateBitchatPeerID(for: peerID)
-                    
-                    // Store public key under multiple IDs to handle lookup issues
-                    queue.async(flags: .barrier) {
-                        // Store by the MCPeerID-based hash
-                        self.peerPublicKeys[bitchatPeerID] = publicKey
-                        
-                        // Also try to extract and store by the actual device ID if possible
-                        // The display name format is "bitchat-XXXXXXXX" where X is first 8 chars of device ID hash
-                        if peerID.displayName.hasPrefix("bitchat-") {
-                            let deviceIDPrefix = String(peerID.displayName.dropFirst("bitchat-".count))
-                            self.peerPublicKeys[deviceIDPrefix] = publicKey
-                            print("WiFiDirect: Stored public key for \(bitchatPeerID) and prefix \(deviceIDPrefix)")
-                        } else {
-                            print("WiFiDirect: Stored public key for \(bitchatPeerID)")
+            var handled = false
+            
+            // Try to decode as JSON first
+            if let contextDict = try? JSONDecoder().decode([String: String].self, from: contextData),
+               let peerConsistentID = contextDict["peerid"] {
+                
+                // Check for new format (161-byte keys)
+                if let keysString = contextDict["keys"],
+                   let fullKeyData = Data(base64Encoded: keysString) {
+                    if fullKeyData.count == 161 {
+                        // Extract P256 key from 161-byte format
+                        let p256KeyData = fullKeyData.subdata(in: 96..<161)
+                        if let publicKey = try? P256.Signing.PublicKey(x963Representation: p256KeyData) {
+                            queue.async(flags: .barrier) {
+                                // Store P256 key by consistent ID only
+                                self.peerPublicKeys[peerConsistentID] = publicKey
+                                print("WiFiDirect: Stored P256 key for \(peerConsistentID) from 161-byte format")
+                                
+                                // Add full key set to encryption service
+                                do {
+                                    try self.encryptionService.addPeerPublicKey(peerConsistentID, publicKeyData: fullKeyData)
+                                    print("WiFiDirect: Added full key set to encryption service")
+                                } catch {
+                                    print("WiFiDirect: Failed to add keys to encryption service: \(error)")
+                                }
+                            }
+                            handled = true
                         }
                     }
                 }
-                
+                // Fall back to old format (65-byte P256 key)
+                else if let pubkeyString = contextDict["pubkey"],
+                        let pubkeyData = Data(base64Encoded: pubkeyString) {
+                    if let publicKey = try? P256.Signing.PublicKey(x963Representation: pubkeyData) {
+                        queue.async(flags: .barrier) {
+                            // Store by consistent ID only
+                            self.peerPublicKeys[peerConsistentID] = publicKey
+                            print("WiFiDirect: Stored P256 key for \(peerConsistentID) from legacy format")
+                        }
+                        handled = true
+                    }
+                }
+            }
+            
+            if handled {
                 // Accept the invitation
                 invitationHandler(true, session)
-            } catch {
-                print("WiFiDirect: Invalid public key from inviter \(peerID.displayName): \(error)")
+            } else {
+                print("WiFiDirect: Invalid or missing keys from inviter \(peerID.displayName)")
                 invitationHandler(false, nil)
             }
         } else {
@@ -1653,48 +1702,68 @@ extension WiFiDirectTransport: MCNearbyServiceBrowserDelegate {
         // Check if already connected
         guard session.connectedPeers.contains(peerID) == false else { return }
         
-        // Extract and validate peer's public key
-        if let pubkeyString = info?["pubkey"],
-           let pubkeyData = Data(base64Encoded: pubkeyString) {
-            do {
-                let publicKey = try P256.Signing.PublicKey(x963Representation: pubkeyData)
-                let bitchatPeerID = generateBitchatPeerID(for: peerID)
+        // Extract and validate peer's keys
+        var keyData: Data?
+        var p256PublicKey: P256.Signing.PublicKey?
+        let peerConsistentID = info?["peerid"]
+        
+        // Check for new format first (161-byte combined keys)
+        if let keysString = info?["keys"],
+           let fullKeyData = Data(base64Encoded: keysString) {
+            keyData = fullKeyData
+            
+            // Extract P256 key from 161-byte format
+            if fullKeyData.count == 161 {
+                let p256KeyData = fullKeyData.subdata(in: 96..<161)
+                p256PublicKey = try? P256.Signing.PublicKey(x963Representation: p256KeyData)
+                print("WiFiDirect: Found peer with 161-byte key format")
+            }
+        }
+        // Fall back to old format (65-byte P256 key only)
+        else if let pubkeyString = info?["pubkey"],
+                let pubkeyData = Data(base64Encoded: pubkeyString) {
+            keyData = pubkeyData
+            p256PublicKey = try? P256.Signing.PublicKey(x963Representation: pubkeyData)
+            print("WiFiDirect: Found peer with legacy 65-byte key format")
+        }
+        
+        if let keyData = keyData, let publicKey = p256PublicKey, let peerConsistentID = peerConsistentID {
+            queue.async(flags: .barrier) {
+                // Store P256 key by the peer's consistent ID only
+                self.peerPublicKeys[peerConsistentID] = publicKey
+                print("WiFiDirect: Stored P256 key for peer \(peerConsistentID)")
                 
-                queue.async(flags: .barrier) {
-                    // Store by the peer's consistent ID if provided
-                    if let peerConsistentID = info?["peerid"] {
-                        self.peerPublicKeys[peerConsistentID] = publicKey
-                        print("WiFiDirect: Stored public key for \(peerConsistentID) from discovery")
-                    }
-                    
-                    // Store by the MCPeerID-based hash
-                    self.peerPublicKeys[bitchatPeerID] = publicKey
-                    
-                    // Also store by device ID prefix for easier lookup
-                    if peerID.displayName.hasPrefix("bitchat-") {
-                        let deviceIDPrefix = String(peerID.displayName.dropFirst("bitchat-".count))
-                        self.peerPublicKeys[deviceIDPrefix] = publicKey
+                // If we have the full 161-byte format, add to encryption service
+                if keyData.count == 161 {
+                    do {
+                        try self.encryptionService.addPeerPublicKey(peerConsistentID, publicKeyData: keyData)
+                        print("WiFiDirect: Added full key set to encryption service")
+                    } catch {
+                        print("WiFiDirect: Failed to add keys to encryption service: \(error)")
                     }
                 }
-                
-                // Include our public key and peer ID in invitation context
-                let ourPubKey = signingKey.publicKey.x963Representation
-                let contextData: [String: String] = [
-                    "pubkey": ourPubKey.base64EncodedString(),
-                    "peerid": myConsistentPeerID
-                ]
+            }
+            
+            // Include our full 161-byte key data in invitation context
+            let fullKeyData = encryptionService.getCombinedPublicKeyData()
+            let contextData: [String: String] = [
+                "version": "2.0",
+                "keys": fullKeyData.base64EncodedString(),
+                "peerid": myConsistentPeerID
+            ]
+            
+            do {
                 let jsonData = try JSONEncoder().encode(contextData)
                 
                 // Invite the peer to join our session
                 print("WiFiDirect: Inviting peer \(peerID.displayName) to join session")
                 browser.invitePeer(peerID, to: session, withContext: jsonData, timeout: 30)
             } catch {
-                // Invalid public key - don't connect
-                print("WiFiDirect: Invalid public key from peer \(peerID.displayName)")
+                print("WiFiDirect: Failed to encode invitation context: \(error)")
             }
         } else {
-            // No public key - don't connect to unsigned peers
-            print("WiFiDirect: No public key from peer \(peerID.displayName)")
+            // No valid keys - don't connect to unsigned peers
+            print("WiFiDirect: No valid keys from peer \(peerID.displayName)")
         }
     }
     

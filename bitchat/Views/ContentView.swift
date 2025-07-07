@@ -1076,61 +1076,8 @@ struct ContentView: View {
         }
     }
     
-    private var networkStatusView: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Title
-            Text("Network Status")
-                .font(.system(size: 16, weight: .semibold, design: .monospaced))
-                .foregroundColor(textColor)
-            
-            Divider()
-            
-            // Transport Status
-            VStack(alignment: .leading, spacing: 8) {
-                Label {
-                    Text("Active Transports")
-                        .font(.system(size: 12, weight: .medium, design: .monospaced))
-                } icon: {
-                    Image(systemName: "network")
-                        .font(.system(size: 12))
-                }
-                .foregroundColor(textColor)
-                
-                HStack(spacing: 4) {
-                    // Combined peer count display
-                    let btCount = viewModel.transportManager.currentTransportInfo.bluetoothPeerCount
-                    let wifiCount = viewModel.transportManager.currentTransportInfo.wifiDirectPeerCount
-                    let isWiFiActive = viewModel.transportManager.currentTransportInfo.isWiFiDirectActive
-                    
-                    HStack(spacing: 0) {
-                        Image(systemName: "dot.radiowaves.left.and.right")
-                            .font(.system(size: 12))
-                            .foregroundColor(btCount > 0 ? Color.blue : Color.gray)
-                        Text(" \(btCount) ")
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundColor(textColor)
-                        Text("BT")
-                            .font(.system(size: 11, weight: .medium, design: .monospaced))
-                            .foregroundColor(Color.blue)
-                        Text(" \(btCount == 1 ? "peer" : "peers")")
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundColor(secondaryTextColor)
-                        
-                        // Only show WiFi Direct peer count if it's enabled
-                        if isWiFiActive {
-                            Text("  ")
-                            Image(systemName: "wifi")
-                                .font(.system(size: 12))
-                                .foregroundColor(wifiCount > 0 ? Color.green : Color.gray)
-                            Text(" \(wifiCount) WiFi \(wifiCount == 1 ? "peer" : "peers")")
-                                .font(.system(size: 11, design: .monospaced))
-                                .foregroundColor(secondaryTextColor)
-                        }
-                    }
-                }
-            }
-            
-            // Bridge Status
+    private var bridgeStatusSection: some View {
+        Group {
             if viewModel.transportManager.currentTransportInfo.isBridging {
                 Divider()
                 
@@ -1174,8 +1121,11 @@ struct ContentView: View {
                         .foregroundColor(secondaryTextColor)
                 }
             }
-            
-            // Connection Quality
+        }
+    }
+    
+    private var connectionQualitySection: some View {
+        Group {
             if viewModel.transportManager.currentTransportInfo.bluetoothPeerCount > 0 || 
                viewModel.transportManager.currentTransportInfo.wifiDirectPeerCount > 0 {
                 Divider()
@@ -1190,116 +1140,208 @@ struct ContentView: View {
                     }
                     .foregroundColor(textColor)
                     
-                    // Show mesh network info
-                    let totalPeers = viewModel.connectedPeers.count
-                    let meshDensity = totalPeers > 10 ? "High" : (totalPeers > 5 ? "Medium" : "Low")
-                    
-                    HStack {
-                        Text("Mesh Density:")
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundColor(secondaryTextColor)
-                        Text(meshDensity)
-                            .font(.system(size: 11, weight: .medium, design: .monospaced))
-                            .foregroundColor(meshDensity == "High" ? Color.green : (meshDensity == "Medium" ? Color.orange : Color.red))
-                    }
+                    meshDensityDisplay
                 }
             }
+        }
+    }
+    
+    private var meshDensityDisplay: some View {
+        let totalPeers = viewModel.connectedPeers.count
+        let meshDensity = totalPeers > 10 ? "High" : (totalPeers > 5 ? "Medium" : "Low")
+        let densityColor = meshDensity == "High" ? Color.green : (meshDensity == "Medium" ? Color.orange : Color.red)
+        
+        return HStack {
+            Text("Mesh Density:")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(secondaryTextColor)
+            Text(meshDensity)
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .foregroundColor(densityColor)
+        }
+    }
+    
+    private var transportControlsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Divider()
             
-            // Battery status
+            Text("Transport Mode")
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .foregroundColor(secondaryTextColor)
+            
+            HStack(spacing: 8) {
+                transportModeButton(mode: .bluetoothOnly)
+                transportModeButton(mode: .wifiOnly)
+                transportModeButton(mode: .auto)
+            }
+        }
+    }
+    
+    private enum TransportMode {
+        case bluetoothOnly, wifiOnly, auto
+    }
+    
+    private func transportModeButton(mode: TransportMode) -> some View {
+        let isActive: Bool
+        let iconName: String
+        let label: String
+        let color: Color
+        
+        switch mode {
+        case .bluetoothOnly:
+            isActive = !viewModel.transportManager.enableWiFiDirect && !viewModel.transportManager.autoSelectTransport
+            iconName = "dot.radiowaves.left.and.right"
+            label = "BT Only"
+            color = Color.blue
+        case .wifiOnly:
+            isActive = viewModel.transportManager.enableWiFiDirect && 
+                      !viewModel.transportManager.autoSelectTransport && 
+                      viewModel.transportManager.primaryTransport == .wifiDirect
+            iconName = "wifi"
+            label = "WiFi"
+            color = Color.green
+        case .auto:
+            isActive = viewModel.transportManager.autoSelectTransport
+            iconName = "wand.and.rays"
+            label = "Auto"
+            color = Color.purple
+        }
+        
+        return Button(action: {
+            switch mode {
+            case .bluetoothOnly:
+                viewModel.transportManager.autoSelectTransport = false
+                viewModel.transportManager.primaryTransport = .bluetooth
+                viewModel.transportManager.enableWiFiDirect = false
+            case .wifiOnly:
+                viewModel.transportManager.autoSelectTransport = false
+                viewModel.transportManager.primaryTransport = .wifiDirect
+                viewModel.transportManager.enableWiFiDirect = true
+                viewModel.transportManager.deactivateTransport(.bluetooth)
+            case .auto:
+                viewModel.transportManager.autoSelectTransport = true
+                viewModel.transportManager.enableWiFiDirect = true
+                viewModel.transportManager.activateTransport(.bluetooth)
+            }
+            viewModel.transportManager.updateTransportInfo()
+        }) {
+            HStack(spacing: 4) {
+                Image(systemName: iconName)
+                    .font(.system(size: 10))
+                Text(label)
+                    .font(.system(size: 10, design: .monospaced))
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(isActive ? color : Color.gray.opacity(0.3))
+            .foregroundColor(.white)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+    
+    private var batteryStatusSection: some View {
+        Group {
             let batteryLevel = Int(BatteryOptimizer.shared.batteryLevel * 100)
             Divider()
             
             HStack(spacing: 4) {
-                Image(systemName: batteryLevel > 80 ? "battery.100" : (batteryLevel > 50 ? "battery.75" : (batteryLevel > 20 ? "battery.50" : "battery.25")))
-                    .font(.system(size: 12))
-                    .foregroundColor(batteryLevel > 50 ? Color.green : (batteryLevel > 20 ? Color.orange : Color.red))
+                batteryIcon(level: batteryLevel)
                 Text("\(batteryLevel)% battery")
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundColor(secondaryTextColor)
             }
+        }
+    }
+    
+    private func batteryIcon(level: Int) -> some View {
+        let iconName = level > 80 ? "battery.100" : (level > 50 ? "battery.75" : (level > 20 ? "battery.50" : "battery.25"))
+        let iconColor = level > 50 ? Color.green : (level > 20 ? Color.orange : Color.red)
+        
+        return Image(systemName: iconName)
+            .font(.system(size: 12))
+            .foregroundColor(iconColor)
+    }
+    
+    private var transportStatusSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label {
+                Text("Active Transports")
+                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+            } icon: {
+                Image(systemName: "network")
+                    .font(.system(size: 12))
+            }
+            .foregroundColor(textColor)
             
-            // Transport Controls (for testing)
-            Divider()
-            
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Transport Mode")
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundColor(secondaryTextColor)
+            HStack(spacing: 4) {
+                // Combined peer count display
+                let btCount = viewModel.transportManager.currentTransportInfo.bluetoothPeerCount
+                let wifiCount = viewModel.transportManager.currentTransportInfo.wifiDirectPeerCount
+                let isWiFiActive = viewModel.transportManager.currentTransportInfo.isWiFiDirectActive
                 
-                HStack(spacing: 8) {
-                    // Bluetooth Only
-                    Button(action: {
-                        viewModel.transportManager.autoSelectTransport = false
-                        viewModel.transportManager.primaryTransport = .bluetooth
-                        viewModel.transportManager.enableWiFiDirect = false  // This will deactivate WiFi Direct
-                        viewModel.transportManager.forceWiFiDirect = false  // Disable force WiFi
-                        // Force update UI
-                        viewModel.transportManager.updateTransportInfo()
-                    }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "dot.radiowaves.left.and.right")
-                                .font(.system(size: 10))
-                            Text("BT Only")
-                                .font(.system(size: 10, design: .monospaced))
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(!viewModel.transportManager.enableWiFiDirect && !viewModel.transportManager.autoSelectTransport ? Color.blue : Color.gray.opacity(0.3))
-                        .foregroundColor(.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    
-                    // WiFi Direct
-                    Button(action: {
-                        viewModel.transportManager.autoSelectTransport = false
-                        viewModel.transportManager.primaryTransport = .wifiDirect
-                        viewModel.transportManager.enableWiFiDirect = true  // This will activate WiFi Direct
-                        viewModel.transportManager.forceWiFiDirect = true  // Force WiFi for testing
-                        // Deactivate Bluetooth when in WiFi-only mode
-                        viewModel.transportManager.deactivateTransport(.bluetooth)
-                        // Force update UI
-                        viewModel.transportManager.updateTransportInfo()
-                    }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "wifi")
-                                .font(.system(size: 10))
-                            Text("WiFi")
-                                .font(.system(size: 10, design: .monospaced))
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(viewModel.transportManager.enableWiFiDirect && !viewModel.transportManager.autoSelectTransport && viewModel.transportManager.primaryTransport == .wifiDirect ? Color.green : Color.gray.opacity(0.3))
-                        .foregroundColor(.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    
-                    // Auto
-                    Button(action: {
-                        viewModel.transportManager.autoSelectTransport = true
-                        viewModel.transportManager.enableWiFiDirect = true
-                        viewModel.transportManager.forceWiFiDirect = false  // Disable force WiFi in auto mode
-                        // Re-activate Bluetooth in auto mode
-                        viewModel.transportManager.activateTransport(.bluetooth)
-                        // Force update UI
-                        viewModel.transportManager.updateTransportInfo()
-                    }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "wand.and.rays")
-                                .font(.system(size: 10))
-                            Text("Auto")
-                                .font(.system(size: 10, design: .monospaced))
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(viewModel.transportManager.autoSelectTransport ? Color.purple : Color.gray.opacity(0.3))
-                        .foregroundColor(.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-                    }
-                    .buttonStyle(PlainButtonStyle())
+                bluetoothPeerDisplay(count: btCount)
+                
+                // Only show WiFi Direct peer count if it's enabled
+                if isWiFiActive {
+                    Text("  ")
+                    wifiPeerDisplay(count: wifiCount)
                 }
             }
+        }
+    }
+    
+    private func bluetoothPeerDisplay(count: Int) -> some View {
+        HStack(spacing: 0) {
+            Image(systemName: "dot.radiowaves.left.and.right")
+                .font(.system(size: 12))
+                .foregroundColor(count > 0 ? Color.blue : Color.gray)
+            Text(" \(count) ")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(textColor)
+            Text("BT")
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .foregroundColor(Color.blue)
+            Text(" \(count == 1 ? "peer" : "peers")")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(secondaryTextColor)
+        }
+    }
+    
+    private func wifiPeerDisplay(count: Int) -> some View {
+        HStack(spacing: 0) {
+            Image(systemName: "wifi")
+                .font(.system(size: 12))
+                .foregroundColor(count > 0 ? Color.green : Color.gray)
+            Text(" \(count) WiFi \(count == 1 ? "peer" : "peers")")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(secondaryTextColor)
+        }
+    }
+    
+    private var networkStatusView: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Title
+            Text("Network Status")
+                .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                .foregroundColor(textColor)
+            
+            Divider()
+            
+            // Transport Status
+            transportStatusSection
+            
+            // Bridge Status
+            bridgeStatusSection
+            
+            // Connection Quality
+            connectionQualitySection
+            
+            // Battery status
+            batteryStatusSection
+            
+            // Transport Controls
+            transportControlsSection
         }
         .padding(16)
         .frame(width: 280)

@@ -45,6 +45,7 @@ class BluetoothMeshService: NSObject {
     private var peerRSSI: [String: NSNumber] = [:] // Track RSSI values for peers
     private var peripheralRSSI: [String: NSNumber] = [:] // Track RSSI by peripheral ID during discovery
     private var loggedCryptoErrors = Set<String>()  // Track which peers we've logged crypto errors for
+    private var peerPublicKeys: [String: Data] = [:]  // P256 public keys for signature verification
     
     weak var delegate: BitchatDelegate?
     private let encryptionService = EncryptionService()
@@ -249,11 +250,9 @@ class BluetoothMeshService: NSObject {
     }
     
     override init() {
-        // Generate ephemeral peer ID for each session to prevent tracking
-        // Use random bytes instead of UUID for better anonymity
-        var randomBytes = [UInt8](repeating: 0, count: 4)
-        _ = SecRandomCopyBytes(kSecRandomDefault, 4, &randomBytes)
-        self.myPeerID = randomBytes.map { String(format: "%02x", $0) }.joined()
+        // Use unified device identity instead of ephemeral ID
+        // For Bluetooth, use only first 8 characters due to BLE advertisement limitations
+        self.myPeerID = String(DeviceIdentity.shared.deviceID.prefix(8))
         
         super.init()
         
@@ -513,9 +512,10 @@ class BluetoothMeshService: NSObject {
                 // Sign the message payload (no encryption for broadcasts)
                 let signature: Data?
                 do {
-                    signature = try self.encryptionService.sign(messageData)
+                    signature = try DeviceIdentity.shared.sign(messageData)
+                    print("[SEND] Signed message with DeviceIdentity, signature length: \(signature?.count ?? 0)")
                 } catch {
-                    // print("[CRYPTO] Failed to sign message: \(error)")
+                    print("[SEND] Failed to sign message: \(error)")
                     signature = nil
                 }
                 
@@ -598,7 +598,7 @@ class BluetoothMeshService: NSObject {
                 // Sign the encrypted payload
                 let signature: Data?
                 do {
-                    signature = try self.encryptionService.sign(encryptedPayload)
+                    signature = try DeviceIdentity.shared.sign(encryptedPayload)
                 } catch {
                     // print("[CRYPTO] Failed to sign private message: \(error)")
                     signature = nil
@@ -820,7 +820,7 @@ class BluetoothMeshService: NSObject {
                     // Sign the message payload
                     let signature: Data?
                     do {
-                        signature = try self.encryptionService.sign(messageData)
+                        signature = try DeviceIdentity.shared.sign(messageData)
                     } catch {
                         signature = nil
                     }
@@ -1237,7 +1237,7 @@ class BluetoothMeshService: NSObject {
     
     func broadcastPacket(_ packet: BitchatPacket) {
         guard let data = packet.toBinaryData() else { 
-            // print("[ERROR] Failed to convert packet to binary data")
+            print("[SEND] Failed to convert packet to binary data")
             // Add to retry queue if this is a message packet
             if packet.type == MessageType.message.rawValue,
                let message = BitchatMessage.fromBinaryPayload(packet.payload) {
@@ -1252,6 +1252,8 @@ class BluetoothMeshService: NSObject {
             }
             return 
         }
+        
+        print("[SEND] Broadcasting packet, binary size: \(data.count), type: \(packet.type), to \(connectedPeripherals.count) peripherals and \(subscribedCentrals.count) centrals")
         
         
         // Send to connected peripherals (as central)
@@ -1338,12 +1340,18 @@ class BluetoothMeshService: NSObject {
     private func handleReceivedPacket(_ packet: BitchatPacket, from peerID: String, peripheral: CBPeripheral? = nil) {
         messageQueue.async(flags: .barrier) { [weak self] in
             guard let self = self else { return }
+            
+            let senderIDString = String(data: packet.senderID, encoding: .utf8) ?? "unknown"
+            print("[RECV] Received packet type: \(packet.type), from peerID: \(peerID), senderID: \(senderIDString), TTL: \(packet.ttl), payload size: \(packet.payload.count)")
+            
             guard packet.ttl > 0 else { 
+                print("[RECV] Dropping packet with TTL 0")
                 return 
             }
             
             // Validate packet has payload
             guard !packet.payload.isEmpty else {
+                print("[RECV] Dropping packet with empty payload")
                 return
             }
             
@@ -1423,17 +1431,30 @@ class BluetoothMeshService: NSObject {
                     
                     // Verify signature if present
                     if let signature = packet.signature {
-                        do {
-                            let isValid = try encryptionService.verify(signature, for: packet.payload, from: senderID)
+                        print("[VERIFY] Verifying signature for message from \(senderID), signature size: \(signature.count)")
+                        // Get P256 public key we stored during key exchange
+                        if let publicKeyData = self.peerPublicKeys[senderID] {
+                            print("[VERIFY] Found P256 public key for \(senderID), key size: \(publicKeyData.count)")
+                            let isValid = DeviceIdentity.shared.verify(signature: signature, for: packet.payload, using: publicKeyData)
                             if !isValid {
+                                if !loggedCryptoErrors.contains(senderID) {
+                                    print("[VERIFY] Invalid signature from \(senderID)")
+                                    loggedCryptoErrors.insert(senderID)
+                                }
                                 return
+                            } else {
+                                print("[VERIFY] Signature verified successfully for \(senderID)")
                             }
-                        } catch {
+                        } else {
                             if !loggedCryptoErrors.contains(senderID) {
-                                // print("[CRYPTO] Failed to verify signature from \(senderID): \(error)")
+                                print("[VERIFY] No P256 public key found for \(senderID)")
+                                print("[VERIFY] Available keys: \(self.peerPublicKeys.keys.sorted())")
                                 loggedCryptoErrors.insert(senderID)
                             }
+                            return
                         }
+                    } else {
+                        print("[VERIFY] No signature in packet from \(senderID)")
                     }
                     
                     // Parse broadcast message (not encrypted)
@@ -1477,6 +1498,7 @@ class BluetoothMeshService: NSObject {
                             self.lastMessageFromPeer[peerID] = Date()
                         }
                         
+                        print("[DELIVER] Delivering message to UI - sender: \(message.sender), content: \(message.content.prefix(50))...")
                         DispatchQueue.main.async {
                             self.delegate?.didReceiveMessage(messageWithPeerID)
                         }
@@ -1526,17 +1548,30 @@ class BluetoothMeshService: NSObject {
                     
                     // Verify signature if present
                     if let signature = packet.signature {
-                        do {
-                            let isValid = try encryptionService.verify(signature, for: packet.payload, from: senderID)
+                        print("[VERIFY] Verifying signature for message from \(senderID), signature size: \(signature.count)")
+                        // Get P256 public key we stored during key exchange
+                        if let publicKeyData = self.peerPublicKeys[senderID] {
+                            print("[VERIFY] Found P256 public key for \(senderID), key size: \(publicKeyData.count)")
+                            let isValid = DeviceIdentity.shared.verify(signature: signature, for: packet.payload, using: publicKeyData)
                             if !isValid {
+                                if !loggedCryptoErrors.contains(senderID) {
+                                    print("[VERIFY] Invalid signature from \(senderID)")
+                                    loggedCryptoErrors.insert(senderID)
+                                }
                                 return
+                            } else {
+                                print("[VERIFY] Signature verified successfully for \(senderID)")
                             }
-                        } catch {
+                        } else {
                             if !loggedCryptoErrors.contains(senderID) {
-                                // print("[CRYPTO] Failed to verify signature from \(senderID): \(error)")
+                                print("[VERIFY] No P256 public key found for \(senderID)")
+                                print("[VERIFY] Available keys: \(self.peerPublicKeys.keys.sorted())")
                                 loggedCryptoErrors.insert(senderID)
                             }
+                            return
                         }
+                    } else {
+                        print("[VERIFY] No signature in packet from \(senderID)")
                     }
                     
                     // Decrypt the message
@@ -1598,6 +1633,7 @@ class BluetoothMeshService: NSObject {
                             self.lastMessageFromPeer[peerID] = Date()
                         }
                         
+                        print("[DELIVER] Delivering message to UI - sender: \(message.sender), content: \(message.content.prefix(50))...")
                         DispatchQueue.main.async {
                             self.delegate?.didReceiveMessage(messageWithPeerID)
                         }
@@ -1665,10 +1701,39 @@ class BluetoothMeshService: NSObject {
                     
                     // Mark this key exchange as processed
                     processedKeyExchanges.insert(exchangeKey)
-                    do {
-                        try encryptionService.addPeerPublicKey(senderID, publicKeyData: publicKeyData)
-                    } catch {
-                        // print("[KEY_EXCHANGE] Failed to add public key for \(senderID): \(error)")
+                    
+                    // Check if this is P256 key (65 bytes) or combined key data
+                    print("[KEY_EXCHANGE] Received key exchange from \(senderID), key data size: \(publicKeyData.count)")
+                    if publicKeyData.count == 65 {
+                        // Direct P256 public key - store for signature verification
+                        print("[KEY_EXCHANGE] Received 65-byte P256 key directly")
+                        self.peerPublicKeys[senderID] = publicKeyData
+                        
+                        // Also add to encryption service for compatibility
+                        // Create a minimal combined key data with dummy Curve25519 keys
+                        var combinedKeyData = Data(count: 96)  // 32 + 32 + 32
+                        combinedKeyData.append(publicKeyData)  // Append P256 key
+                        try? encryptionService.addPeerPublicKey(senderID, publicKeyData: combinedKeyData)
+                    } else if publicKeyData.count >= 96 {
+                        // Combined key data - add to encryption service
+                        print("[KEY_EXCHANGE] Received combined key data")
+                        do {
+                            try encryptionService.addPeerPublicKey(senderID, publicKeyData: publicKeyData)
+                            print("[KEY_EXCHANGE] Successfully added peer keys to encryption service")
+                        } catch {
+                            print("[KEY_EXCHANGE] Failed to add peer keys: \(error)")
+                        }
+                        
+                        // Extract P256 key if present (161 bytes format)
+                        if publicKeyData.count == 161 {
+                            let p256KeyData = publicKeyData.subdata(in: 96..<161)
+                            self.peerPublicKeys[senderID] = p256KeyData
+                            print("[KEY_EXCHANGE] Extracted and stored 65-byte P256 key from 161-byte format")
+                        } else {
+                            print("[KEY_EXCHANGE] No P256 key in \(publicKeyData.count)-byte format (legacy?)")
+                        }
+                    } else {
+                        print("[KEY_EXCHANGE] Unexpected key data size: \(publicKeyData.count)")
                     }
                     
                     // Register identity key with view model for persistent favorites
@@ -2238,9 +2303,19 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
         peripheralRSSI[peripheralID] = RSSI
         
         // Extract peer ID from name (no prefix for stealth)
-        if let name = peripheral.name, name.count == 8 {
-            // Assume 8-character names are peer IDs
-            let peerID = name
+        if let name = peripheral.name {
+            // Handle both 8-char (truncated) and 16-char (full) peer IDs
+            let peerID: String
+            if name.count == 8 {
+                // Already truncated by BLE
+                peerID = name
+            } else if name.count == 16 {
+                // Full device ID, truncate to match our convention
+                peerID = String(name.prefix(8))
+            } else {
+                // Not a valid peer ID
+                return
+            }
             peerRSSI[peerID] = RSSI
             // Discovered potential peer
         }
@@ -2426,7 +2501,8 @@ extension BluetoothMeshService: CBPeripheralDelegate {
                 peripheral.maximumWriteValueLength(for: .withoutResponse)
                 
                 // Send key exchange and announce immediately without any delay
-                let publicKeyData = self.encryptionService.getCombinedPublicKeyData()
+                let publicKeyData = encryptionService.getCombinedPublicKeyData()  // 161 bytes with P256
+                print("[KEY_EXCHANGE] Sending key exchange to peripheral, key data size: \(publicKeyData.count), myPeerID: \(self.myPeerID)")
                 let packet = BitchatPacket(
                     type: MessageType.keyExchange.rawValue,
                     ttl: 1,
@@ -2436,7 +2512,10 @@ extension BluetoothMeshService: CBPeripheralDelegate {
                 
                 if let data = packet.toBinaryData() {
                     let writeType: CBCharacteristicWriteType = characteristic.properties.contains(.write) ? .withResponse : .withoutResponse
+                    print("[KEY_EXCHANGE] Writing key exchange packet, binary size: \(data.count)")
                     peripheral.writeValue(data, for: characteristic, type: writeType)
+                } else {
+                    print("[KEY_EXCHANGE] Failed to convert key exchange packet to binary")
                 }
                 
                 // Send announce packet after a short delay to avoid overwhelming the connection
@@ -2481,17 +2560,22 @@ extension BluetoothMeshService: CBPeripheralDelegate {
     
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
         guard let data = characteristic.value else {
+            print("[CENTRAL] No data in characteristic value")
             return
         }
         
+        print("[CENTRAL] Received data as central, data size: \(data.count)")
+        
         guard let packet = BitchatPacket.from(data) else { 
-            // Failed to parse packet
+            print("[CENTRAL] Failed to parse packet from data")
             return 
         }
         
         // Use the sender ID from the packet, not our local mapping which might still be a temp ID
         let _ = connectedPeripherals.first(where: { $0.value == peripheral })?.key ?? "unknown"
         let packetSenderID = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8) ?? "unknown"
+        
+        print("[CENTRAL] Parsed packet type: \(packet.type), from senderID: \(packetSenderID)")
         
         // Always handle received packets
         handleReceivedPacket(packet, from: packetSenderID, peripheral: peripheral)
@@ -2575,6 +2659,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                let packet = BitchatPacket.from(data) {
                 // Try to identify peer from packet
                 let peerID = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8) ?? "unknown"
+                print("[PERIPHERAL] Received packet as peripheral, type: \(packet.type), from peerID: \(peerID), data size: \(data.count)")
                 
                 
                 // Store the central for updates
@@ -2586,7 +2671,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 if peerID != "unknown" && peerID != myPeerID {
                     // Send key exchange back if we haven't already
                     if packet.type == MessageType.keyExchange.rawValue {
-                        let publicKeyData = self.encryptionService.getCombinedPublicKeyData()
+                        let publicKeyData = encryptionService.getCombinedPublicKeyData()  // 161 bytes with P256
                         let responsePacket = BitchatPacket(
                             type: MessageType.keyExchange.rawValue,
                             ttl: 1,
@@ -2635,7 +2720,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             subscribedCentrals.append(central)
             
             // Send our public key to the newly connected central
-            let publicKeyData = encryptionService.getCombinedPublicKeyData()
+            let publicKeyData = encryptionService.getCombinedPublicKeyData()  // 161 bytes with P256
             let keyPacket = BitchatPacket(
                 type: MessageType.keyExchange.rawValue,
                 ttl: 1,
@@ -2760,8 +2845,8 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         
         startAdvertising()
         
-        // Stop advertising after a short burst (1 second)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+        // Stop advertising after a longer burst (10 seconds) to ensure discovery
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10.0) { [weak self] in
             if self?.batteryOptimizer.currentPowerMode.advertisingInterval ?? 0 > 0 {
                 self?.peripheralManager?.stopAdvertising()
                 self?.isAdvertising = false

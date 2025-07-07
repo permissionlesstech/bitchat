@@ -914,16 +914,16 @@ class ChatViewModel: ObservableObject {
             // Check if room is password protected and encrypt if needed
             if let room = messageRoom, roomKeys[room] != nil {
                 // Send encrypted room message
-                if transportManager.forceWiFiDirect {
-                    // Route through transport manager when forcing WiFi Direct
+                if transportManager.activeTransports.contains(.wifiDirect) {
+                    // Route through transport manager when WiFi Direct is active
                     sendMessageThroughTransportManager(content, mentions: mentions, room: room, roomKey: roomKeys[room])
                 } else {
                     meshService.sendEncryptedRoomMessage(content, mentions: mentions, room: room, roomKey: roomKeys[room]!)
                 }
             } else {
                 // Send via mesh with mentions and room (unencrypted)
-                if transportManager.forceWiFiDirect {
-                    // Route through transport manager when forcing WiFi Direct
+                if transportManager.activeTransports.contains(.wifiDirect) {
+                    // Route through transport manager when WiFi Direct is active
                     sendMessageThroughTransportManager(content, mentions: mentions, room: messageRoom, roomKey: nil)
                 } else {
                     meshService.sendMessage(content, mentions: mentions, room: messageRoom)
@@ -967,8 +967,8 @@ class ChatViewModel: ObservableObject {
         objectWillChange.send()
         
         // Send via mesh with the same message ID
-        if transportManager.forceWiFiDirect {
-            // Route through transport manager when forcing WiFi Direct
+        if transportManager.activeTransports.contains(.wifiDirect) {
+            // Route through transport manager when WiFi Direct is active
             sendPrivateMessageThroughTransportManager(content, to: peerID, recipientNickname: recipientNickname, messageID: message.id)
         } else {
             meshService.sendPrivateMessage(content, to: peerID, recipientNickname: recipientNickname, messageID: message.id)
@@ -1017,15 +1017,9 @@ class ChatViewModel: ObservableObject {
                 payload = try JSONEncoder().encode(message)
             }
             
-            // Use WiFi Direct identity when forcing WiFi Direct
-            let senderID: Data
-            if transportManager.forceWiFiDirect,
-               let wifiTransport = transportManager.transports[.wifiDirect] as? WiFiDirectTransport {
-                senderID = wifiTransport.myConsistentPeerID.data(using: .utf8) ?? Data()
-                print("TransportManager: Using WiFi Direct sender ID: \(wifiTransport.myConsistentPeerID)")
-            } else {
-                senderID = meshService.myPeerID.data(using: .utf8) ?? Data()
-            }
+            // Use consistent 8-character sender ID for all transports
+            // This matches Bluetooth's BLE advertisement limitation
+            let senderID = meshService.myPeerID.data(using: .utf8) ?? Data()
             
             let packet = BitchatPacket(
                 type: MessageType.message.rawValue,
@@ -1062,7 +1056,7 @@ class ChatViewModel: ObservableObject {
             let payload = try JSONEncoder().encode(message)
             // Use WiFi Direct identity when forcing WiFi Direct
             let senderID: Data
-            if transportManager.forceWiFiDirect,
+            if transportManager.activeTransports.contains(.wifiDirect),
                let wifiTransport = transportManager.transports[.wifiDirect] as? WiFiDirectTransport {
                 senderID = wifiTransport.myConsistentPeerID.data(using: .utf8) ?? Data()
             } else {

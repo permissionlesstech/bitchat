@@ -23,13 +23,16 @@ class TransportManager: ObservableObject {
     
     // Private properties
     private(set) var transports: [TransportType: TransportProtocol] = [:]
-    private var routingTable: [String: TransportType] = [:]  // peerID -> preferred transport
-    private var peerTransports: [String: Set<TransportType>] = [:]  // peerID -> available transports
+    private let peerManager = PeerManager.shared
     private let transportQueue = DispatchQueue(label: "bitchat.transportManager", attributes: .concurrent)
     private var cancellables = Set<AnyCancellable>()
     private let bridgeManager = BridgeManager.shared
     private var updateDebounceTimer: Timer?
     private var pendingUpdateInfo: TransportInfo?
+    
+    // Legacy peer tracking - being migrated to PeerManager
+    private var peerTransports: [String: Set<TransportType>] = [:]
+    private var routingTable: [String: TransportType] = [:]
     
     // Delegate
     weak var delegate: BitchatDelegate?
@@ -49,20 +52,25 @@ class TransportManager: ObservableObject {
     
     var autoSelectTransport = true
     var preferLowPower = true
-    var forceWiFiDirect = false  // Debug flag to force WiFi Direct for testing
     
     // Smart activation settings
     private let minPeersForBluetooth = 2  // Activate WiFi Direct if BT has fewer peers
+    private let maxPeersForWiFi = 5      // Deactivate WiFi Direct if BT has many peers
     private let wifiActivationDelay: TimeInterval = 5.0  // Wait before activating WiFi
     private var wifiActivationTimer: Timer?
-    private var lastPeerCountCheck = Date()
     private var isSmartActivationEnabled = true
     private var wifiActivationScheduled = false
     private var lastLoggedPeerCount = -1
+    private var peerCleanupTimer: Timer?
     
     private init() {
         // Start smart activation monitoring
         startSmartActivation()
+        
+        // Start peer cleanup timer
+        peerCleanupTimer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { [weak self] _ in
+            self?.peerManager.cleanupStalePeers()
+        }
     }
     
     // MARK: - Transport Management
@@ -129,128 +137,66 @@ class TransportManager: ObservableObject {
         transportQueue.async {
             if let peerID = peerID {
                 // Unicast: select optimal transport for specific peer
-                let transport = self.selectTransport(for: packet, to: peerID)
-                if self.forceWiFiDirect && transport.transportType == .wifiDirect {
-                    print("📡 Forcing WiFi Direct for message to \(peerID)")
-                } else {
-                    print("📡 Sending message to \(peerID) via \(transport.transportType)")
+                guard let transportType = self.peerManager.selectTransport(for: peerID) else {
+                    print("📡 No transport available for peer \(peerID), trying all active transports")
+                    // Peer not yet visible, try all active transports
+                    for transport in self.transports.values where self.activeTransports.contains(transport.transportType) {
+                        try? transport.send(packet, to: peerID)
+                    }
+                    return
                 }
+                
+                guard let transport = self.transports[transportType] else {
+                    print("📡 Transport \(transportType) not available")
+                    return
+                }
+                
+                print("📡 Sending message to \(peerID) via \(transport.transportType)")
+                
                 do {
                     try transport.send(packet, to: peerID)
+                    // Record successful delivery
+                    self.peerManager.recordSuccessfulDelivery(to: peerID, via: transportType)
                 } catch {
+                    print("📡 Failed to send via \(transportType): \(error)")
+                    self.peerManager.recordFailedDelivery(to: peerID, via: transportType)
+                    
                     // Try fallback transport
                     if let fallback = self.getFallbackTransport(for: transport.transportType) {
-                        print("📡 Primary transport failed, trying fallback \(fallback.transportType) for \(peerID)")
+                        print("📡 Trying fallback \(fallback.transportType) for \(peerID)")
                         try? fallback.send(packet, to: peerID)
                     }
                 }
             } else {
                 // Broadcast: use all active transports
                 let activeTransportTypes = self.activeTransports.sorted(by: { $0.rawValue < $1.rawValue })
-                if self.forceWiFiDirect {
-                    // When forcing WiFi Direct, only broadcast through WiFi Direct
-                    if let wifiTransport = self.transports[.wifiDirect], wifiTransport.isAvailable {
-                        print("📡 Forcing broadcast via WiFi Direct only")
-                        try? wifiTransport.broadcast(packet)
-                    }
-                } else {
-                    // Normal broadcast through all active transports
-                    // print("📡 Broadcasting message via: \(activeTransportTypes.map { $0.rawValue }.joined(separator: ", "))")
-                    for transport in self.transports.values where self.activeTransports.contains(transport.transportType) {
-                        try? transport.broadcast(packet)
-                    }
+                print("📡 Broadcasting message via: \(activeTransportTypes.map { $0.rawValue }.joined(separator: ", "))")
+                
+                for transport in self.transports.values where self.activeTransports.contains(transport.transportType) {
+                    try? transport.broadcast(packet)
+                }
+                
+                // Check if we should bridge this broadcast
+                if self.peerManager.canBridge() && packet.ttl > 1 {
+                    // This device can act as a bridge
+                    print("🌉 Bridge active: forwarding broadcast between transports")
                 }
             }
         }
     }
     
-    private func selectTransport(for packet: BitchatPacket, to peerID: String) -> TransportProtocol {
-        // Check if we have a preferred transport for this peer
-        if let preferredType = routingTable[peerID],
-           let transport = transports[preferredType],
+    private func selectTransport(for packet: BitchatPacket, to peerID: String) -> TransportProtocol? {
+        // Always use PeerManager for transport selection
+        if let transportType = peerManager.selectTransport(for: peerID),
+           let transport = transports[transportType],
            transport.isAvailable {
             return transport
         }
         
-        // Otherwise, use intelligent routing
-        let messageSize = estimatePacketSize(packet)
-        let batteryLevel = BatteryOptimizer.shared.batteryLevel
-        
-        // Get available transports for this peer
-        let availableForPeer = peerTransports[peerID] ?? [.bluetooth]
-        
-        // Select based on criteria
-        if autoSelectTransport {
-            let selected = selectOptimalTransport(
-                messageSize: messageSize,
-                batteryLevel: batteryLevel,
-                availableTransports: availableForPeer
-            )
-            if selected.transportType == .bluetooth {
-                print("📡 Using Bluetooth for peer \(peerID) (preferred for nearby peers)")
-            } else {
-                print("📡 Using \(selected.transportType) for peer \(peerID) (size: \(messageSize) bytes)")
-            }
-            return selected
-        } else {
-            // Use primary transport if available
-            if availableForPeer.contains(primaryTransport),
-               let transport = transports[primaryTransport] {
-                print("📡 Using primary transport \(transport.transportType) for peer \(peerID)")
-                return transport
-            }
-        }
-        
-        // Fallback to Bluetooth
-        return transports[.bluetooth]!
+        // Peer not visible on any transport
+        return nil
     }
     
-    private func selectOptimalTransport(
-        messageSize: Int,
-        batteryLevel: Float,
-        availableTransports: Set<TransportType>
-    ) -> TransportProtocol {
-        // Debug: Force WiFi Direct if flag is set and WiFi Direct is available
-        if forceWiFiDirect && availableTransports.contains(.wifiDirect),
-           let wifi = transports[.wifiDirect],
-           wifi.isAvailable {
-            print("TransportManager: Forcing WiFi Direct for testing")
-            return wifi
-        }
-        
-        // ALWAYS prefer Bluetooth if available (lower power, works well for nearby peers)
-        if availableTransports.contains(.bluetooth),
-           let bluetooth = transports[.bluetooth],
-           bluetooth.isAvailable {
-            // Check if peer has good Bluetooth signal
-            // For now, we assume Bluetooth peers are "nearby" if we can connect
-            return bluetooth
-        }
-        
-        // Only use WiFi Direct if:
-        // 1. Bluetooth is not available for this peer, OR
-        // 2. Message is very large and battery is good
-        if messageSize > 50_000 && batteryLevel > 0.5 {
-            if availableTransports.contains(.wifiDirect),
-               let wifi = transports[.wifiDirect],
-               wifi.isAvailable {
-                print("TransportManager: Using WiFi Direct for large message (\(messageSize) bytes)")
-                return wifi
-            }
-        }
-        
-        // If Bluetooth not available but WiFi Direct is, use it
-        if availableTransports.contains(.wifiDirect),
-           let wifi = transports[.wifiDirect],
-           wifi.isAvailable {
-            print("TransportManager: Using WiFi Direct (Bluetooth not available for peer)")
-            return wifi
-        }
-        
-        // Default to Bluetooth even if not currently available
-        // (message will be queued)
-        return transports[.bluetooth]!
-    }
     
     private func estimatePacketSize(_ packet: BitchatPacket) -> Int {
         // Estimate packet size for routing decisions
@@ -326,38 +272,41 @@ class TransportManager: ObservableObject {
     // MARK: - Bridge Support
     
     private func bridgeBroadcast(_ packet: BitchatPacket, from sourceTransport: TransportType) {
-        let targetTransports = bridgeManager.shouldBridgeMessage(packet, from: sourceTransport)
+        // Check if we can bridge
+        guard peerManager.canBridge() && packet.ttl > 1 else { return }
         
-        for targetType in targetTransports {
-            if let transport = transports[targetType], transport.isAvailable {
-                // Mark packet as bridged by decrementing TTL
+        // Get peers on source transport
+        let sourcePeers = Set(peerManager.getPeers(on: sourceTransport))
+        
+        // Bridge to other transports with non-overlapping peers
+        for (type, transport) in transports where type != sourceTransport && transport.isAvailable {
+            let targetPeers = Set(peerManager.getPeers(on: type))
+            
+            // Only bridge if there are peers on target that aren't on source
+            if !targetPeers.isEmpty && !targetPeers.isSubset(of: sourcePeers) {
                 var bridgedPacket = packet
-                bridgedPacket.ttl = max(1, packet.ttl - 1)  // Extra hop for bridge
+                bridgedPacket.ttl = max(1, packet.ttl - 1)
                 
                 try? transport.broadcast(bridgedPacket)
+                print("🌉 Bridging broadcast from \(sourceTransport) to \(type)")
             }
         }
     }
     
     private func updateBridgeManagerPeers() {
-        // Collect peers by transport type
-        var bluetoothPeers: [String] = []
-        var wifiDirectPeers: [String] = []
-        
-        transportQueue.sync {
-            for (peerID, transports) in peerTransports {
-                if transports.contains(.bluetooth) {
-                    bluetoothPeers.append(peerID)
-                }
-                if transports.contains(.wifiDirect) {
-                    wifiDirectPeers.append(peerID)
-                }
-            }
-        }
+        // Get peers from PeerManager
+        let bluetoothPeers = peerManager.getPeers(on: TransportType.bluetooth)
+        let wifiDirectPeers = peerManager.getPeers(on: TransportType.wifiDirect)
         
         // Update BridgeManager
         bridgeManager.updateBluetoothPeers(bluetoothPeers)
         bridgeManager.updateWiFiDirectPeers(wifiDirectPeers)
+        
+        // Check if we're a bridge node
+        let isBridge = peerManager.canBridge()
+        if isBridge != bridgeManager.isBridgeNode {
+            print("🌉 Bridge status changed: \(isBridge)")
+        }
         
         // Update transport info for UI
         updateTransportInfo()
@@ -385,18 +334,12 @@ class TransportManager: ObservableObject {
                 }
             }
             
-            // Update peer transport tracking based on actual connected peers
+            // Update PeerManager with current peer visibility
             for (type, transport) in self.transports {
                 for peer in transport.currentPeers {
-                    var transports = self.peerTransports[peer.peerID] ?? []
-                    transports.insert(type)
-                    self.peerTransports[peer.peerID] = transports
+                    self.peerManager.updatePeerVisibility(peerID: peer.peerID, on: type, rssi: peer.rssi)
                 }
             }
-            
-            // Clean up disconnected peers
-            let allConnectedPeerIDs = Set(self.transports.values.flatMap { $0.currentPeers.map { $0.peerID } })
-            self.peerTransports = self.peerTransports.filter { allConnectedPeerIDs.contains($0.key) }
             
             // Update allPeers list with unique peers from all transports
             var uniquePeers: [String: PeerInfo] = [:]
@@ -513,12 +456,19 @@ class TransportManager: ObservableObject {
             if shouldLog {
                 print("TransportManager: \(bluetoothPeerCount) Bluetooth peers found, canceling WiFi Direct activation")
             }
-        } else if bluetoothPeerCount >= minPeersForBluetooth * 2 && enableWiFiDirect {
-            // Plenty of Bluetooth peers, deactivate WiFi Direct to save power
-            if shouldLog {
-                print("TransportManager: \(bluetoothPeerCount) Bluetooth peers found, deactivating WiFi Direct to save power")
+        } else if bluetoothPeerCount >= maxPeersForWiFi && enableWiFiDirect {
+            // Plenty of Bluetooth peers, check if we should deactivate WiFi Direct
+            let wifiPeerCount = peerManager.getPeers(on: TransportType.wifiDirect).count
+            
+            // Only deactivate if we're not bridging important connections
+            if wifiPeerCount == 0 || !peerManager.canBridge() {
+                if shouldLog {
+                    print("TransportManager: \(bluetoothPeerCount) Bluetooth peers found, deactivating WiFi Direct to save power")
+                }
+                enableWiFiDirect = false
+            } else if shouldLog {
+                print("TransportManager: Keeping WiFi Direct active for bridging (\(wifiPeerCount) WiFi peers)")
             }
-            enableWiFiDirect = false
         }
     }
     
@@ -535,12 +485,8 @@ class TransportManager: ObservableObject {
 
 extension TransportManager: TransportDelegate {
     func transport(_ transport: TransportProtocol, didDiscoverPeer peer: PeerInfo) {
-        // Update peer transports
-        transportQueue.async(flags: .barrier) {
-            var transports = self.peerTransports[peer.peerID] ?? []
-            transports.insert(transport.transportType)
-            self.peerTransports[peer.peerID] = transports
-        }
+        // Update PeerManager
+        peerManager.updatePeerVisibility(peerID: peer.peerID, on: transport.transportType, rssi: peer.rssi)
         
         // Update peer list
         DispatchQueue.main.async {
@@ -559,34 +505,28 @@ extension TransportManager: TransportDelegate {
     }
     
     func transport(_ transport: TransportProtocol, didLosePeer peerID: String) {
-        // Update peer transports
-        transportQueue.async(flags: .barrier) {
-            if var transports = self.peerTransports[peerID] {
-                transports.remove(transport.transportType)
-                if transports.isEmpty {
-                    self.peerTransports.removeValue(forKey: peerID)
-                    self.routingTable.removeValue(forKey: peerID)
-                } else {
-                    self.peerTransports[peerID] = transports
-                }
-            }
-        }
-        
-        // Update peer list if no transports left
-        if peerTransports[peerID] == nil {
-            DispatchQueue.main.async {
+        // PeerManager will handle stale peer cleanup automatically
+        // Just update our peer list
+        DispatchQueue.main.async {
+            // Check if peer is still visible on other transports
+            if self.peerManager.selectTransport(for: peerID) == nil {
+                // No transport available, remove from list
                 self.allPeers.removeAll { $0.peerID == peerID }
                 
                 // Update BridgeManager peer lists
                 self.updateBridgeManagerPeers()
+                
+                self.delegate?.didDisconnectFromPeer(peerID)
             }
-            delegate?.didDisconnectFromPeer(peerID)
         }
     }
     
     func transport(_ transport: TransportProtocol, didReceivePacket packet: BitchatPacket, from peerID: String) {
-        // Check if we should bridge this message
-        if bridgeManager.isBridgeNode && packet.ttl > 1 {
+        // Update peer visibility
+        peerManager.updatePeerVisibility(peerID: peerID, on: transport.transportType)
+        
+        // Handle bridging for broadcasts
+        if packet.recipientID == nil && packet.ttl > 1 {
             bridgeBroadcast(packet, from: transport.transportType)
         }
         
