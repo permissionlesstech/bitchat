@@ -48,7 +48,17 @@ class TransportManager: ObservableObject {
     var autoSelectTransport = true
     var preferLowPower = true
     
-    private init() {}
+    // Smart activation settings
+    private let minPeersForBluetooth = 2  // Activate WiFi Direct if BT has fewer peers
+    private let wifiActivationDelay: TimeInterval = 5.0  // Wait before activating WiFi
+    private var wifiActivationTimer: Timer?
+    private var lastPeerCountCheck = Date()
+    private var isSmartActivationEnabled = true
+    
+    private init() {
+        // Start smart activation monitoring
+        startSmartActivation()
+    }
     
     // MARK: - Transport Management
     
@@ -158,7 +168,11 @@ class TransportManager: ObservableObject {
                 batteryLevel: batteryLevel,
                 availableTransports: availableForPeer
             )
-            print("📡 Auto-selected \(selected.transportType) for peer \(peerID) (size: \(messageSize) bytes, battery: \(Int(batteryLevel * 100))%)")
+            if selected.transportType == .bluetooth {
+                print("📡 Using Bluetooth for peer \(peerID) (preferred for nearby peers)")
+            } else {
+                print("📡 Using \(selected.transportType) for peer \(peerID) (size: \(messageSize) bytes)")
+            }
             return selected
         } else {
             // Use primary transport if available
@@ -178,31 +192,37 @@ class TransportManager: ObservableObject {
         batteryLevel: Float,
         availableTransports: Set<TransportType>
     ) -> TransportProtocol {
-        // Large messages: prefer WiFi Direct if battery is good
-        if messageSize > 10_000 && batteryLevel > 0.5 {
+        // ALWAYS prefer Bluetooth if available (lower power, works well for nearby peers)
+        if availableTransports.contains(.bluetooth),
+           let bluetooth = transports[.bluetooth],
+           bluetooth.isAvailable {
+            // Check if peer has good Bluetooth signal
+            // For now, we assume Bluetooth peers are "nearby" if we can connect
+            return bluetooth
+        }
+        
+        // Only use WiFi Direct if:
+        // 1. Bluetooth is not available for this peer, OR
+        // 2. Message is very large and battery is good
+        if messageSize > 50_000 && batteryLevel > 0.5 {
             if availableTransports.contains(.wifiDirect),
                let wifi = transports[.wifiDirect],
                wifi.isAvailable {
+                print("TransportManager: Using WiFi Direct for large message (\(messageSize) bytes)")
                 return wifi
             }
         }
         
-        // Small messages or low battery: prefer Bluetooth
-        if messageSize < 1_000 || batteryLevel < 0.3 || preferLowPower {
-            if let bluetooth = transports[.bluetooth],
-               bluetooth.isAvailable {
-                return bluetooth
-            }
-        }
-        
-        // Medium size, good battery: use faster transport if available
+        // If Bluetooth not available but WiFi Direct is, use it
         if availableTransports.contains(.wifiDirect),
            let wifi = transports[.wifiDirect],
            wifi.isAvailable {
+            print("TransportManager: Using WiFi Direct (Bluetooth not available for peer)")
             return wifi
         }
         
-        // Default to Bluetooth
+        // Default to Bluetooth even if not currently available
+        // (message will be queued)
         return transports[.bluetooth]!
     }
     
@@ -380,6 +400,11 @@ class TransportManager: ObservableObject {
                 info.activeTransport = .bluetooth
             }
             
+            // Check for smart activation
+            if self.isSmartActivationEnabled && self.autoSelectTransport {
+                self.checkSmartActivation(bluetoothPeerCount: info.bluetoothPeerCount)
+            }
+            
             // Check if this is a transport state change (immediate update)
             let isTransportStateChange = self.currentTransportInfo.isWiFiDirectActive != info.isWiFiDirectActive ||
                                        self.currentTransportInfo.activeTransport != info.activeTransport
@@ -423,6 +448,45 @@ class TransportManager: ObservableObject {
     }
     
     private var pendingAllPeers: [PeerInfo]?
+    
+    // MARK: - Smart Activation
+    
+    private func startSmartActivation() {
+        // Check peer count periodically
+        Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+            self?.evaluateSmartActivation()
+        }
+    }
+    
+    private func checkSmartActivation(bluetoothPeerCount: Int) {
+        // Cancel any pending WiFi activation
+        wifiActivationTimer?.invalidate()
+        
+        if bluetoothPeerCount < minPeersForBluetooth && !enableWiFiDirect {
+            // Not enough Bluetooth peers, schedule WiFi Direct activation
+            print("TransportManager: Only \(bluetoothPeerCount) Bluetooth peers found, scheduling WiFi Direct activation...")
+            
+            wifiActivationTimer = Timer.scheduledTimer(withTimeInterval: wifiActivationDelay, repeats: false) { [weak self] _ in
+                guard let self = self else { return }
+                if self.autoSelectTransport && !self.enableWiFiDirect {
+                    print("TransportManager: Activating WiFi Direct to find more distant peers")
+                    self.enableWiFiDirect = true
+                }
+            }
+        } else if bluetoothPeerCount >= minPeersForBluetooth * 2 && enableWiFiDirect {
+            // Plenty of Bluetooth peers, consider deactivating WiFi Direct to save power
+            print("TransportManager: \(bluetoothPeerCount) Bluetooth peers found, deactivating WiFi Direct to save power")
+            enableWiFiDirect = false
+        }
+    }
+    
+    private func evaluateSmartActivation() {
+        guard autoSelectTransport && isSmartActivationEnabled else { return }
+        
+        // Get current Bluetooth peer count
+        let btPeerCount = transports[.bluetooth]?.currentPeers.count ?? 0
+        checkSmartActivation(bluetoothPeerCount: btPeerCount)
+    }
 }
 
 // MARK: - Transport Delegate

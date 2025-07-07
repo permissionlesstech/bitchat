@@ -391,15 +391,18 @@ class BluetoothMeshService: NSObject {
         // Initial send with random delay
         let initialDelay = self.randomDelay()
         DispatchQueue.main.asyncAfter(deadline: .now() + initialDelay) { [weak self] in
-            self?.broadcastPacket(announcePacket)
+            guard self != nil else { return }
+            // Use TransportManager to announce on all available transports
+            TransportManager.shared.send(announcePacket, to: nil)
         }
         
         // Send multiple times for reliability with jittered delays
         for baseDelay in [0.5, 1.0, 2.0] {
             let jitteredDelay = baseDelay + self.randomDelay()
             DispatchQueue.main.asyncAfter(deadline: .now() + jitteredDelay) { [weak self] in
-                guard let self = self else { return }
-                self.broadcastPacket(announcePacket)
+                guard self != nil else { return }
+                // Use TransportManager to announce on all available transports
+                TransportManager.shared.send(announcePacket, to: nil)
             }
         }
     }
@@ -540,25 +543,25 @@ class BluetoothMeshService: NSObject {
                         self?.recentlySentMessages.remove(msgID)
                     }
                     
-                    // Use TransportManager if WiFi Direct is active, otherwise use Bluetooth
-                    if TransportManager.shared.activeTransports.contains(.wifiDirect) || 
-                       (!TransportManager.shared.autoSelectTransport && TransportManager.shared.primaryTransport == .wifiDirect) {
-                        // Send via TransportManager for multi-transport support
+                    // Always use TransportManager for consistent routing
+                    // It will intelligently select the best transport(s) based on:
+                    // - Peer availability on each transport
+                    // - Message size and battery level
+                    // - Smart activation of WiFi Direct when needed
+                    
+                    // Add random delay before initial send for privacy
+                    let initialDelay = self.randomDelay()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + initialDelay) { [weak self] in
+                        guard self != nil else { return }
                         TransportManager.shared.send(packet, to: recipientID)
-                    } else {
-                        // Use traditional Bluetooth broadcasting
-                        // Add random delay before initial send
-                        let initialDelay = self.randomDelay()
-                        DispatchQueue.main.asyncAfter(deadline: .now() + initialDelay) { [weak self] in
-                            self?.broadcastPacket(packet)
-                        }
-                        
-                        // Single retry for reliability
-                        let retryDelay = 0.3 + self.randomDelay()
-                        DispatchQueue.main.asyncAfter(deadline: .now() + retryDelay) { [weak self] in
-                            self?.broadcastPacket(packet)
-                            // Re-sending message
-                        }
+                    }
+                    
+                    // Single retry for reliability
+                    let retryDelay = 0.3 + self.randomDelay()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + retryDelay) { [weak self] in
+                        guard self != nil else { return }
+                        TransportManager.shared.send(packet, to: recipientID)
+                        // Re-sending message
                     }
                 }
             }
@@ -648,10 +651,13 @@ class BluetoothMeshService: NSObject {
                     
                     // Message tracking is now done in ChatViewModel to ensure consistent message IDs
                     
-                    // Add random delay for timing obfuscation
+                    // Always use TransportManager for consistent routing
+                    // Private messages will be routed to the specific peer using the best transport
                     let delay = self.randomDelay()
                     DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-                        self?.broadcastPacket(packet)
+                        guard self != nil else { return }
+                        // Send to specific peer (not broadcast)
+                        TransportManager.shared.send(packet, to: recipientPeerID)
                         // Private message sent with timing delay
                     }
                     
@@ -766,7 +772,8 @@ class BluetoothMeshService: NSObject {
                 ttl: 5  // Allow wider propagation for room announcements
             )
             
-            self.broadcastPacket(packet)
+            // Use TransportManager for room announcements
+            TransportManager.shared.send(packet, to: nil)
         }
     }
     
@@ -788,7 +795,8 @@ class BluetoothMeshService: NSObject {
                 ttl: 5  // Allow wider propagation for room announcements
             )
             
-            self.broadcastPacket(packet)
+            // Use TransportManager for retention announcements
+            TransportManager.shared.send(packet, to: nil)
         }
     }
     
@@ -843,7 +851,8 @@ class BluetoothMeshService: NSObject {
                         ttl: self.adaptiveTTL
                     )
                     
-                    self.broadcastPacket(packet)
+                    // Use TransportManager for encrypted room messages
+                    TransportManager.shared.send(packet, to: nil)
                 }
             } catch {
             }
