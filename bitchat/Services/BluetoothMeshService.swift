@@ -842,6 +842,132 @@ class BluetoothMeshService: NSObject {
         }
     }
     
+    func sendPrivateVoiceMessage(_ audioData: Data, duration: TimeInterval, to recipientPeerID: String, recipientNickname: String, messageID: String? = nil) {
+        messageQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            let nickname = self.delegate as? ChatViewModel
+            let senderNick = nickname?.nickname ?? self.myPeerID
+            
+            // Use provided message ID or generate a new one
+            let msgID = messageID ?? UUID().uuidString
+            
+            // Compress audio data for efficient transmission
+            let compressedAudioData = AudioService.shared.compressAudioData(audioData) ?? audioData
+            
+            let message = BitchatMessage(
+                id: msgID,
+                sender: senderNick,
+                content: "Voice message (\(AudioService.shared.formatDuration(duration)))",
+                timestamp: Date(),
+                isRelay: false,
+                originalSender: nil,
+                isPrivate: true,
+                recipientNickname: recipientNickname,
+                senderPeerID: self.myPeerID,
+                audioData: compressedAudioData,
+                audioDuration: duration,
+                isVoiceMessage: true
+            )
+            
+            if let messageData = message.toBinaryPayload() {
+                // Pad message to standard block size for privacy
+                let blockSize = MessagePadding.optimalBlockSize(for: messageData.count)
+                let paddedData = MessagePadding.pad(messageData, toSize: blockSize)
+                
+                // Encrypt the padded message for the recipient
+                let encryptedPayload: Data
+                do {
+                    encryptedPayload = try self.encryptionService.encrypt(paddedData, for: recipientPeerID)
+                } catch {
+                    return
+                }
+                
+                // Sign the encrypted payload
+                let signature: Data?
+                do {
+                    signature = try self.encryptionService.sign(encryptedPayload)
+                } catch {
+                    signature = nil
+                }
+                
+                // Create packet with recipient ID for proper routing
+                let packet = BitchatPacket(
+                    type: MessageType.voiceMessage.rawValue,
+                    senderID: Data(self.myPeerID.utf8),
+                    recipientID: Data(recipientPeerID.utf8),
+                    timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                    payload: encryptedPayload,
+                    signature: signature,
+                    ttl: self.adaptiveTTL
+                )
+                
+                // Cache for offline delivery if recipient is favorite
+                self.cacheMessage(packet, messageID: msgID)
+                
+                // Send via mesh
+                self.broadcastPacket(packet)
+            }
+        }
+    }
+    
+    func sendBroadcastVoiceMessage(_ audioData: Data, duration: TimeInterval, room: String? = nil) {
+        messageQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            let nickname = self.delegate as? ChatViewModel
+            let senderNick = nickname?.nickname ?? self.myPeerID
+            
+            // Compress audio data for efficient transmission
+            let compressedAudioData = AudioService.shared.compressAudioData(audioData) ?? audioData
+            
+            let message = BitchatMessage(
+                sender: senderNick,
+                content: "🎵 Voice message (\(AudioService.shared.formatDuration(duration)))",
+                timestamp: Date(),
+                isRelay: false,
+                originalSender: nil,
+                isPrivate: false,
+                recipientNickname: nil,
+                senderPeerID: self.myPeerID,
+                room: room,
+                audioData: compressedAudioData,
+                audioDuration: duration,
+                isVoiceMessage: true
+            )
+            
+            if let messageData = message.toBinaryPayload() {
+                // Sign the message payload (no encryption for broadcasts)
+                let signature: Data?
+                do {
+                    signature = try self.encryptionService.sign(messageData)
+                } catch {
+                    signature = nil
+                }
+                
+                // Create packet with broadcast recipient
+                let packet = BitchatPacket(
+                    type: MessageType.voiceMessage.rawValue,
+                    senderID: Data(self.myPeerID.utf8),
+                    recipientID: SpecialRecipients.broadcast,
+                    timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                    payload: messageData,
+                    signature: signature,
+                    ttl: self.adaptiveTTL
+                )
+                
+                // Track this message to prevent duplicate sends
+                let msgID = "\(packet.timestamp)-\(self.myPeerID)-\(packet.payload.prefix(32).hashValue)"
+                self.messageQueue.async(flags: .barrier) { [weak self] in
+                    self?.recentlySentMessages.insert(msgID)
+                }
+                
+                // Send the message
+                self.broadcastPacket(packet)
+            }
+        }
+    }
+    
     private func sendAnnouncementToPeer(_ peerID: String) {
         guard let vm = delegate as? ChatViewModel else { return }
         
@@ -1391,8 +1517,8 @@ class BluetoothMeshService: NSObject {
         // Note: We'll decode messages in the switch statement below, not here
         
         switch MessageType(rawValue: packet.type) {
-        case .message:
-            // Unified message handler for both broadcast and private messages
+        case .message, .voiceMessage:
+            // Unified message handler for both broadcast and private messages (including voice)
             guard let senderID = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8) else {
                 return
             }

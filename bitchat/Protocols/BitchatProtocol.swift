@@ -77,6 +77,7 @@ enum MessageType: UInt8 {
     case deliveryAck = 0x0A  // Acknowledge message received
     case deliveryStatusRequest = 0x0B  // Request delivery status update
     case readReceipt = 0x0C  // Message has been read/viewed
+    case voiceMessage = 0x0D  // Voice message
 }
 
 // Special recipient ID for broadcast messages
@@ -225,7 +226,12 @@ struct BitchatMessage: Codable, Equatable {
     let isEncrypted: Bool  // Flag to indicate if content is encrypted
     var deliveryStatus: DeliveryStatus? // Delivery tracking
     
-    init(id: String? = nil, sender: String, content: String, timestamp: Date, isRelay: Bool, originalSender: String? = nil, isPrivate: Bool = false, recipientNickname: String? = nil, senderPeerID: String? = nil, mentions: [String]? = nil, room: String? = nil, encryptedContent: Data? = nil, isEncrypted: Bool = false, deliveryStatus: DeliveryStatus? = nil) {
+    // Voice message fields
+    let audioData: Data?  // Voice message audio data
+    let audioDuration: TimeInterval?  // Voice message duration in seconds
+    let isVoiceMessage: Bool  // Flag to indicate if this is a voice message
+    
+    init(id: String? = nil, sender: String, content: String, timestamp: Date, isRelay: Bool, originalSender: String? = nil, isPrivate: Bool = false, recipientNickname: String? = nil, senderPeerID: String? = nil, mentions: [String]? = nil, room: String? = nil, encryptedContent: Data? = nil, isEncrypted: Bool = false, deliveryStatus: DeliveryStatus? = nil, audioData: Data? = nil, audioDuration: TimeInterval? = nil, isVoiceMessage: Bool = false) {
         self.id = id ?? UUID().uuidString
         self.sender = sender
         self.content = content
@@ -240,6 +246,9 @@ struct BitchatMessage: Codable, Equatable {
         self.encryptedContent = encryptedContent
         self.isEncrypted = isEncrypted
         self.deliveryStatus = deliveryStatus ?? (isPrivate ? .sending : nil)
+        self.audioData = audioData
+        self.audioDuration = audioDuration
+        self.isVoiceMessage = isVoiceMessage
     }
 }
 

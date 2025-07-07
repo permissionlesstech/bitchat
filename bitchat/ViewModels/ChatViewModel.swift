@@ -899,6 +899,106 @@ class ChatViewModel: ObservableObject {
         meshService.sendPrivateMessage(content, to: peerID, recipientNickname: recipientNickname, messageID: message.id)
     }
     
+    func sendVoiceMessage(_ audioData: Data, duration: TimeInterval, to peerID: String? = nil) {
+        guard !audioData.isEmpty else { return }
+        
+        if let peerID = peerID {
+            // Send as private voice messages //todo
+            sendPrivateVoiceMessage(audioData, duration: duration, to: peerID)
+        } else {
+            // Send as broadcast voice messages
+            sendBroadcastVoiceMessage(audioData, duration: duration)
+        }
+    }
+    
+    private func sendPrivateVoiceMessage(_ audioData: Data, duration: TimeInterval, to peerID: String) {
+        guard let recipientNickname = meshService.getPeerNicknames()[peerID] else { return }
+        
+        // Mark messages as read when sending
+        markPrivateMessagesAsRead(from: peerID)
+        
+        // Create the voice message locally
+        let message = BitchatMessage(
+            sender: nickname,
+            content: "Voice message (\(AudioService.shared.formatDuration(duration)))",
+            timestamp: Date(),
+            isRelay: false,
+            originalSender: nil,
+            isPrivate: true,
+            recipientNickname: recipientNickname,
+            senderPeerID: meshService.myPeerID,
+            deliveryStatus: .sending,
+            audioData: audioData,
+            audioDuration: duration,
+            isVoiceMessage: true
+        )
+        
+        // Add to our private chat history
+        if privateChats[peerID] == nil {
+            privateChats[peerID] = []
+        }
+        privateChats[peerID]?.append(message)
+        
+        // Track the message for delivery confirmation
+        let isFavorite = isFavorite(peerID: peerID)
+        DeliveryTracker.shared.trackMessage(message, recipientID: peerID, recipientNickname: recipientNickname, isFavorite: isFavorite)
+        
+        // Trigger UI update
+        objectWillChange.send()
+        
+        // Send via mesh service
+        meshService.sendPrivateVoiceMessage(audioData, duration: duration, to: peerID, recipientNickname: recipientNickname, messageID: message.id)
+    }
+    
+    private func sendBroadcastVoiceMessage(_ audioData: Data, duration: TimeInterval) {
+        // Determine which room this voice message belongs to
+        let messageRoom = currentRoom
+        
+        // Create the voice message locally
+        let message = BitchatMessage(
+            sender: nickname,
+            content: "🎵 Voice message (\(AudioService.shared.formatDuration(duration)))",
+            timestamp: Date(),
+            isRelay: false,
+            originalSender: nil,
+            isPrivate: false,
+            recipientNickname: nil,
+            senderPeerID: meshService.myPeerID,
+            room: messageRoom,
+            audioData: audioData,
+            audioDuration: duration,
+            isVoiceMessage: true
+        )
+        
+        if let room = messageRoom {
+            // Add to room messages
+            if roomMessages[room] == nil {
+                roomMessages[room] = []
+            }
+            roomMessages[room]?.append(message)
+            
+            // Save message if room has retention enabled
+            if retentionEnabledRooms.contains(room) {
+                MessageRetentionService.shared.saveMessage(message, forRoom: room)
+            }
+            
+            // Track ourselves as a room member
+            if roomMembers[room] == nil {
+                roomMembers[room] = Set()
+            }
+            roomMembers[room]?.insert(meshService.myPeerID)
+        } else {
+            // Add to main messages
+            messages.append(message)
+        }
+        
+        // Trigger UI Update
+        objectWillChange.send()
+        
+        // Send via mesh service
+        meshService.sendBroadcastVoiceMessage(audioData, duration: duration, room: messageRoom)
+    }
+    
     func startPrivateChat(with peerID: String) {
         let peerNickname = meshService.getPeerNicknames()[peerID] ?? "unknown"
         selectedPrivateChatPeer = peerID

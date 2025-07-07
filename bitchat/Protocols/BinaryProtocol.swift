@@ -227,7 +227,7 @@ extension BitchatMessage {
         var data = Data()
         
         // Message format:
-        // - Flags: 1 byte (bit 0: isRelay, bit 1: isPrivate, bit 2: hasOriginalSender, bit 3: hasRecipientNickname, bit 4: hasSenderPeerID, bit 5: hasMentions, bit 6: hasRoom, bit 7: isEncrypted)
+        // - Flags: 2 bytes (original flags + extended flags)
         // - Timestamp: 8 bytes (seconds since epoch)
         // - ID length: 1 byte
         // - ID: variable
@@ -241,6 +241,8 @@ extension BitchatMessage {
         // - Sender peer ID length + data
         // - Mentions array
         // - Room hashtag
+        // - Audio data (for voice messages)
+        // - Audio duration (for voice messages)
         
         var flags: UInt8 = 0
         if isRelay { flags |= 0x01 }
@@ -252,7 +254,12 @@ extension BitchatMessage {
         if room != nil { flags |= 0x40 }
         if isEncrypted { flags |= 0x80 }
         
+        // Extended flags for new features
+        var extendedFlags: UInt8 = 0
+        if isVoiceMessage { extendedFlags |= 0x01 }
+        
         data.append(flags)
+        data.append(extendedFlags)
         
         // Timestamp (in milliseconds)
         let timestampMillis = UInt64(timestamp.timeIntervalSince1970 * 1000)
@@ -329,6 +336,29 @@ extension BitchatMessage {
             data.append(roomData.prefix(255))
         }
         
+        // Voice message data
+        if isVoiceMessage {
+            // Audio duration (8 bytes - double precision)
+            let duration = audioDuration ?? 0.0
+            let durationBits = duration.bitPattern
+            for i in (0..<8).reversed() {
+                data.append(UInt8((durationBits >> (i * 8)) & 0xFF))
+            }
+            
+            // Audio data
+            if let audioData = audioData {
+                let audioSize = UInt32(min(audioData.count, 2_000_000)) // Max 2MB for voice
+                // Audio data length (4 bytes)
+                for i in (0..<4).reversed() {
+                    data.append(UInt8((audioSize >> (i * 8)) & 0xFF))
+                }
+                data.append(audioData.prefix(Int(audioSize)))
+            } else {
+                // No audio data
+                data.append(contentsOf: [0, 0, 0, 0])
+            }
+        }
+        
         return data
     }
     
@@ -337,7 +367,7 @@ extension BitchatMessage {
         let dataCopy = Data(data)
         
         
-        guard dataCopy.count >= 13 else { 
+        guard dataCopy.count >= 14 else { 
             return nil 
         }
         
@@ -356,6 +386,13 @@ extension BitchatMessage {
         let hasMentions = (flags & 0x20) != 0
         let hasRoom = (flags & 0x40) != 0
         let isEncrypted = (flags & 0x80) != 0
+        
+        // Extended flags
+        guard offset < dataCopy.count else { 
+            return nil 
+        }
+        let extendedFlags = dataCopy[offset]; offset += 1
+        let isVoiceMessage = (extendedFlags & 0x01) != 0
         
         // Timestamp
         guard offset + 8 <= dataCopy.count else { 
@@ -475,6 +512,37 @@ extension BitchatMessage {
             }
         }
         
+        // Voice message data
+        var audioData: Data?
+        var audioDuration: TimeInterval?
+        
+        if isVoiceMessage {
+            // Audio duration (8 bytes - double precision)
+            if offset + 8 <= dataCopy.count {
+                let durationData = dataCopy[offset..<offset+8]
+                let durationBits = durationData.reduce(0) { result, byte in
+                    (result << 8) | UInt64(byte)
+                }
+                audioDuration = TimeInterval(bitPattern: durationBits)
+                offset += 8
+                
+                // Audio data length (4 bytes)
+                if offset + 4 <= dataCopy.count {
+                    let audioSizeData = dataCopy[offset..<offset+4]
+                    let audioSize = audioSizeData.reduce(0) { result, byte in
+                        (result << 8) | UInt32(byte)
+                    }
+                    offset += 4
+                    
+                    // Audio data
+                    if audioSize > 0 && offset + Int(audioSize) <= dataCopy.count {
+                        audioData = dataCopy[offset..<offset+Int(audioSize)]
+                        offset += Int(audioSize)
+                    }
+                }
+            }
+        }
+        
         let message = BitchatMessage(
             id: id,
             sender: sender,
@@ -488,7 +556,10 @@ extension BitchatMessage {
             mentions: mentions,
             room: room,
             encryptedContent: encryptedContent,
-            isEncrypted: isEncrypted
+            isEncrypted: isEncrypted,
+            audioData: audioData,
+            audioDuration: audioDuration,
+            isVoiceMessage: isVoiceMessage
         )
         return message
     }

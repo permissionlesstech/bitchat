@@ -27,16 +27,17 @@ struct ContentView: View {
     @State private var showCommandSuggestions = false
     @State private var commandSuggestions: [String] = []
     
+    // Theme colors using centralized ThemeManager
     private var backgroundColor: Color {
-        colorScheme == .dark ? Color.black : Color.white
+        ThemeManager.backgroundColor(for: colorScheme)
     }
     
     private var textColor: Color {
-        colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
+        ThemeManager.textColor(for: colorScheme)
     }
     
     private var secondaryTextColor: Color {
-        colorScheme == .dark ? Color.green.opacity(0.8) : Color(red: 0, green: 0.5, blue: 0).opacity(0.8)
+        ThemeManager.secondaryTextColor(for: colorScheme)
     }
     
     var body: some View {
@@ -682,6 +683,10 @@ struct ContentView: View {
                     sendMessage()
                 }
             
+            // Voice message button
+            VoiceMessageView()
+                .environmentObject(viewModel)
+            
             Button(action: sendMessage) {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 20))
@@ -994,6 +999,15 @@ struct MessageContentView: View {
     let isMentioned: Bool
     
     var body: some View {
+        // Check if this is a voice message
+        if message.isVoiceMessage {
+            VoiceMessageBubble(message: message)
+        } else {
+            textMessageView
+        }
+    }
+    
+    private var textMessageView: some View {
         let content = message.content
         let hashtagPattern = "#([a-zA-Z0-9_]+)"
         let mentionPattern = "@([a-zA-Z0-9_]+)"

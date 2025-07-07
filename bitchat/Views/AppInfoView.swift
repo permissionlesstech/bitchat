@@ -5,15 +5,15 @@ struct AppInfoView: View {
     @Environment(\.colorScheme) var colorScheme
     
     private var backgroundColor: Color {
-        colorScheme == .dark ? Color.black : Color.white
+        ThemeManager.backgroundColor(for: colorScheme) // Theme manager for getting true color
     }
     
     private var textColor: Color {
-        colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
+        ThemeManager.textColor(for: colorScheme)
     }
     
     private var secondaryTextColor: Color {
-        colorScheme == .dark ? Color.green.opacity(0.8) : Color(red: 0, green: 0.5, blue: 0).opacity(0.8)
+        ThemeManager.secondaryTextColor(for: colorScheme)
     }
     
     var body: some View {
