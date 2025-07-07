@@ -17,24 +17,24 @@ class KeychainManager {
     
     private init() {}
     
-    // MARK: - Room Passwords
+    // MARK: - Channel Passwords
     
-    func saveRoomPassword(_ password: String, for room: String) -> Bool {
-        let key = "room_\(room)"
+    func saveChannelPassword(_ password: String, for channel: String) -> Bool {
+        let key = "channel_\(channel)"
         return save(password, forKey: key)
     }
     
-    func getRoomPassword(for room: String) -> String? {
-        let key = "room_\(room)"
+    func getChannelPassword(for channel: String) -> String? {
+        let key = "channel_\(channel)"
         return retrieve(forKey: key)
     }
     
-    func deleteRoomPassword(for room: String) -> Bool {
-        let key = "room_\(room)"
+    func deleteChannelPassword(for channel: String) -> Bool {
+        let key = "channel_\(channel)"
         return delete(forKey: key)
     }
     
-    func getAllRoomPasswords() -> [String: String] {
+    func getAllChannelPasswords() -> [String: String] {
         var passwords: [String: String] = [:]
         
         // Query all items
@@ -56,11 +56,11 @@ class KeychainManager {
         if status == errSecSuccess, let items = result as? [[String: Any]] {
             for item in items {
                 if let account = item[kSecAttrAccount as String] as? String,
-                   account.hasPrefix("room_"),
+                   account.hasPrefix("channel_"),
                    let data = item[kSecValueData as String] as? Data,
                    let password = String(data: data, encoding: .utf8) {
-                    let room = String(account.dropFirst(5)) // Remove "room_" prefix
-                    passwords[room] = password
+                    let channel = String(account.dropFirst(8)) // Remove "channel_" prefix
+                    passwords[channel] = password
                 }
             }
         }
