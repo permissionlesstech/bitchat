@@ -911,10 +911,20 @@ class ChatViewModel: ObservableObject {
             // Check if room is password protected and encrypt if needed
             if let room = messageRoom, roomKeys[room] != nil {
                 // Send encrypted room message
-                meshService.sendEncryptedRoomMessage(content, mentions: mentions, room: room, roomKey: roomKeys[room]!)
+                if transportManager.forceWiFiDirect {
+                    // Route through transport manager when forcing WiFi Direct
+                    sendMessageThroughTransportManager(content, mentions: mentions, room: room, roomKey: roomKeys[room])
+                } else {
+                    meshService.sendEncryptedRoomMessage(content, mentions: mentions, room: room, roomKey: roomKeys[room]!)
+                }
             } else {
                 // Send via mesh with mentions and room (unencrypted)
-                meshService.sendMessage(content, mentions: mentions, room: messageRoom)
+                if transportManager.forceWiFiDirect {
+                    // Route through transport manager when forcing WiFi Direct
+                    sendMessageThroughTransportManager(content, mentions: mentions, room: messageRoom, roomKey: nil)
+                } else {
+                    meshService.sendMessage(content, mentions: mentions, room: messageRoom)
+                }
             }
         }
     }
@@ -954,7 +964,110 @@ class ChatViewModel: ObservableObject {
         objectWillChange.send()
         
         // Send via mesh with the same message ID
-        meshService.sendPrivateMessage(content, to: peerID, recipientNickname: recipientNickname, messageID: message.id)
+        if transportManager.forceWiFiDirect {
+            // Route through transport manager when forcing WiFi Direct
+            sendPrivateMessageThroughTransportManager(content, to: peerID, recipientNickname: recipientNickname, messageID: message.id)
+        } else {
+            meshService.sendPrivateMessage(content, to: peerID, recipientNickname: recipientNickname, messageID: message.id)
+        }
+    }
+    
+    // Helper methods for sending through TransportManager when forcing WiFi Direct
+    private func sendMessageThroughTransportManager(_ content: String, mentions: [String], room: String?, roomKey: SymmetricKey?) {
+        let message = BitchatMessage(
+            sender: nickname,
+            content: content,
+            timestamp: Date(),
+            isRelay: false,
+            originalSender: nil,
+            isPrivate: false,
+            recipientNickname: nil,
+            senderPeerID: meshService.myPeerID,
+            deliveryStatus: .sent,
+            mentions: mentions,
+            room: room
+        )
+        
+        do {
+            let payload: Data
+            if let roomKey = roomKey {
+                // Encrypt room message
+                let roomMessage = BitchatRoomMessage(
+                    content: content,
+                    mentions: mentions,
+                    timestamp: Date()
+                )
+                let jsonData = try JSONEncoder().encode(roomMessage)
+                let encryptedData = try CryptoKit.AES.GCM.seal(jsonData, using: roomKey).combined!
+                
+                let encryptedMessage = BitchatMessage(
+                    sender: nickname,
+                    content: "",  // Empty content for encrypted messages
+                    timestamp: Date(),
+                    isRelay: false,
+                    originalSender: nil,
+                    isPrivate: false,
+                    recipientNickname: nil,
+                    senderPeerID: meshService.myPeerID,
+                    mentions: [],  // Don't expose mentions in encrypted message
+                    room: room,
+                    encryptedRoomData: encryptedData
+                )
+                payload = try JSONEncoder().encode(encryptedMessage)
+            } else {
+                payload = try JSONEncoder().encode(message)
+            }
+            
+            let packet = BitchatPacket(
+                version: 1,
+                type: MessageType.message.rawValue,
+                senderID: meshService.myPeerID.data(using: .utf8) ?? Data(),
+                recipientID: nil,  // Broadcast
+                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                ttl: 7,
+                payload: payload,
+                signature: nil
+            )
+            
+            transportManager.send(packet, to: nil)
+            print("TransportManager: Sent message via WiFi Direct")
+        } catch {
+            print("TransportManager: Failed to send message: \(error)")
+        }
+    }
+    
+    private func sendPrivateMessageThroughTransportManager(_ content: String, to peerID: String, recipientNickname: String, messageID: String) {
+        let message = BitchatMessage(
+            id: messageID,
+            sender: nickname,
+            content: content,
+            timestamp: Date(),
+            isRelay: false,
+            originalSender: nil,
+            isPrivate: true,
+            recipientNickname: recipientNickname,
+            senderPeerID: meshService.myPeerID,
+            deliveryStatus: .sent
+        )
+        
+        do {
+            let payload = try JSONEncoder().encode(message)
+            let packet = BitchatPacket(
+                version: 1,
+                type: MessageType.message.rawValue,
+                senderID: meshService.myPeerID.data(using: .utf8) ?? Data(),
+                recipientID: peerID.data(using: .utf8),
+                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                ttl: 7,
+                payload: payload,
+                signature: nil
+            )
+            
+            transportManager.send(packet, to: peerID)
+            print("TransportManager: Sent private message via WiFi Direct to \(recipientNickname)")
+        } catch {
+            print("TransportManager: Failed to send private message: \(error)")
+        }
     }
     
     func startPrivateChat(with peerID: String) {

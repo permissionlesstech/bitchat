@@ -49,6 +49,7 @@ class TransportManager: ObservableObject {
     
     var autoSelectTransport = true
     var preferLowPower = true
+    var forceWiFiDirect = false  // Debug flag to force WiFi Direct for testing
     
     // Smart activation settings
     private let minPeersForBluetooth = 2  // Activate WiFi Direct if BT has fewer peers
@@ -196,6 +197,14 @@ class TransportManager: ObservableObject {
         batteryLevel: Float,
         availableTransports: Set<TransportType>
     ) -> TransportProtocol {
+        // Debug: Force WiFi Direct if flag is set and WiFi Direct is available
+        if forceWiFiDirect && availableTransports.contains(.wifiDirect),
+           let wifi = transports[.wifiDirect],
+           wifi.isAvailable {
+            print("TransportManager: Forcing WiFi Direct for testing")
+            return wifi
+        }
+        
         // ALWAYS prefer Bluetooth if available (lower power, works well for nearby peers)
         if availableTransports.contains(.bluetooth),
            let bluetooth = transports[.bluetooth],

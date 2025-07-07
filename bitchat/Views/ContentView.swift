@@ -1232,6 +1232,7 @@ struct ContentView: View {
                         viewModel.transportManager.autoSelectTransport = false
                         viewModel.transportManager.primaryTransport = .bluetooth
                         viewModel.transportManager.enableWiFiDirect = false  // This will deactivate WiFi Direct
+                        viewModel.transportManager.forceWiFiDirect = false  // Disable force WiFi
                         // Force update UI
                         viewModel.transportManager.updateTransportInfo()
                     }) {
@@ -1254,6 +1255,7 @@ struct ContentView: View {
                         viewModel.transportManager.autoSelectTransport = false
                         viewModel.transportManager.primaryTransport = .wifiDirect
                         viewModel.transportManager.enableWiFiDirect = true  // This will activate WiFi Direct
+                        viewModel.transportManager.forceWiFiDirect = true  // Force WiFi for testing
                         // Deactivate Bluetooth when in WiFi-only mode
                         viewModel.transportManager.deactivateTransport(.bluetooth)
                         // Force update UI
@@ -1277,6 +1279,7 @@ struct ContentView: View {
                     Button(action: {
                         viewModel.transportManager.autoSelectTransport = true
                         viewModel.transportManager.enableWiFiDirect = true
+                        viewModel.transportManager.forceWiFiDirect = false  // Disable force WiFi in auto mode
                         // Re-activate Bluetooth in auto mode
                         viewModel.transportManager.activateTransport(.bluetooth)
                         // Force update UI
