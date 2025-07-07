@@ -1235,7 +1235,7 @@ class BluetoothMeshService: NSObject {
         return Int(distance)
     }
     
-    private func broadcastPacket(_ packet: BitchatPacket) {
+    func broadcastPacket(_ packet: BitchatPacket) {
         guard let data = packet.toBinaryData() else { 
             // print("[ERROR] Failed to convert packet to binary data")
             // Add to retry queue if this is a message packet
