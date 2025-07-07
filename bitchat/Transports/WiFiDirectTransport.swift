@@ -163,11 +163,12 @@ class WiFiDirectTransport: NSObject, TransportProtocol {
         
         peerID = MCPeerID(displayName: displayName)
         
-        // Create session with security
+        // Create session with optional encryption
+        // We handle our own encryption/signing at the application layer
         session = MCSession(
             peer: peerID,
             securityIdentity: nil,
-            encryptionPreference: .required
+            encryptionPreference: .optional
         )
         session.delegate = self
         
@@ -415,11 +416,17 @@ class WiFiDirectTransport: NSObject, TransportProtocol {
     
     private func broadcastPacket(_ packet: BitchatPacket) {
         let peers = session.connectedPeers
-        guard !peers.isEmpty else { return }
+        guard !peers.isEmpty else { 
+            print("WiFiDirect: No connected peers to broadcast to")
+            return 
+        }
+        
+        print("WiFiDirect: Broadcasting to \(peers.count) peers: \(peers.map { $0.displayName })")
         
         do {
             let data = try encodePacketCached(packet)
             try session.send(data, toPeers: peers, with: .reliable)
+            print("WiFiDirect: Sent \(data.count) bytes to peers")
         } catch {
             print("WiFiDirect: Broadcast failed: \(error)")
         }
@@ -712,11 +719,14 @@ class WiFiDirectTransport: NSObject, TransportProtocol {
                         let sig = try P256.Signing.ECDSASignature(derRepresentation: signatureData)
                         if publicKey.isValidSignature(sig, for: dataToVerify) {
                             signature = signatureData
+                            print("WiFiDirect: Signature verified successfully using found key")
                         } else {
+                            print("WiFiDirect: Signature invalid - data to verify: \(dataToVerify.count) bytes, sig: \(signatureData.count) bytes")
                             throw TransportError.invalidData
                         }
                     } catch {
                         print("WiFiDirect: Signature verification failed with found key: \(error)")
+                        print("WiFiDirect: Signature data length: \(signatureData.count), expected DER format")
                         throw TransportError.invalidData
                     }
                 } else {
@@ -860,9 +870,11 @@ class WiFiDirectTransport: NSObject, TransportProtocol {
 
 extension WiFiDirectTransport: MCSessionDelegate {
     func session(_ session: MCSession, peer peerID: MCPeerID, didChange state: MCSessionState) {
+        print("WiFiDirect: Peer \(peerID.displayName) state changed to \(state.rawValue)")
         queue.async(flags: .barrier) {
             switch state {
             case .connected:
+                print("WiFiDirect: Connected to peer \(peerID.displayName)")
                 // Enforce peer limit
                 if self.connectedPeers.count >= self.maxPeers {
                     // Reject new connection
@@ -895,6 +907,7 @@ extension WiFiDirectTransport: MCSessionDelegate {
                 self.retryPendingMessages(for: bitchatPeerID)
                 
             case .notConnected:
+                print("WiFiDirect: Disconnected from peer \(peerID.displayName)")
                 self.connectionState[peerID] = .disconnected
                 
                 if let peerInfo = self.connectedPeers[peerID] {
@@ -1569,6 +1582,7 @@ extension WiFiDirectTransport: MCNearbyServiceBrowserDelegate {
                 let ourPubKey = signingKey.publicKey.x963Representation
                 
                 // Invite the peer to join our session
+                print("WiFiDirect: Inviting peer \(peerID.displayName) to join session")
                 browser.invitePeer(peerID, to: session, withContext: ourPubKey, timeout: 30)
             } catch {
                 // Invalid public key - don't connect

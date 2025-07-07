@@ -137,14 +137,20 @@ class BridgeManager: ObservableObject {
     }
     
     private func evaluateBridgeStatus() {
-        // Only show evaluating if we haven't determined status yet
+        // Don't spam the logs - only set evaluating on first run
+        var shouldSetEvaluating = false
         if case .inactive = bridgeStatus {
-            bridgeStatus = .evaluating
+            shouldSetEvaluating = true
         }
         
         // Calculate bridge score based on multiple factors
         var score: Float = 0.0
         var factors: [Float] = []
+        
+        // Set evaluating status only on first run
+        if shouldSetEvaluating {
+            bridgeStatus = .evaluating
+        }
         
         // Factor 1: Battery level (0-25 points)
         let batteryLevel = BatteryOptimizer.shared.batteryLevel
@@ -154,7 +160,9 @@ class BridgeManager: ObservableObject {
                 // Keep bridge active if battery is within 5% of threshold
                 return
             }
-            bridgeStatus = .lowBattery
+            if bridgeStatus != .lowBattery {
+                bridgeStatus = .lowBattery
+            }
             isBridgeNode = false
             return
         }
@@ -171,7 +179,9 @@ class BridgeManager: ObservableObject {
             if isBridgeNode && totalPeers >= (minPeersForBridge - 1) {
                 return
             }
-            bridgeStatus = .insufficientConnections
+            if bridgeStatus != .insufficientConnections {
+                bridgeStatus = .insufficientConnections
+            }
             isBridgeNode = false
             return
         }
