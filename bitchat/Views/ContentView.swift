@@ -433,11 +433,16 @@ struct ContentView: View {
                                     
                                     // Check for links and show preview
                                     if let markdownLink = message.content.extractMarkdownLink() {
-                                        LinkPreviewView(url: markdownLink.url, title: markdownLink.title)
-                                            .padding(.top, 4)
+                                        // Don't show link preview if the message is just the emoji
+                                        let cleanContent = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
+                                        if cleanContent.hasPrefix("👇") {
+                                            LinkPreviewView(url: markdownLink.url, title: markdownLink.title)
+                                                .padding(.top, 4)
+                                        }
                                     } else {
                                         // Check for plain URLs
                                         let urls = message.content.extractURLs()
+                                        let _ = urls.isEmpty ? nil : print("DEBUG: Found \(urls.count) plain URLs in message")
                                         ForEach(urls.prefix(3), id: \.url) { urlInfo in
                                             LinkPreviewView(url: urlInfo.url, title: nil)
                                                 .padding(.top, 4)
