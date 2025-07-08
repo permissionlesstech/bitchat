@@ -38,6 +38,17 @@ class DisplayNameTests: XCTestCase {
         XCTAssertEqual(name, "carol-abcd")
     }
 
+    func testSelfDisplayNameNoFingerprint() {
+        let nicknames = ["peerA": "carol"]
+        let name = ChatViewModel.computeDisplayName(peerID: "peerA",
+                                                   nickname: "carol",
+                                                   allNicknames: nicknames,
+                                                   myNickname: "carol",
+                                                   fingerprint: "abcd",
+                                                   isSelf: true)
+        XCTAssertEqual(name, "carol")
+    }
+
     func testMentionReplacesWithDisplayName() {
         let nicknames = ["peerA": "alice", "peerB": "alice"]
         let fingerprints = ["peerA": "abcd1234", "peerB": "efgh5678"]

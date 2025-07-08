@@ -1090,12 +1090,14 @@ class ChatViewModel: ObservableObject {
                                    nickname: String?,
                                    allNicknames: [String: String],
                                    myNickname: String,
-                                   fingerprint: String?) -> String {
+                                   fingerprint: String?,
+                                   isSelf: Bool = false) -> String {
         let baseName = nickname ?? "person-\(peerID.prefix(4))"
+
         var count = allNicknames.values.filter { $0 == baseName }.count
         if myNickname == baseName { count += 1 }
 
-        if count > 1, nickname != nil {
+        if !isSelf && count > 1, nickname != nil {
             let short = String((fingerprint ?? peerID).prefix(4))
             return "\(baseName)-\(short)"
         }
@@ -1118,7 +1120,8 @@ class ChatViewModel: ObservableObject {
                                                nickname: nick,
                                                allNicknames: all,
                                                myNickname: nickname,
-                                               fingerprint: fingerprint)
+                                               fingerprint: fingerprint,
+                                               isSelf: peerID == meshService.myPeerID)
     }
     
     // PANIC: Emergency data clearing for activist safety
