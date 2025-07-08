@@ -15,7 +15,7 @@ So we did what we do at Unit 221B - we fixed it. All of it.
 ✅ Fixed those gnarly buffer overflows
 ✅ Built real session management with HMACs
 
-We tried reaching out to the devs - crickets. After 90 days of radio silence, here's our gift to the community:
+We discovered vulnerabilities and immediately created a PR with fixes. Here's our gift to the community:
 
 🔐 Secure fork: https://github.com/lancejames221b/bitchat
 📋 Full vulnerability report: https://github.com/lancejames221b/bitchat/blob/security-patches/SECURITY_DISCLOSURE.md

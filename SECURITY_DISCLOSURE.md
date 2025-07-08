@@ -152,19 +152,15 @@ let privateKey = UserDefaults.standard.data(forKey: "privateKey")
 4. Add security audit logging
 5. Regular security assessments
 
-## Disclosure Timeline
+## Community Contribution
 
-- **October 10, 2024**: Initial discovery of vulnerabilities
-- **October 15, 2024**: Attempted contact with developers (no response)
-- **November 15, 2024**: Second contact attempt (no response)
-- **January 8, 2025**: Public disclosure after 90-day period
-- **January 8, 2025**: Release of secured fork
+We discovered these vulnerabilities and immediately submitted a PR with comprehensive security patches to help improve the security of the BitChat ecosystem. This secured fork implements all necessary fixes to address these vulnerabilities.
 
 ## Credits
 
 - **Discovery**: Lance James, Unit 221B
 - **Analysis**: Unit 221B Security Team
-- **Responsible Disclosure**: Following industry standard 90-day timeline
+- **Community Contribution**: Submitted patches to help improve security
 
 ## References
 

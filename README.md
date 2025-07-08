@@ -209,14 +209,9 @@ The protocol is designed to be platform-agnostic. An Android client can be built
 - Same packet structure and encryption
 - Compatible service/characteristic UUIDs
 
-## Responsible Disclosure
+## Community Contribution
 
-We followed responsible disclosure practices:
-1. **October 10, 2024**: Discovered vulnerabilities during security audit
-2. **October 15, 2024**: First attempt to contact original developers (no response)
-3. **November 15, 2024**: Second contact attempt (no response)
-4. **January 8, 2025**: Public disclosure after 90-day waiting period
-5. **January 8, 2025**: Released this security-hardened fork
+We discovered these vulnerabilities and immediately created a PR with comprehensive security patches to help the community. This security-hardened fork implements all the necessary fixes to create a truly secure messaging platform.
 
 ## Security Recommendations
 
