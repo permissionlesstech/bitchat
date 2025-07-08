@@ -61,6 +61,11 @@ class MessageRetryService {
         originalMessageID: String? = nil,
         originalTimestamp: Date? = nil
     ) {
+        // Don't queue empty or whitespace-only messages
+        guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return
+        }
+        
         // Don't queue if we're at capacity
         guard retryQueue.count < maxQueueSize else {
             return
