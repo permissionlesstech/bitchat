@@ -184,6 +184,7 @@ struct ContentView: View {
                     .foregroundColor(textColor)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Back to main chat")
                 
                 Spacer()
                 
@@ -191,6 +192,7 @@ struct ContentView: View {
                     Image(systemName: "lock.fill")
                         .font(.system(size: 14))
                         .foregroundColor(Color.orange)
+                        .accessibilityLabel("Private chat with \(privatePeerNick)")
                     Text("\(privatePeerNick)")
                         .font(.system(size: 16, weight: .medium, design: .monospaced))
                         .foregroundColor(Color.orange)
@@ -208,6 +210,8 @@ struct ContentView: View {
                         .foregroundColor(viewModel.isFavorite(peerID: privatePeerID) ? Color.yellow : textColor)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(viewModel.isFavorite(peerID: privatePeerID) ? "Remove from favorites" : "Add to favorites")
+                .accessibilityHint("Double tap to toggle favorite status")
             } else if let currentChannel = viewModel.currentChannel {
                 // Channel header
                 Button(action: {
@@ -222,6 +226,7 @@ struct ContentView: View {
                     .foregroundColor(textColor)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Back to main chat")
                 
                 Spacer()
                 
@@ -236,6 +241,7 @@ struct ContentView: View {
                             Image(systemName: "lock.fill")
                                 .font(.system(size: 14))
                                 .foregroundColor(Color.orange)
+                                .accessibilityLabel("Password protected channel")
                         }
                         Text("channel: \(currentChannel)")
                             .font(.system(size: 16, weight: .medium, design: .monospaced))
@@ -254,6 +260,7 @@ struct ContentView: View {
                             .font(.system(size: 16))
                             .foregroundColor(Color.yellow)
                             .help("Messages in this channel are being saved locally")
+                            .accessibilityLabel("Message retention enabled")
                     }
                     
                     // Save button - only for channel owner
@@ -267,6 +274,7 @@ struct ContentView: View {
                         }
                         .buttonStyle(.plain)
                         .help(viewModel.retentionEnabledChannels.contains(currentChannel) ? "Disable message retention" : "Enable message retention")
+                        .accessibilityLabel(viewModel.retentionEnabledChannels.contains(currentChannel) ? "Disable message retention" : "Enable message retention")
                     }
                     
                     // Password button for channel creator only
@@ -286,6 +294,7 @@ struct ContentView: View {
                                 .foregroundColor(viewModel.passwordProtectedChannels.contains(currentChannel) ? Color.yellow : textColor)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel(viewModel.passwordProtectedChannels.contains(currentChannel) ? "Remove channel password" : "Set channel password")
                     }
                     
                     // Leave channel button
@@ -351,12 +360,14 @@ struct ContentView: View {
                         Image(systemName: "number")
                             .font(.system(size: 12))
                             .foregroundColor(Color.blue)
+                            .accessibilityLabel("Unread channel messages")
                     }
                     
                     if !viewModel.unreadPrivateMessages.isEmpty {
                         Image(systemName: "envelope.fill")
                             .font(.system(size: 12))
                             .foregroundColor(Color.orange)
+                            .accessibilityLabel("Unread private messages")
                     }
                     
                     let otherPeersCount = viewModel.connectedPeers.filter { $0 != viewModel.meshService.myPeerID }.count
@@ -366,8 +377,10 @@ struct ContentView: View {
                         // People icon with count
                         Image(systemName: "person.2.fill")
                             .font(.system(size: 11))
+                            .accessibilityLabel("\(otherPeersCount) connected \(otherPeersCount == 1 ? "person" : "people")")
                         Text("\(otherPeersCount)")
                             .font(.system(size: 12, design: .monospaced))
+                            .accessibilityHidden(true)
                         
                         // Channels icon with count (only if there are channels)
                         if channelCount > 0 {
@@ -375,8 +388,10 @@ struct ContentView: View {
                                 .font(.system(size: 12, design: .monospaced))
                             Image(systemName: "square.split.2x2")
                                 .font(.system(size: 11))
+                                .accessibilityLabel("\(channelCount) active \(channelCount == 1 ? "channel" : "channels")")
                             Text("\(channelCount)")
                                 .font(.system(size: 12, design: .monospaced))
+                                .accessibilityHidden(true)
                         }
                     }
                     .foregroundColor(viewModel.isConnected ? textColor : Color.red)
@@ -719,6 +734,8 @@ struct ContentView: View {
             }
             .buttonStyle(.plain)
             .padding(.trailing, 12)
+            .accessibilityLabel("Send message")
+            .accessibilityHint(messageText.isEmpty ? "Enter a message to send" : "Double tap to send")
             }
             .padding(.vertical, 8)
             .background(backgroundColor.opacity(0.95))
@@ -740,6 +757,7 @@ struct ContentView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "square.split.2x2")
                         .font(.system(size: 10))
+                        .accessibilityHidden(true)
                     Text("CHANNELS")
                         .font(.system(size: 11, weight: .bold, design: .monospaced))
                 }
@@ -775,6 +793,7 @@ struct ContentView: View {
                     Image(systemName: "lock.fill")
                         .font(.system(size: 10))
                         .foregroundColor(secondaryTextColor)
+                        .accessibilityLabel("Password protected")
                 }
                 
                 Text(channel)
@@ -835,6 +854,7 @@ struct ContentView: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(viewModel.passwordProtectedChannels.contains(channel) ? "Remove password" : "Set password")
             }
             
             // Leave button
@@ -907,6 +927,7 @@ struct ContentView: View {
                             HStack(spacing: 4) {
                                 Image(systemName: "person.2.fill")
                                     .font(.system(size: 10))
+                                    .accessibilityHidden(true)
                                 Text("PEOPLE")
                                     .font(.system(size: 11, weight: .bold, design: .monospaced))
                             }
@@ -978,14 +999,17 @@ struct ContentView: View {
                                     Image(systemName: "person.fill")
                                         .font(.system(size: 10))
                                         .foregroundColor(textColor)
+                                        .accessibilityLabel("You")
                                 } else if viewModel.unreadPrivateMessages.contains(peerID) {
                                     Image(systemName: "envelope.fill")
                                         .font(.system(size: 12))
                                         .foregroundColor(Color.orange)
+                                        .accessibilityLabel("Unread message from \(displayName)")
                                 } else {
                                     Circle()
                                         .fill(viewModel.getRSSIColor(rssi: rssi, colorScheme: colorScheme))
                                         .frame(width: 8, height: 8)
+                                        .accessibilityLabel("Signal strength: \(rssi > -60 ? "excellent" : rssi > -70 ? "good" : rssi > -80 ? "fair" : "poor")")
                                 }
                                 
                                 // Favorite star (not for self)
@@ -998,6 +1022,7 @@ struct ContentView: View {
                                             .foregroundColor(isFavorite ? Color.yellow : secondaryTextColor)
                                     }
                                     .buttonStyle(.plain)
+                                    .accessibilityLabel(isFavorite ? "Remove \(displayName) from favorites" : "Add \(displayName) to favorites")
                                 }
                                 
                                 // Peer name
