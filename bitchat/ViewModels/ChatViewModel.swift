@@ -2727,8 +2727,11 @@ extension ChatViewModel: BitchatDelegate {
                 
                 // Check if this is our own message being echoed back
                 if finalMessage.sender != nickname && finalMessage.sender != "system" {
-                    channelMessages[channel]?.append(finalMessage)
-                    channelMessages[channel]?.sort { $0.timestamp < $1.timestamp }
+                    // Skip empty or whitespace-only messages
+                    if !finalMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        channelMessages[channel]?.append(finalMessage)
+                        channelMessages[channel]?.sort { $0.timestamp < $1.timestamp }
+                    }
                 } else if finalMessage.sender != "system" {
                     // Our own message - check if we already have it (by ID and content)
                     let messageExists = channelMessages[channel]?.contains { existingMsg in
@@ -2746,8 +2749,11 @@ extension ChatViewModel: BitchatDelegate {
                     } ?? false
                     if !messageExists {
                         // This is a message we sent from another device or it's missing locally
-                        channelMessages[channel]?.append(finalMessage)
-                        channelMessages[channel]?.sort { $0.timestamp < $1.timestamp }
+                        // Skip empty or whitespace-only messages
+                        if !finalMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            channelMessages[channel]?.append(finalMessage)
+                            channelMessages[channel]?.sort { $0.timestamp < $1.timestamp }
+                        }
                     }
                 } else {
                     // System message - always add
@@ -2805,9 +2811,12 @@ extension ChatViewModel: BitchatDelegate {
             
             // Check if this is our own message being echoed back
             if finalMessage.sender != nickname && finalMessage.sender != "system" {
-                messages.append(finalMessage)
-                // Sort messages by timestamp to ensure proper ordering
-                messages.sort { $0.timestamp < $1.timestamp }
+                // Skip empty or whitespace-only messages
+                if !finalMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    messages.append(finalMessage)
+                    // Sort messages by timestamp to ensure proper ordering
+                    messages.sort { $0.timestamp < $1.timestamp }
+                }
             } else if finalMessage.sender != "system" {
                 // Our own message - check if we already have it (by ID and content)
                 let messageExists = messages.contains { existingMsg in
@@ -2825,8 +2834,11 @@ extension ChatViewModel: BitchatDelegate {
                 }
                 if !messageExists {
                     // This is a message we sent from another device or it's missing locally
-                    messages.append(finalMessage)
-                    messages.sort { $0.timestamp < $1.timestamp }
+                    // Skip empty or whitespace-only messages
+                    if !finalMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        messages.append(finalMessage)
+                        messages.sort { $0.timestamp < $1.timestamp }
+                    }
                 }
             } else {
                 // System message - always add
