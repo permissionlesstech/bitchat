@@ -1288,7 +1288,7 @@ class BluetoothMeshService: NSObject {
                     isPrivate: message.isPrivate,
                     recipientPeerID: nil,
                     recipientNickname: message.recipientNickname,
-                    roomKey: nil,
+                    channelKey: nil,
                     originalMessageID: message.id,
                     originalTimestamp: message.timestamp
                 )
