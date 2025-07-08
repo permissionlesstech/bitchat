@@ -74,6 +74,7 @@ class BluetoothMeshService: NSObject {
     private var cachedMessagesSentToPeer: Set<String> = []  // Track which peers have already received cached messages
     private var receivedMessageTimestamps: [String: Date] = [:]  // Track timestamps of received messages for debugging
     private var recentlySentMessages: Set<String> = []  // Short-term cache to prevent any duplicate sends
+    private let recentlySentMessagesLock = NSLock()  // Thread safety for recentlySentMessages
     private var lastMessageFromPeer: [String: Date] = [:]  // Track last message time from each peer for connection prioritization
     
     // Battery and range optimizations
@@ -100,8 +101,8 @@ class BluetoothMeshService: NSObject {
     private var advertisingTimer: Timer?  // Timer for interval-based advertising
     
     // Timing randomization for privacy
-    private let minMessageDelay: TimeInterval = 0.05  // 50ms minimum
-    private let maxMessageDelay: TimeInterval = 0.5   // 500ms maximum
+    private let minMessageDelay: TimeInterval = 0.01  // 10ms minimum for faster sync
+    private let maxMessageDelay: TimeInterval = 0.1   // 100ms maximum for faster sync
     
     // Fragment handling
     private var incomingFragments: [String: [Int: Data]] = [:]  // fragmentID -> [index: data]
@@ -366,7 +367,7 @@ class BluetoothMeshService: NSObject {
         }
         
         // Send initial announces after services are ready
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
             self?.sendBroadcastAnnounce()
         }
         
@@ -395,7 +396,7 @@ class BluetoothMeshService: NSObject {
         }
         
         // Send multiple times for reliability with jittered delays
-        for baseDelay in [0.5, 1.0, 2.0] {
+        for baseDelay in [0.2, 0.5, 1.0] {
             let jitteredDelay = baseDelay + self.randomDelay()
             DispatchQueue.main.asyncAfter(deadline: .now() + jitteredDelay) { [weak self] in
                 guard let self = self else { return }
@@ -489,7 +490,7 @@ class BluetoothMeshService: NSObject {
         self.characteristic = characteristic
     }
     
-    func sendMessage(_ content: String, mentions: [String] = [], room: String? = nil, to recipientID: String? = nil) {
+    func sendMessage(_ content: String, mentions: [String] = [], room: String? = nil, to recipientID: String? = nil, messageID: String? = nil, timestamp: Date? = nil) {
         messageQueue.async { [weak self] in
             guard let self = self else { return }
             
@@ -497,9 +498,10 @@ class BluetoothMeshService: NSObject {
             let senderNick = nickname?.nickname ?? self.myPeerID
             
             let message = BitchatMessage(
+                id: messageID,
                 sender: senderNick,
                 content: content,
-                timestamp: Date(),
+                timestamp: timestamp ?? Date(),
                 isRelay: false,
                 originalSender: nil,
                 isPrivate: false,
@@ -532,12 +534,21 @@ class BluetoothMeshService: NSObject {
                 
                 // Track this message to prevent duplicate sends
                 let msgID = "\(packet.timestamp)-\(self.myPeerID)-\(packet.payload.prefix(32).hashValue)"
-                if !self.recentlySentMessages.contains(msgID) {
+                
+                self.recentlySentMessagesLock.lock()
+                let shouldSend = !self.recentlySentMessages.contains(msgID)
+                if shouldSend {
                     self.recentlySentMessages.insert(msgID)
-                    
+                }
+                self.recentlySentMessagesLock.unlock()
+                
+                if shouldSend {
                     // Clean up old entries after 10 seconds
                     self.messageQueue.asyncAfter(deadline: .now() + 10.0) { [weak self] in
-                        self?.recentlySentMessages.remove(msgID)
+                        guard let self = self else { return }
+                        self.recentlySentMessagesLock.lock()
+                        self.recentlySentMessages.remove(msgID)
+                        self.recentlySentMessagesLock.unlock()
                     }
                     
                     // Add random delay before initial send
@@ -630,12 +641,21 @@ class BluetoothMeshService: NSObject {
                 
                 // Track to prevent duplicate sends
                 let msgID = "\(packet.timestamp)-\(self.myPeerID)-\(packet.payload.prefix(32).hashValue)"
-                if !self.recentlySentMessages.contains(msgID) {
+                
+                self.recentlySentMessagesLock.lock()
+                let shouldSend = !self.recentlySentMessages.contains(msgID)
+                if shouldSend {
                     self.recentlySentMessages.insert(msgID)
-                    
+                }
+                self.recentlySentMessagesLock.unlock()
+                
+                if shouldSend {
                     // Clean up after 10 seconds
                     self.messageQueue.asyncAfter(deadline: .now() + 10.0) { [weak self] in
-                        self?.recentlySentMessages.remove(msgID)
+                        guard let self = self else { return }
+                        self.recentlySentMessagesLock.lock()
+                        self.recentlySentMessages.remove(msgID)
+                        self.recentlySentMessagesLock.unlock()
                     }
                     
                     // Message tracking is now done in ChatViewModel to ensure consistent message IDs
@@ -784,7 +804,7 @@ class BluetoothMeshService: NSObject {
         }
     }
     
-    func sendEncryptedRoomMessage(_ content: String, mentions: [String], room: String, roomKey: SymmetricKey) {
+    func sendEncryptedRoomMessage(_ content: String, mentions: [String], room: String, roomKey: SymmetricKey, messageID: String? = nil, timestamp: Date? = nil) {
         messageQueue.async { [weak self] in
             guard let self = self else { return }
             
@@ -802,9 +822,10 @@ class BluetoothMeshService: NSObject {
                 
                 // Create message with encrypted content
                 let message = BitchatMessage(
+                    id: messageID,
                     sender: senderNick,
                     content: "",  // Empty placeholder since actual content is encrypted
-                    timestamp: Date(),
+                    timestamp: timestamp ?? Date(),
                     isRelay: false,
                     originalSender: nil,
                     isPrivate: false,
@@ -1184,7 +1205,7 @@ class BluetoothMeshService: NSObject {
             
             // Send cached messages with slight delay between each
             for (index, storedMessage) in messagesToSend.enumerated() {
-                let delay = Double(index) * 0.1 // 100ms between messages
+                let delay = Double(index) * 0.02 // 20ms between messages for faster sync
                 
                 DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak peripheral] in
                     guard let peripheral = peripheral,
@@ -1238,8 +1259,10 @@ class BluetoothMeshService: NSObject {
     private func broadcastPacket(_ packet: BitchatPacket) {
         guard let data = packet.toBinaryData() else { 
             // print("[ERROR] Failed to convert packet to binary data")
-            // Add to retry queue if this is a message packet
-            if packet.type == MessageType.message.rawValue,
+            // Add to retry queue if this is a message packet AND it's our own message
+            if let senderID = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8),
+               senderID == self.myPeerID,
+               packet.type == MessageType.message.rawValue,
                let message = BitchatMessage.fromBinaryPayload(packet.payload) {
                 MessageRetryService.shared.addMessageForRetry(
                     content: message.content,
@@ -1247,7 +1270,10 @@ class BluetoothMeshService: NSObject {
                     room: message.room,
                     isPrivate: message.isPrivate,
                     recipientPeerID: nil,
-                    recipientNickname: message.recipientNickname
+                    recipientNickname: message.recipientNickname,
+                    roomKey: nil,
+                    originalMessageID: message.id,
+                    originalTimestamp: message.timestamp
                 )
             }
             return 
@@ -1294,29 +1320,36 @@ class BluetoothMeshService: NSObject {
             }
         }
         
-        // If no peers received the message, add to retry queue
+        // If no peers received the message, add to retry queue ONLY if it's our own message
         if sentToPeripherals == 0 && sentToCentrals == 0 {
-            if packet.type == MessageType.message.rawValue,
-               let message = BitchatMessage.fromBinaryPayload(packet.payload) {
-                // For encrypted room messages, we need to preserve the room key
-                var roomKeyData: Data? = nil
-                if let room = message.room, message.isEncrypted {
-                    // This is an encrypted room message
-                    if let viewModel = delegate as? ChatViewModel,
-                       let roomKey = viewModel.roomKeys[room] {
-                        roomKeyData = roomKey.withUnsafeBytes { Data($0) }
+            // Check if this packet originated from us
+            if let senderID = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8),
+               senderID == self.myPeerID {
+                // This is our own message that failed to send
+                if packet.type == MessageType.message.rawValue,
+                   let message = BitchatMessage.fromBinaryPayload(packet.payload) {
+                    // For encrypted room messages, we need to preserve the room key
+                    var roomKeyData: Data? = nil
+                    if let room = message.room, message.isEncrypted {
+                        // This is an encrypted room message
+                        if let viewModel = delegate as? ChatViewModel,
+                           let roomKey = viewModel.roomKeys[room] {
+                            roomKeyData = roomKey.withUnsafeBytes { Data($0) }
+                        }
                     }
+                    
+                    MessageRetryService.shared.addMessageForRetry(
+                        content: message.content,
+                        mentions: message.mentions,
+                        room: message.room,
+                        isPrivate: message.isPrivate,
+                        recipientPeerID: nil,
+                        recipientNickname: message.recipientNickname,
+                        roomKey: roomKeyData,
+                        originalMessageID: message.id,
+                        originalTimestamp: message.timestamp
+                    )
                 }
-                
-                MessageRetryService.shared.addMessageForRetry(
-                    content: message.content,
-                    mentions: message.mentions,
-                    room: message.room,
-                    isPrivate: message.isPrivate,
-                    recipientPeerID: nil,
-                    recipientNickname: message.recipientNickname,
-                    roomKey: roomKeyData
-                )
             }
         }
     }
@@ -1722,11 +1755,9 @@ class BluetoothMeshService: NSObject {
                     // Send announce with our nickname immediately
                     self.sendAnnouncementToPeer(senderID)
                     
-                    // Delay sending cached messages to ensure connection is fully established
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                        // Check if this peer has cached messages (especially for favorites)
-                        self?.sendCachedMessages(to: senderID)
-                    }
+                    // Send cached messages immediately for faster sync
+                    // Check if this peer has cached messages (especially for favorites)
+                    self.sendCachedMessages(to: senderID)
                 }
             }
             
