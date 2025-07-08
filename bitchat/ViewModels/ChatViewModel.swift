@@ -2118,8 +2118,32 @@ extension ChatViewModel: BitchatDelegate {
                 if roomMessages[room] == nil {
                     roomMessages[room] = []
                 }
-                roomMessages[room]?.append(messageToAdd)
-                roomMessages[room]?.sort { $0.timestamp < $1.timestamp }
+                
+                // Check if this is our own message being echoed back
+                if messageToAdd.sender != nickname {
+                    roomMessages[room]?.append(messageToAdd)
+                    roomMessages[room]?.sort { $0.timestamp < $1.timestamp }
+                } else {
+                    // Our own message - check if we already have it (by ID and content)
+                    let messageExists = roomMessages[room]?.contains { existingMsg in
+                        // Check by ID first
+                        if existingMsg.id == messageToAdd.id {
+                            return true
+                        }
+                        // Check by content and sender with time window (within 1 second)
+                        if existingMsg.content == messageToAdd.content && 
+                           existingMsg.sender == messageToAdd.sender {
+                            let timeDiff = abs(existingMsg.timestamp.timeIntervalSince(messageToAdd.timestamp))
+                            return timeDiff < 1.0
+                        }
+                        return false
+                    } ?? false
+                    if !messageExists {
+                        // This is a message we sent from another device or it's missing locally
+                        roomMessages[room]?.append(messageToAdd)
+                        roomMessages[room]?.sort { $0.timestamp < $1.timestamp }
+                    }
+                }
                 
                 // Save message if room has retention enabled
                 if retentionEnabledRooms.contains(room) {
@@ -2135,8 +2159,8 @@ extension ChatViewModel: BitchatDelegate {
                 } else {
                 }
                 
-                // Update unread count if not currently viewing this room
-                if currentRoom != room {
+                // Update unread count if not currently viewing this room and it's not our own message
+                if currentRoom != room && messageToAdd.sender != nickname {
                     unreadRoomMessages[room] = (unreadRoomMessages[room] ?? 0) + 1
                 }
             } else {
@@ -2144,9 +2168,32 @@ extension ChatViewModel: BitchatDelegate {
             }
         } else {
             // Regular public message (main chat)
-            messages.append(message)
-            // Sort messages by timestamp to ensure proper ordering
-            messages.sort { $0.timestamp < $1.timestamp }
+            // Check if this is our own message being echoed back
+            if message.sender != nickname {
+                messages.append(message)
+                // Sort messages by timestamp to ensure proper ordering
+                messages.sort { $0.timestamp < $1.timestamp }
+            } else {
+                // Our own message - check if we already have it (by ID and content)
+                let messageExists = messages.contains { existingMsg in
+                    // Check by ID first
+                    if existingMsg.id == message.id {
+                        return true
+                    }
+                    // Check by content and sender with time window (within 1 second)
+                    if existingMsg.content == message.content && 
+                       existingMsg.sender == message.sender {
+                        let timeDiff = abs(existingMsg.timestamp.timeIntervalSince(message.timestamp))
+                        return timeDiff < 1.0
+                    }
+                    return false
+                }
+                if !messageExists {
+                    // This is a message we sent from another device or it's missing locally
+                    messages.append(message)
+                    messages.sort { $0.timestamp < $1.timestamp }
+                }
+            }
         }
         
         // Check if we're mentioned
