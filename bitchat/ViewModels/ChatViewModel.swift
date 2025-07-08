@@ -1073,10 +1073,11 @@ class ChatViewModel: ObservableObject {
         if let peerID = selectedPrivateChatPeer {
             // In private chat - send to the other person
             if let peerNickname = meshService.getPeerNicknames()[peerID] {
+                // Send the message directly without going through sendPrivateMessage to avoid local echo
                 meshService.sendPrivateMessage(screenshotMessage, to: peerID, recipientNickname: peerNickname)
             }
             
-            // Also show locally
+            // Show local notification immediately as system message
             let localNotification = BitchatMessage(
                 sender: "system",
                 content: "you took a screenshot",
@@ -1094,9 +1095,14 @@ class ChatViewModel: ObservableObject {
             
         } else if let channel = currentChannel {
             // In a channel - send to channel
-            meshService.sendMessage(screenshotMessage, channel: channel)
+            // Check if channel is password protected and encrypt if needed
+            if let channelKey = channelKeys[channel] {
+                meshService.sendEncryptedChannelMessage(screenshotMessage, mentions: [], channel: channel, channelKey: channelKey)
+            } else {
+                meshService.sendMessage(screenshotMessage, mentions: [], channel: channel)
+            }
             
-            // Also show locally
+            // Show local notification immediately as system message
             let localNotification = BitchatMessage(
                 sender: "system",
                 content: "you took a screenshot",
@@ -1113,9 +1119,9 @@ class ChatViewModel: ObservableObject {
             
         } else {
             // In public chat - send to everyone
-            meshService.sendMessage(screenshotMessage)
+            meshService.sendMessage(screenshotMessage, mentions: [], channel: nil)
             
-            // Also show locally
+            // Show local notification immediately as system message
             let localNotification = BitchatMessage(
                 sender: "system",
                 content: "you took a screenshot",
