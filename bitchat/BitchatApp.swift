@@ -92,8 +92,21 @@ struct BitchatApp: App {
             
             // Send the shared content after a short delay
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                let prefix = contentType == "url" ? "Shared link: " : ""
-                self.chatViewModel.sendMessage(prefix + sharedContent)
+                if contentType == "url" {
+                    // Try to parse as JSON first
+                    if let data = sharedContent.data(using: .utf8),
+                       let urlData = try? JSONSerialization.jsonObject(with: data) as? [String: String],
+                       let url = urlData["url"],
+                       let title = urlData["title"] {
+                        // Send formatted link with title and URL
+                        self.chatViewModel.sendMessage("[\(title)](\(url))")
+                    } else {
+                        // Fallback to simple URL
+                        self.chatViewModel.sendMessage("Shared link: \(sharedContent)")
+                    }
+                } else {
+                    self.chatViewModel.sendMessage(sharedContent)
+                }
             }
         }
     }
