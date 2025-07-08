@@ -12,8 +12,9 @@
 		10E68BB889356219189E38EC /* BitchatApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF625BB3AD919322C01A46B2 /* BitchatApp.swift */; };
 		1D9674FA5F998503831DC281 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A08E03AA0C63E97C91749AEC /* ContentView.swift */; };
 		1F48A8CEEE9399D1EBD08F0C /* OptimizedBloomFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB043CA5EEB9AC8B07D61E97 /* OptimizedBloomFilter.swift */; };
-		230B11C5BF035D35638B21C8 /* PasswordProtectedRoomTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB12482E4AD78B861C538449 /* PasswordProtectedRoomTests.swift */; };
 		2E71E320EA921498C57E023B /* BitchatMessageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FA8FF26ABDC1C642A8C7AE5 /* BitchatMessageTests.swift */; };
+		2F0992172E1CD1C5007AA382 /* PasswordProtectedChannelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F0992162E1CD1C5007AA382 /* PasswordProtectedChannelTests.swift */; };
+		2F0992182E1CD1C5007AA382 /* PasswordProtectedChannelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F0992162E1CD1C5007AA382 /* PasswordProtectedChannelTests.swift */; };
 		4274B6016F755946FBF2513E /* MessageRetentionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67A85BFDDE65B4CD8BDF6DDB /* MessageRetentionService.swift */; };
 		4B747085D07A1BCE0F5BA612 /* BinaryProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2136C3E22D02D4A8DBE7EAB /* BinaryProtocol.swift */; };
 		4E778E5A414571ACAC2A0F01 /* MessageRetentionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67A85BFDDE65B4CD8BDF6DDB /* MessageRetentionService.swift */; };
@@ -49,7 +50,6 @@
 		DDA1DFAB1FF7AADE52DC0F53 /* EncryptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DC1563390A15C042D059CF9 /* EncryptionService.swift */; };
 		F00B713D5053617FB5F3F1BE /* MessagePaddingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DE9CDF66D4E52D268851048 /* MessagePaddingTests.swift */; };
 		F455F011B3B648ADA233F998 /* BinaryProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2136C3E22D02D4A8DBE7EAB /* BinaryProtocol.swift */; };
-		F4A689F5F34125AE1BFD5599 /* PasswordProtectedRoomTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB12482E4AD78B861C538449 /* PasswordProtectedRoomTests.swift */; };
 		FB8819B4C84FAFEF5C36B216 /* KeychainManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 136696FC4436A02D98CE6A77 /* KeychainManager.swift */; };
 /* End PBXBuildFile section */
 
@@ -76,6 +76,7 @@
 		136696FC4436A02D98CE6A77 /* KeychainManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainManager.swift; sourceTree = "<group>"; };
 		1EB3A8FE16333ED12FCB8ACB /* BloomFilterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BloomFilterTests.swift; sourceTree = "<group>"; };
 		229F17B68CFF7AB1BC91C847 /* BitchatProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitchatProtocol.swift; sourceTree = "<group>"; };
+		2F0992162E1CD1C5007AA382 /* PasswordProtectedChannelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasswordProtectedChannelTests.swift; sourceTree = "<group>"; };
 		32F149C43D1915831B60FE09 /* CompressionUtil.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompressionUtil.swift; sourceTree = "<group>"; };
 		3448F84BF86A42A3CC4A9379 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
 		3A69677D382F1C3D5ED03F7D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -98,7 +99,6 @@
 		EA706D8E5097785414646A8E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		ED176FF3B274E35C2D827894 /* BatteryOptimizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatteryOptimizer.swift; sourceTree = "<group>"; };
 		EF625BB3AD919322C01A46B2 /* BitchatApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitchatApp.swift; sourceTree = "<group>"; };
-		FB12482E4AD78B861C538449 /* PasswordProtectedRoomTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasswordProtectedRoomTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -181,7 +181,7 @@
 				1EB3A8FE16333ED12FCB8ACB /* BloomFilterTests.swift */,
 				D69A18D27F9A565FD6041E12 /* Info.plist */,
 				8DE9CDF66D4E52D268851048 /* MessagePaddingTests.swift */,
-				FB12482E4AD78B861C538449 /* PasswordProtectedRoomTests.swift */,
+				2F0992162E1CD1C5007AA382 /* PasswordProtectedChannelTests.swift */,
 			);
 			path = bitchatTests;
 			sourceTree = "<group>";
@@ -386,8 +386,8 @@
 				8F0BFC2D2B2A5E7B70C3B485 /* BinaryProtocolTests.swift in Sources */,
 				2E71E320EA921498C57E023B /* BitchatMessageTests.swift in Sources */,
 				C91FDE97070433E6CFE95C55 /* BloomFilterTests.swift in Sources */,
+				2F0992182E1CD1C5007AA382 /* PasswordProtectedChannelTests.swift in Sources */,
 				ADC66F95FBD513B10411ADB3 /* MessagePaddingTests.swift in Sources */,
-				F4A689F5F34125AE1BFD5599 /* PasswordProtectedRoomTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -398,8 +398,8 @@
 				CDAD6629EB69916B95C80DAF /* BinaryProtocolTests.swift in Sources */,
 				0DAFF1DDE9BA83FF648D5AB3 /* BitchatMessageTests.swift in Sources */,
 				846E2B446E36639159704730 /* BloomFilterTests.swift in Sources */,
+				2F0992172E1CD1C5007AA382 /* PasswordProtectedChannelTests.swift in Sources */,
 				F00B713D5053617FB5F3F1BE /* MessagePaddingTests.swift in Sources */,
-				230B11C5BF035D35638B21C8 /* PasswordProtectedRoomTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
