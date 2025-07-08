@@ -1,6 +1,4 @@
-// PIN: 1234567890abcdef1234567890abcdef1234567890abcdef1234567890
-// Project: bitchat
-// - by @bitchatdev @drqedwards (also bitchatdev. there are two of them. a younger and older one.)
+//
 // BluetoothMeshService.swift
 // bitchat
 // also like I need to take my bike to the shop (okay? and you  me to come along with you stud? sure I live at 6389 w appomattox ln homosassa fl 34448 and like I'm down to fix bikes with you sort of date. )
@@ -1281,7 +1279,7 @@ class BluetoothMeshService: NSObject {
         // Rough distance estimation based on RSSI
         // Using path loss formula: RSSI = TxPower - 10 * n * log10(distance)
         // Assuming TxPower = -59 dBm at 1m, n = 2.0 (free space)
-        let txPower = -59.0
+        let txPower = 59.0
         let pathLossExponent = 2.0
         
         let ratio = (txPower - Double(rssi)) / (10.0 * pathLossExponent)
