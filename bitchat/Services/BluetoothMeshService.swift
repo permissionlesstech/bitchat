@@ -74,6 +74,7 @@ class BluetoothMeshService: NSObject {
     private var cachedMessagesSentToPeer: Set<String> = []  // Track which peers have already received cached messages
     private var receivedMessageTimestamps: [String: Date] = [:]  // Track timestamps of received messages for debugging
     private var recentlySentMessages: Set<String> = []  // Short-term cache to prevent any duplicate sends
+    private let recentlySentMessagesLock = NSLock()  // Thread safety for recentlySentMessages
     private var lastMessageFromPeer: [String: Date] = [:]  // Track last message time from each peer for connection prioritization
     
     // Battery and range optimizations
@@ -490,6 +491,9 @@ class BluetoothMeshService: NSObject {
     }
     
     func sendMessage(_ content: String, mentions: [String] = [], channel: String? = nil, to recipientID: String? = nil) {
+        // Defensive check for empty content
+        guard !content.isEmpty else { return }
+        
         messageQueue.async { [weak self] in
             guard let self = self else { return }
             
@@ -532,12 +536,21 @@ class BluetoothMeshService: NSObject {
                 
                 // Track this message to prevent duplicate sends
                 let msgID = "\(packet.timestamp)-\(self.myPeerID)-\(packet.payload.prefix(32).hashValue)"
-                if !self.recentlySentMessages.contains(msgID) {
+                
+                self.recentlySentMessagesLock.lock()
+                let shouldSend = !self.recentlySentMessages.contains(msgID)
+                if shouldSend {
                     self.recentlySentMessages.insert(msgID)
-                    
+                }
+                self.recentlySentMessagesLock.unlock()
+                
+                if shouldSend {
                     // Clean up old entries after 10 seconds
                     self.messageQueue.asyncAfter(deadline: .now() + 10.0) { [weak self] in
-                        self?.recentlySentMessages.remove(msgID)
+                        guard let self = self else { return }
+                        self.recentlySentMessagesLock.lock()
+                        self.recentlySentMessages.remove(msgID)
+                        self.recentlySentMessagesLock.unlock()
                     }
                     
                     // Add random delay before initial send
@@ -559,6 +572,9 @@ class BluetoothMeshService: NSObject {
     
     
     func sendPrivateMessage(_ content: String, to recipientPeerID: String, recipientNickname: String, messageID: String? = nil) {
+        // Defensive checks
+        guard !content.isEmpty, !recipientPeerID.isEmpty, !recipientNickname.isEmpty else { return }
+        
         messageQueue.async { [weak self] in
             guard let self = self else { return }
             
@@ -617,7 +633,11 @@ class BluetoothMeshService: NSObject {
                 
                 
                 // Check if recipient is offline and cache if they're a favorite
-                if !self.activePeers.contains(recipientPeerID) {
+                self.activePeersLock.lock()
+                let isRecipientOffline = !self.activePeers.contains(recipientPeerID)
+                self.activePeersLock.unlock()
+                
+                if isRecipientOffline {
                     if let publicKeyData = self.encryptionService.getPeerIdentityKey(recipientPeerID) {
                         let fingerprint = self.getPublicKeyFingerprint(publicKeyData)
                         if self.delegate?.isFavorite(fingerprint: fingerprint) ?? false {
@@ -630,12 +650,21 @@ class BluetoothMeshService: NSObject {
                 
                 // Track to prevent duplicate sends
                 let msgID = "\(packet.timestamp)-\(self.myPeerID)-\(packet.payload.prefix(32).hashValue)"
-                if !self.recentlySentMessages.contains(msgID) {
+                
+                self.recentlySentMessagesLock.lock()
+                let shouldSend = !self.recentlySentMessages.contains(msgID)
+                if shouldSend {
                     self.recentlySentMessages.insert(msgID)
-                    
+                }
+                self.recentlySentMessagesLock.unlock()
+                
+                if shouldSend {
                     // Clean up after 10 seconds
                     self.messageQueue.asyncAfter(deadline: .now() + 10.0) { [weak self] in
-                        self?.recentlySentMessages.remove(msgID)
+                        guard let self = self else { return }
+                        self.recentlySentMessagesLock.lock()
+                        self.recentlySentMessages.remove(msgID)
+                        self.recentlySentMessagesLock.unlock()
                     }
                     
                     // Message tracking is now done in ChatViewModel to ensure consistent message IDs
@@ -798,7 +827,10 @@ class BluetoothMeshService: NSObject {
             
             do {
                 let sealedBox = try AES.GCM.seal(contentData, using: channelKey)
-                let encryptedData = sealedBox.combined!
+                guard let encryptedData = sealedBox.combined else {
+                    // Encryption failed to produce combined data
+                    return
+                }
                 
                 // Create message with encrypted content
                 let message = BitchatMessage(

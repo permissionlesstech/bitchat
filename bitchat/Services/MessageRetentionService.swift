@@ -31,7 +31,10 @@ class MessageRetentionService {
     
     private init() {
         // Get documents directory
-        documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        guard let docsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            fatalError("Unable to access documents directory")
+        }
+        documentsDirectory = docsDir
         messagesDirectory = documentsDirectory.appendingPathComponent("Messages", isDirectory: true)
         
         // Create messages directory if it doesn't exist
