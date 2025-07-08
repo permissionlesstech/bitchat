@@ -2750,8 +2750,42 @@ extension ChatViewModel: BitchatDelegate {
                 if channelMessages[channel] == nil {
                     channelMessages[channel] = []
                 }
-                channelMessages[channel]?.append(finalMessage)
-                channelMessages[channel]?.sort { $0.timestamp < $1.timestamp }
+                
+                // Check if this is our own message being echoed back
+                if finalMessage.sender != nickname && finalMessage.sender != "system" {
+                    // Skip empty or whitespace-only messages
+                    if !finalMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        channelMessages[channel]?.append(finalMessage)
+                        channelMessages[channel]?.sort { $0.timestamp < $1.timestamp }
+                    }
+                } else if finalMessage.sender != "system" {
+                    // Our own message - check if we already have it (by ID and content)
+                    let messageExists = channelMessages[channel]?.contains { existingMsg in
+                        // Check by ID first
+                        if existingMsg.id == finalMessage.id {
+                            return true
+                        }
+                        // Check by content and sender with time window (within 1 second)
+                        if existingMsg.content == finalMessage.content && 
+                           existingMsg.sender == finalMessage.sender {
+                            let timeDiff = abs(existingMsg.timestamp.timeIntervalSince(finalMessage.timestamp))
+                            return timeDiff < 1.0
+                        }
+                        return false
+                    } ?? false
+                    if !messageExists {
+                        // This is a message we sent from another device or it's missing locally
+                        // Skip empty or whitespace-only messages
+                        if !finalMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            channelMessages[channel]?.append(finalMessage)
+                            channelMessages[channel]?.sort { $0.timestamp < $1.timestamp }
+                        }
+                    }
+                } else {
+                    // System message - always add
+                    channelMessages[channel]?.append(finalMessage)
+                    channelMessages[channel]?.sort { $0.timestamp < $1.timestamp }
+                }
                 
                 // Save message if channel has retention enabled
                 if retentionEnabledChannels.contains(channel) {
@@ -2767,8 +2801,8 @@ extension ChatViewModel: BitchatDelegate {
                 } else {
                 }
                 
-                // Update unread count if not currently viewing this channel
-                if currentChannel != channel {
+                // Update unread count if not currently viewing this channel and it's not our own message
+                if currentChannel != channel && finalMessage.sender != nickname {
                     unreadChannelMessages[channel] = (unreadChannelMessages[channel] ?? 0) + 1
                 }
             } else {
@@ -2782,9 +2816,10 @@ extension ChatViewModel: BitchatDelegate {
                                   (message.content.contains("🫂") || message.content.contains("🐟") || 
                                    message.content.contains("took a screenshot"))
             
+            let finalMessage: BitchatMessage
             if isActionMessage {
                 // Convert to system message
-                let systemMessage = BitchatMessage(
+                finalMessage = BitchatMessage(
                     sender: "system",
                     content: String(message.content.dropFirst(2).dropLast(2)), // Remove * * wrapper
                     timestamp: message.timestamp,
@@ -2796,12 +2831,46 @@ extension ChatViewModel: BitchatDelegate {
                     mentions: message.mentions,
                     channel: message.channel
                 )
-                messages.append(systemMessage)
             } else {
-                messages.append(message)
+                finalMessage = message
             }
-            // Sort messages by timestamp to ensure proper ordering
-            messages.sort { $0.timestamp < $1.timestamp }
+            
+            // Check if this is our own message being echoed back
+            if finalMessage.sender != nickname && finalMessage.sender != "system" {
+                // Skip empty or whitespace-only messages
+                if !finalMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    messages.append(finalMessage)
+                    // Sort messages by timestamp to ensure proper ordering
+                    messages.sort { $0.timestamp < $1.timestamp }
+                }
+            } else if finalMessage.sender != "system" {
+                // Our own message - check if we already have it (by ID and content)
+                let messageExists = messages.contains { existingMsg in
+                    // Check by ID first
+                    if existingMsg.id == finalMessage.id {
+                        return true
+                    }
+                    // Check by content and sender with time window (within 1 second)
+                    if existingMsg.content == finalMessage.content && 
+                       existingMsg.sender == finalMessage.sender {
+                        let timeDiff = abs(existingMsg.timestamp.timeIntervalSince(finalMessage.timestamp))
+                        return timeDiff < 1.0
+                    }
+                    return false
+                }
+                if !messageExists {
+                    // This is a message we sent from another device or it's missing locally
+                    // Skip empty or whitespace-only messages
+                    if !finalMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        messages.append(finalMessage)
+                        messages.sort { $0.timestamp < $1.timestamp }
+                    }
+                }
+            } else {
+                // System message - always add
+                messages.append(finalMessage)
+                messages.sort { $0.timestamp < $1.timestamp }
+            }
         }
         
         // Check if we're mentioned
