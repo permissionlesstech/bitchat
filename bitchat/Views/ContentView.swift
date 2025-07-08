@@ -415,18 +415,38 @@ struct ContentView: View {
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             } else {
                                 // Regular messages with natural text wrapping
-                                HStack(alignment: .top, spacing: 0) {
-                                    // Single text view for natural wrapping
-                                    Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme))
-                                        .textSelection(.enabled)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                VStack(alignment: .leading, spacing: 8) {
+                                    HStack(alignment: .top, spacing: 0) {
+                                        // Single text view for natural wrapping
+                                        Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme))
+                                            .textSelection(.enabled)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                        
+                                        // Delivery status indicator for private messages
+                                        if message.isPrivate && message.sender == viewModel.nickname,
+                                           let status = message.deliveryStatus {
+                                            DeliveryStatusView(status: status, colorScheme: colorScheme)
+                                                .padding(.leading, 4)
+                                        }
+                                    }
                                     
-                                    // Delivery status indicator for private messages
-                                    if message.isPrivate && message.sender == viewModel.nickname,
-                                       let status = message.deliveryStatus {
-                                        DeliveryStatusView(status: status, colorScheme: colorScheme)
-                                            .padding(.leading, 4)
+                                    // Check for links and show preview
+                                    if let markdownLink = message.content.extractMarkdownLink() {
+                                        // Don't show link preview if the message is just the emoji
+                                        let cleanContent = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
+                                        if cleanContent.hasPrefix("👇") {
+                                            LinkPreviewView(url: markdownLink.url, title: markdownLink.title)
+                                                .padding(.top, 4)
+                                        }
+                                    } else {
+                                        // Check for plain URLs
+                                        let urls = message.content.extractURLs()
+                                        let _ = urls.isEmpty ? nil : print("DEBUG: Found \(urls.count) plain URLs in message")
+                                        ForEach(urls.prefix(3), id: \.url) { urlInfo in
+                                            LinkPreviewView(url: urlInfo.url, title: nil)
+                                                .padding(.top, 4)
+                                        }
                                     }
                                 }
                             }
