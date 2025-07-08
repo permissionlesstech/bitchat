@@ -51,6 +51,14 @@ class MessageRetentionService {
         
         // Clean up old messages on init
         cleanupOldMessages()
+        
+        do {
+            let documentsDirectory = try getDocumentsDirectory()
+            // Use documentsDirectory
+        } catch {
+            print("Error: \(error.localizedDescription)")
+            // Optionally, show an alert to the user
+        }
     }
     
     // MARK: - Favorite Channels Management
@@ -205,5 +213,12 @@ class MessageRetentionService {
         
         // Clear favorite channels
         UserDefaults.standard.removeObject(forKey: favoriteChannelsKey)
+    }
+    
+    func getDocumentsDirectory() throws -> URL {
+        guard let docsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            throw AppError.missingDocumentsDirectory
+        }
+        return docsDir
     }
 }
