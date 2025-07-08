@@ -12,7 +12,7 @@ bitchat is a decentralized, peer-to-peer messaging application that operates ove
 4. [Message Relay Protocol](#message-relay-protocol)
 5. [Store and Forward Mechanism](#store-and-forward-mechanism)
 6. [Encryption and Security](#encryption-and-security)
-7. [Room-Based Communication](#room-based-communication)
+7. [Channel-Based Communication](#channel-based-communication)
 8. [Binary Protocol Specification](#binary-protocol-specification)
 9. [Privacy Features](#privacy-features)
 10. [Message Fragmentation](#message-fragmentation)
@@ -39,7 +39,7 @@ graph TB
     subgraph "Application Layer"
         UI[Chat UI]
         CMD[Commands]
-        ROOM[Room Management]
+        ROOM[Channel Management]
     end
     
     subgraph "Service Layer"
@@ -342,10 +342,10 @@ sequenceDiagram
 ### Encryption Layers
 
 1. **Private Messages**: X25519 key exchange + AES-256-GCM
-2. **Room Messages**: Password-derived keys using Argon2id
+2. **Channel Messages**: Password-derived keys using Argon2id
 3. **Digital Signatures**: Ed25519 for message authenticity
 
-### Key Derivation for Rooms
+### Key Derivation for Channels
 
 <div align="center">
 
@@ -355,7 +355,7 @@ graph LR
     A --> K[256-bit Key]
     K --> AES[AES-256-GCM]
     
-    S[Salt - SHA256 of roomName] --> A
+    S[Salt - SHA256 of channelName] --> A
     I[Iterations - 10] --> A
     M[Memory - 64MB] --> A
     T[Parallelism - 4] --> A
@@ -368,27 +368,27 @@ graph LR
 
 </div>
 
-## Room-Based Communication
+## Channel-Based Communication
 
-Rooms provide topic-based group messaging with optional password protection.
+Channels provide topic-based group messaging with optional password protection.
 
-### Room State Machine
+### Channel State Machine
 
 <div align="center">
 
 ```mermaid
 stateDiagram-v2
     [*] --> Discovery
-    Discovery --> Joined: /j #room
-    Joined --> PasswordPrompt: Room is protected
-    Joined --> Unlocked: Room is public
+    Discovery --> Joined: /j #channel
+    Joined --> PasswordPrompt: Channel is protected
+    Joined --> Unlocked: Channel is public
     PasswordPrompt --> Unlocked: Correct password
     PasswordPrompt --> PasswordPrompt: Wrong password
-    Unlocked --> [*]: Leave room
+    Unlocked --> [*]: Leave channel
     
     state Discovery {
         [*] --> Scanning
-        Scanning --> Found: Room activity detected
+        Scanning --> Found: Channel activity detected
     }
     
     state Unlocked {
@@ -402,13 +402,13 @@ stateDiagram-v2
 
 </div>
 
-### Room Features
+### Channel Features
 
-- **Hashtag naming**: Rooms identified by #roomname
+- **Hashtag naming**: Channels identified by #channelname
 - **Password protection**: Optional encryption with shared passwords
 - **Owner privileges**: Transfer ownership, change passwords
 - **Message retention**: Owner-controlled mandatory retention
-- **Decentralized discovery**: Rooms discovered through usage
+- **Decentralized discovery**: Channels discovered through usage
 
 ## Binary Protocol Specification
 
@@ -467,8 +467,8 @@ classDiagram
 | FRAGMENT_START | 0x05 | Start of fragmented message |
 | FRAGMENT_CONTINUE | 0x06 | Continuation fragment |
 | FRAGMENT_END | 0x07 | Final fragment |
-| ROOM_ANNOUNCE | 0x08 | Room status announcement |
-| ROOM_RETENTION | 0x09 | Room retention policy |
+| ROOM_ANNOUNCE | 0x08 | Channel status announcement |
+| ROOM_RETENTION | 0x09 | Channel retention policy |
 
 ## Performance Optimizations
 
@@ -680,7 +680,7 @@ sequenceDiagram
     
     alt Private Message
         E->>E: Encrypt with X25519<br/>shared secret
-    else Room Message  
+    else Channel Message  
         E->>E: Encrypt with Argon2id<br/>derived key
     else Broadcast
         E->>E: Sign with Ed25519
@@ -797,7 +797,7 @@ graph TB
 
 **2. Asynchronous Delivery**: Nostr's event-based model aligns well with bitchat's store-and-forward mechanism, enabling message delivery across time zones and sporadic connectivity.
 
-**3. Selective Sharing**: Users could opt-in to share specific rooms or conversations beyond the local mesh, maintaining privacy by default.
+**3. Selective Sharing**: Users could opt-in to share specific channels or conversations beyond the local mesh, maintaining privacy by default.
 
 **4. Decentralized Architecture**: Nostr's relay model preserves bitchat's decentralization principles - no single point of failure or control.
 
@@ -813,7 +813,7 @@ sequenceDiagram
     M->>G: Message for remote delivery
     G->>G: Check opt-in status
     
-    alt Room allows bridging
+    alt Channel allows bridging
         G->>N: Convert to Nostr event
         Note over N: Add bitchat metadata<br/>Maintain encryption
         N->>R: Publish event
@@ -832,7 +832,7 @@ sequenceDiagram
 Key considerations for maintaining bitchat's privacy model:
 
 1. **Opt-in Only**: Network bridging disabled by default, requiring explicit user consent
-2. **Room-Level Control**: Bridge permissions managed per room, not globally
+2. **Channel-Level Control**: Bridge permissions managed per channel, not globally
 3. **Maintained Encryption**: Messages remain end-to-end encrypted when bridged
 4. **Ephemeral Options**: Support for Nostr's ephemeral events (NIP-16) for temporary bridging
 5. **Identity Isolation**: Generate separate Nostr keypairs unlinked to local peer identities
@@ -841,7 +841,7 @@ Key considerations for maintaining bitchat's privacy model:
 
 - **Disaster Coordination**: Bridge local emergency mesh networks to coordinate broader relief efforts
 - **Event Overflow**: Extend large gatherings beyond Bluetooth range while maintaining local clusters
-- **Checkpoint Sync**: Periodically sync specific rooms when internet is briefly available
+- **Checkpoint Sync**: Periodically sync specific channels when internet is briefly available
 - **Cross-Community Bridges**: Connect related but geographically separated communities
 
 This extension would be implemented as an optional module, ensuring the core bitchat system remains fully functional without any network dependencies. Users in pure offline environments would see no change, while those with selective connectivity could benefit from enhanced reach when desired.

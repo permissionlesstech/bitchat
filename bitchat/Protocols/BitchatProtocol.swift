@@ -72,8 +72,8 @@ enum MessageType: UInt8 {
     case fragmentStart = 0x05
     case fragmentContinue = 0x06
     case fragmentEnd = 0x07
-    case roomAnnounce = 0x08  // Announce password-protected room status
-    case roomRetention = 0x09  // Announce room retention status
+    case channelAnnounce = 0x08  // Announce password-protected channel status
+    case channelRetention = 0x09  // Announce channel retention status
     case deliveryAck = 0x0A  // Acknowledge message received
     case deliveryStatusRequest = 0x0B  // Request delivery status update
     case readReceipt = 0x0C  // Message has been read/viewed
@@ -220,12 +220,12 @@ struct BitchatMessage: Codable, Equatable {
     let recipientNickname: String?
     let senderPeerID: String?
     let mentions: [String]?  // Array of mentioned nicknames
-    let room: String?  // Room hashtag (e.g., "#general")
+    let channel: String?  // Channel hashtag (e.g., "#general")
     let encryptedContent: Data?  // For password-protected rooms
     let isEncrypted: Bool  // Flag to indicate if content is encrypted
     var deliveryStatus: DeliveryStatus? // Delivery tracking
     
-    init(id: String? = nil, sender: String, content: String, timestamp: Date, isRelay: Bool, originalSender: String? = nil, isPrivate: Bool = false, recipientNickname: String? = nil, senderPeerID: String? = nil, mentions: [String]? = nil, room: String? = nil, encryptedContent: Data? = nil, isEncrypted: Bool = false, deliveryStatus: DeliveryStatus? = nil) {
+    init(id: String? = nil, sender: String, content: String, timestamp: Date, isRelay: Bool, originalSender: String? = nil, isPrivate: Bool = false, recipientNickname: String? = nil, senderPeerID: String? = nil, mentions: [String]? = nil, channel: String? = nil, encryptedContent: Data? = nil, isEncrypted: Bool = false, deliveryStatus: DeliveryStatus? = nil) {
         self.id = id ?? UUID().uuidString
         self.sender = sender
         self.content = content
@@ -236,7 +236,7 @@ struct BitchatMessage: Codable, Equatable {
         self.recipientNickname = recipientNickname
         self.senderPeerID = senderPeerID
         self.mentions = mentions
-        self.room = room
+        self.channel = channel
         self.encryptedContent = encryptedContent
         self.isEncrypted = isEncrypted
         self.deliveryStatus = deliveryStatus ?? (isPrivate ? .sending : nil)
@@ -248,10 +248,10 @@ protocol BitchatDelegate: AnyObject {
     func didConnectToPeer(_ peerID: String)
     func didDisconnectFromPeer(_ peerID: String)
     func didUpdatePeerList(_ peers: [String])
-    func didReceiveRoomLeave(_ room: String, from peerID: String)
-    func didReceivePasswordProtectedRoomAnnouncement(_ room: String, isProtected: Bool, creatorID: String?, keyCommitment: String?)
-    func didReceiveRoomRetentionAnnouncement(_ room: String, enabled: Bool, creatorID: String?)
-    func decryptRoomMessage(_ encryptedContent: Data, room: String) -> String?
+    func didReceiveChannelLeave(_ channel: String, from peerID: String)
+    func didReceivePasswordProtectedChannelAnnouncement(_ channel: String, isProtected: Bool, creatorID: String?, keyCommitment: String?)
+    func didReceiveChannelRetentionAnnouncement(_ channel: String, enabled: Bool, creatorID: String?)
+    func decryptChannelMessage(_ encryptedContent: Data, channel: String) -> String?
     
     // Optional method to check if a fingerprint belongs to a favorite peer
     func isFavorite(fingerprint: String) -> Bool
@@ -268,19 +268,19 @@ extension BitchatDelegate {
         return false
     }
     
-    func didReceiveRoomLeave(_ room: String, from peerID: String) {
+    func didReceiveChannelLeave(_ channel: String, from peerID: String) {
         // Default empty implementation
     }
     
-    func didReceivePasswordProtectedRoomAnnouncement(_ room: String, isProtected: Bool, creatorID: String?, keyCommitment: String?) {
+    func didReceivePasswordProtectedChannelAnnouncement(_ channel: String, isProtected: Bool, creatorID: String?, keyCommitment: String?) {
         // Default empty implementation
     }
     
-    func didReceiveRoomRetentionAnnouncement(_ room: String, enabled: Bool, creatorID: String?) {
+    func didReceiveChannelRetentionAnnouncement(_ channel: String, enabled: Bool, creatorID: String?) {
         // Default empty implementation
     }
     
-    func decryptRoomMessage(_ encryptedContent: Data, room: String) -> String? {
+    func decryptChannelMessage(_ encryptedContent: Data, channel: String) -> String? {
         // Default returns nil (unable to decrypt)
         return nil
     }
