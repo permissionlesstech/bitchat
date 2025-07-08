@@ -66,6 +66,9 @@ This project is released into the public domain. See the [LICENSE](LICENSE) file
 - `/m @user message` - Send a private message
 - `/w` - List online users
 - `/channels` - Show all discovered channels
+- `/block @user` - Block a user from messaging you
+- `/block` - List all blocked users
+- `/unblock @user` - Unblock a user
 - `/clear` - Clear chat messages
 - `/pass [password]` - Set/change channel password (owner only)
 - `/transfer @user` - Transfer channel ownership
