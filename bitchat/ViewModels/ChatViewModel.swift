@@ -30,8 +30,6 @@ class ChatViewModel: ObservableObject {
     @Published var privateChats: [String: [BitchatMessage]] = [:] // peerID -> messages
     @Published var selectedPrivateChatPeer: String? = nil
     @Published var unreadPrivateMessages: Set<String> = []
-    // Autocomplete suggestions for @mentions. Stores peer IDs so we can
-    // disambiguate duplicate nicknames when presenting options.
     @Published var autocompleteSuggestions: [String] = []
     @Published var showAutocomplete: Bool = false
     @Published var autocompleteRange: NSRange? = nil
