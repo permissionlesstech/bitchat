@@ -519,12 +519,14 @@ struct ContentView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     // Define commands with aliases and syntax
                     let commandInfo: [(commands: [String], syntax: String?, description: String)] = [
+                        (["/block"], "[nickname]", "block or list blocked peers"),
                         (["/clear"], nil, "clear chat messages"),
                         (["/hug"], "<nickname>", "send someone a warm hug"),
                         (["/j", "/join"], "<channel>", "join or create a channel"),
                         (["/m", "/msg"], "<nickname> [message]", "send private message"),
                         (["/channels"], nil, "show all discovered channels"),
                         (["/slap"], "<nickname>", "slap someone with a trout"),
+                        (["/unblock"], "<nickname>", "unblock a peer"),
                         (["/w"], nil, "see who's online")
                     ]
                     
@@ -625,12 +627,14 @@ struct ContentView: View {
                     if newValue.hasPrefix("/") && newValue.count >= 1 {
                         // Build context-aware command list
                         var commandDescriptions = [
+                            ("/block", "block or list blocked peers"),
+                            ("/channels", "show all discovered channels"),
                             ("/clear", "clear chat messages"),
                             ("/hug", "send someone a warm hug"),
                             ("/j", "join or create a channel"),
                             ("/m", "send private message"),
-                            ("/channels", "show all discovered channels"),
                             ("/slap", "slap someone with a trout"),
+                            ("/unblock", "unblock a peer"),
                             ("/w", "see who's online")
                         ]
                         
