@@ -1,7 +1,7 @@
 ![ChatGPT Image Jul 5, 2025 at 06_07_31 PM](https://github.com/user-attachments/assets/2660f828-49c7-444d-beca-d8b01854667a)
 # bitchat
 
-A secure, decentralized, peer-to-peer messaging app that works over Bluetooth mesh networks. No internet required, no servers, no phone numbers - just pure encrypted communication.
+A secure, decentralized, peer-to-peer messaging app that works over Bluetooth mesh networks. No internet required, no servers, no phone numbers - just pure encrypted end to end communication.
 
 ## License
 
@@ -9,17 +9,17 @@ This project is released into the public domain. See the [LICENSE](LICENSE) file
 
 ## Features
 
-- **Decentralized Mesh Network**: Automatic peer discovery and multi-hop message relay over Bluetooth LE
-- **End-to-End Encryption**: X25519 key exchange + AES-256-GCM for private messages
-- **Channel-Based Chats**: Topic-based group messaging with optional password protection
-- **Store & Forward**: Messages cached for offline peers and delivered when they reconnect
-- **Privacy First**: No accounts, no phone numbers, no persistent identifiers
-- **IRC-Style Commands**: Familiar `/join`, `/msg`, `/who` style interface
-- **Message Retention**: Optional channel-wide message saving controlled by channel owners
-- **Universal App**: Native support for iOS and macOS
-- **Cover Traffic**: Timing obfuscation and dummy messages for enhanced privacy
-- **Emergency Wipe**: Triple-tap to instantly clear all data
-- **Performance Optimizations**: LZ4 message compression, adaptive battery modes, and optimized networking
+- **Decentralized Mesh Network**: Automatic peer discovery and multi-hop message relay over Bluetooth LE.
+- **End-to-End Encryption**: X25519 key exchange + AES-256-GCM for private messages.
+- **Channel-Based Chats**: Topic-based group messaging with optional password protection.
+- **Store & Forward**: Messages cached for offline peers and delivered when they reconnect.
+- **Privacy First**: No accounts, no phone numbers, no persistent identifiers.
+- **IRC-Style Commands**: Familiar `/join`, `/msg`, `/who` style interface.
+- **Message Retention**: Optional channel-wide message saving controlled by channel owners.
+- **Universal App**: Native support for iOS and macOS.
+- **Cover Traffic**: Timing obfuscation and dummy messages for enhanced privacy.
+- **Emergency Wipe**: Triple-tap on logo to instantly clear all data.
+- **Performance Optimizations**: LZ4 message compression, adaptive battery modes, and optimized networking.
 
 ## Setup
 
@@ -53,9 +53,9 @@ This project is released into the public domain. See the [LICENSE](LICENSE) file
 
 ### Option 3: Manual Xcode Project
 
-1. Open Xcode and create a new iOS/macOS App
-2. Copy all Swift files from the `bitchat` directory into your project
-3. Update Info.plist with Bluetooth permissions
+1. Open Xcode and create a new iOS/macOS App.
+2. Copy all Swift files from the `bitchat` directory into your project.
+3. Update Info.plist with Bluetooth permissions.
 4. Set deployment target to iOS 16.0 / macOS 13.0
 
 ## Usage
@@ -77,7 +77,7 @@ This project is released into the public domain. See the [LICENSE](LICENSE) file
 ### Getting Started
 
 1. Launch bitchat on your device
-2. Set your nickname (or use the auto-generated one)
+2. Set your nickname (or use an auto-generated nickname provided)
 3. You'll automatically connect to nearby peers
 4. Join a channel with `/j #general` or start chatting in public
 5. Messages relay through the mesh network to reach distant peers
@@ -101,7 +101,7 @@ This project is released into the public domain. See the [LICENSE](LICENSE) file
 - **No Registration**: No accounts, emails, or phone numbers required
 - **Ephemeral by Default**: Messages exist only in device memory
 - **Cover Traffic**: Random delays and dummy messages prevent traffic analysis
-- **Emergency Wipe**: Triple-tap logo to instantly clear all data
+- **Emergency Wipe**: Triple-tap  on logo to instantly clear all data
 - **Local-First**: Works completely offline, no servers involved
 
 ## Performance & Efficiency
