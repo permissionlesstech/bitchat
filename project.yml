@@ -47,6 +47,32 @@ targets:
       CODE_SIGNING_ALLOWED: YES
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
+      CODE_SIGN_ENTITLEMENTS: bitchat/bitchat.entitlements
+    dependencies:
+      - target: bitchatShareExtension
+        platformFilter: ios
+        embed: true
+        
+  bitchatShareExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - bitchatShareExtension
+    info:
+      path: bitchatShareExtension/Info.plist
+      properties:
+        CFBundleDisplayName: bitchat
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: chat.bitchat.ShareExtension
+      INFOPLIST_FILE: bitchatShareExtension/Info.plist
+      SWIFT_VERSION: 5.0
+      IPHONEOS_DEPLOYMENT_TARGET: 16.0
+      CODE_SIGN_STYLE: Automatic
+      CODE_SIGNING_REQUIRED: YES
+      CODE_SIGNING_ALLOWED: YES
+      CODE_SIGN_ENTITLEMENTS: bitchatShareExtension/bitchatShareExtension.entitlements
 
   bitchatTests_iOS:
     type: bundle.unit-test
