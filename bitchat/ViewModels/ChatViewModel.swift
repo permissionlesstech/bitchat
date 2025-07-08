@@ -1862,7 +1862,7 @@ extension ChatViewModel: BitchatDelegate {
                 if !isValidName {
                     let systemMessage = BitchatMessage(
                         sender: "system",
-                        content: "invalid channel name. use only letters, numbers, and underscores.",
+                        content: "Invalid channel name. use only letters, numbers, and underscores.",
                         timestamp: Date(),
                         isRelay: false
                     )
