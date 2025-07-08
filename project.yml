@@ -85,6 +85,7 @@ targets:
       CODE_SIGNING_REQUIRED: YES
       CODE_SIGNING_ALLOWED: YES
       CODE_SIGN_ENTITLEMENTS: bitchatShareExtension/bitchatShareExtension.entitlements
+      CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION: YES
       DEVELOPMENT_TEAM: L3N5LHJD5Y
 
   bitchatTests_iOS:
