@@ -349,7 +349,7 @@ class PasswordProtectedChannelTests: XCTestCase {
         XCTAssertFalse(viewModel.joinedChannels.contains("#invalid-channel!"))
         
         // Should have system message about invalid name
-        let hasErrorMessage = viewModel.messages.contains { $0.sender == "system" && $0.content.contains("Invalid channel name") }
+        let hasErrorMessage = viewModel.messages.contains { $0.sender == "system" && $0.content.contains("invalid channel name") }
         XCTAssertTrue(hasErrorMessage)
     }
     
