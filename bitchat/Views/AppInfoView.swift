@@ -108,15 +108,15 @@ struct AppInfoView: View {
                         
                         VStack(alignment: .leading, spacing: 8) {
                             Text("/j #channel - join or create a channel")
-                            Text("/m @user - send private message")
+                            Text("/m @name - send private message")
                             Text("/w - see who's online")
                             Text("/channels - show all discovered channels")
-                            Text("/block @user - block a user")
-                            Text("/block - list blocked users")
-                            Text("/unblock @user - unblock a user")
+                            Text("/block @name - block a peer")
+                            Text("/block - list blocked peers")
+                            Text("/unblock @name - unblock a peer")
                             Text("/clear - clear current chat")
-                            Text("/hug @user - send someone a hug")
-                            Text("/slap @user - slap with a trout")
+                            Text("/hug @name - send someone a hug")
+                            Text("/slap @name - slap with a trout")
                         }
                         .font(.system(size: 14, design: .monospaced))
                         .foregroundColor(textColor)
@@ -234,15 +234,15 @@ struct AppInfoView: View {
                         
                         VStack(alignment: .leading, spacing: 8) {
                             Text("/j #channel - join or create a channel")
-                            Text("/m @user - send private message")
+                            Text("/m @name - send private message")
                             Text("/w - see who's online")
                             Text("/channels - show all discovered channels")
-                            Text("/block @user - block a user")
-                            Text("/block - list blocked users")
-                            Text("/unblock @user - unblock a user")
+                            Text("/block @name - block a peer")
+                            Text("/block - list blocked peers")
+                            Text("/unblock @name - unblock a peer")
                             Text("/clear - clear current chat")
-                            Text("/hug @user - send someone a hug")
-                            Text("/slap @user - slap with a trout")
+                            Text("/hug @name - send someone a hug")
+                            Text("/slap @name - slap with a trout")
                         }
                         .font(.system(size: 14, design: .monospaced))
                         .foregroundColor(textColor)

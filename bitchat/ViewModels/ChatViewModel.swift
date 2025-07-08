@@ -2256,7 +2256,7 @@ extension ChatViewModel: BitchatDelegate {
                 if blockedUsers.isEmpty {
                     let systemMessage = BitchatMessage(
                         sender: "system",
-                        content: "no blocked users.",
+                        content: "no blocked peers.",
                         timestamp: Date(),
                         isRelay: false
                     )
@@ -2280,10 +2280,10 @@ extension ChatViewModel: BitchatDelegate {
                         }
                     }
                     
-                    let blockedList = blockedNicknames.isEmpty ? "blocked users (not currently online)" : blockedNicknames.sorted().joined(separator: ", ")
+                    let blockedList = blockedNicknames.isEmpty ? "blocked peers (not currently online)" : blockedNicknames.sorted().joined(separator: ", ")
                     let systemMessage = BitchatMessage(
                         sender: "system",
-                        content: "blocked users: \(blockedList)",
+                        content: "blocked peers: \(blockedList)",
                         timestamp: Date(),
                         isRelay: false
                     )
