@@ -9,113 +9,146 @@
 import Foundation
 import CryptoKit
 
-class EncryptionService {
-    // Key agreement keys for encryption
+    /// A secure service responsible for managing ephemeral and persistent encryption keys,
+    /// signing keys, peer identity management, and encryption/decryption using symmetric keys.
+final class EncryptionService: @unchecked Sendable {
+    
+        // MARK: - Ephemeral Keys (Session-Based)
+    
+        /// Ephemeral private key for key agreement during this session.
     private var privateKey: Curve25519.KeyAgreement.PrivateKey
+    
+        /// Public key derived from the ephemeral private key (used for peer key exchange).
     public let publicKey: Curve25519.KeyAgreement.PublicKey
     
-    // Signing keys for authentication
+        /// Ephemeral signing private key for message signing in this session.
     private var signingPrivateKey: Curve25519.Signing.PrivateKey
+    
+        /// Public signing key for the ephemeral signing key.
     public let signingPublicKey: Curve25519.Signing.PublicKey
     
-    // Storage for peer keys
-    private var peerPublicKeys: [String: Curve25519.KeyAgreement.PublicKey] = [:]
-    private var peerSigningKeys: [String: Curve25519.Signing.PublicKey] = [:]
-    private var peerIdentityKeys: [String: Curve25519.Signing.PublicKey] = [:]
-    private var sharedSecrets: [String: SymmetricKey] = [:]
+        // MARK: - Persistent Identity Keys (Favorites)
     
-    // Persistent identity for favorites (separate from ephemeral keys)
+        /// Persistent identity signing private key (stored across app sessions).
     private let identityKey: Curve25519.Signing.PrivateKey
+    
+        /// Public version of the persistent identity key.
     public let identityPublicKey: Curve25519.Signing.PublicKey
     
-    // Thread safety
-    private let cryptoQueue = DispatchQueue(label: "chat.bitchat.crypto", attributes: .concurrent)
+        // MARK: - Peer Key Storage
     
+        /// PeerID → peer's ephemeral encryption public key.
+    private var peerPublicKeys: [String: Curve25519.KeyAgreement.PublicKey] = [:]
+    
+        /// PeerID → peer's ephemeral signing public key.
+    private var peerSigningKeys: [String: Curve25519.Signing.PublicKey] = [:]
+    
+        /// PeerID → peer's persistent identity public key.
+    private var peerIdentityKeys: [String: Curve25519.Signing.PublicKey] = [:]
+    
+        /// PeerID → derived symmetric encryption key (shared secret).
+    private var sharedSecrets: [String: SymmetricKey] = [:]
+    
+        /// Thread-safe access queue for crypto state.
+    private let queueu = DispatchQueue(label: "chat.bitchat.crypto.queue", attributes: .concurrent)
+    
+        // MARK: - Initialization
+    
+        /// Initializes the encryption service by generating ephemeral keys and loading
+        /// or creating a persistent identity key.
     init() {
-        // Generate ephemeral key pairs for this session
+            // Ephemeral session keys
         self.privateKey = Curve25519.KeyAgreement.PrivateKey()
         self.publicKey = privateKey.publicKey
         
         self.signingPrivateKey = Curve25519.Signing.PrivateKey()
         self.signingPublicKey = signingPrivateKey.publicKey
         
-        // Load or create persistent identity key
+            // Persistent identity key
         if let identityData = UserDefaults.standard.data(forKey: "bitchat.identityKey"),
            let loadedKey = try? Curve25519.Signing.PrivateKey(rawRepresentation: identityData) {
             self.identityKey = loadedKey
         } else {
-            // First run - create and save identity key
             self.identityKey = Curve25519.Signing.PrivateKey()
             UserDefaults.standard.set(identityKey.rawRepresentation, forKey: "bitchat.identityKey")
         }
+        
         self.identityPublicKey = identityKey.publicKey
     }
     
-    // Create combined public key data for exchange
+        // MARK: - Public Key Exchange
+    
+        /// Combines the three public keys into one 96-byte data packet for exchange with peers.
+        /// - Returns: Concatenated data containing ephemeral encryption, signing, and identity keys.
     func getCombinedPublicKeyData() -> Data {
         var data = Data()
-        data.append(publicKey.rawRepresentation)  // 32 bytes - ephemeral encryption key
-        data.append(signingPublicKey.rawRepresentation)  // 32 bytes - ephemeral signing key
-        data.append(identityPublicKey.rawRepresentation)  // 32 bytes - persistent identity key
-        return data  // Total: 96 bytes
+        data.append(publicKey.rawRepresentation)
+        data.append(signingPublicKey.rawRepresentation)
+        data.append(identityPublicKey.rawRepresentation)
+        return data
     }
     
-    // Add peer's combined public keys
+        /// Stores the peer’s combined public keys and derives the symmetric encryption key.
+        /// - Parameters:
+        ///   - peerID: The identifier for the peer.
+        ///   - publicKeyData: The peer's 96-byte combined public key data.
+        /// - Throws: `EncryptionError.invalidPublicKey` if the data is malformed.
     func addPeerPublicKey(_ peerID: String, publicKeyData: Data) throws {
-        try cryptoQueue.sync(flags: .barrier) {
-            // Convert to array for safe access
+        try queueu.sync(flags: .barrier) {
             let keyBytes = [UInt8](publicKeyData)
-            
             guard keyBytes.count == 96 else {
-                // print("[CRYPTO] Invalid public key data size: \(keyBytes.count), expected 96")
                 throw EncryptionError.invalidPublicKey
             }
             
-            // Extract all three keys: 32 for key agreement + 32 for signing + 32 for identity
             let keyAgreementData = Data(keyBytes[0..<32])
             let signingKeyData = Data(keyBytes[32..<64])
             let identityKeyData = Data(keyBytes[64..<96])
             
-            let publicKey = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: keyAgreementData)
-            peerPublicKeys[peerID] = publicKey
-            
+            let encryptionKey = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: keyAgreementData)
             let signingKey = try Curve25519.Signing.PublicKey(rawRepresentation: signingKeyData)
-            peerSigningKeys[peerID] = signingKey
-            
             let identityKey = try Curve25519.Signing.PublicKey(rawRepresentation: identityKeyData)
+            
+            peerPublicKeys[peerID] = encryptionKey
+            peerSigningKeys[peerID] = signingKey
             peerIdentityKeys[peerID] = identityKey
             
-            // Stored all three keys for peer
-            
-            // Generate shared secret for encryption
-            if let publicKey = peerPublicKeys[peerID] {
-                let sharedSecret = try privateKey.sharedSecretFromKeyAgreement(with: publicKey)
-                let symmetricKey = sharedSecret.hkdfDerivedSymmetricKey(
-                    using: SHA256.self,
-                    salt: "bitchat-v1".data(using: .utf8)!,
-                    sharedInfo: Data(),
-                    outputByteCount: 32
-                )
-                sharedSecrets[peerID] = symmetricKey
-            }
+                // Generate shared secret
+            let sharedSecret = try privateKey.sharedSecretFromKeyAgreement(with: encryptionKey)
+            let symmetricKey = sharedSecret.hkdfDerivedSymmetricKey(
+                using: SHA256.self,
+                salt: "bitchat-v1".data(using: .utf8)!,
+                sharedInfo: Data(),
+                outputByteCount: 32
+            )
+            sharedSecrets[peerID] = symmetricKey
         }
     }
     
-    // Get peer's persistent identity key for favorites
+        // MARK: - Identity
+    
+        /// Returns the persistent identity public key of a peer.
+        /// - Parameter peerID: The peer’s identifier.
+        /// - Returns: The identity key data if available.
     func getPeerIdentityKey(_ peerID: String) -> Data? {
-        return cryptoQueue.sync {
-            return peerIdentityKeys[peerID]?.rawRepresentation
+        queueu.sync {
+            peerIdentityKeys[peerID]?.rawRepresentation
         }
     }
     
-    // Clear persistent identity (for panic mode)
+        /// Clears the persistent identity key from local storage.
     func clearPersistentIdentity() {
         UserDefaults.standard.removeObject(forKey: "bitchat.identityKey")
-        // print("[CRYPTO] Cleared persistent identity key")
     }
     
+        // MARK: - Encryption & Decryption
+    
+        /// Encrypts the given data for the specified peer.
+        /// - Parameters:
+        ///   - data: Plaintext data.
+        ///   - peerID: The recipient’s peer ID.
+        /// - Returns: Encrypted data using AES-GCM.
     func encrypt(_ data: Data, for peerID: String) throws -> Data {
-        let symmetricKey = try cryptoQueue.sync {
+        let symmetricKey = try queueu.sync {
             guard let key = sharedSecrets[peerID] else {
                 throw EncryptionError.noSharedSecret
             }
@@ -126,8 +159,13 @@ class EncryptionService {
         return sealedBox.combined ?? Data()
     }
     
+        /// Decrypts received data from the specified peer.
+        /// - Parameters:
+        ///   - data: Encrypted data.
+        ///   - peerID: Sender's peer ID.
+        /// - Returns: Decrypted plaintext data.
     func decrypt(_ data: Data, from peerID: String) throws -> Data {
-        let symmetricKey = try cryptoQueue.sync {
+        let symmetricKey = try queueu.sync {
             guard let key = sharedSecrets[peerID] else {
                 throw EncryptionError.noSharedSecret
             }
@@ -138,25 +176,37 @@ class EncryptionService {
         return try AES.GCM.open(sealedBox, using: symmetricKey)
     }
     
+        // MARK: - Signing & Verification
+    
+        /// Signs a piece of data using the ephemeral signing key.
+        /// - Parameter data: Data to sign.
+        /// - Returns: The cryptographic signature.
     func sign(_ data: Data) throws -> Data {
-        // Create a local copy of the key to avoid concurrent access
         let key = signingPrivateKey
         return try key.signature(for: data)
     }
     
+        /// Verifies a signature from a known peer.
+        /// - Parameters:
+        ///   - signature: The signature to verify.
+        ///   - data: The original message data.
+        ///   - peerID: The sender’s peer ID.
+        /// - Returns: `true` if valid; otherwise, `false`.
     func verify(_ signature: Data, for data: Data, from peerID: String) throws -> Bool {
-        let verifyingKey = try cryptoQueue.sync {
-            guard let key = peerSigningKeys[peerID] else {
+        let key = try queueu.sync {
+            guard let verifyingKey = peerSigningKeys[peerID] else {
                 throw EncryptionError.noSharedSecret
             }
-            return key
+            return verifyingKey
         }
         
-        return verifyingKey.isValidSignature(signature, for: data)
+        return key.isValidSignature(signature, for: data)
     }
-    
 }
 
+    // MARK: - Encryption Errors
+
+    /// Represents cryptographic errors for encryption and key handling.
 enum EncryptionError: Error {
     case noSharedSecret
     case invalidPublicKey
