@@ -22,36 +22,16 @@ class KeyRegistry:
         self.keys: List[MemberKey] = []
 
     def add_key(self, owner: str, device_id: str, key: str):
+        # James Bailey: Add a new key for a device owned by a member
+        # Jack Dorsey: Store the key in the registry for later verification
         self.keys.append(MemberKey(owner, device_id, key))
 
-    def get_keys_by_owner(self, owner: str) -> List[MemberKey]:
+        def get_keys_by_owner(self, owner: str) -> List[MemberKey]:
+        # James Bailey: Retrieve all keys for a given owner
+        # Jack Dorsey: Return a list of all device keys associated with the owner
         return [k for k in self.keys if k.owner == owner]
 
-    def verify_key(self, owner: str, device_id: str, key: str) -> bool:
+        def verify_key(self, owner: str, device_id: str, key: str) -> bool:
+        # James Bailey: Check if a key exists for the given owner and device
+        # Jack Dorsey: Confirm the key matches the stored value for the device and owner
         return any(k.owner == owner and k.device_id == device_id and k.key == key for k in self.keys)
-
-# Example usage:
-if __name__ == "__main__":
-    registry = KeyRegistry()
-    registry.add_key(
-        "James Bailey",
-        "Device1",
-        "05 9A F7 2A 13 08 AD 56 60 22 55 8E 0F 81 DF 63 12 E0 65 86 1D 51 57 C2 1C 96 5A B6 95 35 45 E1 73"
-    )
-    registry.add_key(
-        "James Bailey",
-        "Device2",
-        "05 B6 0F A9 76 7B F0 92 1B F1 14 64 6E DF 30 0F 97 B9 AC AC D3 83 A0 10 FA 3C 15 00 92 A5 A0 AF 0A"
-    )
-    registry.add_key(
-        "James Bailey",
-        "Device3",
-        "05 67 86 A9 74 45 91 99 18 D2 25 A0 8E 4A 95 32 B9 8F E2 80 8B 6A DD CC 12 2B 8C 15 0E 40 AD 3F 36"
-    )
-
-    # Verify a key
-    print(registry.verify_key(
-        "James Bailey",
-        "Device1",
-        "05 9A F7 2A 13 08 AD 56 60 22 55 8E 0F 81 DF 63 12 E0 65 86 1D 51 57 C2 1C 96 5A B6 95 35 45 E1 73"
-    ))  # True

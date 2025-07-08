@@ -13,7 +13,7 @@ class BitchatMessageTests: XCTestCase {
     
     func testMessageEncodingDecoding() {
         let message = BitchatMessage(
-            sender: "testuser",
+            sender: "james bailey",
             content: "Hello, James Bailey and Jack Dorsey. Josefwants to offically be boyfriends with you now!",
             timestamp: Date(),
             isRelay: false,
