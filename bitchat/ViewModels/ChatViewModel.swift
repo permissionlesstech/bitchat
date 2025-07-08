@@ -15,10 +15,11 @@ import CommonCrypto
 import UIKit
 #endif
 
-class ChatViewModel: ObservableObject {
-    @Published var messages: [BitchatMessage] = []
-    @Published var connectedPeers: [String] = []
-    @Published var nickname: String = "" {
+@Observable
+class ChatViewModel {
+    var messages: [BitchatMessage] = []
+    var connectedPeers: [String] = []
+    var nickname: String = "" {
         didSet {
             nicknameSaveTimer?.invalidate()
             nicknameSaveTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
@@ -26,30 +27,30 @@ class ChatViewModel: ObservableObject {
             }
         }
     }
-    @Published var isConnected = false
-    @Published var privateChats: [String: [BitchatMessage]] = [:] // peerID -> messages
-    @Published var selectedPrivateChatPeer: String? = nil
-    @Published var unreadPrivateMessages: Set<String> = []
-    @Published var autocompleteSuggestions: [String] = []
-    @Published var showAutocomplete: Bool = false
-    @Published var autocompleteRange: NSRange? = nil
-    @Published var selectedAutocompleteIndex: Int = 0
+    var isConnected = false
+    var privateChats: [String: [BitchatMessage]] = [:] // peerID -> messages
+    var selectedPrivateChatPeer: String? = nil
+    var unreadPrivateMessages: Set<String> = []
+    var autocompleteSuggestions: [String] = []
+    var showAutocomplete: Bool = false
+    var autocompleteRange: NSRange? = nil
+    var selectedAutocompleteIndex: Int = 0
     
     // Room support
-    @Published var joinedRooms: Set<String> = []  // Set of room hashtags
-    @Published var currentRoom: String? = nil  // Currently selected room
-    @Published var roomMessages: [String: [BitchatMessage]] = [:]  // room -> messages
-    @Published var unreadRoomMessages: [String: Int] = [:]  // room -> unread count
-    @Published var roomMembers: [String: Set<String>] = [:]  // room -> set of peer IDs who have sent messages
-    @Published var roomPasswords: [String: String] = [:]  // room -> password (stored locally only)
-    @Published var roomKeys: [String: SymmetricKey] = [:]  // room -> derived encryption key
-    @Published var passwordProtectedRooms: Set<String> = []  // Set of rooms that require passwords
-    @Published var roomCreators: [String: String] = [:]  // room -> creator peerID
-    @Published var roomKeyCommitments: [String: String] = [:]  // room -> SHA256(derivedKey) for verification
-    @Published var showPasswordPrompt: Bool = false
-    @Published var passwordPromptRoom: String? = nil
-    @Published var savedRooms: Set<String> = []  // Rooms saved for message retention
-    @Published var retentionEnabledRooms: Set<String> = []  // Rooms where owner enabled retention for all members
+    var joinedRooms: Set<String> = []  // Set of room hashtags
+    var currentRoom: String? = nil  // Currently selected room
+    var roomMessages: [String: [BitchatMessage]] = [:]  // room -> messages
+    var unreadRoomMessages: [String: Int] = [:]  // room -> unread count
+    var roomMembers: [String: Set<String>] = [:]  // room -> set of peer IDs who have sent messages
+    var roomPasswords: [String: String] = [:]  // room -> password (stored locally only)
+    var roomKeys: [String: SymmetricKey] = [:]  // room -> derived encryption key
+    var passwordProtectedRooms: Set<String> = []  // Set of rooms that require passwords
+    var roomCreators: [String: String] = [:]  // room -> creator peerID
+    var roomKeyCommitments: [String: String] = [:]  // room -> SHA256(derivedKey) for verification
+    var showPasswordPrompt: Bool = false
+    var passwordPromptRoom: String? = nil
+    var savedRooms: Set<String> = []  // Rooms saved for message retention
+    var retentionEnabledRooms: Set<String> = []  // Rooms where owner enabled retention for all members
     
     let meshService = BluetoothMeshService()
     private let userDefaults = UserDefaults.standard
@@ -63,7 +64,7 @@ class ChatViewModel: ObservableObject {
     private let retentionEnabledRoomsKey = "bitchat.retentionEnabledRooms"
     private var nicknameSaveTimer: Timer?
     
-    @Published var favoritePeers: Set<String> = []  // Now stores public key fingerprints instead of peer IDs
+    var favoritePeers: Set<String> = []  // Now stores public key fingerprints instead of peer IDs
     private var peerIDToPublicKeyFingerprint: [String: String] = [:]  // Maps ephemeral peer IDs to persistent fingerprints
     
     // Messages are naturally ephemeral - no persistent storage
@@ -892,9 +893,6 @@ class ChatViewModel: ObservableObject {
         let isFavorite = isFavorite(peerID: peerID)
         DeliveryTracker.shared.trackMessage(message, recipientID: peerID, recipientNickname: recipientNickname, isFavorite: isFavorite)
         
-        // Trigger UI update
-        objectWillChange.send()
-        
         // Send via mesh with the same message ID
         meshService.sendPrivateMessage(content, to: peerID, recipientNickname: recipientNickname, messageID: message.id)
     }
@@ -1132,10 +1130,6 @@ class ChatViewModel: ObservableObject {
         
         // Force immediate UserDefaults synchronization
         userDefaults.synchronize()
-        
-        // Force UI update
-        objectWillChange.send()
-        
     }
     
     
@@ -1419,9 +1413,6 @@ extension ChatViewModel: BitchatDelegate {
         // Remove peer from room members
         if roomMembers[room] != nil {
             roomMembers[room]?.remove(peerID)
-            
-            // Force UI update
-            objectWillChange.send()
         }
     }
     
@@ -1957,9 +1948,6 @@ extension ChatViewModel: BitchatDelegate {
                 // Sort messages by timestamp to ensure proper ordering
                 privateChats[peerID]?.sort { $0.timestamp < $1.timestamp }
                 
-                // Trigger UI update for private chats
-                objectWillChange.send()
-                
                 // Mark as unread if not currently viewing this chat
                 if selectedPrivateChatPeer != peerID {
                     unreadPrivateMessages.insert(peerID)
@@ -2201,9 +2189,6 @@ extension ChatViewModel: BitchatDelegate {
             originalSender: nil
         )
         messages.append(systemMessage)
-        
-        // Force UI update
-        objectWillChange.send()
     }
     
     func didDisconnectFromPeer(_ peerID: String) {
@@ -2215,9 +2200,6 @@ extension ChatViewModel: BitchatDelegate {
             originalSender: nil
         )
         messages.append(systemMessage)
-        
-        // Force UI update
-        objectWillChange.send()
     }
     
     func didUpdatePeerList(_ peers: [String]) {
@@ -2235,9 +2217,6 @@ extension ChatViewModel: BitchatDelegate {
                 roomMembers[room] = activeMembers
             }
         }
-        
-        // Force UI update
-        objectWillChange.send()
         
         // If we're in a private chat with someone who disconnected, exit the chat
         if let currentChatPeer = selectedPrivateChatPeer,
@@ -2331,7 +2310,6 @@ extension ChatViewModel: BitchatDelegate {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             self.privateChats = updatedPrivateChats
-            self.objectWillChange.send()
         }
         
         // Update in room messages
@@ -2343,11 +2321,6 @@ extension ChatViewModel: BitchatDelegate {
                     updatedMessage.deliveryStatus = status
                     roomMsgs[index] = updatedMessage
                     roomMessages[room] = roomMsgs
-                    
-                    // Force UI update
-                    DispatchQueue.main.async { [weak self] in
-                        self?.objectWillChange.send()
-                    }
                 }
             }
         }

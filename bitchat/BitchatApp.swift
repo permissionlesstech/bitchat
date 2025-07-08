@@ -11,7 +11,7 @@ import UserNotifications
 
 @main
 struct BitchatApp: App {
-    @StateObject private var chatViewModel = ChatViewModel()
+    @State private var chatViewModel = ChatViewModel()
     #if os(iOS)
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     #endif
@@ -23,7 +23,7 @@ struct BitchatApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .environmentObject(chatViewModel)
+                .environment(chatViewModel)
                 .onAppear {
                     NotificationDelegate.shared.chatViewModel = chatViewModel
                 }
