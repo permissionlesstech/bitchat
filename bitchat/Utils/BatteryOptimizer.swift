@@ -22,52 +22,93 @@ enum PowerMode {
     
     var scanDuration: TimeInterval {
         switch self {
-        case .performance: return 3.0
-        case .balanced: return 2.0
-        case .powerSaver: return 1.0
-        case .ultraLowPower: return 0.5
+        case .performance: return BatteryOptimizer.Constants.performanceScanDuration
+        case .balanced: return BatteryOptimizer.Constants.balancedScanDuration
+        case .powerSaver: return BatteryOptimizer.Constants.powerSaverScanDuration
+        case .ultraLowPower: return BatteryOptimizer.Constants.ultraLowPowerScanDuration
         }
     }
     
     var scanPauseDuration: TimeInterval {
         switch self {
-        case .performance: return 2.0
-        case .balanced: return 3.0
-        case .powerSaver: return 8.0
-        case .ultraLowPower: return 20.0
+        case .performance: return BatteryOptimizer.Constants.performanceScanPause
+        case .balanced: return BatteryOptimizer.Constants.balancedScanPause
+        case .powerSaver: return BatteryOptimizer.Constants.powerSaverScanPause
+        case .ultraLowPower: return BatteryOptimizer.Constants.ultraLowPowerScanPause
         }
     }
     
     var maxConnections: Int {
         switch self {
-        case .performance: return 20
-        case .balanced: return 10
-        case .powerSaver: return 5
-        case .ultraLowPower: return 2
+        case .performance: return BatteryOptimizer.Constants.performanceMaxConnections
+        case .balanced: return BatteryOptimizer.Constants.balancedMaxConnections
+        case .powerSaver: return BatteryOptimizer.Constants.powerSaverMaxConnections
+        case .ultraLowPower: return BatteryOptimizer.Constants.ultraLowPowerMaxConnections
         }
     }
     
     var advertisingInterval: TimeInterval {
         // Note: iOS doesn't let us control this directly, but we can stop/start advertising
         switch self {
-        case .performance: return 0.0  // Continuous
-        case .balanced: return 5.0     // Advertise every 5 seconds
-        case .powerSaver: return 15.0  // Advertise every 15 seconds
-        case .ultraLowPower: return 30.0 // Advertise every 30 seconds
+        case .performance: return BatteryOptimizer.Constants.performanceAdvertisingInterval  // Continuous
+        case .balanced: return BatteryOptimizer.Constants.balancedAdvertisingInterval     // Advertise every 5 seconds
+        case .powerSaver: return BatteryOptimizer.Constants.powerSaverAdvertisingInterval  // Advertise every 15 seconds
+        case .ultraLowPower: return BatteryOptimizer.Constants.ultraLowPowerAdvertisingInterval // Advertise every 30 seconds
         }
     }
     
     var messageAggregationWindow: TimeInterval {
         switch self {
-        case .performance: return 0.05  // 50ms
-        case .balanced: return 0.1      // 100ms
-        case .powerSaver: return 0.3    // 300ms
-        case .ultraLowPower: return 0.5 // 500ms
+        case .performance: return BatteryOptimizer.Constants.performanceAggregationWindow  // 50ms
+        case .balanced: return BatteryOptimizer.Constants.balancedAggregationWindow      // 100ms
+        case .powerSaver: return BatteryOptimizer.Constants.powerSaverAggregationWindow    // 300ms
+        case .ultraLowPower: return BatteryOptimizer.Constants.ultraLowPowerAggregationWindow // 500ms
         }
     }
 }
 
 class BatteryOptimizer {
+    // MARK: - Constants
+    struct Constants {
+        // Battery level thresholds
+        static let criticalBatteryLevel: Float = 0.1
+        static let lowBatteryLevel: Float = 0.3
+        static let mediumBatteryLevel: Float = 0.6
+        
+        // Background mode thresholds
+        static let backgroundLowBatteryLevel: Float = 0.2
+        static let backgroundMediumBatteryLevel: Float = 0.5
+        
+        // Scan timing (in seconds)
+        static let performanceScanDuration: TimeInterval = 3.0
+        static let balancedScanDuration: TimeInterval = 2.0
+        static let powerSaverScanDuration: TimeInterval = 1.0
+        static let ultraLowPowerScanDuration: TimeInterval = 0.5
+        
+        static let performanceScanPause: TimeInterval = 2.0
+        static let balancedScanPause: TimeInterval = 3.0
+        static let powerSaverScanPause: TimeInterval = 8.0
+        static let ultraLowPowerScanPause: TimeInterval = 20.0
+        
+        // Connection limits
+        static let performanceMaxConnections: Int = 20
+        static let balancedMaxConnections: Int = 10
+        static let powerSaverMaxConnections: Int = 5
+        static let ultraLowPowerMaxConnections: Int = 2
+        
+        // Advertising intervals (in seconds)
+        static let performanceAdvertisingInterval: TimeInterval = 0.0
+        static let balancedAdvertisingInterval: TimeInterval = 5.0
+        static let powerSaverAdvertisingInterval: TimeInterval = 15.0
+        static let ultraLowPowerAdvertisingInterval: TimeInterval = 30.0
+        
+        // Message aggregation windows (in seconds)
+        static let performanceAggregationWindow: TimeInterval = 0.05
+        static let balancedAggregationWindow: TimeInterval = 0.1
+        static let powerSaverAggregationWindow: TimeInterval = 0.3
+        static let ultraLowPowerAggregationWindow: TimeInterval = 0.5
+    }
+    
     static let shared = BatteryOptimizer()
     
     @Published var currentPowerMode: PowerMode = .balanced
@@ -182,23 +223,23 @@ class BatteryOptimizer {
         
         if isCharging {
             // When charging, use performance mode unless battery is critical
-            currentPowerMode = batteryLevel < 0.1 ? .balanced : .performance
+            currentPowerMode = batteryLevel < Constants.criticalBatteryLevel ? .balanced : .performance
         } else if isInBackground {
             // In background, always use power saving
-            if batteryLevel < 0.2 {
+            if batteryLevel < Constants.backgroundLowBatteryLevel {
                 currentPowerMode = .ultraLowPower
-            } else if batteryLevel < 0.5 {
+            } else if batteryLevel < Constants.backgroundMediumBatteryLevel {
                 currentPowerMode = .powerSaver
             } else {
                 currentPowerMode = .balanced
             }
         } else {
             // Foreground, not charging
-            if batteryLevel < 0.1 {
+            if batteryLevel < Constants.criticalBatteryLevel {
                 currentPowerMode = .ultraLowPower
-            } else if batteryLevel < 0.3 {
+            } else if batteryLevel < Constants.lowBatteryLevel {
                 currentPowerMode = .powerSaver
-            } else if batteryLevel < 0.6 {
+            } else if batteryLevel < Constants.mediumBatteryLevel {
                 currentPowerMode = .balanced
             } else {
                 currentPowerMode = .performance
