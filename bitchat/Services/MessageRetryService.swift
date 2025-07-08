@@ -1,3 +1,4 @@
+
 //
 // MessageRetryService.swift
 // bitchat
@@ -14,6 +15,8 @@ import Foundation
 
 struct RetryableMessage: Sendable {
     let id: String
+    let originalMessageID: String?
+    let originalTimestamp: Date?
     let content: String
     let mentions: [String]?
     let channel: String?
@@ -58,6 +61,8 @@ final class MessageRetryService: @unchecked Sendable {
     /// Adds a message to the retry queue if capacity allows.
     func addMessageForRetry(
         content: String,
+        originalMessageID: String? = nil,
+        originalTimestamp: Date? = nil,
         mentions: [String]? = nil,
         channel: String? = nil,
         isPrivate: Bool = false,
@@ -72,6 +77,8 @@ final class MessageRetryService: @unchecked Sendable {
 
             let retryMessage = RetryableMessage(
                 id: UUID().uuidString,
+                originalMessageID: originalMessageID,
+                originalTimestamp: originalTimestamp,
                 content: content,
                 mentions: mentions,
                 channel: channel,
@@ -84,6 +91,7 @@ final class MessageRetryService: @unchecked Sendable {
             )
 
             self.retryQueue.append(retryMessage)
+                self.retryQueue.sort { ($0.originalTimestamp ?? .distantPast) < ($1.originalTimestamp ?? .distantPast) }
         }
     }
 
@@ -156,7 +164,10 @@ final class MessageRetryService: @unchecked Sendable {
             let connectedPeers =
                 (meshService.delegate as? ChatViewModel)?.connectedPeers ?? []
 
-            for message in messagesToRetry {
+                            let delay = Double(index) * 0.05
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                    guard let self else { return }
+
                 guard message.retryCount < message.maxRetries else {
                     continue
                 }
@@ -165,18 +176,15 @@ final class MessageRetryService: @unchecked Sendable {
                     let recipientID = message.recipientPeerID,
                     connectedPeers.contains(recipientID)
                 {
-                    // Retry private message
                     meshService.sendPrivateMessage(
                         message.content,
                         to: recipientID,
-                        recipientNickname: message.recipientNickname
-                            ?? "unknown"
+                        recipientNickname: message.recipientNickname ?? "unknown"
                     )
                 } else if let channel = message.channel,
                     let channelKeyData = message.channelKey,
                     !connectedPeers.isEmpty
                 {
-                    // Retry channel message
                     let key = SymmetricKey(data: channelKeyData)
                     meshService.sendEncryptedChannelMessage(
                         message.content,
@@ -185,14 +193,12 @@ final class MessageRetryService: @unchecked Sendable {
                         channelKey: key
                     )
                 } else if !connectedPeers.isEmpty {
-                    // Retry public message
                     meshService.sendMessage(
                         message.content,
                         mentions: message.mentions ?? [],
                         channel: message.channel
                     )
                 } else {
-                    // No peer connected — re-queue with exponential backoff
                     let updatedMessage = RetryableMessage(
                         id: message.id,
                         content: message.content,

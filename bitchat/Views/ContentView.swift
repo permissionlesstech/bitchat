@@ -26,6 +26,7 @@ struct ContentView: View {
     @State private var showPasswordError = false
     @State private var showCommandSuggestions = false
     @State private var commandSuggestions: [String] = []
+    @State private var showLeaveChannelAlert = false
     
     private var backgroundColor: Color {
         colorScheme == .dark ? Color.black : Color.white
@@ -289,13 +290,21 @@ struct ContentView: View {
                     
                     // Leave channel button
                     Button(action: {
-                        viewModel.leaveChannel(currentChannel)
+                        showLeaveChannelAlert = true
                     }) {
                         Text("leave")
                             .font(.system(size: 12, design: .monospaced))
                             .foregroundColor(Color.red)
                     }
                     .buttonStyle(.plain)
+                    .alert("Leave Channel", isPresented: $showLeaveChannelAlert) {
+                        Button("Cancel", role: .cancel) { }
+                        Button("Leave", role: .destructive) {
+                            viewModel.leaveChannel(currentChannel)
+                        }
+                    } message: {
+                        Text("Are you sure you want to leave \(currentChannel)?")
+                    }
                 }
             } else {
                 // Public chat header
@@ -415,18 +424,38 @@ struct ContentView: View {
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             } else {
                                 // Regular messages with natural text wrapping
-                                HStack(alignment: .top, spacing: 0) {
-                                    // Single text view for natural wrapping
-                                    Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme))
-                                        .textSelection(.enabled)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                VStack(alignment: .leading, spacing: 8) {
+                                    HStack(alignment: .top, spacing: 0) {
+                                        // Single text view for natural wrapping
+                                        Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme))
+                                            .textSelection(.enabled)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                        
+                                        // Delivery status indicator for private messages
+                                        if message.isPrivate && message.sender == viewModel.nickname,
+                                           let status = message.deliveryStatus {
+                                            DeliveryStatusView(status: status, colorScheme: colorScheme)
+                                                .padding(.leading, 4)
+                                        }
+                                    }
                                     
-                                    // Delivery status indicator for private messages
-                                    if message.isPrivate && message.sender == viewModel.nickname,
-                                       let status = message.deliveryStatus {
-                                        DeliveryStatusView(status: status, colorScheme: colorScheme)
-                                            .padding(.leading, 4)
+                                    // Check for links and show preview
+                                    if let markdownLink = message.content.extractMarkdownLink() {
+                                        // Don't show link preview if the message is just the emoji
+                                        let cleanContent = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
+                                        if cleanContent.hasPrefix("👇") {
+                                            LinkPreviewView(url: markdownLink.url, title: markdownLink.title)
+                                                .padding(.top, 4)
+                                        }
+                                    } else {
+                                        // Check for plain URLs
+                                        let urls = message.content.extractURLs()
+                                        let _ = urls.isEmpty ? nil : print("DEBUG: Found \(urls.count) plain URLs in message")
+                                        ForEach(urls.prefix(3), id: \.url) { urlInfo in
+                                            LinkPreviewView(url: urlInfo.url, title: nil)
+                                                .padding(.top, 4)
+                                        }
                                     }
                                 }
                             }
@@ -617,6 +646,7 @@ struct ContentView: View {
                 .textFieldStyle(.plain)
                 .font(.system(size: 14, design: .monospaced))
                 .foregroundColor(textColor)
+                .autocorrectionDisabled()
                 .focused($isTextFieldFocused)
                 .onChange(of: messageText) { newValue in
                     // Get cursor position (approximate - end of text for now)
@@ -682,9 +712,10 @@ struct ContentView: View {
             Button(action: sendMessage) {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 20))
-                    .foregroundColor((viewModel.selectedPrivateChatPeer != nil || 
-                                     (viewModel.currentChannel != nil && viewModel.passwordProtectedChannels.contains(viewModel.currentChannel ?? ""))) 
-                                     ? Color.orange : textColor)
+                    .foregroundColor(messageText.isEmpty ? Color.gray :
+                                            (viewModel.selectedPrivateChatPeer != nil ||
+                                             (viewModel.currentChannel != nil && viewModel.passwordProtectedChannels.contains(viewModel.currentChannel ?? "")))
+                                             ? Color.orange : textColor)
             }
             .buttonStyle(.plain)
             .padding(.trailing, 12)
@@ -808,7 +839,7 @@ struct ContentView: View {
             
             // Leave button
             Button(action: {
-                viewModel.leaveChannel(channel)
+                showLeaveChannelAlert = true
             }) {
                 Text("leave channel")
                     .font(.system(size: 10, design: .monospaced))
@@ -821,6 +852,14 @@ struct ContentView: View {
                     )
             }
             .buttonStyle(.plain)
+            .alert("Leave Channel", isPresented: $showLeaveChannelAlert) {
+                Button("Cancel", role: .cancel) { }
+                Button("Leave", role: .destructive) {
+                    viewModel.leaveChannel(channel)
+                }
+            } message: {
+                Text("Are you sure you want to leave \(channel)?")
+            }
         }
     }
     
