@@ -32,15 +32,5 @@ jobs:
     - name: Deploy bitchat app to Kubernetes
       run: |
         kubectl apply -f k8s/bitchat-deployment.yaml
-        kubectl apply -f k8s/bitchat-service.yaml   runs-on: macos-latest
-
-    steps:
-    - uses: actions/checkout@v4
-    - name: Build
-      run: swift build -v
-    - name: build website 
-    - on push: 
-    - build: irc.bitchat.html
-    - run: swift bitchat -v
-    - run: github actions
+        kubectl apply -f k8s/bitchat-service.yaml
     
