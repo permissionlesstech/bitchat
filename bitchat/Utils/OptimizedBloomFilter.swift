@@ -10,7 +10,7 @@ import Foundation
 import CryptoKit
 
 /// Optimized Bloom filter using bit-packed storage and better hash functions
-struct OptimizedBloomFilter {
+struct OptimizedBloomFilter: Sendable {
     private var bitArray: [UInt64]
     private let bitCount: Int
     private let hashCount: Int

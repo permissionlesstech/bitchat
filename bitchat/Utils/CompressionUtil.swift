@@ -9,7 +9,7 @@
 import Foundation
 import Compression
 
-struct CompressionUtil {
+struct CompressionUtil: Sendable {
     // Compression threshold - don't compress if data is smaller than this
     static let compressionThreshold = 100 // bytes
     

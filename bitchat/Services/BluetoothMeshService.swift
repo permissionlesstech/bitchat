@@ -2692,14 +2692,14 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
     
     private func setupBatteryOptimizer() {
         // Subscribe to power mode changes
-        batteryOptimizer.$currentPowerMode
+        batteryOptimizer.powerModePublisher
             .sink { [weak self] powerMode in
                 self?.handlePowerModeChange(powerMode)
             }
             .store(in: &batteryOptimizerCancellables)
         
         // Subscribe to battery level changes
-        batteryOptimizer.$batteryLevel
+        batteryOptimizer.batteryLevelPublisher
             .sink { [weak self] level in
                 self?.currentBatteryLevel = level
             }
