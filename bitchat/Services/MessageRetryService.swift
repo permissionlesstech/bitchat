@@ -12,6 +12,8 @@ import CryptoKit
 
 struct RetryableMessage {
     let id: String
+    let originalMessageID: String? 
+    let originalTimestamp: Date?
     let content: String
     let mentions: [String]?
     let room: String?
@@ -29,7 +31,7 @@ class MessageRetryService {
     
     private var retryQueue: [RetryableMessage] = []
     private var retryTimer: Timer?
-    private let retryInterval: TimeInterval = 5.0 // Retry every 5 seconds
+    private let retryInterval: TimeInterval = 2.0 // Retry every 2 seconds for faster sync
     private let maxQueueSize = 50
     
     weak var meshService: BluetoothMeshService?
@@ -55,7 +57,9 @@ class MessageRetryService {
         isPrivate: Bool = false,
         recipientPeerID: String? = nil,
         recipientNickname: String? = nil,
-        roomKey: Data? = nil
+        roomKey: Data? = nil,
+        originalMessageID: String? = nil,
+        originalTimestamp: Date? = nil
     ) {
         // Don't queue if we're at capacity
         guard retryQueue.count < maxQueueSize else {
@@ -64,6 +68,8 @@ class MessageRetryService {
         
         let retryMessage = RetryableMessage(
             id: UUID().uuidString,
+            originalMessageID: originalMessageID,
+            originalTimestamp: originalTimestamp,
             content: content,
             mentions: mentions,
             room: room,
@@ -113,13 +119,16 @@ class MessageRetryService {
                     meshService.sendPrivateMessage(
                         message.content,
                         to: recipientID,
-                        recipientNickname: message.recipientNickname ?? "unknown"
+                        recipientNickname: message.recipientNickname ?? "unknown",
+                        messageID: message.originalMessageID
                     )
                 } else {
                     // Recipient not connected, keep in queue with updated retry time
                     var updatedMessage = message
                     updatedMessage = RetryableMessage(
                         id: message.id,
+                        originalMessageID: message.originalMessageID,
+                        originalTimestamp: message.originalTimestamp,
                         content: message.content,
                         mentions: message.mentions,
                         room: message.room,
@@ -141,13 +150,17 @@ class MessageRetryService {
                         message.content,
                         mentions: message.mentions ?? [],
                         room: room,
-                        roomKey: roomKey
+                        roomKey: roomKey,
+                        messageID: message.originalMessageID,
+                        timestamp: message.originalTimestamp
                     )
                 } else {
                     // No peers connected, keep in queue
                     var updatedMessage = message
                     updatedMessage = RetryableMessage(
                         id: message.id,
+                        originalMessageID: message.originalMessageID,
+                        originalTimestamp: message.originalTimestamp,
                         content: message.content,
                         mentions: message.mentions,
                         room: message.room,
@@ -166,13 +179,18 @@ class MessageRetryService {
                     meshService.sendMessage(
                         message.content,
                         mentions: message.mentions ?? [],
-                        room: message.room
+                        room: message.room,
+                        to: nil,
+                        messageID: message.originalMessageID,
+                        timestamp: message.originalTimestamp
                     )
                 } else {
                     // No peers connected, keep in queue
                     var updatedMessage = message
                     updatedMessage = RetryableMessage(
                         id: message.id,
+                        originalMessageID: message.originalMessageID,
+                        originalTimestamp: message.originalTimestamp,
                         content: message.content,
                         mentions: message.mentions,
                         room: message.room,
