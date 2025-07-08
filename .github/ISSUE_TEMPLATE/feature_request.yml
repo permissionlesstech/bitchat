@@ -1,0 +1,42 @@
+name: Feature Request
+description: Suggest an enhancement for Bitchat
+title: "[FEATURE] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Note:** All features must align with Bitchat's core principles:
+        - Decentralized operation
+        - Privacy-first design
+        - No internet dependency
+        - Minimal metadata collection
+  - type: textarea
+    id: feature-description
+    attributes:
+      label: Feature Summary
+      description: A clear, concise description of the requested feature
+      placeholder: What should this feature accomplish?
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation & Use Case
+      description: Why is this valuable for Bitchat users?
+      placeholder: |
+        - Describe specific scenarios
+        - Explain privacy/security benefits
+        - Note how it improves mesh networking
+  - type: dropdown
+    id: platform-scope
+    attributes:
+      label: Platform Scope
+      multiple: true
+      options:
+        - iOS
+        - macOS
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Other ways to solve this problem
+      placeholder: Why is this approach better than alternatives?

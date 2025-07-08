@@ -1,0 +1,44 @@
+name: Bug report
+description: Report a bug to help us improve Bitchat
+title: "[BUG]"
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please provide detailed information about the bug.
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: Steps to reproduce
+      description: List clear steps to reproduce the issue
+      placeholder: |
+        1. Go to...
+        2. Click on...
+        3. Scroll to...
+        4. See error
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected behavior
+      placeholder: What should have happened?
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: Actual behavior
+      placeholder: What actually happened instead?
+  - type: input
+    id: device
+    attributes:
+      label: Device
+      placeholder: e.g., iPhone 14, MacBook Pro M1, iPad Air
+  - type: input
+    id: os-version
+    attributes:
+      label: OS Version
+      placeholder: e.g., iOS 17.2, macOS 14.1
+  - type: input
+    id: app-version
+    attributes:
+      label: App Version
+      placeholder: e.g., 1.2.0
