@@ -11,6 +11,8 @@ This is a security-hardened fork of the original BitChat application. We took Bi
 
 **See [SECURITY_DISCLOSURE.md](SECURITY_DISCLOSURE.md) for full vulnerability details.**
 
+**🔗 Our Pull Request with Fixes**: https://github.com/jackjackbits/bitchat/pull/77
+
 ## Why This Fork Exists
 
 The original BitChat, while innovative in concept, contains several critical security flaws:
@@ -212,6 +214,8 @@ The protocol is designed to be platform-agnostic. An Android client can be built
 ## Community Contribution
 
 We discovered these vulnerabilities and immediately created a PR with comprehensive security patches to help the community. This security-hardened fork implements all the necessary fixes to create a truly secure messaging platform.
+
+**🔗 Pull Request**: https://github.com/jackjackbits/bitchat/pull/77
 
 ## Security Recommendations
 

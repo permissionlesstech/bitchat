@@ -18,7 +18,7 @@ So we did what we do at Unit 221B - we fixed it. All of it.
 We discovered vulnerabilities and immediately created a PR with fixes. Here's our gift to the community:
 
 🔐 Secure fork: https://github.com/lancejames221b/bitchat
-📋 Full vulnerability report: https://github.com/lancejames221b/bitchat/blob/security-patches/SECURITY_DISCLOSURE.md
+📋 Full vulnerability report: https://github.com/lancejames221b/bitchat/blob/main/SECURITY_DISCLOSURE.md
 🤝 PR to original repo: https://github.com/jackjackbits/bitchat/pull/77
 
 Look, I get it. When you're innovating at the speed of thought, security can feel like that annoying friend who keeps telling you to wear a seatbelt. But here's the reality - if we're going to build the decentralized future, we need to build it right. 
