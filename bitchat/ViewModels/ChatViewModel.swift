@@ -130,6 +130,14 @@ class ChatViewModel: ObservableObject {
             name: UIApplication.didBecomeActiveNotification,
             object: nil
         )
+        
+        // Add screenshot detection for iOS
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(userDidTakeScreenshot),
+            name: UIApplication.userDidTakeScreenshotNotification,
+            object: nil
+        )
         #endif
     }
     
@@ -1055,6 +1063,72 @@ class ChatViewModel: ObservableObject {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                 self.markPrivateMessagesAsRead(from: peerID)
             }
+        }
+    }
+    
+    @objc private func userDidTakeScreenshot() {
+        // Send screenshot notification based on current context
+        let screenshotMessage = "* \(nickname) took a screenshot *"
+        
+        if let peerID = selectedPrivateChatPeer {
+            // In private chat - send to the other person
+            if let peerNickname = meshService.getPeerNicknames()[peerID] {
+                // Send the message directly without going through sendPrivateMessage to avoid local echo
+                meshService.sendPrivateMessage(screenshotMessage, to: peerID, recipientNickname: peerNickname)
+            }
+            
+            // Show local notification immediately as system message
+            let localNotification = BitchatMessage(
+                sender: "system",
+                content: "you took a screenshot",
+                timestamp: Date(),
+                isRelay: false,
+                originalSender: nil,
+                isPrivate: true,
+                recipientNickname: meshService.getPeerNicknames()[peerID],
+                senderPeerID: meshService.myPeerID
+            )
+            if privateChats[peerID] == nil {
+                privateChats[peerID] = []
+            }
+            privateChats[peerID]?.append(localNotification)
+            
+        } else if let channel = currentChannel {
+            // In a channel - send to channel
+            // Check if channel is password protected and encrypt if needed
+            if let channelKey = channelKeys[channel] {
+                meshService.sendEncryptedChannelMessage(screenshotMessage, mentions: [], channel: channel, channelKey: channelKey)
+            } else {
+                meshService.sendMessage(screenshotMessage, mentions: [], channel: channel)
+            }
+            
+            // Show local notification immediately as system message
+            let localNotification = BitchatMessage(
+                sender: "system",
+                content: "you took a screenshot",
+                timestamp: Date(),
+                isRelay: false,
+                originalSender: nil,
+                isPrivate: false,
+                channel: channel
+            )
+            if channelMessages[channel] == nil {
+                channelMessages[channel] = []
+            }
+            channelMessages[channel]?.append(localNotification)
+            
+        } else {
+            // In public chat - send to everyone
+            meshService.sendMessage(screenshotMessage, mentions: [], channel: nil)
+            
+            // Show local notification immediately as system message
+            let localNotification = BitchatMessage(
+                sender: "system",
+                content: "you took a screenshot",
+                timestamp: Date(),
+                isRelay: false
+            )
+            messages.append(localNotification)
         }
     }
     
@@ -2438,9 +2512,10 @@ extension ChatViewModel: BitchatDelegate {
                     }
                 }
                 
-                // Check if this is a hug/slap action that should be converted to system message
+                // Check if this is an action that should be converted to system message
                 let isActionMessage = messageToStore.content.hasPrefix("* ") && messageToStore.content.hasSuffix(" *") &&
-                                      (messageToStore.content.contains("🫂") || messageToStore.content.contains("🐟"))
+                                      (messageToStore.content.contains("🫂") || messageToStore.content.contains("🐟") || 
+                                       messageToStore.content.contains("took a screenshot"))
                 
                 if isActionMessage {
                     // Convert to system message
@@ -2621,9 +2696,10 @@ extension ChatViewModel: BitchatDelegate {
                     }
                 }
                 
-                // Check if this is a hug/slap action that should be converted to system message
+                // Check if this is an action that should be converted to system message
                 let isActionMessage = messageToAdd.content.hasPrefix("* ") && messageToAdd.content.hasSuffix(" *") &&
-                                      (messageToAdd.content.contains("🫂") || messageToAdd.content.contains("🐟"))
+                                      (messageToAdd.content.contains("🫂") || messageToAdd.content.contains("🐟") || 
+                                       messageToAdd.content.contains("took a screenshot"))
                 
                 let finalMessage: BitchatMessage
                 if isActionMessage {
@@ -2675,9 +2751,10 @@ extension ChatViewModel: BitchatDelegate {
         } else {
             // Regular public message (main chat)
             
-            // Check if this is a hug/slap action that should be converted to system message
+            // Check if this is an action that should be converted to system message
             let isActionMessage = message.content.hasPrefix("* ") && message.content.hasSuffix(" *") &&
-                                  (message.content.contains("🫂") || message.content.contains("🐟"))
+                                  (message.content.contains("🫂") || message.content.contains("🐟") || 
+                                   message.content.contains("took a screenshot"))
             
             if isActionMessage {
                 // Convert to system message
