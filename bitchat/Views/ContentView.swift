@@ -190,7 +190,7 @@ struct ContentView: View {
                     Image(systemName: "lock.fill")
                         .font(.system(size: 14))
                         .foregroundColor(Color.orange)
-                    Text("private: \(privatePeerNick)")
+                    Text("\(privatePeerNick)")
                         .font(.system(size: 16, weight: .medium, design: .monospaced))
                         .foregroundColor(Color.orange)
                 }
