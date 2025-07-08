@@ -65,11 +65,11 @@ struct AppInfoView: View {
                         FeatureRow(icon: "at", title: "Mentions",
                                   description: "Use @nickname to notify specific users")
                         
-                        FeatureRow(icon: "number", title: "Rooms",
-                                  description: "Create #rooms for topic-based conversations")
+                        FeatureRow(icon: "number", title: "Channels",
+                                  description: "Create #channels for topic-based conversations")
                         
-                        FeatureRow(icon: "lock.fill", title: "Password Rooms",
-                                  description: "Secure rooms with passwords and AES encryption")
+                        FeatureRow(icon: "lock.fill", title: "Password Channels",
+                                  description: "Secure channels with passwords and AES encryption")
                     }
                     
                     // Privacy
@@ -92,11 +92,31 @@ struct AppInfoView: View {
                         
                         VStack(alignment: .leading, spacing: 8) {
                             Text("• Set your nickname in the header")
-                            Text("• Swipe left or tap room name for sidebar")
+                            Text("• Swipe left or tap channel name for sidebar")
                             Text("• Tap a peer to start a private chat")
                             Text("• Use @nickname to mention someone")
-                            Text("• Use #roomname to create/join rooms")
+                            Text("• Use #channelname to create/join channels")
                             Text("• Triple-tap the logo for panic mode")
+                        }
+                        .font(.system(size: 14, design: .monospaced))
+                        .foregroundColor(textColor)
+                    }
+                    
+                    // Commands
+                    VStack(alignment: .leading, spacing: 16) {
+                        SectionHeader("Commands")
+                        
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("/j #channel - join or create a channel")
+                            Text("/m @name - send private message")
+                            Text("/w - see who's online")
+                            Text("/channels - show all discovered channels")
+                            Text("/block @name - block a peer")
+                            Text("/block - list blocked peers")
+                            Text("/unblock @name - unblock a peer")
+                            Text("/clear - clear current chat")
+                            Text("/hug @name - send someone a hug")
+                            Text("/slap @name - slap with a trout")
                         }
                         .font(.system(size: 14, design: .monospaced))
                         .foregroundColor(textColor)
@@ -113,7 +133,7 @@ struct AppInfoView: View {
                             Text("Store & Forward: 12h for all, ∞ for favorites")
                             Text("Battery: Adaptive scanning based on level")
                             Text("Platform: Universal (iOS, iPadOS, macOS)")
-                            Text("Rooms: Password-protected with key commitments")
+                            Text("Channels: Password-protected with key commitments")
                             Text("Storage: Keychain for passwords, encrypted retention")
                         }
                         .font(.system(size: 14, design: .monospaced))
@@ -171,11 +191,11 @@ struct AppInfoView: View {
                         FeatureRow(icon: "at", title: "Mentions",
                                   description: "Use @nickname to notify specific users")
                         
-                        FeatureRow(icon: "number", title: "Rooms",
-                                  description: "Create #rooms for topic-based conversations")
+                        FeatureRow(icon: "number", title: "Channels",
+                                  description: "Create #channels for topic-based conversations")
                         
-                        FeatureRow(icon: "lock.fill", title: "Password Rooms",
-                                  description: "Secure rooms with passwords and AES encryption")
+                        FeatureRow(icon: "lock.fill", title: "Password Channels",
+                                  description: "Secure channels with passwords and AES encryption")
                     }
                     
                     // Privacy
@@ -198,11 +218,31 @@ struct AppInfoView: View {
                         
                         VStack(alignment: .leading, spacing: 8) {
                             Text("• Set your nickname in the header")
-                            Text("• Swipe left or tap room name for sidebar")
+                            Text("• Swipe left or tap channel name for sidebar")
                             Text("• Tap a peer to start a private chat")
                             Text("• Use @nickname to mention someone")
-                            Text("• Use #roomname to create/join rooms")
+                            Text("• Use #channelname to create/join channels")
                             Text("• Triple-tap the logo for panic mode")
+                        }
+                        .font(.system(size: 14, design: .monospaced))
+                        .foregroundColor(textColor)
+                    }
+                    
+                    // Commands
+                    VStack(alignment: .leading, spacing: 16) {
+                        SectionHeader("Commands")
+                        
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("/j #channel - join or create a channel")
+                            Text("/m @name - send private message")
+                            Text("/w - see who's online")
+                            Text("/channels - show all discovered channels")
+                            Text("/block @name - block a peer")
+                            Text("/block - list blocked peers")
+                            Text("/unblock @name - unblock a peer")
+                            Text("/clear - clear current chat")
+                            Text("/hug @name - send someone a hug")
+                            Text("/slap @name - slap with a trout")
                         }
                         .font(.system(size: 14, design: .monospaced))
                         .foregroundColor(textColor)
@@ -219,7 +259,7 @@ struct AppInfoView: View {
                             Text("Store & Forward: 12h for all, ∞ for favorites")
                             Text("Battery: Adaptive scanning based on level")
                             Text("Platform: Universal (iOS, iPadOS, macOS)")
-                            Text("Rooms: Password-protected with key commitments")
+                            Text("Channels: Password-protected with key commitments")
                             Text("Storage: Keychain for passwords, encrypted retention")
                         }
                         .font(.system(size: 14, design: .monospaced))

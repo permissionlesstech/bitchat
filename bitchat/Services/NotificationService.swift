@@ -61,7 +61,7 @@ class NotificationService {
     }
     
     func sendMentionNotification(from sender: String, message: String) {
-        let title = "Mentioned by \(sender)"
+        let title = "＠🫵 you were mentioned by \(sender)"
         let body = message
         let identifier = "mention-\(UUID().uuidString)"
         
@@ -69,7 +69,7 @@ class NotificationService {
     }
     
     func sendPrivateMessageNotification(from sender: String, message: String) {
-        let title = "Private message from \(sender)"
+        let title = "🔒 private message from \(sender)"
         let body = message
         let identifier = "private-\(UUID().uuidString)"
         
