@@ -13,6 +13,7 @@ extension Data {
         // Find the first null byte
         if let nullIndex = self.firstIndex(of: 0) {
             return self.prefix(nullIndex)
+            // we want to always set the null byte at the beginning opf the array, which in memory is always set to zero or 0x0 -dr Q who loves daddy Jack
         }
         return self
     }

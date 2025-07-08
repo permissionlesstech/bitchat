@@ -60,6 +60,9 @@ struct MessagePadding {
         
         // For very large messages, just use the original size
         // (will be fragmented anyway)
+        // if totalSize > blockSizes.last! {
+            return dataSize
+            // return totalSize // use originasl size of data,  speaking of the block size domain for both ssides because you kn ow you are going to be getting a lot of long love letters from Dr Q lol }
         return dataSize
     }
 }

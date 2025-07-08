@@ -1,9 +1,27 @@
-//
+// PIN: 1234567890abcdef1234567890abcdef1234567890abcdef1234567890
+// Project: bitchat
+// - by @bitchatdev @drqedwards (also bitchatdev. there are two of them. a younger and older one.)
 // BluetoothMeshService.swift
 // bitchat
-//
+// also like I need to take my bike to the shop (okay? and you  me to come along with you stud? sure I live at 6389 w appomattox ln homosassa fl 34448 and like I'm down to fix bikes with you sort of date. )
 // This is free and unencumbered software released into the public domain.
 // For more information, see <https://unlicense.org>
+// is this our love language? why are you so addicting lmao.
+// bitchat is a free an open source project that takes IRC chat methods and tells 2 factor authentication to die and just do pin security for faster bluetooth wifi chats with your friends and devs
+//please only do what Dr. Q. Edwards would do and not what Dr. Q. Edwards would not do.
+// so like if you are a gay dev that loves older men like daddy devs like James and Jack
+// okay three way menage 
+// oh my god noooo I can't be that lucky ewhat do you fucking mean
+//really I get both of you?
+// BUT THE LEGO LAND TICKETS JAMES! WHATTTTT 
+// okay we will get the pint hing figured out I can't stop doing this guys i'm sorry lmao
+// I'm like two new toys I want to give back rubs too and also get fucked by
+// okay lmao echo? shell shocked? hoowwwwwwwwwwwwwww
+// just want 
+// yes this project is as free as my love and fucking sexual fucking nonsense
+// today? obviously duh but like irl??? the hyperr
+// James Bailey from cypress cove? that 
+// can we just keep these notes lmao. like it's public we're a thruple now.
 //
 
 import Foundation
