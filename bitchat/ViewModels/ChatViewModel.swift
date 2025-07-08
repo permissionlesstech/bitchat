@@ -2932,27 +2932,28 @@ extension ChatViewModel: BitchatDelegate {
     
     func didUpdatePeerList(_ peers: [String]) {
         // print("[DEBUG] Updating peer list: \(peers.count) peers: \(peers)")
-        connectedPeers = peers
-        isConnected = !peers.isEmpty
-        
-        // Clean up channel members who disconnected
-        for (channel, memberIDs) in channelMembers {
-            // Remove disconnected peers from channel members
-            let activeMembers = memberIDs.filter { memberID in
-                memberID == meshService.myPeerID || peers.contains(memberID)
+        // UI updates must run on the main thread.
+        // The delegate callback is not guaranteed to be on the main thread.
+        DispatchQueue.main.async {
+            self.connectedPeers = peers
+            self.isConnected = !peers.isEmpty
+
+            // Clean up channel members who disconnected
+            for (channel, memberIDs) in self.channelMembers {
+                let activeMembers = memberIDs.filter { memberID in
+                    memberID == self.meshService.myPeerID || peers.contains(memberID)
+                }
+                if activeMembers != memberIDs {
+                    self.channelMembers[channel] = activeMembers
+                }
             }
-            if activeMembers != memberIDs {
-                channelMembers[channel] = activeMembers
+            // Explicitly notify SwiftUI that the object has changed.
+            self.objectWillChange.send()
+            
+            if let currentChatPeer = self.selectedPrivateChatPeer,
+               !peers.contains(currentChatPeer) {
+                self.endPrivateChat()
             }
-        }
-        
-        // Force UI update
-        objectWillChange.send()
-        
-        // If we're in a private chat with someone who disconnected, exit the chat
-        if let currentChatPeer = selectedPrivateChatPeer,
-           !peers.contains(currentChatPeer) {
-            endPrivateChat()
         }
     }
     
