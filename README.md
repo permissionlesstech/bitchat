@@ -63,12 +63,15 @@ This project is released into the public domain. See the [LICENSE](LICENSE) file
 ### Basic Commands
 
 - `/j #channel` - Join or create a channel
-- `/m @user message` - Send a private message
+- `/m @name message` - Send a private message
 - `/w` - List online users
 - `/channels` - Show all discovered channels
+- `/block @name` - Block a peer from messaging you
+- `/block` - List all blocked peers
+- `/unblock @name` - Unblock a peer
 - `/clear` - Clear chat messages
 - `/pass [password]` - Set/change channel password (owner only)
-- `/transfer @user` - Transfer channel ownership
+- `/transfer @name` - Transfer channel ownership
 - `/save` - Toggle message retention for channel (owner only)
 
 ### Getting Started

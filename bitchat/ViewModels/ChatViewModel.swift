@@ -63,10 +63,12 @@ class ChatViewModel: ObservableObject {
     // private let channelPasswordsKey = "bitchat.channelPasswords" // Now using Keychain
     private let channelKeyCommitmentsKey = "bitchat.channelKeyCommitments"
     private let retentionEnabledChannelsKey = "bitchat.retentionEnabledChannels"
+    private let blockedUsersKey = "bitchat.blockedUsers"
     private var nicknameSaveTimer: Timer?
     
     @Published var favoritePeers: Set<String> = []  // Now stores public key fingerprints instead of peer IDs
     private var peerIDToPublicKeyFingerprint: [String: String] = [:]  // Maps ephemeral peer IDs to persistent fingerprints
+    private var blockedUsers: Set<String> = []  // Stores public key fingerprints of blocked users
     
     // Messages are naturally ephemeral - no persistent storage
     
@@ -78,6 +80,7 @@ class ChatViewModel: ObservableObject {
         loadFavorites()
         loadJoinedChannels()
         loadChannelData()
+        loadBlockedUsers()
         // Load saved channels state
         savedChannels = MessageRetentionService.shared.getFavoriteChannels()
         meshService.delegate = self
@@ -129,6 +132,14 @@ class ChatViewModel: ObservableObject {
             name: UIApplication.didBecomeActiveNotification,
             object: nil
         )
+        
+        // Add screenshot detection for iOS
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(userDidTakeScreenshot),
+            name: UIApplication.userDidTakeScreenshotNotification,
+            object: nil
+        )
         #endif
     }
     
@@ -157,6 +168,17 @@ class ChatViewModel: ObservableObject {
     
     private func saveFavorites() {
         userDefaults.set(Array(favoritePeers), forKey: favoritesKey)
+        userDefaults.synchronize()
+    }
+    
+    private func loadBlockedUsers() {
+        if let savedBlockedUsers = userDefaults.stringArray(forKey: blockedUsersKey) {
+            blockedUsers = Set(savedBlockedUsers)
+        }
+    }
+    
+    private func saveBlockedUsers() {
+        userDefaults.set(Array(blockedUsers), forKey: blockedUsersKey)
         userDefaults.synchronize()
     }
     
@@ -796,6 +818,25 @@ class ChatViewModel: ObservableObject {
         }
     }
     
+    private func isPeerBlocked(_ peerID: String) -> Bool {
+        // Check if we have the public key fingerprint for this peer
+        if let fingerprint = peerIDToPublicKeyFingerprint[peerID] {
+            return blockedUsers.contains(fingerprint)
+        }
+        
+        // Try to get public key from mesh service
+        if let publicKeyData = meshService.getPeerPublicKey(peerID) {
+            let fingerprint = SHA256.hash(data: publicKeyData)
+                .compactMap { String(format: "%02x", $0) }
+                .joined()
+                .prefix(16)
+                .lowercased()
+            return blockedUsers.contains(String(fingerprint))
+        }
+        
+        return false
+    }
+    
     func sendMessage(_ content: String) {
         guard !content.isEmpty else { return }
         
@@ -881,6 +922,18 @@ class ChatViewModel: ObservableObject {
         guard !content.isEmpty else { return }
         guard let recipientNickname = meshService.getPeerNicknames()[peerID] else { return }
         
+        // Check if the recipient is blocked
+        if isPeerBlocked(peerID) {
+            let systemMessage = BitchatMessage(
+                sender: "system",
+                content: "cannot send message to \(recipientNickname): user is blocked.",
+                timestamp: Date(),
+                isRelay: false
+            )
+            messages.append(systemMessage)
+            return
+        }
+        
         // IMPORTANT: When sending a message, it means we're viewing this chat
         // Send read receipts for any delivered messages from this peer
         markPrivateMessagesAsRead(from: peerID)
@@ -917,6 +970,19 @@ class ChatViewModel: ObservableObject {
     
     func startPrivateChat(with peerID: String) {
         let peerNickname = meshService.getPeerNicknames()[peerID] ?? "unknown"
+        
+        // Check if the peer is blocked
+        if isPeerBlocked(peerID) {
+            let systemMessage = BitchatMessage(
+                sender: "system",
+                content: "cannot start chat with \(peerNickname): user is blocked.",
+                timestamp: Date(),
+                isRelay: false
+            )
+            messages.append(systemMessage)
+            return
+        }
+        
         selectedPrivateChatPeer = peerID
         unreadPrivateMessages.remove(peerID)
         
@@ -999,6 +1065,72 @@ class ChatViewModel: ObservableObject {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                 self.markPrivateMessagesAsRead(from: peerID)
             }
+        }
+    }
+    
+    @objc private func userDidTakeScreenshot() {
+        // Send screenshot notification based on current context
+        let screenshotMessage = "* \(nickname) took a screenshot *"
+        
+        if let peerID = selectedPrivateChatPeer {
+            // In private chat - send to the other person
+            if let peerNickname = meshService.getPeerNicknames()[peerID] {
+                // Send the message directly without going through sendPrivateMessage to avoid local echo
+                meshService.sendPrivateMessage(screenshotMessage, to: peerID, recipientNickname: peerNickname)
+            }
+            
+            // Show local notification immediately as system message
+            let localNotification = BitchatMessage(
+                sender: "system",
+                content: "you took a screenshot",
+                timestamp: Date(),
+                isRelay: false,
+                originalSender: nil,
+                isPrivate: true,
+                recipientNickname: meshService.getPeerNicknames()[peerID],
+                senderPeerID: meshService.myPeerID
+            )
+            if privateChats[peerID] == nil {
+                privateChats[peerID] = []
+            }
+            privateChats[peerID]?.append(localNotification)
+            
+        } else if let channel = currentChannel {
+            // In a channel - send to channel
+            // Check if channel is password protected and encrypt if needed
+            if let channelKey = channelKeys[channel] {
+                meshService.sendEncryptedChannelMessage(screenshotMessage, mentions: [], channel: channel, channelKey: channelKey)
+            } else {
+                meshService.sendMessage(screenshotMessage, mentions: [], channel: channel)
+            }
+            
+            // Show local notification immediately as system message
+            let localNotification = BitchatMessage(
+                sender: "system",
+                content: "you took a screenshot",
+                timestamp: Date(),
+                isRelay: false,
+                originalSender: nil,
+                isPrivate: false,
+                channel: channel
+            )
+            if channelMessages[channel] == nil {
+                channelMessages[channel] = []
+            }
+            channelMessages[channel]?.append(localNotification)
+            
+        } else {
+            // In public chat - send to everyone
+            meshService.sendMessage(screenshotMessage, mentions: [], channel: nil)
+            
+            // Show local notification immediately as system message
+            let localNotification = BitchatMessage(
+                sender: "system",
+                content: "you took a screenshot",
+                timestamp: Date(),
+                isRelay: false
+            )
+            messages.append(localNotification)
         }
     }
     
@@ -2200,6 +2332,172 @@ extension ChatViewModel: BitchatDelegate {
                 messages.append(usageMessage)
             }
             
+        case "/block":
+            if parts.count > 1 {
+                let targetName = String(parts[1])
+                // Remove @ if present
+                let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
+                
+                // Find peer ID for this nickname
+                if let peerID = getPeerIDForNickname(nickname) {
+                    // Get public key fingerprint for persistent blocking
+                    if let publicKeyData = meshService.getPeerPublicKey(peerID) {
+                        let fingerprint = SHA256.hash(data: publicKeyData)
+                            .compactMap { String(format: "%02x", $0) }
+                            .joined()
+                            .prefix(16)
+                            .lowercased()
+                        let fingerprintStr = String(fingerprint)
+                        
+                        if blockedUsers.contains(fingerprintStr) {
+                            let systemMessage = BitchatMessage(
+                                sender: "system",
+                                content: "\(nickname) is already blocked.",
+                                timestamp: Date(),
+                                isRelay: false
+                            )
+                            messages.append(systemMessage)
+                        } else {
+                            blockedUsers.insert(fingerprintStr)
+                            saveBlockedUsers()
+                            
+                            // Remove from favorites if blocked
+                            if favoritePeers.contains(fingerprintStr) {
+                                favoritePeers.remove(fingerprintStr)
+                                saveFavorites()
+                            }
+                            
+                            let systemMessage = BitchatMessage(
+                                sender: "system",
+                                content: "blocked \(nickname). you will no longer receive messages from them.",
+                                timestamp: Date(),
+                                isRelay: false
+                            )
+                            messages.append(systemMessage)
+                        }
+                    } else {
+                        let systemMessage = BitchatMessage(
+                            sender: "system",
+                            content: "cannot block \(nickname): unable to verify identity.",
+                            timestamp: Date(),
+                            isRelay: false
+                        )
+                        messages.append(systemMessage)
+                    }
+                } else {
+                    let systemMessage = BitchatMessage(
+                        sender: "system",
+                        content: "cannot block \(nickname): user not found.",
+                        timestamp: Date(),
+                        isRelay: false
+                    )
+                    messages.append(systemMessage)
+                }
+            } else {
+                // List blocked users
+                if blockedUsers.isEmpty {
+                    let systemMessage = BitchatMessage(
+                        sender: "system",
+                        content: "no blocked peers.",
+                        timestamp: Date(),
+                        isRelay: false
+                    )
+                    messages.append(systemMessage)
+                } else {
+                    // Find nicknames for blocked users
+                    var blockedNicknames: [String] = []
+                    for (peerID, _) in meshService.getPeerNicknames() {
+                        if let publicKeyData = meshService.getPeerPublicKey(peerID) {
+                            let fingerprint = SHA256.hash(data: publicKeyData)
+                                .compactMap { String(format: "%02x", $0) }
+                                .joined()
+                                .prefix(16)
+                                .lowercased()
+                            let fingerprintStr = String(fingerprint)
+                            if blockedUsers.contains(fingerprintStr) {
+                                if let nickname = meshService.getPeerNicknames()[peerID] {
+                                    blockedNicknames.append(nickname)
+                                }
+                            }
+                        }
+                    }
+                    
+                    let blockedList = blockedNicknames.isEmpty ? "blocked peers (not currently online)" : blockedNicknames.sorted().joined(separator: ", ")
+                    let systemMessage = BitchatMessage(
+                        sender: "system",
+                        content: "blocked peers: \(blockedList)",
+                        timestamp: Date(),
+                        isRelay: false
+                    )
+                    messages.append(systemMessage)
+                }
+            }
+            
+        case "/unblock":
+            if parts.count > 1 {
+                let targetName = String(parts[1])
+                // Remove @ if present
+                let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
+                
+                // Find peer ID for this nickname
+                if let peerID = getPeerIDForNickname(nickname) {
+                    // Get public key fingerprint
+                    if let publicKeyData = meshService.getPeerPublicKey(peerID) {
+                        let fingerprint = SHA256.hash(data: publicKeyData)
+                            .compactMap { String(format: "%02x", $0) }
+                            .joined()
+                            .prefix(16)
+                            .lowercased()
+                        let fingerprintStr = String(fingerprint)
+                        
+                        if blockedUsers.contains(fingerprintStr) {
+                            blockedUsers.remove(fingerprintStr)
+                            saveBlockedUsers()
+                            
+                            let systemMessage = BitchatMessage(
+                                sender: "system",
+                                content: "unblocked \(nickname).",
+                                timestamp: Date(),
+                                isRelay: false
+                            )
+                            messages.append(systemMessage)
+                        } else {
+                            let systemMessage = BitchatMessage(
+                                sender: "system",
+                                content: "\(nickname) is not blocked.",
+                                timestamp: Date(),
+                                isRelay: false
+                            )
+                            messages.append(systemMessage)
+                        }
+                    } else {
+                        let systemMessage = BitchatMessage(
+                            sender: "system",
+                            content: "cannot unblock \(nickname): unable to verify identity.",
+                            timestamp: Date(),
+                            isRelay: false
+                        )
+                        messages.append(systemMessage)
+                    }
+                } else {
+                    let systemMessage = BitchatMessage(
+                        sender: "system",
+                        content: "cannot unblock \(nickname): user not found.",
+                        timestamp: Date(),
+                        isRelay: false
+                    )
+                    messages.append(systemMessage)
+                }
+            } else {
+                let systemMessage = BitchatMessage(
+                    sender: "system",
+                    content: "usage: /unblock <nickname>",
+                    timestamp: Date(),
+                    isRelay: false
+                )
+                messages.append(systemMessage)
+            }
+            
         default:
             // Unknown command
             let systemMessage = BitchatMessage(
@@ -2213,6 +2511,19 @@ extension ChatViewModel: BitchatDelegate {
     }
     
     func didReceiveMessage(_ message: BitchatMessage) {
+        
+        // Check if sender is blocked (for both private and public messages)
+        if let senderPeerID = message.senderPeerID {
+            if isPeerBlocked(senderPeerID) {
+                // Silently ignore messages from blocked users
+                return
+            }
+        } else if let peerID = getPeerIDForNickname(message.sender) {
+            if isPeerBlocked(peerID) {
+                // Silently ignore messages from blocked users
+                return
+            }
+        }
         
         if message.isPrivate {
             // Handle private message
@@ -2269,9 +2580,10 @@ extension ChatViewModel: BitchatDelegate {
                     }
                 }
                 
-                // Check if this is a hug/slap action that should be converted to system message
+                // Check if this is an action that should be converted to system message
                 let isActionMessage = messageToStore.content.hasPrefix("* ") && messageToStore.content.hasSuffix(" *") &&
-                                      (messageToStore.content.contains("🫂") || messageToStore.content.contains("🐟"))
+                                      (messageToStore.content.contains("🫂") || messageToStore.content.contains("🐟") || 
+                                       messageToStore.content.contains("took a screenshot"))
                 
                 if isActionMessage {
                     // Convert to system message
@@ -2452,9 +2764,10 @@ extension ChatViewModel: BitchatDelegate {
                     }
                 }
                 
-                // Check if this is a hug/slap action that should be converted to system message
+                // Check if this is an action that should be converted to system message
                 let isActionMessage = messageToAdd.content.hasPrefix("* ") && messageToAdd.content.hasSuffix(" *") &&
-                                      (messageToAdd.content.contains("🫂") || messageToAdd.content.contains("🐟"))
+                                      (messageToAdd.content.contains("🫂") || messageToAdd.content.contains("🐟") || 
+                                       messageToAdd.content.contains("took a screenshot"))
                 
                 let finalMessage: BitchatMessage
                 if isActionMessage {
@@ -2506,9 +2819,10 @@ extension ChatViewModel: BitchatDelegate {
         } else {
             // Regular public message (main chat)
             
-            // Check if this is a hug/slap action that should be converted to system message
+            // Check if this is an action that should be converted to system message
             let isActionMessage = message.content.hasPrefix("* ") && message.content.hasSuffix(" *") &&
-                                  (message.content.contains("🫂") || message.content.contains("🐟"))
+                                  (message.content.contains("🫂") || message.content.contains("🐟") || 
+                                   message.content.contains("took a screenshot"))
             
             if isActionMessage {
                 // Convert to system message
