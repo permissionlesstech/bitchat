@@ -35,46 +35,66 @@ class ShareViewController: SLComposeServiceViewController {
     }
     
     override func didSelectPost() {
-        // Get the shared content
+        // If we have content text from the compose view, handle it directly
+        if let text = contentText, !text.isEmpty {
+            handleSharedText(text)
+            // Complete the share action after saving
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                self.extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
+            }
+            return
+        }
+        
+        // Otherwise, process attachments
         guard let extensionItem = extensionContext?.inputItems.first as? NSExtensionItem else {
             self.extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
             return
         }
         
+        var hasProcessedContent = false
+        let group = DispatchGroup()
+        
         // Process different types of shared content
         for itemProvider in extensionItem.attachments ?? [] {
             if itemProvider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) {
+                group.enter()
                 itemProvider.loadItem(forTypeIdentifier: UTType.plainText.identifier, options: nil) { [weak self] (item, error) in
                     if let text = item as? String {
                         self?.handleSharedText(text)
+                        hasProcessedContent = true
                     }
+                    group.leave()
                 }
             } else if itemProvider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
+                group.enter()
                 itemProvider.loadItem(forTypeIdentifier: UTType.url.identifier, options: nil) { [weak self] (item, error) in
                     if let url = item as? URL {
                         self?.handleSharedURL(url)
+                        hasProcessedContent = true
                     }
+                    group.leave()
                 }
             } else if itemProvider.hasItemConformingToTypeIdentifier(UTType.image.identifier) {
+                group.enter()
                 itemProvider.loadItem(forTypeIdentifier: UTType.image.identifier, options: nil) { [weak self] (item, error) in
                     if let image = item as? UIImage {
                         self?.handleSharedImage(image)
+                        hasProcessedContent = true
                     } else if let data = item as? Data {
                         if let image = UIImage(data: data) {
                             self?.handleSharedImage(image)
+                            hasProcessedContent = true
                         }
                     }
+                    group.leave()
                 }
             }
         }
         
-        // If we have content text, share it
-        if let text = contentText, !text.isEmpty {
-            handleSharedText(text)
+        // Complete after all items are processed
+        group.notify(queue: .main) {
+            self.extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
         }
-        
-        // Complete the share action
-        self.extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
     }
     
     override func configurationItems() -> [Any]! {
@@ -106,12 +126,17 @@ class ShareViewController: SLComposeServiceViewController {
     
     private func saveToSharedDefaults(content: String, type: String) {
         // Use app groups to share data between extension and main app
-        if let userDefaults = UserDefaults(suiteName: "group.chat.bitchat") {
-            userDefaults.set(content, forKey: "sharedContent")
-            userDefaults.set(type, forKey: "sharedContentType")
-            userDefaults.set(Date(), forKey: "sharedContentDate")
-            userDefaults.synchronize()
+        guard let userDefaults = UserDefaults(suiteName: "group.chat.bitchat") else {
+            print("ShareExtension: Failed to access app group UserDefaults")
+            return
         }
+        
+        userDefaults.set(content, forKey: "sharedContent")
+        userDefaults.set(type, forKey: "sharedContentType")
+        userDefaults.set(Date(), forKey: "sharedContentDate")
+        userDefaults.synchronize()
+        
+        print("ShareExtension: Saved content of type \(type) to shared defaults")
     }
     
     private func openMainApp() {
