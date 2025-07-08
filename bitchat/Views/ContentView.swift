@@ -169,7 +169,7 @@ struct ContentView: View {
     private var headerView: some View {
         HStack {
             if let privatePeerID = viewModel.selectedPrivateChatPeer,
-               let privatePeerNick = viewModel.meshService.getPeerNicknames()[privatePeerID] {
+               let _ = viewModel.meshService.getPeerNicknames()[privatePeerID] {
                 // Private chat header
                 Button(action: {
                     viewModel.endPrivateChat()
@@ -190,7 +190,7 @@ struct ContentView: View {
                     Image(systemName: "lock.fill")
                         .font(.system(size: 14))
                         .foregroundColor(Color.orange)
-                    Text("private: \(privatePeerNick)")
+                    Text("private: \(viewModel.displayName(for: privatePeerID))")
                         .font(.system(size: 16, weight: .medium, design: .monospaced))
                         .foregroundColor(Color.orange)
                 }
@@ -487,12 +487,12 @@ struct ContentView: View {
             // @mentions autocomplete
             if viewModel.showAutocomplete && !viewModel.autocompleteSuggestions.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(viewModel.autocompleteSuggestions.enumerated()), id: \.element) { index, suggestion in
+                    ForEach(Array(viewModel.autocompleteSuggestions.enumerated()), id: \.element) { index, peerID in
                         Button(action: {
-                            _ = viewModel.completeNickname(suggestion, in: &messageText)
+                            _ = viewModel.completeNickname(peerID, in: &messageText)
                         }) {
                             HStack {
-                                Text("@\(suggestion)")
+                                Text("@\(viewModel.displayName(for: peerID))")
                                     .font(.system(size: 11, design: .monospaced))
                                     .foregroundColor(textColor)
                                     .fontWeight(.medium)
@@ -589,21 +589,21 @@ struct ContentView: View {
             
             HStack(alignment: .center, spacing: 4) {
             if viewModel.selectedPrivateChatPeer != nil {
-                Text("<@\(viewModel.nickname)> →")
+                Text("<@\(viewModel.displayName(for: viewModel.meshService.myPeerID))> →")
                     .font(.system(size: 12, weight: .medium, design: .monospaced))
                     .foregroundColor(Color.orange)
                     .lineLimit(1)
                     .fixedSize()
                     .padding(.leading, 12)
             } else if let currentChannel = viewModel.currentChannel, viewModel.passwordProtectedChannels.contains(currentChannel) {
-                Text("<@\(viewModel.nickname)> →")
+                Text("<@\(viewModel.displayName(for: viewModel.meshService.myPeerID))> →")
                     .font(.system(size: 12, weight: .medium, design: .monospaced))
                     .foregroundColor(Color.orange)
                     .lineLimit(1)
                     .fixedSize()
                     .padding(.leading, 12)
             } else {
-                Text("<@\(viewModel.nickname)>")
+                Text("<@\(viewModel.displayName(for: viewModel.meshService.myPeerID))>")
                     .font(.system(size: 12, weight: .medium, design: .monospaced))
                     .foregroundColor(textColor)
                     .lineLimit(1)

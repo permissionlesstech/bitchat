@@ -30,6 +30,8 @@ class ChatViewModel: ObservableObject {
     @Published var privateChats: [String: [BitchatMessage]] = [:] // peerID -> messages
     @Published var selectedPrivateChatPeer: String? = nil
     @Published var unreadPrivateMessages: Set<String> = []
+    // Autocomplete suggestions for @mentions. Stores peer IDs so we can
+    // disambiguate duplicate nicknames when presenting options.
     @Published var autocompleteSuggestions: [String] = []
     @Published var showAutocomplete: Bool = false
     @Published var autocompleteRange: NSRange? = nil
@@ -1102,9 +1104,15 @@ class ChatViewModel: ObservableObject {
     }
 
     func displayName(for peerID: String) -> String {
-        if peerID == meshService.myPeerID { return nickname }
         let all = meshService.getPeerNicknames()
-        let nick = all[peerID]
+        let nick: String? = {
+            if peerID == meshService.myPeerID {
+                return nickname
+            } else {
+                return all[peerID]
+            }
+        }()
+
         let fingerprint = peerIDToPublicKeyFingerprint[peerID]
         return ChatViewModel.computeDisplayName(peerID: peerID,
                                                nickname: nick,
@@ -1237,17 +1245,21 @@ class ChatViewModel: ObservableObject {
         
         let partial = String(beforeCursor[range]).lowercased()
         
-        // Get all available nicknames (excluding self)
         let peerNicknames = meshService.getPeerNicknames()
-        let allNicknames = Array(peerNicknames.values)
-        
-        // Filter suggestions
-        let suggestions = allNicknames.filter { nick in
+
+        // Filter peer IDs whose nickname matches the partial text
+        let matchingPeers = peerNicknames.filter { (_, nick) in
             nick.lowercased().hasPrefix(partial)
-        }.sorted()
-        
-        if !suggestions.isEmpty {
-            autocompleteSuggestions = suggestions
+        }
+
+        let sortedPeers = matchingPeers.keys.sorted { id1, id2 in
+            let name1 = displayName(for: id1)
+            let name2 = displayName(for: id2)
+            return name1 < name2
+        }
+
+        if !sortedPeers.isEmpty {
+            autocompleteSuggestions = sortedPeers
             showAutocomplete = true
             autocompleteRange = match.range(at: 0) // Store full @mention range
             selectedAutocompleteIndex = 0
@@ -1259,12 +1271,14 @@ class ChatViewModel: ObservableObject {
         }
     }
     
-    func completeNickname(_ nickname: String, in text: inout String) -> Int {
+    func completeNickname(_ peerID: String, in text: inout String) -> Int {
         guard let range = autocompleteRange else { return text.count }
-        
+
+        let nicknameToInsert = meshService.getPeerNicknames()[peerID] ?? peerID
+
         // Replace the @partial with @nickname
         let nsText = text as NSString
-        let newText = nsText.replacingCharacters(in: range, with: "@\(nickname) ")
+        let newText = nsText.replacingCharacters(in: range, with: "@\(nicknameToInsert) ")
         text = newText
         
         // Hide autocomplete
@@ -1274,7 +1288,7 @@ class ChatViewModel: ObservableObject {
         selectedAutocompleteIndex = 0
         
         // Return new cursor position (after the space)
-        return range.location + nickname.count + 2
+        return range.location + nicknameToInsert.count + 2
     }
     
     func getSenderColor(for message: BitchatMessage, colorScheme: ColorScheme) -> Color {
@@ -1911,7 +1925,6 @@ extension ChatViewModel: BitchatDelegate {
                 messages.append(systemMessage)
             }
         case "/w":
-            let peerNicknames = meshService.getPeerNicknames()
             if connectedPeers.isEmpty {
                 let systemMessage = BitchatMessage(
                     sender: "system",
@@ -1921,9 +1934,9 @@ extension ChatViewModel: BitchatDelegate {
                 )
                 messages.append(systemMessage)
             } else {
-                let onlineList = connectedPeers.compactMap { peerID in
-                    peerNicknames[peerID]
-                }.sorted().joined(separator: ", ")
+                let onlineList = connectedPeers.map { displayName(for: $0) }
+                    .sorted()
+                    .joined(separator: ", ")
                 
                 let systemMessage = BitchatMessage(
                     sender: "system",
@@ -2615,9 +2628,15 @@ extension ChatViewModel: BitchatDelegate {
     
     func didConnectToPeer(_ peerID: String) {
         isConnected = true
+
+        var name = peerID
+        if let actualID = getPeerIDForNickname(peerID) {
+            name = displayName(for: actualID)
+        }
+
         let systemMessage = BitchatMessage(
             sender: "system",
-            content: "\(peerID) connected",
+            content: "\(name) connected",
             timestamp: Date(),
             isRelay: false,
             originalSender: nil
@@ -2629,9 +2648,14 @@ extension ChatViewModel: BitchatDelegate {
     }
     
     func didDisconnectFromPeer(_ peerID: String) {
+        var name = peerID
+        if let actualID = getPeerIDForNickname(peerID) {
+            name = displayName(for: actualID)
+        }
+
         let systemMessage = BitchatMessage(
             sender: "system",
-            content: "\(peerID) disconnected",
+            content: "\(name) disconnected",
             timestamp: Date(),
             isRelay: false,
             originalSender: nil
