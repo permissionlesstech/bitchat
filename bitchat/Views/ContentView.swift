@@ -819,7 +819,7 @@ struct ContentView: View {
             
             // Leave button
             Button(action: {
-                viewModel.leaveChannel(channel)
+                showLeaveChannelAlert = true
             }) {
                 Text("leave channel")
                     .font(.system(size: 10, design: .monospaced))
@@ -832,6 +832,14 @@ struct ContentView: View {
                     )
             }
             .buttonStyle(.plain)
+            .alert("Leave Channel", isPresented: $showLeaveChannelAlert) {
+                Button("Cancel", role: .cancel) { }
+                Button("Leave", role: .destructive) {
+                    viewModel.leaveChannel(channel)
+                }
+            } message: {
+                Text("Are you sure you want to leave \(channel)?")
+            }
         }
     }
     
