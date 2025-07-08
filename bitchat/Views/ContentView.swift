@@ -26,6 +26,7 @@ struct ContentView: View {
     @State private var showPasswordError = false
     @State private var showCommandSuggestions = false
     @State private var commandSuggestions: [String] = []
+    @State private var showLeaveChannelAlert = false
     
     private var backgroundColor: Color {
         colorScheme == .dark ? Color.black : Color.white
@@ -289,13 +290,21 @@ struct ContentView: View {
                     
                     // Leave channel button
                     Button(action: {
-                        viewModel.leaveChannel(currentChannel)
+                        showLeaveChannelAlert = true
                     }) {
                         Text("leave")
                             .font(.system(size: 12, design: .monospaced))
                             .foregroundColor(Color.red)
                     }
                     .buttonStyle(.plain)
+                    .alert("Leave Channel", isPresented: $showLeaveChannelAlert) {
+                        Button("Cancel", role: .cancel) { }
+                        Button("Leave", role: .destructive) {
+                            viewModel.leaveChannel(currentChannel)
+                        }
+                    } message: {
+                        Text("Are you sure you want to leave \(currentChannel)?")
+                    }
                 }
             } else {
                 // Public chat header
@@ -617,6 +626,7 @@ struct ContentView: View {
                 .textFieldStyle(.plain)
                 .font(.system(size: 14, design: .monospaced))
                 .foregroundColor(textColor)
+                .autocorrectionDisabled()
                 .focused($isTextFieldFocused)
                 .onChange(of: messageText) { newValue in
                     // Get cursor position (approximate - end of text for now)
@@ -682,9 +692,10 @@ struct ContentView: View {
             Button(action: sendMessage) {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 20))
-                    .foregroundColor((viewModel.selectedPrivateChatPeer != nil || 
-                                     (viewModel.currentChannel != nil && viewModel.passwordProtectedChannels.contains(viewModel.currentChannel ?? ""))) 
-                                     ? Color.orange : textColor)
+                    .foregroundColor(messageText.isEmpty ? Color.gray :
+                                            (viewModel.selectedPrivateChatPeer != nil ||
+                                             (viewModel.currentChannel != nil && viewModel.passwordProtectedChannels.contains(viewModel.currentChannel ?? "")))
+                                             ? Color.orange : textColor)
             }
             .buttonStyle(.plain)
             .padding(.trailing, 12)
