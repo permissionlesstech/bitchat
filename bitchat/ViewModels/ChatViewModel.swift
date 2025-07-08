@@ -1083,6 +1083,35 @@ class ChatViewModel: ObservableObject {
         let nicknames = meshService.getPeerNicknames()
         return nicknames.first(where: { $0.value == nickname })?.key
     }
+
+    static func computeDisplayName(peerID: String,
+                                   nickname: String?,
+                                   allNicknames: [String: String],
+                                   myNickname: String,
+                                   fingerprint: String?) -> String {
+        let baseName = nickname ?? "person-\(peerID.prefix(4))"
+        var count = allNicknames.values.filter { $0 == baseName }.count
+        if myNickname == baseName { count += 1 }
+
+        if count > 1, nickname != nil {
+            let short = String((fingerprint ?? peerID).prefix(4))
+            return "\(baseName)-\(short)"
+        }
+
+        return baseName
+    }
+
+    func displayName(for peerID: String) -> String {
+        if peerID == meshService.myPeerID { return nickname }
+        let all = meshService.getPeerNicknames()
+        let nick = all[peerID]
+        let fingerprint = peerIDToPublicKeyFingerprint[peerID]
+        return ChatViewModel.computeDisplayName(peerID: peerID,
+                                               nickname: nick,
+                                               allNicknames: all,
+                                               myNickname: nickname,
+                                               fingerprint: fingerprint)
+    }
     
     // PANIC: Emergency data clearing for activist safety
     func panicClearAllData() {
@@ -1348,7 +1377,13 @@ class ChatViewModel: ObservableObject {
         
         if message.sender != "system" {
             // Sender
-            let sender = AttributedString("<@\(message.sender)> ")
+            let senderDisplay: String
+            if let peerID = message.senderPeerID {
+                senderDisplay = displayName(for: peerID)
+            } else {
+                senderDisplay = message.sender
+            }
+            let sender = AttributedString("<@\(senderDisplay)> ")
             var senderStyle = AttributeContainer()
             
             // Get sender color
@@ -1470,7 +1505,13 @@ class ChatViewModel: ObservableObject {
             contentStyle.font = .system(size: 12, design: .monospaced).italic()
             result.append(content.mergingAttributes(contentStyle))
         } else {
-            let sender = AttributedString("<\(message.sender)> ")
+            let senderDisplay: String
+            if let peerID = message.senderPeerID {
+                senderDisplay = displayName(for: peerID)
+            } else {
+                senderDisplay = message.sender
+            }
+            let sender = AttributedString("<\(senderDisplay)> ")
             var senderStyle = AttributeContainer()
             
             // Get RSSI-based color

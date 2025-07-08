@@ -913,18 +913,18 @@ struct ContentView: View {
                         let sortedPeers = peersToShow.sorted { peer1, peer2 in
                             let isFav1 = viewModel.isFavorite(peerID: peer1)
                             let isFav2 = viewModel.isFavorite(peerID: peer2)
-                            
+
                             if isFav1 != isFav2 {
                                 return isFav1 // Favorites come first
                             }
-                            
-                            let name1 = peerNicknames[peer1] ?? "person-\(peer1.prefix(4))"
-                            let name2 = peerNicknames[peer2] ?? "person-\(peer2.prefix(4))"
+
+                            let name1 = viewModel.displayName(for: peer1)
+                            let name2 = viewModel.displayName(for: peer2)
                             return name1 < name2
                         }
                         
                         ForEach(sortedPeers, id: \.self) { peerID in
-                            let displayName = peerID == myPeerID ? viewModel.nickname : (peerNicknames[peerID] ?? "person-\(peerID.prefix(4))")
+                            let displayName = viewModel.displayName(for: peerID)
                             let rssi = peerRSSI[peerID]?.intValue ?? -100
                             let isFavorite = viewModel.isFavorite(peerID: peerID)
                             let isMe = peerID == myPeerID
