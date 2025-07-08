@@ -35,65 +35,110 @@ class ShareViewController: SLComposeServiceViewController {
     }
     
     override func didSelectPost() {
-        // If we have content text from the compose view, handle it directly
-        if let text = contentText, !text.isEmpty {
-            handleSharedText(text)
-            // Complete the share action after saving
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                self.extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
-            }
-            return
-        }
-        
-        // Otherwise, process attachments
         guard let extensionItem = extensionContext?.inputItems.first as? NSExtensionItem else {
             self.extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
             return
         }
         
-        var hasProcessedContent = false
+        print("ShareExtension: Processing share with \(extensionItem.attachments?.count ?? 0) attachments")
+        
+        // Get the page title from the compose view or extension item
+        let pageTitle = self.contentText ?? extensionItem.attributedContentText?.string ?? extensionItem.attributedTitle?.string
+        print("ShareExtension: Page title: \(pageTitle ?? "none")")
+        
+        var foundURL: URL? = nil
         let group = DispatchGroup()
         
-        // Process different types of shared content
-        for itemProvider in extensionItem.attachments ?? [] {
-            if itemProvider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) {
-                group.enter()
-                itemProvider.loadItem(forTypeIdentifier: UTType.plainText.identifier, options: nil) { [weak self] (item, error) in
-                    if let text = item as? String {
-                        self?.handleSharedText(text)
-                        hasProcessedContent = true
-                    }
-                    group.leave()
-                }
-            } else if itemProvider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
-                group.enter()
-                itemProvider.loadItem(forTypeIdentifier: UTType.url.identifier, options: nil) { [weak self] (item, error) in
-                    if let url = item as? URL {
-                        self?.handleSharedURL(url)
-                        hasProcessedContent = true
-                    }
-                    group.leave()
-                }
-            } else if itemProvider.hasItemConformingToTypeIdentifier(UTType.image.identifier) {
-                group.enter()
-                itemProvider.loadItem(forTypeIdentifier: UTType.image.identifier, options: nil) { [weak self] (item, error) in
-                    if let image = item as? UIImage {
-                        self?.handleSharedImage(image)
-                        hasProcessedContent = true
-                    } else if let data = item as? Data {
-                        if let image = UIImage(data: data) {
-                            self?.handleSharedImage(image)
-                            hasProcessedContent = true
-                        }
-                    }
-                    group.leave()
-                }
+        // IMPORTANT: Check if the NSExtensionItem itself has a URL
+        // Safari often provides the URL as an attributedString with a link
+        if let attributedText = extensionItem.attributedContentText {
+            print("ShareExtension: Checking attributed text for URLs")
+            let text = attributedText.string
+            let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
+            let matches = detector?.matches(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count))
+            if let firstMatch = matches?.first, let url = firstMatch.url {
+                print("ShareExtension: Found URL in attributed text: \(url.absoluteString)")
+                foundURL = url
             }
         }
         
-        // Complete after all items are processed
-        group.notify(queue: .main) {
-            self.extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
+        // Only check attachments if we haven't found a URL yet
+        if foundURL == nil {
+            for (index, itemProvider) in (extensionItem.attachments ?? []).enumerated() {
+                print("ShareExtension: Attachment \(index) types: \(itemProvider.registeredTypeIdentifiers)")
+                
+                // Try multiple URL type identifiers that Safari might use
+                let urlTypes = [
+                    UTType.url.identifier,
+                    "public.url",
+                    "public.file-url"
+                ]
+                
+                for urlType in urlTypes {
+                    if itemProvider.hasItemConformingToTypeIdentifier(urlType) {
+                        group.enter()
+                        itemProvider.loadItem(forTypeIdentifier: urlType, options: nil) { (item, error) in
+                            defer { group.leave() }
+                            
+                            if let url = item as? URL {
+                                print("ShareExtension: Found URL: \(url.absoluteString)")
+                                foundURL = url
+                        } else if let data = item as? Data,
+                                  let urlString = String(data: data, encoding: .utf8),
+                                  let url = URL(string: urlString) {
+                            print("ShareExtension: Found URL from data: \(url.absoluteString)")
+                            foundURL = url
+                        } else if let string = item as? String,
+                                  let url = URL(string: string) {
+                            print("ShareExtension: Found URL from string: \(url.absoluteString)")
+                            foundURL = url
+                        }
+                    }
+                    break // Found a URL type, no need to check other types
+                }
+            }
+            
+            // Also check for plain text that might be a URL
+            if foundURL == nil && itemProvider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) {
+                group.enter()
+                itemProvider.loadItem(forTypeIdentifier: UTType.plainText.identifier, options: nil) { (item, error) in
+                    defer { group.leave() }
+                    
+                    if let text = item as? String {
+                        // Check if the text is actually a URL
+                        if let url = URL(string: text),
+                           (url.scheme == "http" || url.scheme == "https") {
+                            print("ShareExtension: Found URL in plain text: \(url.absoluteString)")
+                            foundURL = url
+                        }
+                    }
+                }
+            }
+        }
+        } // End of if foundURL == nil
+        
+        // Process after all checks complete
+        group.notify(queue: .main) { [weak self] in
+            if let url = foundURL {
+                // We have a URL! Create the JSON data
+                let urlData: [String: String] = [
+                    "url": url.absoluteString,
+                    "title": pageTitle ?? url.host ?? "Shared Link"
+                ]
+                
+                print("ShareExtension: Saving URL share - url: \(url.absoluteString), title: \(urlData["title"] ?? "")")
+                
+                if let jsonData = try? JSONSerialization.data(withJSONObject: urlData),
+                   let jsonString = String(data: jsonData, encoding: .utf8) {
+                    self?.saveToSharedDefaults(content: jsonString, type: "url")
+                }
+            } else if let title = pageTitle, !title.isEmpty {
+                // No URL found, just share the text
+                print("ShareExtension: No URL found, sharing as text: \(title)")
+                self?.saveToSharedDefaults(content: title, type: "text")
+            }
+            
+            self?.extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
         }
     }
     
@@ -155,11 +200,19 @@ class ShareViewController: SLComposeServiceViewController {
         userDefaults.synchronize()
         
         print("ShareExtension: Saved content of type \(type) to shared defaults")
+        print("ShareExtension: Content: \(content)")
+        
+        // Force open the main app
+        self.openMainApp()
     }
     
     private func openMainApp() {
-        // Note: Share extensions cannot directly open the containing app
-        // The user will need to tap on the notification or manually open the app
-        // to see the shared content
+        // Share extensions cannot directly open the containing app
+        // The app will check for shared content when it becomes active
+        // Show success feedback to user
+        DispatchQueue.main.async {
+            self.textView.text = "✓ Shared to bitchat"
+            self.textView.isEditable = false
+        }
     }
 }

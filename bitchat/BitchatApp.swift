@@ -58,19 +58,24 @@ struct BitchatApp: App {
     private func checkForSharedContent() {
         // Check app group for shared content from extension
         guard let userDefaults = UserDefaults(suiteName: "group.chat.bitchat") else {
-            print("Failed to access app group UserDefaults")
+            print("DEBUG: Failed to access app group UserDefaults")
             return
         }
         
         guard let sharedContent = userDefaults.string(forKey: "sharedContent"),
               let sharedDate = userDefaults.object(forKey: "sharedContentDate") as? Date else {
-            print("No shared content found in UserDefaults")
+            print("DEBUG: No shared content found in UserDefaults")
             return
         }
+        
+        print("DEBUG: Found shared content: \(sharedContent)")
+        print("DEBUG: Shared date: \(sharedDate)")
+        print("DEBUG: Time since shared: \(Date().timeIntervalSince(sharedDate)) seconds")
         
         // Only process if shared within last 30 seconds
         if Date().timeIntervalSince(sharedDate) < 30 {
             let contentType = userDefaults.string(forKey: "sharedContentType") ?? "text"
+            print("DEBUG: Content type: \(contentType)")
             
             // Clear the shared content
             userDefaults.removeObject(forKey: "sharedContent")
@@ -93,21 +98,28 @@ struct BitchatApp: App {
             // Send the shared content after a short delay
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                 if contentType == "url" {
+                    print("DEBUG: Processing URL content")
                     // Try to parse as JSON first
                     if let data = sharedContent.data(using: .utf8),
                        let urlData = try? JSONSerialization.jsonObject(with: data) as? [String: String],
                        let url = urlData["url"],
                        let title = urlData["title"] {
-                        // Send formatted link with title and URL
-                        self.chatViewModel.sendMessage("[\(title)](\(url))")
+                        // Send just emoji with hidden markdown link
+                        let markdownLink = "👇 [\(title)](\(url))"
+                        print("DEBUG: Sending markdown link: \(markdownLink)")
+                        self.chatViewModel.sendMessage(markdownLink)
                     } else {
                         // Fallback to simple URL
+                        print("DEBUG: Failed to parse JSON, sending as plain URL")
                         self.chatViewModel.sendMessage("Shared link: \(sharedContent)")
                     }
                 } else {
+                    print("DEBUG: Sending plain text: \(sharedContent)")
                     self.chatViewModel.sendMessage(sharedContent)
                 }
             }
+        } else {
+            print("DEBUG: Shared content is too old, ignoring")
         }
     }
 }
