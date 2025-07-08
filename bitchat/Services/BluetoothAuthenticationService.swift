@@ -2,6 +2,8 @@ import Foundation
 import CoreBluetooth
 import CryptoKit
 import SwiftUI
+import Security
+import LocalAuthentication
 
 /// Service responsible for secure Bluetooth device authentication and pairing
 class BluetoothAuthenticationService: NSObject, ObservableObject {
@@ -13,7 +15,7 @@ class BluetoothAuthenticationService: NSObject, ObservableObject {
     @Published private(set) var whitelistedDevices: Set<WhitelistedDevice> = []
     
     private let keychain = KeychainService()
-    private let secureStorage = SecureStorageService()
+    private let secureStorage: SecureStorageService
     private var activeChallenges: [UUID: ChallengeData] = [:]
     private var connectionCallbacks: [UUID: (Bool) -> Void] = [:]
     
@@ -41,9 +43,21 @@ class BluetoothAuthenticationService: NSObject, ObservableObject {
     struct WhitelistedDevice: Codable, Hashable {
         let identifier: UUID
         let name: String
-        let publicKey: Data
+        let publicKeyBase64: String
         let addedDate: Date
         let lastConnected: Date?
+        
+        var publicKey: Data {
+            return Data(base64Encoded: publicKeyBase64) ?? Data()
+        }
+        
+        init(identifier: UUID, name: String, publicKey: Data, addedDate: Date, lastConnected: Date?) {
+            self.identifier = identifier
+            self.name = name
+            self.publicKeyBase64 = publicKey.base64EncodedString()
+            self.addedDate = addedDate
+            self.lastConnected = lastConnected
+        }
         
         func hash(into hasher: inout Hasher) {
             hasher.combine(identifier)
@@ -62,7 +76,8 @@ class BluetoothAuthenticationService: NSObject, ObservableObject {
     
     // MARK: - Initialization
     
-    override init() {
+    override init() throws {
+        self.secureStorage = try SecureStorageService()
         super.init()
         loadWhitelist()
         startChallengeCleanupTimer()
@@ -192,8 +207,8 @@ class BluetoothAuthenticationService: NSObject, ObservableObject {
         // Store the keys securely
         do {
             let keyData = try JSONEncoder().encode([
-                "private": privateKey.rawRepresentation,
-                "public": publicKey.rawRepresentation
+                "private": privateKey.rawRepresentation.base64EncodedString(),
+                "public": publicKey.rawRepresentation.base64EncodedString()
             ])
             
             try keychain.storeItem(
