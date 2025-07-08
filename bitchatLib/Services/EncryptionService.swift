@@ -7,7 +7,7 @@
 //
 
 import Foundation
-import CryptoKit
+import Crypto
 
 class EncryptionService {
     // Key agreement keys for encryption

@@ -8,7 +8,7 @@
 
 import Foundation
 import Combine
-import CryptoKit
+import Crypto
 
 struct RetryableMessage {
     let id: String

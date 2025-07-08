@@ -7,7 +7,7 @@
 //
 
 import Foundation
-import CryptoKit
+import Crypto
 
 struct StoredMessage: Codable {
     let id: String

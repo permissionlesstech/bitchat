@@ -7,7 +7,7 @@
 //
 
 import Foundation
-import CryptoKit
+import Crypto
 
 // Privacy-preserving padding utilities
 struct MessagePadding {
