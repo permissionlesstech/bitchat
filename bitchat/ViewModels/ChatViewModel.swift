@@ -1331,18 +1331,24 @@ class ChatViewModel: ObservableObject {
                 }
                 
                 // Add the match with appropriate styling
-                let matchText = String(contentText[range])
+                var matchText = String(contentText[range])
                 var matchStyle = AttributeContainer()
                 matchStyle.font = .system(size: 14, weight: .semibold, design: .monospaced)
-                
+
                 if matchType == "mention" {
                     matchStyle.foregroundColor = Color.orange
+
+                    // Replace with display name if we know the peer
+                    let nick = String(matchText.dropFirst())
+                    if let peerID = getPeerIDForNickname(nick) {
+                        matchText = "@" + displayName(for: peerID)
+                    }
                 } else {
                     // Hashtag
                     matchStyle.foregroundColor = Color.blue
                     matchStyle.underlineStyle = .single
                 }
-                
+
                 processedContent.append(AttributedString(matchText).mergingAttributes(matchStyle))
                 
                 lastEndIndex = range.upperBound
@@ -1441,17 +1447,22 @@ class ChatViewModel: ObservableObject {
                     }
                     
                     // Add styled match
-                    let matchText = String(content[nsRange])
+                    var matchText = String(content[nsRange])
                     var matchStyle = AttributeContainer()
                     matchStyle.font = .system(size: 14, weight: .semibold, design: .monospaced)
-                    
+
                     if type == "hashtag" {
                         matchStyle.foregroundColor = Color.blue
                         matchStyle.underlineStyle = .single
                     } else if type == "mention" {
                         matchStyle.foregroundColor = Color.orange
+
+                        let nick = String(matchText.dropFirst())
+                        if let peerID = getPeerIDForNickname(nick) {
+                            matchText = "@" + displayName(for: peerID)
+                        }
                     }
-                    
+
                     result.append(AttributedString(matchText).mergingAttributes(matchStyle))
                     lastEnd = nsRange.upperBound
                 }
