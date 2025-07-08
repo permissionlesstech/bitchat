@@ -15,8 +15,9 @@ struct LinkPreviewView: View {
     let url: URL
     let title: String?
     @Environment(\.colorScheme) var colorScheme
+    #if os(iOS)
     @State private var metadata: LPLinkMetadata?
-    
+    #endif
     private var textColor: Color {
         colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
     }
@@ -85,11 +86,13 @@ struct LinkPreviewView: View {
                 
                 VStack(alignment: .leading, spacing: 4) {
                     // Title
+                    #if os(iOS)
                     Text(metadata?.title ?? title ?? url.host ?? "Link")
                         .font(.system(size: 14, weight: .semibold, design: .monospaced))
                         .foregroundColor(textColor)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
+                    #endif
                     
                     // Host
                     Text(url.host ?? url.absoluteString)
