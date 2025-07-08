@@ -1,0 +1,122 @@
+//
+// ShareViewController.swift
+// bitchatShareExtension
+//
+// This is free and unencumbered software released into the public domain.
+// For more information, see <https://unlicense.org>
+//
+
+import UIKit
+import Social
+import UniformTypeIdentifiers
+
+class ShareViewController: SLComposeServiceViewController {
+    
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        // Set placeholder text
+        placeholder = "Share to bitchat..."
+        // Set character limit (optional)
+        charactersRemaining = 500
+    }
+    
+    override func isContentValid() -> Bool {
+        // Validate that we have text content or attachments
+        if let text = contentText, !text.isEmpty {
+            return true
+        }
+        // Check if we have attachments
+        if let item = extensionContext?.inputItems.first as? NSExtensionItem,
+           let attachments = item.attachments,
+           !attachments.isEmpty {
+            return true
+        }
+        return false
+    }
+    
+    override func didSelectPost() {
+        // Get the shared content
+        guard let extensionItem = extensionContext?.inputItems.first as? NSExtensionItem else {
+            self.extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
+            return
+        }
+        
+        // Process different types of shared content
+        for itemProvider in extensionItem.attachments ?? [] {
+            if itemProvider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) {
+                itemProvider.loadItem(forTypeIdentifier: UTType.plainText.identifier, options: nil) { [weak self] (item, error) in
+                    if let text = item as? String {
+                        self?.handleSharedText(text)
+                    }
+                }
+            } else if itemProvider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
+                itemProvider.loadItem(forTypeIdentifier: UTType.url.identifier, options: nil) { [weak self] (item, error) in
+                    if let url = item as? URL {
+                        self?.handleSharedURL(url)
+                    }
+                }
+            } else if itemProvider.hasItemConformingToTypeIdentifier(UTType.image.identifier) {
+                itemProvider.loadItem(forTypeIdentifier: UTType.image.identifier, options: nil) { [weak self] (item, error) in
+                    if let image = item as? UIImage {
+                        self?.handleSharedImage(image)
+                    } else if let data = item as? Data {
+                        if let image = UIImage(data: data) {
+                            self?.handleSharedImage(image)
+                        }
+                    }
+                }
+            }
+        }
+        
+        // If we have content text, share it
+        if let text = contentText, !text.isEmpty {
+            handleSharedText(text)
+        }
+        
+        // Complete the share action
+        self.extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
+    }
+    
+    override func configurationItems() -> [Any]! {
+        // No configuration items needed
+        return []
+    }
+    
+    // MARK: - Helper Methods
+    
+    private func handleSharedText(_ text: String) {
+        // Save to shared user defaults to pass to main app
+        saveToSharedDefaults(content: text, type: "text")
+        openMainApp()
+    }
+    
+    private func handleSharedURL(_ url: URL) {
+        // Convert URL to text and share
+        let text = url.absoluteString
+        saveToSharedDefaults(content: text, type: "url")
+        openMainApp()
+    }
+    
+    private func handleSharedImage(_ image: UIImage) {
+        // For now, we'll just notify that image sharing isn't supported
+        // In the future, we could implement image sharing via the mesh
+        saveToSharedDefaults(content: "Image sharing coming soon!", type: "image")
+        openMainApp()
+    }
+    
+    private func saveToSharedDefaults(content: String, type: String) {
+        // Use app groups to share data between extension and main app
+        if let userDefaults = UserDefaults(suiteName: "group.chat.bitchat") {
+            userDefaults.set(content, forKey: "sharedContent")
+            userDefaults.set(type, forKey: "sharedContentType")
+            userDefaults.set(Date(), forKey: "sharedContentDate")
+            userDefaults.synchronize()
+        }
+    }
+    
+    private func openMainApp() {
+        // Note: Share extensions cannot directly open the containing app
+        // The user will need to tap on the notification or manually open the app
+        // to see the shared content
+    }
+}
