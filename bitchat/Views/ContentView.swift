@@ -7,6 +7,9 @@
 //
 
 import SwiftUI
+#if os(iOS)
+import UIKit
+#endif
 
 struct ContentView: View {
     @EnvironmentObject var viewModel: ChatViewModel
@@ -164,6 +167,30 @@ struct ContentView: View {
         } message: {
             Text("The password you entered is incorrect. Please try again.")
         }
+        .alert("Bluetooth Permission Required", isPresented: $viewModel.showBluetoothPermissionAlert) {
+            if viewModel.bluetoothAuthorizationStatus == "denied" {
+                Button("Open Settings") {
+                    viewModel.openAppSettings()
+                }
+                Button("Cancel", role: .cancel) { }
+            } else {
+                Button("OK", role: .cancel) { }
+            }
+        } message: {
+            if viewModel.bluetoothAuthorizationStatus == "denied" {
+                Text("bitchat needs Bluetooth permission to connect with nearby users. Please enable Bluetooth in Settings.")
+            } else if viewModel.bluetoothAuthorizationStatus == "restricted" {
+                Text("Bluetooth access is restricted on this device. bitchat requires Bluetooth to function.")
+            } else {
+                Text("Bluetooth permission is required for bitchat to work.")
+            }
+        }
+        #if os(iOS)
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            // Check Bluetooth permission when app becomes active (returning from Settings)
+            viewModel.refreshBluetoothStatus()
+        }
+        #endif
     }
     
     private var headerView: some View {

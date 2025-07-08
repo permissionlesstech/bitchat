@@ -11,6 +11,7 @@ import SwiftUI
 import Combine
 import CryptoKit
 import CommonCrypto
+import CoreBluetooth
 #if os(iOS)
 import UIKit
 #endif
@@ -51,6 +52,10 @@ class ChatViewModel: ObservableObject {
     @Published var savedChannels: Set<String> = []  // Channels saved for message retention
     @Published var retentionEnabledChannels: Set<String> = []  // Channels where owner enabled retention for all members
     
+    // Bluetooth permission handling
+    @Published var showBluetoothPermissionAlert: Bool = false
+    @Published var bluetoothAuthorizationStatus: String = "notDetermined"
+    
     let meshService = BluetoothMeshService()
     private let userDefaults = UserDefaults.standard
     private let nicknameKey = "bitchat.nickname"
@@ -83,10 +88,8 @@ class ChatViewModel: ObservableObject {
         savedChannels = MessageRetentionService.shared.getFavoriteChannels()
         meshService.delegate = self
         
-        // Log startup info
-        
-        // Start mesh service immediately
-        meshService.startServices()
+        // Check Bluetooth permission and start services if enabled
+        checkBluetoothPermissionAndStartServices()
         
         // Set up message retry service
         MessageRetryService.shared.meshService = meshService
@@ -3035,6 +3038,53 @@ extension ChatViewModel: BitchatDelegate {
                 }
             }
         }
+    }
+    
+    
+    func checkBluetoothPermissionAndStartServices() {
+        #if os(iOS)
+        // On iOS 13+, we need to check for Bluetooth authorization
+        if #available(iOS 13.0, *) {
+            switch CBCentralManager.authorization {
+            case .notDetermined:
+                // Permission not yet requested, it will be requested when we create CBCentralManager
+                bluetoothAuthorizationStatus = "notDetermined"
+                // Start services which will trigger permission prompt
+                meshService.startServices()
+            case .restricted:
+                bluetoothAuthorizationStatus = "restricted"
+                showBluetoothPermissionAlert = true
+            case .denied:
+                bluetoothAuthorizationStatus = "denied"
+                showBluetoothPermissionAlert = true
+            case .allowedAlways:
+                bluetoothAuthorizationStatus = "authorized"
+                meshService.startServices()
+            @unknown default:
+                bluetoothAuthorizationStatus = "unknown"
+                meshService.startServices()
+            }
+        } else {
+            // iOS 12 and earlier don't have explicit Bluetooth permissions
+            meshService.startServices()
+        }
+        #else
+        // macOS doesn't require explicit Bluetooth permissions
+        meshService.startServices()
+        #endif
+    }
+    
+    func openAppSettings() {
+        #if os(iOS)
+        if let settingsURL = URL(string: UIApplication.openSettingsURLString) {
+            UIApplication.shared.open(settingsURL)
+        }
+        #endif
+    }
+    
+    func refreshBluetoothStatus() {
+        // Called when returning from settings
+        checkBluetoothPermission()
     }
     
 }
