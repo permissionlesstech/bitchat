@@ -3084,7 +3084,7 @@ extension ChatViewModel: BitchatDelegate {
     
     func refreshBluetoothStatus() {
         // Called when returning from settings
-        checkBluetoothPermission()
+        checkBluetoothPermissionAndStartServices()
     }
     
 }

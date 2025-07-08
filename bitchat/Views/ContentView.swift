@@ -167,7 +167,7 @@ struct ContentView: View {
         } message: {
             Text("The password you entered is incorrect. Please try again.")
         }
-        .alert("Bluetooth Permission Required", isPresented: $viewModel.showBluetoothPermissionAlert) {
+        .alert("Bitchat Needs Bluetooth Access", isPresented: $viewModel.showBluetoothPermissionAlert) {
             if viewModel.bluetoothAuthorizationStatus == "denied" {
                 Button("Open Settings") {
                     viewModel.openAppSettings()
@@ -178,7 +178,7 @@ struct ContentView: View {
             }
         } message: {
             if viewModel.bluetoothAuthorizationStatus == "denied" {
-                Text("bitchat needs Bluetooth permission to connect with nearby users. Please enable Bluetooth in Settings.")
+                Text("Bitchat needs Bluetooth permission to connect with nearby users. Please enable Bluetooth in Settings.")
             } else if viewModel.bluetoothAuthorizationStatus == "restricted" {
                 Text("Bluetooth access is restricted on this device. bitchat requires Bluetooth to function.")
             } else {
