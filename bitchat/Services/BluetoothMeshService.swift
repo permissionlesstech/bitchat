@@ -101,8 +101,8 @@ class BluetoothMeshService: NSObject {
     private var advertisingTimer: Timer?  // Timer for interval-based advertising
     
     // Timing randomization for privacy
-    private let minMessageDelay: TimeInterval = 0.05  // 50ms minimum
-    private let maxMessageDelay: TimeInterval = 0.5   // 500ms maximum
+    private let minMessageDelay: TimeInterval = 0.01  // 10ms minimum for faster sync
+    private let maxMessageDelay: TimeInterval = 0.1   // 100ms maximum for faster sync
     
     // Fragment handling
     private var incomingFragments: [String: [Int: Data]] = [:]  // fragmentID -> [index: data]
@@ -372,7 +372,7 @@ class BluetoothMeshService: NSObject {
         }
         
         // Send initial announces after services are ready
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
             self?.sendBroadcastAnnounce()
         }
         
@@ -401,7 +401,7 @@ class BluetoothMeshService: NSObject {
         }
         
         // Send multiple times for reliability with jittered delays
-        for baseDelay in [0.5, 1.0, 2.0] {
+        for baseDelay in [0.2, 0.5, 1.0] {
             let jitteredDelay = baseDelay + self.randomDelay()
             DispatchQueue.main.asyncAfter(deadline: .now() + jitteredDelay) { [weak self] in
                 guard let self = self else { return }
@@ -495,10 +495,9 @@ class BluetoothMeshService: NSObject {
         self.characteristic = characteristic
     }
     
-    func sendMessage(_ content: String, mentions: [String] = [], channel: String? = nil, to recipientID: String? = nil) {
+    func sendMessage(_ content: String, mentions: [String] = [], channel: String? = nil, to recipientID: String? = nil, messageID: String? = nil, timestamp: Date? = nil) {
         // Defensive check for empty content
         guard !content.isEmpty else { return }
-        
         messageQueue.async { [weak self] in
             guard let self = self else { return }
             
@@ -506,9 +505,10 @@ class BluetoothMeshService: NSObject {
             let senderNick = nickname?.nickname ?? self.myPeerID
             
             let message = BitchatMessage(
+                id: messageID,
                 sender: senderNick,
                 content: content,
-                timestamp: Date(),
+                timestamp: timestamp ?? Date(),
                 isRelay: false,
                 originalSender: nil,
                 isPrivate: false,
@@ -818,7 +818,7 @@ class BluetoothMeshService: NSObject {
         }
     }
     
-    func sendEncryptedChannelMessage(_ content: String, mentions: [String], channel: String, channelKey: SymmetricKey) {
+    func sendEncryptedChannelMessage(_ content: String, mentions: [String], channel: String, channelKey: SymmetricKey, messageID: String? = nil, timestamp: Date? = nil) {
         messageQueue.async { [weak self] in
             guard let self = self else { return }
             
@@ -839,9 +839,10 @@ class BluetoothMeshService: NSObject {
                 
                 // Create message with encrypted content
                 let message = BitchatMessage(
+                    id: messageID,
                     sender: senderNick,
                     content: "",  // Empty placeholder since actual content is encrypted
-                    timestamp: Date(),
+                    timestamp: timestamp ?? Date(),
                     isRelay: false,
                     originalSender: nil,
                     isPrivate: false,
@@ -1221,7 +1222,7 @@ class BluetoothMeshService: NSObject {
             
             // Send cached messages with slight delay between each
             for (index, storedMessage) in messagesToSend.enumerated() {
-                let delay = Double(index) * 0.1 // 100ms between messages
+                let delay = Double(index) * 0.02 // 20ms between messages for faster sync
                 
                 DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak peripheral] in
                     guard let peripheral = peripheral,
@@ -1275,8 +1276,10 @@ class BluetoothMeshService: NSObject {
     private func broadcastPacket(_ packet: BitchatPacket) {
         guard let data = packet.toBinaryData() else { 
             // print("[ERROR] Failed to convert packet to binary data")
-            // Add to retry queue if this is a message packet
-            if packet.type == MessageType.message.rawValue,
+            // Add to retry queue if this is a message packet AND it's our own message
+            if let senderID = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8),
+               senderID == self.myPeerID,
+               packet.type == MessageType.message.rawValue,
                let message = BitchatMessage.fromBinaryPayload(packet.payload) {
                 MessageRetryService.shared.addMessageForRetry(
                     content: message.content,
@@ -1284,7 +1287,10 @@ class BluetoothMeshService: NSObject {
                     channel: message.channel,
                     isPrivate: message.isPrivate,
                     recipientPeerID: nil,
-                    recipientNickname: message.recipientNickname
+                    recipientNickname: message.recipientNickname,
+                    channelKey: nil,
+                    originalMessageID: message.id,
+                    originalTimestamp: message.timestamp
                 )
             }
             return 
@@ -1331,29 +1337,36 @@ class BluetoothMeshService: NSObject {
             }
         }
         
-        // If no peers received the message, add to retry queue
+        // If no peers received the message, add to retry queue ONLY if it's our own message
         if sentToPeripherals == 0 && sentToCentrals == 0 {
-            if packet.type == MessageType.message.rawValue,
-               let message = BitchatMessage.fromBinaryPayload(packet.payload) {
-                // For encrypted channel messages, we need to preserve the channel key
-                var channelKeyData: Data? = nil
-                if let channel = message.channel, message.isEncrypted {
-                    // This is an encrypted channel message
-                    if let viewModel = delegate as? ChatViewModel,
-                       let channelKey = viewModel.channelKeys[channel] {
-                        channelKeyData = channelKey.withUnsafeBytes { Data($0) }
+            // Check if this packet originated from us
+            if let senderID = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8),
+               senderID == self.myPeerID {
+                // This is our own message that failed to send
+                if packet.type == MessageType.message.rawValue,
+                   let message = BitchatMessage.fromBinaryPayload(packet.payload) {
+                    // For encrypted channel messages, we need to preserve the channel key
+                    var channelKeyData: Data? = nil
+                    if let channel = message.channel, message.isEncrypted {
+                        // This is an encrypted channel message
+                        if let viewModel = delegate as? ChatViewModel,
+                           let channelKey = viewModel.channelKeys[channel] {
+                            channelKeyData = channelKey.withUnsafeBytes { Data($0) }
+                        }
                     }
+                    
+                    MessageRetryService.shared.addMessageForRetry(
+                        content: message.content,
+                        mentions: message.mentions,
+                        channel: message.channel,
+                        isPrivate: message.isPrivate,
+                        recipientPeerID: nil,
+                        recipientNickname: message.recipientNickname,
+                        channelKey: channelKeyData,
+                        originalMessageID: message.id,
+                        originalTimestamp: message.timestamp
+                    )
                 }
-                
-                MessageRetryService.shared.addMessageForRetry(
-                    content: message.content,
-                    mentions: message.mentions,
-                    channel: message.channel,
-                    isPrivate: message.isPrivate,
-                    recipientPeerID: nil,
-                    recipientNickname: message.recipientNickname,
-                    channelKey: channelKeyData
-                )
             }
         }
     }
@@ -1759,11 +1772,9 @@ class BluetoothMeshService: NSObject {
                     // Send announce with our nickname immediately
                     self.sendAnnouncementToPeer(senderID)
                     
-                    // Delay sending cached messages to ensure connection is fully established
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                        // Check if this peer has cached messages (especially for favorites)
-                        self?.sendCachedMessages(to: senderID)
-                    }
+                    // Send cached messages immediately for faster sync
+                    // Check if this peer has cached messages (especially for favorites)
+                    self.sendCachedMessages(to: senderID)
                 }
             }
             

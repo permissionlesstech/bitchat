@@ -12,6 +12,8 @@ import CryptoKit
 
 struct RetryableMessage {
     let id: String
+    let originalMessageID: String? 
+    let originalTimestamp: Date?
     let content: String
     let mentions: [String]?
     let channel: String?
@@ -29,7 +31,7 @@ class MessageRetryService {
     
     private var retryQueue: [RetryableMessage] = []
     private var retryTimer: Timer?
-    private let retryInterval: TimeInterval = 5.0 // Retry every 5 seconds
+    private let retryInterval: TimeInterval = 2.0 // Retry every 2 seconds for faster sync
     private let maxQueueSize = 50
     
     weak var meshService: BluetoothMeshService?
@@ -55,15 +57,34 @@ class MessageRetryService {
         isPrivate: Bool = false,
         recipientPeerID: String? = nil,
         recipientNickname: String? = nil,
-        channelKey: Data? = nil
+        channelKey: Data? = nil,
+        originalMessageID: String? = nil,
+        originalTimestamp: Date? = nil
     ) {
+        // Don't queue empty or whitespace-only messages
+        guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return
+        }
+        
         // Don't queue if we're at capacity
         guard retryQueue.count < maxQueueSize else {
             return
         }
         
+        // Check if this message is already in the queue
+        if let messageID = originalMessageID {
+            let alreadyQueued = retryQueue.contains { msg in
+                msg.originalMessageID == messageID
+            }
+            if alreadyQueued {
+                return // Don't add duplicate
+            }
+        }
+        
         let retryMessage = RetryableMessage(
             id: UUID().uuidString,
+            originalMessageID: originalMessageID,
+            originalTimestamp: originalTimestamp,
             content: content,
             mentions: mentions,
             channel: channel,
@@ -76,10 +97,17 @@ class MessageRetryService {
         )
         
         retryQueue.append(retryMessage)
+        
+        // Sort the queue by original timestamp to maintain message order
+        retryQueue.sort { (msg1, msg2) in
+            let time1 = msg1.originalTimestamp ?? Date.distantPast
+            let time2 = msg2.originalTimestamp ?? Date.distantPast
+            return time1 < time2
+        }
     }
     
     private func processRetryQueue() {
-        guard let meshService = meshService else { return }
+        guard meshService != nil else { return }
         
         let now = Date()
         var messagesToRetry: [RetryableMessage] = []
@@ -95,95 +123,123 @@ class MessageRetryService {
         
         retryQueue = updatedQueue
         
-        for message in messagesToRetry {
+        // Sort messages by original timestamp to maintain order
+        messagesToRetry.sort { (msg1, msg2) in
+            let time1 = msg1.originalTimestamp ?? Date.distantPast
+            let time2 = msg2.originalTimestamp ?? Date.distantPast
+            return time1 < time2
+        }
+        
+        // Send messages with delay to maintain order
+        for (index, message) in messagesToRetry.enumerated() {
             // Check if we should still retry
             if message.retryCount >= message.maxRetries {
                 continue
             }
             
-            // Check connectivity before retrying
-            let viewModel = meshService.delegate as? ChatViewModel
-            let connectedPeers = viewModel?.connectedPeers ?? []
+            // Add delay between messages to ensure proper ordering
+            let delay = Double(index) * 0.05 // 50ms between messages
             
-            if message.isPrivate {
-                // For private messages, check if recipient is connected
-                if let recipientID = message.recipientPeerID,
-                   connectedPeers.contains(recipientID) {
-                    // Retry private message
-                    meshService.sendPrivateMessage(
-                        message.content,
-                        to: recipientID,
-                        recipientNickname: message.recipientNickname ?? "unknown"
-                    )
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self = self,
+                      let meshService = self.meshService else { return }
+                
+                // Check connectivity before retrying
+                let viewModel = meshService.delegate as? ChatViewModel
+                let connectedPeers = viewModel?.connectedPeers ?? []
+                
+                if message.isPrivate {
+                    // For private messages, check if recipient is connected
+                    if let recipientID = message.recipientPeerID,
+                       connectedPeers.contains(recipientID) {
+                        // Retry private message
+                        meshService.sendPrivateMessage(
+                            message.content,
+                            to: recipientID,
+                            recipientNickname: message.recipientNickname ?? "unknown",
+                            messageID: message.originalMessageID
+                        )
+                    } else {
+                        // Recipient not connected, keep in queue with updated retry time
+                        var updatedMessage = message
+                        updatedMessage = RetryableMessage(
+                            id: message.id,
+                            originalMessageID: message.originalMessageID,
+                            originalTimestamp: message.originalTimestamp,
+                            content: message.content,
+                            mentions: message.mentions,
+                            channel: message.channel,
+                            isPrivate: message.isPrivate,
+                            recipientPeerID: message.recipientPeerID,
+                            recipientNickname: message.recipientNickname,
+                            channelKey: message.channelKey,
+                            retryCount: message.retryCount + 1,
+                            nextRetryTime: Date().addingTimeInterval(self.retryInterval * Double(message.retryCount + 2))
+                        )
+                        self.retryQueue.append(updatedMessage)
+                    }
+                } else if let channel = message.channel, let channelKeyData = message.channelKey {
+                    // For channel messages, check if we have peers in the channel
+                    if !connectedPeers.isEmpty {
+                        // Recreate SymmetricKey from data
+                        let channelKey = SymmetricKey(data: channelKeyData)
+                        meshService.sendEncryptedChannelMessage(
+                            message.content,
+                            mentions: message.mentions ?? [],
+                            channel: channel,
+                            channelKey: channelKey,
+                            messageID: message.originalMessageID,
+                            timestamp: message.originalTimestamp
+                        )
+                    } else {
+                        // No peers connected, keep in queue
+                        var updatedMessage = message
+                        updatedMessage = RetryableMessage(
+                            id: message.id,
+                            originalMessageID: message.originalMessageID,
+                            originalTimestamp: message.originalTimestamp,
+                            content: message.content,
+                            mentions: message.mentions,
+                            channel: message.channel,
+                            isPrivate: message.isPrivate,
+                            recipientPeerID: message.recipientPeerID,
+                            recipientNickname: message.recipientNickname,
+                            channelKey: message.channelKey,
+                            retryCount: message.retryCount + 1,
+                            nextRetryTime: Date().addingTimeInterval(self.retryInterval * Double(message.retryCount + 2))
+                        )
+                        self.retryQueue.append(updatedMessage)
+                    }
                 } else {
-                    // Recipient not connected, keep in queue with updated retry time
-                    var updatedMessage = message
-                    updatedMessage = RetryableMessage(
-                        id: message.id,
-                        content: message.content,
-                        mentions: message.mentions,
-                        channel: message.channel,
-                        isPrivate: message.isPrivate,
-                        recipientPeerID: message.recipientPeerID,
-                        recipientNickname: message.recipientNickname,
-                        channelKey: message.channelKey,
-                        retryCount: message.retryCount + 1,
-                        nextRetryTime: Date().addingTimeInterval(retryInterval * Double(message.retryCount + 2))
-                    )
-                    retryQueue.append(updatedMessage)
-                }
-            } else if let channel = message.channel, let channelKeyData = message.channelKey {
-                // For channel messages, check if we have peers in the channel
-                if !connectedPeers.isEmpty {
-                    // Recreate SymmetricKey from data
-                    let channelKey = SymmetricKey(data: channelKeyData)
-                    meshService.sendEncryptedChannelMessage(
-                        message.content,
-                        mentions: message.mentions ?? [],
-                        channel: channel,
-                        channelKey: channelKey
-                    )
-                } else {
-                    // No peers connected, keep in queue
-                    var updatedMessage = message
-                    updatedMessage = RetryableMessage(
-                        id: message.id,
-                        content: message.content,
-                        mentions: message.mentions,
-                        channel: message.channel,
-                        isPrivate: message.isPrivate,
-                        recipientPeerID: message.recipientPeerID,
-                        recipientNickname: message.recipientNickname,
-                        channelKey: message.channelKey,
-                        retryCount: message.retryCount + 1,
-                        nextRetryTime: Date().addingTimeInterval(retryInterval * Double(message.retryCount + 2))
-                    )
-                    retryQueue.append(updatedMessage)
-                }
-            } else {
-                // Regular message
-                if !connectedPeers.isEmpty {
-                    meshService.sendMessage(
-                        message.content,
-                        mentions: message.mentions ?? [],
-                        channel: message.channel
-                    )
-                } else {
-                    // No peers connected, keep in queue
-                    var updatedMessage = message
-                    updatedMessage = RetryableMessage(
-                        id: message.id,
-                        content: message.content,
-                        mentions: message.mentions,
-                        channel: message.channel,
-                        isPrivate: message.isPrivate,
-                        recipientPeerID: message.recipientPeerID,
-                        recipientNickname: message.recipientNickname,
-                        channelKey: message.channelKey,
-                        retryCount: message.retryCount + 1,
-                        nextRetryTime: Date().addingTimeInterval(retryInterval * Double(message.retryCount + 2))
-                    )
-                    retryQueue.append(updatedMessage)
+                    // Regular message
+                    if !connectedPeers.isEmpty {
+                        meshService.sendMessage(
+                            message.content,
+                            mentions: message.mentions ?? [],
+                            channel: message.channel,
+                            to: nil,
+                            messageID: message.originalMessageID,
+                            timestamp: message.originalTimestamp
+                        )
+                    } else {
+                        // No peers connected, keep in queue
+                        var updatedMessage = message
+                        updatedMessage = RetryableMessage(
+                            id: message.id,
+                            originalMessageID: message.originalMessageID,
+                            originalTimestamp: message.originalTimestamp,
+                            content: message.content,
+                            mentions: message.mentions,
+                            channel: message.channel,
+                            isPrivate: message.isPrivate,
+                            recipientPeerID: message.recipientPeerID,
+                            recipientNickname: message.recipientNickname,
+                            channelKey: message.channelKey,
+                            retryCount: message.retryCount + 1,
+                            nextRetryTime: Date().addingTimeInterval(self.retryInterval * Double(message.retryCount + 2))
+                        )
+                        self.retryQueue.append(updatedMessage)
+                    }
                 }
             }
         }
