@@ -71,6 +71,16 @@ class MessageRetryService {
             return
         }
         
+        // Check if this message is already in the queue
+        if let messageID = originalMessageID {
+            let alreadyQueued = retryQueue.contains { msg in
+                msg.originalMessageID == messageID
+            }
+            if alreadyQueued {
+                return // Don't add duplicate
+            }
+        }
+        
         let retryMessage = RetryableMessage(
             id: UUID().uuidString,
             originalMessageID: originalMessageID,
@@ -97,7 +107,7 @@ class MessageRetryService {
     }
     
     private func processRetryQueue() {
-        guard let meshService = meshService else { return }
+        guard meshService != nil else { return }
         
         let now = Date()
         var messagesToRetry: [RetryableMessage] = []
