@@ -111,9 +111,27 @@ class ShareViewController: SLComposeServiceViewController {
     }
     
     private func handleSharedURL(_ url: URL) {
-        // Convert URL to text and share
-        let text = url.absoluteString
-        saveToSharedDefaults(content: text, type: "url")
+        // Get the page title if available from the extension context
+        var pageTitle: String? = nil
+        if let item = extensionContext?.inputItems.first as? NSExtensionItem {
+            pageTitle = item.attributedContentText?.string ?? item.attributedTitle?.string
+        }
+        
+        // Create a structured format for URL sharing
+        let urlData: [String: String] = [
+            "url": url.absoluteString,
+            "title": pageTitle ?? url.host ?? "Shared Link"
+        ]
+        
+        // Convert to JSON string
+        if let jsonData = try? JSONSerialization.data(withJSONObject: urlData),
+           let jsonString = String(data: jsonData, encoding: .utf8) {
+            saveToSharedDefaults(content: jsonString, type: "url")
+        } else {
+            // Fallback to simple URL
+            saveToSharedDefaults(content: url.absoluteString, type: "url")
+        }
+        
         openMainApp()
     }
     
