@@ -40,5 +40,16 @@
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>bitchat</string>
+			</array>
+			<key>CFBundleURLName</key>
+			<string>chat.bitchat</string>
+		</dict>
+	</array>
 </dict>
 </plist>
