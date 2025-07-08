@@ -3304,7 +3304,6 @@ extension ChatViewModel: BitchatDelegate {
     }
     
     // Toggle screenshot protection for private chats
-    // Toggle screenshot protection for private chats
     func togglePrivateChatScreenshotProtection(_ enabled: Bool) {
         guard let peerID = selectedPrivateChatPeer,
               let fingerprint = peerIDToPublicKeyFingerprint[peerID],
