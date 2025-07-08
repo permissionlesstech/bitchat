@@ -35,6 +35,12 @@ struct BitchatApp: App {
                 .onOpenURL { url in
                     handleURL(url)
                 }
+                #if os(iOS)
+                .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                    // Check for shared content when app becomes active
+                    checkForSharedContent()
+                }
+                #endif
         }
         #if os(macOS)
         .windowStyle(.hiddenTitleBar)
@@ -51,9 +57,14 @@ struct BitchatApp: App {
     
     private func checkForSharedContent() {
         // Check app group for shared content from extension
-        guard let userDefaults = UserDefaults(suiteName: "group.chat.bitchat"),
-              let sharedContent = userDefaults.string(forKey: "sharedContent"),
+        guard let userDefaults = UserDefaults(suiteName: "group.chat.bitchat") else {
+            print("Failed to access app group UserDefaults")
+            return
+        }
+        
+        guard let sharedContent = userDefaults.string(forKey: "sharedContent"),
               let sharedDate = userDefaults.object(forKey: "sharedContentDate") as? Date else {
+            print("No shared content found in UserDefaults")
             return
         }
         
