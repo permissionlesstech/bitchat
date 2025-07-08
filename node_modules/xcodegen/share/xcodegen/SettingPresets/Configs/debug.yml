@@ -1,0 +1,14 @@
+---
+# Settings take from the following file and sorted
+# /Applications/Xcode.app/Contents/Developer/Library/Xcode/Templates/Project Templates/Base/Base_ProjectSettings.xctemplate/TemplateInfo.plist
+DEBUG_INFORMATION_FORMAT: dwarf
+ENABLE_TESTABILITY: YES
+GCC_DYNAMIC_NO_PIC: NO
+GCC_OPTIMIZATION_LEVEL: '0'
+GCC_PREPROCESSOR_DEFINITIONS: ["$(inherited)", "DEBUG=1"]
+MTL_ENABLE_DEBUG_INFO: YES
+ONLY_ACTIVE_ARCH: YES
+
+# Swift Settings
+SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+SWIFT_OPTIMIZATION_LEVEL: -Onone

@@ -1,0 +1,3 @@
+TARGETED_DEVICE_FAMILY: 3
+LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks"
+SDKROOT: appletvos
