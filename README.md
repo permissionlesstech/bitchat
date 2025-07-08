@@ -1,13 +1,13 @@
-# BitChat Secure - Security-Hardened Fork
+# BitChat: Now with Extra Bits of Security™
 
-**A security-focused fork addressing critical vulnerabilities in the original BitChat application**
+**The original BitChat, but we flipped all the security bits from 0 to 1**
 
 **Author**: Lance James, Unit 221B  
 **Contact**: lancejames@unit221b.com
 
 ## IMPORTANT SECURITY NOTICE
 
-This is a security-hardened fork of the original BitChat application. During a comprehensive security audit, we discovered multiple critical vulnerabilities that could compromise user communications. This fork implements essential security fixes to protect users.
+This is a security-hardened fork of the original BitChat application. We took BitChat and added a few more bits - specifically, the security bits that were missing. During our audit, we found the app was transmitting security in cleartext (aka not at all). This fork implements essential fixes because every bit counts, especially the secure ones.
 
 **See [SECURITY_DISCLOSURE.md](SECURITY_DISCLOSURE.md) for full vulnerability details.**
 
