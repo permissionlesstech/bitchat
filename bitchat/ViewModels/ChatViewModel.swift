@@ -36,36 +36,38 @@ class ChatViewModel {
     var autocompleteRange: NSRange? = nil
     var selectedAutocompleteIndex: Int = 0
     
-    // Room support
-    var joinedRooms: Set<String> = []  // Set of room hashtags
-    var currentRoom: String? = nil  // Currently selected room
-    var roomMessages: [String: [BitchatMessage]] = [:]  // room -> messages
-    var unreadRoomMessages: [String: Int] = [:]  // room -> unread count
-    var roomMembers: [String: Set<String>] = [:]  // room -> set of peer IDs who have sent messages
-    var roomPasswords: [String: String] = [:]  // room -> password (stored locally only)
-    var roomKeys: [String: SymmetricKey] = [:]  // room -> derived encryption key
-    var passwordProtectedRooms: Set<String> = []  // Set of rooms that require passwords
-    var roomCreators: [String: String] = [:]  // room -> creator peerID
-    var roomKeyCommitments: [String: String] = [:]  // room -> SHA256(derivedKey) for verification
+    // Channel support
+    var joinedChannels: Set<String> = []  // Set of channel hashtags
+    var currentChannel: String? = nil  // Currently selected channel
+    var channelMessages: [String: [BitchatMessage]] = [:]  // channel -> messages
+    var unreadChannelMessages: [String: Int] = [:]  // channel -> unread count
+    var channelMembers: [String: Set<String>] = [:]  // channel -> set of peer IDs who have sent messages
+    var channelPasswords: [String: String] = [:]  // channel -> password (stored locally only)
+    var channelKeys: [String: SymmetricKey] = [:]  // channel -> derived encryption key
+    var passwordProtectedChannels: Set<String> = []  // Set of channels that require passwords
+    var channelCreators: [String: String] = [:]  // channel -> creator peerID
+    var channelKeyCommitments: [String: String] = [:]  // channel -> SHA256(derivedKey) for verification
     var showPasswordPrompt: Bool = false
-    var passwordPromptRoom: String? = nil
-    var savedRooms: Set<String> = []  // Rooms saved for message retention
-    var retentionEnabledRooms: Set<String> = []  // Rooms where owner enabled retention for all members
+    var passwordPromptChannel: String? = nil
+    var savedChannels: Set<String> = []  // Channels saved for message retention
+    var retentionEnabledChannels: Set<String> = []  // Channels where owner enabled retention for all members
     
     let meshService = BluetoothMeshService()
     private let userDefaults = UserDefaults.standard
     private let nicknameKey = "bitchat.nickname"
     private let favoritesKey = "bitchat.favorites"
-    private let joinedRoomsKey = "bitchat.joinedRooms"
-    private let passwordProtectedRoomsKey = "bitchat.passwordProtectedRooms"
-    private let roomCreatorsKey = "bitchat.roomCreators"
-    // private let roomPasswordsKey = "bitchat.roomPasswords" // Now using Keychain
-    private let roomKeyCommitmentsKey = "bitchat.roomKeyCommitments"
-    private let retentionEnabledRoomsKey = "bitchat.retentionEnabledRooms"
+    private let joinedChannelsKey = "bitchat.joinedChannels"
+    private let passwordProtectedChannelsKey = "bitchat.passwordProtectedChannels"
+    private let channelCreatorsKey = "bitchat.channelCreators"
+    // private let channelPasswordsKey = "bitchat.channelPasswords" // Now using Keychain
+    private let channelKeyCommitmentsKey = "bitchat.channelKeyCommitments"
+    private let retentionEnabledChannelsKey = "bitchat.retentionEnabledChannels"
+    private let blockedUsersKey = "bitchat.blockedUsers"
     private var nicknameSaveTimer: Timer?
     
     var favoritePeers: Set<String> = []  // Now stores public key fingerprints instead of peer IDs
     private var peerIDToPublicKeyFingerprint: [String: String] = [:]  // Maps ephemeral peer IDs to persistent fingerprints
+    private var blockedUsers: Set<String> = []  // Stores public key fingerprints of blocked users
     
     // Messages are naturally ephemeral - no persistent storage
     
@@ -75,10 +77,11 @@ class ChatViewModel {
     init() {
         loadNickname()
         loadFavorites()
-        loadJoinedRooms()
-        loadRoomData()
-        // Load saved rooms state
-        savedRooms = MessageRetentionService.shared.getFavoriteRooms()
+        loadJoinedChannels()
+        loadChannelData()
+        loadBlockedUsers()
+        // Load saved channels state
+        savedChannels = MessageRetentionService.shared.getFavoriteChannels()
         meshService.delegate = self
         
         // Log startup info
@@ -99,6 +102,20 @@ class ChatViewModel {
                 self?.updateMessageDeliveryStatus(messageID, status: status)
             }
         
+        // Show welcome message after delay if still no peers
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+            guard let self = self else { return }
+            if self.connectedPeers.isEmpty && self.messages.isEmpty {
+                let welcomeMessage = BitchatMessage(
+                    sender: "system",
+                    content: "get people around you to download bitchat…and chat with them here!",
+                    timestamp: Date(),
+                    isRelay: false
+                )
+                self.messages.append(welcomeMessage)
+            }
+        }
+        
         // When app becomes active, send read receipts for visible messages
         #if os(macOS)
         NotificationCenter.default.addObserver(
@@ -114,6 +131,14 @@ class ChatViewModel {
             name: UIApplication.didBecomeActiveNotification,
             object: nil
         )
+        
+        // Add screenshot detection for iOS
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(userDidTakeScreenshot),
+            name: UIApplication.userDidTakeScreenshotNotification,
+            object: nil
+        )
         #endif
     }
     
@@ -121,7 +146,7 @@ class ChatViewModel {
         if let savedNickname = userDefaults.string(forKey: nicknameKey) {
             nickname = savedNickname
         } else {
-            nickname = "user\(Int.random(in: 1000...9999))"
+            nickname = "anon\(Int.random(in: 1000...9999))"
             saveNickname()
         }
     }
@@ -145,93 +170,104 @@ class ChatViewModel {
         userDefaults.synchronize()
     }
     
-    private func loadJoinedRooms() {
-        if let savedRoomsList = userDefaults.stringArray(forKey: joinedRoomsKey) {
-            joinedRooms = Set(savedRoomsList)
-            // Initialize empty data structures for joined rooms
-            for room in joinedRooms {
-                if roomMessages[room] == nil {
-                    roomMessages[room] = []
+    private func loadBlockedUsers() {
+        if let savedBlockedUsers = userDefaults.stringArray(forKey: blockedUsersKey) {
+            blockedUsers = Set(savedBlockedUsers)
+        }
+    }
+    
+    private func saveBlockedUsers() {
+        userDefaults.set(Array(blockedUsers), forKey: blockedUsersKey)
+        userDefaults.synchronize()
+    }
+    
+    private func loadJoinedChannels() {
+        if let savedChannelsList = userDefaults.stringArray(forKey: joinedChannelsKey) {
+            joinedChannels = Set(savedChannelsList)
+            // Initialize empty data structures for joined channels
+            for channel in joinedChannels {
+                if channelMessages[channel] == nil {
+                    channelMessages[channel] = []
                 }
-                if roomMembers[room] == nil {
-                    roomMembers[room] = Set()
+                if channelMembers[channel] == nil {
+                    channelMembers[channel] = Set()
                 }
                 
-                // Load saved messages if this room has retention enabled
-                if retentionEnabledRooms.contains(room) {
-                    let savedMessages = MessageRetentionService.shared.loadMessagesForRoom(room)
+                // Load saved messages if this channel has retention enabled
+                if retentionEnabledChannels.contains(channel) {
+                    let savedMessages = MessageRetentionService.shared.loadMessagesForChannel(channel)
                     if !savedMessages.isEmpty {
-                        roomMessages[room] = savedMessages
+                        channelMessages[channel] = savedMessages
                     }
                 }
             }
         }
     }
     
-    private func saveJoinedRooms() {
-        userDefaults.set(Array(joinedRooms), forKey: joinedRoomsKey)
+    private func saveJoinedChannels() {
+        userDefaults.set(Array(joinedChannels), forKey: joinedChannelsKey)
         userDefaults.synchronize()
     }
     
-    private func loadRoomData() {
-        // Load password protected rooms
-        if let savedProtectedRooms = userDefaults.stringArray(forKey: passwordProtectedRoomsKey) {
-            passwordProtectedRooms = Set(savedProtectedRooms)
+    private func loadChannelData() {
+        // Load password protected channels
+        if let savedProtectedChannels = userDefaults.stringArray(forKey: passwordProtectedChannelsKey) {
+            passwordProtectedChannels = Set(savedProtectedChannels)
         }
         
-        // Load room creators
-        if let savedCreators = userDefaults.dictionary(forKey: roomCreatorsKey) as? [String: String] {
-            roomCreators = savedCreators
+        // Load channel creators
+        if let savedCreators = userDefaults.dictionary(forKey: channelCreatorsKey) as? [String: String] {
+            channelCreators = savedCreators
         }
         
-        // Load room key commitments
-        if let savedCommitments = userDefaults.dictionary(forKey: roomKeyCommitmentsKey) as? [String: String] {
-            roomKeyCommitments = savedCommitments
+        // Load channel key commitments
+        if let savedCommitments = userDefaults.dictionary(forKey: channelKeyCommitmentsKey) as? [String: String] {
+            channelKeyCommitments = savedCommitments
         }
         
-        // Load retention-enabled rooms
-        if let savedRetentionRooms = userDefaults.stringArray(forKey: retentionEnabledRoomsKey) {
-            retentionEnabledRooms = Set(savedRetentionRooms)
+        // Load retention-enabled channels
+        if let savedRetentionChannels = userDefaults.stringArray(forKey: retentionEnabledChannelsKey) {
+            retentionEnabledChannels = Set(savedRetentionChannels)
         }
         
-        // Load room passwords from Keychain
-        let savedPasswords = KeychainManager.shared.getAllRoomPasswords()
-        roomPasswords = savedPasswords
+        // Load channel passwords from Keychain
+        let savedPasswords = KeychainManager.shared.getAllChannelPasswords()
+        channelPasswords = savedPasswords
         // Derive keys for all saved passwords
-        for (room, password) in savedPasswords {
-            roomKeys[room] = deriveRoomKey(from: password, roomName: room)
+        for (channel, password) in savedPasswords {
+            channelKeys[channel] = deriveChannelKey(from: password, channelName: channel)
         }
     }
     
-    private func saveRoomData() {
-        userDefaults.set(Array(passwordProtectedRooms), forKey: passwordProtectedRoomsKey)
-        userDefaults.set(roomCreators, forKey: roomCreatorsKey)
+    private func saveChannelData() {
+        userDefaults.set(Array(passwordProtectedChannels), forKey: passwordProtectedChannelsKey)
+        userDefaults.set(channelCreators, forKey: channelCreatorsKey)
         // Save passwords to Keychain instead of UserDefaults
-        for (room, password) in roomPasswords {
-            _ = KeychainManager.shared.saveRoomPassword(password, for: room)
+        for (channel, password) in channelPasswords {
+            _ = KeychainManager.shared.saveChannelPassword(password, for: channel)
         }
-        userDefaults.set(roomKeyCommitments, forKey: roomKeyCommitmentsKey)
-        userDefaults.set(Array(retentionEnabledRooms), forKey: retentionEnabledRoomsKey)
+        userDefaults.set(channelKeyCommitments, forKey: channelKeyCommitmentsKey)
+        userDefaults.set(Array(retentionEnabledChannels), forKey: retentionEnabledChannelsKey)
         userDefaults.synchronize()
     }
     
-    func joinRoom(_ room: String, password: String? = nil) -> Bool {
-        // Ensure room starts with #
-        let roomTag = room.hasPrefix("#") ? room : "#\(room)"
+    func joinChannel(_ channel: String, password: String? = nil) -> Bool {
+        // Ensure channel starts with #
+        let channelTag = channel.hasPrefix("#") ? channel : "#\(channel)"
         
         
-        // Check if room is already joined and we can access it
-        if joinedRooms.contains(roomTag) {
+        // Check if channel is already joined and we can access it
+        if joinedChannels.contains(channelTag) {
             // Already joined, check if we need password verification
-            if passwordProtectedRooms.contains(roomTag) && roomKeys[roomTag] == nil {
+            if passwordProtectedChannels.contains(channelTag) && channelKeys[channelTag] == nil {
                 if let password = password {
-                    // User provided password for already-joined room - verify it
+                    // User provided password for already-joined channel - verify it
                     
                     // Derive key and try to verify
-                    let key = deriveRoomKey(from: password, roomName: roomTag)
+                    let key = deriveChannelKey(from: password, channelName: channelTag)
                     
                     // First, check if we have a key commitment to verify against
-                    if let expectedCommitment = roomKeyCommitments[roomTag] {
+                    if let expectedCommitment = channelKeyCommitments[channelTag] {
                         let actualCommitment = computeKeyCommitment(for: key)
                         if actualCommitment != expectedCommitment {
                             return false
@@ -239,11 +275,11 @@ class ChatViewModel {
                     }
                     
                     // Check if we have messages to verify against
-                    if let roomMsgs = roomMessages[roomTag], !roomMsgs.isEmpty {
-                        let encryptedMessages = roomMsgs.filter { $0.isEncrypted && $0.encryptedContent != nil }
+                    if let channelMsgs = channelMessages[channelTag], !channelMsgs.isEmpty {
+                        let encryptedMessages = channelMsgs.filter { $0.isEncrypted && $0.encryptedContent != nil }
                         if let encryptedMsg = encryptedMessages.first,
                            let encryptedData = encryptedMsg.encryptedContent {
-                            let testDecrypted = decryptRoomMessage(encryptedData, room: roomTag, testKey: key)
+                            let testDecrypted = decryptChannelMessage(encryptedData, channel: channelTag, testKey: key)
                             if testDecrypted == nil {
                                 return false
                             }
@@ -251,36 +287,36 @@ class ChatViewModel {
                     }
                     
                     // Store the verified key
-                    roomKeys[roomTag] = key
-                    roomPasswords[roomTag] = password
+                    channelKeys[channelTag] = key
+                    channelPasswords[channelTag] = password
                     
-                    // Now switch to the room
-                    switchToRoom(roomTag)
+                    // Now switch to the channel
+                    switchToChannel(channelTag)
                     return true
                 } else {
                     // Need password to access
-                    passwordPromptRoom = roomTag
+                    passwordPromptChannel = channelTag
                     showPasswordPrompt = true
                     return false
                 }
             }
-            // Switch to the room (no password needed)
-            switchToRoom(roomTag)
+            // Switch to the channel (no password needed)
+            switchToChannel(channelTag)
             return true
         }
         
-        // If room is password protected and we don't have the key yet
-        if passwordProtectedRooms.contains(roomTag) && roomKeys[roomTag] == nil {
-            // Allow room creator to bypass password check
-            if roomCreators[roomTag] == meshService.myPeerID {
-                // Room creator should already have the key set when they created the password
+        // If channel is password protected and we don't have the key yet
+        if passwordProtectedChannels.contains(channelTag) && channelKeys[channelTag] == nil {
+            // Allow channel creator to bypass password check
+            if channelCreators[channelTag] == meshService.myPeerID {
+                // Channel creator should already have the key set when they created the password
                 // This is a failsafe - just proceed without password
             } else if let password = password {
                 // Derive key from password
-                let key = deriveRoomKey(from: password, roomName: roomTag)
+                let key = deriveChannelKey(from: password, channelName: channelTag)
                 
                 // First, check if we have a key commitment to verify against
-                if let expectedCommitment = roomKeyCommitments[roomTag] {
+                if let expectedCommitment = channelKeyCommitments[channelTag] {
                     let actualCommitment = computeKeyCommitment(for: key)
                     if actualCommitment != expectedCommitment {
                         return false
@@ -291,14 +327,14 @@ class ChatViewModel {
                 var passwordVerified = false
                 var shouldProceed = true
                 
-                if let roomMsgs = roomMessages[roomTag], !roomMsgs.isEmpty {
+                if let channelMsgs = channelMessages[channelTag], !channelMsgs.isEmpty {
                     // Look for encrypted messages to verify against
-                    let encryptedMessages = roomMsgs.filter { $0.isEncrypted && $0.encryptedContent != nil }
+                    let encryptedMessages = channelMsgs.filter { $0.isEncrypted && $0.encryptedContent != nil }
                     
                     if let encryptedMsg = encryptedMessages.first,
                        let encryptedData = encryptedMsg.encryptedContent {
                         // Test decryption with the derived key
-                        let testDecrypted = decryptRoomMessage(encryptedData, room: roomTag, testKey: key)
+                        let testDecrypted = decryptChannelMessage(encryptedData, channel: channelTag, testKey: key)
                         if testDecrypted == nil {
                             // Password is wrong, can't decrypt
                             shouldProceed = false
@@ -311,19 +347,19 @@ class ChatViewModel {
                         // Add warning message
                         let warningMsg = BitchatMessage(
                             sender: "system",
-                            content: "joined room \(roomTag). password will be verified when encrypted messages arrive.",
+                            content: "joined channel \(channelTag). password will be verified when encrypted messages arrive.",
                             timestamp: Date(),
                             isRelay: false
                         )
                         messages.append(warningMsg)
                     }
                 } else {
-                    // Empty room - accept tentatively
+                    // Empty channel - accept tentatively
                     
                     // Add info message
                     let infoMsg = BitchatMessage(
                         sender: "system",
-                        content: "joined empty room \(roomTag). waiting for encrypted messages to verify password.",
+                        content: "joined empty channel \(channelTag). waiting for encrypted messages to verify password.",
                         timestamp: Date(),
                         isRelay: false
                     )
@@ -336,141 +372,141 @@ class ChatViewModel {
                 }
                 
                 // Store the key (tentatively if not verified)
-                roomKeys[roomTag] = key
-                roomPasswords[roomTag] = password
+                channelKeys[channelTag] = key
+                channelPasswords[channelTag] = password
                 // Save password to Keychain
-                _ = KeychainManager.shared.saveRoomPassword(password, for: roomTag)
+                _ = KeychainManager.shared.saveChannelPassword(password, for: channelTag)
                 
                 if passwordVerified {
                 } else {
                 }
             } else {
-                // Show password prompt and return early - don't join the room yet
-                passwordPromptRoom = roomTag
+                // Show password prompt and return early - don't join the channel yet
+                passwordPromptChannel = channelTag
                 showPasswordPrompt = true
                 return false
             }
         }
         
-        // At this point, room is either not password protected or we don't know yet
+        // At this point, channel is either not password protected or we don't know yet
         
-        joinedRooms.insert(roomTag)
-        saveJoinedRooms()
+        joinedChannels.insert(channelTag)
+        saveJoinedChannels()
         
-        // Only claim creator role if this is a brand new room (no one has announced it as protected)
+        // Only claim creator role if this is a brand new channel (no one has announced it as protected)
         // If it's password protected, someone else already created it
-        if roomCreators[roomTag] == nil && !passwordProtectedRooms.contains(roomTag) {
-            roomCreators[roomTag] = meshService.myPeerID
-            saveRoomData()
+        if channelCreators[channelTag] == nil && !passwordProtectedChannels.contains(channelTag) {
+            channelCreators[channelTag] = meshService.myPeerID
+            saveChannelData()
         }
         
         // Add ourselves as a member
-        if roomMembers[roomTag] == nil {
-            roomMembers[roomTag] = Set()
+        if channelMembers[channelTag] == nil {
+            channelMembers[channelTag] = Set()
         }
-        roomMembers[roomTag]?.insert(meshService.myPeerID)
+        channelMembers[channelTag]?.insert(meshService.myPeerID)
         
-        // Switch to the room
-        currentRoom = roomTag
+        // Switch to the channel
+        currentChannel = channelTag
         selectedPrivateChatPeer = nil  // Exit private chat if in one
         
-        // Clear unread count for this room
-        unreadRoomMessages[roomTag] = 0
+        // Clear unread count for this channel
+        unreadChannelMessages[channelTag] = 0
         
-        // Initialize room messages if needed
-        if roomMessages[roomTag] == nil {
-            roomMessages[roomTag] = []
+        // Initialize channel messages if needed
+        if channelMessages[channelTag] == nil {
+            channelMessages[channelTag] = []
         }
         
-        // Load saved messages if this is a favorite room
-        if MessageRetentionService.shared.getFavoriteRooms().contains(roomTag) {
-            let savedMessages = MessageRetentionService.shared.loadMessagesForRoom(roomTag)
+        // Load saved messages if this is a favorite channel
+        if MessageRetentionService.shared.getFavoriteChannels().contains(channelTag) {
+            let savedMessages = MessageRetentionService.shared.loadMessagesForChannel(channelTag)
             if !savedMessages.isEmpty {
                 // Merge saved messages with current messages, avoiding duplicates
-                var existingMessageIDs = Set(roomMessages[roomTag]?.map { $0.id } ?? [])
+                var existingMessageIDs = Set(channelMessages[channelTag]?.map { $0.id } ?? [])
                 for savedMessage in savedMessages {
                     if !existingMessageIDs.contains(savedMessage.id) {
-                        roomMessages[roomTag]?.append(savedMessage)
+                        channelMessages[channelTag]?.append(savedMessage)
                         existingMessageIDs.insert(savedMessage.id)
                     }
                 }
                 // Sort by timestamp
-                roomMessages[roomTag]?.sort { $0.timestamp < $1.timestamp }
+                channelMessages[channelTag]?.sort { $0.timestamp < $1.timestamp }
             }
         }
         
         // Hide password prompt if it was showing
         showPasswordPrompt = false
-        passwordPromptRoom = nil
+        passwordPromptChannel = nil
         
         return true
     }
     
-    func leaveRoom(_ room: String) {
-        joinedRooms.remove(room)
-        saveJoinedRooms()
+    func leaveChannel(_ channel: String) {
+        joinedChannels.remove(channel)
+        saveJoinedChannels()
         
         // Send leave notification to other peers
-        meshService.sendRoomLeaveNotification(room)
+        meshService.sendChannelLeaveNotification(channel)
         
-        // If we're currently in this room, exit to main chat
-        if currentRoom == room {
-            currentRoom = nil
+        // If we're currently in this channel, exit to main chat
+        if currentChannel == channel {
+            currentChannel = nil
         }
         
-        // Clean up room data
-        unreadRoomMessages.removeValue(forKey: room)
-        roomMessages.removeValue(forKey: room)
-        roomMembers.removeValue(forKey: room)
-        roomKeys.removeValue(forKey: room)
-        roomPasswords.removeValue(forKey: room)
+        // Clean up channel data
+        unreadChannelMessages.removeValue(forKey: channel)
+        channelMessages.removeValue(forKey: channel)
+        channelMembers.removeValue(forKey: channel)
+        channelKeys.removeValue(forKey: channel)
+        channelPasswords.removeValue(forKey: channel)
         // Delete password from Keychain
-        _ = KeychainManager.shared.deleteRoomPassword(for: room)
+        _ = KeychainManager.shared.deleteChannelPassword(for: channel)
     }
     
     // Password management
-    func setRoomPassword(_ password: String, for room: String) {
-        guard joinedRooms.contains(room) else { return }
+    func setChannelPassword(_ password: String, for channel: String) {
+        guard joinedChannels.contains(channel) else { return }
         
-        // Check if room already has a creator
-        if let existingCreator = roomCreators[room], existingCreator != meshService.myPeerID {
+        // Check if channel already has a creator
+        if let existingCreator = channelCreators[channel], existingCreator != meshService.myPeerID {
             return
         }
         
-        // If room is already password protected by someone else, we can't claim it
-        if passwordProtectedRooms.contains(room) && roomCreators[room] != meshService.myPeerID {
+        // If channel is already password protected by someone else, we can't claim it
+        if passwordProtectedChannels.contains(channel) && channelCreators[channel] != meshService.myPeerID {
             return
         }
         
-        // Claim creator role if not set and room is not already protected
-        if roomCreators[room] == nil && !passwordProtectedRooms.contains(room) {
-            roomCreators[room] = meshService.myPeerID
-            saveRoomData()
+        // Claim creator role if not set and channel is not already protected
+        if channelCreators[channel] == nil && !passwordProtectedChannels.contains(channel) {
+            channelCreators[channel] = meshService.myPeerID
+            saveChannelData()
         }
         
         // Derive encryption key from password
-        let key = deriveRoomKey(from: password, roomName: room)
-        roomKeys[room] = key
-        roomPasswords[room] = password
-        passwordProtectedRooms.insert(room)
+        let key = deriveChannelKey(from: password, channelName: channel)
+        channelKeys[channel] = key
+        channelPasswords[channel] = password
+        passwordProtectedChannels.insert(channel)
         // Save password to Keychain
-        _ = KeychainManager.shared.saveRoomPassword(password, for: room)
+        _ = KeychainManager.shared.saveChannelPassword(password, for: channel)
         
         // Compute and store key commitment for verification
         let commitment = computeKeyCommitment(for: key)
-        roomKeyCommitments[room] = commitment
+        channelKeyCommitments[channel] = commitment
         
-        // Save room data
-        saveRoomData()
+        // Save channel data
+        saveChannelData()
         
-        // Announce that this room is now password protected with commitment
-        meshService.announcePasswordProtectedRoom(room, creatorID: meshService.myPeerID, keyCommitment: commitment)
+        // Announce that this channel is now password protected with commitment
+        meshService.announcePasswordProtectedChannel(channel, creatorID: meshService.myPeerID, keyCommitment: commitment)
         
         // Send an encrypted initialization message with metadata
         let timestamp = ISO8601DateFormatter().string(from: Date())
         let metadata = [
-            "type": "room_init",
-            "room": room,
+            "type": "channel_init",
+            "channel": channel,
             "creator": nickname,
             "creatorID": meshService.myPeerID,
             "timestamp": timestamp,
@@ -479,38 +515,38 @@ class ChatViewModel {
         let jsonData = try? JSONSerialization.data(withJSONObject: metadata)
         let metadataStr = jsonData?.base64EncodedString() ?? ""
         
-        let initMessage = "🔐 Room \(room) initialized | Protected room created by \(nickname) | Metadata: \(metadataStr)"
-        meshService.sendEncryptedRoomMessage(initMessage, mentions: [], room: room, roomKey: key)
+        let initMessage = "🔐 Channel \(channel) initialized | Protected channel created by \(nickname) | Metadata: \(metadataStr)"
+        meshService.sendEncryptedChannelMessage(initMessage, mentions: [], channel: channel, channelKey: key)
         
     }
     
-    func removeRoomPassword(for room: String) {
-        // Only room creator can remove password
-        guard roomCreators[room] == meshService.myPeerID else {
+    func removeChannelPassword(for channel: String) {
+        // Only channel creator can remove password
+        guard channelCreators[channel] == meshService.myPeerID else {
             return
         }
         
-        roomKeys.removeValue(forKey: room)
-        roomPasswords.removeValue(forKey: room)
-        roomKeyCommitments.removeValue(forKey: room)
-        passwordProtectedRooms.remove(room)
+        channelKeys.removeValue(forKey: channel)
+        channelPasswords.removeValue(forKey: channel)
+        channelKeyCommitments.removeValue(forKey: channel)
+        passwordProtectedChannels.remove(channel)
         // Delete password from Keychain
-        _ = KeychainManager.shared.deleteRoomPassword(for: room)
+        _ = KeychainManager.shared.deleteChannelPassword(for: channel)
         
-        // Save room data
-        saveRoomData()
+        // Save channel data
+        saveChannelData()
         
-        // Announce that this room is no longer password protected
-        meshService.announcePasswordProtectedRoom(room, isProtected: false, creatorID: meshService.myPeerID)
+        // Announce that this channel is no longer password protected
+        meshService.announcePasswordProtectedChannel(channel, isProtected: false, creatorID: meshService.myPeerID)
         
     }
     
-    // Transfer room ownership to another user
-    func transferRoomOwnership(to nickname: String) {
-        guard let currentRoom = currentRoom else {
+    // Transfer channel ownership to another user
+    func transferChannelOwnership(to nickname: String) {
+        guard let currentChannel = currentChannel else {
             let msg = BitchatMessage(
                 sender: "system",
-                content: "you must be in a room to transfer ownership.",
+                content: "you must be in a channel to transfer ownership.",
                 timestamp: Date(),
                 isRelay: false
             )
@@ -519,10 +555,10 @@ class ChatViewModel {
         }
         
         // Check if current user is the owner
-        guard roomCreators[currentRoom] == meshService.myPeerID else {
+        guard channelCreators[currentChannel] == meshService.myPeerID else {
             let msg = BitchatMessage(
                 sender: "system",
-                content: "only the room owner can transfer ownership.",
+                content: "only the channel owner can transfer ownership.",
                 timestamp: Date(),
                 isRelay: false
             )
@@ -546,41 +582,41 @@ class ChatViewModel {
         }
         
         // Update ownership
-        roomCreators[currentRoom] = targetPeerID
-        saveRoomData()
+        channelCreators[currentChannel] = targetPeerID
+        saveChannelData()
         
         // Announce the ownership transfer
-        if passwordProtectedRooms.contains(currentRoom) {
-            let commitment = roomKeyCommitments[currentRoom]
-            meshService.announcePasswordProtectedRoom(currentRoom, creatorID: targetPeerID, keyCommitment: commitment)
+        if passwordProtectedChannels.contains(currentChannel) {
+            let commitment = channelKeyCommitments[currentChannel]
+            meshService.announcePasswordProtectedChannel(currentChannel, creatorID: targetPeerID, keyCommitment: commitment)
         }
         
         // Send notification message
         let transferMsg = BitchatMessage(
             sender: "system",
-            content: "room ownership transferred from \(self.nickname) to \(targetNick).",
+            content: "channel ownership transferred from \(self.nickname) to \(targetNick).",
             timestamp: Date(),
             isRelay: false,
-            room: currentRoom
+            channel: currentChannel
         )
         messages.append(transferMsg)
         
-        // Send encrypted notification if room is protected
-        if let roomKey = roomKeys[currentRoom] {
-            let notifyMsg = "🔑 Room ownership transferred to \(targetNick) by \(self.nickname)"
-            meshService.sendEncryptedRoomMessage(notifyMsg, mentions: [targetNick], room: currentRoom, roomKey: roomKey)
+        // Send encrypted notification if channel is protected
+        if let channelKey = channelKeys[currentChannel] {
+            let notifyMsg = "🔑 Channel ownership transferred to \(targetNick) by \(self.nickname)"
+            meshService.sendEncryptedChannelMessage(notifyMsg, mentions: [targetNick], channel: currentChannel, channelKey: channelKey)
         } else {
             meshService.sendMessage(transferMsg.content, mentions: [targetNick])
         }
         
     }
     
-    // Change password for current room
-    func changeRoomPassword(to newPassword: String) {
-        guard let currentRoom = currentRoom else {
+    // Change password for current channel
+    func changeChannelPassword(to newPassword: String) {
+        guard let currentChannel = currentChannel else {
             let msg = BitchatMessage(
                 sender: "system",
-                content: "you must be in a room to change its password.",
+                content: "you must be in a channel to change its password.",
                 timestamp: Date(),
                 isRelay: false
             )
@@ -589,10 +625,10 @@ class ChatViewModel {
         }
         
         // Check if current user is the owner
-        guard roomCreators[currentRoom] == meshService.myPeerID else {
+        guard channelCreators[currentChannel] == meshService.myPeerID else {
             let msg = BitchatMessage(
                 sender: "system",
-                content: "only the room owner can change the password.",
+                content: "only the channel owner can change the password.",
                 timestamp: Date(),
                 isRelay: false
             )
@@ -600,11 +636,11 @@ class ChatViewModel {
             return
         }
         
-        // Check if room is currently password protected
-        guard passwordProtectedRooms.contains(currentRoom) else {
+        // Check if channel is currently password protected
+        guard passwordProtectedChannels.contains(currentChannel) else {
             let msg = BitchatMessage(
                 sender: "system",
-                content: "room is not password protected. use the lock button to set a password.",
+                content: "channel is not password protected. use the lock button to set a password.",
                 timestamp: Date(),
                 isRelay: false
             )
@@ -613,33 +649,33 @@ class ChatViewModel {
         }
         
         // Store old key for re-encryption
-        let oldKey = roomKeys[currentRoom]
+        let oldKey = channelKeys[currentChannel]
         
         // Derive new encryption key from new password
-        let newKey = deriveRoomKey(from: newPassword, roomName: currentRoom)
-        roomKeys[currentRoom] = newKey
-        roomPasswords[currentRoom] = newPassword
+        let newKey = deriveChannelKey(from: newPassword, channelName: currentChannel)
+        channelKeys[currentChannel] = newKey
+        channelPasswords[currentChannel] = newPassword
         // Update password in Keychain
-        _ = KeychainManager.shared.saveRoomPassword(newPassword, for: currentRoom)
+        _ = KeychainManager.shared.saveChannelPassword(newPassword, for: currentChannel)
         
         // Compute new key commitment
         let newCommitment = computeKeyCommitment(for: newKey)
-        roomKeyCommitments[currentRoom] = newCommitment
+        channelKeyCommitments[currentChannel] = newCommitment
         
-        // Save room data
-        saveRoomData()
+        // Save channel data
+        saveChannelData()
         
         // Send password change notification with old key
         if let oldKey = oldKey {
-            let changeNotice = "🔐 Password changed by room owner. Please update your password."
-            meshService.sendEncryptedRoomMessage(changeNotice, mentions: [], room: currentRoom, roomKey: oldKey)
+            let changeNotice = "🔐 Password changed by channel owner. Please update your password."
+            meshService.sendEncryptedChannelMessage(changeNotice, mentions: [], channel: currentChannel, channelKey: oldKey)
         }
         
         // Send new initialization message with new key
         let timestamp = ISO8601DateFormatter().string(from: Date())
         let metadata = [
             "type": "password_change",
-            "room": currentRoom,
+            "channel": currentChannel,
             "changer": nickname,
             "changerID": meshService.myPeerID,
             "timestamp": timestamp,
@@ -648,11 +684,11 @@ class ChatViewModel {
         let jsonData = try? JSONSerialization.data(withJSONObject: metadata)
         let metadataStr = jsonData?.base64EncodedString() ?? ""
         
-        let initMessage = "🔑 Password changed | Room \(currentRoom) password updated by \(nickname) | Metadata: \(metadataStr)"
-        meshService.sendEncryptedRoomMessage(initMessage, mentions: [], room: currentRoom, roomKey: newKey)
+        let initMessage = "🔑 Password changed | Channel \(currentChannel) password updated by \(nickname) | Metadata: \(metadataStr)"
+        meshService.sendEncryptedChannelMessage(initMessage, mentions: [], channel: currentChannel, channelKey: newKey)
         
         // Announce the new commitment
-        meshService.announcePasswordProtectedRoom(currentRoom, creatorID: meshService.myPeerID, keyCommitment: newCommitment)
+        meshService.announcePasswordProtectedChannel(currentChannel, creatorID: meshService.myPeerID, keyCommitment: newCommitment)
         
         // Add local success message
         let successMsg = BitchatMessage(
@@ -672,9 +708,9 @@ class ChatViewModel {
         return hash.compactMap { String(format: "%02x", $0) }.joined()
     }
     
-    private func deriveRoomKey(from password: String, roomName: String) -> SymmetricKey {
+    private func deriveChannelKey(from password: String, channelName: String) -> SymmetricKey {
         // Use PBKDF2 to derive a key from the password
-        let salt = roomName.data(using: .utf8)!  // Use room name as salt for consistency
+        let salt = channelName.data(using: .utf8)!  // Use channel name as salt for consistency
         let keyData = pbkdf2(password: password, salt: salt, iterations: 100000, keyLength: 32)
         return SymmetricKey(data: keyData)
     }
@@ -701,42 +737,42 @@ class ChatViewModel {
         return derivedKey
     }
     
-    func switchToRoom(_ room: String?) {
-        // Check if room needs password
-        if let room = room, passwordProtectedRooms.contains(room) && roomKeys[room] == nil {
+    func switchToChannel(_ channel: String?) {
+        // Check if channel needs password
+        if let channel = channel, passwordProtectedChannels.contains(channel) && channelKeys[channel] == nil {
             // Need password, show prompt instead
-            passwordPromptRoom = room
+            passwordPromptChannel = channel
             showPasswordPrompt = true
             return
         }
         
-        currentRoom = room
+        currentChannel = channel
         selectedPrivateChatPeer = nil  // Exit private chat
         
-        // Clear unread count for this room
-        if let room = room {
-            unreadRoomMessages[room] = 0
+        // Clear unread count for this channel
+        if let channel = channel {
+            unreadChannelMessages[channel] = 0
         }
     }
     
-    func getRoomMessages(_ room: String) -> [BitchatMessage] {
-        return roomMessages[room] ?? []
+    func getChannelMessages(_ channel: String) -> [BitchatMessage] {
+        return channelMessages[channel] ?? []
     }
     
-    func parseRooms(from content: String) -> Set<String> {
+    func parseChannels(from content: String) -> Set<String> {
         let pattern = "#([a-zA-Z0-9_]+)"
         let regex = try? NSRegularExpression(pattern: pattern, options: [])
         let matches = regex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
         
-        var rooms = Set<String>()
+        var channels = Set<String>()
         for match in matches {
             if let range = Range(match.range(at: 0), in: content) {
-                let room = String(content[range])
-                rooms.insert(room)
+                let channel = String(content[range])
+                channels.insert(channel)
             }
         }
         
-        return rooms
+        return channels
     }
     
     func toggleFavorite(peerID: String) {
@@ -781,6 +817,25 @@ class ChatViewModel {
         }
     }
     
+    private func isPeerBlocked(_ peerID: String) -> Bool {
+        // Check if we have the public key fingerprint for this peer
+        if let fingerprint = peerIDToPublicKeyFingerprint[peerID] {
+            return blockedUsers.contains(fingerprint)
+        }
+        
+        // Try to get public key from mesh service
+        if let publicKeyData = meshService.getPeerPublicKey(peerID) {
+            let fingerprint = SHA256.hash(data: publicKeyData)
+                .compactMap { String(format: "%02x", $0) }
+                .joined()
+                .prefix(16)
+                .lowercased()
+            return blockedUsers.contains(String(fingerprint))
+        }
+        
+        return false
+    }
+    
     func sendMessage(_ content: String) {
         guard !content.isEmpty else { return }
         
@@ -794,19 +849,19 @@ class ChatViewModel {
             // Send as private message
             sendPrivateMessage(content, to: selectedPeer)
         } else {
-            // Parse mentions and rooms from the content
+            // Parse mentions and channels from the content
             let mentions = parseMentions(from: content)
-            let rooms = parseRooms(from: content)
+            let channels = parseChannels(from: content)
             
-            // Auto-join any rooms mentioned in the message
-            for room in rooms {
-                if !joinedRooms.contains(room) {
-                    let _ = joinRoom(room)
+            // Auto-join any channels mentioned in the message
+            for channel in channels {
+                if !joinedChannels.contains(channel) {
+                    let _ = joinChannel(channel)
                 }
             }
             
-            // Determine which room this message belongs to
-            let messageRoom = currentRoom  // Use current room if we're in one
+            // Determine which channel this message belongs to
+            let messageChannel = currentChannel  // Use current channel if we're in one
             
             // Add message to local display
             let message = BitchatMessage(
@@ -819,45 +874,45 @@ class ChatViewModel {
                 recipientNickname: nil,
                 senderPeerID: meshService.myPeerID,
                 mentions: mentions.isEmpty ? nil : mentions,
-                room: messageRoom
+                channel: messageChannel
             )
             
-            if let room = messageRoom {
-                // Add to room messages
-                if roomMessages[room] == nil {
-                    roomMessages[room] = []
+            if let channel = messageChannel {
+                // Add to channel messages
+                if channelMessages[channel] == nil {
+                    channelMessages[channel] = []
                 }
-                roomMessages[room]?.append(message)
+                channelMessages[channel]?.append(message)
                 
-                // Save message if room has retention enabled
-                if retentionEnabledRooms.contains(room) {
-                    MessageRetentionService.shared.saveMessage(message, forRoom: room)
+                // Save message if channel has retention enabled
+                if retentionEnabledChannels.contains(channel) {
+                    MessageRetentionService.shared.saveMessage(message, forChannel: channel)
                 }
                 
-                // Track ourselves as a room member
-                if roomMembers[room] == nil {
-                    roomMembers[room] = Set()
+                // Track ourselves as a channel member
+                if channelMembers[channel] == nil {
+                    channelMembers[channel] = Set()
                 }
-                roomMembers[room]?.insert(meshService.myPeerID)
+                channelMembers[channel]?.insert(meshService.myPeerID)
             } else {
                 // Add to main messages
                 messages.append(message)
             }
             
-            // Only auto-join rooms if we're sending TO that room
-            if let messageRoom = messageRoom {
-                if !joinedRooms.contains(messageRoom) {
-                    let _ = joinRoom(messageRoom)
+            // Only auto-join channels if we're sending TO that channel
+            if let messageChannel = messageChannel {
+                if !joinedChannels.contains(messageChannel) {
+                    let _ = joinChannel(messageChannel)
                 }
             }
             
-            // Check if room is password protected and encrypt if needed
-            if let room = messageRoom, roomKeys[room] != nil {
-                // Send encrypted room message
-                meshService.sendEncryptedRoomMessage(content, mentions: mentions, room: room, roomKey: roomKeys[room]!)
+            // Check if channel is password protected and encrypt if needed
+            if let channel = messageChannel, channelKeys[channel] != nil {
+                // Send encrypted channel message
+                meshService.sendEncryptedChannelMessage(content, mentions: mentions, channel: channel, channelKey: channelKeys[channel]!)
             } else {
-                // Send via mesh with mentions and room (unencrypted)
-                meshService.sendMessage(content, mentions: mentions, room: messageRoom)
+                // Send via mesh with mentions and channel (unencrypted)
+                meshService.sendMessage(content, mentions: mentions, channel: messageChannel)
             }
         }
     }
@@ -865,6 +920,18 @@ class ChatViewModel {
     func sendPrivateMessage(_ content: String, to peerID: String) {
         guard !content.isEmpty else { return }
         guard let recipientNickname = meshService.getPeerNicknames()[peerID] else { return }
+        
+        // Check if the recipient is blocked
+        if isPeerBlocked(peerID) {
+            let systemMessage = BitchatMessage(
+                sender: "system",
+                content: "cannot send message to \(recipientNickname): user is blocked.",
+                timestamp: Date(),
+                isRelay: false
+            )
+            messages.append(systemMessage)
+            return
+        }
         
         // IMPORTANT: When sending a message, it means we're viewing this chat
         // Send read receipts for any delivered messages from this peer
@@ -899,6 +966,19 @@ class ChatViewModel {
     
     func startPrivateChat(with peerID: String) {
         let peerNickname = meshService.getPeerNicknames()[peerID] ?? "unknown"
+        
+        // Check if the peer is blocked
+        if isPeerBlocked(peerID) {
+            let systemMessage = BitchatMessage(
+                sender: "system",
+                content: "cannot start chat with \(peerNickname): user is blocked.",
+                timestamp: Date(),
+                isRelay: false
+            )
+            messages.append(systemMessage)
+            return
+        }
+        
         selectedPrivateChatPeer = peerID
         unreadPrivateMessages.remove(peerID)
         
@@ -981,6 +1061,72 @@ class ChatViewModel {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                 self.markPrivateMessagesAsRead(from: peerID)
             }
+        }
+    }
+    
+    @objc private func userDidTakeScreenshot() {
+        // Send screenshot notification based on current context
+        let screenshotMessage = "* \(nickname) took a screenshot *"
+        
+        if let peerID = selectedPrivateChatPeer {
+            // In private chat - send to the other person
+            if let peerNickname = meshService.getPeerNicknames()[peerID] {
+                // Send the message directly without going through sendPrivateMessage to avoid local echo
+                meshService.sendPrivateMessage(screenshotMessage, to: peerID, recipientNickname: peerNickname)
+            }
+            
+            // Show local notification immediately as system message
+            let localNotification = BitchatMessage(
+                sender: "system",
+                content: "you took a screenshot",
+                timestamp: Date(),
+                isRelay: false,
+                originalSender: nil,
+                isPrivate: true,
+                recipientNickname: meshService.getPeerNicknames()[peerID],
+                senderPeerID: meshService.myPeerID
+            )
+            if privateChats[peerID] == nil {
+                privateChats[peerID] = []
+            }
+            privateChats[peerID]?.append(localNotification)
+            
+        } else if let channel = currentChannel {
+            // In a channel - send to channel
+            // Check if channel is password protected and encrypt if needed
+            if let channelKey = channelKeys[channel] {
+                meshService.sendEncryptedChannelMessage(screenshotMessage, mentions: [], channel: channel, channelKey: channelKey)
+            } else {
+                meshService.sendMessage(screenshotMessage, mentions: [], channel: channel)
+            }
+            
+            // Show local notification immediately as system message
+            let localNotification = BitchatMessage(
+                sender: "system",
+                content: "you took a screenshot",
+                timestamp: Date(),
+                isRelay: false,
+                originalSender: nil,
+                isPrivate: false,
+                channel: channel
+            )
+            if channelMessages[channel] == nil {
+                channelMessages[channel] = []
+            }
+            channelMessages[channel]?.append(localNotification)
+            
+        } else {
+            // In public chat - send to everyone
+            meshService.sendMessage(screenshotMessage, mentions: [], channel: nil)
+            
+            // Show local notification immediately as system message
+            let localNotification = BitchatMessage(
+                sender: "system",
+                content: "you took a screenshot",
+                timestamp: Date(),
+                isRelay: false
+            )
+            messages.append(localNotification)
         }
     }
     
@@ -1075,37 +1221,37 @@ class ChatViewModel {
         privateChats.removeAll()
         unreadPrivateMessages.removeAll()
         
-        // Clear all room data
-        joinedRooms.removeAll()
-        currentRoom = nil
-        roomMessages.removeAll()
-        unreadRoomMessages.removeAll()
-        roomMembers.removeAll()
-        roomPasswords.removeAll()
-        roomKeys.removeAll()
-        passwordProtectedRooms.removeAll()
-        roomCreators.removeAll()
-        roomKeyCommitments.removeAll()
+        // Clear all channel data
+        joinedChannels.removeAll()
+        currentChannel = nil
+        channelMessages.removeAll()
+        unreadChannelMessages.removeAll()
+        channelMembers.removeAll()
+        channelPasswords.removeAll()
+        channelKeys.removeAll()
+        passwordProtectedChannels.removeAll()
+        channelCreators.removeAll()
+        channelKeyCommitments.removeAll()
         showPasswordPrompt = false
-        passwordPromptRoom = nil
+        passwordPromptChannel = nil
         
         // Clear all keychain passwords
         _ = KeychainManager.shared.deleteAllPasswords()
         
         // Clear all retained messages
         MessageRetentionService.shared.deleteAllStoredMessages()
-        savedRooms.removeAll()
-        retentionEnabledRooms.removeAll()
+        savedChannels.removeAll()
+        retentionEnabledChannels.removeAll()
         
         // Clear message retry queue
         MessageRetryService.shared.clearRetryQueue()
         
-        // Clear persisted room data from UserDefaults
-        userDefaults.removeObject(forKey: joinedRoomsKey)
-        userDefaults.removeObject(forKey: passwordProtectedRoomsKey)
-        userDefaults.removeObject(forKey: roomCreatorsKey)
-        userDefaults.removeObject(forKey: roomKeyCommitmentsKey)
-        userDefaults.removeObject(forKey: retentionEnabledRoomsKey)
+        // Clear persisted channel data from UserDefaults
+        userDefaults.removeObject(forKey: joinedChannelsKey)
+        userDefaults.removeObject(forKey: passwordProtectedChannelsKey)
+        userDefaults.removeObject(forKey: channelCreatorsKey)
+        userDefaults.removeObject(forKey: channelKeyCommitmentsKey)
+        userDefaults.removeObject(forKey: retentionEnabledChannelsKey)
         
         // Reset nickname to anonymous
         nickname = "anon\(Int.random(in: 1000...9999))"
@@ -1312,6 +1458,124 @@ class ChatViewModel {
         return processedContent
     }
     
+    func formatMessageAsText(_ message: BitchatMessage, colorScheme: ColorScheme) -> AttributedString {
+        var result = AttributedString()
+        
+        let isDark = colorScheme == .dark
+        let primaryColor = isDark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
+        let secondaryColor = primaryColor.opacity(0.7)
+        
+        // Timestamp
+        let timestamp = AttributedString("[\(formatTimestamp(message.timestamp))] ")
+        var timestampStyle = AttributeContainer()
+        timestampStyle.foregroundColor = message.sender == "system" ? Color.gray : secondaryColor
+        timestampStyle.font = .system(size: 12, design: .monospaced)
+        result.append(timestamp.mergingAttributes(timestampStyle))
+        
+        if message.sender != "system" {
+            // Sender
+            let sender = AttributedString("<@\(message.sender)> ")
+            var senderStyle = AttributeContainer()
+            
+            // Get sender color
+            let senderColor: Color
+            if message.sender == nickname {
+                senderColor = primaryColor
+            } else if let peerID = message.senderPeerID ?? getPeerIDForNickname(message.sender),
+                      let rssi = meshService.getPeerRSSI()[peerID] {
+                senderColor = getRSSIColor(rssi: rssi.intValue, colorScheme: colorScheme)
+            } else {
+                senderColor = primaryColor.opacity(0.9)
+            }
+            
+            senderStyle.foregroundColor = senderColor
+            senderStyle.font = .system(size: 14, weight: .medium, design: .monospaced)
+            result.append(sender.mergingAttributes(senderStyle))
+            
+            // Process content with hashtags and mentions
+            let content = message.content
+            let hashtagPattern = "#([a-zA-Z0-9_]+)"
+            let mentionPattern = "@([a-zA-Z0-9_]+)"
+            
+            let hashtagRegex = try? NSRegularExpression(pattern: hashtagPattern, options: [])
+            let mentionRegex = try? NSRegularExpression(pattern: mentionPattern, options: [])
+            
+            let hashtagMatches = hashtagRegex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
+            let mentionMatches = mentionRegex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
+            
+            // Combine and sort matches
+            var allMatches: [(range: NSRange, type: String)] = []
+            for match in hashtagMatches {
+                allMatches.append((match.range(at: 0), "hashtag"))
+            }
+            for match in mentionMatches {
+                allMatches.append((match.range(at: 0), "mention"))
+            }
+            allMatches.sort { $0.range.location < $1.range.location }
+            
+            // Build content with styling
+            var lastEnd = content.startIndex
+            let isMentioned = message.mentions?.contains(nickname) ?? false
+            
+            for (range, type) in allMatches {
+                // Add text before match
+                if let nsRange = Range(range, in: content) {
+                    let beforeText = String(content[lastEnd..<nsRange.lowerBound])
+                    if !beforeText.isEmpty {
+                        var beforeStyle = AttributeContainer()
+                        beforeStyle.foregroundColor = primaryColor
+                        beforeStyle.font = .system(size: 14, design: .monospaced)
+                        if isMentioned {
+                            beforeStyle.font = beforeStyle.font?.bold()
+                        }
+                        result.append(AttributedString(beforeText).mergingAttributes(beforeStyle))
+                    }
+                    
+                    // Add styled match
+                    let matchText = String(content[nsRange])
+                    var matchStyle = AttributeContainer()
+                    matchStyle.font = .system(size: 14, weight: .semibold, design: .monospaced)
+                    
+                    if type == "hashtag" {
+                        matchStyle.foregroundColor = Color.blue
+                        matchStyle.underlineStyle = .single
+                    } else if type == "mention" {
+                        matchStyle.foregroundColor = Color.orange
+                    }
+                    
+                    result.append(AttributedString(matchText).mergingAttributes(matchStyle))
+                    lastEnd = nsRange.upperBound
+                }
+            }
+            
+            // Add remaining text
+            if lastEnd < content.endIndex {
+                let remainingText = String(content[lastEnd...])
+                var remainingStyle = AttributeContainer()
+                remainingStyle.foregroundColor = primaryColor
+                remainingStyle.font = .system(size: 14, design: .monospaced)
+                if isMentioned {
+                    remainingStyle.font = remainingStyle.font?.bold()
+                }
+                result.append(AttributedString(remainingText).mergingAttributes(remainingStyle))
+            }
+        } else {
+            // System message
+            let content = AttributedString("* \(message.content) *")
+            var contentStyle = AttributeContainer()
+            // Check for welcome message
+            if message.content.contains("get people around you to download bitchat") {
+                contentStyle.foregroundColor = Color.blue
+            } else {
+                contentStyle.foregroundColor = Color.gray
+            }
+            contentStyle.font = .system(size: 12, design: .monospaced).italic()
+            result.append(content.mergingAttributes(contentStyle))
+        }
+        
+        return result
+    }
+    
     func formatMessage(_ message: BitchatMessage, colorScheme: ColorScheme) -> AttributedString {
         var result = AttributedString()
         
@@ -1321,15 +1585,15 @@ class ChatViewModel {
         
         let timestamp = AttributedString("[\(formatTimestamp(message.timestamp))] ")
         var timestampStyle = AttributeContainer()
-        timestampStyle.foregroundColor = secondaryColor
+        timestampStyle.foregroundColor = message.sender == "system" ? Color.gray : secondaryColor
         timestampStyle.font = .system(size: 12, design: .monospaced)
         result.append(timestamp.mergingAttributes(timestampStyle))
         
         if message.sender == "system" {
             let content = AttributedString("* \(message.content) *")
             var contentStyle = AttributeContainer()
-            contentStyle.foregroundColor = secondaryColor
-            contentStyle.font = .system(size: 14, design: .monospaced).italic()
+            contentStyle.foregroundColor = Color.gray
+            contentStyle.font = .system(size: 12, design: .monospaced).italic()
             result.append(content.mergingAttributes(contentStyle))
         } else {
             let sender = AttributedString("<\(message.sender)> ")
@@ -1409,60 +1673,61 @@ class ChatViewModel {
 }
 
 extension ChatViewModel: BitchatDelegate {
-    func didReceiveRoomLeave(_ room: String, from peerID: String) {
-        // Remove peer from room members
-        if roomMembers[room] != nil {
-            roomMembers[room]?.remove(peerID)
+    
+    func didReceiveChannelLeave(_ channel: String, from peerID: String) {
+        // Remove peer from channel members
+        if channelMembers[channel] != nil {
+            channelMembers[channel]?.remove(peerID)
         }
     }
     
-    func didReceivePasswordProtectedRoomAnnouncement(_ room: String, isProtected: Bool, creatorID: String?, keyCommitment: String?) {
-        let wasAlreadyProtected = passwordProtectedRooms.contains(room)
+    func didReceivePasswordProtectedChannelAnnouncement(_ channel: String, isProtected: Bool, creatorID: String?, keyCommitment: String?) {
+        let wasAlreadyProtected = passwordProtectedChannels.contains(channel)
         
         if isProtected {
-            passwordProtectedRooms.insert(room)
+            passwordProtectedChannels.insert(channel)
             if let creator = creatorID {
-                roomCreators[room] = creator
+                channelCreators[channel] = creator
             }
             
             // Store the key commitment if provided
             if let commitment = keyCommitment {
-                roomKeyCommitments[room] = commitment
+                channelKeyCommitments[channel] = commitment
             }
             
-            // If we just learned this room is protected and we're in it without a key, prompt for password
-            if !wasAlreadyProtected && joinedRooms.contains(room) && roomKeys[room] == nil {
+            // If we just learned this channel is protected and we're in it without a key, prompt for password
+            if !wasAlreadyProtected && joinedChannels.contains(channel) && channelKeys[channel] == nil {
                 
                 // Add system message
                 let systemMessage = BitchatMessage(
                     sender: "system",
-                    content: "room \(room) is password protected. you need the password to participate.",
+                    content: "channel \(channel) is password protected. you need the password to participate.",
                     timestamp: Date(),
                     isRelay: false
                 )
                 messages.append(systemMessage)
                 
-                // If currently viewing this room, show password prompt
-                if currentRoom == room {
-                    passwordPromptRoom = room
+                // If currently viewing this channel, show password prompt
+                if currentChannel == channel {
+                    passwordPromptChannel = channel
                     showPasswordPrompt = true
                 }
             }
         } else {
-            passwordProtectedRooms.remove(room)
-            // If we're in this room and it's no longer protected, clear the key
-            roomKeys.removeValue(forKey: room)
-            roomPasswords.removeValue(forKey: room)
-            roomKeyCommitments.removeValue(forKey: room)
+            passwordProtectedChannels.remove(channel)
+            // If we're in this channel and it's no longer protected, clear the key
+            channelKeys.removeValue(forKey: channel)
+            channelPasswords.removeValue(forKey: channel)
+            channelKeyCommitments.removeValue(forKey: channel)
         }
         
-        // Save updated room data
-        saveRoomData()
+        // Save updated channel data
+        saveChannelData()
         
     }
     
-    func decryptRoomMessage(_ encryptedContent: Data, room: String, testKey: SymmetricKey? = nil) -> String? {
-        let key = testKey ?? roomKeys[room]
+    func decryptChannelMessage(_ encryptedContent: Data, channel: String, testKey: SymmetricKey? = nil) -> String? {
+        let key = testKey ?? channelKeys[channel]
         guard let key = key else {
             return nil
         }
@@ -1479,70 +1744,70 @@ extension ChatViewModel: BitchatDelegate {
         }
     }
     
-    func didReceiveRoomRetentionAnnouncement(_ room: String, enabled: Bool, creatorID: String?) {
+    func didReceiveChannelRetentionAnnouncement(_ channel: String, enabled: Bool, creatorID: String?) {
         
-        // Only process if we're a member of this room
-        guard joinedRooms.contains(room) else { return }
+        // Only process if we're a member of this channel
+        guard joinedChannels.contains(channel) else { return }
         
-        // Verify the announcement is from the room owner
-        if let creatorID = creatorID, roomCreators[room] != creatorID {
+        // Verify the announcement is from the channel owner
+        if let creatorID = creatorID, channelCreators[channel] != creatorID {
             return
         }
         
         // Update retention status
         if enabled {
-            retentionEnabledRooms.insert(room)
-            savedRooms.insert(room)
-            // Ensure room is in favorites if not already
-            if !MessageRetentionService.shared.getFavoriteRooms().contains(room) {
-                _ = MessageRetentionService.shared.toggleFavoriteRoom(room)
+            retentionEnabledChannels.insert(channel)
+            savedChannels.insert(channel)
+            // Ensure channel is in favorites if not already
+            if !MessageRetentionService.shared.getFavoriteChannels().contains(channel) {
+                _ = MessageRetentionService.shared.toggleFavoriteChannel(channel)
             }
             
             // Show system message
             let systemMessage = BitchatMessage(
                 sender: "system",
-                content: "room owner enabled message retention for \(room). all messages will be saved locally.",
+                content: "channel owner enabled message retention for \(channel). all messages will be saved locally.",
                 timestamp: Date(),
                 isRelay: false
             )
-            if currentRoom == room {
+            if currentChannel == channel {
                 messages.append(systemMessage)
-            } else if var roomMsgs = roomMessages[room] {
-                roomMsgs.append(systemMessage)
-                roomMessages[room] = roomMsgs
+            } else if var channelMsgs = channelMessages[channel] {
+                channelMsgs.append(systemMessage)
+                channelMessages[channel] = channelMsgs
             } else {
-                roomMessages[room] = [systemMessage]
+                channelMessages[channel] = [systemMessage]
             }
         } else {
-            retentionEnabledRooms.remove(room)
-            savedRooms.remove(room)
+            retentionEnabledChannels.remove(channel)
+            savedChannels.remove(channel)
             
-            // Delete all saved messages for this room
-            MessageRetentionService.shared.deleteMessagesForRoom(room)
+            // Delete all saved messages for this channel
+            MessageRetentionService.shared.deleteMessagesForChannel(channel)
             // Remove from favorites if currently set
-            if MessageRetentionService.shared.getFavoriteRooms().contains(room) {
-                _ = MessageRetentionService.shared.toggleFavoriteRoom(room)
+            if MessageRetentionService.shared.getFavoriteChannels().contains(channel) {
+                _ = MessageRetentionService.shared.toggleFavoriteChannel(channel)
             }
             
             // Show system message
             let systemMessage = BitchatMessage(
                 sender: "system",
-                content: "room owner disabled message retention for \(room). all saved messages have been deleted.",
+                content: "channel owner disabled message retention for \(channel). all saved messages have been deleted.",
                 timestamp: Date(),
                 isRelay: false
             )
-            if currentRoom == room {
+            if currentChannel == channel {
                 messages.append(systemMessage)
-            } else if var roomMsgs = roomMessages[room] {
-                roomMsgs.append(systemMessage)
-                roomMessages[room] = roomMsgs
+            } else if var channelMsgs = channelMessages[channel] {
+                channelMsgs.append(systemMessage)
+                channelMessages[channel] = channelMsgs
             } else {
-                roomMessages[room] = [systemMessage]
+                channelMessages[channel] = [systemMessage]
             }
         }
         
         // Persist retention status
-        userDefaults.set(Array(retentionEnabledRooms), forKey: retentionEnabledRoomsKey)
+        userDefaults.set(Array(retentionEnabledChannels), forKey: retentionEnabledChannelsKey)
     }
     
     private func handleCommand(_ command: String) {
@@ -1550,36 +1815,36 @@ extension ChatViewModel: BitchatDelegate {
         guard let cmd = parts.first else { return }
         
         switch cmd {
-        case "/j":
+        case "/j", "/join":
             if parts.count > 1 {
-                let roomName = String(parts[1])
-                // Ensure room name starts with #
-                let room = roomName.hasPrefix("#") ? roomName : "#\(roomName)"
+                let channelName = String(parts[1])
+                // Ensure channel name starts with #
+                let channel = channelName.hasPrefix("#") ? channelName : "#\(channelName)"
                 
-                // Validate room name
-                let cleanedName = room.dropFirst()
+                // Validate channel name
+                let cleanedName = channel.dropFirst()
                 let isValidName = !cleanedName.isEmpty && cleanedName.allSatisfy { $0.isLetter || $0.isNumber || $0 == "_" }
                 
                 if !isValidName {
                     let systemMessage = BitchatMessage(
                         sender: "system",
-                        content: "invalid room name. use only letters, numbers, and underscores.",
+                        content: "invalid channel name. use only letters, numbers, and underscores.",
                         timestamp: Date(),
                         isRelay: false
                     )
                     messages.append(systemMessage)
                 } else {
-                    let wasAlreadyJoined = joinedRooms.contains(room)
-                    let wasPasswordProtected = passwordProtectedRooms.contains(room)
-                    let hadCreator = roomCreators[room] != nil
+                    let wasAlreadyJoined = joinedChannels.contains(channel)
+                    let wasPasswordProtected = passwordProtectedChannels.contains(channel)
+                    let hadCreator = channelCreators[channel] != nil
                     
-                    let success = joinRoom(room)
+                    let success = joinChannel(channel)
                     
                     if success {
                         if !wasAlreadyJoined {
-                            var message = "joined room \(room)"
+                            var message = "joined channel \(channel)"
                             if !hadCreator && !wasPasswordProtected {
-                                message += " (created new room - you are the owner)"
+                                message += " (created new channel - you are the owner)"
                             }
                             let systemMessage = BitchatMessage(
                                 sender: "system",
@@ -1589,10 +1854,10 @@ extension ChatViewModel: BitchatDelegate {
                             )
                             messages.append(systemMessage)
                         } else {
-                            // Already in room, just switched to it
+                            // Already in channel, just switched to it
                             let systemMessage = BitchatMessage(
                                 sender: "system",
-                                content: "switched to room \(room)",
+                                content: "switched to channel \(channel)",
                                 timestamp: Date(),
                                 isRelay: false
                             )
@@ -1605,7 +1870,7 @@ extension ChatViewModel: BitchatDelegate {
                 // Show usage hint
                 let systemMessage = BitchatMessage(
                     sender: "system",
-                    content: "usage: /j #roomname",
+                    content: "usage: /j #channelname",
                     timestamp: Date(),
                     isRelay: false
                 )
@@ -1615,12 +1880,12 @@ extension ChatViewModel: BitchatDelegate {
             // /create is now just an alias for /join
             let systemMessage = BitchatMessage(
                 sender: "system",
-                content: "use /join #roomname to join or create a room",
+                content: "use /join #channelname to join or create a channel",
                 timestamp: Date(),
                 isRelay: false
             )
             messages.append(systemMessage)
-        case "/m":
+        case "/m", "/msg":
             if parts.count > 1 {
                 let targetName = String(parts[1])
                 // Remove @ if present
@@ -1661,57 +1926,57 @@ extension ChatViewModel: BitchatDelegate {
                 )
                 messages.append(systemMessage)
             }
-        case "/rooms":
-            // Discover all rooms (both joined and not joined)
-            var allRooms: Set<String> = Set()
+        case "/channels":
+            // Discover all channels (both joined and not joined)
+            var allChannels: Set<String> = Set()
             
-            // Add joined rooms
-            allRooms.formUnion(joinedRooms)
+            // Add joined channels
+            allChannels.formUnion(joinedChannels)
             
-            // Find rooms from messages we've seen
+            // Find channels from messages we've seen
             for msg in messages {
-                if let room = msg.room {
-                    allRooms.insert(room)
+                if let channel = msg.channel {
+                    allChannels.insert(channel)
                 }
             }
             
-            // Also check room messages we've cached
-            for (room, _) in roomMessages {
-                allRooms.insert(room)
+            // Also check channel messages we've cached
+            for (channel, _) in channelMessages {
+                allChannels.insert(channel)
             }
             
-            // Add password protected rooms we know about
-            allRooms.formUnion(passwordProtectedRooms)
+            // Add password protected channels we know about
+            allChannels.formUnion(passwordProtectedChannels)
             
-            if allRooms.isEmpty {
+            if allChannels.isEmpty {
                 let systemMessage = BitchatMessage(
                     sender: "system",
-                    content: "no rooms discovered yet. rooms appear as people use them.",
+                    content: "no channels discovered yet. channels appear as people use them.",
                     timestamp: Date(),
                     isRelay: false
                 )
                 messages.append(systemMessage)
             } else {
-                let roomList = allRooms.sorted().map { room in
+                let channelList = allChannels.sorted().map { channel in
                     var status = ""
-                    if joinedRooms.contains(room) {
+                    if joinedChannels.contains(channel) {
                         status += " ✓"
                     }
-                    if passwordProtectedRooms.contains(room) {
+                    if passwordProtectedChannels.contains(channel) {
                         status += " 🔒"
                     }
-                    if retentionEnabledRooms.contains(room) {
+                    if retentionEnabledChannels.contains(channel) {
                         status += " 📌"
                     }
-                    if roomCreators[room] == meshService.myPeerID {
+                    if channelCreators[channel] == meshService.myPeerID {
                         status += " (owner)"
                     }
-                    return "\(room)\(status)"
+                    return "\(channel)\(status)"
                 }.joined(separator: "\n")
                 
                 let systemMessage = BitchatMessage(
                     sender: "system",
-                    content: "discovered rooms:\n\(roomList)\n\n✓ = joined, 🔒 = password protected, 📌 = retention enabled",
+                    content: "discovered channels:\n\(channelList)\n\n✓ = joined, 🔒 = password protected, 📌 = retention enabled",
                     timestamp: Date(),
                     isRelay: false
                 )
@@ -1741,7 +2006,7 @@ extension ChatViewModel: BitchatDelegate {
                 messages.append(systemMessage)
             }
         case "/transfer":
-            // Transfer room ownership
+            // Transfer channel ownership
             let parts = command.split(separator: " ", maxSplits: 1).map(String.init)
             if parts.count < 2 {
                 let systemMessage = BitchatMessage(
@@ -1752,14 +2017,14 @@ extension ChatViewModel: BitchatDelegate {
                 )
                 messages.append(systemMessage)
             } else {
-                transferRoomOwnership(to: parts[1])
+                transferChannelOwnership(to: parts[1])
             }
         case "/pass":
-            // Change room password (only available in rooms)
-            guard currentRoom != nil else {
+            // Change channel password (only available in channels)
+            guard currentChannel != nil else {
                 let systemMessage = BitchatMessage(
                     sender: "system",
-                    content: "you must be in a room to use /pass.",
+                    content: "you must be in a channel to use /pass.",
                     timestamp: Date(),
                     isRelay: false
                 )
@@ -1776,13 +2041,13 @@ extension ChatViewModel: BitchatDelegate {
                 )
                 messages.append(systemMessage)
             } else {
-                changeRoomPassword(to: parts[1])
+                changeChannelPassword(to: parts[1])
             }
         case "/clear":
             // Clear messages based on current context
-            if let room = currentRoom {
-                // Clear room messages
-                roomMessages[room]?.removeAll()
+            if let channel = currentChannel {
+                // Clear channel messages
+                channelMessages[channel]?.removeAll()
             } else if let peerID = selectedPrivateChatPeer {
                 // Clear private chat
                 privateChats[peerID]?.removeAll()
@@ -1791,11 +2056,11 @@ extension ChatViewModel: BitchatDelegate {
                 messages.removeAll()
             }
         case "/save":
-            // Toggle retention for current room (owner only)
-            guard let room = currentRoom else {
+            // Toggle retention for current channel (owner only)
+            guard let channel = currentChannel else {
                 let systemMessage = BitchatMessage(
                     sender: "system",
-                    content: "you must be in a room to toggle message retention.",
+                    content: "you must be in a channel to toggle message retention.",
                     timestamp: Date(),
                     isRelay: false
                 )
@@ -1803,11 +2068,11 @@ extension ChatViewModel: BitchatDelegate {
                 break
             }
             
-            // Check if user is the room owner
-            guard roomCreators[room] == meshService.myPeerID else {
+            // Check if user is the channel owner
+            guard channelCreators[channel] == meshService.myPeerID else {
                 let systemMessage = BitchatMessage(
                     sender: "system",
-                    content: "only the room owner can toggle message retention.",
+                    content: "only the channel owner can toggle message retention.",
                     timestamp: Date(),
                     isRelay: false
                 )
@@ -1816,65 +2081,347 @@ extension ChatViewModel: BitchatDelegate {
             }
             
             // Toggle retention status
-            let isEnabling = !retentionEnabledRooms.contains(room)
+            let isEnabling = !retentionEnabledChannels.contains(channel)
             
             if isEnabling {
-                // Enable retention for this room
-                retentionEnabledRooms.insert(room)
-                savedRooms.insert(room)
-                _ = MessageRetentionService.shared.toggleFavoriteRoom(room) // Enable if not already
+                // Enable retention for this channel
+                retentionEnabledChannels.insert(channel)
+                savedChannels.insert(channel)
+                _ = MessageRetentionService.shared.toggleFavoriteChannel(channel) // Enable if not already
                 
                 // Announce to all members that retention is enabled
-                meshService.sendRoomRetentionAnnouncement(room, enabled: true)
+                meshService.sendChannelRetentionAnnouncement(channel, enabled: true)
                 
                 let systemMessage = BitchatMessage(
                     sender: "system",
-                    content: "message retention enabled for room \(room). all members will save messages locally.",
+                    content: "message retention enabled for channel \(channel). all members will save messages locally.",
                     timestamp: Date(),
                     isRelay: false
                 )
                 messages.append(systemMessage)
                 
                 // Load any previously saved messages
-                let savedMessages = MessageRetentionService.shared.loadMessagesForRoom(room)
+                let savedMessages = MessageRetentionService.shared.loadMessagesForChannel(channel)
                 if !savedMessages.isEmpty {
                     // Merge saved messages with current messages, avoiding duplicates
-                    var existingMessageIDs = Set(roomMessages[room]?.map { $0.id } ?? [])
+                    var existingMessageIDs = Set(channelMessages[channel]?.map { $0.id } ?? [])
                     for savedMessage in savedMessages {
                         if !existingMessageIDs.contains(savedMessage.id) {
-                            if roomMessages[room] == nil {
-                                roomMessages[room] = []
+                            if channelMessages[channel] == nil {
+                                channelMessages[channel] = []
                             }
-                            roomMessages[room]?.append(savedMessage)
+                            channelMessages[channel]?.append(savedMessage)
                             existingMessageIDs.insert(savedMessage.id)
                         }
                     }
                     // Sort by timestamp
-                    roomMessages[room]?.sort { $0.timestamp < $1.timestamp }
+                    channelMessages[channel]?.sort { $0.timestamp < $1.timestamp }
                 }
             } else {
-                // Disable retention for this room
-                retentionEnabledRooms.remove(room)
-                savedRooms.remove(room)
+                // Disable retention for this channel
+                retentionEnabledChannels.remove(channel)
+                savedChannels.remove(channel)
                 
-                // Delete all saved messages for this room
-                MessageRetentionService.shared.deleteMessagesForRoom(room)
-                _ = MessageRetentionService.shared.toggleFavoriteRoom(room) // Disable if enabled
+                // Delete all saved messages for this channel
+                MessageRetentionService.shared.deleteMessagesForChannel(channel)
+                _ = MessageRetentionService.shared.toggleFavoriteChannel(channel) // Disable if enabled
                 
                 // Announce to all members that retention is disabled
-                meshService.sendRoomRetentionAnnouncement(room, enabled: false)
+                meshService.sendChannelRetentionAnnouncement(channel, enabled: false)
                 
                 let systemMessage = BitchatMessage(
                     sender: "system",
-                    content: "message retention disabled for room \(room). all saved messages will be deleted on all devices.",
+                    content: "message retention disabled for channel \(channel). all saved messages will be deleted on all devices.",
                     timestamp: Date(),
                     isRelay: false
                 )
                 messages.append(systemMessage)
             }
             
-            // Save the updated room data
-            saveRoomData()
+            // Save the updated channel data
+            saveChannelData()
+        case "/hug":
+            if parts.count > 1 {
+                let targetName = String(parts[1])
+                // Remove @ if present
+                let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
+                
+                // Check if target exists in connected peers
+                if let targetPeerID = getPeerIDForNickname(nickname) {
+                    // Create hug message
+                    let hugMessage = BitchatMessage(
+                        sender: "system",
+                        content: "🫂 \(self.nickname) hugs \(nickname)",
+                        timestamp: Date(),
+                        isRelay: false,
+                        isPrivate: false,
+                        recipientNickname: nickname,
+                        senderPeerID: meshService.myPeerID,
+                        channel: currentChannel
+                    )
+                    
+                    // Send as a regular message but it will be displayed as system message due to content
+                    let hugContent = "* 🫂 \(self.nickname) hugs \(nickname) *"
+                    if let channel = currentChannel {
+                        meshService.sendMessage(hugContent, channel: channel)
+                        // Add to channel messages
+                        if channelMessages[channel] == nil {
+                            channelMessages[channel] = []
+                        }
+                        channelMessages[channel]?.append(hugMessage)
+                    } else if selectedPrivateChatPeer != nil {
+                        // In private chat, send as private message
+                        if let peerNickname = meshService.getPeerNicknames()[targetPeerID] {
+                            meshService.sendPrivateMessage("* 🫂 \(self.nickname) hugs you *", to: targetPeerID, recipientNickname: peerNickname)
+                        }
+                    } else {
+                        // In public chat
+                        meshService.sendMessage(hugContent)
+                        messages.append(hugMessage)
+                    }
+                } else {
+                    let errorMessage = BitchatMessage(
+                        sender: "system",
+                        content: "cannot hug \(nickname): user not found.",
+                        timestamp: Date(),
+                        isRelay: false
+                    )
+                    messages.append(errorMessage)
+                }
+            } else {
+                let usageMessage = BitchatMessage(
+                    sender: "system",
+                    content: "usage: /hug <nickname>",
+                    timestamp: Date(),
+                    isRelay: false
+                )
+                messages.append(usageMessage)
+            }
+            
+        case "/slap":
+            if parts.count > 1 {
+                let targetName = String(parts[1])
+                // Remove @ if present
+                let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
+                
+                // Check if target exists in connected peers
+                if let targetPeerID = getPeerIDForNickname(nickname) {
+                    // Create slap message
+                    let slapMessage = BitchatMessage(
+                        sender: "system",
+                        content: "🐟 \(self.nickname) slaps \(nickname) around a bit with a large trout",
+                        timestamp: Date(),
+                        isRelay: false,
+                        isPrivate: false,
+                        recipientNickname: nickname,
+                        senderPeerID: meshService.myPeerID,
+                        channel: currentChannel
+                    )
+                    
+                    // Send as a regular message but it will be displayed as system message due to content
+                    let slapContent = "* 🐟 \(self.nickname) slaps \(nickname) around a bit with a large trout *"
+                    if let channel = currentChannel {
+                        meshService.sendMessage(slapContent, channel: channel)
+                        // Add to channel messages
+                        if channelMessages[channel] == nil {
+                            channelMessages[channel] = []
+                        }
+                        channelMessages[channel]?.append(slapMessage)
+                    } else if selectedPrivateChatPeer != nil {
+                        // In private chat, send as private message
+                        if let peerNickname = meshService.getPeerNicknames()[targetPeerID] {
+                            meshService.sendPrivateMessage("* 🐟 \(self.nickname) slaps you around a bit with a large trout *", to: targetPeerID, recipientNickname: peerNickname)
+                        }
+                    } else {
+                        // In public chat
+                        meshService.sendMessage(slapContent)
+                        messages.append(slapMessage)
+                    }
+                } else {
+                    let errorMessage = BitchatMessage(
+                        sender: "system",
+                        content: "cannot slap \(nickname): user not found.",
+                        timestamp: Date(),
+                        isRelay: false
+                    )
+                    messages.append(errorMessage)
+                }
+            } else {
+                let usageMessage = BitchatMessage(
+                    sender: "system",
+                    content: "usage: /slap <nickname>",
+                    timestamp: Date(),
+                    isRelay: false
+                )
+                messages.append(usageMessage)
+            }
+            
+        case "/block":
+            if parts.count > 1 {
+                let targetName = String(parts[1])
+                // Remove @ if present
+                let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
+                
+                // Find peer ID for this nickname
+                if let peerID = getPeerIDForNickname(nickname) {
+                    // Get public key fingerprint for persistent blocking
+                    if let publicKeyData = meshService.getPeerPublicKey(peerID) {
+                        let fingerprint = SHA256.hash(data: publicKeyData)
+                            .compactMap { String(format: "%02x", $0) }
+                            .joined()
+                            .prefix(16)
+                            .lowercased()
+                        let fingerprintStr = String(fingerprint)
+                        
+                        if blockedUsers.contains(fingerprintStr) {
+                            let systemMessage = BitchatMessage(
+                                sender: "system",
+                                content: "\(nickname) is already blocked.",
+                                timestamp: Date(),
+                                isRelay: false
+                            )
+                            messages.append(systemMessage)
+                        } else {
+                            blockedUsers.insert(fingerprintStr)
+                            saveBlockedUsers()
+                            
+                            // Remove from favorites if blocked
+                            if favoritePeers.contains(fingerprintStr) {
+                                favoritePeers.remove(fingerprintStr)
+                                saveFavorites()
+                            }
+                            
+                            let systemMessage = BitchatMessage(
+                                sender: "system",
+                                content: "blocked \(nickname). you will no longer receive messages from them.",
+                                timestamp: Date(),
+                                isRelay: false
+                            )
+                            messages.append(systemMessage)
+                        }
+                    } else {
+                        let systemMessage = BitchatMessage(
+                            sender: "system",
+                            content: "cannot block \(nickname): unable to verify identity.",
+                            timestamp: Date(),
+                            isRelay: false
+                        )
+                        messages.append(systemMessage)
+                    }
+                } else {
+                    let systemMessage = BitchatMessage(
+                        sender: "system",
+                        content: "cannot block \(nickname): user not found.",
+                        timestamp: Date(),
+                        isRelay: false
+                    )
+                    messages.append(systemMessage)
+                }
+            } else {
+                // List blocked users
+                if blockedUsers.isEmpty {
+                    let systemMessage = BitchatMessage(
+                        sender: "system",
+                        content: "no blocked peers.",
+                        timestamp: Date(),
+                        isRelay: false
+                    )
+                    messages.append(systemMessage)
+                } else {
+                    // Find nicknames for blocked users
+                    var blockedNicknames: [String] = []
+                    for (peerID, _) in meshService.getPeerNicknames() {
+                        if let publicKeyData = meshService.getPeerPublicKey(peerID) {
+                            let fingerprint = SHA256.hash(data: publicKeyData)
+                                .compactMap { String(format: "%02x", $0) }
+                                .joined()
+                                .prefix(16)
+                                .lowercased()
+                            let fingerprintStr = String(fingerprint)
+                            if blockedUsers.contains(fingerprintStr) {
+                                if let nickname = meshService.getPeerNicknames()[peerID] {
+                                    blockedNicknames.append(nickname)
+                                }
+                            }
+                        }
+                    }
+                    
+                    let blockedList = blockedNicknames.isEmpty ? "blocked peers (not currently online)" : blockedNicknames.sorted().joined(separator: ", ")
+                    let systemMessage = BitchatMessage(
+                        sender: "system",
+                        content: "blocked peers: \(blockedList)",
+                        timestamp: Date(),
+                        isRelay: false
+                    )
+                    messages.append(systemMessage)
+                }
+            }
+            
+        case "/unblock":
+            if parts.count > 1 {
+                let targetName = String(parts[1])
+                // Remove @ if present
+                let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
+                
+                // Find peer ID for this nickname
+                if let peerID = getPeerIDForNickname(nickname) {
+                    // Get public key fingerprint
+                    if let publicKeyData = meshService.getPeerPublicKey(peerID) {
+                        let fingerprint = SHA256.hash(data: publicKeyData)
+                            .compactMap { String(format: "%02x", $0) }
+                            .joined()
+                            .prefix(16)
+                            .lowercased()
+                        let fingerprintStr = String(fingerprint)
+                        
+                        if blockedUsers.contains(fingerprintStr) {
+                            blockedUsers.remove(fingerprintStr)
+                            saveBlockedUsers()
+                            
+                            let systemMessage = BitchatMessage(
+                                sender: "system",
+                                content: "unblocked \(nickname).",
+                                timestamp: Date(),
+                                isRelay: false
+                            )
+                            messages.append(systemMessage)
+                        } else {
+                            let systemMessage = BitchatMessage(
+                                sender: "system",
+                                content: "\(nickname) is not blocked.",
+                                timestamp: Date(),
+                                isRelay: false
+                            )
+                            messages.append(systemMessage)
+                        }
+                    } else {
+                        let systemMessage = BitchatMessage(
+                            sender: "system",
+                            content: "cannot unblock \(nickname): unable to verify identity.",
+                            timestamp: Date(),
+                            isRelay: false
+                        )
+                        messages.append(systemMessage)
+                    }
+                } else {
+                    let systemMessage = BitchatMessage(
+                        sender: "system",
+                        content: "cannot unblock \(nickname): user not found.",
+                        timestamp: Date(),
+                        isRelay: false
+                    )
+                    messages.append(systemMessage)
+                }
+            } else {
+                let systemMessage = BitchatMessage(
+                    sender: "system",
+                    content: "usage: /unblock <nickname>",
+                    timestamp: Date(),
+                    isRelay: false
+                )
+                messages.append(systemMessage)
+            }
+            
         default:
             // Unknown command
             let systemMessage = BitchatMessage(
@@ -1888,6 +2435,19 @@ extension ChatViewModel: BitchatDelegate {
     }
     
     func didReceiveMessage(_ message: BitchatMessage) {
+        
+        // Check if sender is blocked (for both private and public messages)
+        if let senderPeerID = message.senderPeerID {
+            if isPeerBlocked(senderPeerID) {
+                // Silently ignore messages from blocked users
+                return
+            }
+        } else if let peerID = getPeerIDForNickname(message.sender) {
+            if isPeerBlocked(peerID) {
+                // Silently ignore messages from blocked users
+                return
+            }
+        }
         
         if message.isPrivate {
             // Handle private message
@@ -1944,6 +2504,29 @@ extension ChatViewModel: BitchatDelegate {
                     }
                 }
                 
+                // Check if this is an action that should be converted to system message
+                let isActionMessage = messageToStore.content.hasPrefix("* ") && messageToStore.content.hasSuffix(" *") &&
+                                      (messageToStore.content.contains("🫂") || messageToStore.content.contains("🐟") || 
+                                       messageToStore.content.contains("took a screenshot"))
+                
+                if isActionMessage {
+                    // Convert to system message
+                    messageToStore = BitchatMessage(
+                        id: messageToStore.id,
+                        sender: "system",
+                        content: String(messageToStore.content.dropFirst(2).dropLast(2)), // Remove * * wrapper
+                        timestamp: messageToStore.timestamp,
+                        isRelay: messageToStore.isRelay,
+                        originalSender: messageToStore.originalSender,
+                        isPrivate: messageToStore.isPrivate,
+                        recipientNickname: messageToStore.recipientNickname,
+                        senderPeerID: messageToStore.senderPeerID,
+                        mentions: messageToStore.mentions,
+                        channel: messageToStore.channel,
+                        deliveryStatus: messageToStore.deliveryStatus
+                    )
+                }
+                
                 privateChats[peerID]?.append(messageToStore)
                 // Sort messages by timestamp to ensure proper ordering
                 privateChats[peerID]?.sort { $0.timestamp < $1.timestamp }
@@ -1973,48 +2556,48 @@ extension ChatViewModel: BitchatDelegate {
             } else if message.sender == nickname {
                 // Our own message that was echoed back - ignore it since we already added it locally
             }
-        } else if let room = message.room {
-            // Room message
+        } else if let channel = message.channel {
+            // Channel message
             
-            // Only process room messages if we've joined this room
-            if joinedRooms.contains(room) {
+            // Only process channel messages if we've joined this channel
+            if joinedChannels.contains(channel) {
                 // Prepare the message to add (might be updated if decryption succeeds)
                 var messageToAdd = message
                 
                 // Check if this is an encrypted message and we don't have the key
-                if message.isEncrypted && roomKeys[room] == nil {
-                    // Mark room as password protected if not already
-                    let wasNewlyDiscovered = !passwordProtectedRooms.contains(room)
+                if message.isEncrypted && channelKeys[channel] == nil {
+                    // Mark channel as password protected if not already
+                    let wasNewlyDiscovered = !passwordProtectedChannels.contains(channel)
                     if wasNewlyDiscovered {
-                        passwordProtectedRooms.insert(room)
-                        saveRoomData()
+                        passwordProtectedChannels.insert(channel)
+                        saveChannelData()
                         
-                        // Add a system message to indicate the room is password protected (only once)
+                        // Add a system message to indicate the channel is password protected (only once)
                         let systemMessage = BitchatMessage(
                             sender: "system",
-                            content: "room \(room) is password protected. you need the password to read messages.",
+                            content: "channel \(channel) is password protected. you need the password to read messages.",
                             timestamp: Date(),
                             isRelay: false
                         )
-                        if roomMessages[room] == nil {
-                            roomMessages[room] = []
+                        if channelMessages[channel] == nil {
+                            channelMessages[channel] = []
                         }
-                        roomMessages[room]?.append(systemMessage)
+                        channelMessages[channel]?.append(systemMessage)
                     }
                     
-                    // If we're currently viewing this room, prompt for password
-                    if currentRoom == room {
-                        passwordPromptRoom = room
+                    // If we're currently viewing this channel, prompt for password
+                    if currentChannel == channel {
+                        passwordPromptChannel = channel
                         showPasswordPrompt = true
                     }
-                } else if message.isEncrypted && roomKeys[room] != nil && message.content == "[Encrypted message - password required]" {
+                } else if message.isEncrypted && channelKeys[channel] != nil && message.content == "[Encrypted message - password required]" {
                     // We have a key but the message shows as encrypted - try to decrypt it again
                     
-                    // Check if this is the first encrypted message in the room (password verification opportunity)
-                    let isFirstEncryptedMessage = roomMessages[room]?.filter { $0.isEncrypted }.isEmpty ?? true
+                    // Check if this is the first encrypted message in the channel (password verification opportunity)
+                    let isFirstEncryptedMessage = channelMessages[channel]?.filter { $0.isEncrypted }.isEmpty ?? true
                     
                     if let encryptedData = message.encryptedContent {
-                        if let decryptedContent = decryptRoomMessage(encryptedData, room: room) {
+                        if let decryptedContent = decryptChannelMessage(encryptedData, channel: channel) {
                             // Successfully decrypted - update the message content
                             
                             if isFirstEncryptedMessage {
@@ -2022,7 +2605,7 @@ extension ChatViewModel: BitchatDelegate {
                                 // Add success message
                                 let verifiedMsg = BitchatMessage(
                                     sender: "system",
-                                    content: "password verified successfully for room \(room).",
+                                    content: "password verified successfully for channel \(channel).",
                                     timestamp: Date(),
                                     isRelay: false
                                 )
@@ -2040,7 +2623,7 @@ extension ChatViewModel: BitchatDelegate {
                                 recipientNickname: message.recipientNickname,
                                 senderPeerID: message.senderPeerID,
                                 mentions: message.mentions,
-                                room: message.room,
+                                channel: message.channel,
                                 encryptedContent: message.encryptedContent,
                                 isEncrypted: message.isEncrypted
                             )
@@ -2051,30 +2634,30 @@ extension ChatViewModel: BitchatDelegate {
                             // Decryption really failed - wrong password
                             
                             // Clear the wrong password
-                            roomKeys.removeValue(forKey: room)
-                            roomPasswords.removeValue(forKey: room)
+                            channelKeys.removeValue(forKey: channel)
+                            channelPasswords.removeValue(forKey: channel)
                             
                             // If this was the first encrypted message, we need to kick the user out
                             if isFirstEncryptedMessage {
                                 
-                                // Leave the room
-                                joinedRooms.remove(room)
-                                saveJoinedRooms()
+                                // Leave the channel
+                                joinedChannels.remove(channel)
+                                saveJoinedChannels()
                                 
-                                // Clear room data
-                                roomMessages.removeValue(forKey: room)
-                                roomMembers.removeValue(forKey: room)
-                                unreadRoomMessages.removeValue(forKey: room)
+                                // Clear channel data
+                                channelMessages.removeValue(forKey: channel)
+                                channelMembers.removeValue(forKey: channel)
+                                unreadChannelMessages.removeValue(forKey: channel)
                                 
-                                // If we're currently in this room, exit to main
-                                if currentRoom == room {
-                                    currentRoom = nil
+                                // If we're currently in this channel, exit to main
+                                if currentChannel == channel {
+                                    currentChannel = nil
                                 }
                                 
                                 // Add error message
                                 let errorMsg = BitchatMessage(
                                     sender: "system",
-                                    content: "wrong password for room \(room). you have been removed from the room.",
+                                    content: "wrong password for channel \(channel). you have been removed from the channel.",
                                     timestamp: Date(),
                                     isRelay: false
                                 )
@@ -2087,52 +2670,99 @@ extension ChatViewModel: BitchatDelegate {
                             // Add system message for subsequent failures
                             let systemMessage = BitchatMessage(
                                 sender: "system",
-                                content: "wrong password for room \(room). please enter the correct password.",
+                                content: "wrong password for channel \(channel). please enter the correct password.",
                                 timestamp: Date(),
                                 isRelay: false
                             )
                             messages.append(systemMessage)
                             
                             // Show password prompt again
-                            if currentRoom == room {
-                                passwordPromptRoom = room
+                            if currentChannel == channel {
+                                passwordPromptChannel = channel
                                 showPasswordPrompt = true
                             }
                         }
                     }
                 }
                 
-                // Add to room messages (using potentially decrypted version)
-                if roomMessages[room] == nil {
-                    roomMessages[room] = []
-                }
-                roomMessages[room]?.append(messageToAdd)
-                roomMessages[room]?.sort { $0.timestamp < $1.timestamp }
+                // Check if this is an action that should be converted to system message
+                let isActionMessage = messageToAdd.content.hasPrefix("* ") && messageToAdd.content.hasSuffix(" *") &&
+                                      (messageToAdd.content.contains("🫂") || messageToAdd.content.contains("🐟") || 
+                                       messageToAdd.content.contains("took a screenshot"))
                 
-                // Save message if room has retention enabled
-                if retentionEnabledRooms.contains(room) {
-                    MessageRetentionService.shared.saveMessage(messageToAdd, forRoom: room)
+                let finalMessage: BitchatMessage
+                if isActionMessage {
+                    // Convert to system message
+                    finalMessage = BitchatMessage(
+                        sender: "system",
+                        content: String(messageToAdd.content.dropFirst(2).dropLast(2)), // Remove * * wrapper
+                        timestamp: messageToAdd.timestamp,
+                        isRelay: messageToAdd.isRelay,
+                        originalSender: messageToAdd.originalSender,
+                        isPrivate: false,
+                        recipientNickname: messageToAdd.recipientNickname,
+                        senderPeerID: messageToAdd.senderPeerID,
+                        mentions: messageToAdd.mentions,
+                        channel: messageToAdd.channel
+                    )
+                } else {
+                    finalMessage = messageToAdd
                 }
                 
-                // Track room members - only track the sender as a member
-                if roomMembers[room] == nil {
-                    roomMembers[room] = Set()
+                // Add to channel messages (using potentially decrypted version)
+                if channelMessages[channel] == nil {
+                    channelMessages[channel] = []
+                }
+                channelMessages[channel]?.append(finalMessage)
+                channelMessages[channel]?.sort { $0.timestamp < $1.timestamp }
+                
+                // Save message if channel has retention enabled
+                if retentionEnabledChannels.contains(channel) {
+                    MessageRetentionService.shared.saveMessage(messageToAdd, forChannel: channel)
+                }
+                
+                // Track channel members - only track the sender as a member
+                if channelMembers[channel] == nil {
+                    channelMembers[channel] = Set()
                 }
                 if let senderPeerID = message.senderPeerID {
-                    roomMembers[room]?.insert(senderPeerID)
+                    channelMembers[channel]?.insert(senderPeerID)
                 } else {
                 }
                 
-                // Update unread count if not currently viewing this room
-                if currentRoom != room {
-                    unreadRoomMessages[room] = (unreadRoomMessages[room] ?? 0) + 1
+                // Update unread count if not currently viewing this channel
+                if currentChannel != channel {
+                    unreadChannelMessages[channel] = (unreadChannelMessages[channel] ?? 0) + 1
                 }
             } else {
-                // We're not in this room, ignore the message
+                // We're not in this channel, ignore the message
             }
         } else {
             // Regular public message (main chat)
-            messages.append(message)
+            
+            // Check if this is an action that should be converted to system message
+            let isActionMessage = message.content.hasPrefix("* ") && message.content.hasSuffix(" *") &&
+                                  (message.content.contains("🫂") || message.content.contains("🐟") || 
+                                   message.content.contains("took a screenshot"))
+            
+            if isActionMessage {
+                // Convert to system message
+                let systemMessage = BitchatMessage(
+                    sender: "system",
+                    content: String(message.content.dropFirst(2).dropLast(2)), // Remove * * wrapper
+                    timestamp: message.timestamp,
+                    isRelay: message.isRelay,
+                    originalSender: message.originalSender,
+                    isPrivate: false,
+                    recipientNickname: message.recipientNickname,
+                    senderPeerID: message.senderPeerID,
+                    mentions: message.mentions,
+                    channel: message.channel
+                )
+                messages.append(systemMessage)
+            } else {
+                messages.append(message)
+            }
             // Sort messages by timestamp to ensure proper ordering
             messages.sort { $0.timestamp < $1.timestamp }
         }
@@ -2149,7 +2779,62 @@ extension ChatViewModel: BitchatDelegate {
         
         #if os(iOS)
         // Haptic feedback for iOS only
-        if isMentioned && message.sender != nickname {
+        
+        // Check if this is a hug message directed at the user
+        let isHugForMe = message.content.contains("🫂") && 
+                         (message.content.contains("hugs \(nickname)") ||
+                          message.content.contains("hugs you"))
+        
+        // Check if this is a slap message directed at the user
+        let isSlapForMe = message.content.contains("🐟") && 
+                          (message.content.contains("slaps \(nickname) around") ||
+                           message.content.contains("slaps you around"))
+        
+        if isHugForMe && message.sender != nickname {
+            // Long warm haptic for hugs - continuous gentle vibration
+            let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+            impactFeedback.prepare()
+            
+            // Create a warm, sustained haptic pattern
+            for i in 0..<8 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.15) {
+                    impactFeedback.impactOccurred()
+                }
+            }
+            
+            // Add a final stronger pulse
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                let strongFeedback = UIImpactFeedbackGenerator(style: .heavy)
+                strongFeedback.prepare()
+                strongFeedback.impactOccurred()
+            }
+        } else if isSlapForMe && message.sender != nickname {
+            // Very harsh, fast, strong haptic for slaps - multiple sharp impacts
+            let impactFeedback = UIImpactFeedbackGenerator(style: .heavy)
+            impactFeedback.prepare()
+            
+            // Rapid-fire heavy impacts to simulate a hard slap
+            impactFeedback.impactOccurred()
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) {
+                impactFeedback.impactOccurred()
+            }
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
+                impactFeedback.impactOccurred()
+            }
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.09) {
+                impactFeedback.impactOccurred()
+            }
+            
+            // Final extra heavy impact
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                let finalImpact = UIImpactFeedbackGenerator(style: .heavy)
+                finalImpact.prepare()
+                finalImpact.impactOccurred()
+            }
+        } else if isMentioned && message.sender != nickname {
             // Very prominent haptic for @mentions - triple tap with heavy impact
             let impactFeedback = UIImpactFeedbackGenerator(style: .heavy)
             impactFeedback.prepare()
@@ -2207,14 +2892,14 @@ extension ChatViewModel: BitchatDelegate {
         connectedPeers = peers
         isConnected = !peers.isEmpty
         
-        // Clean up room members who disconnected
-        for (room, memberIDs) in roomMembers {
-            // Remove disconnected peers from room members
+        // Clean up channel members who disconnected
+        for (channel, memberIDs) in channelMembers {
+            // Remove disconnected peers from channel members
             let activeMembers = memberIDs.filter { memberID in
                 memberID == meshService.myPeerID || peers.contains(memberID)
             }
             if activeMembers != memberIDs {
-                roomMembers[room] = activeMembers
+                channelMembers[channel] = activeMembers
             }
         }
         
@@ -2312,15 +2997,15 @@ extension ChatViewModel: BitchatDelegate {
             self.privateChats = updatedPrivateChats
         }
         
-        // Update in room messages
-        for (room, var roomMsgs) in roomMessages {
-            if let index = roomMsgs.firstIndex(where: { $0.id == messageID }) {
-                let currentStatus = roomMsgs[index].deliveryStatus
+        // Update in channel messages
+        for (channel, var channelMsgs) in channelMessages {
+            if let index = channelMsgs.firstIndex(where: { $0.id == messageID }) {
+                let currentStatus = channelMsgs[index].deliveryStatus
                 if !shouldSkipUpdate(currentStatus: currentStatus, newStatus: status) {
-                    var updatedMessage = roomMsgs[index]
+                    var updatedMessage = channelMsgs[index]
                     updatedMessage.deliveryStatus = status
-                    roomMsgs[index] = updatedMessage
-                    roomMessages[room] = roomMsgs
+                    channelMsgs[index] = updatedMessage
+                    channelMessages[channel] = channelMsgs
                 }
             }
         }
