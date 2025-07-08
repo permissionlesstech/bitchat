@@ -249,6 +249,11 @@ class BluetoothMeshService: NSObject {
         return String(fingerprint)
     }
     
+    // Public method to get peer's public key data
+    func getPeerPublicKey(_ peerID: String) -> Data? {
+        return encryptionService.getPeerIdentityKey(peerID)
+    }
+    
     override init() {
         // Generate ephemeral peer ID for each session to prevent tracking
         // Use random bytes instead of UUID for better anonymity

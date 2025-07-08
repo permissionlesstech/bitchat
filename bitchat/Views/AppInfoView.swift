@@ -102,6 +102,26 @@ struct AppInfoView: View {
                         .foregroundColor(textColor)
                     }
                     
+                    // Commands
+                    VStack(alignment: .leading, spacing: 16) {
+                        SectionHeader("Commands")
+                        
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("/j #channel - join or create a channel")
+                            Text("/m @name - send private message")
+                            Text("/w - see who's online")
+                            Text("/channels - show all discovered channels")
+                            Text("/block @name - block a peer")
+                            Text("/block - list blocked peers")
+                            Text("/unblock @name - unblock a peer")
+                            Text("/clear - clear current chat")
+                            Text("/hug @name - send someone a hug")
+                            Text("/slap @name - slap with a trout")
+                        }
+                        .font(.system(size: 14, design: .monospaced))
+                        .foregroundColor(textColor)
+                    }
+                    
                     // Technical Details
                     VStack(alignment: .leading, spacing: 16) {
                         SectionHeader("Technical Details")
@@ -203,6 +223,26 @@ struct AppInfoView: View {
                             Text("• Use @nickname to mention someone")
                             Text("• Use #channelname to create/join channels")
                             Text("• Triple-tap the logo for panic mode")
+                        }
+                        .font(.system(size: 14, design: .monospaced))
+                        .foregroundColor(textColor)
+                    }
+                    
+                    // Commands
+                    VStack(alignment: .leading, spacing: 16) {
+                        SectionHeader("Commands")
+                        
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("/j #channel - join or create a channel")
+                            Text("/m @name - send private message")
+                            Text("/w - see who's online")
+                            Text("/channels - show all discovered channels")
+                            Text("/block @name - block a peer")
+                            Text("/block - list blocked peers")
+                            Text("/unblock @name - unblock a peer")
+                            Text("/clear - clear current chat")
+                            Text("/hug @name - send someone a hug")
+                            Text("/slap @name - slap with a trout")
                         }
                         .font(.system(size: 14, design: .monospaced))
                         .foregroundColor(textColor)
