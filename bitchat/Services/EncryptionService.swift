@@ -8,6 +8,8 @@
 
 import Foundation
 import CryptoKit
+import LocalAuthentication
+import Security
 
 class EncryptionService {
     // Key agreement keys for encryption
@@ -31,7 +33,15 @@ class EncryptionService {
     // Thread safety
     private let cryptoQueue = DispatchQueue(label: "chat.bitchat.crypto", attributes: .concurrent)
     
-    init() {
+    // Keychain service identifiers
+    private let keychainService = "com.bitchat.encryption"
+    private let identityKeyTag = "com.bitchat.identityKey"
+    private let keyRotationTag = "com.bitchat.keyRotation"
+    
+    // Key rotation interval (30 days)
+    private let keyRotationInterval: TimeInterval = 30 * 24 * 60 * 60
+    
+    init() throws {
         // Generate ephemeral key pairs for this session
         self.privateKey = Curve25519.KeyAgreement.PrivateKey()
         self.publicKey = privateKey.publicKey
@@ -39,16 +49,22 @@ class EncryptionService {
         self.signingPrivateKey = Curve25519.Signing.PrivateKey()
         self.signingPublicKey = signingPrivateKey.publicKey
         
-        // Load or create persistent identity key
-        if let identityData = UserDefaults.standard.data(forKey: "bitchat.identityKey"),
-           let loadedKey = try? Curve25519.Signing.PrivateKey(rawRepresentation: identityData) {
-            self.identityKey = loadedKey
-        } else {
-            // First run - create and save identity key
-            self.identityKey = Curve25519.Signing.PrivateKey()
-            UserDefaults.standard.set(identityKey.rawRepresentation, forKey: "bitchat.identityKey")
+        // Load or create persistent identity key with biometric protection
+        do {
+            if let identityKeyData = try loadIdentityKeyFromKeychain() {
+                self.identityKey = try Curve25519.Signing.PrivateKey(rawRepresentation: identityKeyData)
+            } else {
+                // First run - create and save identity key
+                self.identityKey = Curve25519.Signing.PrivateKey()
+                try saveIdentityKeyToKeychain(self.identityKey.rawRepresentation)
+            }
+            self.identityPublicKey = identityKey.publicKey
+            
+            // Check if key rotation is needed
+            try checkAndPerformKeyRotationIfNeeded()
+        } catch {
+            throw EncryptionError.keychainError(error)
         }
-        self.identityPublicKey = identityKey.publicKey
     }
     
     // Create combined public key data for exchange
@@ -109,9 +125,200 @@ class EncryptionService {
     }
     
     // Clear persistent identity (for panic mode)
-    func clearPersistentIdentity() {
-        UserDefaults.standard.removeObject(forKey: "bitchat.identityKey")
-        // print("[CRYPTO] Cleared persistent identity key")
+    func clearPersistentIdentity() throws {
+        do {
+            try deleteIdentityKeyFromKeychain()
+            // print("[CRYPTO] Cleared persistent identity key from keychain")
+        } catch {
+            throw EncryptionError.keychainError(error)
+        }
+    }
+    
+    // MARK: - Keychain Operations
+    
+    private func createAccessControl() throws -> SecAccessControl {
+        var error: Unmanaged<CFError>?
+        
+        guard let accessControl = SecAccessControlCreateWithFlags(
+            kCFAllocatorDefault,
+            kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+            [.biometryCurrentSet, .privateKeyUsage],
+            &error
+        ) else {
+            if let error = error?.takeRetainedValue() {
+                throw error as Error
+            }
+            throw EncryptionError.keychainAccessControlCreationFailed
+        }
+        
+        return accessControl
+    }
+    
+    private func saveIdentityKeyToKeychain(_ keyData: Data) throws {
+        let accessControl = try createAccessControl()
+        
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: keychainService,
+            kSecAttrAccount as String: identityKeyTag,
+            kSecValueData as String: keyData,
+            kSecAttrAccessControl as String: accessControl,
+            kSecUseAuthenticationContext as String: LAContext(),
+            kSecAttrSynchronizable as String: false
+        ]
+        
+        // Delete any existing item first
+        SecItemDelete(query as CFDictionary)
+        
+        let status = SecItemAdd(query as CFDictionary, nil)
+        
+        if status != errSecSuccess {
+            throw EncryptionError.keychainSaveError(status)
+        }
+        
+        // Save key rotation timestamp
+        try saveKeyRotationTimestamp()
+    }
+    
+    private func loadIdentityKeyFromKeychain() throws -> Data? {
+        let context = LAContext()
+        context.localizedReason = "Access your encrypted identity key"
+        
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: keychainService,
+            kSecAttrAccount as String: identityKeyTag,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+            kSecUseAuthenticationContext as String: context
+        ]
+        
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        
+        switch status {
+        case errSecSuccess:
+            guard let data = item as? Data else {
+                throw EncryptionError.keychainDataCorrupted
+            }
+            return data
+        case errSecItemNotFound:
+            return nil
+        case errSecUserCanceled:
+            throw EncryptionError.biometricAuthenticationCanceled
+        case errSecAuthFailed:
+            throw EncryptionError.biometricAuthenticationFailed
+        default:
+            throw EncryptionError.keychainLoadError(status)
+        }
+    }
+    
+    private func deleteIdentityKeyFromKeychain() throws {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: keychainService,
+            kSecAttrAccount as String: identityKeyTag
+        ]
+        
+        let status = SecItemDelete(query as CFDictionary)
+        
+        if status != errSecSuccess && status != errSecItemNotFound {
+            throw EncryptionError.keychainDeleteError(status)
+        }
+        
+        // Also delete rotation timestamp
+        try deleteKeyRotationTimestamp()
+    }
+    
+    // MARK: - Key Rotation
+    
+    private func checkAndPerformKeyRotationIfNeeded() throws {
+        guard let lastRotation = try loadKeyRotationTimestamp() else {
+            // No rotation timestamp found, save current time
+            try saveKeyRotationTimestamp()
+            return
+        }
+        
+        let timeSinceLastRotation = Date().timeIntervalSince(lastRotation)
+        
+        if timeSinceLastRotation >= keyRotationInterval {
+            try performKeyRotation()
+        }
+    }
+    
+    private func performKeyRotation() throws {
+        // Generate new identity key
+        let newIdentityKey = Curve25519.Signing.PrivateKey()
+        
+        // Save the new key
+        try saveIdentityKeyToKeychain(newIdentityKey.rawRepresentation)
+        
+        // Note: In a real implementation, you would need to:
+        // 1. Notify peers of the key rotation
+        // 2. Maintain old key for a transition period
+        // 3. Re-encrypt any stored data with the new key
+        // This is a simplified version
+    }
+    
+    private func saveKeyRotationTimestamp() throws {
+        let timestamp = Date()
+        let data = try JSONEncoder().encode(timestamp)
+        
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: keychainService,
+            kSecAttrAccount as String: keyRotationTag,
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+            kSecAttrSynchronizable as String: false
+        ]
+        
+        SecItemDelete(query as CFDictionary)
+        
+        let status = SecItemAdd(query as CFDictionary, nil)
+        
+        if status != errSecSuccess {
+            throw EncryptionError.keychainSaveError(status)
+        }
+    }
+    
+    private func loadKeyRotationTimestamp() throws -> Date? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: keychainService,
+            kSecAttrAccount as String: keyRotationTag,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        
+        switch status {
+        case errSecSuccess:
+            guard let data = item as? Data else {
+                return nil
+            }
+            return try JSONDecoder().decode(Date.self, from: data)
+        case errSecItemNotFound:
+            return nil
+        default:
+            throw EncryptionError.keychainLoadError(status)
+        }
+    }
+    
+    private func deleteKeyRotationTimestamp() throws {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: keychainService,
+            kSecAttrAccount as String: keyRotationTag
+        ]
+        
+        let status = SecItemDelete(query as CFDictionary)
+        
+        if status != errSecSuccess && status != errSecItemNotFound {
+            throw EncryptionError.keychainDeleteError(status)
+        }
     }
     
     func encrypt(_ data: Data, for peerID: String) throws -> Data {
@@ -157,9 +364,46 @@ class EncryptionService {
     
 }
 
-enum EncryptionError: Error {
+enum EncryptionError: LocalizedError {
     case noSharedSecret
     case invalidPublicKey
     case encryptionFailed
     case decryptionFailed
+    case keychainError(Error)
+    case keychainSaveError(OSStatus)
+    case keychainLoadError(OSStatus)
+    case keychainDeleteError(OSStatus)
+    case keychainAccessControlCreationFailed
+    case keychainDataCorrupted
+    case biometricAuthenticationFailed
+    case biometricAuthenticationCanceled
+    
+    var errorDescription: String? {
+        switch self {
+        case .noSharedSecret:
+            return "No shared secret available for encryption"
+        case .invalidPublicKey:
+            return "Invalid public key format"
+        case .encryptionFailed:
+            return "Encryption operation failed"
+        case .decryptionFailed:
+            return "Decryption operation failed"
+        case .keychainError(let error):
+            return "Keychain error: \(error.localizedDescription)"
+        case .keychainSaveError(let status):
+            return "Failed to save to keychain: \(status)"
+        case .keychainLoadError(let status):
+            return "Failed to load from keychain: \(status)"
+        case .keychainDeleteError(let status):
+            return "Failed to delete from keychain: \(status)"
+        case .keychainAccessControlCreationFailed:
+            return "Failed to create keychain access control"
+        case .keychainDataCorrupted:
+            return "Keychain data is corrupted"
+        case .biometricAuthenticationFailed:
+            return "Biometric authentication failed"
+        case .biometricAuthenticationCanceled:
+            return "Biometric authentication was canceled"
+        }
+    }
 }

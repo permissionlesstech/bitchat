@@ -47,7 +47,7 @@ class BluetoothMeshService: NSObject {
     private var loggedCryptoErrors = Set<String>()  // Track which peers we've logged crypto errors for
     
     weak var delegate: BitchatDelegate?
-    private let encryptionService = EncryptionService()
+    private var encryptionService: EncryptionService!
     private let messageQueue = DispatchQueue(label: "bitchat.messageQueue", attributes: .concurrent)
     private var processedMessages = Set<String>()
     private let maxTTL: UInt8 = 7  // Maximum hops for long-distance delivery
@@ -262,6 +262,16 @@ class BluetoothMeshService: NSObject {
         self.myPeerID = randomBytes.map { String(format: "%02x", $0) }.joined()
         
         super.init()
+        
+        // Initialize encryption service with error handling
+        do {
+            self.encryptionService = try EncryptionService()
+        } catch {
+            // Log the error and create a fallback instance
+            print("ERROR: Failed to initialize EncryptionService with keychain: \(error)")
+            // Fatal error as encryption is critical for secure communication
+            fatalError("Cannot initialize secure encryption service: \(error)")
+        }
         
         centralManager = CBCentralManager(delegate: self, queue: nil)
         peripheralManager = CBPeripheralManager(delegate: self, queue: nil)
@@ -981,7 +991,11 @@ class BluetoothMeshService: NSObject {
         fragmentMetadata.removeAll()
         
         // Clear persistent identity
-        encryptionService.clearPersistentIdentity()
+        do {
+            try encryptionService.clearPersistentIdentity()
+        } catch {
+            print("ERROR: Failed to clear persistent identity: \(error)")
+        }
         
         // print("[PANIC] Emergency disconnect completed")
     }
