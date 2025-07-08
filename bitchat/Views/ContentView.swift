@@ -625,12 +625,14 @@ struct ContentView: View {
                     if newValue.hasPrefix("/") && newValue.count >= 1 {
                         // Build context-aware command list
                         var commandDescriptions = [
+                            ("/block", "block or list blocked users"),
                             ("/clear", "clear chat messages"),
                             ("/hug", "send someone a warm hug"),
                             ("/j", "join or create a channel"),
                             ("/m", "send private message"),
                             ("/channels", "show all discovered channels"),
                             ("/slap", "slap someone with a trout"),
+                            ("/unblock", "unblock a user"),
                             ("/w", "see who's online")
                         ]
                         
