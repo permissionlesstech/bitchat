@@ -74,9 +74,11 @@ enum MessageType: UInt8 {
     case fragmentEnd = 0x07
     case channelAnnounce = 0x08  // Announce password-protected channel status
     case channelRetention = 0x09  // Announce channel retention status
-    case deliveryAck = 0x0A  // Acknowledge message received
-    case deliveryStatusRequest = 0x0B  // Request delivery status update
-    case readReceipt = 0x0C  // Message has been read/viewed
+    case channelScreenshotProtection = 0x0A
+    case privateScreenshotProtection = 0x0B
+    case deliveryAck = 0x0C  // Acknowledge message received
+    case deliveryStatusRequest = 0x0D  // Request delivery status update
+    case readReceipt = 0x0E  // Message has been read/viewed
 }
 
 // Special recipient ID for broadcast messages
@@ -251,6 +253,8 @@ protocol BitchatDelegate: AnyObject {
     func didReceiveChannelLeave(_ channel: String, from peerID: String)
     func didReceivePasswordProtectedChannelAnnouncement(_ channel: String, isProtected: Bool, creatorID: String?, keyCommitment: String?)
     func didReceiveChannelRetentionAnnouncement(_ channel: String, enabled: Bool, creatorID: String?)
+    func didReceiveChannelScreenshotProtectionAnnouncement(_ channel: String, enabled: Bool, creatorID: String?)
+    func didReceivePrivateScreenshotProtectionNotification(_ enabled: Bool, from peerID: String)
     func decryptChannelMessage(_ encryptedContent: Data, channel: String) -> String?
     
     // Optional method to check if a fingerprint belongs to a favorite peer
@@ -277,6 +281,14 @@ extension BitchatDelegate {
     }
     
     func didReceiveChannelRetentionAnnouncement(_ channel: String, enabled: Bool, creatorID: String?) {
+        // Default empty implementation
+    }
+    
+    func didReceiveChannelScreenshotProtectionAnnouncement(_ channel: String, enabled: Bool, creatorID: String?) {
+        // Default empty implementation
+    }
+    
+    func didReceivePrivateScreenshotProtectionNotification(_ enabled: Bool, from peerID: String) {
         // Default empty implementation
     }
     

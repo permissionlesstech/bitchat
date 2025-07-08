@@ -44,6 +44,8 @@ class ChatViewModel: ObservableObject {
     @Published var channelPasswords: [String: String] = [:]  // channel -> password (stored locally only)
     @Published var channelKeys: [String: SymmetricKey] = [:]  // channel -> derived encryption key
     @Published var passwordProtectedChannels: Set<String> = []  // Set of channels that require passwords
+    @Published var screenshotProtectedChannels: Set<String> = []  // Channels with screenshot protection
+    @Published var screenshotProtectedChats: Set<String> = []  // Private chat fingerprints with protection
     @Published var channelCreators: [String: String] = [:]  // channel -> creator peerID
     @Published var channelKeyCommitments: [String: String] = [:]  // channel -> SHA256(derivedKey) for verification
     @Published var showPasswordPrompt: Bool = false
@@ -62,6 +64,8 @@ class ChatViewModel: ObservableObject {
     private let channelKeyCommitmentsKey = "bitchat.channelKeyCommitments"
     private let retentionEnabledChannelsKey = "bitchat.retentionEnabledChannels"
     private let blockedUsersKey = "bitchat.blockedUsers"
+    private let screenshotProtectedChannelsKey = "bitchat.screenshotProtectedChannels"
+    private let screenshotProtectedChatsKey = "bitchat.screenshotProtectedChats"
     private var nicknameSaveTimer: Timer?
     
     @Published var favoritePeers: Set<String> = []  // Now stores public key fingerprints instead of peer IDs
@@ -136,6 +140,12 @@ class ChatViewModel: ObservableObject {
             self,
             selector: #selector(userDidTakeScreenshot),
             name: UIApplication.userDidTakeScreenshotNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(userDidCaptureScreen),
+            name: UIScreen.capturedDidChangeNotification,
             object: nil
         )
         #endif
@@ -236,6 +246,15 @@ class ChatViewModel: ObservableObject {
         for (channel, password) in savedPasswords {
             channelKeys[channel] = deriveChannelKey(from: password, channelName: channel)
         }
+        
+        // Load screenshot protected channels
+        if let savedScreenshotChannels = userDefaults.stringArray(forKey: screenshotProtectedChannelsKey) {
+            screenshotProtectedChannels = Set(savedScreenshotChannels)
+        }
+        // Load screenshot protected chats
+        if let savedScreenshotChats = userDefaults.stringArray(forKey: screenshotProtectedChatsKey) {
+            screenshotProtectedChats = Set(savedScreenshotChats)
+        }
     }
     
     private func saveChannelData() {
@@ -247,6 +266,8 @@ class ChatViewModel: ObservableObject {
         }
         userDefaults.set(channelKeyCommitments, forKey: channelKeyCommitmentsKey)
         userDefaults.set(Array(retentionEnabledChannels), forKey: retentionEnabledChannelsKey)
+        userDefaults.set(Array(screenshotProtectedChannels), forKey: screenshotProtectedChannelsKey)
+        userDefaults.set(Array(screenshotProtectedChats), forKey: screenshotProtectedChatsKey)
         userDefaults.synchronize()
     }
     
@@ -1066,9 +1087,16 @@ class ChatViewModel: ObservableObject {
         }
     }
     
-    @objc private func userDidTakeScreenshot() {
+    @objc private func userDidCaptureScreen() {
+        self.userDidTakeScreenshot(recording: true)
+    }
+    
+    @objc private func userDidTakeScreenshot(recording: Bool = false) {
         // Send screenshot notification based on current context
-        let screenshotMessage = "* \(nickname) took a screenshot *"
+        let isCaptured = UIScreen.main.isCaptured
+        if !isCaptured && recording { return }
+        let captureType: String = isCaptured && recording ? "screen recording" : "screenshot"
+        let screenshotMessage: String = "* \(nickname) took a \(captureType) *"
         
         if let peerID = selectedPrivateChatPeer {
             // In private chat - send to the other person
@@ -1080,7 +1108,7 @@ class ChatViewModel: ObservableObject {
             // Show local notification immediately as system message
             let localNotification = BitchatMessage(
                 sender: "system",
-                content: "you took a screenshot",
+                content: "you took a \(captureType)",
                 timestamp: Date(),
                 isRelay: false,
                 originalSender: nil,
@@ -1105,7 +1133,7 @@ class ChatViewModel: ObservableObject {
             // Show local notification immediately as system message
             let localNotification = BitchatMessage(
                 sender: "system",
-                content: "you took a screenshot",
+                content: "you took a \(captureType)",
                 timestamp: Date(),
                 isRelay: false,
                 originalSender: nil,
@@ -1124,7 +1152,7 @@ class ChatViewModel: ObservableObject {
             // Show local notification immediately as system message
             let localNotification = BitchatMessage(
                 sender: "system",
-                content: "you took a screenshot",
+                content: "you took a \(captureType)",
                 timestamp: Date(),
                 isRelay: false
             )
@@ -1254,6 +1282,18 @@ class ChatViewModel: ObservableObject {
         userDefaults.removeObject(forKey: channelCreatorsKey)
         userDefaults.removeObject(forKey: channelKeyCommitmentsKey)
         userDefaults.removeObject(forKey: retentionEnabledChannelsKey)
+        userDefaults.removeObject(forKey: screenshotProtectedChannelsKey)
+        userDefaults.removeObject(forKey: screenshotProtectedChatsKey)
+        
+        // Clear screenshot protection enabler tracking
+        for fingerprint in screenshotProtectedChats {
+            let enablerKey = "screenshot-prevention_enabler_\(fingerprint)"
+            userDefaults.removeObject(forKey: enablerKey)
+        }
+        
+        // Clear screenshot protection data
+        screenshotProtectedChannels.removeAll()
+        screenshotProtectedChats.removeAll()
         
         // Reset nickname to anonymous
         nickname = "anon\(Int.random(in: 1000...9999))"
@@ -1263,6 +1303,10 @@ class ChatViewModel: ObservableObject {
         favoritePeers.removeAll()
         peerIDToPublicKeyFingerprint.removeAll()
         saveFavorites()
+        
+        // Clear blocked users
+        blockedUsers.removeAll()
+        saveBlockedUsers()
         
         // Clear autocomplete state
         autocompleteSuggestions.removeAll()
@@ -1281,10 +1325,7 @@ class ChatViewModel: ObservableObject {
         
         // Force UI update
         objectWillChange.send()
-        
     }
-    
-    
     
     func formatTimestamp(_ date: Date) -> String {
         let formatter = DateFormatter()
@@ -1676,6 +1717,18 @@ class ChatViewModel: ObservableObject {
         
         return result
     }
+    
+    // Helper to check if screenshots are blocked
+    func areScreenshotsAllowed() -> Bool {
+        if let channel = currentChannel, screenshotProtectedChannels.contains(channel) {
+            return false
+        }
+        if let peerID = selectedPrivateChatPeer,
+           let fingerprint = peerIDToPublicKeyFingerprint[peerID] {
+            return !(screenshotProtectedChats.contains(fingerprint))
+        }
+        return true
+    }
 }
 
 extension ChatViewModel: BitchatDelegate {
@@ -1816,6 +1869,101 @@ extension ChatViewModel: BitchatDelegate {
         
         // Persist retention status
         userDefaults.set(Array(retentionEnabledChannels), forKey: retentionEnabledChannelsKey)
+    }
+    
+    func didReceiveChannelScreenshotProtectionAnnouncement(_ channel: String, enabled: Bool, creatorID: String?) {
+        // Only process if we're a member of this channel
+        guard joinedChannels.contains(channel) else { return }
+        
+        // Verify the announcement is from the channel owner
+        if let creatorID = creatorID, channelCreators[channel] != creatorID {
+            return
+        }
+        
+        // Update screenshot protection status
+        if enabled {
+            screenshotProtectedChannels.insert(channel)
+        } else {
+            screenshotProtectedChannels.remove(channel)
+        }
+        
+        // Save the settings
+        saveChannelData()
+        
+        // Show notification if we're in the channel
+        if currentChannel == channel {
+            let msg = BitchatMessage(
+                sender: "system",
+                content: "channel owner \(enabled ? "enabled" : "disabled") screenshot protection.",
+                timestamp: Date(),
+                isRelay: false
+            )
+            messages.append(msg)
+        }
+    }
+
+    func didReceivePrivateScreenshotProtectionNotification(_ enabled: Bool, from peerID: String) {
+        guard let fingerprint = peerIDToPublicKeyFingerprint[peerID] else { return }
+        
+        if enabled {
+            screenshotProtectedChats.insert(fingerprint)
+            
+            // Store who enabled protection for this chat
+            let enablerKey = "screenshot-prevention_enabler_\(fingerprint)"
+            userDefaults.set(peerID, forKey: enablerKey)
+            
+            if selectedPrivateChatPeer == peerID {
+                let msg = BitchatMessage(
+                    sender: "system",
+                    content: "screenshot protection enabled by other party.",
+                    timestamp: Date(),
+                    isRelay: false
+                )
+                if privateChats[peerID] == nil {
+                    privateChats[peerID] = []
+                }
+                privateChats[peerID]?.append(msg)
+            }
+        } else {
+            // Only allow disabling if the requester is the one who enabled it
+            let enablerKey = "screenshot-prevention_enabler_\(fingerprint)"
+            let originalEnabler = userDefaults.string(forKey: enablerKey)
+            
+            if originalEnabler == peerID {
+                screenshotProtectedChats.remove(fingerprint)
+                userDefaults.removeObject(forKey: enablerKey)
+                
+                if selectedPrivateChatPeer == peerID {
+                    let msg = BitchatMessage(
+                        sender: "system",
+                        content: "screenshot protection disabled by other party.",
+                        timestamp: Date(),
+                        isRelay: false
+                    )
+                    if privateChats[peerID] == nil {
+                        privateChats[peerID] = []
+                    }
+                    privateChats[peerID]?.append(msg)
+                }
+            } else {
+                if selectedPrivateChatPeer == peerID {
+                    let msg = BitchatMessage(
+                        sender: "system",
+                        content: "screenshot protection disable request ignored (only the enabler can disable it).",
+                        timestamp: Date(),
+                        isRelay: false
+                    )
+                    if privateChats[peerID] == nil {
+                        privateChats[peerID] = []
+                    }
+                    privateChats[peerID]?.append(msg)
+                }
+                return
+            }
+        }
+        
+        userDefaults.set(Array(screenshotProtectedChats), forKey: screenshotProtectedChatsKey)
+        userDefaults.synchronize()
     }
     
     private func handleCommand(_ command: String) {
@@ -2430,6 +2578,78 @@ extension ChatViewModel: BitchatDelegate {
                 messages.append(systemMessage)
             }
             
+        case "/screenshots":
+            if parts.count > 1 {
+                let setting = String(parts[1]).lowercased()
+                if currentChannel != nil {
+                    if setting == "allow" {
+                        toggleChannelScreenshotProtection(false)
+                    } else if setting == "block" {
+                        toggleChannelScreenshotProtection(true)
+                    } else {
+                        let msg = BitchatMessage(
+                            sender: "system",
+                            content: "usage: /screenshots allow or /screenshots block",
+                            timestamp: Date(),
+                            isRelay: false
+                        )
+                        messages.append(msg)
+                    }
+                } else if selectedPrivateChatPeer != nil {
+                    if setting == "allow" {
+                        togglePrivateChatScreenshotProtection(false)
+                    } else if setting == "block" {
+                        togglePrivateChatScreenshotProtection(true)
+                    } else {
+                        let msg = BitchatMessage(
+                            sender: "system",
+                            content: "usage: /screenshots allow or /screenshots block",
+                            timestamp: Date(),
+                            isRelay: false
+                        )
+                        messages.append(msg)
+                    }
+                } else {
+                    let msg = BitchatMessage(
+                        sender: "system",
+                        content: "screenshot protection is only available in channels and private chats.",
+                        timestamp: Date(),
+                        isRelay: false
+                    )
+                    messages.append(msg)
+                }
+            } else {
+                if let channel = currentChannel {
+                    let isProtected = screenshotProtectedChannels.contains(channel)
+                    let status = isProtected ? "enabled" : "disabled"
+                    let msg = BitchatMessage(
+                        sender: "system",
+                        content: "screenshot protection is \(status) for \(channel).",
+                        timestamp: Date(),
+                        isRelay: false
+                    )
+                    messages.append(msg)
+                } else if let peerID = selectedPrivateChatPeer,
+                          let fingerprint = peerIDToPublicKeyFingerprint[peerID] {
+                    let isProtected = screenshotProtectedChats.contains(fingerprint)
+                    let status = isProtected ? "enabled" : "disabled"
+                    let msg = BitchatMessage(
+                        sender: "system",
+                        content: "screenshot protection is \(status) for this chat.",
+                        timestamp: Date(),
+                        isRelay: false
+                    )
+                    messages.append(msg)
+                } else {
+                    let msg = BitchatMessage(
+                        sender: "system",
+                        content: "screenshot protection is only available in channels and private chats.",
+                        timestamp: Date(),
+                        isRelay: false
+                    )
+                    messages.append(msg)
+                }
+            }
         default:
             // Unknown command
             let systemMessage = BitchatMessage(
@@ -3037,4 +3257,124 @@ extension ChatViewModel: BitchatDelegate {
         }
     }
     
+    // Toggle screenshot protection for channels
+    func toggleChannelScreenshotProtection(_ enabled: Bool) {
+        guard let channel = currentChannel else {
+            let msg = BitchatMessage(
+                sender: "system",
+                content: "you must be in a channel to manage screenshot protection.",
+                timestamp: Date(),
+                isRelay: false
+            )
+            messages.append(msg)
+            return
+        }
+        guard channelCreators[channel] == meshService.myPeerID else {
+            let msg = BitchatMessage(
+                sender: "system",
+                content: "only the channel owner can manage screenshot protection.",
+                timestamp: Date(),
+                isRelay: false
+            )
+            messages.append(msg)
+            return
+        }
+        if enabled {
+            screenshotProtectedChannels.insert(channel)
+            meshService.sendChannelScreenshotProtectionAnnouncement(channel, enabled: true)
+            let msg = BitchatMessage(
+                sender: "system",
+                content: "screenshot protection enabled for \(channel).",
+                timestamp: Date(),
+                isRelay: false
+            )
+            messages.append(msg)
+        } else {
+            screenshotProtectedChannels.remove(channel)
+            meshService.sendChannelScreenshotProtectionAnnouncement(channel, enabled: false)
+            let msg = BitchatMessage(
+                sender: "system",
+                content: "screenshot protection disabled for \(channel).",
+                timestamp: Date(),
+                isRelay: false
+            )
+            messages.append(msg)
+        }
+        saveChannelData()
+    }
+    
+    // Toggle screenshot protection for private chats
+    // Toggle screenshot protection for private chats
+    func togglePrivateChatScreenshotProtection(_ enabled: Bool) {
+        guard let peerID = selectedPrivateChatPeer,
+              let fingerprint = peerIDToPublicKeyFingerprint[peerID],
+              let peerNickname = meshService.getPeerNicknames()[peerID] else {
+            let msg = BitchatMessage(
+                sender: "system",
+                content: "you must be in a private chat to manage screenshot protection.",
+                timestamp: Date(),
+                isRelay: false
+            )
+            messages.append(msg)
+            return
+        }
+        
+        if enabled {
+            screenshotProtectedChats.insert(fingerprint)
+            
+            // Track that we enabled protection for this chat
+            let enablerKey = "screenshot-prevention_enabler_\(fingerprint)"
+            userDefaults.set(meshService.myPeerID, forKey: enablerKey)
+            
+            meshService.sendPrivateScreenshotProtectionNotification(true, to: peerID, recipientNickname: peerNickname)
+            let msg = BitchatMessage(
+                sender: "system",
+                content: "screenshot protection enabled for this chat.",
+                timestamp: Date(),
+                isRelay: false
+            )
+            if privateChats[peerID] == nil {
+                privateChats[peerID] = []
+            }
+            privateChats[peerID]?.append(msg)
+        } else {
+            // Check if we're the one who enabled it
+            let enablerKey = "screenshot-prevention_enabler_\(fingerprint)"
+            let originalEnabler = userDefaults.string(forKey: enablerKey)
+            
+            if originalEnabler == meshService.myPeerID || originalEnabler == nil {
+                // We enabled it or no record exists, so we can disable it
+                screenshotProtectedChats.remove(fingerprint)
+                userDefaults.removeObject(forKey: enablerKey)
+                
+                meshService.sendPrivateScreenshotProtectionNotification(false, to: peerID, recipientNickname: peerNickname)
+                let msg = BitchatMessage(
+                    sender: "system",
+                    content: "screenshot protection disabled for this chat.",
+                    timestamp: Date(),
+                    isRelay: false
+                )
+                if privateChats[peerID] == nil {
+                    privateChats[peerID] = []
+                }
+                privateChats[peerID]?.append(msg)
+            } else {
+                // Someone else enabled it, we can't disable it
+                let msg = BitchatMessage(
+                    sender: "system",
+                    content: "cannot disable screenshot protection - it was enabled by the other party.",
+                    timestamp: Date(),
+                    isRelay: false
+                )
+                if privateChats[peerID] == nil {
+                    privateChats[peerID] = []
+                }
+                privateChats[peerID]?.append(msg)
+                return
+            }
+        }
+        
+        userDefaults.set(Array(screenshotProtectedChats), forKey: screenshotProtectedChatsKey)
+        userDefaults.synchronize()
+    }
 }

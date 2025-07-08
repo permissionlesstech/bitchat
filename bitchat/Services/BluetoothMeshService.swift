@@ -706,6 +706,57 @@ class BluetoothMeshService: NSObject {
         }
     }
     
+    func sendChannelScreenshotProtectionAnnouncement(_ channel: String, enabled: Bool) {
+        messageQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            // Payload format: channel|enabled|creatorID
+            let enabledFlag = enabled ? "1" : "0"
+            let payload = "\(channel)|\(enabledFlag)|\(self.myPeerID)"
+            
+            let packet = BitchatPacket(
+                type: MessageType.channelScreenshotProtection.rawValue,
+                senderID: Data(self.myPeerID.utf8),
+                recipientID: SpecialRecipients.broadcast,
+                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                payload: Data(payload.utf8),
+                signature: nil,
+                ttl: 5
+            )
+            
+            self.broadcastPacket(packet)
+        }
+    }
+
+    func sendPrivateScreenshotProtectionNotification(_ enabled: Bool, to recipientID: String, recipientNickname: String) {
+        messageQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            let enabledFlag = enabled ? "1" : "0"
+            let payload = Data(enabledFlag.utf8)
+            
+            // Encrypt the notification
+            let encryptedPayload: Data
+            do {
+                encryptedPayload = try self.encryptionService.encrypt(payload, for: recipientID)
+            } catch {
+                return
+            }
+            
+            let packet = BitchatPacket(
+                type: MessageType.privateScreenshotProtection.rawValue,
+                senderID: Data(self.myPeerID.utf8),
+                recipientID: Data(recipientID.utf8),
+                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                payload: encryptedPayload,
+                signature: nil,
+                ttl: 3
+            )
+            
+            self.broadcastPacket(packet)
+        }
+    }
+    
     func sendDeliveryAck(_ ack: DeliveryAck, to recipientID: String) {
         messageQueue.async { [weak self] in
             guard let self = self else { return }
@@ -1983,6 +2034,53 @@ class BluetoothMeshService: NSObject {
                         self.broadcastPacket(relayPacket)
                     }
                 }
+            }
+            
+        case .channelScreenshotProtection:
+            if let payloadStr = String(data: packet.payload, encoding: .utf8) {
+                let components = payloadStr.split(separator: "|").map(String.init)
+                if components.count >= 3 {
+                    let channel = components[0]
+                    let enabled = components[1] == "1"
+                    let creatorID = components[2]
+                    
+                    DispatchQueue.main.async {
+                        self.delegate?.didReceiveChannelScreenshotProtectionAnnouncement(channel, enabled: enabled, creatorID: creatorID)
+                    }
+                    
+                    // Relay announcement
+                    if packet.ttl > 1 {
+                        var relayPacket = packet
+                        relayPacket.ttl -= 1
+                        self.broadcastPacket(relayPacket)
+                    }
+                }
+            }
+
+        case .privateScreenshotProtection:
+            if let recipientIDData = packet.recipientID,
+               let recipientID = String(data: recipientIDData.trimmingNullBytes(), encoding: .utf8),
+               recipientID == myPeerID {
+                // This notification is for us - decrypt it
+                if let senderID = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8) {
+                    do {
+                        let decryptedData = try encryptionService.decrypt(packet.payload, from: senderID)
+                        if let enabledStr = String(data: decryptedData, encoding: .utf8) {
+                            let enabled = enabledStr == "1"
+                            
+                            DispatchQueue.main.async {
+                                self.delegate?.didReceivePrivateScreenshotProtectionNotification(enabled, from: senderID)
+                            }
+                        }
+                    } catch {
+                        // Failed to decrypt
+                    }
+                }
+            } else if packet.ttl > 0 {
+                // Relay if not for us
+                var relayPacket = packet
+                relayPacket.ttl -= 1
+                self.broadcastPacket(relayPacket)
             }
             
         case .deliveryAck:

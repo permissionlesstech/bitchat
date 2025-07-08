@@ -198,6 +198,13 @@ struct ContentView: View {
                 
                 Spacer()
                 
+                if !viewModel.areScreenshotsAllowed() {
+                    Image(systemName: "camera.fill.badge.ellipsis")
+                        .font(.system(size: 14))
+                        .foregroundColor(Color.red)
+                        .help("Screenshots are blocked in this chat")
+                }
+                
                 // Favorite button
                 Button(action: {
                     viewModel.toggleFavorite(peerID: privatePeerID)
@@ -247,6 +254,13 @@ struct ContentView: View {
                 Spacer()
                 
                 HStack(spacing: 8) {
+                    if !viewModel.areScreenshotsAllowed() {
+                        Image(systemName: "camera.fill.badge.ellipsis")
+                            .font(.system(size: 14))
+                            .foregroundColor(Color.red)
+                            .help("Screenshots are blocked in this chat")
+                    }
+                    
                     // Show retention indicator for all users
                     if viewModel.retentionEnabledChannels.contains(currentChannel) {
                         Image(systemName: "bookmark.fill")
@@ -438,6 +452,7 @@ struct ContentView: View {
                 }
                 .padding(.vertical, 8)
             }
+            .screenshotProtection(!viewModel.areScreenshotsAllowed())
             .background(backgroundColor)
             .onChange(of: viewModel.messages.count) { _ in
                 if viewModel.selectedPrivateChatPeer == nil && !viewModel.messages.isEmpty {
@@ -536,10 +551,25 @@ struct ContentView: View {
                         (["/transfer"], "<nickname>", "transfer channel ownership")
                     ]
                     
+                    let screenshotCommandInfo: [(commands: [String], syntax: String?, description: String)] = [
+                        (["/screenshots"], "<allow/block>", "manage screenshot protection")
+                    ]
+
                     // Build the display
-                    let allCommands = viewModel.currentChannel != nil 
-                        ? commandInfo + channelCommandInfo 
-                        : commandInfo
+                    let allCommands: [(commands: [String], syntax: String?, description: String)] = {
+                        var commands = commandInfo
+                        
+                        if let channel = viewModel.currentChannel {
+                            commands.append(contentsOf: channelCommandInfo)
+                            if (viewModel.channelCreators[channel] == viewModel.meshService.myPeerID) {
+                                commands.append(contentsOf: screenshotCommandInfo)
+                            }
+                        } else if viewModel.selectedPrivateChatPeer != nil {
+                            commands.append(contentsOf: screenshotCommandInfo)
+                        }
+                        
+                        return commands
+                    }()
                     
                     // Show matching commands
                     ForEach(commandSuggestions, id: \.self) { command in
@@ -639,10 +669,15 @@ struct ContentView: View {
                         ]
                         
                         // Add channel-specific commands if in a channel
-                        if viewModel.currentChannel != nil {
+                        if let currentChannel = viewModel.currentChannel {
                             commandDescriptions.append(("/pass", "change channel password"))
                             commandDescriptions.append(("/save", "save channel messages locally"))
                             commandDescriptions.append(("/transfer", "transfer channel ownership"))
+                            if (viewModel.channelCreators[currentChannel] == viewModel.meshService.myPeerID) {
+                                commandDescriptions.append(("/screenshots", "manage screenshot protection"))
+                            }
+                        } else if viewModel.selectedPrivateChatPeer != nil {
+                            commandDescriptions.append(("/screenshots", "manage screenshot protection"))
                         }
                         
                         let input = newValue.lowercased()
