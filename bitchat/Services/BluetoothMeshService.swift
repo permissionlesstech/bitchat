@@ -174,6 +174,77 @@ class BluetoothMeshService: NSObject {
     private var advertisementData: [String: Any] = [:]
     private var isAdvertising = false
     
+    // Statistics tracking for anonymous message relaying
+    private var messagesRelayed: Int = 0
+    private var uniquePeersHelped: Set<String> = []
+    private var sessionStartTime: Date = Date()
+    private let relayStatsKey = "bitchat.relayStats"
+    private let sessionStatsKey = "bitchat.sessionStats"
+    
+    // Statistics properties (not @Published since this isn't an ObservableObject)
+    private var totalMessagesRelayed: Int = 0
+    private var totalPeersHelped: Int = 0
+    private var sessionMessagesRelayed: Int = 0
+    private var sessionPeersHelped: Int = 0
+    
+    private func loadRelayStatistics() {
+        let defaults = UserDefaults.standard
+        totalMessagesRelayed = defaults.integer(forKey: "\(relayStatsKey).totalMessages")
+        totalPeersHelped = defaults.integer(forKey: "\(relayStatsKey).totalPeers")
+        
+        // Reset session stats on app launch
+        sessionMessagesRelayed = 0
+        sessionPeersHelped = 0
+        uniquePeersHelped.removeAll()
+        sessionStartTime = Date()
+    }
+    
+    private func saveRelayStatistics() {
+        let defaults = UserDefaults.standard
+        defaults.set(totalMessagesRelayed, forKey: "\(relayStatsKey).totalMessages")
+        defaults.set(totalPeersHelped, forKey: "\(relayStatsKey).totalPeers")
+        defaults.synchronize()
+    }
+    
+    private func trackMessageRelay(originalSenderID: String, messageType: UInt8) {
+        // Don't track our own messages
+        guard originalSenderID != myPeerID else { return }
+        
+        // Only track actual message relays (not system messages like announces, key exchanges, etc.)
+        guard messageType == MessageType.message.rawValue else { return }
+        
+        // Update session stats
+        sessionMessagesRelayed += 1
+        let wasNewPeer = uniquePeersHelped.insert(originalSenderID).inserted
+        if wasNewPeer {
+            sessionPeersHelped += 1
+        }
+        
+        // Update total stats
+        totalMessagesRelayed += 1
+        if wasNewPeer {
+            totalPeersHelped += 1
+        }
+        
+        // Save to persistent storage
+        saveRelayStatistics()
+    }
+    
+    func getRelayStatistics() -> (totalMessages: Int, totalPeers: Int, sessionMessages: Int, sessionPeers: Int, sessionDuration: TimeInterval) {
+        let sessionDuration = Date().timeIntervalSince(sessionStartTime)
+        return (totalMessagesRelayed, totalPeersHelped, sessionMessagesRelayed, sessionPeersHelped, sessionDuration)
+    }
+    
+    func resetRelayStatistics() {
+        totalMessagesRelayed = 0
+        totalPeersHelped = 0
+        sessionMessagesRelayed = 0
+        sessionPeersHelped = 0
+        uniquePeersHelped.removeAll()
+        sessionStartTime = Date()
+        saveRelayStatistics()
+    }
+    
     // ===== MESSAGE AGGREGATION =====
     
     private func startAggregationTimer() {
@@ -265,6 +336,9 @@ class BluetoothMeshService: NSObject {
         
         centralManager = CBCentralManager(delegate: self, queue: nil)
         peripheralManager = CBPeripheralManager(delegate: self, queue: nil)
+        
+        // Load relay statistics from persistent storage
+        loadRelayStatistics()
         
         // Start bloom filter reset timer (reset every 5 minutes)
         bloomFilterResetTimer = Timer.scheduledTimer(withTimeInterval: 300.0, repeats: true) { [weak self] _ in
@@ -1548,6 +1622,9 @@ class BluetoothMeshService: NSObject {
                                          Double.random(in: 0...1) < relayProb
                         
                         if shouldRelay {
+                            // Track this message relay for statistics
+                            self.trackMessageRelay(originalSenderID: senderID, messageType: packet.type)
+                            
                             // Add random delay to prevent collision storms
                             let delay = Double.random(in: minMessageDelay...maxMessageDelay)
                             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in

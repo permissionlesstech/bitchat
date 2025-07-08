@@ -2456,6 +2456,42 @@ extension ChatViewModel: BitchatDelegate {
                 messages.append(systemMessage)
             }
             
+        case "/stats":
+            // Show relay statistics
+            let stats = meshService.getRelayStatistics()
+            let sessionDurationMinutes = Int(stats.sessionDuration / 60)
+            let sessionDurationHours = sessionDurationMinutes / 60
+            let remainingMinutes = sessionDurationMinutes % 60
+            
+            var durationString: String
+            if sessionDurationHours > 0 {
+                durationString = "\(sessionDurationHours)h \(remainingMinutes)m"
+            } else {
+                durationString = "\(remainingMinutes)m"
+            }
+            
+            let statsContent = """
+Relay statistics:
+
+session (\(durationString)):
+• messages relayed: \(stats.sessionMessages)
+• unique peers helped: \(stats.sessionPeers)
+
+all time:
+• total messages relayed: \(stats.totalMessages)
+• total peers helped: \(stats.totalPeers)
+
+You're helping keep the mesh network alive by relaying messages for others!
+"""
+            
+            let systemMessage = BitchatMessage(
+                sender: "system",
+                content: statsContent,
+                timestamp: Date(),
+                isRelay: false
+            )
+            messages.append(systemMessage)
+            
         default:
             // Unknown command
             let systemMessage = BitchatMessage(

@@ -111,6 +111,7 @@ struct AppInfoView: View {
                             Text("/m @name - send private message")
                             Text("/w - see who's online")
                             Text("/channels - show all discovered channels")
+                            Text("/stats - show relay statistics")
                             Text("/block @name - block a peer")
                             Text("/block - list blocked peers")
                             Text("/unblock @name - unblock a peer")

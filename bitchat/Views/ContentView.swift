@@ -556,6 +556,7 @@ struct ContentView: View {
                         (["/channels"], nil, "show all discovered channels"),
                         (["/slap"], "<nickname>", "slap someone with a trout"),
                         (["/unblock"], "<nickname>", "unblock a peer"),
+                        (["/stats"], nil, "show relay statistics"),
                         (["/w"], nil, "see who's online")
                     ]
                     
@@ -664,6 +665,7 @@ struct ContentView: View {
                             ("/j", "join or create a channel"),
                             ("/m", "send private message"),
                             ("/slap", "slap someone with a trout"),
+                            ("/stats", "show relay statistics"),
                             ("/unblock", "unblock a peer"),
                             ("/w", "see who's online")
                         ]
