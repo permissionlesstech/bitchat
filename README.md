@@ -74,6 +74,49 @@ This project is released into the public domain. See the [LICENSE](LICENSE) file
 - `/transfer @name` - Transfer channel ownership
 - `/save` - Toggle message retention for channel (owner only)
 
+### Structure
+
+```mermaid
+flowchart TD
+    A[User Launches App] --> B[Set Nickname / Auto-Generate]
+    B --> C[Connect to Nearby Peers via Bluetooth]
+    C --> D{Peer Found?}
+    D -- Yes --> E[Establish BLE Connection]
+    D -- No --> C
+
+    E --> F{Join Channel?}
+    F -- Yes: /j #channel --> G[Join or Create Channel]
+    G --> H[Send/Receive Messages]
+    H --> I[Relay via Multi-Hop Mesh]
+    I --> J{Message for This Node?}
+    J -- Yes --> K[Decrypt + Display]
+    J -- No --> L[Forward to Next Hop]
+
+    K --> M{Private Message?}
+    M -- Yes --> N[X25519 + AES-256-GCM]
+    M -- No --> O{Channel Protected?}
+    O -- Yes --> P[Argon2id + AES-256-GCM]
+    O -- No --> Q[Display Plaintext in Channel View]
+
+    P --> Q
+    N --> Q
+
+    Q --> R{Channel Owner Actions}
+    R -- /pass --> S[Set/Change Password]
+    R -- /save --> T[Toggle Message Retention]
+    R -- /transfer --> U[Transfer Ownership]
+
+    H --> V[Cache Message if Peer is Offline]
+    V --> W[Forward When Peer Reconnects]
+
+    A --> X[Emergency Wipe: Triple Tap Logo]
+    X --> Y[Clear All Messages + Keys]
+
+    style A fill:#F6F8FA,stroke:#333,stroke-width:2
+    style X fill:#FCE4EC,stroke:#F06292,stroke-width:2
+    style Q fill:#E3F2FD,stroke:#2196F3,stroke-width:2
+``` 
+
 ### Getting Started
 
 1. Launch bitchat on your device
