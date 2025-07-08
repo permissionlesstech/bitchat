@@ -10,7 +10,7 @@ import Foundation
 import CryptoKit
 
 // Privacy-preserving padding utilities
-struct MessagePadding {
+struct MessagePadding: Sendable {
     // Standard block sizes for padding
     static let blockSizes = [256, 512, 1024, 2048]
     
@@ -64,7 +64,7 @@ struct MessagePadding {
     }
 }
 
-enum MessageType: UInt8 {
+enum MessageType: UInt8, Sendable {
     case announce = 0x01
     case keyExchange = 0x02
     case leave = 0x03
@@ -80,11 +80,11 @@ enum MessageType: UInt8 {
 }
 
 // Special recipient ID for broadcast messages
-struct SpecialRecipients {
+struct SpecialRecipients: Sendable {
     static let broadcast = Data(repeating: 0xFF, count: 8)  // All 0xFF = broadcast
 }
 
-struct BitchatPacket: Codable {
+struct BitchatPacket: Codable, Sendable {
     let version: UInt8
     let type: UInt8
     let senderID: Data
@@ -131,7 +131,7 @@ struct BitchatPacket: Codable {
 }
 
 // Delivery acknowledgment structure
-struct DeliveryAck: Codable {
+struct DeliveryAck: Codable, Sendable {
     let originalMessageID: String
     let ackID: String
     let recipientID: String  // Who received it
@@ -158,7 +158,7 @@ struct DeliveryAck: Codable {
 }
 
 // Read receipt structure
-struct ReadReceipt: Codable {
+struct ReadReceipt: Codable, Sendable {
     let originalMessageID: String
     let receiptID: String
     let readerID: String  // Who read it
@@ -183,7 +183,7 @@ struct ReadReceipt: Codable {
 }
 
 // Delivery status for messages
-enum DeliveryStatus: Codable, Equatable {
+enum DeliveryStatus: Codable, Equatable, Sendable {
     case sending
     case sent  // Left our device
     case delivered(to: String, at: Date)  // Confirmed by recipient
@@ -209,7 +209,7 @@ enum DeliveryStatus: Codable, Equatable {
     }
 }
 
-struct BitchatMessage: Codable, Equatable {
+struct BitchatMessage: Codable, Equatable, Sendable {
     let id: String
     let sender: String
     let content: String
@@ -243,7 +243,7 @@ struct BitchatMessage: Codable, Equatable {
     }
 }
 
-protocol BitchatDelegate: AnyObject {
+protocol BitchatDelegate: AnyObject, Sendable {
     func didReceiveMessage(_ message: BitchatMessage)
     func didConnectToPeer(_ peerID: String)
     func didDisconnectFromPeer(_ peerID: String)

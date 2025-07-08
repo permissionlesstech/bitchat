@@ -33,7 +33,7 @@ extension Data {
 // - Payload: Variable length
 // - Signature: 64 bytes (if hasSignature flag set)
 
-struct BinaryProtocol {
+struct BinaryProtocol: Sendable {
     static let headerSize = 13
     static let senderIDSize = 8
     static let recipientIDSize = 8
