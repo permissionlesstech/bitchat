@@ -18,6 +18,7 @@ targets:
       - bitchat
     resources:
       - bitchat/Assets.xcassets
+      - bitchat/LaunchScreen.storyboard
     info:
       path: bitchat/Info.plist
       properties:
@@ -29,10 +30,15 @@ targets:
         UIBackgroundModes:
           - bluetooth-central
           - bluetooth-peripheral
-        UILaunchScreen:
-          UIColorName: Black
+        UILaunchStoryboardName: LaunchScreen
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UIRequiresFullScreen: true
         CFBundleURLTypes:
           - CFBundleURLSchemes:
               - bitchat
@@ -86,7 +92,6 @@ targets:
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
       CODE_SIGN_ENTITLEMENTS: bitchat/bitchat.entitlements
-      DEVELOPMENT_TEAM: L3N5LHJD5Y
         
   bitchatShareExtension:
     type: app-extension
@@ -117,7 +122,6 @@ targets:
       CODE_SIGNING_ALLOWED: YES
       CODE_SIGN_ENTITLEMENTS: bitchatShareExtension/bitchatShareExtension.entitlements
       CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION: YES
-      DEVELOPMENT_TEAM: L3N5LHJD5Y
 
   bitchatTests_iOS:
     type: bundle.unit-test
