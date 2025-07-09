@@ -49,6 +49,7 @@ class BluetoothMeshService: NSObject {
     weak var delegate: BitchatDelegate?
     private var encryptionService: EncryptionService!
     private var authenticationService: BluetoothAuthenticationService?
+    private var noiseProtocolManager: NoiseProtocolManager?
     private let messageQueue = DispatchQueue(label: "bitchat.messageQueue", attributes: .concurrent)
     private var processedMessages = Set<String>()
     private let maxTTL: UInt8 = 7  // Maximum hops for long-distance delivery
@@ -267,6 +268,13 @@ class BluetoothMeshService: NSObject {
         // Initialize encryption service with error handling
         do {
             self.encryptionService = try EncryptionService()
+            
+            // Initialize Noise Protocol Manager if secure mode is available
+            do {
+                self.noiseProtocolManager = try NoiseProtocolManager()
+            } catch {
+                print("Failed to initialize Noise Protocol Manager: \(error)")
+            }
         } catch {
             // Log the error and create a fallback instance
             print("ERROR: Failed to initialize EncryptionService with keychain: \(error)")
@@ -965,6 +973,31 @@ class BluetoothMeshService: NSObject {
         return rssiWithDefaults
     }
     
+    // MARK: - Noise Protocol Status
+    
+    func isNoiseHandshakeComplete(for peerID: String) -> Bool {
+        return noiseProtocolManager?.isHandshakeComplete(for: peerID) ?? false
+    }
+    
+    func getNoiseHandshakeState(for peerID: String) -> String {
+        guard let noiseManager = noiseProtocolManager else {
+            return "Not Started"
+        }
+        
+        if noiseManager.isHandshakeComplete(for: peerID) {
+            return "Secured"
+        } else {
+            return "Exchanging Keys"
+        }
+    }
+    
+    func getSecureConnectionCount() -> Int {
+        guard let noiseManager = noiseProtocolManager else { return 0 }
+        return activePeers.filter { peerID in
+            noiseManager.isHandshakeComplete(for: peerID)
+        }.count
+    }
+    
     // Emergency disconnect for panic situations
     func emergencyDisconnectAll() {
         // Stop advertising immediately
@@ -996,6 +1029,13 @@ class BluetoothMeshService: NSObject {
         processedMessages.removeAll()
         incomingFragments.removeAll()
         fragmentMetadata.removeAll()
+        
+        // Clear all Noise Protocol sessions
+        if let noiseManager = noiseProtocolManager {
+            for peerID in getAllConnectedPeerIDs() {
+                noiseManager.removeSession(for: peerID)
+            }
+        }
         
         // Clear persistent identity
         do {
@@ -1085,6 +1125,9 @@ class BluetoothMeshService: NSObject {
             announcedPeers.remove(peerID)
             announcedToPeers.remove(peerID)
             processedKeyExchanges = processedKeyExchanges.filter { !$0.contains(peerID) }
+            
+            // Clean up Noise Protocol session
+            noiseProtocolManager?.removeSession(for: peerID)
             
             peerNicknamesLock.lock()
             peerNicknames.removeValue(forKey: peerID)
@@ -1295,6 +1338,14 @@ class BluetoothMeshService: NSObject {
     }
     
     private func broadcastPacket(_ packet: BitchatPacket) {
+        // Check if we should use Noise Protocol for this packet
+        let shouldUseNoise = authenticationService?.isSecureModeEnabled ?? false &&
+                           noiseProtocolManager != nil &&
+                           packet.type != MessageType.noiseHandshakeInit.rawValue &&
+                           packet.type != MessageType.noiseHandshakeResp.rawValue &&
+                           packet.type != MessageType.noiseHandshakeFinal.rawValue &&
+                           packet.type != MessageType.noiseTransport.rawValue
+        
         guard let data = packet.toBinaryData() else { 
             // print("[ERROR] Failed to convert packet to binary data")
             // Add to retry queue if this is a message packet AND it's our own message
@@ -1320,18 +1371,46 @@ class BluetoothMeshService: NSObject {
         
         // Send to connected peripherals (as central)
         var sentToPeripherals = 0
-        for (_, peripheral) in connectedPeripherals {
+        for (peerID, peripheral) in connectedPeripherals {
             if let characteristic = peripheralCharacteristics[peripheral] {
                 // Check if peripheral is connected before writing
                 if peripheral.state == .connected {
+                    var dataToSend = data
+                    
+                    // If Noise is enabled and handshake is complete, wrap in Noise transport
+                    if shouldUseNoise,
+                       let noiseManager = noiseProtocolManager,
+                       noiseManager.isHandshakeComplete(for: peerID) {
+                        do {
+                            // Encrypt the entire packet with Noise
+                            let encryptedData = try noiseManager.encrypt(data, for: peerID)
+                            let noisePacket = BitchatPacket(
+                                type: MessageType.noiseTransport.rawValue,
+                                senderID: packet.senderID,
+                                recipientID: packet.recipientID,
+                                timestamp: packet.timestamp,
+                                payload: encryptedData,
+                                signature: nil,
+                                ttl: packet.ttl
+                            )
+                            
+                            if let noiseData = noisePacket.toBinaryData() {
+                                dataToSend = noiseData
+                            }
+                        } catch {
+                            print("[NOISE] Failed to encrypt packet for \(peerID): \(error)")
+                            // Fall back to regular encryption
+                        }
+                    }
+                    
                     // Use withoutResponse for faster transmission when possible
                     // Only use withResponse for critical messages or when MTU negotiation needed
-                    let writeType: CBCharacteristicWriteType = data.count > 512 ? .withResponse : .withoutResponse
+                    let writeType: CBCharacteristicWriteType = dataToSend.count > 512 ? .withResponse : .withoutResponse
                     
                     // Additional safety check for characteristic properties
                     if characteristic.properties.contains(.write) || 
                        characteristic.properties.contains(.writeWithoutResponse) {
-                        peripheral.writeValue(data, for: characteristic, type: writeType)
+                        peripheral.writeValue(dataToSend, for: characteristic, type: writeType)
                         sentToPeripherals += 1
                     }
                 } else {
@@ -2095,6 +2174,123 @@ class BluetoothMeshService: NSObject {
                 self.broadcastPacket(relayPacket)
             }
             
+        case .noiseHandshakeInit:
+            // Handle Noise Protocol handshake initiation
+            guard let noiseManager = self.noiseProtocolManager,
+                  let senderID = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8),
+                  authenticationService?.isSecureModeEnabled ?? false else {
+                // If not in secure mode or no Noise manager, fall back to regular key exchange
+                return
+            }
+            
+            do {
+                // First, start handshake as responder if not already started
+                _ = try noiseManager.startHandshake(with: senderID, isInitiator: false)
+                
+                // Process the handshake initiation and generate response
+                if let response = try noiseManager.processHandshakeMessage(packet.payload, from: senderID) {
+                    // Send handshake response
+                    let responsePacket = BitchatPacket(
+                        type: MessageType.noiseHandshakeResp.rawValue,
+                        senderID: Data(myPeerID.utf8),
+                        recipientID: packet.senderID,
+                        timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                        payload: response,
+                        signature: nil,
+                        ttl: 1  // Direct response, no relay needed
+                    )
+                    
+                    // Send directly to the peer if connected
+                    if let peripheral = connectedPeripherals[senderID],
+                       let characteristic = peripheralCharacteristics[peripheral],
+                       let data = responsePacket.toBinaryData() {
+                        peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
+                    }
+                }
+            } catch {
+                print("[NOISE] Failed to process handshake init from \(senderID): \(error)")
+            }
+            
+        case .noiseHandshakeResp:
+            // Handle Noise Protocol handshake response
+            guard let noiseManager = self.noiseProtocolManager,
+                  let senderID = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8) else {
+                return
+            }
+            
+            do {
+                // Process the handshake response and generate final message if needed
+                if let finalMessage = try noiseManager.processHandshakeMessage(packet.payload, from: senderID) {
+                    // Send handshake finalization
+                    let finalPacket = BitchatPacket(
+                        type: MessageType.noiseHandshakeFinal.rawValue,
+                        senderID: Data(myPeerID.utf8),
+                        recipientID: packet.senderID,
+                        timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                        payload: finalMessage,
+                        signature: nil,
+                        ttl: 1
+                    )
+                    
+                    if let peripheral = connectedPeripherals[senderID],
+                       let characteristic = peripheralCharacteristics[peripheral],
+                       let data = finalPacket.toBinaryData() {
+                        peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
+                    }
+                }
+                
+                // Check if handshake is complete
+                if noiseManager.isHandshakeComplete(for: senderID) {
+                    print("[NOISE] Handshake completed with \(senderID)")
+                    // Continue with regular announce flow
+                    self.sendAnnouncementToPeer(senderID)
+                }
+            } catch {
+                print("[NOISE] Failed to process handshake response from \(senderID): \(error)")
+            }
+            
+        case .noiseHandshakeFinal:
+            // Handle Noise Protocol handshake finalization
+            guard let noiseManager = self.noiseProtocolManager,
+                  let senderID = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8) else {
+                return
+            }
+            
+            do {
+                // Process the final handshake message
+                _ = try noiseManager.processHandshakeMessage(packet.payload, from: senderID)
+                
+                // Check if handshake is complete
+                if noiseManager.isHandshakeComplete(for: senderID) {
+                    print("[NOISE] Handshake completed with \(senderID)")
+                    // Continue with regular announce flow
+                    self.sendAnnouncementToPeer(senderID)
+                }
+            } catch {
+                print("[NOISE] Failed to process handshake final from \(senderID): \(error)")
+            }
+            
+        case .noiseTransport:
+            // Handle Noise Protocol encrypted transport message
+            guard let noiseManager = self.noiseProtocolManager,
+                  let senderID = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8),
+                  noiseManager.isHandshakeComplete(for: senderID) else {
+                return
+            }
+            
+            do {
+                // Decrypt the transport message
+                let decryptedData = try noiseManager.decrypt(packet.payload, from: senderID)
+                
+                // Parse the inner packet from decrypted data
+                if let innerPacket = BitchatPacket.from(decryptedData) {
+                    // Process the inner packet normally
+                    handleReceivedPacket(innerPacket, from: senderID, peripheral: peripheral)
+                }
+            } catch {
+                print("[NOISE] Failed to decrypt transport message from \(senderID): \(error)")
+            }
+            
         default:
             break
         }
@@ -2458,6 +2654,9 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
                 
                 announcedPeers.remove(peerID)
                 announcedToPeers.remove(peerID)
+                
+                // Clean up Noise Protocol session on disconnect
+                noiseProtocolManager?.removeSession(for: peerID)
             } else {
                 // print("[DEBUG] Peripheral with temp ID \(peerID) disconnected, not removing from active peers")
             }
@@ -2512,18 +2711,38 @@ extension BluetoothMeshService: CBPeripheralDelegate {
                 // iOS supports up to 512 bytes with BLE 5.0
                 peripheral.maximumWriteValueLength(for: .withoutResponse)
                 
-                // Send key exchange and announce immediately without any delay
-                let publicKeyData = self.encryptionService.getCombinedPublicKeyData()
-                let packet = BitchatPacket(
-                    type: MessageType.keyExchange.rawValue,
-                    ttl: 1,
-                    senderID: self.myPeerID,
-                    payload: publicKeyData
-                )
-                
-                if let data = packet.toBinaryData() {
-                    let writeType: CBCharacteristicWriteType = characteristic.properties.contains(.write) ? .withResponse : .withoutResponse
-                    peripheral.writeValue(data, for: characteristic, type: writeType)
+                // Check if secure mode is enabled and use Noise Protocol
+                if let authService = authenticationService,
+                   authService.isSecureModeEnabled,
+                   let noiseManager = self.noiseProtocolManager {
+                    // Initiate Noise Protocol handshake
+                    do {
+                        guard let handshakeData = try noiseManager.startHandshake(with: peripheral.identifier.uuidString, isInitiator: true) else {
+                            // No handshake data to send yet
+                            return
+                        }
+                        let noisePacket = BitchatPacket(
+                            type: MessageType.noiseHandshakeInit.rawValue,
+                            senderID: Data(self.myPeerID.utf8),
+                            recipientID: nil,
+                            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                            payload: handshakeData,
+                            signature: nil,
+                            ttl: 1
+                        )
+                        
+                        if let data = noisePacket.toBinaryData() {
+                            let writeType: CBCharacteristicWriteType = characteristic.properties.contains(.write) ? .withResponse : .withoutResponse
+                            peripheral.writeValue(data, for: characteristic, type: writeType)
+                        }
+                    } catch {
+                        print("[NOISE] Failed to initiate handshake: \(error)")
+                        // Fall back to regular key exchange
+                        self.sendRegularKeyExchange(to: peripheral, characteristic: characteristic)
+                    }
+                } else {
+                    // Send regular key exchange
+                    self.sendRegularKeyExchange(to: peripheral, characteristic: characteristic)
                 }
                 
                 // Send announce packet after a short delay to avoid overwhelming the connection
@@ -2873,6 +3092,23 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
     private func randomDelay() -> TimeInterval {
         // Generate random delay between min and max for timing obfuscation
         return TimeInterval.random(in: minMessageDelay...maxMessageDelay)
+    }
+    
+    // MARK: - Key Exchange Helpers
+    
+    private func sendRegularKeyExchange(to peripheral: CBPeripheral, characteristic: CBCharacteristic) {
+        let publicKeyData = self.encryptionService.getCombinedPublicKeyData()
+        let packet = BitchatPacket(
+            type: MessageType.keyExchange.rawValue,
+            ttl: 1,
+            senderID: self.myPeerID,
+            payload: publicKeyData
+        )
+        
+        if let data = packet.toBinaryData() {
+            let writeType: CBCharacteristicWriteType = characteristic.properties.contains(.write) ? .withResponse : .withoutResponse
+            peripheral.writeValue(data, for: characteristic, type: writeType)
+        }
     }
     
     // MARK: - Cover Traffic

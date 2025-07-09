@@ -77,6 +77,10 @@ enum MessageType: UInt8 {
     case deliveryAck = 0x0A  // Acknowledge message received
     case deliveryStatusRequest = 0x0B  // Request delivery status update
     case readReceipt = 0x0C  // Message has been read/viewed
+    case noiseHandshakeInit = 0x0D  // Noise Protocol handshake initiation
+    case noiseHandshakeResp = 0x0E  // Noise Protocol handshake response
+    case noiseHandshakeFinal = 0x0F  // Noise Protocol handshake finalization
+    case noiseTransport = 0x10  // Noise Protocol encrypted transport message
 }
 
 // Special recipient ID for broadcast messages
