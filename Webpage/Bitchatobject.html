@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>BitChat × KiwiFarms (IRC-Cmd)</title>
+<style>
+:root{--bg:#121212;--fg:#e0e0e0;--accent:#3f51b5;}
+*{box-sizing:border-box}
+body{margin:0;font-family:sans-serif;background:var(--bg);color:var(--fg);display:flex;height:100vh;overflow:hidden}
+#left,#right{flex:1 1 50%;display:flex;flex-direction:column;min-width:300px}
+#header{padding:.5rem 1rem;background:#1e1e1e;font-weight:700}
+#messages{flex:1 1 auto;overflow-y:auto;padding:1rem}
+.message{margin:.25rem 0}
+.message.me{text-align:right}
+.message.action{font-style:italic}
+.message.system{color:#8bc34a}
+#inputBar{display:flex;padding:.5rem;background:#1e1e1e}
+#inputBar input{flex:1;padding:.5rem;font-size:1rem;border:1px solid #555;border-radius:4px;background:#222;color:var(--fg)}
+button{padding:.4rem .9rem;background:var(--accent);border:none;color:#fff;border-radius:4px;cursor:pointer}
+.modal{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.8)}
+.modal>.box{background:#1e1e1e;padding:2rem;border-radius:8px;width:90%;max-width:400px}
+iframe{border:none;flex:1 1 auto}
+#kfFallback{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center}
+</style>
+</head>
+<body>
+
+<!-- LEFT: BitChat -->
+<div id="left">
+  <div id="header">BitChat</div>
+  <div id="messages"></div>
+  <div id="inputBar">
+    <input id="chatInput" placeholder="Type a message or /command…" autocomplete="off" />
+  </div>
+</div>
+
+<!-- RIGHT: KiwiFarms Chat -->
+<div id="right">
+  <div id="header">KiwiFarms Chat</div>
+  <iframe id="kfFrame" src="https://kiwifarms.st/chat/general.1/" sandbox="allow-scripts allow-same-origin"></iframe>
+  <div id="kfFallback" style="display:none">
+    <p>Embedding blocked by KiwiFarms.</p>
+    <button onclick="window.open('https://kiwifarms.st/chat/general.1/','_blank')">
+      Open KiwiFarms Chat
+    </button>
+  </div>
+</div>
+
+<!-- PIN modal -->
+<div id="pinModal" class="modal" style="display:none">
+  <div class="box">
+    <h2>Enter 4–8-digit PIN</h2>
+    <input id="pinField" type="password" pattern="\\d*" minlength="4" maxlength="8"
+           style="width:100%;font-size:1.25rem;padding:.5rem" />
+    <button id="pinSubmit">Continue</button>
+  </div>
+</div>
+
+<script type="module">
+/* ---------- CONFIG ---------- */
+const WS_URL = "wss://chat.bitchat.xyz/ws";   // your relay
+const SALT   = "bitchat🤘";
+
+/* ---------- KiwiFarms iframe guard ---------- */
+const kfFrame = document.getElementById("kfFrame");
+kfFrame.addEventListener("load", () => {
+  if (kfFrame.contentWindow.location.href === "about:blank") {
+    kfFrame.style.display = "none";
+    document.getElementById("kfFallback").style.display = "flex";
+  }
+});
+
+/* ---------- State ---------- */
+let pinHash = localStorage.getItem("pinHash");
+let nick    = localStorage.getItem("nick") || prompt("Nickname?","Alice") || "anon";
+let currentRoom = "lobby";              // for future multi-room support
+let ws;
+
+/* ---------- PIN modal ---------- */
+const pinModal  = document.getElementById("pinModal");
+if (!pinHash) pinModal.style.display = "flex";
+document.getElementById("pinSubmit").addEventListener("click", async () => {
+  const pin = document.getElementById("pinField").value.trim();
+  if (pin.length < 4) { alert("PIN too short"); return; }
+  pinHash = await sha256(pin + SALT);
+  localStorage.setItem("pinHash", pinHash);
+  pinModal.style.display = "none";
+  connect();
+});
+if (pinHash) connect();
+
+/* ---------- WebSocket lifecycle ---------- */
+function connect() {
+  ws = new WebSocket(WS_URL);
+  ws.addEventListener("open", () => logSystem("Connected."));
+  ws.addEventListener("close", () => {
+    logSystem("Disconnected. Reconnecting…");
+    setTimeout(connect, 3000);
+  });
+  ws.addEventListener("message", async e => {
+    const msg = JSON.parse(e.data);
+    switch (msg.type) {
+      case "HELLO": {
+        const sig = await hmac(pinHash, msg.nonce);
+        ws.send(JSON.stringify({ type:"AUTH", nick, sig }));
+        break;
+      }
+      case "AUTH_OK":
+        if (msg.nick && msg.nick !== nick) {
+          logSystem(`Nickname in use; you are now ${msg.nick}`);
+          nick = msg.nick;
+          localStorage.setItem("nick", nick);
+        }
+        break;
+      case "MSG":
+        pushMessage(msg.nick, msg.body);
+        break;
+      case "SYSTEM":
+        logSystem(msg.body);
+        break;
+    }
+  });
+}
+
+/* ---------- IRC-style command parser ---------- */
+const cmdTable = {
+  HELP: {
+    desc:"Show this help",
+    action() {
+      const list = Object.keys(cmdTable)
+        .map(cmd => `/${cmd.toLowerCase()} – ${cmdTable[cmd].desc}`)
+        .join("\n");
+      logSystem(list);
+    }
+  },
+  NICK: {
+    desc:"Change nickname  (/nick newNick)",
+    action(args) {
+      const newNick = args[0];
+      if (!newNick) return logSystem("Usage: /nick <name>");
+      ws?.send(JSON.stringify({ type:"NICK", newNick }));
+      // optimistic update; server may correct
+      logSystem(`You are now known as ${newNick}`);
+      nick = newNick;
+      localStorage.setItem("nick", nick);
+    }
+  },
+  ME: {
+    desc:"Emote (/me does something)",
+    action(args) {
+      const text = args.join(" ");
+      if (!text) return;
+      const body = `* ${nick} ${text}`;
+      ws?.send(JSON.stringify({ type:"MSG", body, ts:Date.now() }));
+      pushMessage(nick, body, {action:true});
+    }
+  },
+  JOIN: {
+    desc:"Join room (/join #room)",
+    action(args) {
+      const room = args[0]?.replace(/^#?/,"");
+      if (!room) return logSystem("Usage: /join <room>");
+      currentRoom = room;
+      ws?.send(JSON.stringify({ type:"JOIN", room }));
+      logSystem(`Joined #${room}`);
+    }
+  },
+  MSG: {
+    desc:"Private message (/msg nick text)",
+    action(args) {
+      const target = args.shift();
+      const text   = args.join(" ");
+      if (!target || !text) return logSystem("Usage: /msg <nick> <text>");
+      ws?.send(JSON.stringify({ type:"PRIVMSG", to:target, body:text }));
+      logSystem(`→${target}: ${text}`);
+    }
+  }
+};
+
+/* ---------- UI helpers ---------- */
+function pushMessage(author, body, opts={}) {
+  const wrap = document.getElementById("messages");
+  const div  = document.createElement("div");
+  div.className = "message" +
+                  (opts.system ? " system" : "") +
+                  (opts.action ? " action" : "") +
+                  (author === nick ? " me" : "");
+  div.textContent = opts.system ? body : `${author}: ${body}`;
+  wrap.appendChild(div);
+  wrap.scrollTop = wrap.scrollHeight;
+}
+const logSystem = txt => pushMessage("•", txt, {system:true});
+
+/* ---------- Input handler ---------- */
+document.getElementById("chatInput").addEventListener("keydown", e => {
+  if (e.key !== "Enter") return;
+  const input = e.target.value.trim();
+  if (!input) return;
+
+  if (input.startsWith("/")) {
+    handleCommand(input.slice(1));
+  } else {
+    ws?.send(JSON.stringify({ type:"MSG", body:input, ts:Date.now(), room:currentRoom }));
+    pushMessage(nick, input);
+  }
+  e.target.value = "";
+});
+
+function handleCommand(raw) {
+  const [cmd, ...args] = raw.split(/\s+/);
+  const entry = cmdTable[cmd.toUpperCase()];
+  if (entry) entry.action(args);
+  else logSystem(`Unknown command: /${cmd}`);
+}
+
+/* ---------- Crypto helpers ---------- */
+async function sha256(str) {
+  const buf = new TextEncoder().encode(str);
+  const hash = await crypto.subtle.digest("SHA-256", buf);
+  return toHex(hash);
+}
+async function hmac(keyHex, msg) {
+  const keyBuf  = hexToBuf(keyHex);
+  const ckey    = await crypto.subtle.importKey("raw", keyBuf,
+                   { name:"HMAC", hash:"SHA-256" }, false, ["sign"]);
+  const sigBuf  = await crypto.subtle.sign("HMAC", ckey,
+                   new TextEncoder().encode(msg));
+  return toHex(sigBuf);
+}
+function hexToBuf(hex) {
+  const bytes = new Uint8Array(hex.match(/.{1,2}/g).map(b => parseInt(b,16)));
+  return bytes.buffer;
+}
+function toHex(buf) {
+  return [...new Uint8Array(buf)]
+           .map(b => b.toString(16).padStart(2,"0")).join("");
+}
+</script>
+</body>
+</html>
