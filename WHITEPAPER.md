@@ -513,10 +513,10 @@ graph TD
     B[Battery Monitor] --> C{Charging?}
     C -->|Yes| P[Performance Mode]
     C -->|No| L{Level?}
-    L -->|>60%| P
+    L -->|&gt;60%| P
     L -->|30-60%| BA[Balanced Mode]
     L -->|10-30%| PS[Power Saver]
-    L -->|<10%| ULP[Ultra Low Power]
+    L -->|&lt;10%| ULP[Ultra Low Power]
     
     P --> F1[3s scan, 2s pause<br/>20 connections<br/>Continuous advertising]
     BA --> F2[2s scan, 3s pause<br/>10 connections<br/>5s advertising intervals]

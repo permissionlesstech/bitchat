@@ -1498,8 +1498,34 @@ class ChatViewModel: ObservableObject {
             senderStyle.font = .system(size: 14, weight: .medium, design: .monospaced)
             result.append(sender.mergingAttributes(senderStyle))
             
-            // Process content with hashtags and mentions
-            let content = message.content
+            // Process content with hashtags, mentions, and markdown links
+            var content = message.content
+            
+            // First, check if content starts with 👇 followed by markdown link
+            if content.hasPrefix("👇 [") {
+                // This is a URL share - remove everything after the emoji
+                if let linkStart = content.firstIndex(of: "[") {
+                    let indexBeforeLink = content.index(before: linkStart)
+                    content = String(content[..<indexBeforeLink])
+                }
+            } else {
+                // Handle normal markdown links
+                let markdownLinkPattern = #"\[([^\]]+)\]\(([^)]+)\)"#
+                if let markdownRegex = try? NSRegularExpression(pattern: markdownLinkPattern, options: []) {
+                    let markdownMatches = markdownRegex.matches(in: content, options: [], range: NSRange(location: 0, length: content.count))
+                    
+                    // Process matches in reverse order to maintain string indices
+                    for match in markdownMatches.reversed() {
+                        if let fullRange = Range(match.range, in: content),
+                           let titleRange = Range(match.range(at: 1), in: content) {
+                            // Normal markdown link - replace with just the title
+                            let linkTitle = String(content[titleRange])
+                            content.replaceSubrange(fullRange, with: linkTitle)
+                        }
+                    }
+                }
+            }
+            
             let hashtagPattern = "#([a-zA-Z0-9_]+)"
             let mentionPattern = "@([a-zA-Z0-9_]+)"
             
@@ -2724,8 +2750,42 @@ extension ChatViewModel: BitchatDelegate {
                 if channelMessages[channel] == nil {
                     channelMessages[channel] = []
                 }
-                channelMessages[channel]?.append(finalMessage)
-                channelMessages[channel]?.sort { $0.timestamp < $1.timestamp }
+                
+                // Check if this is our own message being echoed back
+                if finalMessage.sender != nickname && finalMessage.sender != "system" {
+                    // Skip empty or whitespace-only messages
+                    if !finalMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        channelMessages[channel]?.append(finalMessage)
+                        channelMessages[channel]?.sort { $0.timestamp < $1.timestamp }
+                    }
+                } else if finalMessage.sender != "system" {
+                    // Our own message - check if we already have it (by ID and content)
+                    let messageExists = channelMessages[channel]?.contains { existingMsg in
+                        // Check by ID first
+                        if existingMsg.id == finalMessage.id {
+                            return true
+                        }
+                        // Check by content and sender with time window (within 1 second)
+                        if existingMsg.content == finalMessage.content && 
+                           existingMsg.sender == finalMessage.sender {
+                            let timeDiff = abs(existingMsg.timestamp.timeIntervalSince(finalMessage.timestamp))
+                            return timeDiff < 1.0
+                        }
+                        return false
+                    } ?? false
+                    if !messageExists {
+                        // This is a message we sent from another device or it's missing locally
+                        // Skip empty or whitespace-only messages
+                        if !finalMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            channelMessages[channel]?.append(finalMessage)
+                            channelMessages[channel]?.sort { $0.timestamp < $1.timestamp }
+                        }
+                    }
+                } else {
+                    // System message - always add
+                    channelMessages[channel]?.append(finalMessage)
+                    channelMessages[channel]?.sort { $0.timestamp < $1.timestamp }
+                }
                 
                 // Save message if channel has retention enabled
                 if retentionEnabledChannels.contains(channel) {
@@ -2741,8 +2801,8 @@ extension ChatViewModel: BitchatDelegate {
                 } else {
                 }
                 
-                // Update unread count if not currently viewing this channel
-                if currentChannel != channel {
+                // Update unread count if not currently viewing this channel and it's not our own message
+                if currentChannel != channel && finalMessage.sender != nickname {
                     unreadChannelMessages[channel] = (unreadChannelMessages[channel] ?? 0) + 1
                 }
             } else {
@@ -2756,9 +2816,10 @@ extension ChatViewModel: BitchatDelegate {
                                   (message.content.contains("🫂") || message.content.contains("🐟") || 
                                    message.content.contains("took a screenshot"))
             
+            let finalMessage: BitchatMessage
             if isActionMessage {
                 // Convert to system message
-                let systemMessage = BitchatMessage(
+                finalMessage = BitchatMessage(
                     sender: "system",
                     content: String(message.content.dropFirst(2).dropLast(2)), // Remove * * wrapper
                     timestamp: message.timestamp,
@@ -2770,12 +2831,46 @@ extension ChatViewModel: BitchatDelegate {
                     mentions: message.mentions,
                     channel: message.channel
                 )
-                messages.append(systemMessage)
             } else {
-                messages.append(message)
+                finalMessage = message
             }
-            // Sort messages by timestamp to ensure proper ordering
-            messages.sort { $0.timestamp < $1.timestamp }
+            
+            // Check if this is our own message being echoed back
+            if finalMessage.sender != nickname && finalMessage.sender != "system" {
+                // Skip empty or whitespace-only messages
+                if !finalMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    messages.append(finalMessage)
+                    // Sort messages by timestamp to ensure proper ordering
+                    messages.sort { $0.timestamp < $1.timestamp }
+                }
+            } else if finalMessage.sender != "system" {
+                // Our own message - check if we already have it (by ID and content)
+                let messageExists = messages.contains { existingMsg in
+                    // Check by ID first
+                    if existingMsg.id == finalMessage.id {
+                        return true
+                    }
+                    // Check by content and sender with time window (within 1 second)
+                    if existingMsg.content == finalMessage.content && 
+                       existingMsg.sender == finalMessage.sender {
+                        let timeDiff = abs(existingMsg.timestamp.timeIntervalSince(finalMessage.timestamp))
+                        return timeDiff < 1.0
+                    }
+                    return false
+                }
+                if !messageExists {
+                    // This is a message we sent from another device or it's missing locally
+                    // Skip empty or whitespace-only messages
+                    if !finalMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        messages.append(finalMessage)
+                        messages.sort { $0.timestamp < $1.timestamp }
+                    }
+                }
+            } else {
+                // System message - always add
+                messages.append(finalMessage)
+                messages.sort { $0.timestamp < $1.timestamp }
+            }
         }
         
         // Check if we're mentioned
@@ -2906,27 +3001,28 @@ extension ChatViewModel: BitchatDelegate {
     
     func didUpdatePeerList(_ peers: [String]) {
         // print("[DEBUG] Updating peer list: \(peers.count) peers: \(peers)")
-        connectedPeers = peers
-        isConnected = !peers.isEmpty
-        
-        // Clean up channel members who disconnected
-        for (channel, memberIDs) in channelMembers {
-            // Remove disconnected peers from channel members
-            let activeMembers = memberIDs.filter { memberID in
-                memberID == meshService.myPeerID || peers.contains(memberID)
+        // UI updates must run on the main thread.
+        // The delegate callback is not guaranteed to be on the main thread.
+        DispatchQueue.main.async {
+            self.connectedPeers = peers
+            self.isConnected = !peers.isEmpty
+
+            // Clean up channel members who disconnected
+            for (channel, memberIDs) in self.channelMembers {
+                let activeMembers = memberIDs.filter { memberID in
+                    memberID == self.meshService.myPeerID || peers.contains(memberID)
+                }
+                if activeMembers != memberIDs {
+                    self.channelMembers[channel] = activeMembers
+                }
             }
-            if activeMembers != memberIDs {
-                channelMembers[channel] = activeMembers
+            // Explicitly notify SwiftUI that the object has changed.
+            self.objectWillChange.send()
+            
+            if let currentChatPeer = self.selectedPrivateChatPeer,
+               !peers.contains(currentChatPeer) {
+                self.endPrivateChat()
             }
-        }
-        
-        // Force UI update
-        objectWillChange.send()
-        
-        // If we're in a private chat with someone who disconnected, exit the chat
-        if let currentChatPeer = selectedPrivateChatPeer,
-           !peers.contains(currentChatPeer) {
-            endPrivateChat()
         }
     }
     
