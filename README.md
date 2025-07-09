@@ -70,7 +70,7 @@ All notable changes to this project will be documented in the [CHANGELOG.md](CHA
 ### Basic Commands
 
 - `/j #channel` - Join or create a channel
-- `/m @name` - Send a private message
+- `/m @name message` - Send a private message
 - `/w` - List online users
 - `/channels` - Show all discovered channels
 - `/block @name` - Block a peer from messaging you
