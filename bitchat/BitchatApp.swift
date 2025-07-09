@@ -145,7 +145,7 @@ class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
         if identifier.hasPrefix("private-") {
             // Extract sender from notification title
             let title = response.notification.request.content.title
-            if let senderName = title.replacingOccurrences(of: "Private message from ", with: "").nilIfEmpty {
+            if let senderName = title.replacingOccurrences(of: "🔒 private message from ", with: "").nilIfEmpty {
                 // Find peer ID and open chat
                 if let peerID = chatViewModel?.getPeerIDForNickname(senderName) {
                     DispatchQueue.main.async {
