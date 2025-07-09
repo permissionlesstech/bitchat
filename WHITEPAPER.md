@@ -24,11 +24,11 @@ bitchat addresses the need for resilient, private communication that doesn't dep
 
 ### Key Features
 
-- **Decentralized**: No servers, no infrastructure dependencies
-- **Ephemeral**: Messages exist only in device memory by default
-- **Encrypted**: End-to-end encryption for private messages
-- **Resilient**: Automatic mesh networking and message relay
-- **Private**: No phone numbers, emails, or permanent identifiers
+- **Decentralized**: No servers, no infrastructure dependencies.
+- **Ephemeral**: Messages exist only in device memory by default.
+- **Encrypted**: End-to-end encryption for private messages.
+- **Resilient**: Automatic mesh networking and message relay.
+- **Private**: No phone numbers, emails, or permanent identifiers.
 
 ## Architecture Overview
 
@@ -218,10 +218,10 @@ graph LR
 </div>
 
 Each message includes a Time-To-Live (TTL) field:
-- **Initial TTL**: Set to 7 for maximum reach
-- **Decrement**: Each relay decrements TTL by 1
-- **Drop**: Messages with TTL=0 are not forwarded
-- **Loop prevention**: Message IDs prevent circular routing
+- **Initial TTL**: Set to 7 for maximum reach.
+- **Decrement**: Each relay decrements TTL by 1.
+- **Drop**: Messages with TTL=0 are not forwarded.
+- **Loop prevention**: Message IDs prevent circular routing.
 
 ### Relay Decision Logic
 
@@ -304,10 +304,10 @@ sequenceDiagram
 </div>
 
 Key features:
-- **Automatic caching**: Messages cached when recipient unreachable
-- **Tiered retention**: Regular (12hr) vs favorite peer (indefinite)
-- **Delivery on reconnect**: Cached messages sent when peer returns
-- **Duplicate prevention**: Message IDs prevent redundant delivery
+- **Automatic caching**: Messages cached when the recipient is unreachable.
+- **Tiered retention**: Regular (12hr) vs favorite peer (indefinite).
+- **Delivery on reconnect**: Cached messages sent when the peer returns.
+- **Duplicate prevention**: Message IDs prevent redundant delivery.
 
 ## Encryption and Security
 
@@ -404,11 +404,11 @@ stateDiagram-v2
 
 ### Channel Features
 
-- **Hashtag naming**: Channels identified by #channelname
-- **Password protection**: Optional encryption with shared passwords
-- **Owner privileges**: Transfer ownership, change passwords
-- **Message retention**: Owner-controlled mandatory retention
-- **Decentralized discovery**: Channels discovered through usage
+- **Hashtag naming**: Channels identified by #channelname.
+- **Password protection**: Optional encryption with shared passwords.
+- **Owner privileges**: Transfer ownership, change passwords.
+- **Message retention**: Owner-controlled mandatory retention.
+- **Decentralized discovery**: Channels discovered through usage.
 
 ## Binary Protocol Specification
 
@@ -497,10 +497,10 @@ graph LR
 </div>
 
 The compression system:
-- **LZ4 Algorithm**: Fast compression/decompression optimized for real-time use
-- **Entropy detection**: Skips compression for already-compressed data
-- **Threshold-based**: Only compresses messages larger than 100 bytes
-- **Transparent**: Compression/decompression handled automatically
+- **LZ4 Algorithm**: Fast compression/decompression optimized for real-time use.
+- **Entropy detection**: Skips compression for already-compressed data.
+- **Threshold-based**: Only compresses messages larger than 100 bytes.
+- **Transparent**: Compression/decompression handled automatically.
 
 ### Battery-Aware Operation
 
@@ -532,18 +532,18 @@ graph TD
 </div>
 
 Power modes affect:
-- **Scan duty cycle**: How often and how long we scan for peers
-- **Connection limits**: Maximum simultaneous peer connections
-- **Advertising intervals**: How often we broadcast our presence
-- **Message aggregation**: Batching window for outgoing messages
+- **Scan duty cycle**: How often and how long we scan for peers.
+- **Connection limits**: Maximum simultaneous peer connections.
+- **Advertising intervals**: How often we broadcast our presence.
+- **Message aggregation**: Batching window for outgoing messages.
 
 ### Optimized Bloom Filters
 
 For efficient duplicate message detection:
-- **Bit-packed storage**: Uses UInt64 arrays for memory efficiency
-- **SHA256 hashing**: High-quality hash distribution
-- **Dynamic sizing**: Adapts to network size (small: 500 items, large: 5000 items)
-- **Low false positive rate**: 0.01 (1%) for accurate duplicate detection
+- **Bit-packed storage**: Uses UInt64 arrays for memory efficiency.
+- **SHA256 hashing**: High-quality hash distribution.
+- **Dynamic sizing**: Adapts to network size (small: 500 items, large: 5000 items).
+- **Low false positive rate**: 0.01 (1%) for accurate duplicate detection.
 
 ## Privacy Features
 
@@ -573,10 +573,10 @@ gantt
 </div>
 
 Cover traffic characteristics:
-- **Random intervals**: 30-120 seconds between dummy messages
-- **Realistic content**: Mimics actual user messages
-- **Marked internally**: Identified and discarded after decryption
-- **Battery aware**: Disabled when battery < 20%
+- **Random intervals**: 30-120 seconds between dummy messages.
+- **Realistic content**: Mimics actual user messages.
+- **Marked internally**: Identified and discarded after decryption.
+- **Battery aware**: Disabled when battery < 20%.
 
 ### Timing Randomization
 
@@ -610,10 +610,10 @@ This prevents timing analysis attacks by adding random delays (50-500ms) to all 
 
 ### Ephemeral Identities
 
-- **No registration**: No account creation or phone numbers
-- **Random peer IDs**: Generated fresh each session
-- **Public key fingerprints**: Only persistent identifier for favorites
-- **Nickname-based**: Human-readable names without permanent binding
+- **No registration**: No account creation or phone numbers.
+- **Random peer IDs**: Generated fresh each session.
+- **Public key fingerprints**: Only persistent identifier for favorites.
+- **Nickname-based**: Human-readable names without permanent binding.
 
 ## Message Fragmentation
 
@@ -654,10 +654,10 @@ graph TD
 
 ### Fragment Structure
 
-- **Fragment ID**: 8-byte identifier linking fragments
-- **Sequence tracking**: START, CONTINUE, END types
-- **Reliability**: Each fragment independently relayed
-- **Optimization**: 20ms inter-fragment delay for BLE 5.0
+- **Fragment ID**: 8-byte identifier linking fragments.
+- **Sequence tracking**: START, CONTINUE, END types.
+- **Reliability**: Each fragment independently relayed.
+- **Optimization**: 20ms inter-fragment delay for BLE 5.0.
 
 ## Complete Message Flow
 
@@ -725,19 +725,19 @@ sequenceDiagram
 
 A planned enhancement will add WiFi Direct as an alternative transport layer:
 
-- **100x bandwidth**: 250+ Mbps vs BLE's 1-3 Mbps  
-- **Extended range**: 100-200m vs BLE's 10-30m
-- **Automatic handoff**: Seamlessly switch between BLE and WiFi Direct
-- **Hybrid mesh**: Some nodes BLE-only, others WiFi-capable
-- **Battery-aware**: Only activate for large transfers or when charging
+- **100x bandwidth**: 250+ Mbps vs BLE's 1-3 Mbps.
+- **Extended range**: 100-200m vs BLE's 10-30m.
+- **Automatic handoff**: Seamlessly switch between BLE and WiFi Direct.
+- **Hybrid mesh**: Some nodes BLE-only, others WiFi-capable.
+- **Battery-aware**: Only activate for large transfers or when charging.
 
 ### Alternative Transports
 
 Future transport options being considered:
 
-- **Ultrasonic Communication**: 1-10 kbps through air, works when radio is jammed
-- **LoRa (Long Range)**: 2-15km range for disaster scenarios
-- **Transport bonding**: Use multiple simultaneously for redundancy
+- **Ultrasonic Communication**: 1-10 kbps through air, works when the radio is jammed.
+- **LoRa (Long Range)**: 2-15km range for disaster scenarios.
+- **Transport bonding**: Use multiple simultaneously for redundancy.
 
 ### Transport Protocol Interface
 
@@ -831,11 +831,11 @@ sequenceDiagram
 
 Key considerations for maintaining bitchat's privacy model:
 
-1. **Opt-in Only**: Network bridging disabled by default, requiring explicit user consent
-2. **Channel-Level Control**: Bridge permissions managed per channel, not globally
-3. **Maintained Encryption**: Messages remain end-to-end encrypted when bridged
-4. **Ephemeral Options**: Support for Nostr's ephemeral events (NIP-16) for temporary bridging
-5. **Identity Isolation**: Generate separate Nostr keypairs unlinked to local peer identities
+1. **Opt-in Only**: Network bridging disabled by default, requiring explicit user consent.
+2. **Channel-Level Control**: Bridge permissions managed per channel, not globally.
+3. **Maintained Encryption**: Messages remain end-to-end encrypted when bridged.
+4. **Ephemeral Options**: Support for Nostr's ephemeral events (NIP-16) for temporary bridging.
+5. **Identity Isolation**: Generate separate Nostr keypairs unlinked to local peer identities.
 
 ### Use Cases
 
@@ -851,11 +851,11 @@ This extension would be implemented as an optional module, ensuring the core bit
 bitchat demonstrates that secure, private messaging is possible without centralized infrastructure. By combining Bluetooth mesh networking, end-to-end encryption, and privacy-preserving protocols, bitchat provides resilient communication that works anywhere people gather, regardless of internet availability.
 
 The system's design prioritizes:
-- **User privacy**: No persistent identifiers or metadata collection
-- **Resilience**: Automatic mesh networking and store-and-forward
-- **Security**: Strong encryption with forward secrecy
-- **Efficiency**: Binary protocols and intelligent caching
-- **Simplicity**: No account creation or complex setup
+- **User privacy**: No persistent identifiers or metadata collection.
+- **Resilience**: Automatic mesh networking and store-and-forward.
+- **Security**: Strong encryption with forward secrecy.
+- **Efficiency**: Binary protocols and intelligent caching.
+- **Simplicity**: No account creation or complex setup.
 
 As a public domain project, bitchat serves as both a practical tool and a reference implementation for decentralized, privacy-preserving communication systems.
 

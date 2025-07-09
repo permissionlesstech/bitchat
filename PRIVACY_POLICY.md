@@ -8,10 +8,10 @@ bitchat is designed with privacy as its foundation. We believe private communica
 
 ## Summary
 
-- **No personal data collection** - We don't collect names, emails, or phone numbers
-- **No servers** - Everything happens on your device and through peer-to-peer connections
-- **No tracking** - We have no analytics, telemetry, or user tracking
-- **Open source** - You can verify these claims by reading our code
+- **No personal data collection** - We don't collect names, emails, or phone numbers.
+- **No servers** - Everything happens on your device and through peer-to-peer connections.
+- **No tracking** - We have no analytics, telemetry, or user tracking.
+- **Open source** - You can verify these claims by reading our code.
 
 ## What Information bitchat Stores
 
@@ -84,10 +84,10 @@ All private messages use end-to-end encryption:
 ## Your Rights
 
 You have complete control:
-- **Delete Everything**: Triple-tap the logo to instantly wipe all data
-- **Leave Anytime**: Close the app and your presence disappears
-- **No Account**: Nothing to delete from servers because there are none
-- **Portability**: Your data never leaves your device unless you export it
+- **Delete Everything**: Triple-tap the logo to instantly wipe all data.
+- **Leave Anytime**: Close the app and your presence disappears.
+- **No Account**: Nothing to delete from servers because there are none.
+- **Portability**: Your data never leaves your device unless you export it.
 
 ## Bluetooth & Permissions
 
@@ -103,10 +103,10 @@ bitchat does not knowingly collect information from children. The app has no age
 
 ## Data Retention
 
-- **Messages**: Deleted from memory when app closes (unless room retention is enabled)
-- **Identity Key**: Persists until you delete the app
-- **Favorites**: Persist until you remove them or delete the app
-- **Everything Else**: Exists only during active sessions
+- **Messages**: Deleted from memory when the app closes (unless room retention is enabled).
+- **Identity Key**: Persists until you delete the app.
+- **Favorites**: Persist until you remove them or delete the app.
+- **Everything Else**: Exists only during active sessions.
 
 ## Security Measures
 

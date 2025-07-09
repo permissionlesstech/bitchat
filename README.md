@@ -10,6 +10,10 @@ A secure, decentralized, peer-to-peer messaging app that works over Bluetooth me
 
 This project is released into the public domain. See the [LICENSE](LICENSE) file for details.
 
+## Changelog
+
+All notable changes to this project will be documented in the [CHANGELOG.md](CHANGELOG.md) file.
+
 ## Features
 
 - **Decentralized Mesh Network**: Automatic peer discovery and multi-hop message relay over Bluetooth LE
@@ -66,7 +70,7 @@ This project is released into the public domain. See the [LICENSE](LICENSE) file
 ### Basic Commands
 
 - `/j #channel` - Join or create a channel
-- `/m @name message` - Send a private message
+- `/m @name` - Send a private message
 - `/w` - List online users
 - `/channels` - Show all discovered channels
 - `/block @name` - Block a peer from messaging you
@@ -75,7 +79,7 @@ This project is released into the public domain. See the [LICENSE](LICENSE) file
 - `/clear` - Clear chat messages
 - `/pass [password]` - Set/change channel password (owner only)
 - `/transfer @name` - Transfer channel ownership
-- `/save` - Toggle message retention for channel (owner only)
+- `/save` - Toggle message retention for a channel (owner only)
 
 ### Getting Started
 
