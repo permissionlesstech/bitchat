@@ -4,6 +4,13 @@
 **Contact**: lancejames@unit221b.com  
 **Date**: January 8, 2025
 
+## Revision History
+
+- **January 8, 2025**: Initial vulnerability disclosure
+- **January 9, 2025**: Vulnerabilities addressed with secure mode toggle implementation
+  - See [SECURITY_PATCHES.md](SECURITY_PATCHES.md) for fix details
+  - Preserves original mesh networking functionality per community feedback
+
 ## Overview
 
 This document discloses critical security vulnerabilities discovered in the BitChat application during a comprehensive security audit. These vulnerabilities could allow attackers to intercept communications, impersonate users, and compromise the entire messaging system.
