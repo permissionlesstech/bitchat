@@ -15,8 +15,9 @@ struct LinkPreviewView: View {
     let url: URL
     let title: String?
     @Environment(\.colorScheme) var colorScheme
+    #if os(iOS)
     @State private var metadata: LPLinkMetadata?
-    
+    #endif
     private var textColor: Color {
         colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
     }
@@ -85,11 +86,13 @@ struct LinkPreviewView: View {
                 
                 VStack(alignment: .leading, spacing: 4) {
                     // Title
+                    #if os(iOS)
                     Text(metadata?.title ?? title ?? url.host ?? "Link")
                         .font(.system(size: 14, weight: .semibold, design: .monospaced))
                         .foregroundColor(textColor)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
+                    #endif
                     
                     // Host
                     Text(url.host ?? url.absoluteString)
@@ -265,19 +268,15 @@ extension String {
     }
     
     func extractMarkdownLink() -> (title: String, url: URL)? {
-        print("DEBUG: Checking for markdown link in: \(self)")
         let pattern = #"\[([^\]]+)\]\(([^)]+)\)"#
         if let regex = try? NSRegularExpression(pattern: pattern),
            let match = regex.firstMatch(in: self, range: NSRange(location: 0, length: self.utf16.count)) {
             if let titleRange = Range(match.range(at: 1), in: self),
                let urlRange = Range(match.range(at: 2), in: self),
                let url = URL(string: String(self[urlRange])) {
-                let result = (String(self[titleRange]), url)
-                print("DEBUG: Found markdown link - title: \(result.0), url: \(result.1)")
-                return result
+                return (String(self[titleRange]), url)
             }
         }
-        print("DEBUG: No markdown link found")
         return nil
     }
 }

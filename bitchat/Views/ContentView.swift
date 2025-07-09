@@ -297,13 +297,13 @@ struct ContentView: View {
                             .foregroundColor(Color.red)
                     }
                     .buttonStyle(.plain)
-                    .alert("Leave Channel", isPresented: $showLeaveChannelAlert) {
-                        Button("Cancel", role: .cancel) { }
-                        Button("Leave", role: .destructive) {
+                    .alert("leave channel?", isPresented: $showLeaveChannelAlert) {
+                        Button("cancel", role: .cancel) { }
+                        Button("leave", role: .destructive) {
                             viewModel.leaveChannel(currentChannel)
                         }
                     } message: {
-                        Text("Are you sure you want to leave \(currentChannel)?")
+                        Text("sure you want to leave \(currentChannel)?")
                     }
                 }
             } else {
@@ -852,13 +852,13 @@ struct ContentView: View {
                     )
             }
             .buttonStyle(.plain)
-            .alert("Leave Channel", isPresented: $showLeaveChannelAlert) {
-                Button("Cancel", role: .cancel) { }
-                Button("Leave", role: .destructive) {
+            .alert("leave channel", isPresented: $showLeaveChannelAlert) {
+                Button("cancel", role: .cancel) { }
+                Button("leave", role: .destructive) {
                     viewModel.leaveChannel(channel)
                 }
             } message: {
-                Text("Are you sure you want to leave \(channel)?")
+                Text("sure you want to leave \(channel)?")
             }
         }
     }

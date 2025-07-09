@@ -1,6 +1,9 @@
 ![ChatGPT Image Jul 5, 2025 at 06_07_31 PM](https://github.com/user-attachments/assets/2660f828-49c7-444d-beca-d8b01854667a)
 # bitchat
 
+> [!WARNING]
+> This software has not received external security review and may contain vulnerabilities and does not necessarily meet its stated security goals. Do not use it for production use, and do not rely on its security whatsoever until it has been reviewed. Work in progress.
+
 A secure, decentralized, peer-to-peer messaging app that works over Bluetooth mesh networks. No internet required, no servers, no phone numbers - just pure encrypted communication.
 
 ## License
