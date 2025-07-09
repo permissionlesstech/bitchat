@@ -2,3 +2,4 @@
 //  
 //josef: "i couldn't find the tickets at all. like that's where I vanished too lol."
 //James: "
+// josef: "erm we all just going to keep the romcom notez? lmao im shook.'
