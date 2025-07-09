@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bitchat Web IRC</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💬</text></svg>">
+</head>
+<body>
+    <div id="app">
+        <!-- Header -->
+        <header id="header">
+            <div class="header-left">
+                <span id="app-title" onclick="showAppInfo()">bitchat*</span>
+                <span class="nickname-input">
+                    @<input type="text" id="nickname" placeholder="nickname" value="anon1234" maxlength="20">
+                </span>
+            </div>
+            
+            <div class="header-center" id="channel-info">
+                <span id="current-location">public chat</span>
+            </div>
+            
+            <div class="header-right">
+                <span id="peer-count">
+                    <span class="icon">👥</span>
+                    <span id="connected-count">0</span>
+                </span>
+                <span id="channel-count" style="display: none;">
+                    · <span class="icon">📁</span>
+                    <span id="joined-channels-count">0</span>
+                </span>
+                <span id="unread-indicator" style="display: none;">
+                    <span class="icon">✉️</span>
+                </span>
+            </div>
+        </header>
+
+        <!-- Messages Area -->
+        <div id="messages-container">
+            <div id="messages"></div>
+        </div>
+
+        <!-- Input Area -->
+        <div id="input-container">
+            <div id="autocomplete" style="display: none;"></div>
+            <div class="input-wrapper">
+                <input type="text" id="message-input" placeholder="type message or /help for commands..." autocomplete="off">
+                <button id="send-btn" onclick="sendMessage()">send</button>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div id="sidebar" class="sidebar">
+            <div class="sidebar-header">
+                <h3>IRC Commands</h3>
+                <button class="close-sidebar" onclick="toggleSidebar()">×</button>
+            </div>
+            
+            <div class="sidebar-section">
+                <h4>Quick Commands</h4>
+                <div class="command-list">
+                    <div class="command-item" onclick="executeCommand('/help')">
+                        <code>/help</code> - Show all commands
+                    </div>
+                    <div class="command-item" onclick="executeCommand('/j #general')">
+                        <code>/j #general</code> - Join channel
+                    </div>
+                    <div class="command-item" onclick="executeCommand('/w')">
+                        <code>/w</code> - List online users
+                    </div>
+                    <div class="command-item" onclick="executeCommand('/channels')">
+                        <code>/channels</code> - Show channels
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <h4>Connected Peers</h4>
+                <div id="peer-list"></div>
+            </div>
+
+            <div class="sidebar-section">
+                <h4>Joined Channels</h4>
+                <div id="channel-list"></div>
+            </div>
+        </div>
+
+        <!-- Overlay -->
+        <div id="overlay" onclick="closeSidebar()"></div>
+
+        <!-- App Info Modal -->
+        <div id="app-info-modal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Bitchat Web IRC</h2>
+                    <button class="close-modal" onclick="closeAppInfo()">×</button>
+                </div>
+                <div class="modal-body">
+                    <p>A web version of the decentralized Bitchat messaging app with IRC-style commands.</p>
+                    
+                    <h3>Features</h3>
+                    <ul>
+                        <li>IRC-style commands (/j, /m, /w, etc.)</li>
+                        <li>Channel-based messaging</li>
+                        <li>Private messaging</li>
+                        <li>Real-time peer discovery</li>
+                        <li>Terminal-style interface</li>
+                    </ul>
+
+                    <h3>Basic Commands</h3>
+                    <ul>
+                        <li><code>/j #channel</code> - Join or create a channel</li>
+                        <li><code>/m @user message</code> - Send private message</li>
+                        <li><code>/w</code> - List online users</li>
+                        <li><code>/channels</code> - Show all channels</li>
+                        <li><code>/leave</code> - Leave current channel</li>
+                        <li><code>/clear</code> - Clear chat messages</li>
+                        <li><code>/help</code> - Show all commands</li>
+                    </ul>
+
+                    <p><strong>Note:</strong> This is a web simulation of the original Bluetooth mesh networking functionality.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="config.js"></script>
+    <script src="crypto.js"></script>
+    <script src="irc-client.js"></script>
+    <script src="networking.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
