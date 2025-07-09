@@ -13,6 +13,11 @@ class BluetoothAuthenticationService: NSObject, ObservableObject {
     @Published private(set) var isPairing = false
     @Published private(set) var pendingConnections: [PendingConnection] = []
     @Published private(set) var whitelistedDevices: Set<WhitelistedDevice> = []
+    @Published var isSecureModeEnabled: Bool = true {
+        didSet {
+            UserDefaults.standard.set(isSecureModeEnabled, forKey: "SecureModeEnabled")
+        }
+    }
     
     private let keychain = KeychainService()
     private let secureStorage: SecureStorageService
@@ -79,6 +84,10 @@ class BluetoothAuthenticationService: NSObject, ObservableObject {
     override init() {
         self.secureStorage = SecureStorageService()
         super.init()
+        
+        // Load secure mode preference
+        self.isSecureModeEnabled = UserDefaults.standard.object(forKey: "SecureModeEnabled") as? Bool ?? true
+        
         loadWhitelist()
         startChallengeCleanupTimer()
     }
@@ -93,6 +102,12 @@ class BluetoothAuthenticationService: NSObject, ObservableObject {
         }
         
         isPairing = true
+        
+        // If secure mode is disabled, auto-pair without PIN
+        guard isSecureModeEnabled else {
+            performPairing(peripheral: peripheral, pin: "000000", completion: completion)
+            return
+        }
         
         // Generate and display PIN for user verification
         let pin = generatePIN()
@@ -113,6 +128,19 @@ class BluetoothAuthenticationService: NSObject, ObservableObject {
     
     /// Authenticates an incoming connection request
     func authenticateConnection(from peripheral: CBPeripheral, completion: @escaping (Bool) -> Void) {
+        // If secure mode is disabled, allow all connections automatically
+        guard isSecureModeEnabled else {
+            // Auto-add to whitelist for future connections
+            let publicKey = generateTemporaryPublicKey(for: peripheral)
+            addToWhitelist(
+                peripheral: peripheral,
+                publicKey: publicKey,
+                name: peripheral.name ?? "Device \(peripheral.identifier.uuidString.prefix(8))"
+            )
+            completion(true)
+            return
+        }
+        
         // Check if device is whitelisted
         if isWhitelisted(peripheral) {
             // Perform challenge-response authentication
@@ -134,6 +162,11 @@ class BluetoothAuthenticationService: NSObject, ObservableObject {
     
     /// Verifies identity during key exchange
     func verifyIdentityForKeyExchange(peripheral: CBPeripheral, publicKey: Data) -> Bool {
+        // If secure mode is disabled, accept all key exchanges
+        guard isSecureModeEnabled else {
+            return true
+        }
+        
         guard let whitelistedDevice = getWhitelistedDevice(for: peripheral) else {
             return false
         }
@@ -181,6 +214,11 @@ class BluetoothAuthenticationService: NSObject, ObservableObject {
         saveWhitelist()
     }
     
+    /// Checks if a peripheral is whitelisted
+    func isWhitelisted(_ peripheral: CBPeripheral) -> Bool {
+        return whitelistedDevices.contains { $0.identifier == peripheral.identifier }
+    }
+    
     // MARK: - Private Methods
     
     private func generatePIN() -> String {
@@ -188,6 +226,14 @@ class BluetoothAuthenticationService: NSObject, ObservableObject {
         return String((0..<Constants.pinLength).map { _ in
             digits.randomElement()!
         })
+    }
+    
+    private func generateTemporaryPublicKey(for peripheral: CBPeripheral) -> Data {
+        // Generate a deterministic key based on peripheral identifier
+        // This ensures consistency across connections
+        let identifier = peripheral.identifier.uuidString
+        let keyData = identifier.data(using: .utf8) ?? Data()
+        return Data(SHA256.hash(data: keyData))
     }
     
     private func generateChallenge() -> Data {
@@ -233,6 +279,13 @@ class BluetoothAuthenticationService: NSObject, ObservableObject {
     }
     
     private func performChallengeResponse(with peripheral: CBPeripheral, completion: @escaping (Bool) -> Void) {
+        // Skip challenge-response if secure mode is disabled
+        guard isSecureModeEnabled else {
+            updateLastConnected(for: peripheral)
+            completion(true)
+            return
+        }
+        
         // Generate challenge
         let challenge = generateChallenge()
         let challengeData = ChallengeData(
@@ -305,9 +358,6 @@ class BluetoothAuthenticationService: NSObject, ObservableObject {
         }
     }
     
-    private func isWhitelisted(_ peripheral: CBPeripheral) -> Bool {
-        whitelistedDevices.contains { $0.identifier == peripheral.identifier }
-    }
     
     private func getWhitelistedDevice(for peripheral: CBPeripheral) -> WhitelistedDevice? {
         whitelistedDevices.first { $0.identifier == peripheral.identifier }

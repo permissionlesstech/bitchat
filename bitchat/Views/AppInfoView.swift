@@ -3,6 +3,7 @@ import SwiftUI
 struct AppInfoView: View {
     @Environment(\.dismiss) var dismiss
     @Environment(\.colorScheme) var colorScheme
+    @ObservedObject var authService: BluetoothAuthenticationService
     
     private var backgroundColor: Color {
         colorScheme == .dark ? Color.black : Color.white
@@ -84,6 +85,43 @@ struct AppInfoView: View {
                         
                         FeatureRow(icon: "hand.raised.fill", title: "Panic Mode",
                                   description: "Triple-tap logo to instantly clear all data")
+                    }
+                    
+                    // Security
+                    VStack(alignment: .leading, spacing: 16) {
+                        SectionHeader("Security")
+                        
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Secure Mode")
+                                    .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                                    .foregroundColor(textColor)
+                                
+                                Text(authService.isSecureModeEnabled ? 
+                                     "PIN & approval required for new connections" : 
+                                     "Auto-connect for easy mesh formation")
+                                    .font(.system(size: 12, design: .monospaced))
+                                    .foregroundColor(secondaryTextColor)
+                            }
+                            
+                            Spacer()
+                            
+                            Toggle("", isOn: $authService.isSecureModeEnabled)
+                                .toggleStyle(SwitchToggleStyle())
+                                .scaleEffect(0.8)
+                        }
+                        .padding(.vertical, 4)
+                        
+                        if !authService.isSecureModeEnabled {
+                            HStack(spacing: 8) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundColor(.orange)
+                                Text("Auto-connect is less secure but enables seamless mesh networking")
+                                    .font(.system(size: 11, design: .monospaced))
+                                    .foregroundColor(.orange)
+                            }
+                            .padding(.top, 4)
+                        }
                     }
                     
                     // How to Use
@@ -210,6 +248,43 @@ struct AppInfoView: View {
                         
                         FeatureRow(icon: "hand.raised.fill", title: "Panic Mode",
                                   description: "Triple-tap logo to instantly clear all data")
+                    }
+                    
+                    // Security
+                    VStack(alignment: .leading, spacing: 16) {
+                        SectionHeader("Security")
+                        
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Secure Mode")
+                                    .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                                    .foregroundColor(textColor)
+                                
+                                Text(authService.isSecureModeEnabled ? 
+                                     "PIN & approval required for new connections" : 
+                                     "Auto-connect for easy mesh formation")
+                                    .font(.system(size: 12, design: .monospaced))
+                                    .foregroundColor(secondaryTextColor)
+                            }
+                            
+                            Spacer()
+                            
+                            Toggle("", isOn: $authService.isSecureModeEnabled)
+                                .toggleStyle(SwitchToggleStyle())
+                                .scaleEffect(0.8)
+                        }
+                        .padding(.vertical, 4)
+                        
+                        if !authService.isSecureModeEnabled {
+                            HStack(spacing: 8) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundColor(.orange)
+                                Text("Auto-connect is less secure but enables seamless mesh networking")
+                                    .font(.system(size: 11, design: .monospaced))
+                                    .foregroundColor(.orange)
+                            }
+                            .padding(.top, 4)
+                        }
                     }
                     
                     // How to Use
@@ -351,5 +426,5 @@ struct FeatureRow: View {
 }
 
 #Preview {
-    AppInfoView()
+    AppInfoView(authService: BluetoothAuthenticationService())
 }

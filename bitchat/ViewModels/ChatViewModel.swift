@@ -52,6 +52,7 @@ class ChatViewModel: ObservableObject {
     @Published var retentionEnabledChannels: Set<String> = []  // Channels where owner enabled retention for all members
     
     let meshService = BluetoothMeshService()
+    let authenticationService = BluetoothAuthenticationService()
     private let userDefaults = UserDefaults.standard
     private let nicknameKey = "bitchat.nickname"
     private let favoritesKey = "bitchat.favorites"
@@ -82,6 +83,9 @@ class ChatViewModel: ObservableObject {
         // Load saved channels state
         savedChannels = MessageRetentionService.shared.getFavoriteChannels()
         meshService.delegate = self
+        
+        // Connect authentication service to mesh service
+        meshService.setAuthenticationService(authenticationService)
         
         // Log startup info
         

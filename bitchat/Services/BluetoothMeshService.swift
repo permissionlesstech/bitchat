@@ -48,6 +48,7 @@ class BluetoothMeshService: NSObject {
     
     weak var delegate: BitchatDelegate?
     private var encryptionService: EncryptionService!
+    private var authenticationService: BluetoothAuthenticationService?
     private let messageQueue = DispatchQueue(label: "bitchat.messageQueue", attributes: .concurrent)
     private var processedMessages = Set<String>()
     private let maxTTL: UInt8 = 7  // Maximum hops for long-distance delivery
@@ -314,6 +315,12 @@ class BluetoothMeshService: NSObject {
             object: nil
         )
         #endif
+    }
+    
+    // MARK: - Authentication Integration
+    
+    func setAuthenticationService(_ authService: BluetoothAuthenticationService) {
+        self.authenticationService = authService
     }
     
     deinit {
@@ -2303,6 +2310,22 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
             return
         }
         
+        // Check if secure mode is enabled and if device is whitelisted
+        let canAutoConnect: Bool
+        if let authService = authenticationService, authService.isSecureModeEnabled {
+            // In secure mode, only auto-connect to whitelisted devices
+            canAutoConnect = authService.isWhitelisted(peripheral)
+        } else {
+            // In non-secure mode or without auth service, allow auto-connect
+            canAutoConnect = true
+        }
+        
+        guard canAutoConnect else {
+            // Device not whitelisted in secure mode, skip auto-connection
+            // User will need to manually approve through UI
+            return
+        }
+        
         // Check if we already have this peripheral in our pool
         if let pooledPeripheral = connectionPool[peripheralID] {
             // Reuse existing peripheral from pool
@@ -2342,6 +2365,25 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
     }
     
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
+        // Authenticate connection if authentication service is available
+        if let authService = authenticationService {
+            authService.authenticateConnection(from: peripheral) { [weak self] authenticated in
+                guard authenticated else {
+                    // Authentication failed, disconnect
+                    self?.centralManager?.cancelPeripheralConnection(peripheral)
+                    return
+                }
+                
+                // Authentication succeeded, continue with connection
+                self?.continueConnectionAfterAuth(peripheral: peripheral)
+            }
+        } else {
+            // No authentication service, continue normally
+            continueConnectionAfterAuth(peripheral: peripheral)
+        }
+    }
+    
+    private func continueConnectionAfterAuth(peripheral: CBPeripheral) {
         peripheral.delegate = self
         peripheral.discoverServices([BluetoothMeshService.serviceUUID])
         

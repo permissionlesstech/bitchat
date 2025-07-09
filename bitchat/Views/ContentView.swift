@@ -118,7 +118,7 @@ struct ContentView: View {
         .frame(minWidth: 600, minHeight: 400)
         #endif
         .sheet(isPresented: $showAppInfo) {
-            AppInfoView()
+            AppInfoView(authService: viewModel.authenticationService)
         }
         .alert("Set Channel Password", isPresented: $showPasswordInput) {
             SecureField("Password", text: $passwordInput)
