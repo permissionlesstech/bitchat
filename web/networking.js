@@ -1,4 +1,4 @@
-// Networking simulation for Bitchat Web IRC
+// Production Networking for Bitchat Live using IRC
 class BitchatNetworking {
     constructor() {
         this.peerID = null;
@@ -10,13 +10,12 @@ class BitchatNetworking {
         this.channelKeys = new Map();
         this.privateChats = new Map();
         
-        // Use BroadcastChannel for inter-tab communication
+        // Use IRC client for live connections
+        this.ircClient = new BitchatIRCClient();
+        
+        // Fallback: Use BroadcastChannel for local tab communication
         this.broadcastChannel = new BroadcastChannel('bitchat-mesh');
         this.broadcastChannel.onmessage = (event) => this.handleBroadcastMessage(event);
-        
-        // Use localStorage for persistence and cross-tab discovery
-        this.storageKey = 'bitchat-peers';
-        this.messageStorageKey = 'bitchat-messages';
         
         // Initialize
         this.init();
@@ -39,18 +38,61 @@ class BitchatNetworking {
             localStorage.setItem('bitchat-peer-id', this.peerID);
         }
 
-        // Restore nickname
-        this.nickname = localStorage.getItem('bitchat-nickname');
-        if (!this.nickname) {
-            this.nickname = window.crypto.generateNickname();
-            localStorage.setItem('bitchat-nickname', this.nickname);
-        }
-
-        // Announce presence immediately
-        this.announcePresence();
+        // Set up IRC client callbacks
+        this.ircClient.onMessage((message) => this.handleIRCMessage(message));
+        this.ircClient.onUserUpdate((peers) => this.handleIRCPeerUpdate(peers));
+        this.ircClient.onConnectionChange((connected, error) => this.handleConnectionChange(connected, error));
         
-        // Discover existing peers
-        this.discoverPeers();
+        // Get nickname from IRC client
+        this.nickname = this.ircClient.nickname || this.generateNickname();
+    }
+
+    // IRC Message Handlers
+    handleIRCMessage(message) {
+        // Forward IRC messages to app handlers
+        this.notifyMessage(message);
+        
+        // Also broadcast locally for multi-tab sync
+        this.broadcastChannel.postMessage({
+            type: 'irc_message',
+            data: message
+        });
+    }
+
+    handleIRCPeerUpdate(peers) {
+        // Update local peer list
+        this.connectedPeers.clear();
+        peers.forEach(peer => {
+            this.connectedPeers.set(peer.nickname, peer);
+        });
+        
+        this.notifyPeerUpdate();
+        
+        // Broadcast peer update to other tabs
+        this.broadcastChannel.postMessage({
+            type: 'peer_update',
+            data: peers
+        });
+    }
+
+    handleConnectionChange(connected, error) {
+        console.log(`IRC connection ${connected ? 'established' : 'lost'}`, error);
+        
+        // Notify connection status change
+        this.broadcastChannel.postMessage({
+            type: 'connection_change',
+            data: { connected, error }
+        });
+    }
+
+    generateNickname() {
+        // Use same logic as IRC client for consistency
+        const adjectives = ['swift', 'bright', 'clever', 'brave', 'quick', 'wise', 'bold', 'keen'];
+        const nouns = ['fox', 'owl', 'hawk', 'wolf', 'bear', 'eagle', 'lion', 'tiger'];
+        const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
+        const noun = nouns[Math.floor(Math.random() * nouns.length)];
+        const num = Math.floor(Math.random() * 1000);
+        return `${adj}${noun}${num}`;
     }
 
     // Event handlers
@@ -214,27 +256,30 @@ class BitchatNetworking {
     sendMessage(content, target = null, channel = null, isPrivate = false) {
         const messageID = this.peerID + '_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
         
-        const message = {
-            type: 'message',
-            id: messageID,
-            peerID: this.peerID,
-            sender: this.nickname,
-            content: content,
-            timestamp: Date.now(),
-            target: target,
-            channel: channel,
-            isPrivate: isPrivate,
-            ttl: 7
-        };
+        // Use IRC client for live messaging
+        const success = this.ircClient.sendMessage(content, target, channel);
+        
+        if (success) {
+            // Create message object for local display
+            const message = {
+                type: 'message',
+                id: messageID,
+                peerID: this.peerID,
+                sender: this.nickname,
+                content: content,
+                timestamp: Date.now(),
+                target: target,
+                channel: channel,
+                isPrivate: isPrivate,
+                ttl: 7
+            };
 
-        // Broadcast the message
-        this.broadcastChannel.postMessage(message);
-
-        // Store message locally for persistence
-        this.storeMessage(message);
-
-        // Notify local handlers
-        this.notifyMessage(message);
+            // Notify local handlers
+            this.notifyMessage(message);
+            
+            // Broadcast to other tabs
+            this.broadcastChannel.postMessage(message);
+        }
 
         return messageID;
     }
@@ -308,14 +353,14 @@ class BitchatNetworking {
     // Join a channel
     joinChannel(channel) {
         this.channels.add(channel);
-        this.announcePresence(); // Re-announce with updated channels
+        this.ircClient.joinChannel(channel);
     }
 
     // Leave a channel
     leaveChannel(channel) {
         this.channels.delete(channel);
         this.channelKeys.delete(channel);
-        this.announcePresence(); // Re-announce with updated channels
+        this.ircClient.leaveChannel(channel);
     }
 
     // Set channel encryption key
@@ -325,29 +370,19 @@ class BitchatNetworking {
 
     // Get connected peers
     getConnectedPeers() {
-        return Array.from(this.connectedPeers.entries()).map(([id, info]) => ({
-            id,
-            nickname: info.nickname,
-            lastSeen: info.lastSeen,
-            channels: info.channels || []
-        }));
+        return this.ircClient.getConnectedPeers();
     }
 
     // Get peer by nickname
     getPeerByNickname(nickname) {
-        for (const [id, info] of this.connectedPeers.entries()) {
-            if (info.nickname === nickname) {
-                return { id, ...info };
-            }
-        }
-        return null;
+        return this.ircClient.getPeerByNickname(nickname);
     }
 
     // Update nickname
     setNickname(nickname) {
         this.nickname = nickname;
         localStorage.setItem('bitchat-nickname', nickname);
-        this.announcePresence();
+        this.ircClient.changeNickname(nickname);
     }
 
     // Notification methods
