@@ -2751,25 +2751,20 @@ extension ChatViewModel: BitchatDelegate {
                     channelMessages[channel] = []
                 }
                 
-                // Check if this is our own message being echoed back
-                if finalMessage.sender != nickname && finalMessage.sender != "system" {
+                // Check if this message is from our own peer ID
+                if finalMessage.senderPeerID != meshService.myPeerID && finalMessage.sender != "system" {
                     // Skip empty or whitespace-only messages
                     if !finalMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         channelMessages[channel]?.append(finalMessage)
                         channelMessages[channel]?.sort { $0.timestamp < $1.timestamp }
                     }
-                } else if finalMessage.sender != "system" {
-                    // Our own message - check if we already have it (by ID and content)
+                } else if finalMessage.senderPeerID == meshService.myPeerID {
+                    // This is a message from our peer ID (e.g., from another one of our devices)
+                    // Check if we already have it before adding to prevent duplicates
                     let messageExists = channelMessages[channel]?.contains { existingMsg in
                         // Check by ID first
                         if existingMsg.id == finalMessage.id {
                             return true
-                        }
-                        // Check by content and sender with time window (within 1 second)
-                        if existingMsg.content == finalMessage.content && 
-                           existingMsg.sender == finalMessage.sender {
-                            let timeDiff = abs(existingMsg.timestamp.timeIntervalSince(finalMessage.timestamp))
-                            return timeDiff < 1.0
                         }
                         return false
                     } ?? false
@@ -2835,26 +2830,21 @@ extension ChatViewModel: BitchatDelegate {
                 finalMessage = message
             }
             
-            // Check if this is our own message being echoed back
-            if finalMessage.sender != nickname && finalMessage.sender != "system" {
+            // Check if this message is from our own peer ID
+            if finalMessage.senderPeerID != meshService.myPeerID && finalMessage.sender != "system" {
                 // Skip empty or whitespace-only messages
                 if !finalMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     messages.append(finalMessage)
                     // Sort messages by timestamp to ensure proper ordering
                     messages.sort { $0.timestamp < $1.timestamp }
                 }
-            } else if finalMessage.sender != "system" {
-                // Our own message - check if we already have it (by ID and content)
+            } else if finalMessage.senderPeerID == meshService.myPeerID {
+                // This is a message from our peer ID (e.g., from another one of our devices)
+                // Check if we already have it before adding to prevent duplicates
                 let messageExists = messages.contains { existingMsg in
                     // Check by ID first
                     if existingMsg.id == finalMessage.id {
                         return true
-                    }
-                    // Check by content and sender with time window (within 1 second)
-                    if existingMsg.content == finalMessage.content && 
-                       existingMsg.sender == finalMessage.sender {
-                        let timeDiff = abs(existingMsg.timestamp.timeIntervalSince(finalMessage.timestamp))
-                        return timeDiff < 1.0
                     }
                     return false
                 }
