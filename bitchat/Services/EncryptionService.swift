@@ -26,6 +26,10 @@ class EncryptionService {
     private var peerIdentityKeys: [String: Curve25519.Signing.PublicKey] = [:]
     private var sharedSecrets: [String: SymmetricKey] = [:]
     
+    // Per-message forward secrecy
+    private var sendingMessageNumbers: [String: UInt32] = [:]
+    private var receivingMessageNumbers: [String: UInt32] = [:]
+    
     // Persistent identity for favorites (separate from ephemeral keys)
     private var identityKey: Curve25519.Signing.PrivateKey!
     public var identityPublicKey: Curve25519.Signing.PublicKey!
@@ -132,6 +136,31 @@ class EncryptionService {
         } catch {
             throw EncryptionError.keychainError(error)
         }
+    }
+    
+    // MARK: - Per-Message Forward Secrecy
+    
+    private func deriveMessageKey(from baseKey: SymmetricKey, messageNumber: UInt32, direction: String) throws -> SymmetricKey {
+        // Create unique info for key derivation
+        let directionData = direction.data(using: .utf8) ?? Data()
+        let messageNumberData = withUnsafeBytes(of: messageNumber.bigEndian) { Data($0) }
+        
+        var info = Data()
+        info.append(directionData)
+        info.append(messageNumberData)
+        
+        // Use HKDF to derive a new key from the base key
+        let salt = "bitchat-msg-key-v1".data(using: .utf8)!
+        
+        // Perform HKDF key derivation using the base key directly
+        let hkdf = HKDF<SHA256>.deriveKey(
+            inputKeyMaterial: baseKey,
+            salt: salt,
+            info: info,
+            outputByteCount: 32
+        )
+        
+        return hkdf
     }
     
     // MARK: - Keychain Operations
@@ -322,27 +351,67 @@ class EncryptionService {
     }
     
     func encrypt(_ data: Data, for peerID: String) throws -> Data {
-        let symmetricKey = try cryptoQueue.sync {
-            guard let key = sharedSecrets[peerID] else {
+        return try cryptoQueue.sync(flags: .barrier) {
+            guard let baseKey = sharedSecrets[peerID] else {
                 throw EncryptionError.noSharedSecret
             }
-            return key
+            
+            // Get current sending message number and increment
+            let messageNumber = sendingMessageNumbers[peerID] ?? 0
+            sendingMessageNumbers[peerID] = messageNumber + 1
+            
+            // Derive unique key for this message
+            let messageKey = try deriveMessageKey(from: baseKey, messageNumber: messageNumber, direction: "send")
+            
+            // Create message with number prefix for decryption
+            var messageData = Data()
+            messageData.append(contentsOf: withUnsafeBytes(of: messageNumber.bigEndian) { Array($0) })
+            messageData.append(data)
+            
+            let sealedBox = try AES.GCM.seal(messageData, using: messageKey)
+            return sealedBox.combined ?? Data()
         }
-        
-        let sealedBox = try AES.GCM.seal(data, using: symmetricKey)
-        return sealedBox.combined ?? Data()
     }
     
     func decrypt(_ data: Data, from peerID: String) throws -> Data {
-        let symmetricKey = try cryptoQueue.sync {
-            guard let key = sharedSecrets[peerID] else {
+        return try cryptoQueue.sync(flags: .barrier) {
+            guard let baseKey = sharedSecrets[peerID] else {
                 throw EncryptionError.noSharedSecret
             }
-            return key
+            
+            // Decrypt the message to get message number and content
+            let sealedBox = try AES.GCM.SealedBox(combined: data)
+            
+            // First try to decrypt with different message numbers
+            // Start with expected next message number
+            let expectedMessageNumber = receivingMessageNumbers[peerID] ?? 0
+            
+            // Try expected number first, then a range around it for out-of-order messages
+            for messageNumber in max(0, expectedMessageNumber - 10)...(expectedMessageNumber + 10) {
+                let messageKey = try deriveMessageKey(from: baseKey, messageNumber: UInt32(messageNumber), direction: "receive")
+                
+                if let decryptedData = try? AES.GCM.open(sealedBox, using: messageKey),
+                   decryptedData.count >= 4 {
+                    
+                    // Extract message number from decrypted data
+                    let messageNumberData = decryptedData.prefix(4)
+                    let actualMessageNumber = messageNumberData.withUnsafeBytes { $0.load(as: UInt32.self).bigEndian }
+                    
+                    // Verify this is the expected message number
+                    if actualMessageNumber == messageNumber {
+                        // Update receiving message number to prevent replay
+                        if actualMessageNumber >= expectedMessageNumber {
+                            receivingMessageNumbers[peerID] = actualMessageNumber + 1
+                        }
+                        
+                        // Return message content without the number prefix
+                        return Data(decryptedData.dropFirst(4))
+                    }
+                }
+            }
+            
+            throw EncryptionError.decryptionFailed
         }
-        
-        let sealedBox = try AES.GCM.SealedBox(combined: data)
-        return try AES.GCM.open(sealedBox, using: symmetricKey)
     }
     
     func sign(_ data: Data) throws -> Data {
