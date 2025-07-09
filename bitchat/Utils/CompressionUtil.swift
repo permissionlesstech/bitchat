@@ -18,7 +18,8 @@ struct CompressionUtil {
         // Skip compression for small data
         guard data.count >= compressionThreshold else { return nil }
         
-        let destinationBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: data.count)
+        let maxCompressedSize = data.count + (data.count / 255) + 16
+        let destinationBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: maxCompressedSize)
         defer { destinationBuffer.deallocate() }
         
         let compressedSize = data.withUnsafeBytes { sourceBuffer in
