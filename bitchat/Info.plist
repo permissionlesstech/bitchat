@@ -32,9 +32,9 @@
 	<key>LSMinimumSystemVersion</key>
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users.</string>
+	<string>$(NSBluetoothAlwaysUsageDescription)</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
-	<string>bitchat uses Bluetooth to discover and connect with other bitchat users nearby.</string>
+	<string>$(NSBluetoothPeripheralUsageDescription)</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>bluetooth-central</string>

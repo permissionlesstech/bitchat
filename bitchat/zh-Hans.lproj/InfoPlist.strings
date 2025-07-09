@@ -1,0 +1,2 @@
+"NSBluetoothAlwaysUsageDescription" = "Bitchat 使用蓝牙创建安全的网状网络，以便与附近的用户聊天。";
+"NSBluetoothPeripheralUsageDescription" = "Bitchat 使用蓝牙发现并连接附近的其他 Bitchat 用户。";
