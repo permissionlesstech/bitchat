@@ -34,6 +34,14 @@ class ChatViewModel: ObservableObject {
     @Published var showAutocomplete: Bool = false
     @Published var autocompleteRange: NSRange? = nil
     @Published var selectedAutocompleteIndex: Int = 0
+    @Published var showPeerList = false
+    @Published var showPasswordInput = false
+    @Published var passwordInputChannel: String? = nil
+    @Published var passwordInput = ""
+    @Published var showPasswordError = false
+    @Published var showCommandSuggestions = false
+    @Published var commandSuggestions: [String] = []
+    @Published var showLeaveChannelAlert = false
     
     // Channel support
     @Published var joinedChannels: Set<String> = []  // Set of channel hashtags
@@ -1378,6 +1386,127 @@ class ChatViewModel: ObservableObject {
         
         // Return new cursor position (after the space)
         return range.location + nickname.count + 2
+    }
+
+    func updateCommandSuggestions(for text: String) {
+        if text.hasPrefix("/") && text.count >= 1 {
+            let input = text.lowercased()
+
+            // Build context-aware command list
+            var commandDescriptions: [(commands: [String], syntax: String?, description: String)] = [
+                (["/block"], "[nickname]", "block or list blocked peers"),
+                (["/channels"], nil, "show all discovered channels"),
+                (["/clear"], nil, "clear chat messages"),
+                (["/hug"], "<nickname>", "send someone a warm hug"),
+                (["/j", "/join"], "<channel>", "join or create a channel"),
+                (["/m", "/msg"], "<nickname> [message]", "send private message"),
+                (["/slap"], "<nickname>", "slap someone with a trout"),
+                (["/unblock"], "<nickname>", "unblock a peer"),
+                (["/w"], nil, "see who's online")
+            ]
+
+            // Add channel-specific commands if in a channel
+            if currentChannel != nil {
+                commandDescriptions.append(("/pass", "[password]", "change channel password"))
+                commandDescriptions.append(("/save", nil, "save channel messages locally"))
+                commandDescriptions.append(("/transfer", "<nickname>", "transfer channel ownership"))
+            }
+
+            // Map of aliases to primary commands
+            let aliases: [String: String] = [
+                "/join": "/j",
+                "/msg": "/m"
+            ]
+
+            var suggestions: [String] = []
+
+            // Filter commands, but convert aliases to primary
+            for (commands, _, _) in commandDescriptions {
+                for cmd in commands {
+                    if cmd.starts(with: input) {
+                        suggestions.append(aliases[cmd] ?? cmd)
+                    }
+                }
+            }
+
+            // Also check if input matches an alias
+            for (alias, primary) in aliases {
+                if alias.starts(with: input) && !suggestions.contains(primary) {
+                    if commandDescriptions.contains(where: { $0.commands.contains(primary) }) {
+                        suggestions.append(primary)
+                    }
+                }
+            }
+
+            // Remove duplicates and sort
+            commandSuggestions = Array(Set(suggestions)).sorted()
+            showCommandSuggestions = !commandSuggestions.isEmpty
+        } else {
+            showCommandSuggestions = false
+            commandSuggestions = []
+        }
+    }
+
+    func commandInfo(for command: String) -> (commands: [String], syntax: String?, description: String)? {
+        let commandDescriptions: [(commands: [String], syntax: String?, description: String)] = [
+            (["/block"], "[nickname]", "block or list blocked peers"),
+            (["/channels"], nil, "show all discovered channels"),
+            (["/clear"], nil, "clear chat messages"),
+            (["/hug"], "<nickname>", "send someone a warm hug"),
+            (["/j", "/join"], "<channel>", "join or create a channel"),
+            (["/m", "/msg"], "<nickname> [message]", "send private message"),
+            (["/slap"], "<nickname>", "slap someone with a trout"),
+            (["/unblock"], "<nickname>", "unblock a peer"),
+            (["/w"], nil, "see who's online")
+        ]
+
+        let channelCommandInfo: [(commands: [String], syntax: String?, description: String)] = [
+            (["/pass"], "[password]", "change channel password"),
+            (["/save"], nil, "save channel messages locally"),
+            (["/transfer"], "<nickname>", "transfer channel ownership")
+        ]
+
+        let allCommands = currentChannel != nil
+            ? commandDescriptions + channelCommandInfo
+            : commandDescriptions
+
+        return allCommands.first(where: { $0.commands.contains(command) })
+    }
+
+    func clearCommandSuggestions() {
+        commandSuggestions = []
+        showCommandSuggestions = false
+    }
+
+    func sortedPeers(in channel: String?) -> [String] {
+        let peerNicknames = meshService.getPeerNicknames()
+        let myPeerID = meshService.myPeerID
+
+        let peersToShow: [String] = {
+            if let currentChannel = channel,
+               let channelMemberIDs = channelMembers[currentChannel] {
+                var memberPeers = connectedPeers.filter { channelMemberIDs.contains($0) }
+                if channelMemberIDs.contains(myPeerID) && !memberPeers.contains(myPeerID) {
+                    memberPeers.append(myPeerID)
+                }
+                return memberPeers
+            } else {
+                return connectedPeers
+            }
+        }()
+
+        return peersToShow.sorted { peer1, peer2 in
+            let isFav1 = isFavorite(peerID: peer1)
+            let isFav2 = isFavorite(peerID: peer2)
+
+            if isFav1 != isFav2 {
+                return isFav1 // Favorites come first
+            }
+
+            let name1 = peerNicknames[peer1] ?? "person-\(peer1.prefix(4))"
+            let name2 = peerNicknames[peer2] ?? "person-\(peer2.prefix(4))"
+            return name1 < name2
+        }
     }
     
     func getSenderColor(for message: BitchatMessage, colorScheme: ColorScheme) -> Color {
