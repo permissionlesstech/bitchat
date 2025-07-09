@@ -6,6 +6,9 @@ import Security
 import LocalAuthentication
 
 /// Service responsible for secure Bluetooth device authentication and pairing
+/// 
+/// Credit: Franck Martin for the insight that mandatory authentication would break
+/// BitChat's core mesh networking functionality, leading to the secure mode toggle
 class BluetoothAuthenticationService: NSObject, ObservableObject {
     
     // MARK: - Properties

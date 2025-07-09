@@ -44,6 +44,8 @@ This document details the security patches applied to address the vulnerabilitie
 
 ### Balancing Security and Usability
 
+**Credit**: Thanks to **Franck Martin** for the critical insight that mandatory authentication would break BitChat's core mesh networking functionality for its intended use cases (protests, emergencies, public events).
+
 BitChat's original design prioritized ease of use for scenarios like protests and emergencies where instant mesh networking is critical. Our patches maintain this core functionality while adding security controls:
 
 1. **Default Behavior**: Secure mode is OFF by default, preserving auto-connect
