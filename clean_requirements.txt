@@ -1,0 +1,7 @@
+# BitChat Meshtastic Integration Dependencies
+# Install with: pip install -r requirements.txt
+
+meshtastic>=2.3.0
+protobuf>=4.21.0
+pubsub>=0.1.2
+pyserial>=3.5
