@@ -6,7 +6,6 @@
 	<true/>
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>group.chat.bitchat</string>
 		<string>group.CY-8C7763D0-19F6-11E8-BD8A-FFD5FF270ED2.com.cydia.Extender</string>
 	</array>
 </dict>

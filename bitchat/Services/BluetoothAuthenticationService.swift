@@ -77,11 +77,7 @@ class BluetoothAuthenticationService: NSObject, ObservableObject {
     // MARK: - Initialization
     
     override init() {
-        do {
-            self.secureStorage = try SecureStorageService()
-        } catch {
-            fatalError("Failed to initialize SecureStorageService: \(error)")
-        }
+        self.secureStorage = SecureStorageService()
         super.init()
         loadWhitelist()
         startChallengeCleanupTimer()
@@ -162,7 +158,7 @@ class BluetoothAuthenticationService: NSObject, ObservableObject {
     
     /// Removes a device from the whitelist
     func removeFromWhitelist(deviceId: UUID) {
-        whitelistedDevices.removeAll(where: { $0.identifier == deviceId })
+        whitelistedDevices = whitelistedDevices.filter { $0.identifier != deviceId }
         saveWhitelist()
         
         // Remove stored keys
