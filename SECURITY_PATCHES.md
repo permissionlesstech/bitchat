@@ -102,6 +102,30 @@ if let authService = authenticationService, authService.isSecureModeEnabled {
 - Auto-connect works in both modes
 - UI provides clear feedback to users
 
+## Future Cryptographic Considerations
+
+### Noise Protocol Framework
+After further research, **Noise Protocol** emerges as potentially superior to Signal Protocol for BitChat's mesh networking:
+
+**Advantages for Mesh:**
+- Designed for P2P from the start (no server assumptions)
+- Flexible handshake patterns adaptable to mesh topology
+- Zero round-trip encryption perfect for intermittent connections
+- Used by WireGuard, WhatsApp, libp2p (battle-tested in P2P)
+- Framework approach - build exactly what you need
+- Simpler than Signal Protocol (no complex ratcheting infrastructure)
+
+**Integration Path:**
+- Keep current mesh networking (unique value proposition)
+- Swap crypto layer for Noise patterns
+- Much simpler than Signal Protocol adaptation
+- Industry-proven approach with formal verification
+
+### Current Implementation
+- **Immediate**: Per-message forward secrecy implemented ✅
+- **Short-term**: Enhanced session management
+- **Long-term**: Noise Protocol integration for optimal P2P security
+
 ## Conclusion
 
-These patches successfully address the security vulnerabilities while preserving BitChat's core vision of seamless P2P mesh networking. Users can now choose their security level based on their specific threat model and use case.
+These patches successfully address the security vulnerabilities while preserving BitChat's core vision of seamless P2P mesh networking. Users can now choose their security level based on their specific threat model and use case. The addition of per-message forward secrecy provides immediate security improvements, while Noise Protocol offers a promising long-term cryptographic foundation specifically designed for P2P environments.

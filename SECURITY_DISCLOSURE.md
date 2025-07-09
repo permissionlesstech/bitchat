@@ -10,6 +10,8 @@
 - **January 9, 2025**: Vulnerabilities addressed with secure mode toggle implementation
   - See [SECURITY_PATCHES.md](SECURITY_PATCHES.md) for fix details
   - Preserves original mesh networking functionality per community feedback
+  - Added per-message forward secrecy for immediate security improvement
+  - Research indicates Noise Protocol superior to Signal Protocol for P2P mesh
 
 ## Overview
 
