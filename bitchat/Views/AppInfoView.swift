@@ -2,19 +2,7 @@ import SwiftUI
 
 struct AppInfoView: View {
     @Environment(\.dismiss) var dismiss
-    @Environment(\.colorScheme) var colorScheme
-    
-    private var backgroundColor: Color {
-        colorScheme == .dark ? Color.black : Color.white
-    }
-    
-    private var textColor: Color {
-        colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
-    }
-    
-    private var secondaryTextColor: Color {
-        colorScheme == .dark ? Color.green.opacity(0.8) : Color(red: 0, green: 0.5, blue: 0).opacity(0.8)
-    }
+    @EnvironmentObject var themeManager: ThemeManager
     
     var body: some View {
         #if os(macOS)
@@ -26,10 +14,10 @@ struct AppInfoView: View {
                     dismiss()
                 }
                 .buttonStyle(.plain)
-                .foregroundColor(textColor)
+                .foregroundColor(themeManager.primaryTextColor)
                 .padding()
             }
-            .background(backgroundColor.opacity(0.95))
+            .background(themeManager.backgroundColor.opacity(0.95))
             
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
@@ -37,11 +25,11 @@ struct AppInfoView: View {
                     VStack(alignment: .center, spacing: 8) {
                         Text("bitchat*")
                             .font(.system(size: 32, weight: .bold, design: .monospaced))
-                            .foregroundColor(textColor)
+                            .foregroundColor(themeManager.primaryTextColor)
                         
                         Text("secure mesh chat")
                             .font(.system(size: 16, design: .monospaced))
-                            .foregroundColor(secondaryTextColor)
+                            .foregroundColor(themeManager.secondaryTextColor)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical)
@@ -99,7 +87,7 @@ struct AppInfoView: View {
                             Text("• Triple-tap the logo for panic mode")
                         }
                         .font(.system(size: 14, design: .monospaced))
-                        .foregroundColor(textColor)
+                        .foregroundColor(themeManager.primaryTextColor)
                     }
                     
                     // Commands
@@ -119,7 +107,7 @@ struct AppInfoView: View {
                             Text("/slap @name - slap with a trout")
                         }
                         .font(.system(size: 14, design: .monospaced))
-                        .foregroundColor(textColor)
+                        .foregroundColor(themeManager.primaryTextColor)
                     }
                     
                     // Technical Details
@@ -137,7 +125,7 @@ struct AppInfoView: View {
                             Text("Storage: Keychain for passwords, encrypted retention")
                         }
                         .font(.system(size: 14, design: .monospaced))
-                        .foregroundColor(textColor)
+                        .foregroundColor(themeManager.primaryTextColor)
                     }
                     
                     // Version
@@ -145,14 +133,14 @@ struct AppInfoView: View {
                         Spacer()
                         Text("Version 1.0.0")
                             .font(.system(size: 12, design: .monospaced))
-                            .foregroundColor(secondaryTextColor)
+                            .foregroundColor(themeManager.secondaryTextColor)
                         Spacer()
                     }
                     .padding(.top)
                 }
                 .padding()
             }
-            .background(backgroundColor)
+            .background(themeManager.backgroundColor)
         }
         .frame(width: 600, height: 700)
         #else
@@ -163,11 +151,11 @@ struct AppInfoView: View {
                     VStack(alignment: .center, spacing: 8) {
                         Text("bitchat*")
                             .font(.system(size: 32, weight: .bold, design: .monospaced))
-                            .foregroundColor(textColor)
+                            .foregroundColor(themeManager.primaryTextColor)
                         
                         Text("secure mesh chat")
                             .font(.system(size: 16, design: .monospaced))
-                            .foregroundColor(secondaryTextColor)
+                            .foregroundColor(themeManager.secondaryTextColor)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical)
@@ -225,7 +213,7 @@ struct AppInfoView: View {
                             Text("• Triple-tap the logo for panic mode")
                         }
                         .font(.system(size: 14, design: .monospaced))
-                        .foregroundColor(textColor)
+                        .foregroundColor(themeManager.primaryTextColor)
                     }
                     
                     // Commands
@@ -245,7 +233,7 @@ struct AppInfoView: View {
                             Text("/slap @name - slap with a trout")
                         }
                         .font(.system(size: 14, design: .monospaced))
-                        .foregroundColor(textColor)
+                        .foregroundColor(themeManager.primaryTextColor)
                     }
                     
                     // Technical Details
@@ -263,7 +251,7 @@ struct AppInfoView: View {
                             Text("Storage: Keychain for passwords, encrypted retention")
                         }
                         .font(.system(size: 14, design: .monospaced))
-                        .foregroundColor(textColor)
+                        .foregroundColor(themeManager.primaryTextColor)
                     }
                     
                     // Version
@@ -271,21 +259,21 @@ struct AppInfoView: View {
                         Spacer()
                         Text("Version 1.0.0")
                             .font(.system(size: 12, design: .monospaced))
-                            .foregroundColor(secondaryTextColor)
+                            .foregroundColor(themeManager.secondaryTextColor)
                         Spacer()
                     }
                     .padding(.top)
                 }
                 .padding()
             }
-            .background(backgroundColor)
+            .background(themeManager.backgroundColor)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Done") {
                         dismiss()
                     }
-                    .foregroundColor(textColor)
+                    .foregroundColor(themeManager.primaryTextColor)
                 }
             }
         }
@@ -295,11 +283,7 @@ struct AppInfoView: View {
 
 struct SectionHeader: View {
     let title: String
-    @Environment(\.colorScheme) var colorScheme
-    
-    private var textColor: Color {
-        colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
-    }
+    @EnvironmentObject var themeManager: ThemeManager
     
     init(_ title: String) {
         self.title = title
@@ -308,7 +292,7 @@ struct SectionHeader: View {
     var body: some View {
         Text(title.uppercased())
             .font(.system(size: 16, weight: .bold, design: .monospaced))
-            .foregroundColor(textColor)
+            .foregroundColor(themeManager.primaryTextColor)
             .padding(.top, 8)
     }
 }
@@ -317,31 +301,23 @@ struct FeatureRow: View {
     let icon: String
     let title: String
     let description: String
-    @Environment(\.colorScheme) var colorScheme
-    
-    private var textColor: Color {
-        colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
-    }
-    
-    private var secondaryTextColor: Color {
-        colorScheme == .dark ? Color.green.opacity(0.8) : Color(red: 0, green: 0.5, blue: 0).opacity(0.8)
-    }
+    @EnvironmentObject var themeManager: ThemeManager
     
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: 20))
-                .foregroundColor(textColor)
+                .foregroundColor(themeManager.primaryTextColor)
                 .frame(width: 30)
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                    .foregroundColor(textColor)
+                    .foregroundColor(themeManager.primaryTextColor)
                 
                 Text(description)
                     .font(.system(size: 12, design: .monospaced))
-                    .foregroundColor(secondaryTextColor)
+                    .foregroundColor(themeManager.secondaryTextColor)
                     .fixedSize(horizontal: false, vertical: true)
             }
             

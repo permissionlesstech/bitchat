@@ -14,19 +14,11 @@ import LinkPresentation
 struct LinkPreviewView: View {
     let url: URL
     let title: String?
-    @Environment(\.colorScheme) var colorScheme
+    @EnvironmentObject var themeManager: ThemeManager
     @State private var metadata: LPLinkMetadata?
     
-    private var textColor: Color {
-        colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
-    }
-    
-    private var backgroundColor: Color {
-        colorScheme == .dark ? Color.black : Color.white
-    }
-    
     private var borderColor: Color {
-        textColor.opacity(0.3)
+        themeManager.dividerColor
     }
     
     var body: some View {
@@ -87,14 +79,14 @@ struct LinkPreviewView: View {
                     // Title
                     Text(metadata?.title ?? title ?? url.host ?? "Link")
                         .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                        .foregroundColor(textColor)
+                        .foregroundColor(themeManager.primaryTextColor)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                     
                     // Host
                     Text(url.host ?? url.absoluteString)
                         .font(.system(size: 11, design: .monospaced))
-                        .foregroundColor(textColor.opacity(0.6))
+                        .foregroundColor(themeManager.secondaryTextColor)
                         .lineLimit(1)
                 }
                 
@@ -104,7 +96,7 @@ struct LinkPreviewView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(colorScheme == .dark ? Color.gray.opacity(0.15) : Color.gray.opacity(0.08))
+                    .fill(themeManager.secondaryBackgroundColor)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
@@ -133,14 +125,14 @@ struct LinkPreviewView: View {
                     // Title
                     Text(title ?? url.host ?? "Link")
                         .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                        .foregroundColor(textColor)
+                        .foregroundColor(themeManager.primaryTextColor)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                     
                     // URL
                     Text(url.absoluteString)
                         .font(.system(size: 11, design: .monospaced))
-                        .foregroundColor(Color.blue)
+                        .foregroundColor(themeManager.linkColor)
                         .lineLimit(1)
                         .truncationMode(.middle)
                 }
@@ -150,13 +142,13 @@ struct LinkPreviewView: View {
                 // Arrow indicator
                 Image(systemName: "chevron.right")
                     .font(.system(size: 14))
-                    .foregroundColor(textColor.opacity(0.5))
+                    .foregroundColor(themeManager.secondaryTextColor)
             }
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(colorScheme == .dark ? Color.gray.opacity(0.15) : Color.gray.opacity(0.08))
+                    .fill(themeManager.secondaryBackgroundColor)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 10)

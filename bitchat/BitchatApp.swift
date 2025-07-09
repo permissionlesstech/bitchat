@@ -12,6 +12,7 @@ import UserNotifications
 @main
 struct BitchatApp: App {
     @StateObject private var chatViewModel = ChatViewModel()
+    @StateObject private var themeManager = ThemeManager.shared
     #if os(iOS)
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     #endif
@@ -24,6 +25,7 @@ struct BitchatApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(chatViewModel)
+                .environmentObject(themeManager)
                 .onAppear {
                     NotificationDelegate.shared.chatViewModel = chatViewModel
                     #if os(iOS)

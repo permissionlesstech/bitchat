@@ -56,6 +56,8 @@
 		F00B713D5053617FB5F3F1BE /* MessagePaddingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DE9CDF66D4E52D268851048 /* MessagePaddingTests.swift */; };
 		F455F011B3B648ADA233F998 /* BinaryProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2136C3E22D02D4A8DBE7EAB /* BinaryProtocol.swift */; };
 		FB8819B4C84FAFEF5C36B216 /* KeychainManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 136696FC4436A02D98CE6A77 /* KeychainManager.swift */; };
+		A1B2C3D4E5F6789012345678 /* ThemeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6789012345679 /* ThemeManager.swift */; };
+		A1B2C3D4E5F6789012345680 /* ThemeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6789012345679 /* ThemeManager.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -149,6 +151,7 @@
 		EA706D8E5097785414646A8E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		ED176FF3B274E35C2D827894 /* BatteryOptimizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatteryOptimizer.swift; sourceTree = "<group>"; };
 		EF625BB3AD919322C01A46B2 /* BitchatApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitchatApp.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6789012345679 /* ThemeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -260,6 +263,7 @@
 				67A85BFDDE65B4CD8BDF6DDB /* MessageRetentionService.swift */,
 				AA4D7595A613F7ED3B386132 /* MessageRetryService.swift */,
 				3448F84BF86A42A3CC4A9379 /* NotificationService.swift */,
+				A1B2C3D4E5F6789012345679 /* ThemeManager.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -281,8 +285,6 @@
 				D8120CFFA88B852C3D106FA6 /* PBXTargetDependency */,
 			);
 			name = bitchat_macOS;
-			packageProductDependencies = (
-			);
 			productName = bitchat_macOS;
 			productReference = 7EEBDA723E1CFD88758DA4AC /* bitchat.app */;
 			productType = "com.apple.product-type.application";
@@ -299,8 +301,6 @@
 				4AA8605DCAA64A45657EF0CA /* PBXTargetDependency */,
 			);
 			name = bitchatTests_macOS;
-			packageProductDependencies = (
-			);
 			productName = bitchatTests_macOS;
 			productReference = 03C57F452B55FD0FD8F51421 /* bitchatTests_macOS.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -316,8 +316,6 @@
 			dependencies = (
 			);
 			name = bitchatShareExtension;
-			packageProductDependencies = (
-			);
 			productName = bitchatShareExtension;
 			productReference = 61F92EBA29C47C0FCC482F1F /* bitchatShareExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
@@ -334,8 +332,6 @@
 				D8C09F21DB7DC06E8E672C21 /* PBXTargetDependency */,
 			);
 			name = bitchatTests_iOS;
-			packageProductDependencies = (
-			);
 			productName = bitchatTests_iOS;
 			productReference = C0DB1DE27F0AAB5092663E8E /* bitchatTests_iOS.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -354,8 +350,6 @@
 				6EB655BA5DB11909C1DEC460 /* PBXTargetDependency */,
 			);
 			name = bitchat_iOS;
-			packageProductDependencies = (
-			);
 			productName = bitchat_iOS;
 			productReference = 997D512074C64904D75DDD40 /* bitchat.app */;
 			productType = "com.apple.product-type.application";
@@ -392,8 +386,6 @@
 				en,
 			);
 			mainGroup = 18198ED912AAF495D8AF7763;
-			minimizedProjectReferenceProxies = 1;
-			preferredProjectObjectVersion = 54;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -455,6 +447,7 @@
 				C99763A4761567F587D21688 /* MessageRetryService.swift in Sources */,
 				749D8CF8A362B6CD0786782D /* NotificationService.swift in Sources */,
 				0245710AEAA58AD0A1425234 /* OptimizedBloomFilter.swift in Sources */,
+				A1B2C3D4E5F6789012345680 /* ThemeManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -479,6 +472,7 @@
 				CEAE115C9C3EB3C4ED82F128 /* MessageRetryService.swift in Sources */,
 				61C81ED5F679D5E973EE0C07 /* NotificationService.swift in Sources */,
 				1F48A8CEEE9399D1EBD08F0C /* OptimizedBloomFilter.swift in Sources */,
+				A1B2C3D4E5F6789012345678 /* ThemeManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
