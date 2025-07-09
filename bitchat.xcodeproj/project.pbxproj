@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 54;
+	objectVersion = 63;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -140,7 +140,7 @@
 		3FA8FF26ABDC1C642A8C7AE5 /* BitchatMessageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitchatMessageTests.swift; sourceTree = "<group>"; };
 		527EB217EFDFAD4CF1C91F07 /* bitchat.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = bitchat.entitlements; sourceTree = "<group>"; };
 		53D535D9CE0B875F47402290 /* BinaryProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BinaryProtocolTests.swift; sourceTree = "<group>"; };
-		61F92EBA29C47C0FCC482F1F /* bitchatShareExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = bitchatShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		61F92EBA29C47C0FCC482F1F /* bitchatShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = bitchatShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		62DBF8B409CE1460C87C28CC /* BluetoothAuthenticationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothAuthenticationService.swift; sourceTree = "<group>"; };
 		67A85BFDDE65B4CD8BDF6DDB /* MessageRetentionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageRetentionService.swift; sourceTree = "<group>"; };
 		6DC1563390A15C042D059CF9 /* EncryptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EncryptionService.swift; sourceTree = "<group>"; };
@@ -390,11 +390,9 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					0576A29205865664C0937536 = {
-						DevelopmentTeam = L3N5LHJD5Y;
 						ProvisioningStyle = Automatic;
 					};
 					57CA17A36A2532A6CFF367BB = {
-						DevelopmentTeam = L3N5LHJD5Y;
 						ProvisioningStyle = Automatic;
 					};
 					AF077EA0474EDEDE2C72716C = {
@@ -413,7 +411,6 @@
 			);
 			mainGroup = 18198ED912AAF495D8AF7763;
 			minimizedProjectReferenceProxies = 1;
-			preferredProjectObjectVersion = 54;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -626,7 +623,7 @@
 				CODE_SIGNING_REQUIRED = YES;
 				CODE_SIGN_ENTITLEMENTS = bitchatShareExtension/bitchatShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = L3N5LHJD5Y;
+				DEVELOPMENT_TEAM = 8UC6ZJA5HQ;
 				INFOPLIST_FILE = bitchatShareExtension/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -634,7 +631,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat.ShareExtension;
+				PRODUCT_BUNDLE_IDENTIFIER = lj.chat.bitchat.ShareExtension;
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -726,7 +723,7 @@
 				CODE_SIGN_ENTITLEMENTS = bitchat/bitchat.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				DEVELOPMENT_TEAM = L3N5LHJD5Y;
+				DEVELOPMENT_TEAM = 8UC6ZJA5HQ;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = bitchat/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
@@ -735,7 +732,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat;
+				PRODUCT_BUNDLE_IDENTIFIER = lj.chat.bitchat;
 				PRODUCT_NAME = bitchat;
 				SDKROOT = macosx;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = YES;
@@ -811,7 +808,7 @@
 				CODE_SIGN_ENTITLEMENTS = bitchat/bitchat.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				DEVELOPMENT_TEAM = L3N5LHJD5Y;
+				DEVELOPMENT_TEAM = 8UC6ZJA5HQ;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = bitchat/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
@@ -820,7 +817,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat;
+				PRODUCT_BUNDLE_IDENTIFIER = lj.chat.bitchat;
 				PRODUCT_NAME = bitchat;
 				SDKROOT = macosx;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = YES;
@@ -900,7 +897,7 @@
 				CODE_SIGNING_REQUIRED = YES;
 				CODE_SIGN_ENTITLEMENTS = bitchatShareExtension/bitchatShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = L3N5LHJD5Y;
+				DEVELOPMENT_TEAM = 8UC6ZJA5HQ;
 				INFOPLIST_FILE = bitchatShareExtension/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -908,7 +905,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat.ShareExtension;
+				PRODUCT_BUNDLE_IDENTIFIER = lj.chat.bitchat.ShareExtension;
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";

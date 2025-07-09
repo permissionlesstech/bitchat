@@ -239,13 +239,13 @@ enum SecureStorageError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .storageError(let status):
-            return "Failed to store data in Keychain: \(SecCopyErrorMessageString(status, nil) ?? "Unknown error")"
+            return "Failed to store data in Keychain: \(SecCopyErrorMessageString(status, nil) ?? "Unknown error" as CFString)"
         case .retrievalError(let status):
-            return "Failed to retrieve data from Keychain: \(SecCopyErrorMessageString(status, nil) ?? "Unknown error")"
+            return "Failed to retrieve data from Keychain: \(SecCopyErrorMessageString(status, nil) ?? "Unknown error" as CFString)"
         case .deletionError(let status):
-            return "Failed to delete data from Keychain: \(SecCopyErrorMessageString(status, nil) ?? "Unknown error")"
+            return "Failed to delete data from Keychain: \(SecCopyErrorMessageString(status, nil) ?? "Unknown error" as CFString)"
         case .updateError(let status):
-            return "Failed to update data in Keychain: \(SecCopyErrorMessageString(status, nil) ?? "Unknown error")"
+            return "Failed to update data in Keychain: \(SecCopyErrorMessageString(status, nil) ?? "Unknown error" as CFString)"
         case .invalidData:
             return "Invalid data provided for storage"
         case .keyNotFound:

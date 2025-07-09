@@ -27,8 +27,8 @@ class EncryptionService {
     private var sharedSecrets: [String: SymmetricKey] = [:]
     
     // Persistent identity for favorites (separate from ephemeral keys)
-    private let identityKey: Curve25519.Signing.PrivateKey
-    public let identityPublicKey: Curve25519.Signing.PublicKey
+    private var identityKey: Curve25519.Signing.PrivateKey!
+    public var identityPublicKey: Curve25519.Signing.PublicKey!
     
     // Thread safety
     private let cryptoQueue = DispatchQueue(label: "chat.bitchat.crypto", attributes: .concurrent)

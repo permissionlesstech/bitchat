@@ -409,7 +409,7 @@ extension BitchatMessage {
             return nil 
         }
         let idLength = Int(dataCopy[offset]); offset += 1
-        guard idLength <= maxStringFieldSize else { return nil }
+        guard idLength <= BinaryProtocol.maxStringFieldSize else { return nil }
         guard let idData = dataCopy.safeSubdata(from: offset, length: idLength) else { 
             return nil 
         }
@@ -421,7 +421,7 @@ extension BitchatMessage {
             return nil 
         }
         let senderLength = Int(dataCopy[offset]); offset += 1
-        guard senderLength <= maxStringFieldSize else { return nil }
+        guard senderLength <= BinaryProtocol.maxStringFieldSize else { return nil }
         guard let senderData = dataCopy.safeSubdata(from: offset, length: senderLength) else { 
             return nil 
         }
@@ -436,7 +436,7 @@ extension BitchatMessage {
             (result << 8) | UInt16(byte)
         })
         offset += 2
-        guard contentLength <= maxStringFieldSize else { return nil }
+        guard contentLength <= BinaryProtocol.maxStringFieldSize else { return nil }
         guard contentLength >= 0 else { return nil }
         
         let content: String
@@ -459,7 +459,7 @@ extension BitchatMessage {
         var originalSender: String?
         if hasOriginalSender && offset < dataCopy.count {
             let length = Int(dataCopy[offset]); offset += 1
-            guard length <= maxStringFieldSize else { return nil }
+            guard length <= BinaryProtocol.maxStringFieldSize else { return nil }
             if let origData = dataCopy.safeSubdata(from: offset, length: length) {
                 originalSender = String(data: origData, encoding: .utf8)
                 offset += length
@@ -471,7 +471,7 @@ extension BitchatMessage {
         var recipientNickname: String?
         if hasRecipientNickname && offset < dataCopy.count {
             let length = Int(dataCopy[offset]); offset += 1
-            guard length <= maxStringFieldSize else { return nil }
+            guard length <= BinaryProtocol.maxStringFieldSize else { return nil }
             if let recipData = dataCopy.safeSubdata(from: offset, length: length) {
                 recipientNickname = String(data: recipData, encoding: .utf8)
                 offset += length
@@ -483,7 +483,7 @@ extension BitchatMessage {
         var senderPeerID: String?
         if hasSenderPeerID && offset < dataCopy.count {
             let length = Int(dataCopy[offset]); offset += 1
-            guard length <= maxStringFieldSize else { return nil }
+            guard length <= BinaryProtocol.maxStringFieldSize else { return nil }
             if let peerData = dataCopy.safeSubdata(from: offset, length: length) {
                 senderPeerID = String(data: peerData, encoding: .utf8)
                 offset += length
@@ -496,13 +496,13 @@ extension BitchatMessage {
         var mentions: [String]?
         if hasMentions && offset < dataCopy.count {
             let mentionCount = Int(dataCopy[offset]); offset += 1
-            guard mentionCount <= maxMentionsCount else { return nil }
+            guard mentionCount <= BinaryProtocol.maxMentionsCount else { return nil }
             if mentionCount > 0 {
                 mentions = []
                 for _ in 0..<mentionCount {
                     guard offset < dataCopy.count else { return nil }
                     let length = Int(dataCopy[offset]); offset += 1
-                    guard length <= maxStringFieldSize else { return nil }
+                    guard length <= BinaryProtocol.maxStringFieldSize else { return nil }
                     if let mentionData = dataCopy.safeSubdata(from: offset, length: length) {
                         if let mention = String(data: mentionData, encoding: .utf8) {
                             mentions?.append(mention)
@@ -519,7 +519,7 @@ extension BitchatMessage {
         var channel: String? = nil
         if hasChannel && offset < dataCopy.count {
             let length = Int(dataCopy[offset]); offset += 1
-            guard length <= maxChannelLength else { return nil }
+            guard length <= BinaryProtocol.maxChannelLength else { return nil }
             if let channelData = dataCopy.safeSubdata(from: offset, length: length) {
                 channel = String(data: channelData, encoding: .utf8)
                 offset += length
