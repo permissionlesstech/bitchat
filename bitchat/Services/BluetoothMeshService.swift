@@ -133,6 +133,7 @@ class BluetoothMeshService: NSObject {
     // Optimized Bloom filter for efficient duplicate detection
     private var messageBloomFilter = OptimizedBloomFilter(expectedItems: 2000, falsePositiveRate: 0.01)
     private var bloomFilterResetTimer: Timer?
+    private var lastBloomFilterNetworkSize: Int = 0  // Track network size for adaptive resizing
     
     // Network size estimation
     private var estimatedNetworkSize: Int {
@@ -271,15 +272,23 @@ class BluetoothMeshService: NSObject {
             self?.messageQueue.async(flags: .barrier) {
                 guard let self = self else { return }
                 
-                // Adapt Bloom filter size based on network size
                 let networkSize = self.estimatedNetworkSize
-                self.messageBloomFilter = OptimizedBloomFilter.adaptive(for: networkSize)
+                let sizeChange = abs(networkSize - self.lastBloomFilterNetworkSize)
+                
+                // Only recreate bloom filter if network size changed significantly (>50% or >20 peers)
+                if sizeChange > max(self.lastBloomFilterNetworkSize / 2, 20) {
+                    self.messageBloomFilter = OptimizedBloomFilter.adaptive(for: networkSize)
+                    self.lastBloomFilterNetworkSize = networkSize
+                    print("[BloomFilter] Recreated for network size: \(networkSize), memory: \(self.messageBloomFilter.memorySizeBytes) bytes")
+                } else {
+                    // Just reset the existing bloom filter - much more efficient
+                    self.messageBloomFilter.reset()
+                    print("[BloomFilter] Reset (no recreation needed), network size: \(networkSize)")
+                }
                 
                 // Clear other duplicate detection sets
                 self.processedMessages.removeAll()
                 self.processedKeyExchanges.removeAll()
-                
-                print("[BloomFilter] Reset with network size: \(networkSize), memory: \(self.messageBloomFilter.memorySizeBytes) bytes")
             }
         }
         
