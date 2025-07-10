@@ -15,7 +15,9 @@ targets:
     type: application
     platform: iOS
     sources: 
-      - bitchat
+      - path: bitchat
+        excludes:
+          - Info-macOS.plist
     resources:
       - bitchat/Assets.xcassets
       - bitchat/LaunchScreen.storyboard
@@ -65,7 +67,9 @@ targets:
     type: application
     platform: macOS
     sources: 
-      - bitchat
+      - path: bitchat
+        excludes:
+          - Info-iOS.plist
     resources:
       - bitchat/Assets.xcassets
     info:
