@@ -146,7 +146,9 @@ Security-specific tests:
 ## Contributing
 
 ### Security Issues
-Report vulnerabilities privately to: security@unit221b.com
+Report vulnerabilities to the original BitChat project: https://github.com/jackjackbits/bitchat/issues
+
+This fork is temporary and intended to demonstrate security fixes via PR #77.
 
 ### Development
 1. Fork the repository
@@ -164,9 +166,10 @@ This project maintains the original Unlicense dedication to public domain.
 - Security enhancements by Unit 221B
 - Noise Protocol Framework by Trevor Perrin
 - Community feedback on security improvements
+- AI-powered IDE tools that assisted in development and analysis
 
 ---
 
 **Company**: Unit 221B  
-**Security Contact**: security@unit221b.com  
-**General Inquiries**: lancejames@unit221b.com
+**Contact**: lancejames@unit221b.com  
+**Original Project**: https://github.com/jackjackbits/bitchat

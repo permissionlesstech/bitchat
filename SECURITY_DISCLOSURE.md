@@ -165,6 +165,8 @@ let privateKey = UserDefaults.standard.data(forKey: "privateKey")
 
 We discovered these vulnerabilities and immediately submitted a PR with comprehensive security patches to help improve the security of the BitChat ecosystem. This secured fork implements all necessary fixes to address these vulnerabilities.
 
+**Important**: This fork is temporary and intended to demonstrate security fixes via PR #77. Please report any security issues to the original BitChat project at https://github.com/jackjackbits/bitchat/issues
+
 ## Credits
 
 - **Discovery**: Lance James, Unit 221B
