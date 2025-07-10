@@ -254,7 +254,7 @@ graph TB
             R2[Message 2]
             R3[Message 3]
             R4[...]
-            R1 -.->|12hr TTL| R2
+            R1 -.->|12-hour TTL| R2
             R2 -.->|100 msg limit| R3
             R3 -.-> R4
         end
@@ -610,7 +610,7 @@ This prevents timing analysis attacks by adding random delays (50-500ms) to all 
 
 ### Ephemeral Identities
 
-- **No registration**: No account creation or phone numbers
+- **No registration**: No account creation or phone number required
 - **Random peer IDs**: Generated fresh each session
 - **Public key fingerprints**: Only persistent identifier for favorites
 - **Nickname-based**: Human-readable names without permanent binding
@@ -656,7 +656,7 @@ graph TD
 
 - **Fragment ID**: 8-byte identifier linking fragments
 - **Sequence tracking**: START, CONTINUE, END types
-- **Reliability**: Each fragment independently relayed
+- **Reliability**: Each fragment is independently relayed
 - **Optimization**: 20ms inter-fragment delay for BLE 5.0
 
 ## Complete Message Flow
