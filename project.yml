@@ -20,7 +20,7 @@ targets:
       - bitchat/Assets.xcassets
       - bitchat/LaunchScreen.storyboard
     info:
-      path: bitchat/Info.plist
+      path: bitchat/Info-iOS.plist
       properties:
         CFBundleDisplayName: bitchat
         CFBundleShortVersionString: $(MARKETING_VERSION)
@@ -45,7 +45,7 @@ targets:
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: chat.bitchat
       PRODUCT_NAME: bitchat
-      INFOPLIST_FILE: bitchat/Info.plist
+      INFOPLIST_FILE: bitchat/Info-iOS.plist
       ENABLE_PREVIEWS: YES
       SWIFT_VERSION: 5.0
       IPHONEOS_DEPLOYMENT_TARGET: 16.0
@@ -69,7 +69,7 @@ targets:
     resources:
       - bitchat/Assets.xcassets
     info:
-      path: bitchat/Info.plist
+      path: bitchat/Info-macOS.plist
       properties:
         CFBundleDisplayName: bitchat
         CFBundleShortVersionString: $(MARKETING_VERSION)
@@ -83,7 +83,7 @@ targets:
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: chat.bitchat
       PRODUCT_NAME: bitchat
-      INFOPLIST_FILE: bitchat/Info.plist
+      INFOPLIST_FILE: bitchat/Info-macOS.plist
       ENABLE_PREVIEWS: YES
       SWIFT_VERSION: 5.0
       MACOSX_DEPLOYMENT_TARGET: 13.0
