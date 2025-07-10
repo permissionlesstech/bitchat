@@ -34,12 +34,13 @@ This project is released into the public domain. See the [LICENSE](LICENSE) file
    ```
 
 2. Generate the Xcode project:
-   ```bash
+    ```bash
+   git clone https://github.com/permissionlesstech/bitchat
    cd bitchat
    xcodegen generate
    ```
 
-3. Open the generated project:
+4. Open the generated project:
    ```bash
    open bitchat.xcodeproj
    ```
