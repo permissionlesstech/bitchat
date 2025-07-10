@@ -1,6 +1,6 @@
 name: bitchat
 options:
-  bundleIdPrefix: com.local.bitchat
+  bundleIdPrefix: chat.bitchat
   deploymentTarget:
     iOS: 16.0
     macOS: 13.0
@@ -43,17 +43,17 @@ targets:
           - CFBundleURLSchemes:
               - bitchat
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.local.bitchat
+      PRODUCT_BUNDLE_IDENTIFIER: chat.bitchat
       PRODUCT_NAME: bitchat
       INFOPLIST_FILE: bitchat/Info.plist
       ENABLE_PREVIEWS: YES
       SWIFT_VERSION: 5.0
       IPHONEOS_DEPLOYMENT_TARGET: 16.0
       SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: YES
-      CODE_SIGN_STYLE: Manual
+      CODE_SIGN_STYLE: Automatic
       CODE_SIGNING_REQUIRED: YES
       CODE_SIGNING_ALLOWED: YES
-      DEVELOPMENT_TEAM: W2L75AE9HQ
+      DEVELOPMENT_TEAM: L3N5LHJD5Y
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
       CODE_SIGN_ENTITLEMENTS: bitchat/bitchat.entitlements
@@ -65,9 +65,7 @@ targets:
     type: application
     platform: macOS
     sources: 
-      - path: bitchat
-        excludes:
-          - "LaunchScreen.storyboard"
+      - bitchat
     resources:
       - bitchat/Assets.xcassets
     info:
@@ -83,16 +81,16 @@ targets:
           - CFBundleURLSchemes:
               - bitchat
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.local.bitchat
+      PRODUCT_BUNDLE_IDENTIFIER: chat.bitchat
       PRODUCT_NAME: bitchat
       INFOPLIST_FILE: bitchat/Info.plist
       ENABLE_PREVIEWS: YES
       SWIFT_VERSION: 5.0
       MACOSX_DEPLOYMENT_TARGET: 13.0
-      CODE_SIGN_STYLE: Manual
-      CODE_SIGNING_REQUIRED: NO
-      CODE_SIGNING_ALLOWED: NO
-      DEVELOPMENT_TEAM: W2L75AE9HQ
+      CODE_SIGN_STYLE: Automatic
+      CODE_SIGNING_REQUIRED: YES
+      CODE_SIGNING_ALLOWED: YES
+      DEVELOPMENT_TEAM: L3N5LHJD5Y
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
       CODE_SIGN_ENTITLEMENTS: bitchat/bitchat.entitlements
@@ -117,14 +115,14 @@ targets:
               NSExtensionActivationSupportsWebURLWithMaxCount: 1
               NSExtensionActivationSupportsImageWithMaxCount: 1
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.local.bitchat.ShareExtension
+      PRODUCT_BUNDLE_IDENTIFIER: chat.bitchat.ShareExtension
       INFOPLIST_FILE: bitchatShareExtension/Info.plist
       SWIFT_VERSION: 5.0
       IPHONEOS_DEPLOYMENT_TARGET: 16.0
-      CODE_SIGN_STYLE: Manual
+      CODE_SIGN_STYLE: Automatic
       CODE_SIGNING_REQUIRED: YES
       CODE_SIGNING_ALLOWED: YES
-      DEVELOPMENT_TEAM: W2L75AE9HQ
+      DEVELOPMENT_TEAM: L3N5LHJD5Y
       CODE_SIGN_ENTITLEMENTS: bitchatShareExtension/bitchatShareExtension.entitlements
       CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION: YES
 
@@ -136,16 +134,16 @@ targets:
     dependencies:
       - target: bitchat_iOS
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.local.bitchat.tests
+      PRODUCT_BUNDLE_IDENTIFIER: chat.bitchat.tests
       INFOPLIST_FILE: bitchatTests/Info.plist
       SWIFT_VERSION: 5.0
       IPHONEOS_DEPLOYMENT_TARGET: 16.0
       TEST_HOST: $(BUILT_PRODUCTS_DIR)/bitchat.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/bitchat
       BUNDLE_LOADER: $(TEST_HOST)
-      CODE_SIGN_STYLE: Manual
+      CODE_SIGN_STYLE: Automatic
       CODE_SIGNING_REQUIRED: YES
       CODE_SIGNING_ALLOWED: YES
-      DEVELOPMENT_TEAM: W2L75AE9HQ
+      DEVELOPMENT_TEAM: L3N5LHJD5Y
       
   bitchatTests_macOS:
     type: bundle.unit-test
@@ -155,16 +153,16 @@ targets:
     dependencies:
       - target: bitchat_macOS
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.local.bitchat.tests
+      PRODUCT_BUNDLE_IDENTIFIER: chat.bitchat.tests
       INFOPLIST_FILE: bitchatTests/Info.plist
       SWIFT_VERSION: 5.0
       MACOSX_DEPLOYMENT_TARGET: 13.0
       TEST_HOST: $(BUILT_PRODUCTS_DIR)/bitchat.app/Contents/MacOS/bitchat
       BUNDLE_LOADER: $(TEST_HOST)
-      CODE_SIGN_STYLE: Manual
+      CODE_SIGN_STYLE: Automatic
       CODE_SIGNING_REQUIRED: YES
       CODE_SIGNING_ALLOWED: YES
-      DEVELOPMENT_TEAM: W2L75AE9HQ
+      DEVELOPMENT_TEAM: L3N5LHJD5Y
 
 schemes:
   bitchat (iOS):
