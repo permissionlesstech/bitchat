@@ -80,8 +80,8 @@ class BluetoothMeshService: NSObject {
     // Battery and range optimizations
     private var scanDutyCycleTimer: Timer?
     private var isActivelyScanning = true
-    private var activeScanDuration: TimeInterval = 2.0  // Scan actively for 2 seconds - will be adjusted based on battery
-    private var scanPauseDuration: TimeInterval = 3.0  // Pause for 3 seconds - will be adjusted based on battery
+    private var activeScanDuration: TimeInterval = 10.0  // Increased to 10 seconds for debugging - will be adjusted based on battery
+    private var scanPauseDuration: TimeInterval = 2.0  // Reduced to 2 seconds for debugging - will be adjusted based on battery
     private var lastRSSIUpdate: [String: Date] = [:]  // Throttle RSSI updates
     private var batteryMonitorTimer: Timer?
     private var currentBatteryLevel: Float = 1.0  // Default to full battery
@@ -422,7 +422,9 @@ class BluetoothMeshService: NSObject {
     }
     
     func startAdvertising() {
+        print("[BLUETOOTH DEBUG] startAdvertising called, peripheral state: \(peripheralManager?.state.rawValue ?? -1)")
         guard peripheralManager?.state == .poweredOn else { 
+            print("[BLUETOOTH DEBUG] Cannot start advertising, peripheral not powered on")
             return 
         }
         
@@ -436,6 +438,7 @@ class BluetoothMeshService: NSObject {
             CBAdvertisementDataLocalNameKey: myPeerID
         ]
         
+        print("[BLUETOOTH DEBUG] Starting advertising with service UUID: \(BluetoothMeshService.serviceUUID), peerID: \(myPeerID)")
         isAdvertising = true
         peripheralManager?.startAdvertising(advertisementData)
     }
@@ -452,16 +455,19 @@ class BluetoothMeshService: NSObject {
             CBCentralManagerScanOptionAllowDuplicatesKey: true
         ]
         
+        print("[BLUETOOTH DEBUG] Starting scan for peripherals with service UUID: \(BluetoothMeshService.serviceUUID)")
         centralManager?.scanForPeripherals(
             withServices: [BluetoothMeshService.serviceUUID],
             options: scanOptions
         )
+        print("[BLUETOOTH DEBUG] Scan started successfully")
         
         // Update scan parameters based on battery before starting
         updateScanParametersForBattery()
         
         // Implement scan duty cycling for battery efficiency
-        scheduleScanDutyCycle()
+        // TEMPORARILY DISABLED FOR DEBUGGING
+        // scheduleScanDutyCycle()
     }
     
     private func scheduleScanDutyCycle() {
@@ -475,6 +481,7 @@ class BluetoothMeshService: NSObject {
             
             if self.isActivelyScanning {
                 // Pause scanning to save battery
+                print("[BLUETOOTH DEBUG] Pausing scan after \(self.activeScanDuration) seconds")
                 self.centralManager?.stopScan()
                 self.isActivelyScanning = false
                 
@@ -482,6 +489,7 @@ class BluetoothMeshService: NSObject {
                 DispatchQueue.main.asyncAfter(deadline: .now() + self.scanPauseDuration) { [weak self] in
                     guard let self = self else { return }
                     if self.centralManager?.state == .poweredOn {
+                        print("[BLUETOOTH DEBUG] Resuming scan after \(self.scanPauseDuration) seconds pause")
                         self.centralManager?.scanForPeripherals(
                             withServices: [BluetoothMeshService.serviceUUID],
                             options: [CBCentralManagerScanOptionAllowDuplicatesKey: true]
@@ -494,6 +502,7 @@ class BluetoothMeshService: NSObject {
     }
     
     private func setupPeripheral() {
+        print("[BLUETOOTH DEBUG] Setting up peripheral with service UUID: \(BluetoothMeshService.serviceUUID)")
         let characteristic = CBMutableCharacteristic(
             type: BluetoothMeshService.characteristicUUID,
             properties: [.read, .write, .writeWithoutResponse, .notify],
@@ -504,6 +513,7 @@ class BluetoothMeshService: NSObject {
         let service = CBMutableService(type: BluetoothMeshService.serviceUUID, primary: true)
         service.characteristics = [characteristic]
         
+        print("[BLUETOOTH DEBUG] Adding service to peripheral manager")
         peripheralManager?.add(service)
         self.characteristic = characteristic
     }
@@ -2256,8 +2266,26 @@ class BluetoothMeshService: NSObject {
 extension BluetoothMeshService: CBCentralManagerDelegate {
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         // Central manager state updated
-        print("[BLUETOOTH DEBUG] Central manager state changed to: \(central.state.rawValue) (poweredOn = 5)")
-        if central.state == .poweredOn {
+        let stateString: String
+        switch central.state {
+        case .unknown: stateString = "unknown(0)"
+        case .resetting: stateString = "resetting(1)"
+        case .unsupported: stateString = "unsupported(2)"
+        case .unauthorized: stateString = "unauthorized(3)"
+        case .poweredOff: stateString = "poweredOff(4)"
+        case .poweredOn: stateString = "poweredOn(5)"
+        @unknown default: stateString = "unknown state(\(central.state.rawValue))"
+        }
+        
+        print("[BLUETOOTH DEBUG] Central manager state changed to: \(stateString)")
+        
+        if central.state == .unsupported {
+            print("[BLUETOOTH DEBUG] Bluetooth is not supported on this device")
+        } else if central.state == .unauthorized {
+            print("[BLUETOOTH DEBUG] Bluetooth is unauthorized. Check app permissions in Settings")
+        } else if central.state == .poweredOff {
+            print("[BLUETOOTH DEBUG] Bluetooth is powered off. Please turn on Bluetooth")
+        } else if central.state == .poweredOn {
             print("[BLUETOOTH DEBUG] Central powered on, starting scan")
             startScanning()
             
@@ -2602,8 +2630,26 @@ extension BluetoothMeshService: CBPeripheralDelegate {
 extension BluetoothMeshService: CBPeripheralManagerDelegate {
     func peripheralManagerDidUpdateState(_ peripheral: CBPeripheralManager) {
         // Peripheral manager state updated
-        print("[BLUETOOTH DEBUG] Peripheral manager state changed to: \(peripheral.state.rawValue) (poweredOn = 5)")
+        let stateString: String
         switch peripheral.state {
+        case .unknown: stateString = "unknown(0)"
+        case .resetting: stateString = "resetting(1)"
+        case .unsupported: stateString = "unsupported(2)"
+        case .unauthorized: stateString = "unauthorized(3)"
+        case .poweredOff: stateString = "poweredOff(4)"
+        case .poweredOn: stateString = "poweredOn(5)"
+        @unknown default: stateString = "unknown state(\(peripheral.state.rawValue))"
+        }
+        
+        print("[BLUETOOTH DEBUG] Peripheral manager state changed to: \(stateString)")
+        
+        switch peripheral.state {
+        case .unsupported:
+            print("[BLUETOOTH DEBUG] Bluetooth is not supported on this device")
+        case .unauthorized:
+            print("[BLUETOOTH DEBUG] Bluetooth is unauthorized. Check app permissions in Settings")
+        case .poweredOff:
+            print("[BLUETOOTH DEBUG] Bluetooth is powered off. Please turn on Bluetooth")
         case .poweredOn:
             print("[BLUETOOTH DEBUG] Peripheral powered on, setting up and advertising")
             setupPeripheral()
@@ -2619,7 +2665,19 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
     }
     
     func peripheralManager(_ peripheral: CBPeripheralManager, didAdd service: CBService, error: Error?) {
-        // Handle service addition if needed
+        if let error = error {
+            print("[BLUETOOTH DEBUG] Failed to add service: \(error.localizedDescription)")
+        } else {
+            print("[BLUETOOTH DEBUG] Service added successfully: \(service.uuid)")
+        }
+    }
+    
+    func peripheralManagerDidStartAdvertising(_ peripheral: CBPeripheralManager, error: Error?) {
+        if let error = error {
+            print("[BLUETOOTH DEBUG] Failed to start advertising: \(error.localizedDescription)")
+        } else {
+            print("[BLUETOOTH DEBUG] Advertising started successfully")
+        }
     }
     
     func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveWrite requests: [CBATTRequest]) {
