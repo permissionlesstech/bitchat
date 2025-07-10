@@ -73,6 +73,34 @@ class ChatViewModel: ObservableObject {
     // Delivery tracking
     private var deliveryTrackerCancellable: AnyCancellable?
     
+    // Ping tracking  
+    private var pendingPings: [String: PendingPing] = [:]
+    private let pingTimeout: TimeInterval = 10.0
+    
+    class PendingPing {
+        let pingID: String
+        let targetPeerID: String
+        let targetNickname: String
+        let sentAt: Date
+        var timeoutTimer: Timer?
+        
+        init(pingID: String, targetPeerID: String, targetNickname: String, sentAt: Date) {
+            self.pingID = pingID
+            self.targetPeerID = targetPeerID
+            self.targetNickname = targetNickname
+            self.sentAt = sentAt
+            self.timeoutTimer = nil
+        }
+    }
+    
+    struct PingResult {
+        let targetPeerID: String
+        let targetNickname: String
+        let latencyMs: Double?
+        let success: Bool
+        let error: String?
+    }
+    
     init() {
         loadNickname()
         loadFavorites()
@@ -100,6 +128,8 @@ class ChatViewModel: ObservableObject {
             .sink { [weak self] (messageID, status) in
                 self?.updateMessageDeliveryStatus(messageID, status: status)
             }
+        
+        // Ping tracking is now handled directly in this class
         
         // Show welcome message after delay if still no peers
         DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
@@ -2456,6 +2486,65 @@ extension ChatViewModel: BitchatDelegate {
                 messages.append(systemMessage)
             }
             
+        case "/ping":
+            if parts.count > 1 {
+                let targetName = String(parts[1])
+                // Remove @ if present
+                let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
+                
+                // Find peer ID for this nickname
+                if let peerID = getPeerIDForNickname(nickname) {
+                    // Check if the peer is online
+                    if connectedPeers.contains(peerID) {
+                        // Send ping request
+                        let pingRequest = PingRequest(
+                            senderID: meshService.myPeerID,
+                            senderNickname: self.nickname,
+                            targetID: peerID,
+                            targetNickname: nickname
+                        )
+                        
+                        // Track the ping
+                        startPing(to: peerID, targetNickname: nickname, pingRequest: pingRequest)
+                        
+                        // Send the ping via mesh service
+                        meshService.sendPingRequest(pingRequest, to: peerID)
+                        
+                        let systemMessage = BitchatMessage(
+                            sender: "system",
+                            content: "🏓 pinging \(nickname)...",
+                            timestamp: Date(),
+                            isRelay: false
+                        )
+                        messages.append(systemMessage)
+                    } else {
+                        let systemMessage = BitchatMessage(
+                            sender: "system",
+                            content: "cannot ping \(nickname): user is offline.",
+                            timestamp: Date(),
+                            isRelay: false
+                        )
+                        messages.append(systemMessage)
+                    }
+                } else {
+                    let systemMessage = BitchatMessage(
+                        sender: "system",
+                        content: "cannot ping \(nickname): user not found.",
+                        timestamp: Date(),
+                        isRelay: false
+                    )
+                    messages.append(systemMessage)
+                }
+            } else {
+                let systemMessage = BitchatMessage(
+                    sender: "system",
+                    content: "usage: /ping @nickname",
+                    timestamp: Date(),
+                    isRelay: false
+                )
+                messages.append(systemMessage)
+            }
+            
         default:
             // Unknown command
             let systemMessage = BitchatMessage(
@@ -3064,6 +3153,86 @@ extension ChatViewModel: BitchatDelegate {
     
     func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) {
         updateMessageDeliveryStatus(messageID, status: status)
+    }
+    
+    func didReceivePingRequest(_ ping: PingRequest) {
+        // We automatically send pong responses in BluetoothMeshService
+        // This method is here for future use if we want to show ping notifications
+    }
+    
+    func didReceivePongResponse(_ pong: PongResponse) {
+        // Process the pong response to calculate latency
+        processPongResponse(pong)
+    }
+    
+    // MARK: - Ping Methods
+    
+    private func startPing(to targetPeerID: String, targetNickname: String, pingRequest: PingRequest) {
+        // Cancel any existing ping to this peer
+        if let existingPing = pendingPings[targetPeerID] {
+            existingPing.timeoutTimer?.invalidate()
+        }
+        
+        let pendingPing = PendingPing(
+            pingID: pingRequest.pingID,
+            targetPeerID: targetPeerID,
+            targetNickname: targetNickname,
+            sentAt: pingRequest.timestamp
+        )
+        
+        // Schedule timeout
+        let timer = Timer.scheduledTimer(withTimeInterval: pingTimeout, repeats: false) { [weak self] _ in
+            self?.handlePingTimeout(for: targetPeerID)
+        }
+        
+        pendingPing.timeoutTimer = timer
+        pendingPings[targetPeerID] = pendingPing
+    }
+    
+    private func processPongResponse(_ pong: PongResponse) {
+        // Find the pending ping
+        guard let pendingPing = pendingPings[pong.responderID],
+              pendingPing.pingID == pong.originalPingID else {
+            // No matching ping found
+            return
+        }
+        
+        // Cancel timeout timer
+        pendingPing.timeoutTimer?.invalidate()
+        
+        // Calculate latency
+        let latencySeconds = Date().timeIntervalSince(pendingPing.sentAt)
+        let latencyMs = latencySeconds * 1000.0
+        
+        // Remove from pending pings
+        pendingPings.removeValue(forKey: pong.responderID)
+        
+        // Show result
+        let content = "🏓 ping to \(pendingPing.targetNickname): \(String(format: "%.1f", latencyMs))ms"
+        let systemMessage = BitchatMessage(
+            sender: "system",
+            content: content,
+            timestamp: Date(),
+            isRelay: false
+        )
+        messages.append(systemMessage)
+    }
+    
+    private func handlePingTimeout(for targetPeerID: String) {
+        guard let pendingPing = pendingPings[targetPeerID] else { return }
+        
+        // Remove from pending
+        pendingPings.removeValue(forKey: targetPeerID)
+        
+        // Show timeout message
+        let content = "🏓 ping to \(pendingPing.targetNickname): timed out after \(Int(pingTimeout))s"
+        let systemMessage = BitchatMessage(
+            sender: "system",
+            content: content,
+            timestamp: Date(),
+            isRelay: false
+        )
+        messages.append(systemMessage)
     }
     
     private func updateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) {

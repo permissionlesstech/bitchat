@@ -772,6 +772,72 @@ class BluetoothMeshService: NSObject {
         }
     }
     
+    func sendPingRequest(_ ping: PingRequest, to recipientID: String) {
+        messageQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            // Encode the ping request
+            guard let pingData = ping.encode() else {
+                return
+            }
+            
+            // Encrypt ping for the target
+            let encryptedPayload: Data
+            do {
+                encryptedPayload = try self.encryptionService.encrypt(pingData, for: recipientID)
+            } catch {
+                return
+            }
+            
+            // Create ping packet with direct routing to target
+            let packet = BitchatPacket(
+                type: MessageType.pingRequest.rawValue,
+                senderID: Data(self.myPeerID.utf8),
+                recipientID: Data(recipientID.utf8),
+                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                payload: encryptedPayload,
+                signature: nil,  // Pings don't need signatures
+                ttl: 5  // Allow reasonable hops for ping
+            )
+            
+            // Send immediately for accurate timing
+            self.broadcastPacket(packet)
+        }
+    }
+    
+    func sendPongResponse(_ pong: PongResponse, to recipientID: String) {
+        messageQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            // Encode the pong response
+            guard let pongData = pong.encode() else {
+                return
+            }
+            
+            // Encrypt pong for the original sender
+            let encryptedPayload: Data
+            do {
+                encryptedPayload = try self.encryptionService.encrypt(pongData, for: recipientID)
+            } catch {
+                return
+            }
+            
+            // Create pong packet with direct routing to original sender
+            let packet = BitchatPacket(
+                type: MessageType.pongResponse.rawValue,
+                senderID: Data(self.myPeerID.utf8),
+                recipientID: Data(recipientID.utf8),
+                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                payload: encryptedPayload,
+                signature: nil,  // Pongs don't need signatures
+                ttl: 5  // Allow reasonable hops for pong
+            )
+            
+            // Send immediately for accurate timing
+            self.broadcastPacket(packet)
+        }
+    }
+    
     func announcePasswordProtectedChannel(_ channel: String, isProtected: Bool = true, creatorID: String? = nil, keyCommitment: String? = nil) {
         messageQueue.async { [weak self] in
             guard let self = self else { return }
@@ -2067,6 +2133,65 @@ class BluetoothMeshService: NSObject {
                 }
             } else if packet.ttl > 0 {
                 // Relay the read receipt if not for us
+                var relayPacket = packet
+                relayPacket.ttl -= 1
+                self.broadcastPacket(relayPacket)
+            }
+            
+        case .pingRequest:
+            // Handle ping request
+            if let recipientIDData = packet.recipientID,
+               let recipientID = String(data: recipientIDData.trimmingNullBytes(), encoding: .utf8),
+               recipientID == myPeerID {
+                // This ping is for us - decrypt it and send pong response
+                if let senderID = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8) {
+                    do {
+                        let decryptedData = try encryptionService.decrypt(packet.payload, from: senderID)
+                        if let ping = PingRequest.decode(from: decryptedData) {
+                            // Notify delegate about ping request
+                            DispatchQueue.main.async {
+                                self.delegate?.didReceivePingRequest(ping)
+                            }
+                            
+                            // Send pong response immediately
+                            let viewModel = self.delegate as? ChatViewModel
+                            let myNickname = viewModel?.nickname ?? self.myPeerID
+                            let pong = PongResponse(originalPing: ping, responderID: self.myPeerID, responderNickname: myNickname)
+                            
+                            self.sendPongResponse(pong, to: senderID)
+                        }
+                    } catch {
+                        // Failed to decrypt ping - might be from unknown sender
+                    }
+                }
+            } else if packet.ttl > 0 {
+                // Relay the ping if not for us
+                var relayPacket = packet
+                relayPacket.ttl -= 1
+                self.broadcastPacket(relayPacket)
+            }
+            
+        case .pongResponse:
+            // Handle pong response
+            if let recipientIDData = packet.recipientID,
+               let recipientID = String(data: recipientIDData.trimmingNullBytes(), encoding: .utf8),
+               recipientID == myPeerID {
+                // This pong is for us - decrypt it
+                if let senderID = String(data: packet.senderID.trimmingNullBytes(), encoding: .utf8) {
+                    do {
+                        let decryptedData = try encryptionService.decrypt(packet.payload, from: senderID)
+                        if let pong = PongResponse.decode(from: decryptedData) {
+                            // Notify delegate to process the pong response
+                            DispatchQueue.main.async {
+                                self.delegate?.didReceivePongResponse(pong)
+                            }
+                        }
+                    } catch {
+                        // Failed to decrypt pong - might be from unknown sender
+                    }
+                }
+            } else if packet.ttl > 0 {
+                // Relay the pong if not for us
                 var relayPacket = packet
                 relayPacket.ttl -= 1
                 self.broadcastPacket(relayPacket)

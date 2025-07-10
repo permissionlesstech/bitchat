@@ -568,6 +568,7 @@ struct ContentView: View {
                         (["/hug"], "<nickname>", "send someone a warm hug"),
                         (["/j", "/join"], "<channel>", "join or create a channel"),
                         (["/m", "/msg"], "<nickname> [message]", "send private message"),
+                        (["/ping"], "<nickname>", "check latency to specific peer"),
                         (["/channels"], nil, "show all discovered channels"),
                         (["/slap"], "<nickname>", "slap someone with a trout"),
                         (["/unblock"], "<nickname>", "unblock a peer"),
@@ -678,6 +679,7 @@ struct ContentView: View {
                             ("/hug", "send someone a warm hug"),
                             ("/j", "join or create a channel"),
                             ("/m", "send private message"),
+                            ("/ping", "check latency to specific peer"),
                             ("/slap", "slap someone with a trout"),
                             ("/unblock", "unblock a peer"),
                             ("/w", "see who's online")
