@@ -23,5 +23,5 @@ jobs:
     - name: Run iOS tests
       run: |
         set -o pipefail && xcodebuild test \
-          -scheme bitchatTests_iOS \
+          -scheme "bitchat (iOS)" \
           -destination "platform=iOS Simulator,name=iPhone 16" | xcpretty
