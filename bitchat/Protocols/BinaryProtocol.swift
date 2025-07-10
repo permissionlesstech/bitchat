@@ -189,9 +189,28 @@ struct BinaryProtocol {
             })
             offset += 2
             
+            let maxOriginalSize = 1024 * 1024
+            guard originalSize > 0 && originalSize <= maxOriginalSize else { 
+                return nil 
+            }
+            
+            let compressedSize = Int(payloadLength) - 2
+            guard compressedSize > 0 && originalSize >= compressedSize else {
+                return nil
+            }
+            
+            let maxCompressionRatio = 100
+            guard originalSize <= compressedSize * maxCompressionRatio else {
+                return nil
+            }
+            
+            guard offset + compressedSize <= data.count else {
+                return nil
+            }
+            
             // Compressed payload
-            let compressedPayload = data[offset..<offset+Int(payloadLength)-2]
-            offset += Int(payloadLength) - 2
+            let compressedPayload = data[offset..<offset+compressedSize]
+            offset += compressedSize
             
             // Decompress
             guard let decompressedPayload = CompressionUtil.decompress(compressedPayload, originalSize: originalSize) else {
@@ -199,6 +218,10 @@ struct BinaryProtocol {
             }
             payload = decompressedPayload
         } else {
+            guard offset + Int(payloadLength) <= data.count else {
+                return nil
+            }
+            
             payload = data[offset..<offset+Int(payloadLength)]
             offset += Int(payloadLength)
         }
@@ -206,6 +229,10 @@ struct BinaryProtocol {
         // Signature
         var signature: Data?
         if hasSignature {
+            guard offset + signatureSize <= data.count else {
+                return nil
+            }
+            
             signature = data[offset..<offset+signatureSize]
         }
         
