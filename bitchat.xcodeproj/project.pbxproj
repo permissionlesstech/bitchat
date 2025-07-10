@@ -53,6 +53,16 @@
 		D948085736ED8E736C1DE3B0 /* BluetoothMeshService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5C3D880FF8AE1673B20E1E3 /* BluetoothMeshService.swift */; };
 		DDA1DFAB1FF7AADE52DC0F53 /* EncryptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DC1563390A15C042D059CF9 /* EncryptionService.swift */; };
 		E65BBB6544FE0159F3C6C3A8 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 95F16C3A4A5621C74461D8D3 /* LaunchScreen.storyboard */; };
+		E7CEA97C2E1EBC2500D4DB51 /* UserDefaults+Extension.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7CEA97B2E1EBC2500D4DB51 /* UserDefaults+Extension.swift */; };
+		E7CEA97D2E1EBC2500D4DB51 /* UserDefaults+Extension.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7CEA97B2E1EBC2500D4DB51 /* UserDefaults+Extension.swift */; };
+		E7CEA97F2E1EBCFC00D4DB51 /* ChatStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7CEA97E2E1EBCFA00D4DB51 /* ChatStorage.swift */; };
+		E7CEA9802E1EBCFC00D4DB51 /* ChatStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7CEA97E2E1EBCFA00D4DB51 /* ChatStorage.swift */; };
+		E7CEA9832E1EE1A800D4DB51 /* AppStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7CEA9822E1EE1A300D4DB51 /* AppStorage.swift */; };
+		E7CEA9842E1EE1A800D4DB51 /* AppStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7CEA9822E1EE1A300D4DB51 /* AppStorage.swift */; };
+		E7CEA9862E1EE1BC00D4DB51 /* BaseStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7CEA9852E1EE1BA00D4DB51 /* BaseStorage.swift */; };
+		E7CEA9872E1EE1BC00D4DB51 /* BaseStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7CEA9852E1EE1BA00D4DB51 /* BaseStorage.swift */; };
+		E7CEA9892E1EEAC600D4DB51 /* EncryptionStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7CEA9882E1EEAB700D4DB51 /* EncryptionStorage.swift */; };
+		E7CEA98A2E1EEAC600D4DB51 /* EncryptionStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7CEA9882E1EEAB700D4DB51 /* EncryptionStorage.swift */; };
 		F00B713D5053617FB5F3F1BE /* MessagePaddingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DE9CDF66D4E52D268851048 /* MessagePaddingTests.swift */; };
 		F455F011B3B648ADA233F998 /* BinaryProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2136C3E22D02D4A8DBE7EAB /* BinaryProtocol.swift */; };
 		FB8819B4C84FAFEF5C36B216 /* KeychainManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 136696FC4436A02D98CE6A77 /* KeychainManager.swift */; };
@@ -129,6 +139,11 @@
 		D5C3D880FF8AE1673B20E1E3 /* BluetoothMeshService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothMeshService.swift; sourceTree = "<group>"; };
 		D69A18D27F9A565FD6041E12 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		E6B8F7B7D55092C2540A7996 /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModel.swift; sourceTree = "<group>"; };
+		E7CEA97B2E1EBC2500D4DB51 /* UserDefaults+Extension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UserDefaults+Extension.swift"; sourceTree = "<group>"; };
+		E7CEA97E2E1EBCFA00D4DB51 /* ChatStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatStorage.swift; sourceTree = "<group>"; };
+		E7CEA9822E1EE1A300D4DB51 /* AppStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStorage.swift; sourceTree = "<group>"; };
+		E7CEA9852E1EE1BA00D4DB51 /* BaseStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BaseStorage.swift; sourceTree = "<group>"; };
+		E7CEA9882E1EEAB700D4DB51 /* EncryptionStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EncryptionStorage.swift; sourceTree = "<group>"; };
 		EA706D8E5097785414646A8E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		ED176FF3B274E35C2D827894 /* BatteryOptimizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatteryOptimizer.swift; sourceTree = "<group>"; };
 		EF625BB3AD919322C01A46B2 /* BitchatApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitchatApp.swift; sourceTree = "<group>"; };
@@ -140,6 +155,7 @@
 			isa = PBXGroup;
 			children = (
 				2F82C5FC8433F4064F079D1F /* bitchat */,
+				E7CEA9812E1EBD0100D4DB51 /* Storage */,
 				A2E8C336FA1ADBEC03261DFD /* bitchatShareExtension */,
 				C3D98EB3E1B455E321F519F4 /* bitchatTests */,
 				9F37F9F2C353B58AC809E93B /* Products */,
@@ -178,6 +194,7 @@
 				ED176FF3B274E35C2D827894 /* BatteryOptimizer.swift */,
 				32F149C43D1915831B60FE09 /* CompressionUtil.swift */,
 				CB043CA5EEB9AC8B07D61E97 /* OptimizedBloomFilter.swift */,
+				E7CEA97B2E1EBC2500D4DB51 /* UserDefaults+Extension.swift */,
 			);
 			path = Utils;
 			sourceTree = "<group>";
@@ -248,6 +265,17 @@
 				3448F84BF86A42A3CC4A9379 /* NotificationService.swift */,
 			);
 			path = Services;
+			sourceTree = "<group>";
+		};
+		E7CEA9812E1EBD0100D4DB51 /* Storage */ = {
+			isa = PBXGroup;
+			children = (
+				E7CEA9882E1EEAB700D4DB51 /* EncryptionStorage.swift */,
+				E7CEA9852E1EE1BA00D4DB51 /* BaseStorage.swift */,
+				E7CEA9822E1EE1A300D4DB51 /* AppStorage.swift */,
+				E7CEA97E2E1EBCFA00D4DB51 /* ChatStorage.swift */,
+			);
+			path = Storage;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -437,15 +465,20 @@
 				923027D6F2F417AFA2488127 /* BitchatProtocol.swift in Sources */,
 				7A50E2F04A3515A7E90EEAE4 /* BluetoothMeshService.swift in Sources */,
 				D450CF41F207BDE1A1AAA56E /* ChatViewModel.swift in Sources */,
+				E7CEA9802E1EBCFC00D4DB51 /* ChatStorage.swift in Sources */,
+				E7CEA9862E1EE1BC00D4DB51 /* BaseStorage.swift in Sources */,
 				B0CA7796B2B2AC2B33F84548 /* CompressionUtil.swift in Sources */,
+				E7CEA9832E1EE1A800D4DB51 /* AppStorage.swift in Sources */,
 				92D34E7A07C990C8A815B0CE /* ContentView.swift in Sources */,
 				8DCEEA289EF7C49E7CD38B08 /* DeliveryTracker.swift in Sources */,
 				739429DFDE5C5829CF70DA7D /* EncryptionService.swift in Sources */,
+				E7CEA9892E1EEAC600D4DB51 /* EncryptionStorage.swift in Sources */,
 				FB8819B4C84FAFEF5C36B216 /* KeychainManager.swift in Sources */,
 				31D147471B9F4E2815352DDA /* LinkPreviewView.swift in Sources */,
 				4E778E5A414571ACAC2A0F01 /* MessageRetentionService.swift in Sources */,
 				C99763A4761567F587D21688 /* MessageRetryService.swift in Sources */,
 				749D8CF8A362B6CD0786782D /* NotificationService.swift in Sources */,
+				E7CEA97D2E1EBC2500D4DB51 /* UserDefaults+Extension.swift in Sources */,
 				0245710AEAA58AD0A1425234 /* OptimizedBloomFilter.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -461,15 +494,20 @@
 				6DE056E1EE9850E9FBF50157 /* BitchatProtocol.swift in Sources */,
 				D948085736ED8E736C1DE3B0 /* BluetoothMeshService.swift in Sources */,
 				7576A357B278E5733E9D9F33 /* ChatViewModel.swift in Sources */,
+				E7CEA97F2E1EBCFC00D4DB51 /* ChatStorage.swift in Sources */,
+				E7CEA9872E1EE1BC00D4DB51 /* BaseStorage.swift in Sources */,
 				7DCA0DBCB8884E3B31C7BCE3 /* CompressionUtil.swift in Sources */,
+				E7CEA9842E1EE1A800D4DB51 /* AppStorage.swift in Sources */,
 				1D9674FA5F998503831DC281 /* ContentView.swift in Sources */,
 				CD0AE423F03AC52BAFC16834 /* DeliveryTracker.swift in Sources */,
 				DDA1DFAB1FF7AADE52DC0F53 /* EncryptionService.swift in Sources */,
+				E7CEA98A2E1EEAC600D4DB51 /* EncryptionStorage.swift in Sources */,
 				8F737CE0435792CC2AD65FCB /* KeychainManager.swift in Sources */,
 				7A5B1AB5642FEC168E917949 /* LinkPreviewView.swift in Sources */,
 				4274B6016F755946FBF2513E /* MessageRetentionService.swift in Sources */,
 				CEAE115C9C3EB3C4ED82F128 /* MessageRetryService.swift in Sources */,
 				61C81ED5F679D5E973EE0C07 /* NotificationService.swift in Sources */,
+				E7CEA97C2E1EBC2500D4DB51 /* UserDefaults+Extension.swift in Sources */,
 				1F48A8CEEE9399D1EBD08F0C /* OptimizedBloomFilter.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

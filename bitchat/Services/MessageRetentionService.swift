@@ -22,10 +22,9 @@ struct StoredMessage: Codable {
 
 class MessageRetentionService {
     static let shared = MessageRetentionService()
-    
+    private let storage: ChatStorage = DefaultChatStorage()
     private let documentsDirectory: URL
     private let messagesDirectory: URL
-    private let favoriteChannelsKey = "bitchat.favoriteChannels"
     private let retentionDays = 7 // Messages retained for 7 days
     private let encryptionKey: SymmetricKey
     
@@ -56,7 +55,7 @@ class MessageRetentionService {
     // MARK: - Favorite Channels Management
     
     func getFavoriteChannels() -> Set<String> {
-        let channels = UserDefaults.standard.stringArray(forKey: favoriteChannelsKey) ?? []
+        let channels = storage.favoriteChannels ?? []
         return Set(channels)
     }
     
@@ -69,7 +68,7 @@ class MessageRetentionService {
         } else {
             favorites.insert(channel)
         }
-        UserDefaults.standard.set(Array(favorites), forKey: favoriteChannelsKey)
+        storage.favoriteChannels = Array(favorites)
         return favorites.contains(channel)
     }
     
@@ -204,6 +203,6 @@ class MessageRetentionService {
         }
         
         // Clear favorite channels
-        UserDefaults.standard.removeObject(forKey: favoriteChannelsKey)
+        storage.removeObject(for: .favoriteChannelsKey)
     }
 }

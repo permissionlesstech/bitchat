@@ -57,13 +57,13 @@ struct BitchatApp: App {
     
     private func checkForSharedContent() {
         // Check app group for shared content from extension
-        guard let userDefaults = UserDefaults(suiteName: "group.chat.bitchat") else {
+        guard let userDefaults: AppStorageUserDefaults = DefaultAppStorage(suiteName: "group.chat.bitchat") else {
             print("DEBUG: Failed to access app group UserDefaults")
             return
         }
         
-        guard let sharedContent = userDefaults.string(forKey: "sharedContent"),
-              let sharedDate = userDefaults.object(forKey: "sharedContentDate") as? Date else {
+        guard let sharedContent = userDefaults.sharedContent,
+              let sharedDate = userDefaults.sharedContentDate else {
             print("DEBUG: No shared content found in UserDefaults")
             return
         }
@@ -74,14 +74,11 @@ struct BitchatApp: App {
         
         // Only process if shared within last 30 seconds
         if Date().timeIntervalSince(sharedDate) < 30 {
-            let contentType = userDefaults.string(forKey: "sharedContentType") ?? "text"
+            let contentType = userDefaults.sharedContentType ?? "text"
             print("DEBUG: Content type: \(contentType)")
             
             // Clear the shared content
-            userDefaults.removeObject(forKey: "sharedContent")
-            userDefaults.removeObject(forKey: "sharedContentType")
-            userDefaults.removeObject(forKey: "sharedContentDate")
-            userDefaults.synchronize()
+            userDefaults.clear()
             
             // Show notification about shared content
             DispatchQueue.main.async {

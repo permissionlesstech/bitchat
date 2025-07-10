@@ -27,7 +27,7 @@ class EncryptionService {
     // Persistent identity for favorites (separate from ephemeral keys)
     private let identityKey: Curve25519.Signing.PrivateKey
     public let identityPublicKey: Curve25519.Signing.PublicKey
-    
+    private let storage: EncryptionStorage = DefaultEncryptionStorage()
     // Thread safety
     private let cryptoQueue = DispatchQueue(label: "chat.bitchat.crypto", attributes: .concurrent)
     
@@ -40,13 +40,13 @@ class EncryptionService {
         self.signingPublicKey = signingPrivateKey.publicKey
         
         // Load or create persistent identity key
-        if let identityData = UserDefaults.standard.data(forKey: "bitchat.identityKey"),
+        if let identityData = storage.identityKey,
            let loadedKey = try? Curve25519.Signing.PrivateKey(rawRepresentation: identityData) {
             self.identityKey = loadedKey
         } else {
             // First run - create and save identity key
             self.identityKey = Curve25519.Signing.PrivateKey()
-            UserDefaults.standard.set(identityKey.rawRepresentation, forKey: "bitchat.identityKey")
+            storage.identityKey = identityKey.rawRepresentation
         }
         self.identityPublicKey = identityKey.publicKey
     }
@@ -110,7 +110,7 @@ class EncryptionService {
     
     // Clear persistent identity (for panic mode)
     func clearPersistentIdentity() {
-        UserDefaults.standard.removeObject(forKey: "bitchat.identityKey")
+        storage.clear()
         // print("[CRYPTO] Cleared persistent identity key")
     }
     

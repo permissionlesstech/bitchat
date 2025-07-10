@@ -52,16 +52,8 @@ class ChatViewModel: ObservableObject {
     @Published var retentionEnabledChannels: Set<String> = []  // Channels where owner enabled retention for all members
     
     let meshService = BluetoothMeshService()
-    private let userDefaults = UserDefaults.standard
-    private let nicknameKey = "bitchat.nickname"
-    private let favoritesKey = "bitchat.favorites"
-    private let joinedChannelsKey = "bitchat.joinedChannels"
-    private let passwordProtectedChannelsKey = "bitchat.passwordProtectedChannels"
-    private let channelCreatorsKey = "bitchat.channelCreators"
+    private let storage: ChatStorage = DefaultChatStorage()
     // private let channelPasswordsKey = "bitchat.channelPasswords" // Now using Keychain
-    private let channelKeyCommitmentsKey = "bitchat.channelKeyCommitments"
-    private let retentionEnabledChannelsKey = "bitchat.retentionEnabledChannels"
-    private let blockedUsersKey = "bitchat.blockedUsers"
     private var nicknameSaveTimer: Timer?
     
     @Published var favoritePeers: Set<String> = []  // Now stores public key fingerprints instead of peer IDs
@@ -142,7 +134,7 @@ class ChatViewModel: ObservableObject {
     }
     
     private func loadNickname() {
-        if let savedNickname = userDefaults.string(forKey: nicknameKey) {
+        if let savedNickname = storage.savedNickName {
             nickname = savedNickname
         } else {
             nickname = "anon\(Int.random(in: 1000...9999))"
@@ -151,37 +143,37 @@ class ChatViewModel: ObservableObject {
     }
     
     func saveNickname() {
-        userDefaults.set(nickname, forKey: nicknameKey)
-        userDefaults.synchronize() // Force immediate save
+        storage.savedNickName = nickname
+        storage.synchronize() // Force immediate save
         
         // Send announce with new nickname to all peers
         meshService.sendBroadcastAnnounce()
     }
     
     private func loadFavorites() {
-        if let savedFavorites = userDefaults.stringArray(forKey: favoritesKey) {
+        if let savedFavorites = storage.savedFavorites {
             favoritePeers = Set(savedFavorites)
         }
     }
     
     private func saveFavorites() {
-        userDefaults.set(Array(favoritePeers), forKey: favoritesKey)
-        userDefaults.synchronize()
+        storage.savedFavorites = Array(favoritePeers)
+        storage.synchronize()
     }
     
     private func loadBlockedUsers() {
-        if let savedBlockedUsers = userDefaults.stringArray(forKey: blockedUsersKey) {
+        if let savedBlockedUsers = storage.savedBlockedUsers {
             blockedUsers = Set(savedBlockedUsers)
         }
     }
     
     private func saveBlockedUsers() {
-        userDefaults.set(Array(blockedUsers), forKey: blockedUsersKey)
-        userDefaults.synchronize()
+        storage.savedBlockedUsers = Array(blockedUsers)
+        storage.synchronize()
     }
     
     private func loadJoinedChannels() {
-        if let savedChannelsList = userDefaults.stringArray(forKey: joinedChannelsKey) {
+        if let savedChannelsList = storage.savedChannelsList {
             joinedChannels = Set(savedChannelsList)
             // Initialize empty data structures for joined channels
             for channel in joinedChannels {
@@ -204,28 +196,28 @@ class ChatViewModel: ObservableObject {
     }
     
     private func saveJoinedChannels() {
-        userDefaults.set(Array(joinedChannels), forKey: joinedChannelsKey)
-        userDefaults.synchronize()
+        storage.savedChannelsList = Array(joinedChannels)
+        storage.synchronize()
     }
     
     private func loadChannelData() {
         // Load password protected channels
-        if let savedProtectedChannels = userDefaults.stringArray(forKey: passwordProtectedChannelsKey) {
+        if let savedProtectedChannels = storage.savedProtectedChannels {
             passwordProtectedChannels = Set(savedProtectedChannels)
         }
         
         // Load channel creators
-        if let savedCreators = userDefaults.dictionary(forKey: channelCreatorsKey) as? [String: String] {
+        if let savedCreators = storage.savedCreators {
             channelCreators = savedCreators
         }
         
         // Load channel key commitments
-        if let savedCommitments = userDefaults.dictionary(forKey: channelKeyCommitmentsKey) as? [String: String] {
+        if let savedCommitments = storage.savedCommitments {
             channelKeyCommitments = savedCommitments
         }
         
         // Load retention-enabled channels
-        if let savedRetentionChannels = userDefaults.stringArray(forKey: retentionEnabledChannelsKey) {
+        if let savedRetentionChannels = storage.savedRetentionChannels {
             retentionEnabledChannels = Set(savedRetentionChannels)
         }
         
@@ -239,15 +231,15 @@ class ChatViewModel: ObservableObject {
     }
     
     private func saveChannelData() {
-        userDefaults.set(Array(passwordProtectedChannels), forKey: passwordProtectedChannelsKey)
-        userDefaults.set(channelCreators, forKey: channelCreatorsKey)
+        storage.savedProtectedChannels = Array(passwordProtectedChannels)
+        storage.savedCreators = channelCreators
         // Save passwords to Keychain instead of UserDefaults
         for (channel, password) in channelPasswords {
             _ = KeychainManager.shared.saveChannelPassword(password, for: channel)
         }
-        userDefaults.set(channelKeyCommitments, forKey: channelKeyCommitmentsKey)
-        userDefaults.set(Array(retentionEnabledChannels), forKey: retentionEnabledChannelsKey)
-        userDefaults.synchronize()
+        storage.savedCommitments = channelKeyCommitments
+        storage.savedRetentionChannels = Array(retentionEnabledChannels)
+        storage.synchronize()
     }
     
     func joinChannel(_ channel: String, password: String? = nil) -> Bool {
@@ -1249,11 +1241,7 @@ class ChatViewModel: ObservableObject {
         MessageRetryService.shared.clearRetryQueue()
         
         // Clear persisted channel data from UserDefaults
-        userDefaults.removeObject(forKey: joinedChannelsKey)
-        userDefaults.removeObject(forKey: passwordProtectedChannelsKey)
-        userDefaults.removeObject(forKey: channelCreatorsKey)
-        userDefaults.removeObject(forKey: channelKeyCommitmentsKey)
-        userDefaults.removeObject(forKey: retentionEnabledChannelsKey)
+        storage.clear()
         
         // Reset nickname to anonymous
         nickname = "anon\(Int.random(in: 1000...9999))"
@@ -1277,7 +1265,7 @@ class ChatViewModel: ObservableObject {
         meshService.emergencyDisconnectAll()
         
         // Force immediate UserDefaults synchronization
-        userDefaults.synchronize()
+        storage.synchronize()
         
         // Force UI update
         objectWillChange.send()
@@ -1841,7 +1829,7 @@ extension ChatViewModel: BitchatDelegate {
         }
         
         // Persist retention status
-        userDefaults.set(Array(retentionEnabledChannels), forKey: retentionEnabledChannelsKey)
+        storage.savedRetentionChannels = Array(retentionEnabledChannels)
     }
     
     private func handleCommand(_ command: String) {
