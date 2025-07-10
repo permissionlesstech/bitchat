@@ -23,6 +23,9 @@ check:
 backup:
     @echo "Backing up original project configuration..."
     @cp project.yml project.yml.backup 2>/dev/null || true
+    @# Backup other files that get modified by xcodegen
+    @if [ -f bitchat.xcodeproj/project.pbxproj ]; then cp bitchat.xcodeproj/project.pbxproj bitchat.xcodeproj/project.pbxproj.backup; fi
+    @if [ -f bitchat/Info.plist ]; then cp bitchat/Info.plist bitchat/Info.plist.backup; fi
 
 # Restore original files
 restore:
@@ -30,6 +33,10 @@ restore:
     @if [ -f project.yml.backup ]; then mv project.yml.backup project.yml; fi
     @# Restore iOS-specific files
     @if [ -f bitchat/LaunchScreen.storyboard.ios ]; then mv bitchat/LaunchScreen.storyboard.ios bitchat/LaunchScreen.storyboard; fi
+    @# Use git to restore all modified files except Justfile
+    @git checkout -- project.yml bitchat.xcodeproj/project.pbxproj bitchat/Info.plist 2>/dev/null || echo "⚠️  Could not restore some files with git"
+    @# Remove any backup files
+    @rm -f bitchat.xcodeproj/project.pbxproj.backup bitchat/Info.plist.backup 2>/dev/null || true
 
 # Apply macOS-specific modifications
 patch-for-macos: backup
@@ -50,20 +57,18 @@ build: check generate
 # Run the macOS app
 run: build
     @echo "Launching BitChat..."
-    @APP_PATH=$$(find ~/Library/Developer/Xcode/DerivedData -name "bitchat.app" -path "*/Debug/*" | head -1); \
-    if [ -n "$$APP_PATH" ]; then \
-        echo "Found app at: $$APP_PATH"; \
-        open "$$APP_PATH"; \
-    else \
-        echo "❌ Could not find built app"; \
-        exit 1; \
-    fi
+    @find ~/Library/Developer/Xcode/DerivedData -name "bitchat.app" -path "*/Debug/*" | head -1 | xargs -I {} open "{}"
 
 # Clean build artifacts and restore original files
 clean: restore
     @echo "Cleaning build artifacts..."
     @rm -rf ~/Library/Developer/Xcode/DerivedData/bitchat-* 2>/dev/null || true
-    @rm -rf bitchat.xcodeproj 2>/dev/null || true
+    @# Only remove the generated project if we have a backup, otherwise use git
+    @if [ -f bitchat.xcodeproj/project.pbxproj.backup ]; then \
+        rm -rf bitchat.xcodeproj; \
+    else \
+        git checkout -- bitchat.xcodeproj/project.pbxproj 2>/dev/null || echo "⚠️  Could not restore project.pbxproj"; \
+    fi
     @rm -f project-macos.yml 2>/dev/null || true
     @echo "✅ Cleaned and restored original files"
 
@@ -73,12 +78,7 @@ dev-run: check
     @if [ ! -f project.yml.backup ]; then just patch-for-macos; fi
     @xcodegen generate
     @xcodebuild -project bitchat.xcodeproj -scheme "bitchat (macOS)" -configuration Debug CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGN_ENTITLEMENTS="" build
-    @APP_PATH=$$(find ~/Library/Developer/Xcode/DerivedData -name "bitchat.app" -path "*/Debug/*" | head -1); \
-    if [ -n "$$APP_PATH" ]; then \
-        open "$$APP_PATH"; \
-    else \
-        echo "❌ Could not find built app"; \
-    fi
+    @find ~/Library/Developer/Xcode/DerivedData -name "bitchat.app" -path "*/Debug/*" | head -1 | xargs -I {} open "{}"
 
 # Show app info
 info:
@@ -108,7 +108,9 @@ nuke:
     @rm -rf bitchat.xcodeproj 2>/dev/null || true
     @rm -f project.yml.backup 2>/dev/null || true
     @rm -f project-macos.yml 2>/dev/null || true
+    @rm -f bitchat.xcodeproj/project.pbxproj.backup 2>/dev/null || true
+    @rm -f bitchat/Info.plist.backup 2>/dev/null || true
     @# Restore iOS-specific files if they were moved
     @if [ -f bitchat/LaunchScreen.storyboard.ios ]; then mv bitchat/LaunchScreen.storyboard.ios bitchat/LaunchScreen.storyboard; fi
-    @git checkout -- project.yml 2>/dev/null || echo "⚠️  Not a git repo or no changes to restore"
+    @git checkout -- project.yml bitchat.xcodeproj/project.pbxproj bitchat/Info.plist 2>/dev/null || echo "⚠️  Not a git repo or no changes to restore"
     @echo "✅ Nuclear clean complete"
