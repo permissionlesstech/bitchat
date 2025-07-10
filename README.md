@@ -81,8 +81,8 @@ This project is released into the public domain. See the [LICENSE](LICENSE) file
 
 1. Launch bitchat on your device
 2. Set your nickname (or use the auto-generated one)
-3. You'll automatically connect to nearby peers
-4. Join a channel with `/j #general` or start chatting in public
+3. Your device will automatically connect to nearby peers
+4. Join a channel with `/j #general` or start chatting publicly
 5. Messages relay through the mesh network to reach distant peers
 
 ### Channel Features
@@ -160,5 +160,5 @@ The protocol is designed to be platform-agnostic. An Android client can be built
 
 ## MacOS
 
-Want to try this on macos: `just run` will set it up and run from source. 
+Want to try this on macOS: `just run` will set it up and run from source. 
 Run `just clean` afterwards to restore things to original state for mobile app building and development.
