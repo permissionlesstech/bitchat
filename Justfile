@@ -28,36 +28,14 @@ backup:
 restore:
     @echo "Restoring original project configuration..."
     @if [ -f project.yml.backup ]; then mv project.yml.backup project.yml; fi
+    @# Restore iOS-specific files
+    @if [ -f bitchat/LaunchScreen.storyboard.ios ]; then mv bitchat/LaunchScreen.storyboard.ios bitchat/LaunchScreen.storyboard; fi
 
 # Apply macOS-specific modifications
 patch-for-macos: backup
-    #!/usr/bin/env bash
-    set -euo pipefail
-    echo "Applying macOS-specific patches..."
-    # Get current development team
-    DEV_TEAM=$(security find-identity -v -p codesigning | grep "Developer ID" | head -1 | sed 's/.*(\(.*\)).*/\1/' || echo "")
-    if [ -z "$DEV_TEAM" ]; then
-        echo "⚠️  No Developer ID found, using your team ID"
-        DEV_TEAM="W2L75AE9HQ"
-    fi
-    echo "Using development team: $DEV_TEAM"
-    # Replace original development team with current one
-    sed -i '' "s/L3N5LHJD5Y/$DEV_TEAM/g" project.yml
-    # Change bundle ID to avoid conflicts
-    sed -i '' 's/chat\.bitchat/com.local.bitchat/g' project.yml
-    # Disable code signing for development
-    sed -i '' 's/CODE_SIGN_STYLE: Automatic/CODE_SIGN_STYLE: Manual/g' project.yml
-    # Add no-signing flags after each CODE_SIGN_STYLE: Manual line
-    sed -i '' '/CODE_SIGN_STYLE: Manual/a\
-      CODE_SIGNING_REQUIRED: NO\
-      CODE_SIGNING_ALLOWED: NO' project.yml
-    # Fix macOS target to exclude LaunchScreen.storyboard
-    sed -i '' '/bitchat_macOS:/,/resources:/ {
-        s|sources: *$|sources:\
-      - path: bitchat\
-        excludes:\
-          - "LaunchScreen.storyboard"|
-    }' project.yml
+    @echo "Temporarily hiding iOS-specific files for macOS build..."
+    @# Move iOS-specific files out of the way temporarily
+    @if [ -f bitchat/LaunchScreen.storyboard ]; then mv bitchat/LaunchScreen.storyboard bitchat/LaunchScreen.storyboard.ios; fi
 
 # Generate Xcode project with patches
 generate: patch-for-macos
@@ -67,7 +45,7 @@ generate: patch-for-macos
 # Build the macOS app
 build: check generate
     @echo "Building BitChat for macOS..."
-    @xcodebuild -project bitchat.xcodeproj -scheme "bitchat (macOS)" -configuration Debug build
+    @xcodebuild -project bitchat.xcodeproj -scheme "bitchat (macOS)" -configuration Debug CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGN_ENTITLEMENTS="" build
 
 # Run the macOS app
 run: build
@@ -86,6 +64,7 @@ clean: restore
     @echo "Cleaning build artifacts..."
     @rm -rf ~/Library/Developer/Xcode/DerivedData/bitchat-* 2>/dev/null || true
     @rm -rf bitchat.xcodeproj 2>/dev/null || true
+    @rm -f project-macos.yml 2>/dev/null || true
     @echo "✅ Cleaned and restored original files"
 
 # Quick run without cleaning (for development)
@@ -93,7 +72,7 @@ dev-run: check
     @echo "Quick development build..."
     @if [ ! -f project.yml.backup ]; then just patch-for-macos; fi
     @xcodegen generate
-    @xcodebuild -project bitchat.xcodeproj -scheme "bitchat (macOS)" -configuration Debug build
+    @xcodebuild -project bitchat.xcodeproj -scheme "bitchat (macOS)" -configuration Debug CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGN_ENTITLEMENTS="" build
     @APP_PATH=$$(find ~/Library/Developer/Xcode/DerivedData -name "bitchat.app" -path "*/Debug/*" | head -1); \
     if [ -n "$$APP_PATH" ]; then \
         open "$$APP_PATH"; \
@@ -128,5 +107,8 @@ nuke:
     @rm -rf ~/Library/Developer/Xcode/DerivedData/bitchat-* 2>/dev/null || true
     @rm -rf bitchat.xcodeproj 2>/dev/null || true
     @rm -f project.yml.backup 2>/dev/null || true
+    @rm -f project-macos.yml 2>/dev/null || true
+    @# Restore iOS-specific files if they were moved
+    @if [ -f bitchat/LaunchScreen.storyboard.ios ]; then mv bitchat/LaunchScreen.storyboard.ios bitchat/LaunchScreen.storyboard; fi
     @git checkout -- project.yml 2>/dev/null || echo "⚠️  Not a git repo or no changes to restore"
     @echo "✅ Nuclear clean complete"
