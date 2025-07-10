@@ -260,11 +260,13 @@ class BluetoothMeshService: NSObject {
         var randomBytes = [UInt8](repeating: 0, count: 4)
         _ = SecRandomCopyBytes(kSecRandomDefault, 4, &randomBytes)
         self.myPeerID = randomBytes.map { String(format: "%02x", $0) }.joined()
+        print("[BLUETOOTH DEBUG] BluetoothMeshService initializing with peer ID: \(self.myPeerID)")
         
         super.init()
         
         centralManager = CBCentralManager(delegate: self, queue: nil)
         peripheralManager = CBPeripheralManager(delegate: self, queue: nil)
+        print("[BLUETOOTH DEBUG] Central and Peripheral managers created")
         
         // Start bloom filter reset timer (reset every 5 minutes)
         bloomFilterResetTimer = Timer.scheduledTimer(withTimeInterval: 300.0, repeats: true) { [weak self] _ in
@@ -362,13 +364,22 @@ class BluetoothMeshService: NSObject {
     
     func startServices() {
         // Starting services
+        print("[BLUETOOTH DEBUG] startServices called")
+        print("[BLUETOOTH DEBUG] Central state: \(centralManager?.state.rawValue ?? -1), Peripheral state: \(peripheralManager?.state.rawValue ?? -1)")
+        
         // Start both central and peripheral services
         if centralManager?.state == .poweredOn {
+            print("[BLUETOOTH DEBUG] Central already powered on, starting scan")
             startScanning()
+        } else {
+            print("[BLUETOOTH DEBUG] Central not yet powered on")
         }
         if peripheralManager?.state == .poweredOn {
+            print("[BLUETOOTH DEBUG] Peripheral already powered on, setting up")
             setupPeripheral()
             startAdvertising()
+        } else {
+            print("[BLUETOOTH DEBUG] Peripheral not yet powered on")
         }
         
         // Send initial announces after services are ready
@@ -430,7 +441,9 @@ class BluetoothMeshService: NSObject {
     }
     
     func startScanning() {
+        print("[BLUETOOTH DEBUG] startScanning called, central state: \(centralManager?.state.rawValue ?? -1)")
         guard centralManager?.state == .poweredOn else { 
+            print("[BLUETOOTH DEBUG] Cannot start scanning, central not powered on")
             return 
         }
         
@@ -2243,7 +2256,9 @@ class BluetoothMeshService: NSObject {
 extension BluetoothMeshService: CBCentralManagerDelegate {
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         // Central manager state updated
+        print("[BLUETOOTH DEBUG] Central manager state changed to: \(central.state.rawValue) (poweredOn = 5)")
         if central.state == .poweredOn {
+            print("[BLUETOOTH DEBUG] Central powered on, starting scan")
             startScanning()
             
             // Send announces when central manager is ready
@@ -2256,9 +2271,14 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi RSSI: NSNumber) {
         // Optimize for 300m range - only connect to strong enough signals
         let rssiValue = RSSI.intValue
+        print("[BLUETOOTH DEBUG] Discovered peripheral: \(peripheral.name ?? "Unknown") ID: \(peripheral.identifier) RSSI: \(rssiValue)")
         
         // Filter out very weak signals (below -90 dBm) to save battery
-        guard rssiValue > -90 else { return }
+        // TEMPORARILY LOWERED FOR DEBUGGING
+        guard rssiValue > -100 else { 
+            print("[BLUETOOTH DEBUG] Ignoring peripheral due to very weak signal")
+            return 
+        }
         
         // Throttle RSSI updates to save CPU
         let peripheralID = peripheral.identifier.uuidString
@@ -2582,8 +2602,10 @@ extension BluetoothMeshService: CBPeripheralDelegate {
 extension BluetoothMeshService: CBPeripheralManagerDelegate {
     func peripheralManagerDidUpdateState(_ peripheral: CBPeripheralManager) {
         // Peripheral manager state updated
+        print("[BLUETOOTH DEBUG] Peripheral manager state changed to: \(peripheral.state.rawValue) (poweredOn = 5)")
         switch peripheral.state {
         case .poweredOn:
+            print("[BLUETOOTH DEBUG] Peripheral powered on, setting up and advertising")
             setupPeripheral()
             startAdvertising()
             
