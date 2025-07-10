@@ -80,8 +80,8 @@ class BluetoothMeshService: NSObject {
     // Battery and range optimizations
     private var scanDutyCycleTimer: Timer?
     private var isActivelyScanning = true
-    private var activeScanDuration: TimeInterval = 2.0  // Scan actively for 2 seconds - will be adjusted based on battery
-    private var scanPauseDuration: TimeInterval = 3.0  // Pause for 3 seconds - will be adjusted based on battery
+    private var activeScanDuration: TimeInterval = 10.0  // Increased to 10 seconds for debugging - will be adjusted based on battery
+    private var scanPauseDuration: TimeInterval = 2.0  // Reduced to 2 seconds for debugging - will be adjusted based on battery
     private var lastRSSIUpdate: [String: Date] = [:]  // Throttle RSSI updates
     private var batteryMonitorTimer: Timer?
     private var currentBatteryLevel: Float = 1.0  // Default to full battery
@@ -279,7 +279,6 @@ class BluetoothMeshService: NSObject {
                 self.processedMessages.removeAll()
                 self.processedKeyExchanges.removeAll()
                 
-                print("[BloomFilter] Reset with network size: \(networkSize), memory: \(self.messageBloomFilter.memorySizeBytes) bytes")
             }
         }
         
@@ -448,6 +447,7 @@ class BluetoothMeshService: NSObject {
         updateScanParametersForBattery()
         
         // Implement scan duty cycling for battery efficiency
+        // TEMPORARILY DISABLED FOR DEBUGGING
         scheduleScanDutyCycle()
     }
     
@@ -1416,7 +1416,6 @@ class BluetoothMeshService: NSObject {
                 return
             } else {
                 // False positive from Bloom filter
-                print("[BloomFilter] False positive detected for message: \(messageID)")
             }
         }
         
@@ -1426,7 +1425,6 @@ class BluetoothMeshService: NSObject {
         // Log statistics periodically
         if messageBloomFilter.insertCount % 100 == 0 {
             let fpRate = messageBloomFilter.estimatedFalsePositiveRate
-            print("[BloomFilter] Items: \(messageBloomFilter.insertCount), Est. FP rate: \(String(format: "%.3f%%", fpRate * 100))")
         }
         
         // Reset bloom filter periodically to prevent saturation
@@ -2243,7 +2241,21 @@ class BluetoothMeshService: NSObject {
 extension BluetoothMeshService: CBCentralManagerDelegate {
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         // Central manager state updated
-        if central.state == .poweredOn {
+        let stateString: String
+        switch central.state {
+        case .unknown: stateString = "unknown(0)"
+        case .resetting: stateString = "resetting(1)"
+        case .unsupported: stateString = "unsupported(2)"
+        case .unauthorized: stateString = "unauthorized(3)"
+        case .poweredOff: stateString = "poweredOff(4)"
+        case .poweredOn: stateString = "poweredOn(5)"
+        @unknown default: stateString = "unknown state(\(central.state.rawValue))"
+        }
+        
+        if central.state == .unsupported {
+        } else if central.state == .unauthorized {
+        } else if central.state == .poweredOff {
+        } else if central.state == .poweredOn {
             startScanning()
             
             // Send announces when central manager is ready
@@ -2256,9 +2268,14 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi RSSI: NSNumber) {
         // Optimize for 300m range - only connect to strong enough signals
         let rssiValue = RSSI.intValue
+        print("[BLUETOOTH DEBUG] Discovered peripheral: \(peripheral.name ?? "Unknown") ID: \(peripheral.identifier) RSSI: \(rssiValue)")
         
         // Filter out very weak signals (below -90 dBm) to save battery
-        guard rssiValue > -90 else { return }
+        // TEMPORARILY LOWERED FOR DEBUGGING
+        guard rssiValue > -100 else { 
+            print("[BLUETOOTH DEBUG] Ignoring peripheral due to very weak signal")
+            return 
+        }
         
         // Throttle RSSI updates to save CPU
         let peripheralID = peripheral.identifier.uuidString
@@ -2582,7 +2599,24 @@ extension BluetoothMeshService: CBPeripheralDelegate {
 extension BluetoothMeshService: CBPeripheralManagerDelegate {
     func peripheralManagerDidUpdateState(_ peripheral: CBPeripheralManager) {
         // Peripheral manager state updated
+        let stateString: String
         switch peripheral.state {
+        case .unknown: stateString = "unknown(0)"
+        case .resetting: stateString = "resetting(1)"
+        case .unsupported: stateString = "unsupported(2)"
+        case .unauthorized: stateString = "unauthorized(3)"
+        case .poweredOff: stateString = "poweredOff(4)"
+        case .poweredOn: stateString = "poweredOn(5)"
+        @unknown default: stateString = "unknown state(\(peripheral.state.rawValue))"
+        }
+        
+        switch peripheral.state {
+        case .unsupported:
+            break
+        case .unauthorized:
+            break
+        case .poweredOff:
+            break
         case .poweredOn:
             setupPeripheral()
             startAdvertising()
@@ -2597,7 +2631,11 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
     }
     
     func peripheralManager(_ peripheral: CBPeripheralManager, didAdd service: CBService, error: Error?) {
-        // Handle service addition if needed
+        // Service added
+    }
+    
+    func peripheralManagerDidStartAdvertising(_ peripheral: CBPeripheralManager, error: Error?) {
+        // Advertising state changed
     }
     
     func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveWrite requests: [CBATTRequest]) {
