@@ -48,8 +48,7 @@ fastlane/test_output
 iOSInjectionProject/
 
 ## Xcode project
-*.xcodeproj/project.xcworkspace/
-*.xcodeproj/xcshareddata/
+*.xcodeproj
 
 ## Python
 __pycache__/
