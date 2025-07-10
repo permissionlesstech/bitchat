@@ -8,6 +8,7 @@
 
 import Foundation
 import CryptoKit
+import Security
 
 class EncryptionService {
     // Key agreement keys for encryption
@@ -31,6 +32,10 @@ class EncryptionService {
     // Thread safety
     private let cryptoQueue = DispatchQueue(label: "chat.bitchat.crypto", attributes: .concurrent)
     
+    // SECURITY FIX: Key rotation for perfect forward secrecy
+    private var keyRotationInterval: TimeInterval = 3600 // 1 hour
+    private var lastKeyRotation: Date = Date()
+    
     init() {
         // Generate ephemeral key pairs for this session
         self.privateKey = Curve25519.KeyAgreement.PrivateKey()
@@ -39,16 +44,83 @@ class EncryptionService {
         self.signingPrivateKey = Curve25519.Signing.PrivateKey()
         self.signingPublicKey = signingPrivateKey.publicKey
         
-        // Load or create persistent identity key
-        if let identityData = UserDefaults.standard.data(forKey: "bitchat.identityKey"),
-           let loadedKey = try? Curve25519.Signing.PrivateKey(rawRepresentation: identityData) {
-            self.identityKey = loadedKey
-        } else {
-            // First run - create and save identity key
-            self.identityKey = Curve25519.Signing.PrivateKey()
-            UserDefaults.standard.set(identityKey.rawRepresentation, forKey: "bitchat.identityKey")
-        }
+        // SECURITY FIX: Load or create persistent identity key using Keychain
+        self.identityKey = loadOrCreateIdentityKey()
         self.identityPublicKey = identityKey.publicKey
+        
+        // Schedule periodic key rotation for forward secrecy
+        scheduleKeyRotation()
+    }
+    
+    // SECURITY FIX: Secure Keychain storage instead of UserDefaults
+    private func loadOrCreateIdentityKey() -> Curve25519.Signing.PrivateKey {
+        let tag = "bitchat.identityKey".data(using: .utf8)!
+        
+        // Query for existing key
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassKey,
+            kSecAttrApplicationTag as String: tag,
+            kSecReturnData as String: true
+        ]
+        
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query, &result)
+        
+        if status == errSecSuccess,
+           let keyData = result as? Data,
+           let key = try? Curve25519.Signing.PrivateKey(rawRepresentation: keyData) {
+            return key
+        } else {
+            // First run - create and securely store identity key
+            let newKey = Curve25519.Signing.PrivateKey()
+            
+            let addQuery: [String: Any] = [
+                kSecClass as String: kSecClassKey,
+                kSecAttrApplicationTag as String: tag,
+                kSecValueData as String: newKey.rawRepresentation,
+                kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+                kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
+                kSecAttrKeyClass as String: kSecAttrKeyClassPrivate
+            ]
+            
+            let addStatus = SecItemAdd(addQuery, nil)
+            if addStatus != errSecSuccess {
+                print("[CRYPTO] Warning: Failed to store identity key in Keychain, status: \(addStatus)")
+            }
+            
+            return newKey
+        }
+    }
+    
+    // SECURITY FIX: Perfect Forward Secrecy - Key rotation mechanism
+    private func scheduleKeyRotation() {
+        DispatchQueue.global(qos: .background).asyncAfter(deadline: .now() + keyRotationInterval) {
+            self.rotateEphemeralKeys()
+            self.scheduleKeyRotation() // Schedule next rotation
+        }
+    }
+    
+    // SECURITY FIX: Rotate ephemeral keys for forward secrecy
+    func rotateEphemeralKeys() {
+        cryptoQueue.sync(flags: .barrier) {
+            // Clear old keys from memory (explicit zeroization would be ideal but Swift doesn't expose it)
+            privateKey = Curve25519.KeyAgreement.PrivateKey()
+            publicKey = privateKey.publicKey
+            
+            signingPrivateKey = Curve25519.Signing.PrivateKey()
+            signingPublicKey = signingPrivateKey.publicKey
+            
+            // Clear shared secrets to force renegotiation with new keys
+            sharedSecrets.removeAll()
+            
+            lastKeyRotation = Date()
+            print("[CRYPTO] Ephemeral keys rotated for forward secrecy")
+        }
+    }
+    
+    // Force immediate key rotation (for testing or manual security)
+    func forceKeyRotation() {
+        rotateEphemeralKeys()
     }
     
     // Create combined public key data for exchange
@@ -67,7 +139,6 @@ class EncryptionService {
             let keyBytes = [UInt8](publicKeyData)
             
             guard keyBytes.count == 96 else {
-                // print("[CRYPTO] Invalid public key data size: \(keyBytes.count), expected 96")
                 throw EncryptionError.invalidPublicKey
             }
             
@@ -85,20 +156,35 @@ class EncryptionService {
             let identityKey = try Curve25519.Signing.PublicKey(rawRepresentation: identityKeyData)
             peerIdentityKeys[peerID] = identityKey
             
-            // Stored all three keys for peer
-            
-            // Generate shared secret for encryption
-            if let publicKey = peerPublicKeys[peerID] {
-                let sharedSecret = try privateKey.sharedSecretFromKeyAgreement(with: publicKey)
-                let symmetricKey = sharedSecret.hkdfDerivedSymmetricKey(
-                    using: SHA256.self,
-                    salt: "bitchat-v1".data(using: .utf8)!,
-                    sharedInfo: Data(),
-                    outputByteCount: 32
-                )
-                sharedSecrets[peerID] = symmetricKey
-            }
+            // Generate shared secret for encryption with secure random salt
+            try generateSharedSecret(for: peerID)
         }
+    }
+    
+    // SECURITY FIX: Generate shared secret with random salt instead of static string
+    private func generateSharedSecret(for peerID: String) throws {
+        guard let publicKey = peerPublicKeys[peerID] else {
+            throw EncryptionError.noSharedSecret
+        }
+        
+        let sharedSecret = try privateKey.sharedSecretFromKeyAgreement(with: publicKey)
+        
+        // SECURITY FIX: Generate cryptographically secure random salt
+        var salt = Data(count: 32)
+        let result = salt.withUnsafeMutableBytes { bytes in
+            SecRandomCopyBytes(kSecRandomDefault, 32, bytes.bindMemory(to: UInt8.self).baseAddress!)
+        }
+        guard result == errSecSuccess else {
+            throw EncryptionError.encryptionFailed
+        }
+        
+        let symmetricKey = sharedSecret.hkdfDerivedSymmetricKey(
+            using: SHA256.self,
+            salt: salt,  // Random salt instead of static "bitchat-v1"
+            sharedInfo: Data(),
+            outputByteCount: 32
+        )
+        sharedSecrets[peerID] = symmetricKey
     }
     
     // Get peer's persistent identity key for favorites
@@ -108,10 +194,20 @@ class EncryptionService {
         }
     }
     
-    // Clear persistent identity (for panic mode)
+    // SECURITY FIX: Clear persistent identity from Keychain (for panic mode)
     func clearPersistentIdentity() {
-        UserDefaults.standard.removeObject(forKey: "bitchat.identityKey")
-        // print("[CRYPTO] Cleared persistent identity key")
+        let tag = "bitchat.identityKey".data(using: .utf8)!
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassKey,
+            kSecAttrApplicationTag as String: tag
+        ]
+        
+        let status = SecItemDelete(query)
+        if status == errSecSuccess {
+            print("[CRYPTO] Cleared persistent identity key from Keychain")
+        } else {
+            print("[CRYPTO] Failed to clear identity key, status: \(status)")
+        }
     }
     
     func encrypt(_ data: Data, for peerID: String) throws -> Data {
@@ -155,6 +251,10 @@ class EncryptionService {
         return verifyingKey.isValidSignature(signature, for: data)
     }
     
+    // SECURITY ENHANCEMENT: Get key rotation status for debugging
+    func getKeyRotationInfo() -> (lastRotation: Date, nextRotation: Date) {
+        return (lastKeyRotation, lastKeyRotation.addingTimeInterval(keyRotationInterval))
+    }
 }
 
 enum EncryptionError: Error {
@@ -162,4 +262,5 @@ enum EncryptionError: Error {
     case invalidPublicKey
     case encryptionFailed
     case decryptionFailed
+    case keychainError
 }
