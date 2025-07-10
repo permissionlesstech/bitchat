@@ -268,19 +268,15 @@ extension String {
     }
     
     func extractMarkdownLink() -> (title: String, url: URL)? {
-        print("DEBUG: Checking for markdown link in: \(self)")
         let pattern = #"\[([^\]]+)\]\(([^)]+)\)"#
         if let regex = try? NSRegularExpression(pattern: pattern),
            let match = regex.firstMatch(in: self, range: NSRange(location: 0, length: self.utf16.count)) {
             if let titleRange = Range(match.range(at: 1), in: self),
                let urlRange = Range(match.range(at: 2), in: self),
                let url = URL(string: String(self[urlRange])) {
-                let result = (String(self[titleRange]), url)
-                print("DEBUG: Found markdown link - title: \(result.0), url: \(result.1)")
-                return result
+                return (String(self[titleRange]), url)
             }
         }
-        print("DEBUG: No markdown link found")
         return nil
     }
 }
