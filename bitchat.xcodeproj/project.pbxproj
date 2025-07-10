@@ -34,6 +34,7 @@
 		846E2B446E36639159704730 /* BloomFilterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EB3A8FE16333ED12FCB8ACB /* BloomFilterTests.swift */; };
 		8DCEEA289EF7C49E7CD38B08 /* DeliveryTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12B9C3EDF3BC73D3BC106DA4 /* DeliveryTracker.swift */; };
 		8F0BFC2D2B2A5E7B70C3B485 /* BinaryProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53D535D9CE0B875F47402290 /* BinaryProtocolTests.swift */; };
+		8F6362CAC327566CABCDAAD1 /* Info-iOS.plist in Resources */ = {isa = PBXBuildFile; fileRef = C7342B1B956D109075DBFCBF /* Info-iOS.plist */; };
 		8F737CE0435792CC2AD65FCB /* KeychainManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 136696FC4436A02D98CE6A77 /* KeychainManager.swift */; };
 		923027D6F2F417AFA2488127 /* BitchatProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 229F17B68CFF7AB1BC91C847 /* BitchatProtocol.swift */; };
 		9269B4230187A9EA969BEDB7 /* PasswordProtectedChannelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 036A1A705AAF9EC21F4354BE /* PasswordProtectedChannelTests.swift */; };
@@ -44,6 +45,7 @@
 		ADC66F95FBD513B10411ADB3 /* MessagePaddingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DE9CDF66D4E52D268851048 /* MessagePaddingTests.swift */; };
 		B0CA7796B2B2AC2B33F84548 /* CompressionUtil.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32F149C43D1915831B60FE09 /* CompressionUtil.swift */; };
 		BCCFEDC1EBE59323C3C470BF /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3A69677D382F1C3D5ED03F7D /* Assets.xcassets */; };
+		C0A336753C9BCC65D5B215FA /* Info-macOS.plist in Resources */ = {isa = PBXBuildFile; fileRef = 90295F26D5B7F278983F2824 /* Info-macOS.plist */; };
 		C0A80BA73EC1A372B9338E3C /* BatteryOptimizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED176FF3B274E35C2D827894 /* BatteryOptimizer.swift */; };
 		C91FDE97070433E6CFE95C55 /* BloomFilterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EB3A8FE16333ED12FCB8ACB /* BloomFilterTests.swift */; };
 		C99763A4761567F587D21688 /* MessageRetryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA4D7595A613F7ED3B386132 /* MessageRetryService.swift */; };
@@ -118,6 +120,7 @@
 		763E0DBA9492A654FC0CDCB9 /* AppInfoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppInfoView.swift; sourceTree = "<group>"; };
 		8DE9CDF66D4E52D268851048 /* MessagePaddingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessagePaddingTests.swift; sourceTree = "<group>"; };
 		8F3A7C058C2C8E1A06C8CF8B /* bitchat_macOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = bitchat_macOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		90295F26D5B7F278983F2824 /* Info-macOS.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Info-macOS.plist"; sourceTree = "<group>"; };
 		95F16C3A4A5621C74461D8D3 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		96D0D41CA19EE5A772AA8434 /* bitchat_iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = bitchat_iOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9AC141774F6671FCDC347DC7 /* LinkPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkPreviewView.swift; sourceTree = "<group>"; };
@@ -126,11 +129,11 @@
 		AA4D7595A613F7ED3B386132 /* MessageRetryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageRetryService.swift; sourceTree = "<group>"; };
 		C0DB1DE27F0AAB5092663E8E /* bitchatTests_iOS.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = bitchatTests_iOS.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C1B378C16594575FCC7F9C75 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
+		C7342B1B956D109075DBFCBF /* Info-iOS.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Info-iOS.plist"; sourceTree = "<group>"; };
 		CB043CA5EEB9AC8B07D61E97 /* OptimizedBloomFilter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OptimizedBloomFilter.swift; sourceTree = "<group>"; };
 		D5C3D880FF8AE1673B20E1E3 /* BluetoothMeshService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothMeshService.swift; sourceTree = "<group>"; };
 		D69A18D27F9A565FD6041E12 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		E6B8F7B7D55092C2540A7996 /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModel.swift; sourceTree = "<group>"; };
-		EA706D8E5097785414646A8E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		ED176FF3B274E35C2D827894 /* BatteryOptimizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatteryOptimizer.swift; sourceTree = "<group>"; };
 		EF625BB3AD919322C01A46B2 /* BitchatApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitchatApp.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -152,7 +155,8 @@
 				3A69677D382F1C3D5ED03F7D /* Assets.xcassets */,
 				527EB217EFDFAD4CF1C91F07 /* bitchat.entitlements */,
 				EF625BB3AD919322C01A46B2 /* BitchatApp.swift */,
-				EA706D8E5097785414646A8E /* Info.plist */,
+				C7342B1B956D109075DBFCBF /* Info-iOS.plist */,
+				90295F26D5B7F278983F2824 /* Info-macOS.plist */,
 				95F16C3A4A5621C74461D8D3 /* LaunchScreen.storyboard */,
 				ADD53BCDA233C02E53458926 /* Protocols */,
 				D98A3186D7E4C72E35BDF7FE /* Services */,
@@ -403,6 +407,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				7DD72D928FF9DD3CA81B46B0 /* Assets.xcassets in Resources */,
+				8F6362CAC327566CABCDAAD1 /* Info-iOS.plist in Resources */,
 				46E1E1013CC18AB66105DB27 /* LaunchScreen.storyboard in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -412,6 +417,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				BCCFEDC1EBE59323C3C470BF /* Assets.xcassets in Resources */,
+				C0A336753C9BCC65D5B215FA /* Info-macOS.plist in Resources */,
 				E65BBB6544FE0159F3C6C3A8 /* LaunchScreen.storyboard in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -624,7 +630,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = L3N5LHJD5Y;
 				ENABLE_PREVIEWS = YES;
-				INFOPLIST_FILE = bitchat/Info.plist;
+				INFOPLIST_FILE = "bitchat/Info-iOS.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -674,7 +680,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = L3N5LHJD5Y;
 				ENABLE_PREVIEWS = YES;
-				INFOPLIST_FILE = bitchat/Info.plist;
+				INFOPLIST_FILE = "bitchat/Info-iOS.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -701,7 +707,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				DEVELOPMENT_TEAM = L3N5LHJD5Y;
 				ENABLE_PREVIEWS = YES;
-				INFOPLIST_FILE = bitchat/Info.plist;
+				INFOPLIST_FILE = "bitchat/Info-macOS.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -784,7 +790,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				DEVELOPMENT_TEAM = L3N5LHJD5Y;
 				ENABLE_PREVIEWS = YES;
-				INFOPLIST_FILE = bitchat/Info.plist;
+				INFOPLIST_FILE = "bitchat/Info-macOS.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
