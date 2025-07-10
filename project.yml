@@ -96,6 +96,7 @@ targets:
         LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
     settings:
       MACOSX_DEPLOYMENT_TARGET: 13.0
+      CODE_SIGN_ENTITLEMENTS: bitchat/bitchat-macOS.entitlements
         
   bitchatShareExtension:
     templates:
