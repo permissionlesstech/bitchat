@@ -11,6 +11,33 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v4
+    - name: Cache build dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/xcodegen
+          ~/Library/Caches/org.swift.swiftpm
+          ~/Library/Developer/Xcode/DerivedData
+        key: ${{ runner.os }}-build-${{ hashFiles('project.yml', 'Package.swift') }}
+        restore-keys: |
+          ${{ runner.os }}-build-
+    - name: Check cache status
+      run: |
+        echo "🔍 Cache status check..."
+        echo "Cache key: ${{ runner.os }}-build-${{ hashFiles('project.yml', 'Package.swift') }}"
+        
+        if [ -d "~/Library/Developer/Xcode/DerivedData" ]; then
+          echo "✅ DerivedData directory exists"
+          ls -la ~/Library/Developer/Xcode/DerivedData/ | head -5
+        else
+          echo "📁 DerivedData directory not found yet"
+        fi
+        
+        if [ -d "~/.cache/xcodegen" ]; then
+          echo "✅ XcodeGen cache exists"
+        else
+          echo "📁 XcodeGen cache not found yet"
+        fi
     - name: Set up Xcode
       uses: maxim-lobanov/setup-xcode@v1
       with:
