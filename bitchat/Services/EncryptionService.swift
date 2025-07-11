@@ -90,10 +90,14 @@ class EncryptionService {
             // Generate shared secret for encryption
             if let publicKey = peerPublicKeys[peerID] {
                 let sharedSecret = try privateKey.sharedSecretFromKeyAgreement(with: publicKey)
+                var context = Data()
+                let parties = [publicKey.rawRepresentation, peerKeyAgreementPublicKey.rawRepresentation].sorted { $0.lexicographicallyPrecedes($1) }
+    context.append(parties[0])
+    context.append(parties[1])
                 let symmetricKey = sharedSecret.hkdfDerivedSymmetricKey(
                     using: SHA256.self,
                     salt: "bitchat-v1".data(using: .utf8)!,
-                    sharedInfo: Data(),
+                    sharedInfo: context,
                     outputByteCount: 32
                 )
                 sharedSecrets[peerID] = symmetricKey
