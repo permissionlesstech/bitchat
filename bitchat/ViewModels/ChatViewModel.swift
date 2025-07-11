@@ -21,8 +21,8 @@ class ChatViewModel: ObservableObject {
     @Published var nickname: String = "" {
         didSet {
             nicknameSaveTimer?.invalidate()
-            nicknameSaveTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
-                self.saveNickname()
+            nicknameSaveTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { [weak self] _ in
+                self?.saveNickname()
             }
         }
     }
@@ -234,7 +234,11 @@ class ChatViewModel: ObservableObject {
         channelPasswords = savedPasswords
         // Derive keys for all saved passwords
         for (channel, password) in savedPasswords {
-            channelKeys[channel] = deriveChannelKey(from: password, channelName: channel)
+            if let key = deriveChannelKey(from: password, channelName: channel) {
+                channelKeys[channel] = key
+            } else {
+                print("Failed to derive key for channel: \(channel)")
+            }
         }
     }
     
@@ -263,7 +267,10 @@ class ChatViewModel: ObservableObject {
                     // User provided password for already-joined channel - verify it
                     
                     // Derive key and try to verify
-                    let key = deriveChannelKey(from: password, channelName: channelTag)
+                    guard let key = deriveChannelKey(from: password, channelName: channelTag) else {
+                        print("Failed to derive key for channel verification")
+                        return false
+                    }
                     
                     // First, check if we have a key commitment to verify against
                     if let expectedCommitment = channelKeyCommitments[channelTag] {
@@ -707,16 +714,22 @@ class ChatViewModel: ObservableObject {
         return hash.compactMap { String(format: "%02x", $0) }.joined()
     }
     
-    private func deriveChannelKey(from password: String, channelName: String) -> SymmetricKey {
+    private func deriveChannelKey(from password: String, channelName: String) -> SymmetricKey? {
         // Use PBKDF2 to derive a key from the password
-        let salt = channelName.data(using: .utf8)!  // Use channel name as salt for consistency
+        guard let salt = channelName.data(using: .utf8) else {
+            print("Failed to convert channel name to data")
+            return nil
+        }
         let keyData = pbkdf2(password: password, salt: salt, iterations: 100000, keyLength: 32)
         return SymmetricKey(data: keyData)
     }
     
     private func pbkdf2(password: String, salt: Data, iterations: Int, keyLength: Int) -> Data {
         var derivedKey = Data(count: keyLength)
-        let passwordData = password.data(using: .utf8)!
+        guard let passwordData = password.data(using: .utf8) else {
+            print("Failed to convert password to data")
+            return derivedKey
+        }
         
         _ = derivedKey.withUnsafeMutableBytes { derivedKeyBytes in
             salt.withUnsafeBytes { saltBytes in
@@ -906,9 +919,9 @@ class ChatViewModel: ObservableObject {
             }
             
             // Check if channel is password protected and encrypt if needed
-            if let channel = messageChannel, channelKeys[channel] != nil {
+            if let channel = messageChannel, let channelKey = channelKeys[channel] {
                 // Send encrypted channel message
-                meshService.sendEncryptedChannelMessage(content, mentions: mentions, channel: channel, channelKey: channelKeys[channel]!)
+                meshService.sendEncryptedChannelMessage(content, mentions: mentions, channel: channel, channelKey: channelKey)
             } else {
                 // Send via mesh with mentions and channel (unencrypted)
                 meshService.sendMessage(content, mentions: mentions, channel: messageChannel)
