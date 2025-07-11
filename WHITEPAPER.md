@@ -205,7 +205,7 @@ graph LR
     B -->|TTL=2| C[Device C<br/>Relay 2<br/>TTL=1]
     C -->|TTL=1| D[Device D<br/>Final<br/>TTL=0]
     B -->|TTL=2| E[Device E<br/>TTL=1]
-    C -->|TTL=1| F[Device F<br/>TTL=1]
+    C -->|TTL=1| F[Device F<br/>TTL=0]
     
     style A fill:#4caf50,color:#fff
     style D fill:#2196f3,color:#fff
