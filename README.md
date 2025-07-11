@@ -1,8 +1,24 @@
 ![ChatGPT Image Jul 5, 2025 at 06_07_31 PM](https://github.com/user-attachments/assets/2660f828-49c7-444d-beca-d8b01854667a)
 # bitchat
 
-> [!WARNING]
-> Private message and channel features have not received external security review and may contain vulnerabilities. Do not use for sensitive use cases, and do not rely on its security until it has been reviewed. Work in progress. Public local chat (the main feature) has no security concerns. 
+# 🛡️ Security Notice: Private Messaging and Channels
+
+> ⚠️ **WARNING**  
+> The **Private Message** and **Private Channel** features in `bitchat` are **experimental**.  
+> These features **have not undergone any external security audits** and **may contain vulnerabilities**.
+> 
+> 🔒 **DO NOT** use them for sensitive data or secure communication **until formal security reviews are complete**.
+
+---
+
+✅ **Public Local Chat is Secure**  
+The main feature — **public local chat** — is fully functional and has **no known security issues**.
+
+🛠️ **Status**: Work in progress  
+🧪 **Recommendation**: Use private features with caution during testing phase only.
+
+> 📝 _We're committed to improving security. Stay tuned for updates and audit reports._
+
 
 A decentralized peer-to-peer messaging app that works over Bluetooth mesh networks. No internet required, no servers, no phone numbers. It's the side-groupchat. 
 
