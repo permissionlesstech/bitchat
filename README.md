@@ -153,10 +153,7 @@ For detailed protocol documentation, see the [Technical Whitepaper](WHITEPAPER.m
 
 ## Android Compatibility
 
-The protocol is designed to be platform-agnostic. An Android client can be built using:
-- Bluetooth LE APIs
-- Same packet structure and encryption
-- Compatible service/characteristic UUIDs
+The protocol is designed to be platform-agnostic. An Android app was already built and can be found [here](https://github.com/permissionlesstech/bitchat-android).
 
 ## MacOS
 
