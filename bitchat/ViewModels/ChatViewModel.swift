@@ -16,6 +16,7 @@ import UIKit
 #endif
 
 class ChatViewModel: ObservableObject {
+    private let encryptionKey = SymmetricKey(size: .bits256)
     @Published var messages: [BitchatMessage] = []
     @Published var connectedPeers: [String] = []
     @Published var nickname: String = "" {
@@ -210,8 +211,9 @@ class ChatViewModel: ObservableObject {
     
     private func loadChannelData() {
         // Load password protected channels
-        if let savedProtectedChannels = userDefaults.stringArray(forKey: passwordProtectedChannelsKey) {
-            passwordProtectedChannels = Set(savedProtectedChannels)
+        if let encryptedChannels = userDefaults.data(forKey: passwordProtectedChannelsKey),
+           let decryptedChannels = decryptData(encryptedChannels) as? [String] {
+            passwordProtectedChannels = Set(decryptedChannels)
         }
         
         // Load channel creators
@@ -239,7 +241,9 @@ class ChatViewModel: ObservableObject {
     }
     
     private func saveChannelData() {
-        userDefaults.set(Array(passwordProtectedChannels), forKey: passwordProtectedChannelsKey)
+        if let encryptedChannels = encryptData(Array(passwordProtectedChannels)) {
+            userDefaults.set(encryptedChannels, forKey: passwordProtectedChannelsKey)
+        }
         userDefaults.set(channelCreators, forKey: channelCreatorsKey)
         // Save passwords to Keychain instead of UserDefaults
         for (channel, password) in channelPasswords {
@@ -1703,6 +1707,19 @@ class ChatViewModel: ObservableObject {
         return result
     }
 }
+
+private func encryptData(_ data: [String]) -> Data? {
+    do {
+        let jsonData = try JSONEncoder().encode(data)
+        let sealedBox = try AES.GCM.seal(jsonData, using: encryptionKey)
+        return sealedBox.combined
+    } catch {
+        print("Encryption failed: \(error)")
+        return nil
+    }
+}
+
+private func decryptData(_ encryptedData: Data) ->
 
 extension ChatViewModel: BitchatDelegate {
     func didReceiveChannelLeave(_ channel: String, from peerID: String) {
