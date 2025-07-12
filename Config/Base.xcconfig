@@ -1,0 +1,11 @@
+// Base configuration settings for bitchat
+// These are the default values used by all targets and configurations
+
+// Default development team (both iOS and macOS)
+DEVELOPMENT_TEAM = L3N5LHJD5Y
+
+// Default bundle identifiers
+PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat
+PRODUCT_BUNDLE_IDENTIFIER_TESTS = chat.bitchat.tests
+PRODUCT_BUNDLE_IDENTIFIER_SHARE_EXTENSION = chat.bitchat.ShareExtension
+APP_GROUP = group.chat.bitchat

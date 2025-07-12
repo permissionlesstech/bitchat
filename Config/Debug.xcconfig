@@ -1,0 +1,17 @@
+// Debug configuration settings
+// Includes base settings and allows for local overrides
+
+#include "Base.xcconfig"
+
+// Debug-specific settings can be added here
+
+// To override any settings locally:
+// 1. Create "Debug-Local.xcconfig" in this Config directory
+// 2. Add your custom settings, for example:
+//    DEVELOPMENT_TEAM = YOUR_TEAM_ID
+//    PRODUCT_BUNDLE_IDENTIFIER = com.yourname.bitchat
+//
+// Any '*Local.xcconfig' file is ignored by git
+
+// Include local overrides if they exist
+#include? "Debug-Local.xcconfig"
