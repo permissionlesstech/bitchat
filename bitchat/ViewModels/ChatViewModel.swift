@@ -2455,16 +2455,25 @@ extension ChatViewModel: BitchatDelegate {
                 )
                 messages.append(systemMessage)
             }
-            
+
         default:
-            // Unknown command
+            //Unknown command
+            let commandStr = String(cmd)
+            let commandMatcher = CommandMatcher(commands: CommandMatcher.defaultCommands)
+
+            var content = "unknown command: \(commandStr)"
+            if let suggestion = commandMatcher.findClosestCommand(to: commandStr) {
+                content += " Did you mean: \(suggestion)?"
+            }
+
             let systemMessage = BitchatMessage(
                 sender: "system",
-                content: "unknown command: \(cmd).",
+                content: content,
                 timestamp: Date(),
                 isRelay: false
             )
             messages.append(systemMessage)
+
         }
     }
     
