@@ -10,6 +10,7 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var viewModel: ChatViewModel
+    @StateObject private var satMeshViewModel = SatMeshViewModel()
     @State private var messageText = ""
     @State private var textFieldSelection: NSRange? = nil
     @FocusState private var isTextFieldFocused: Bool
@@ -164,6 +165,18 @@ struct ContentView: View {
             Button("OK", role: .cancel) { }
         } message: {
             Text("The password you entered is incorrect. Please try again.")
+        }
+        .sheet(isPresented: $satMeshViewModel.showEmergencyPanel) {
+            EmergencyPanelView(satMeshViewModel: satMeshViewModel)
+        }
+        .sheet(isPresented: $satMeshViewModel.showSatellitePanel) {
+            SatelliteStatusView(satMeshViewModel: satMeshViewModel)
+        }
+        .sheet(isPresented: $satMeshViewModel.showGlobalChat) {
+            GlobalChatView(satMeshViewModel: satMeshViewModel)
+        }
+        .sheet(isPresented: $satMeshViewModel.showConfiguration) {
+            SatMeshConfigurationView(satMeshViewModel: satMeshViewModel)
         }
     }
     
@@ -393,8 +406,12 @@ struct ContentView: View {
                                 .font(.system(size: 12, design: .monospaced))
                                 .accessibilityHidden(true)
                         }
-                    }
-                    .foregroundColor(viewModel.isConnected ? textColor : Color.red)
+                                    }
+                .foregroundColor(viewModel.isConnected ? textColor : Color.red)
+                
+                // SatMesh button
+                SatMeshButton(satMeshViewModel: satMeshViewModel)
+                    .font(.system(size: 16))
                 }
                 .onTapGesture {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
