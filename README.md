@@ -1,7 +1,10 @@
 ![ChatGPT Image Jul 5, 2025 at 06_07_31 PM](https://github.com/user-attachments/assets/2660f828-49c7-444d-beca-d8b01854667a)
 # bitchat
 
-A secure, decentralized, peer-to-peer messaging app that works over Bluetooth mesh networks. No internet required, no servers, no phone numbers - just pure encrypted communication.
+> [!WARNING]
+> Private message and channel features have not received external security review and may contain vulnerabilities. Do not use for sensitive use cases, and do not rely on its security until it has been reviewed. Work in progress. Public local chat (the main feature) has no security concerns. 
+
+A decentralized peer-to-peer messaging app that works over Bluetooth mesh networks. No internet required, no servers, no phone numbers. It's the side-groupchat. 
 
 ## License
 
@@ -10,7 +13,7 @@ This project is released into the public domain. See the [LICENSE](LICENSE) file
 ## Features
 
 - **Decentralized Mesh Network**: Automatic peer discovery and multi-hop message relay over Bluetooth LE
-- **End-to-End Encryption**: X25519 key exchange + AES-256-GCM for private messages
+- **End-to-End Encryption**: X25519 key exchange + AES-256-GCM for private messages and channels
 - **Channel-Based Chats**: Topic-based group messaging with optional password protection
 - **Store & Forward**: Messages cached for offline peers and delivered when they reconnect
 - **Privacy First**: No accounts, no phone numbers, no persistent identifiers
@@ -154,3 +157,8 @@ The protocol is designed to be platform-agnostic. An Android client can be built
 - Bluetooth LE APIs
 - Same packet structure and encryption
 - Compatible service/characteristic UUIDs
+
+## MacOS
+
+Want to try this on macos: `just run` will set it up and run from source. 
+Run `just clean` afterwards to restore things to original state for mobile app building and development.
