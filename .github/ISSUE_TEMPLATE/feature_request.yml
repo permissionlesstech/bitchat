@@ -1,0 +1,36 @@
+name: Feature request
+description: Request a new feature or enhancement
+labels: [enhancement]
+
+body:
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I have used the search function for [**OPEN**](https://github.com/permissionlesstech/bitchat/issues) issues to see if someone else has already submitted the same feature request.
+          required: true
+        - label: I have **also** used the search function for [**CLOSED**](https://github.com/permissionlesstech/bitchat/issues?q=is%3Aissue+is%3Aclosed) issues to see if the feature was already implemented and is just waiting to be released, or if the feature was rejected.
+          required: true
+        - label: I will describe the problem with as much detail as possible.
+          required: true
+        - label: This request contains only one single feature, **not** a list of multiple (related) features.
+          required: true
+
+  - type: textarea
+    id: feature
+    attributes:
+      label: Feature or improvement you want
+      description: Try to be as specific as possible. Please not only explain what the feature does, but also how.
+
+  - type: textarea
+    id: reason
+    attributes:
+      label: Why should this be added?
+      description: What problem does the feature solve? In what use-cases is the feature needed?
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots / Drawings / Technical details
+      description: If your request is about (or includes) changing or extending the UI, describe what the UI would look like and how the user would interact with it.

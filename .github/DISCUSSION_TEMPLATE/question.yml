@@ -1,0 +1,30 @@
+body:
+  - type: markdown
+    attributes:
+      value:
+        "Thanks for taking the time to fill out this form! :hugs:"
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: "Checklist"
+      options:
+        - label: "I made sure that there are *no existing issues or discussions* - [open](https://github.com/permissionlesstech/bitchat/issues) or [closed](https://github.com/permissionlesstech/bitchat-android/issues?q=is%3Aissue+is%3Aclosed) - which I could contribute my information to."
+          required: true
+        - label: "I have taken the time to fill in all the required details. I understand that the question will be dismissed otherwise."
+          required: true
+        - label: "I have read and understood the [technical architecture](https://github.com/permissionlesstech/bitchat#technical-architecture)."
+          required: true
+
+  - type: textarea
+    id: what-is-the-question
+    attributes:
+      label: What is/are your question(s)?
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional-information
+    attributes:
+      label: Additional information
+      description: Any other information you'd like to include, for instance sketches, mockups, pictures of cats, etc.
