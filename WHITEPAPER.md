@@ -20,6 +20,14 @@
 
 ---
 
+## 📊 Architecture Diagram
+
+The following diagram shows how `bitchat` components interact to enable peer-to-peer messaging over Bluetooth:
+
+![bitchat architecture](./architecture.png)
+
+---
+
 ## 📦 Binary Protocol
 
 ### Format
