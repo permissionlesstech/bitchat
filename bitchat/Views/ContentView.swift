@@ -24,8 +24,6 @@ struct ContentView: View {
     @State private var showPasswordPrompt = false
     @State private var passwordPromptInput = ""
     @State private var showPasswordError = false
-    @State private var showCommandSuggestions = false
-    @State private var commandSuggestions: [String] = []
     @State private var showLeaveChannelAlert = false
     
     private var backgroundColor: Color {
@@ -528,19 +526,35 @@ struct ContentView: View {
     
     private var inputView: some View {
         VStack(spacing: 0) {
-            // @mentions autocomplete
+            // Unified autocomplete for both commands and usernames
             if viewModel.showAutocomplete && !viewModel.autocompleteSuggestions.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(viewModel.autocompleteSuggestions.enumerated()), id: \.element) { index, suggestion in
                         Button(action: {
-                            _ = viewModel.completeNickname(suggestion, in: &messageText)
+                            _ = viewModel.completeAutocomplete(suggestion, in: &messageText)
                         }) {
                             HStack {
-                                Text("@\(suggestion)")
-                                    .font(.system(size: 11, design: .monospaced))
-                                    .foregroundColor(textColor)
-                                    .fontWeight(.medium)
-                                Spacer()
+                                if suggestion.hasPrefix("/") {
+                                    // Command suggestion
+                                    Text(suggestion)
+                                        .font(.system(size: 11, design: .monospaced))
+                                        .foregroundColor(textColor)
+                                        .fontWeight(.medium)
+                                    
+                                    Spacer()
+                                    
+                                    // Show command description
+                                    Text(getCommandDescription(for: suggestion))
+                                        .font(.system(size: 10, design: .monospaced))
+                                        .foregroundColor(secondaryTextColor)
+                                } else {
+                                    // Username suggestion
+                                    Text("@\(suggestion)")
+                                        .font(.system(size: 11, design: .monospaced))
+                                        .foregroundColor(textColor)
+                                        .fontWeight(.medium)
+                                    Spacer()
+                                }
                             }
                             .padding(.horizontal, 12)
                             .padding(.vertical, 3)
@@ -548,81 +562,6 @@ struct ContentView: View {
                         }
                         .buttonStyle(.plain)
                         .background(Color.gray.opacity(0.1))
-                    }
-                }
-                .background(backgroundColor)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 4)
-                        .stroke(secondaryTextColor.opacity(0.3), lineWidth: 1)
-                )
-                .padding(.horizontal, 12)
-            }
-            
-            // Command suggestions
-            if showCommandSuggestions && !commandSuggestions.isEmpty {
-                VStack(alignment: .leading, spacing: 0) {
-                    // Define commands with aliases and syntax
-                    let commandInfo: [(commands: [String], syntax: String?, description: String)] = [
-                        (["/block"], "[nickname]", "block or list blocked peers"),
-                        (["/clear"], nil, "clear chat messages"),
-                        (["/hug"], "<nickname>", "send someone a warm hug"),
-                        (["/j", "/join"], "<channel>", "join or create a channel"),
-                        (["/m", "/msg"], "<nickname> [message]", "send private message"),
-                        (["/channels"], nil, "show all discovered channels"),
-                        (["/slap"], "<nickname>", "slap someone with a trout"),
-                        (["/unblock"], "<nickname>", "unblock a peer"),
-                        (["/w"], nil, "see who's online")
-                    ]
-                    
-                    let channelCommandInfo: [(commands: [String], syntax: String?, description: String)] = [
-                        (["/pass"], "[password]", "change channel password"),
-                        (["/save"], nil, "save channel messages locally"),
-                        (["/transfer"], "<nickname>", "transfer channel ownership")
-                    ]
-                    
-                    // Build the display
-                    let allCommands = viewModel.currentChannel != nil 
-                        ? commandInfo + channelCommandInfo 
-                        : commandInfo
-                    
-                    // Show matching commands
-                    ForEach(commandSuggestions, id: \.self) { command in
-                        // Find the command info for this suggestion
-                        if let info = allCommands.first(where: { $0.commands.contains(command) }) {
-                            Button(action: {
-                                // Replace current text with selected command
-                                messageText = command + " "
-                                showCommandSuggestions = false
-                                commandSuggestions = []
-                            }) {
-                                HStack {
-                                    // Show all aliases together
-                                    Text(info.commands.joined(separator: ", "))
-                                        .font(.system(size: 11, design: .monospaced))
-                                        .foregroundColor(textColor)
-                                        .fontWeight(.medium)
-                                    
-                                    // Show syntax if any
-                                    if let syntax = info.syntax {
-                                        Text(syntax)
-                                            .font(.system(size: 10, design: .monospaced))
-                                            .foregroundColor(secondaryTextColor.opacity(0.8))
-                                    }
-                                    
-                                    Spacer()
-                                    
-                                    // Show description
-                                    Text(info.description)
-                                        .font(.system(size: 10, design: .monospaced))
-                                        .foregroundColor(secondaryTextColor)
-                                }
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 3)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            .buttonStyle(.plain)
-                            .background(Color.gray.opacity(0.1))
-                        }
                     }
                 }
                 .background(backgroundColor)
@@ -667,58 +606,6 @@ struct ContentView: View {
                     // Get cursor position (approximate - end of text for now)
                     let cursorPosition = newValue.count
                     viewModel.updateAutocomplete(for: newValue, cursorPosition: cursorPosition)
-                    
-                    // Check for command autocomplete
-                    if newValue.hasPrefix("/") && newValue.count >= 1 {
-                        // Build context-aware command list
-                        var commandDescriptions = [
-                            ("/block", "block or list blocked peers"),
-                            ("/channels", "show all discovered channels"),
-                            ("/clear", "clear chat messages"),
-                            ("/hug", "send someone a warm hug"),
-                            ("/j", "join or create a channel"),
-                            ("/m", "send private message"),
-                            ("/slap", "slap someone with a trout"),
-                            ("/unblock", "unblock a peer"),
-                            ("/w", "see who's online")
-                        ]
-                        
-                        // Add channel-specific commands if in a channel
-                        if viewModel.currentChannel != nil {
-                            commandDescriptions.append(("/pass", "change channel password"))
-                            commandDescriptions.append(("/save", "save channel messages locally"))
-                            commandDescriptions.append(("/transfer", "transfer channel ownership"))
-                        }
-                        
-                        let input = newValue.lowercased()
-                        
-                        // Map of aliases to primary commands
-                        let aliases: [String: String] = [
-                            "/join": "/j",
-                            "/msg": "/m"
-                        ]
-                        
-                        // Filter commands, but convert aliases to primary
-                        commandSuggestions = commandDescriptions
-                            .filter { $0.0.starts(with: input) }
-                            .map { $0.0 }
-                        
-                        // Also check if input matches an alias
-                        for (alias, primary) in aliases {
-                            if alias.starts(with: input) && !commandSuggestions.contains(primary) {
-                                if commandDescriptions.contains(where: { $0.0 == primary }) {
-                                    commandSuggestions.append(primary)
-                                }
-                            }
-                        }
-                        
-                        // Remove duplicates and sort
-                        commandSuggestions = Array(Set(commandSuggestions)).sorted()
-                        showCommandSuggestions = !commandSuggestions.isEmpty
-                    } else {
-                        showCommandSuggestions = false
-                        commandSuggestions = []
-                    }
                 }
                 .onSubmit {
                     sendMessage()
@@ -742,6 +629,37 @@ struct ContentView: View {
         }
         .onAppear {
             isTextFieldFocused = true
+        }
+    }
+    
+    private func getCommandDescription(for command: String) -> String {
+        switch command {
+        case "/block":
+            return "block or list blocked peers"
+        case "/channels":
+            return "show all discovered channels"
+        case "/clear":
+            return "clear chat messages"
+        case "/hug":
+            return "send someone a warm hug"
+        case "/j", "/join":
+            return "join or create a channel"
+        case "/m", "/msg":
+            return "send private message"
+        case "/slap":
+            return "slap someone with a trout"
+        case "/unblock":
+            return "unblock a peer"
+        case "/w":
+            return "see who's online"
+        case "/pass":
+            return "change channel password"
+        case "/save":
+            return "save channel messages locally"
+        case "/transfer":
+            return "transfer channel ownership"
+        default:
+            return ""
         }
     }
     

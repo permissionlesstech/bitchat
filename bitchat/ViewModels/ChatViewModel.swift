@@ -1316,25 +1316,109 @@ class ChatViewModel: ObservableObject {
     }
     
     func updateAutocomplete(for text: String, cursorPosition: Int) {
-        // Find @ symbol before cursor
+        // Reset autocomplete state
+        showAutocomplete = false
+        autocompleteSuggestions = []
+        autocompleteRange = nil
+        selectedAutocompleteIndex = 0
+        
         let beforeCursor = String(text.prefix(cursorPosition))
         
-        // Look for @ pattern
+        // Check for username autocomplete after various commands
+        let userCommandPattern = "^/(m|msg|block|hug|slap|unblock)\\s+([a-zA-Z0-9_]*)$"
+        if let userCommandRegex = try? NSRegularExpression(pattern: userCommandPattern, options: []),
+           let userCommandMatch = userCommandRegex.firstMatch(in: beforeCursor, options: [], range: NSRange(location: 0, length: beforeCursor.count)) {
+            
+            let command = (beforeCursor as NSString).substring(with: userCommandMatch.range(at: 1))
+            
+            // Extract the partial username
+            let partialRange = userCommandMatch.range(at: 2)
+            guard let range = Range(partialRange, in: beforeCursor) else {
+                return
+            }
+            
+            let partial = String(beforeCursor[range]).lowercased()
+            
+            // Get nicknames based on command
+            let suggestions: [String]
+            if command == "unblock" {
+                // For /unblock, suggest only blocked users
+                let blockedNicknames = blockedUsers.compactMap { fingerprint in
+                    // Find nickname for this fingerprint
+                    peerIDToPublicKeyFingerprint.first(where: { $0.value == fingerprint })?.key
+                }.compactMap { peerID in
+                    meshService.getPeerNicknames()[peerID]
+                }
+                suggestions = blockedNicknames.filter { $0.lowercased().hasPrefix(partial) }.sorted()
+            } else {
+                // For other commands, suggest all non-blocked users
+                let peerNicknames = meshService.getPeerNicknames()
+                let allNicknames = Array(peerNicknames.values).filter { $0 != nickname }
+                suggestions = allNicknames.filter { nick in
+                    guard let peerID = getPeerIDForNickname(nick), let fingerprint = peerIDToPublicKeyFingerprint[peerID] else {
+                        return true // Default to not blocked if info is missing
+                    }
+                    return !blockedUsers.contains(fingerprint) && nick.lowercased().hasPrefix(partial)
+                }.sorted()
+            }
+            
+            if !suggestions.isEmpty {
+                autocompleteSuggestions = suggestions
+                showAutocomplete = true
+                autocompleteRange = partialRange // Store the username part range
+                selectedAutocompleteIndex = 0
+            }
+            return
+        }
+        
+        // Check for command autocomplete (starts with /)
+        if text.hasPrefix("/") {
+            let input = text.lowercased()
+            
+            // Build command list
+            var commands = [
+                "/block",
+                "/channels", 
+                "/clear",
+                "/hug",
+                "/j",
+                "/join",
+                "/m",
+                "/msg",
+                "/slap",
+                "/unblock",
+                "/w"
+            ]
+            
+            // Add channel-specific commands if in a channel
+            if currentChannel != nil {
+                commands.append(contentsOf: ["/pass", "/save", "/transfer"])
+            }
+            
+            // Filter commands that match the input
+            let matchingCommands = commands.filter { command in
+                command.lowercased().hasPrefix(input)
+            }.sorted()
+            
+            if !matchingCommands.isEmpty {
+                autocompleteSuggestions = matchingCommands
+                showAutocomplete = true
+                autocompleteRange = NSRange(location: 0, length: text.count)
+                selectedAutocompleteIndex = 0
+            }
+            return
+        }
+        
+        // Check for username autocomplete (@ symbol)
         let pattern = "@([a-zA-Z0-9_]*)$"
         guard let regex = try? NSRegularExpression(pattern: pattern, options: []),
               let match = regex.firstMatch(in: beforeCursor, options: [], range: NSRange(location: 0, length: beforeCursor.count)) else {
-            showAutocomplete = false
-            autocompleteSuggestions = []
-            autocompleteRange = nil
             return
         }
         
         // Extract the partial nickname
         let partialRange = match.range(at: 1)
         guard let range = Range(partialRange, in: beforeCursor) else {
-            showAutocomplete = false
-            autocompleteSuggestions = []
-            autocompleteRange = nil
             return
         }
         
@@ -1342,7 +1426,7 @@ class ChatViewModel: ObservableObject {
         
         // Get all available nicknames (excluding self)
         let peerNicknames = meshService.getPeerNicknames()
-        let allNicknames = Array(peerNicknames.values)
+        let allNicknames = Array(peerNicknames.values).filter { $0 != nickname }
         
         // Filter suggestions
         let suggestions = allNicknames.filter { nick in
@@ -1354,20 +1438,37 @@ class ChatViewModel: ObservableObject {
             showAutocomplete = true
             autocompleteRange = match.range(at: 0) // Store full @mention range
             selectedAutocompleteIndex = 0
-        } else {
-            showAutocomplete = false
-            autocompleteSuggestions = []
-            autocompleteRange = nil
-            selectedAutocompleteIndex = 0
         }
     }
     
-    func completeNickname(_ nickname: String, in text: inout String) -> Int {
+    func completeAutocomplete(_ suggestion: String, in text: inout String) -> Int {
         guard let range = autocompleteRange else { return text.count }
         
-        // Replace the @partial with @nickname
         let nsText = text as NSString
-        let newText = nsText.replacingCharacters(in: range, with: "@\(nickname) ")
+        let newText: String
+        let newCursorPosition: Int
+        
+        if suggestion.hasPrefix("/") {
+            // Command completion
+            newText = nsText.replacingCharacters(in: range, with: "\(suggestion) ")
+            newCursorPosition = range.location + suggestion.count + 1
+        } else {
+            // Username completion - check if we're completing after a user command
+            let beforeRange = nsText.substring(to: range.location)
+            let userCommandPattern = "^/(m|msg|block|hug|slap|unblock)\\s+$"
+            
+            if let userCommandRegex = try? NSRegularExpression(pattern: userCommandPattern, options: []),
+               userCommandRegex.firstMatch(in: beforeRange, options: [], range: NSRange(location: 0, length: beforeRange.count)) != nil {
+                // Completing username after a user command - no @ prefix needed
+                newText = nsText.replacingCharacters(in: range, with: "\(suggestion) ")
+                newCursorPosition = range.location + suggestion.count + 1
+            } else {
+                // Regular @ mention completion
+                newText = nsText.replacingCharacters(in: range, with: "@\(suggestion) ")
+                newCursorPosition = range.location + suggestion.count + 2
+            }
+        }
+        
         text = newText
         
         // Hide autocomplete
@@ -1376,8 +1477,12 @@ class ChatViewModel: ObservableObject {
         autocompleteRange = nil
         selectedAutocompleteIndex = 0
         
-        // Return new cursor position (after the space)
-        return range.location + nickname.count + 2
+        return newCursorPosition
+    }
+    
+    // Keep the old function for backward compatibility
+    func completeNickname(_ nickname: String, in text: inout String) -> Int {
+        return completeAutocomplete(nickname, in: &text)
     }
     
     func getSenderColor(for message: BitchatMessage, colorScheme: ColorScheme) -> Color {
