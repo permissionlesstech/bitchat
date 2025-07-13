@@ -719,6 +719,50 @@ sequenceDiagram
 
 </div>
 
+## Message Lifecycle (Architectural Flow)
+
+While the "Complete Message Flow" section illustrates the message journey as a timeline of interactions between system components, the following diagram provides a complementary **architectural view**. It visualizes the **internal transformations** a message undergoes—from user input, through encryption, optional compression and fragmentation, to transmission and final delivery.
+
+<div align="center">
+
+```mermaid
+graph TD
+    UI[User Input] --> ENC[Encryption Service]
+    ENC --> COMP{"Message > 100B?"}
+    COMP -->|Yes| LZ[LZ4 Compress]
+    COMP -->|No| SKIP[Skip Compression]
+    LZ --> FRAG{"Message > 500B?"}
+    SKIP --> FRAG
+    FRAG -->|Yes| SPLIT[Fragment Handler]
+    FRAG -->|No| PASS[Send as-is]
+    SPLIT --> ROUTE[Routing & Relay Logic]
+    PASS --> ROUTE
+    ROUTE --> BLE[BLE Mesh Transmission]
+
+    BLE --> RFRAG{"Was Fragmented?"}
+    RFRAG -->|Yes| REASSM[Reassembly Buffer]
+    RFRAG -->|No| RENC[Decrypt Payload]
+    REASSM --> RENC
+    RENC --> DISPLAY[Render in UI]
+
+    style UI fill:#e3f2fd
+    style ENC fill:#c8e6c9
+    style COMP fill:#ffe0b2
+    style LZ fill:#b2dfdb
+    style SKIP fill:#f8bbd0
+    style FRAG fill:#ffe0b2
+    style SPLIT fill:#d1c4e9
+    style PASS fill:#f0f4c3
+    style ROUTE fill:#c5e1a5
+    style BLE fill:#ce93d8
+    style RFRAG fill:#ffe0b2
+    style REASSM fill:#bbdefb
+    style RENC fill:#c8e6c9
+    style DISPLAY fill:#e3f2fd
+```
+
+</div>
+
 ## Future Performance Enhancements
 
 ### WiFi Direct Transport
