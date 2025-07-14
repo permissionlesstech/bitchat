@@ -372,7 +372,7 @@ class EncryptionService {
             // Prepend the message number to the sealed box data
             var combinedData = Data()
             combinedData.append(messageNumberData)
-            combinedData.append(sealedBox.combined)
+            combinedData.append(sealedBox.combined!)
             
             return combinedData
         }
