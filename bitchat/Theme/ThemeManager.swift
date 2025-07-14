@@ -11,12 +11,15 @@ import Combine
 
 class ThemeManager: ObservableObject {
     @Published var selectedTheme: BitchatTheme = .systemAuto
+    @Published var customThemes: [BitchatTheme] = []
     
     private let userDefaults = UserDefaults.standard
     private let themeKey = "bitchat.selectedTheme"
+    private let customThemesKey = "bitchat.customThemes"
     
     init() {
         loadSelectedTheme()
+        loadCustomThemes()
     }
     
     private func loadSelectedTheme() {
@@ -29,6 +32,13 @@ class ThemeManager: ObservableObject {
         }
     }
     
+    private func loadCustomThemes() {
+        if let themesData = userDefaults.data(forKey: customThemesKey),
+           let themes = try? JSONDecoder().decode([BitchatTheme].self, from: themesData) {
+            customThemes = themes
+        }
+    }
+    
     func selectTheme(_ theme: BitchatTheme) {
         selectedTheme = theme
         saveSelectedTheme()
@@ -37,6 +47,13 @@ class ThemeManager: ObservableObject {
     private func saveSelectedTheme() {
         if let themeData = try? JSONEncoder().encode(selectedTheme) {
             userDefaults.set(themeData, forKey: themeKey)
+            userDefaults.synchronize()
+        }
+    }
+    
+    private func saveCustomThemes() {
+        if let themesData = try? JSONEncoder().encode(customThemes) {
+            userDefaults.set(themesData, forKey: customThemesKey)
             userDefaults.synchronize()
         }
     }
@@ -172,6 +189,101 @@ class ThemeManager: ObservableObject {
     }
     
     func getAllThemes() -> [BitchatTheme] {
-        return BitchatTheme.allThemes
+        return BitchatTheme.allThemes + customThemes
+    }
+    
+    // MARK: - Custom Theme Management
+    
+    func addCustomTheme(_ theme: BitchatTheme) {
+        // Remove existing theme with same ID if it exists
+        customThemes.removeAll { $0.id == theme.id }
+        
+        // Add the new theme
+        customThemes.append(theme)
+        saveCustomThemes()
+        
+        // If this is the selected theme, update it
+        if selectedTheme.id == theme.id {
+            selectedTheme = theme
+            saveSelectedTheme()
+        }
+    }
+    
+    func removeCustomTheme(_ theme: BitchatTheme) {
+        customThemes.removeAll { $0.id == theme.id }
+        saveCustomThemes()
+        
+        // If this was the selected theme, switch to system auto
+        if selectedTheme.id == theme.id {
+            selectedTheme = .systemAuto
+            saveSelectedTheme()
+        }
+    }
+    
+    func updateCustomTheme(_ theme: BitchatTheme) {
+        if let index = customThemes.firstIndex(where: { $0.id == theme.id }) {
+            customThemes[index] = theme
+            saveCustomThemes()
+            
+            // If this is the selected theme, update it
+            if selectedTheme.id == theme.id {
+                selectedTheme = theme
+                saveSelectedTheme()
+            }
+        }
+    }
+    
+    // MARK: - JSON Export/Import
+    
+    func exportThemeAsJSON(_ theme: BitchatTheme) -> String? {
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .prettyPrinted
+            let data = try encoder.encode(theme)
+            return String(data: data, encoding: .utf8)
+        } catch {
+            return nil
+        }
+    }
+    
+    func importThemeFromJSON(_ jsonString: String) -> BitchatTheme? {
+        guard let data = jsonString.data(using: .utf8) else { return nil }
+        
+        do {
+            let theme = try JSONDecoder().decode(BitchatTheme.self, from: data)
+            // Generate new ID to avoid conflicts
+            var newTheme = theme
+            newTheme.id = "custom_\(UUID().uuidString)"
+            return newTheme
+        } catch {
+            return nil
+        }
+    }
+    
+    func exportAllCustomThemesAsJSON() -> String? {
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .prettyPrinted
+            let data = try encoder.encode(customThemes)
+            return String(data: data, encoding: .utf8)
+        } catch {
+            return nil
+        }
+    }
+    
+    func importThemesFromJSON(_ jsonString: String) -> [BitchatTheme]? {
+        guard let data = jsonString.data(using: .utf8) else { return nil }
+        
+        do {
+            let themes = try JSONDecoder().decode([BitchatTheme].self, from: data)
+            // Generate new IDs to avoid conflicts
+            return themes.map { theme in
+                var newTheme = theme
+                newTheme.id = "custom_\(UUID().uuidString)"
+                return newTheme
+            }
+        } catch {
+            return nil
+        }
     }
 } 

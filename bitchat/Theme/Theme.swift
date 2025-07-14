@@ -7,40 +7,43 @@
 //
 
 import SwiftUI
+#if canImport(AppKit)
+import AppKit
+#endif
 
 struct BitchatTheme: Codable, Equatable, Identifiable {
-    let id: String
-    let name: String
-    let description: String
+    var id: String
+    var name: String
+    var description: String
     
     // Background colors
-    let backgroundColor: CodableColor
-    let secondaryBackgroundColor: CodableColor
+    var backgroundColor: CodableColor
+    var secondaryBackgroundColor: CodableColor
     
     // Text colors
-    let primaryTextColor: CodableColor
-    let secondaryTextColor: CodableColor
-    let systemTextColor: CodableColor
+    var primaryTextColor: CodableColor
+    var secondaryTextColor: CodableColor
+    var systemTextColor: CodableColor
     
     // Accent colors
-    let accentColor: CodableColor
-    let mentionColor: CodableColor
-    let hashtagColor: CodableColor
+    var accentColor: CodableColor
+    var mentionColor: CodableColor
+    var hashtagColor: CodableColor
     
     // Signal strength colors
-    let excellentSignalColor: CodableColor
-    let goodSignalColor: CodableColor
-    let fairSignalColor: CodableColor
-    let weakSignalColor: CodableColor
-    let poorSignalColor: CodableColor
+    var excellentSignalColor: CodableColor
+    var goodSignalColor: CodableColor
+    var fairSignalColor: CodableColor
+    var weakSignalColor: CodableColor
+    var poorSignalColor: CodableColor
     
     // Additional UI colors
-    let dividerColor: CodableColor
-    let unreadMessageColor: CodableColor
-    let favoriteColor: CodableColor
+    var dividerColor: CodableColor
+    var unreadMessageColor: CodableColor
+    var favoriteColor: CodableColor
     
     // Whether this theme respects system appearance
-    let followsSystemAppearance: Bool
+    var followsSystemAppearance: Bool
 }
 
 // Helper struct to make Color codable
@@ -205,4 +208,30 @@ extension BitchatTheme {
         .cyberpunk,
         .ocean
     ]
+    
+    // Create a new custom theme
+    static func createCustomTheme() -> BitchatTheme {
+        return BitchatTheme(
+            id: "custom_\(UUID().uuidString)",
+            name: "Custom Theme",
+            description: "Your custom theme",
+            backgroundColor: CodableColor(red: 0.1, green: 0.1, blue: 0.1, alpha: 1),
+            secondaryBackgroundColor: CodableColor(red: 0.15, green: 0.15, blue: 0.15, alpha: 0.95),
+            primaryTextColor: CodableColor(red: 0, green: 1, blue: 0, alpha: 1),
+            secondaryTextColor: CodableColor(red: 0, green: 1, blue: 0, alpha: 0.8),
+            systemTextColor: CodableColor(red: 0.5, green: 0.5, blue: 0.5, alpha: 1),
+            accentColor: CodableColor(red: 0, green: 1, blue: 0, alpha: 1),
+            mentionColor: CodableColor(red: 1, green: 0.6, blue: 0, alpha: 1),
+            hashtagColor: CodableColor(red: 0.3, green: 0.7, blue: 1, alpha: 1),
+            excellentSignalColor: CodableColor(red: 0, green: 1, blue: 0, alpha: 1),
+            goodSignalColor: CodableColor(red: 0.5, green: 1, blue: 0, alpha: 1),
+            fairSignalColor: CodableColor(red: 1, green: 1, blue: 0, alpha: 1),
+            weakSignalColor: CodableColor(red: 1, green: 0.6, blue: 0, alpha: 1),
+            poorSignalColor: CodableColor(red: 1, green: 0.2, blue: 0.2, alpha: 1),
+            dividerColor: CodableColor(red: 0.3, green: 0.3, blue: 0.3, alpha: 1),
+            unreadMessageColor: CodableColor(red: 1, green: 0.6, blue: 0, alpha: 1),
+            favoriteColor: CodableColor(red: 1, green: 0.8, blue: 0, alpha: 1),
+            followsSystemAppearance: false
+        )
+    }
 } 

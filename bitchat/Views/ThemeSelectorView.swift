@@ -11,6 +11,7 @@ import SwiftUI
 struct ThemeSelectorView: View {
     @EnvironmentObject var themeManager: ThemeManager
     @Environment(\.colorScheme) var colorScheme
+    @State private var showingCustomThemeEditor = false
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -21,6 +22,18 @@ struct ThemeSelectorView: View {
                     .accessibilityHidden(true)
                 Text("THEMES")
                     .font(.system(size: 11, weight: .bold, design: .monospaced))
+                
+                Spacer()
+                
+                Button(action: {
+                    showingCustomThemeEditor = true
+                }) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 10))
+                        .foregroundColor(themeManager.accentColor(for: colorScheme))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Create custom theme")
             }
             .foregroundColor(themeManager.secondaryTextColor(for: colorScheme))
             .padding(.horizontal, 12)
@@ -38,6 +51,9 @@ struct ThemeSelectorView: View {
             }
             .padding(.horizontal, 8)
         }
+        .sheet(isPresented: $showingCustomThemeEditor) {
+            CustomThemeEditor()
+        }
     }
 }
 
@@ -48,6 +64,8 @@ struct ThemePreviewCard: View {
     
     @Environment(\.colorScheme) var colorScheme
     @EnvironmentObject var themeManager: ThemeManager
+    @State private var showingCustomThemeEditor = false
+    @State private var showingDeleteAlert = false
     
     private var previewBackgroundColor: Color {
         if theme.followsSystemAppearance {
@@ -138,6 +156,31 @@ struct ThemePreviewCard: View {
                         Spacer()
                         
                         // Removed settings icon for auto theme
+                        
+                        // Show edit/delete options for custom themes
+                        if theme.id.hasPrefix("custom_") {
+                            HStack(spacing: 4) {
+                                Button(action: {
+                                    showingCustomThemeEditor = true
+                                }) {
+                                    Image(systemName: "pencil")
+                                        .font(.system(size: 10))
+                                        .foregroundColor(themeManager.secondaryTextColor(for: colorScheme))
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("Edit theme")
+                                
+                                Button(action: {
+                                    showingDeleteAlert = true
+                                }) {
+                                    Image(systemName: "trash")
+                                        .font(.system(size: 10))
+                                        .foregroundColor(themeManager.secondaryTextColor(for: colorScheme))
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("Delete theme")
+                            }
+                        }
                     }
                     
                     Text(theme.description)
@@ -146,7 +189,6 @@ struct ThemePreviewCard: View {
                         .multilineTextAlignment(.leading)
                         .lineLimit(2)
                 }
-                
                 Spacer()
             }
             .padding(8)
@@ -172,6 +214,17 @@ struct ThemePreviewCard: View {
         .accessibilityLabel("\(theme.name) theme")
         .accessibilityHint(theme.description)
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+        .sheet(isPresented: $showingCustomThemeEditor) {
+            CustomThemeEditor(editingTheme: theme)
+        }
+        .alert("Delete Theme", isPresented: $showingDeleteAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                themeManager.removeCustomTheme(theme)
+            }
+        } message: {
+            Text("Are you sure you want to delete '\(theme.name)'? This action cannot be undone.")
+        }
     }
 }
 
