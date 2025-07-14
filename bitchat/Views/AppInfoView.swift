@@ -3,17 +3,18 @@ import SwiftUI
 struct AppInfoView: View {
     @Environment(\.dismiss) var dismiss
     @Environment(\.colorScheme) var colorScheme
+    @EnvironmentObject var themeManager: ThemeManager
     
     private var backgroundColor: Color {
-        colorScheme == .dark ? Color.black : Color.white
+        themeManager.backgroundColor(for: colorScheme)
     }
     
     private var textColor: Color {
-        colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
+        themeManager.primaryTextColor(for: colorScheme)
     }
     
     private var secondaryTextColor: Color {
-        colorScheme == .dark ? Color.green.opacity(0.8) : Color(red: 0, green: 0.5, blue: 0).opacity(0.8)
+        themeManager.secondaryTextColor(for: colorScheme)
     }
     
     var body: some View {
@@ -296,9 +297,10 @@ struct AppInfoView: View {
 struct SectionHeader: View {
     let title: String
     @Environment(\.colorScheme) var colorScheme
+    @EnvironmentObject var themeManager: ThemeManager
     
     private var textColor: Color {
-        colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
+        themeManager.primaryTextColor(for: colorScheme)
     }
     
     init(_ title: String) {
@@ -318,13 +320,14 @@ struct FeatureRow: View {
     let title: String
     let description: String
     @Environment(\.colorScheme) var colorScheme
+    @EnvironmentObject var themeManager: ThemeManager
     
     private var textColor: Color {
-        colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
+        themeManager.primaryTextColor(for: colorScheme)
     }
     
     private var secondaryTextColor: Color {
-        colorScheme == .dark ? Color.green.opacity(0.8) : Color(red: 0, green: 0.5, blue: 0).opacity(0.8)
+        themeManager.secondaryTextColor(for: colorScheme)
     }
     
     var body: some View {

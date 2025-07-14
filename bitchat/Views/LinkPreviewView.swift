@@ -15,15 +15,16 @@ struct LinkPreviewView: View {
     let url: URL
     let title: String?
     @Environment(\.colorScheme) var colorScheme
+    @EnvironmentObject var themeManager: ThemeManager
     #if os(iOS)
     @State private var metadata: LPLinkMetadata?
     #endif
     private var textColor: Color {
-        colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
+        themeManager.primaryTextColor(for: colorScheme)
     }
     
     private var backgroundColor: Color {
-        colorScheme == .dark ? Color.black : Color.white
+        themeManager.backgroundColor(for: colorScheme)
     }
     
     private var borderColor: Color {
@@ -107,7 +108,7 @@ struct LinkPreviewView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(colorScheme == .dark ? Color.gray.opacity(0.15) : Color.gray.opacity(0.08))
+                    .fill(themeManager.secondaryBackgroundColor(for: colorScheme).opacity(0.5))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
@@ -129,7 +130,7 @@ struct LinkPreviewView: View {
                 // Link icon
                 Image(systemName: "link.circle.fill")
                     .font(.system(size: 32))
-                    .foregroundColor(Color.blue.opacity(0.8))
+                    .foregroundColor(themeManager.hashtagColor(for: colorScheme).opacity(0.8))
                     .frame(width: 40, height: 40)
                 
                 VStack(alignment: .leading, spacing: 4) {
@@ -143,7 +144,7 @@ struct LinkPreviewView: View {
                     // URL
                     Text(url.absoluteString)
                         .font(.system(size: 11, design: .monospaced))
-                        .foregroundColor(Color.blue)
+                        .foregroundColor(themeManager.hashtagColor(for: colorScheme))
                         .lineLimit(1)
                         .truncationMode(.middle)
                 }
@@ -159,7 +160,7 @@ struct LinkPreviewView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(colorScheme == .dark ? Color.gray.opacity(0.15) : Color.gray.opacity(0.08))
+                    .fill(themeManager.secondaryBackgroundColor(for: colorScheme).opacity(0.5))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 10)

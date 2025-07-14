@@ -5,8 +5,6 @@
 	<key>com.apple.security.app-sandbox</key>
 	<true/>
 	<key>com.apple.security.application-groups</key>
-	<array>
-		<string>group.chat.bitchat</string>
-	</array>
+	<array/>
 </dict>
 </plist>

@@ -10,6 +10,7 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var viewModel: ChatViewModel
+    @EnvironmentObject var themeManager: ThemeManager
     @State private var messageText = ""
     @State private var textFieldSelection: NSRange? = nil
     @FocusState private var isTextFieldFocused: Bool
@@ -29,15 +30,15 @@ struct ContentView: View {
     @State private var showLeaveChannelAlert = false
     
     private var backgroundColor: Color {
-        colorScheme == .dark ? Color.black : Color.white
+        themeManager.backgroundColor(for: colorScheme)
     }
     
     private var textColor: Color {
-        colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
+        themeManager.primaryTextColor(for: colorScheme)
     }
     
     private var secondaryTextColor: Color {
-        colorScheme == .dark ? Color.green.opacity(0.8) : Color(red: 0, green: 0.5, blue: 0).opacity(0.8)
+        themeManager.secondaryTextColor(for: colorScheme)
     }
     
     var body: some View {
@@ -433,7 +434,7 @@ struct ContentView: View {
                             
                             if message.sender == "system" {
                                 // System messages
-                                Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme))
+                                Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme, themeManager: themeManager))
                                     .textSelection(.enabled)
                                     .fixedSize(horizontal: false, vertical: true)
                                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -442,7 +443,7 @@ struct ContentView: View {
                                 VStack(alignment: .leading, spacing: 8) {
                                     HStack(alignment: .top, spacing: 0) {
                                         // Single text view for natural wrapping
-                                        Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme))
+                                        Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme, themeManager: themeManager))
                                             .textSelection(.enabled)
                                             .fixedSize(horizontal: false, vertical: true)
                                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -450,7 +451,7 @@ struct ContentView: View {
                                         // Delivery status indicator for private messages
                                         if message.isPrivate && message.sender == viewModel.nickname,
                                            let status = message.deliveryStatus {
-                                            DeliveryStatusView(status: status, colorScheme: colorScheme)
+                                            DeliveryStatusView(status: status)
                                                 .padding(.leading, 4)
                                         }
                                     }
@@ -1003,11 +1004,11 @@ struct ContentView: View {
                                 } else if viewModel.unreadPrivateMessages.contains(peerID) {
                                     Image(systemName: "envelope.fill")
                                         .font(.system(size: 12))
-                                        .foregroundColor(Color.orange)
+                                        .foregroundColor(themeManager.unreadMessageColor(for: colorScheme))
                                         .accessibilityLabel("Unread message from \(displayName)")
                                 } else {
                                     Circle()
-                                        .fill(viewModel.getRSSIColor(rssi: rssi, colorScheme: colorScheme))
+                                        .fill(themeManager.getRSSIColor(rssi: rssi, colorScheme: colorScheme))
                                         .frame(width: 8, height: 8)
                                         .accessibilityLabel("Signal strength: \(rssi > -60 ? "excellent" : rssi > -70 ? "good" : rssi > -80 ? "fair" : "poor")")
                                 }
@@ -1019,7 +1020,7 @@ struct ContentView: View {
                                     }) {
                                         Image(systemName: isFavorite ? "star.fill" : "star")
                                             .font(.system(size: 12))
-                                            .foregroundColor(isFavorite ? Color.yellow : secondaryTextColor)
+                                            .foregroundColor(isFavorite ? themeManager.favoriteColor(for: colorScheme) : secondaryTextColor)
                                     }
                                     .buttonStyle(.plain)
                                     .accessibilityLabel(isFavorite ? "Remove \(displayName) from favorites" : "Add \(displayName) to favorites")
@@ -1061,6 +1062,15 @@ struct ContentView: View {
                         }
                         }
                     }
+                    
+                    // Add divider before themes section if there are channels or people
+                    if !viewModel.joinedChannels.isEmpty || !viewModel.connectedPeers.isEmpty {
+                        Divider()
+                            .padding(.vertical, 4)
+                    }
+                    
+                    // Theme selector section
+                    ThemeSelectorView()
                 }
                 .padding(.vertical, 8)
             }
@@ -1183,14 +1193,15 @@ struct MessageContentView: View {
 // Delivery status indicator view
 struct DeliveryStatusView: View {
     let status: DeliveryStatus
-    let colorScheme: ColorScheme
+    @Environment(\.colorScheme) var colorScheme
+    @EnvironmentObject var themeManager: ThemeManager
     
     private var textColor: Color {
-        colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
+        themeManager.primaryTextColor(for: colorScheme)
     }
     
     private var secondaryTextColor: Color {
-        colorScheme == .dark ? Color.green.opacity(0.8) : Color(red: 0, green: 0.5, blue: 0).opacity(0.8)
+        themeManager.secondaryTextColor(for: colorScheme)
     }
     
     var body: some View {
