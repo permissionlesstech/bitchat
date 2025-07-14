@@ -40,6 +40,14 @@ This document details the security patches applied to address the vulnerabilitie
 - **Solution**: Encrypted storage service with key rotation
 - **Files**: `SecureStorageService.swift`
 
+### 6. Decryption Oracle & Replay Attack - EncryptionService
+- **Issue**: Decryption logic allowed for a padding oracle-style attack and did not prevent message replay.
+- **Solution**: Replaced the vulnerable decryption loop with a secure approach using Additional Authenticated Data (AAD) and a strict anti-replay watermark.
+- **Implementation**:
+  - The message number is now included as AAD in the AES-GCM authenticated encryption.
+  - The receiving end now verifies the message number is strictly increasing, preventing replays of old messages.
+- **Files**: `EncryptionService.swift`
+
 ## Design Philosophy
 
 ### Balancing Security and Usability

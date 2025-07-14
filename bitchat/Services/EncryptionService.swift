@@ -28,7 +28,7 @@ class EncryptionService {
     
     // Per-message forward secrecy
     private var sendingMessageNumbers: [String: UInt32] = [:]
-    private var receivingMessageNumbers: [String: UInt32] = [:]
+    private var replayWindows: [String: ReplayWindow] = [:]
     
     // Persistent identity for favorites (separate from ephemeral keys)
     private var identityKey: Curve25519.Signing.PrivateKey!
@@ -363,13 +363,18 @@ class EncryptionService {
             // Derive unique key for this message
             let messageKey = try deriveMessageKey(from: baseKey, messageNumber: messageNumber, direction: "send")
             
-            // Create message with number prefix for decryption
-            var messageData = Data()
-            messageData.append(contentsOf: withUnsafeBytes(of: messageNumber.bigEndian) { Array($0) })
-            messageData.append(data)
+            // Use message number as additional authenticated data
+            let messageNumberData = withUnsafeBytes(of: messageNumber.bigEndian) { Data($0) }
             
-            let sealedBox = try AES.GCM.seal(messageData, using: messageKey)
-            return sealedBox.combined ?? Data()
+            // Seal the data using AES-GCM, authenticating the message number
+            let sealedBox = try AES.GCM.seal(data, using: messageKey, authenticating: messageNumberData)
+            
+            // Prepend the message number to the sealed box data
+            var combinedData = Data()
+            combinedData.append(messageNumberData)
+            combinedData.append(sealedBox.combined)
+            
+            return combinedData
         }
     }
     
@@ -379,38 +384,40 @@ class EncryptionService {
                 throw EncryptionError.noSharedSecret
             }
             
-            // Decrypt the message to get message number and content
-            let sealedBox = try AES.GCM.SealedBox(combined: data)
-            
-            // First try to decrypt with different message numbers
-            // Start with expected next message number
-            let expectedMessageNumber = receivingMessageNumbers[peerID] ?? 0
-            
-            // Try expected number first, then a range around it for out-of-order messages
-            for messageNumber in max(0, expectedMessageNumber - 10)...(expectedMessageNumber + 10) {
-                let messageKey = try deriveMessageKey(from: baseKey, messageNumber: UInt32(messageNumber), direction: "receive")
-                
-                if let decryptedData = try? AES.GCM.open(sealedBox, using: messageKey),
-                   decryptedData.count >= 4 {
-                    
-                    // Extract message number from decrypted data
-                    let messageNumberData = decryptedData.prefix(4)
-                    let actualMessageNumber = messageNumberData.withUnsafeBytes { $0.load(as: UInt32.self).bigEndian }
-                    
-                    // Verify this is the expected message number
-                    if actualMessageNumber == messageNumber {
-                        // Update receiving message number to prevent replay
-                        if actualMessageNumber >= expectedMessageNumber {
-                            receivingMessageNumbers[peerID] = actualMessageNumber + 1
-                        }
-                        
-                        // Return message content without the number prefix
-                        return Data(decryptedData.dropFirst(4))
-                    }
-                }
+            guard data.count > 4 else {
+                throw EncryptionError.decryptionFailed
             }
             
-            throw EncryptionError.decryptionFailed
+            // Extract message number from the start of the data
+            let messageNumberData = data.prefix(4)
+            let ciphertextData = data.dropFirst(4)
+            
+            let messageNumber = messageNumberData.withUnsafeBytes { $0.load(as: UInt32.self).bigEndian }
+            
+            // Get or create a replay window for the peer
+            var window = self.replayWindows[peerID] ?? ReplayWindow()
+            
+            // Anti-replay check using the sliding window
+            guard window.isMessageValid(messageNumber) else {
+                throw EncryptionError.replayAttackDetected
+            }
+            
+            // Derive the unique key for this message number
+            let messageKey = try deriveMessageKey(from: baseKey, messageNumber: messageNumber, direction: "receive")
+            
+            // Attempt to open the sealed box using the message key and authenticated message number
+            do {
+                let sealedBox = try AES.GCM.SealedBox(combined: ciphertextData)
+                let decryptedData = try AES.GCM.open(sealedBox, using: messageKey, authenticating: messageNumberData)
+                
+                // Success! Update the window to prevent replay of this message number
+                window.recordReceivedMessage(messageNumber)
+                self.replayWindows[peerID] = window
+                
+                return decryptedData
+            } catch {
+                throw EncryptionError.decryptionFailed
+            }
         }
     }
     
@@ -433,6 +440,39 @@ class EncryptionService {
     
 }
 
+private struct ReplayWindow {
+    private(set) var highestReceivedNumber: UInt32 = 0
+    private var receivedNumbers: Set<UInt32> = []
+    
+    private static let windowSize: UInt32 = 128
+    
+    mutating func isMessageValid(_ messageNumber: UInt32) -> Bool {
+        // Message is too old if it's outside the sliding window
+        if messageNumber < highestReceivedNumber.subtractingReportingOverflow(ReplayWindow.windowSize).partialValue {
+            return false
+        }
+        
+        // Message is a replay if we've already seen it
+        if receivedNumbers.contains(messageNumber) {
+            return false
+        }
+        
+        return true
+    }
+    
+    mutating func recordReceivedMessage(_ messageNumber: UInt32) {
+        receivedNumbers.insert(messageNumber)
+        
+        if messageNumber > highestReceivedNumber {
+            highestReceivedNumber = messageNumber
+        }
+        
+        // Evict old message numbers that are no longer in the window
+        let lowerBound = highestReceivedNumber.subtractingReportingOverflow(ReplayWindow.windowSize).partialValue
+        receivedNumbers = receivedNumbers.filter { $0 >= lowerBound }
+    }
+}
+
 enum EncryptionError: LocalizedError {
     case noSharedSecret
     case invalidPublicKey
@@ -446,6 +486,7 @@ enum EncryptionError: LocalizedError {
     case keychainDataCorrupted
     case biometricAuthenticationFailed
     case biometricAuthenticationCanceled
+    case replayAttackDetected
     
     var errorDescription: String? {
         switch self {
@@ -473,6 +514,8 @@ enum EncryptionError: LocalizedError {
             return "Biometric authentication failed"
         case .biometricAuthenticationCanceled:
             return "Biometric authentication was canceled"
+        case .replayAttackDetected:
+            return "Replay attack detected with old message"
         }
     }
 }
