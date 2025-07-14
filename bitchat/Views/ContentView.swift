@@ -727,8 +727,9 @@ struct ContentView: View {
                         sendMessage()
                     }
                 }
+                #if os(macOS)
                 .commandNavigation(isShowing: showCommandSuggestions, suggestions: commandSuggestions, selectedIndex: $selectedCommandIndex, onSelect: { selectCommand($0) }, onCancel: { clearCommandSuggestions() })
-
+                #endif
             Button(action: sendMessage) {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 20))
@@ -1250,6 +1251,7 @@ struct DeliveryStatusView: View {
 }
 
 // MARK: macOS Command Navigation
+#if os(macOS)
 private extension View {
     func commandNavigation(
         isShowing: Bool,
@@ -1285,6 +1287,7 @@ private extension View {
         }
     }
 }
+#endif
 
 private extension ContentView {
     func clearCommandSuggestions() {
