@@ -137,13 +137,6 @@ struct ThemePreviewCard: View {
                         
                         Spacer()
                         
-                        if isSelected {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 12))
-                                .foregroundColor(themeManager.accentColor(for: colorScheme))
-                                .accessibilityLabel("Selected")
-                        }
-                        
                         // Removed settings icon for auto theme
                     }
                     
