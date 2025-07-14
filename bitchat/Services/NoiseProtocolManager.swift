@@ -99,7 +99,7 @@ class NoiseProtocolManager {
     // MARK: - Cleanup
     
     func cleanupStaleSessions() {
-        _ = sessionQueue.sync(flags: .barrier) {
+        sessionQueue.sync(flags: .barrier) {
             let now = Date()
             sessions = sessions.filter { _, session in
                 now.timeIntervalSince(session.lastActivity) < 300 // 5 minutes
@@ -470,7 +470,6 @@ private class CipherState {
     func decrypt(_ ciphertext: Data) throws -> Data {
         defer { nonce += 1 }
         
-        let nonceData = withUnsafeBytes(of: nonce.littleEndian) { Data($0) } + Data(repeating: 0, count: 4)
         let sealedBox = try AES.GCM.SealedBox(combined: ciphertext)
         return try AES.GCM.open(sealedBox, using: key)
     }
