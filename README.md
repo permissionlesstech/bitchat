@@ -6,6 +6,32 @@
 
 A decentralized peer-to-peer messaging app that works over Bluetooth mesh networks. No internet required, no servers, no phone numbers. It's the side-groupchat. 
 
+## Table of Contents
+
+- [License](#license)
+- [Features](#features)
+- [Setup](#setup)
+  - [Option 1: Using XcodeGen (Recommended)](#option-1-using-xcodegen-recommended)
+  - [Option 2: Using Swift Package Manager](#option-2-using-swift-package-manager)
+  - [Option 3: Manual Xcode Project](#option-3-manual-xcode-project)
+- [Usage](#usage)
+  - [Basic Commands](#basic-commands)
+  - [Getting Started](#getting-started)
+  - [Channel Features](#channel-features)
+- [Security & Privacy](#security--privacy)
+  - [Encryption](#encryption)
+  - [Privacy Features](#privacy-features)
+- [Performance & Efficiency](#performance--efficiency)
+  - [Message Compression](#message-compression)
+  - [Battery Optimization](#battery-optimization)
+  - [Network Efficiency](#network-efficiency)
+- [Technical Architecture](#technical-architecture)
+  - [Binary Protocol](#binary-protocol)
+  - [Mesh Networking](#mesh-networking)
+- [Building for Production](#building-for-production)
+- [Android Compatibility](#android-compatibility)
+- [MacOS](#macos)
+
 ## License
 
 This project is released into the public domain. See the [LICENSE](LICENSE) file for details.
