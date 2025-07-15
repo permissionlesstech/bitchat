@@ -61,7 +61,7 @@ class ChatViewModel: ObservableObject {
     @Published var retentionEnabledChannels: Set<String> = []  // Channels where owner enabled retention for all members
     @Published var channelVerificationStatus: [String: ChannelVerificationStatus] = [:]  // Track verification status
     
-    let meshService = BluetoothMeshService()
+    var meshService = BluetoothMeshService()
     private let userDefaults = UserDefaults.standard
     private let nicknameKey = "bitchat.nickname"
     private let joinedChannelsKey = "bitchat.joinedChannels"
@@ -959,13 +959,13 @@ class ChatViewModel: ObservableObject {
     }
     
     // Compute SHA256 hash of the derived key for public verification
-    private func computeKeyCommitment(for key: SymmetricKey) -> String {
+    internal func computeKeyCommitment(for key: SymmetricKey) -> String {
         let keyData = key.withUnsafeBytes { Data($0) }
         let hash = SHA256.hash(data: keyData)
         return hash.compactMap { String(format: "%02x", $0) }.joined()
     }
     
-    private func deriveChannelKey(from password: String, channelName: String) -> SymmetricKey {
+    internal func deriveChannelKey(from password: String, channelName: String) -> SymmetricKey {
         // Get creator fingerprint for this channel
         let creatorFingerprint = channelCreators[channelName]
         

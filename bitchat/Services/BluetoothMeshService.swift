@@ -53,6 +53,14 @@ extension TimeInterval {
     }
 }
 
+// Version negotiation state
+enum VersionNegotiationState {
+    case none
+    case helloSent
+    case ackReceived(version: UInt8)
+    case failed(reason: String)
+}
+
 class BluetoothMeshService: NSObject {
     static let serviceUUID = CBUUID(string: "F47B5E2D-4A9E-4C5A-9B3F-8E1D2C3A4B5C")
     static let characteristicUUID = CBUUID(string: "A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D")
@@ -86,6 +94,10 @@ class BluetoothMeshService: NSObject {
     
     weak var delegate: BitchatDelegate?
     private let noiseService = NoiseEncryptionService()
+    
+    // Protocol version negotiation state
+    private var versionNegotiationState: [String: VersionNegotiationState] = [:]
+    private var negotiatedVersions: [String: UInt8] = [:]  // peerID -> agreed version
     
     func getNoiseService() -> NoiseEncryptionService {
         return noiseService
@@ -2398,6 +2410,14 @@ class BluetoothMeshService: NSObject {
                 return
             }
             if !isPeerIDOurs(senderID) {
+                // Check if we've completed version negotiation with this peer
+                if negotiatedVersions[senderID] == nil {
+                    // Legacy peer - assume version 1 for backward compatibility
+                    SecurityLogger.log("Received Noise handshake from \(senderID) without version negotiation, assuming v1", 
+                                      category: SecurityLogger.session, level: .debug)
+                    negotiatedVersions[senderID] = 1
+                    versionNegotiationState[senderID] = .ackReceived(version: 1)
+                }
                 handleNoiseHandshakeMessage(from: senderID, message: packet.payload, isInitiation: true)
             }
             
@@ -2448,6 +2468,20 @@ class BluetoothMeshService: NSObject {
             let senderID = packet.senderID.hexEncodedString()
             if !isPeerIDOurs(senderID) {
                 handleChannelMetadata(from: senderID, data: packet.payload)
+            }
+            
+        case .versionHello:
+            // Handle version negotiation hello
+            let senderID = packet.senderID.hexEncodedString()
+            if !isPeerIDOurs(senderID) {
+                handleVersionHello(from: senderID, data: packet.payload, peripheral: peripheral)
+            }
+            
+        case .versionAck:
+            // Handle version negotiation acknowledgment
+            let senderID = packet.senderID.hexEncodedString()
+            if !isPeerIDOurs(senderID) {
+                handleVersionAck(from: senderID, data: packet.payload)
             }
             
         default:
@@ -2860,6 +2894,11 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
                 
                 // Clear cached messages tracking for this peer to allow re-sending if they reconnect
                 cachedMessagesSentToPeer.remove(peerID)
+                
+                // Clear version negotiation state
+                versionNegotiationState.removeValue(forKey: peerID)
+                negotiatedVersions.removeValue(forKey: peerID)
+                
                 // Peer disconnected
                 
                 return (removed, peerNicknames[peerID])
@@ -2920,10 +2959,10 @@ extension BluetoothMeshService: CBPeripheralDelegate {
                 // iOS supports up to 512 bytes with BLE 5.0
                 peripheral.maximumWriteValueLength(for: .withoutResponse)
                 
-                // Send Noise identity announcement once
-                self.sendNoiseIdentityAnnounce()
+                // Start version negotiation instead of immediately sending Noise identity
+                self.sendVersionHello(to: peripheral)
                 
-                // Send announce packet after a short delay to avoid overwhelming the connection
+                // Send announce packet after version negotiation completes
                 // Send multiple times for reliability
                 if let vm = self.delegate as? ChatViewModel {
                     // Send announces multiple times with delays
@@ -3572,6 +3611,140 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         DispatchQueue.main.async { [weak self] in
             self?.delegate?.didReceiveChannelMetadata(metadata, from: peerID)
         }
+    }
+    
+    // MARK: - Protocol Version Negotiation
+    
+    private func handleVersionHello(from peerID: String, data: Data, peripheral: CBPeripheral? = nil) {
+        guard let hello = VersionHello.decode(from: data) else {
+            SecurityLogger.log("Failed to decode version hello from \(peerID)", category: SecurityLogger.session, level: .error)
+            return
+        }
+        
+        SecurityLogger.log("Received version hello from \(peerID): supported versions \(hello.supportedVersions), preferred \(hello.preferredVersion)", 
+                          category: SecurityLogger.session, level: .debug)
+        
+        // Find the best common version
+        let ourVersions = Array(ProtocolVersion.supportedVersions)
+        if let agreedVersion = ProtocolVersion.negotiateVersion(clientVersions: hello.supportedVersions, serverVersions: ourVersions) {
+            // We can communicate! Send ACK
+            negotiatedVersions[peerID] = agreedVersion
+            versionNegotiationState[peerID] = .ackReceived(version: agreedVersion)
+            
+            let ack = VersionAck(
+                agreedVersion: agreedVersion,
+                serverVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0",
+                platform: getPlatformString()
+            )
+            
+            sendVersionAck(ack, to: peerID)
+            
+            // Proceed with Noise handshake after successful version negotiation
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                self?.sendNoiseIdentityAnnounce()
+                self?.initiateNoiseHandshake(with: peerID)
+            }
+        } else {
+            // No compatible version
+            versionNegotiationState[peerID] = .failed(reason: "No compatible protocol version")
+            
+            let ack = VersionAck(
+                agreedVersion: 0,
+                serverVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0",
+                platform: getPlatformString(),
+                rejected: true,
+                reason: "No compatible protocol version. Client supports: \(hello.supportedVersions), server supports: \(ourVersions)"
+            )
+            
+            sendVersionAck(ack, to: peerID)
+            
+            // Disconnect after a short delay
+            if let peripheral = peripheral {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                    self?.centralManager?.cancelPeripheralConnection(peripheral)
+                }
+            }
+        }
+    }
+    
+    private func handleVersionAck(from peerID: String, data: Data) {
+        guard let ack = VersionAck.decode(from: data) else {
+            SecurityLogger.log("Failed to decode version ack from \(peerID)", category: SecurityLogger.session, level: .error)
+            return
+        }
+        
+        if ack.rejected {
+            SecurityLogger.log("Version negotiation rejected by \(peerID): \(ack.reason ?? "Unknown reason")", 
+                              category: SecurityLogger.session, level: .error)
+            versionNegotiationState[peerID] = .failed(reason: ack.reason ?? "Version rejected")
+            // TODO: Handle disconnection
+        } else {
+            SecurityLogger.log("Version negotiation successful with \(peerID): agreed on version \(ack.agreedVersion)", 
+                              category: SecurityLogger.session, level: .debug)
+            negotiatedVersions[peerID] = ack.agreedVersion
+            versionNegotiationState[peerID] = .ackReceived(version: ack.agreedVersion)
+            
+            // If we were the initiator (sent hello first), proceed with Noise handshake
+            // Note: Since we're handling their ACK, they initiated, so we should not initiate again
+            // The peer who sent hello will initiate the Noise handshake
+        }
+    }
+    
+    private func sendVersionHello(to peripheral: CBPeripheral? = nil) {
+        let hello = VersionHello(
+            clientVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0",
+            platform: getPlatformString()
+        )
+        
+        guard let helloData = hello.encode() else { return }
+        
+        let packet = BitchatPacket(
+            type: MessageType.versionHello.rawValue,
+            ttl: 1,  // Version negotiation is direct, no relay
+            senderID: myPeerID,
+            payload: helloData
+        )
+        
+        // Mark that we initiated version negotiation
+        // We don't know the peer ID yet from peripheral, so we'll track it when we get the response
+        
+        if let peripheral = peripheral,
+           let characteristic = peripheralCharacteristics[peripheral] {
+            // Send directly to specific peripheral
+            if let data = packet.toBinaryData() {
+                let writeType: CBCharacteristicWriteType = characteristic.properties.contains(.write) ? .withResponse : .withoutResponse
+                peripheral.writeValue(data, for: characteristic, type: writeType)
+            }
+        } else {
+            // Broadcast to all
+            broadcastPacket(packet)
+        }
+    }
+    
+    private func sendVersionAck(_ ack: VersionAck, to peerID: String) {
+        guard let ackData = ack.encode() else { return }
+        
+        let packet = BitchatPacket(
+            type: MessageType.versionAck.rawValue,
+            senderID: Data(myPeerID.utf8),
+            recipientID: Data(peerID.utf8),
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: ackData,
+            signature: nil,
+            ttl: 1  // Direct response, no relay
+        )
+        
+        broadcastPacket(packet)
+    }
+    
+    private func getPlatformString() -> String {
+        #if os(iOS)
+        return "iOS"
+        #elseif os(macOS)
+        return "macOS"
+        #else
+        return "Unknown"
+        #endif
     }
     
     func sendChannelKeyVerifyRequest(_ request: ChannelKeyVerifyRequest, to peers: [String]) {
