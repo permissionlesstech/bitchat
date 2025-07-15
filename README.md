@@ -1,5 +1,6 @@
-![ChatGPT Image Jul 5, 2025 at 06_07_31 PM](https://github.com/user-attachments/assets/2660f828-49c7-444d-beca-d8b01854667a)
-# bitchat
+<img height="300" alt="bitchat" src="https://github.com/user-attachments/assets/2660f828-49c7-444d-beca-d8b01854667a" />
+
+## bitchat
 
 > [!WARNING]
 > Private message and channel features have not received external security review and may contain vulnerabilities. Do not use for sensitive use cases, and do not rely on its security until it has been reviewed. Work in progress. Public local chat (the main feature) has no security concerns. 
