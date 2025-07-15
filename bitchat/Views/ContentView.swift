@@ -1043,9 +1043,9 @@ struct ContentView: View {
                                         .foregroundColor(Color.orange)
                                         .accessibilityLabel("Unread message from \(displayName)")
                                 } else {
-                                    Circle()
-                                        .fill(viewModel.getRSSIColor(rssi: rssi, colorScheme: colorScheme))
-                                        .frame(width: 8, height: 8)
+                                    Image(systemName: "radiowaves.left")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(viewModel.getRSSIColor(rssi: rssi, colorScheme: colorScheme))
                                         .accessibilityLabel("Signal strength: \(rssi > -60 ? "excellent" : rssi > -70 ? "good" : rssi > -80 ? "fair" : "poor")")
                                 }
                                 
