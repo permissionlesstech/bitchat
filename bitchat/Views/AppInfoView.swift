@@ -22,7 +22,7 @@ struct AppInfoView: View {
             // Custom header for macOS
             HStack {
                 Spacer()
-                Button("Done") {
+                Button("DONE") {
                     dismiss()
                 }
                 .buttonStyle(.plain)
@@ -39,7 +39,7 @@ struct AppInfoView: View {
                             .font(.system(size: 32, weight: .bold, design: .monospaced))
                             .foregroundColor(textColor)
                         
-                        Text("secure mesh chat")
+                        Text("mesh sidegroupchat")
                             .font(.system(size: 16, design: .monospaced))
                             .foregroundColor(secondaryTextColor)
                     }
@@ -48,42 +48,42 @@ struct AppInfoView: View {
                     
                     // Features
                     VStack(alignment: .leading, spacing: 16) {
-                        SectionHeader("Features")
+                        SectionHeader("FEATURES")
                         
-                        FeatureRow(icon: "wifi.slash", title: "Offline Communication",
-                                  description: "Works without internet using Bluetooth mesh networking")
+                        FeatureRow(icon: "wifi.slash", title: "offline communication",
+                                  description: "works without internet using Bluetooth mesh networking")
                         
-                        FeatureRow(icon: "lock.shield", title: "End-to-End Encryption",
-                                  description: "All messages encrypted with Curve25519 + AES-GCM")
+                        FeatureRow(icon: "lock.shield", title: "end-to-end encryption",
+                                  description: "private messages encrypted with noise protocol")
                         
-                        FeatureRow(icon: "antenna.radiowaves.left.and.right", title: "Extended Range",
-                                  description: "Messages relay through peers, reaching 300m+")
+                        FeatureRow(icon: "antenna.radiowaves.left.and.right", title: "extended range",
+                                  description: "messages relay through peers, increasing the distance")
                         
-                        FeatureRow(icon: "star.fill", title: "Favorites System",
-                                  description: "Store-and-forward messages for favorites indefinitely")
+                        FeatureRow(icon: "star.fill", title: "favorites",
+                                  description: "store-and-forward messages for favorite people")
                         
-                        FeatureRow(icon: "at", title: "Mentions",
-                                  description: "Use @nickname to notify specific users")
+                        FeatureRow(icon: "at", title: "mentions",
+                                  description: "use @nickname to notify specific people")
                         
-                        FeatureRow(icon: "number", title: "Channels",
-                                  description: "Create #channels for topic-based conversations")
+                        FeatureRow(icon: "number", title: "channels",
+                                  description: "create #channels for topic-based conversations")
                         
-                        FeatureRow(icon: "lock.fill", title: "Password Channels",
-                                  description: "Secure channels with passwords and AES encryption")
+                        FeatureRow(icon: "lock.fill", title: "private channels",
+                                  description: "secure channels with passwords and noise encryption")
                     }
                     
                     // Privacy
                     VStack(alignment: .leading, spacing: 16) {
                         SectionHeader("Privacy")
                         
-                        FeatureRow(icon: "eye.slash", title: "No Tracking",
-                                  description: "No servers, accounts, or data collection")
+                        FeatureRow(icon: "eye.slash", title: "no tracking",
+                                  description: "no servers, accounts, or data collection")
                         
-                        FeatureRow(icon: "shuffle", title: "Ephemeral Identity",
-                                  description: "New peer ID generated each session")
+                        FeatureRow(icon: "shuffle", title: "ephemeral identity",
+                                  description: "new peer ID generated each session")
                         
-                        FeatureRow(icon: "hand.raised.fill", title: "Panic Mode",
-                                  description: "Triple-tap logo to instantly clear all data")
+                        FeatureRow(icon: "hand.raised.fill", title: "panic mode",
+                                  description: "triple-tap logo to instantly clear all data")
                     }
                     
                     // How to Use
@@ -91,12 +91,12 @@ struct AppInfoView: View {
                         SectionHeader("How to Use")
                         
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("• Set your nickname in the header")
-                            Text("• Swipe left or tap channel name for sidebar")
-                            Text("• Tap a peer to start a private chat")
-                            Text("• Use @nickname to mention someone")
-                            Text("• Use #channelname to create/join channels")
-                            Text("• Triple-tap the logo for panic mode")
+                            Text("• set your nickname by tapping it")
+                            Text("• swipe left for sidebar")
+                            Text("• tap a peer to start a private chat")
+                            Text("• use @nickname to mention someone")
+                            Text("• use #channelname to create/join channels")
+                            Text("• triple-tap the logo for panic mode")
                         }
                         .font(.system(size: 14, design: .monospaced))
                         .foregroundColor(textColor)
@@ -127,14 +127,14 @@ struct AppInfoView: View {
                         SectionHeader("Technical Details")
                         
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Protocol: Custom binary over BLE")
-                            Text("Encryption: Curve25519 + AES-256-GCM")
-                            Text("Range: ~100m direct, 300m+ with relay")
-                            Text("Store & Forward: 12h for all, ∞ for favorites")
-                            Text("Battery: Adaptive scanning based on level")
-                            Text("Platform: Universal (iOS, iPadOS, macOS)")
-                            Text("Channels: Password-protected with key commitments")
-                            Text("Storage: Keychain for passwords, encrypted retention")
+                            Text("protocol: custom binary over BLE")
+                            Text("encryption: noise protocol")
+                            Text("range: ~30m direct, 300m+ with relay")
+                            Text("store & forward: 12h for all, ∞ for favorites")
+                            Text("battery: Adaptive scanning based on level")
+                            Text("platform: Universal (iOS, iPadOS, macOS)")
+                            Text("channels: Password-protected with key commitments")
+                            Text("storage: Keychain for passwords, encrypted retention")
                         }
                         .font(.system(size: 14, design: .monospaced))
                         .foregroundColor(textColor)
@@ -143,7 +143,7 @@ struct AppInfoView: View {
                     // Version
                     HStack {
                         Spacer()
-                        Text("Version 1.0.0")
+                        Text("VERSION 1.0.0")
                             .font(.system(size: 12, design: .monospaced))
                             .foregroundColor(secondaryTextColor)
                         Spacer()
@@ -165,7 +165,7 @@ struct AppInfoView: View {
                             .font(.system(size: 32, weight: .bold, design: .monospaced))
                             .foregroundColor(textColor)
                         
-                        Text("secure mesh chat")
+                        Text("mesh sidegroupchat")
                             .font(.system(size: 16, design: .monospaced))
                             .foregroundColor(secondaryTextColor)
                     }
@@ -176,40 +176,40 @@ struct AppInfoView: View {
                     VStack(alignment: .leading, spacing: 16) {
                         SectionHeader("Features")
                         
-                        FeatureRow(icon: "wifi.slash", title: "Offline Communication",
-                                  description: "Works without internet using Bluetooth mesh networking")
+                        FeatureRow(icon: "wifi.slash", title: "offline communication",
+                                  description: "works without internet using Bluetooth mesh networking")
                         
-                        FeatureRow(icon: "lock.shield", title: "End-to-End Encryption",
-                                  description: "All messages encrypted with Curve25519 + AES-GCM")
+                        FeatureRow(icon: "lock.shield", title: "end-to-end encryption",
+                                  description: "private messages and channels encrypted with noise protocol")
                         
                         FeatureRow(icon: "antenna.radiowaves.left.and.right", title: "Extended Range",
-                                  description: "Messages relay through peers, reaching 300m+")
+                                  description: "messages relay through peers, increasing the distance")
                         
-                        FeatureRow(icon: "star.fill", title: "Favorites System",
-                                  description: "Store-and-forward messages for favorites indefinitely")
+                        FeatureRow(icon: "star.fill", title: "favorites",
+                                  description: "store-and-forward messages for favorite people")
                         
-                        FeatureRow(icon: "at", title: "Mentions",
-                                  description: "Use @nickname to notify specific users")
+                        FeatureRow(icon: "at", title: "mentions",
+                                  description: "use @nickname to notify specific people")
                         
-                        FeatureRow(icon: "number", title: "Channels",
-                                  description: "Create #channels for topic-based conversations")
+                        FeatureRow(icon: "number", title: "channels",
+                                  description: "create #channels for topic-based conversations")
                         
-                        FeatureRow(icon: "lock.fill", title: "Password Channels",
-                                  description: "Secure channels with passwords and AES encryption")
+                        FeatureRow(icon: "lock.fill", title: "private channels",
+                                  description: "secure channels with passwords and noise encryption")
                     }
                     
                     // Privacy
                     VStack(alignment: .leading, spacing: 16) {
                         SectionHeader("Privacy")
                         
-                        FeatureRow(icon: "eye.slash", title: "No Tracking",
-                                  description: "No servers, accounts, or data collection")
+                        FeatureRow(icon: "eye.slash", title: "no tracking",
+                                  description: "no servers, accounts, or data collection")
                         
-                        FeatureRow(icon: "shuffle", title: "Ephemeral Identity",
-                                  description: "New peer ID generated each session")
+                        FeatureRow(icon: "shuffle", title: "ephemeral identity",
+                                  description: "new peer ID generated each session")
                         
-                        FeatureRow(icon: "hand.raised.fill", title: "Panic Mode",
-                                  description: "Triple-tap logo to instantly clear all data")
+                        FeatureRow(icon: "hand.raised.fill", title: "panic mode",
+                                  description: "triple-tap logo to instantly clear all data")
                     }
                     
                     // How to Use
@@ -217,12 +217,12 @@ struct AppInfoView: View {
                         SectionHeader("How to Use")
                         
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("• Set your nickname in the header")
-                            Text("• Swipe left or tap channel name for sidebar")
-                            Text("• Tap a peer to start a private chat")
-                            Text("• Use @nickname to mention someone")
-                            Text("• Use #channelname to create/join channels")
-                            Text("• Triple-tap the logo for panic mode")
+                            Text("• set your nickname by tapping it")
+                            Text("• swipe left for sidebar")
+                            Text("• tap a peer to start a private chat")
+                            Text("• use @nickname to mention someone")
+                            Text("• use #channelname to create/join channels")
+                            Text("• triple-tap the logo for panic mode")
                         }
                         .font(.system(size: 14, design: .monospaced))
                         .foregroundColor(textColor)
@@ -253,14 +253,14 @@ struct AppInfoView: View {
                         SectionHeader("Technical Details")
                         
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Protocol: Custom binary over BLE")
-                            Text("Encryption: Curve25519 + AES-256-GCM")
-                            Text("Range: ~100m direct, 300m+ with relay")
-                            Text("Store & Forward: 12h for all, ∞ for favorites")
-                            Text("Battery: Adaptive scanning based on level")
-                            Text("Platform: Universal (iOS, iPadOS, macOS)")
-                            Text("Channels: Password-protected with key commitments")
-                            Text("Storage: Keychain for passwords, encrypted retention")
+                            Text("protocol: custom binary over BLE")
+                            Text("encryption: noise protocol")
+                            Text("range: ~30m direct, 300m+ with relay")
+                            Text("store & forward: 12h for all, ∞ for favorites")
+                            Text("battery: adaptive scanning based on level")
+                            Text("platform: universal (iOS, iPadOS, macOS)")
+                            Text("channels: password-protected with key commitments")
+                            Text("storage: keychain for passwords, encrypted retention")
                         }
                         .font(.system(size: 14, design: .monospaced))
                         .foregroundColor(textColor)
@@ -269,7 +269,7 @@ struct AppInfoView: View {
                     // Version
                     HStack {
                         Spacer()
-                        Text("Version 1.0.0")
+                        Text("VERSION 1.0.0")
                             .font(.system(size: 12, design: .monospaced))
                             .foregroundColor(secondaryTextColor)
                         Spacer()
@@ -282,7 +282,7 @@ struct AppInfoView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
+                    Button("DONE") {
                         dismiss()
                     }
                     .foregroundColor(textColor)
