@@ -8,12 +8,13 @@
 
 import Foundation
 import Security
+import CryptoKit
 
 class KeychainManager {
     static let shared = KeychainManager()
     
     private let service = "com.bitchat.passwords"
-    private let accessGroup: String? = nil // Set this if using app groups
+    private let accessGroup: String? = nil
     
     private init() {}
     
@@ -36,8 +37,6 @@ class KeychainManager {
     
     func getAllChannelPasswords() -> [String: String] {
         var passwords: [String: String] = [:]
-        
-        // Query all items
         var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -59,7 +58,7 @@ class KeychainManager {
                    account.hasPrefix("channel_"),
                    let data = item[kSecValueData as String] as? Data,
                    let password = String(data: data, encoding: .utf8) {
-                    let channel = String(account.dropFirst(8)) // Remove "channel_" prefix
+                    let channel = String(account.dropFirst(8))
                     passwords[channel] = password
                 }
             }
@@ -78,6 +77,66 @@ class KeychainManager {
         return retrieveData(forKey: "identity_\(key)")
     }
     
+    @available(iOS 13.0, *)
+    func generateSecureEnclavePrivateKey(label: String = "com.bitchat.identity.securekey") -> SecKey? {
+        let tag = label.data(using: .utf8)!
+
+        let accessControl = SecAccessControlCreateWithFlags(
+            nil,
+            kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+            [.privateKeyUsage, .biometryAny],
+            nil
+        )
+
+        guard let access = accessControl else {
+            print("Access control creation failed")
+            return nil
+        }
+
+        let attributes: [String: Any] = [
+            kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
+            kSecAttrKeySizeInBits as String: 256,
+            kSecAttrTokenID as String: kSecAttrTokenIDSecureEnclave,
+            kSecAttrKeyClass as String: kSecAttrKeyClassPrivate,
+            kSecAttrApplicationTag as String: tag,
+            kSecAttrAccessControl as String: access,
+            kSecAttrIsPermanent as String: true,
+            kSecClass as String: kSecClassKey
+        ]
+
+        var error: Unmanaged<CFError>?
+        guard let privateKey = SecKeyCreateRandomKey(attributes as CFDictionary, &error) else {
+            print("Key generation failed: \(error!.takeRetainedValue())")
+            return nil
+        }
+
+        return privateKey
+    }
+
+    @available(iOS 13.0, *)
+    func getSecureEnclavePrivateKey(label: String = "com.bitchat.identity.securekey") -> SecKey? {
+        let tag = label.data(using: .utf8)!
+
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassKey,
+            kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
+            kSecAttrKeyClass as String: kSecAttrKeyClassPrivate,
+            kSecAttrApplicationTag as String: tag,
+            kSecReturnRef as String: true
+        ]
+
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+
+        guard status == errSecSuccess else {
+            print("Failed to retrieve key with status: \(status)")
+            return nil
+        }
+
+        return (item as! SecKey)
+    }
+
+    
     // MARK: - Generic Operations
     
     private func save(_ value: String, forKey key: String) -> Bool {
@@ -86,7 +145,6 @@ class KeychainManager {
     }
     
     private func saveData(_ data: Data, forKey key: String) -> Bool {
-        // First try to update existing
         let updateQuery: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -106,7 +164,6 @@ class KeychainManager {
         var status = SecItemUpdate(mutableUpdateQuery as CFDictionary, updateAttributes as CFDictionary)
         
         if status == errSecItemNotFound {
-            // Item doesn't exist, create it
             var createQuery = mutableUpdateQuery
             createQuery[kSecValueData as String] = data
             createQuery[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
