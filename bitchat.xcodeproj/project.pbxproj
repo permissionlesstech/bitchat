@@ -12,6 +12,14 @@
 		04891CAA2E22971E0064A111 /* LRUCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04891CA82E22971E0064A111 /* LRUCache.swift */; };
 		04AD0B4E2E25B9580002A40A /* IdentityModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E2446380E7A44E49A35B664 /* IdentityModels.swift */; };
 		04AD0B4F2E25B9580002A40A /* SecureIdentityStateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EE9D4FA625C4671ACD371D4 /* SecureIdentityStateManager.swift */; };
+		04AD0B542E2678220002A40A /* VersionNegotiationIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04AD0B522E2678220002A40A /* VersionNegotiationIntegrationTests.swift */; };
+		04AD0B552E2678220002A40A /* BinaryProtocolVersionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04AD0B502E2678220002A40A /* BinaryProtocolVersionTests.swift */; };
+		04AD0B562E2678220002A40A /* ProtocolVersionNegotiationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04AD0B512E2678220002A40A /* ProtocolVersionNegotiationTests.swift */; };
+		04AD0B572E2678220002A40A /* VersionNegotiationScenarioTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04AD0B532E2678220002A40A /* VersionNegotiationScenarioTests.swift */; };
+		04AD0B582E2678220002A40A /* VersionNegotiationIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04AD0B522E2678220002A40A /* VersionNegotiationIntegrationTests.swift */; };
+		04AD0B592E2678220002A40A /* BinaryProtocolVersionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04AD0B502E2678220002A40A /* BinaryProtocolVersionTests.swift */; };
+		04AD0B5A2E2678220002A40A /* ProtocolVersionNegotiationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04AD0B512E2678220002A40A /* ProtocolVersionNegotiationTests.swift */; };
+		04AD0B5B2E2678220002A40A /* VersionNegotiationScenarioTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04AD0B532E2678220002A40A /* VersionNegotiationScenarioTests.swift */; };
 		04B6BA3E2E2035220090FE39 /* NoiseProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04B6BA3D2E2035220090FE39 /* NoiseProtocolTests.swift */; };
 		04B6BA3F2E2035220090FE39 /* NoiseProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04B6BA3D2E2035220090FE39 /* NoiseProtocolTests.swift */; };
 		04B6BA452E2035530090FE39 /* NoiseSecurityConsiderations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04B6BA422E2035530090FE39 /* NoiseSecurityConsiderations.swift */; };
@@ -146,6 +154,10 @@
 		036A1A705AAF9EC21F4354BE /* PasswordProtectedChannelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasswordProtectedChannelTests.swift; sourceTree = "<group>"; };
 		03C57F452B55FD0FD8F51421 /* bitchatTests_macOS.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = bitchatTests_macOS.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		04891CA82E22971E0064A111 /* LRUCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LRUCache.swift; sourceTree = "<group>"; };
+		04AD0B502E2678220002A40A /* BinaryProtocolVersionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BinaryProtocolVersionTests.swift; sourceTree = "<group>"; };
+		04AD0B512E2678220002A40A /* ProtocolVersionNegotiationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolVersionNegotiationTests.swift; sourceTree = "<group>"; };
+		04AD0B522E2678220002A40A /* VersionNegotiationIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VersionNegotiationIntegrationTests.swift; sourceTree = "<group>"; };
+		04AD0B532E2678220002A40A /* VersionNegotiationScenarioTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VersionNegotiationScenarioTests.swift; sourceTree = "<group>"; };
 		04B6BA3D2E2035220090FE39 /* NoiseProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoiseProtocolTests.swift; sourceTree = "<group>"; };
 		04B6BA402E2035530090FE39 /* NoiseChannelEncryption.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoiseChannelEncryption.swift; sourceTree = "<group>"; };
 		04B6BA412E2035530090FE39 /* NoiseProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoiseProtocol.swift; sourceTree = "<group>"; };
@@ -324,6 +336,10 @@
 		C3D98EB3E1B455E321F519F4 /* bitchatTests */ = {
 			isa = PBXGroup;
 			children = (
+				04AD0B502E2678220002A40A /* BinaryProtocolVersionTests.swift */,
+				04AD0B512E2678220002A40A /* ProtocolVersionNegotiationTests.swift */,
+				04AD0B522E2678220002A40A /* VersionNegotiationIntegrationTests.swift */,
+				04AD0B532E2678220002A40A /* VersionNegotiationScenarioTests.swift */,
 				04B6BA5F2E21601B0090FE39 /* ChannelVerificationTests.swift */,
 				04B6BA602E21601B0090FE39 /* KeychainIntegrationTests.swift */,
 				04B6BA612E21601B0090FE39 /* NoiseChannelEncryptionTests.swift */,
@@ -613,6 +629,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				8F0BFC2D2B2A5E7B70C3B485 /* BinaryProtocolTests.swift in Sources */,
+				04AD0B582E2678220002A40A /* VersionNegotiationIntegrationTests.swift in Sources */,
+				04AD0B592E2678220002A40A /* BinaryProtocolVersionTests.swift in Sources */,
+				04AD0B5A2E2678220002A40A /* ProtocolVersionNegotiationTests.swift in Sources */,
+				04AD0B5B2E2678220002A40A /* VersionNegotiationScenarioTests.swift in Sources */,
 				04B6BA6F2E21601B0090FE39 /* ChannelVerificationTests.swift in Sources */,
 				04B6BA702E21601B0090FE39 /* NoiseKeyRotationTests.swift in Sources */,
 				04B6BA712E21601B0090FE39 /* NoiseRateLimiterTests.swift in Sources */,
@@ -635,6 +655,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				CDAD6629EB69916B95C80DAF /* BinaryProtocolTests.swift in Sources */,
+				04AD0B542E2678220002A40A /* VersionNegotiationIntegrationTests.swift in Sources */,
+				04AD0B552E2678220002A40A /* BinaryProtocolVersionTests.swift in Sources */,
+				04AD0B562E2678220002A40A /* ProtocolVersionNegotiationTests.swift in Sources */,
+				04AD0B572E2678220002A40A /* VersionNegotiationScenarioTests.swift in Sources */,
 				04B6BA672E21601B0090FE39 /* ChannelVerificationTests.swift in Sources */,
 				04B6BA682E21601B0090FE39 /* NoiseKeyRotationTests.swift in Sources */,
 				04B6BA692E21601B0090FE39 /* NoiseRateLimiterTests.swift in Sources */,

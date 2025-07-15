@@ -167,6 +167,7 @@ class ChannelVerificationTests: XCTestCase {
         let update = ChannelPasswordUpdate(
             channel: channel,
             ownerID: ownerID,
+            ownerFingerprint: "test-fingerprint", // Mock fingerprint
             encryptedPassword: Data(), // Would be encrypted in real scenario
             newKeyCommitment: newCommitment
         )
@@ -191,9 +192,12 @@ class MockBluetoothMeshService: BluetoothMeshService {
     var mockNoiseSessionEstablished = false
     var mockDecryptedPassword: String?
     
-    override func sendChannelKeyVerifyResponse(_ response: ChannelKeyVerifyResponse, to peerID: String) {
+    // Mock the method without override since it's not overrideable
+    func mockSendChannelKeyVerifyResponse(_ response: ChannelKeyVerifyResponse, to peerID: String) {
         sentVerifyResponse = true
         lastVerifyResponse = response
+        // Call the real method if needed
+        super.sendChannelKeyVerifyResponse(response, to: peerID)
     }
     
     override func getNoiseService() -> NoiseEncryptionService {

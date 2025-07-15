@@ -150,8 +150,11 @@ struct BinaryProtocol {
         
         // Header
         let version = unpaddedData[offset]; offset += 1
-        // Only support version 1
-        guard version == 1 else { return nil }
+        // Check if version is supported
+        guard ProtocolVersion.isSupported(version) else { 
+            // Log unsupported version for debugging
+            return nil 
+        }
         let type = unpaddedData[offset]; offset += 1
         let ttl = unpaddedData[offset]; offset += 1
         
