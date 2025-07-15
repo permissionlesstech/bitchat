@@ -76,7 +76,7 @@ graph LR
     ID1 -->|Rotate| ID2
     ID2 -->|Rotate| ID3
     
-    F[Fingerprint: SHA256(PublicKey)]
+    F["Fingerprint: SHA256 of PublicKey"]
     F -.->|"Persistent Identity"| ID1
     F -.-> ID2
     F -.-> ID3
