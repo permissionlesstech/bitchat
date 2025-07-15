@@ -10,6 +10,7 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var viewModel: ChatViewModel
+    @EnvironmentObject var themeManager: ThemeManager
     @State private var messageText = ""
     @State private var textFieldSelection: NSRange? = nil
     @FocusState private var isTextFieldFocused: Bool
@@ -29,15 +30,15 @@ struct ContentView: View {
     @State private var showLeaveChannelAlert = false
     
     private var backgroundColor: Color {
-        colorScheme == .dark ? Color.black : Color.white
+        themeManager.backgroundColor(for: colorScheme)
     }
     
     private var textColor: Color {
-        colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
+        themeManager.primaryTextColor(for: colorScheme)
     }
     
     private var secondaryTextColor: Color {
-        colorScheme == .dark ? Color.green.opacity(0.8) : Color(red: 0, green: 0.5, blue: 0).opacity(0.8)
+        themeManager.secondaryTextColor(for: colorScheme)
     }
     
     var body: some View {
@@ -204,13 +205,13 @@ struct ContentView: View {
                         let encryptionStatus = viewModel.getEncryptionStatus(for: privatePeerID)
                         Image(systemName: encryptionStatus.icon)
                             .font(.system(size: 14))
-                            .foregroundColor(encryptionStatus == .noiseVerified ? Color.green : 
-                                           encryptionStatus == .noiseSecured ? Color.orange :
-                                           Color.red)
+                            .foregroundColor(encryptionStatus == .noiseVerified ? themeManager.successColor(for: colorScheme) : 
+                                           encryptionStatus == .noiseSecured ? themeManager.warningColor(for: colorScheme) :
+                                           themeManager.errorColor(for: colorScheme))
                             .accessibilityLabel("Encryption status: \(encryptionStatus == .noiseVerified ? "verified" : encryptionStatus == .noiseSecured ? "secured" : "not encrypted")")
                         Text("\(privatePeerNick)")
                             .font(.system(size: 16, weight: .medium, design: .monospaced))
-                            .foregroundColor(Color.orange)
+                            .foregroundColor(themeManager.accentColor(for: colorScheme))
                     }
                     .frame(maxWidth: .infinity)
                     .accessibilityLabel("Private chat with \(privatePeerNick)")
@@ -226,7 +227,7 @@ struct ContentView: View {
                 }) {
                     Image(systemName: viewModel.isFavorite(peerID: privatePeerID) ? "star.fill" : "star")
                         .font(.system(size: 16))
-                        .foregroundColor(viewModel.isFavorite(peerID: privatePeerID) ? Color.yellow : textColor)
+                        .foregroundColor(viewModel.isFavorite(peerID: privatePeerID) ? themeManager.favoriteColor(for: colorScheme) : textColor)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(viewModel.isFavorite(peerID: privatePeerID) ? "Remove from favorites" : "Add to favorites")
@@ -259,13 +260,13 @@ struct ContentView: View {
                         if viewModel.passwordProtectedChannels.contains(currentChannel) {
                             Image(systemName: "lock.fill")
                                 .font(.system(size: 14))
-                                .foregroundColor(Color.orange)
+                                .foregroundColor(themeManager.warningColor(for: colorScheme))
                                 .accessibilityLabel("Password protected channel")
                         }
                         
                         Text(currentChannel)
                             .font(.system(size: 16, weight: .medium, design: .monospaced))
-                            .foregroundColor(viewModel.passwordProtectedChannels.contains(currentChannel) ? Color.orange : Color.blue)
+                            .foregroundColor(viewModel.passwordProtectedChannels.contains(currentChannel) ? themeManager.warningColor(for: colorScheme) : themeManager.accentColor(for: colorScheme))
                         
                         // Verification status indicator after channel name
                         if viewModel.passwordProtectedChannels.contains(currentChannel),
@@ -278,15 +279,15 @@ struct ContentView: View {
                             case .verified:
                                 Image(systemName: "checkmark.circle.fill")
                                     .font(.system(size: 12))
-                                    .foregroundColor(Color.green)
+                                    .foregroundColor(themeManager.successColor(for: colorScheme))
                             case .failed:
                                 Image(systemName: "xmark.circle.fill")
                                     .font(.system(size: 12))
-                                    .foregroundColor(Color.red)
+                                    .foregroundColor(themeManager.errorColor(for: colorScheme))
                             case .unverified:
                                 Image(systemName: "questionmark.circle")
                                     .font(.system(size: 12))
-                                    .foregroundColor(Color.gray)
+                                    .foregroundColor(themeManager.secondaryTextColor(for: colorScheme))
                                     .help("Password verification pending")
                             }
                         } else if viewModel.passwordProtectedChannels.contains(currentChannel) {
@@ -303,7 +304,7 @@ struct ContentView: View {
                     if viewModel.retentionEnabledChannels.contains(currentChannel) {
                         Image(systemName: "bookmark.fill")
                             .font(.system(size: 16))
-                            .foregroundColor(Color.yellow)
+                            .foregroundColor(themeManager.favoriteColor(for: colorScheme))
                             .help("Messages in this channel are being saved locally")
                             .accessibilityLabel("Message retention enabled")
                     }
@@ -336,7 +337,7 @@ struct ContentView: View {
                         }) {
                             Image(systemName: viewModel.passwordProtectedChannels.contains(currentChannel) ? "lock.fill" : "lock")
                                 .font(.system(size: 16))
-                                .foregroundColor(viewModel.passwordProtectedChannels.contains(currentChannel) ? Color.yellow : textColor)
+                                .foregroundColor(viewModel.passwordProtectedChannels.contains(currentChannel) ? themeManager.favoriteColor(for: colorScheme) : textColor)
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel(viewModel.passwordProtectedChannels.contains(currentChannel) ? "Remove channel password" : "Set channel password")
@@ -348,7 +349,7 @@ struct ContentView: View {
                     }) {
                         Image(systemName: "xmark.circle")
                             .font(.system(size: 16))
-                            .foregroundColor(Color.red.opacity(0.8))
+                            .foregroundColor(themeManager.errorColor(for: colorScheme).opacity(0.8))
                     }
                     .buttonStyle(.plain)
                     .alert("leave channel?", isPresented: $showLeaveChannelAlert) {
@@ -404,14 +405,14 @@ struct ContentView: View {
                     if hasUnreadChannelMessages {
                         Image(systemName: "number")
                             .font(.system(size: 12))
-                            .foregroundColor(Color.blue)
+                            .foregroundColor(themeManager.accentColor(for: colorScheme))
                             .accessibilityLabel("Unread channel messages")
                     }
                     
                     if !viewModel.unreadPrivateMessages.isEmpty {
                         Image(systemName: "envelope.fill")
                             .font(.system(size: 12))
-                            .foregroundColor(Color.orange)
+                            .foregroundColor(themeManager.warningColor(for: colorScheme))
                             .accessibilityLabel("Unread private messages")
                     }
                     
@@ -439,7 +440,7 @@ struct ContentView: View {
                                 .accessibilityHidden(true)
                         }
                     }
-                    .foregroundColor(viewModel.isConnected ? textColor : Color.red)
+                    .foregroundColor(viewModel.isConnected ? textColor : themeManager.errorColor(for: colorScheme))
                 }
                 .onTapGesture {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
@@ -477,7 +478,7 @@ struct ContentView: View {
                             
                             if message.sender == "system" {
                                 // System messages
-                                Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme))
+                                Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme, themeManager: themeManager))
                                     .textSelection(.enabled)
                                     .fixedSize(horizontal: false, vertical: true)
                                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -486,7 +487,7 @@ struct ContentView: View {
                                 VStack(alignment: .leading, spacing: 8) {
                                     HStack(alignment: .top, spacing: 0) {
                                         // Single text view for natural wrapping
-                                        Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme))
+                                        Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme, themeManager: themeManager))
                                             .textSelection(.enabled)
                                             .fixedSize(horizontal: false, vertical: true)
                                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -494,7 +495,7 @@ struct ContentView: View {
                                         // Delivery status indicator for private messages
                                         if message.isPrivate && message.sender == viewModel.nickname,
                                            let status = message.deliveryStatus {
-                                            DeliveryStatusView(status: status, colorScheme: colorScheme)
+                                            DeliveryStatusView(status: status)
                                                 .padding(.leading, 4)
                                         }
                                     }
@@ -590,7 +591,7 @@ struct ContentView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .buttonStyle(.plain)
-                        .background(Color.gray.opacity(0.1))
+                        .background(themeManager.secondaryBackgroundColor(for: colorScheme).opacity(0.1))
                     }
                 }
                 .background(backgroundColor)
@@ -664,7 +665,7 @@ struct ContentView: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                             }
                             .buttonStyle(.plain)
-                            .background(Color.gray.opacity(0.1))
+                            .background(themeManager.secondaryBackgroundColor(for: colorScheme).opacity(0.1))
                         }
                     }
                 }
@@ -680,14 +681,14 @@ struct ContentView: View {
             if viewModel.selectedPrivateChatPeer != nil {
                 Text("<@\(viewModel.nickname)> →")
                     .font(.system(size: 12, weight: .medium, design: .monospaced))
-                    .foregroundColor(Color.orange)
+                    .foregroundColor(themeManager.accentColor(for: colorScheme))
                     .lineLimit(1)
                     .fixedSize()
                     .padding(.leading, 12)
             } else if let currentChannel = viewModel.currentChannel, viewModel.passwordProtectedChannels.contains(currentChannel) {
                 Text("<@\(viewModel.nickname)> →")
                     .font(.system(size: 12, weight: .medium, design: .monospaced))
-                    .foregroundColor(Color.orange)
+                    .foregroundColor(themeManager.accentColor(for: colorScheme))
                     .lineLimit(1)
                     .fixedSize()
                     .padding(.leading, 12)
@@ -770,10 +771,10 @@ struct ContentView: View {
             Button(action: sendMessage) {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 20))
-                    .foregroundColor(messageText.isEmpty ? Color.gray :
-                                            (viewModel.selectedPrivateChatPeer != nil ||
-                                             (viewModel.currentChannel != nil && viewModel.passwordProtectedChannels.contains(viewModel.currentChannel ?? "")))
-                                             ? Color.orange : textColor)
+                                    .foregroundColor(messageText.isEmpty ? themeManager.secondaryTextColor(for: colorScheme) :
+                                        (viewModel.selectedPrivateChatPeer != nil ||
+                                         (viewModel.currentChannel != nil && viewModel.passwordProtectedChannels.contains(viewModel.currentChannel ?? "")))
+                                         ? themeManager.accentColor(for: colorScheme) : textColor)
             }
             .buttonStyle(.plain)
             .padding(.trailing, 12)
@@ -841,7 +842,7 @@ struct ContentView: View {
                 
                 Text(channel)
                     .font(.system(size: 14, design: .monospaced))
-                    .foregroundColor(viewModel.currentChannel == channel ? Color.blue : textColor)
+                    .foregroundColor(viewModel.currentChannel == channel ? themeManager.accentColor(for: colorScheme) : textColor)
                 
                 Spacer()
                 
@@ -852,7 +853,7 @@ struct ContentView: View {
                         .foregroundColor(backgroundColor)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(Color.orange)
+                        .background(themeManager.accentColor(for: colorScheme))
                         .clipShape(Capsule())
                 }
                 
@@ -890,10 +891,10 @@ struct ContentView: View {
                     .foregroundColor(viewModel.passwordProtectedChannels.contains(channel) ? backgroundColor : secondaryTextColor)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 2)
-                    .background(viewModel.passwordProtectedChannels.contains(channel) ? Color.orange : Color.clear)
+                    .background(viewModel.passwordProtectedChannels.contains(channel) ? themeManager.accentColor(for: colorScheme) : Color.clear)
                     .overlay(
                         RoundedRectangle(cornerRadius: 4)
-                            .stroke(viewModel.passwordProtectedChannels.contains(channel) ? Color.orange : secondaryTextColor.opacity(0.5), lineWidth: 1)
+                            .stroke(viewModel.passwordProtectedChannels.contains(channel) ? themeManager.accentColor(for: colorScheme) : secondaryTextColor.opacity(0.5), lineWidth: 1)
                     )
                 }
                 .buttonStyle(.plain)
@@ -906,7 +907,7 @@ struct ContentView: View {
             }) {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 14))
-                    .foregroundColor(Color.red.opacity(0.6))
+                    .foregroundColor(themeManager.errorColor(for: colorScheme).opacity(0.6))
             }
             .buttonStyle(.plain)
             .alert("leave channel", isPresented: $showLeaveChannelAlert) {
@@ -924,7 +925,7 @@ struct ContentView: View {
         HStack(spacing: 0) {
             // Grey vertical bar for visual continuity
             Rectangle()
-                .fill(Color.gray.opacity(0.3))
+                .fill(themeManager.secondaryTextColor(for: colorScheme).opacity(0.3))
                 .frame(width: 1)
             
             VStack(alignment: .leading, spacing: 0) {
@@ -1040,11 +1041,11 @@ struct ContentView: View {
                                 } else if viewModel.unreadPrivateMessages.contains(peerID) {
                                     Image(systemName: "envelope.fill")
                                         .font(.system(size: 12))
-                                        .foregroundColor(Color.orange)
+                                        .foregroundColor(themeManager.unreadMessageColor(for: colorScheme))
                                         .accessibilityLabel("Unread message from \(displayName)")
                                 } else {
                                     Circle()
-                                        .fill(viewModel.getRSSIColor(rssi: rssi, colorScheme: colorScheme))
+                                        .fill(themeManager.getRSSIColor(rssi: rssi, colorScheme: colorScheme))
                                         .frame(width: 8, height: 8)
                                         .accessibilityLabel("Signal strength: \(rssi > -60 ? "excellent" : rssi > -70 ? "good" : rssi > -80 ? "fair" : "poor")")
                                 }
@@ -1054,10 +1055,10 @@ struct ContentView: View {
                                     let encryptionStatus = viewModel.getEncryptionStatus(for: peerID)
                                     Image(systemName: encryptionStatus.icon)
                                         .font(.system(size: 10))
-                                        .foregroundColor(encryptionStatus == .noiseVerified ? Color.green : 
+                                        .foregroundColor(encryptionStatus == .noiseVerified ? themeManager.successColor(for: colorScheme) : 
                                                        encryptionStatus == .noiseSecured ? textColor :
-                                                       encryptionStatus == .noiseHandshaking ? Color.orange :
-                                                       Color.red)
+                                                       encryptionStatus == .noiseHandshaking ? themeManager.warningColor(for: colorScheme) :
+                                                       themeManager.errorColor(for: colorScheme))
                                         .accessibilityLabel("Encryption: \(encryptionStatus == .noiseVerified ? "verified" : encryptionStatus == .noiseSecured ? "secured" : encryptionStatus == .noiseHandshaking ? "establishing" : "none")")
                                 }
                                 
@@ -1099,7 +1100,7 @@ struct ContentView: View {
                                     }) {
                                         Image(systemName: isFavorite ? "star.fill" : "star")
                                             .font(.system(size: 12))
-                                            .foregroundColor(isFavorite ? Color.yellow : secondaryTextColor)
+                                            .foregroundColor(isFavorite ? themeManager.favoriteColor(for: colorScheme) : secondaryTextColor)
                                     }
                                     .buttonStyle(.plain)
                                     .accessibilityLabel(isFavorite ? "Remove \(displayName) from favorites" : "Add \(displayName) to favorites")
@@ -1110,6 +1111,15 @@ struct ContentView: View {
                         }
                         }
                     }
+                    
+                    // Add divider before themes section if there are channels or people
+                    if !viewModel.joinedChannels.isEmpty || !viewModel.connectedPeers.isEmpty {
+                        Divider()
+                            .padding(.vertical, 4)
+                    }
+                    
+                    // Theme selector section
+                    ThemeSelectorView()
                 }
                 .padding(.vertical, 8)
             }
@@ -1127,6 +1137,7 @@ struct MessageContentView: View {
     let viewModel: ChatViewModel
     let colorScheme: ColorScheme
     let isMentioned: Bool
+    @EnvironmentObject var themeManager: ThemeManager
     
     var body: some View {
         let content = message.content
@@ -1158,12 +1169,12 @@ struct MessageContentView: View {
                 // Note: We can't have clickable links in concatenated Text, so hashtags won't be clickable
                 result = result + Text(segment.text)
                     .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                    .foregroundColor(Color.blue)
-                    .underline()
-            } else if segment.type == "mention" {
-                result = result + Text(segment.text)
-                    .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                    .foregroundColor(Color.orange)
+                    .foregroundColor(themeManager.accentColor(for: colorScheme))
+                                                .underline()
+                    } else if segment.type == "mention" {
+                        result = result + Text(segment.text)
+                            .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                            .foregroundColor(themeManager.accentColor(for: colorScheme))
             } else {
                 result = result + Text(segment.text)
                     .font(.system(size: 14, design: .monospaced))
@@ -1232,14 +1243,15 @@ struct MessageContentView: View {
 // Delivery status indicator view
 struct DeliveryStatusView: View {
     let status: DeliveryStatus
-    let colorScheme: ColorScheme
+    @Environment(\.colorScheme) var colorScheme
+    @EnvironmentObject var themeManager: ThemeManager
     
     private var textColor: Color {
-        colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
+        themeManager.primaryTextColor(for: colorScheme)
     }
     
     private var secondaryTextColor: Color {
-        colorScheme == .dark ? Color.green.opacity(0.8) : Color(red: 0, green: 0.5, blue: 0).opacity(0.8)
+        themeManager.secondaryTextColor(for: colorScheme)
     }
     
     var body: some View {
@@ -1271,13 +1283,13 @@ struct DeliveryStatusView: View {
                 Image(systemName: "checkmark")
                     .font(.system(size: 10, weight: .bold))
             }
-            .foregroundColor(Color(red: 0.0, green: 0.478, blue: 1.0))  // Bright blue
+            .foregroundColor(themeManager.accentColor(for: colorScheme))
             .help("Read by \(nickname)")
             
         case .failed(let reason):
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 10))
-                .foregroundColor(Color.red.opacity(0.8))
+                .foregroundColor(themeManager.errorColor(for: colorScheme).opacity(0.8))
                 .help("Failed: \(reason)")
             
         case .partiallyDelivered(let reached, let total):
