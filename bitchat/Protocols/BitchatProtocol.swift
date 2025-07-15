@@ -99,6 +99,10 @@ enum MessageType: UInt8 {
     case channelPasswordUpdate = 0x16    // Distribute new password to channel members
     case channelMetadata = 0x17         // Announce channel creator and metadata
     
+    // Protocol version negotiation
+    case versionHello = 0x20            // Initial version announcement
+    case versionAck = 0x21              // Version acknowledgment
+    
     var description: String {
         switch self {
         case .announce: return "announce"
@@ -120,6 +124,8 @@ enum MessageType: UInt8 {
         case .channelKeyVerifyResponse: return "channelKeyVerifyResponse"
         case .channelPasswordUpdate: return "channelPasswordUpdate"
         case .channelMetadata: return "channelMetadata"
+        case .versionHello: return "versionHello"
+        case .versionAck: return "versionAck"
         }
     }
 }
@@ -379,6 +385,92 @@ struct PeerIdentityBinding {
     func verify() -> Bool {
         // TODO: Implement signature verification
         return true
+    }
+}
+
+// MARK: - Protocol Version Negotiation
+
+// Protocol version constants
+struct ProtocolVersion {
+    static let current: UInt8 = 1
+    static let minimum: UInt8 = 1
+    static let maximum: UInt8 = 1
+    
+    // Future versions can be added here
+    static let supportedVersions: Set<UInt8> = [1]
+    
+    static func isSupported(_ version: UInt8) -> Bool {
+        return supportedVersions.contains(version)
+    }
+    
+    static func negotiateVersion(clientVersions: [UInt8], serverVersions: [UInt8]) -> UInt8? {
+        // Find the highest common version
+        let clientSet = Set(clientVersions)
+        let serverSet = Set(serverVersions)
+        let common = clientSet.intersection(serverSet)
+        
+        return common.max()
+    }
+}
+
+// Version negotiation hello message
+struct VersionHello: Codable {
+    let supportedVersions: [UInt8]  // List of supported protocol versions
+    let preferredVersion: UInt8     // Preferred version (usually the latest)
+    let clientVersion: String       // App version string (e.g., "1.0.0")
+    let platform: String            // Platform identifier (e.g., "iOS", "macOS")
+    let capabilities: [String]?     // Optional capability flags for future extensions
+    
+    init(supportedVersions: [UInt8] = Array(ProtocolVersion.supportedVersions), 
+         preferredVersion: UInt8 = ProtocolVersion.current,
+         clientVersion: String,
+         platform: String,
+         capabilities: [String]? = nil) {
+        self.supportedVersions = supportedVersions
+        self.preferredVersion = preferredVersion
+        self.clientVersion = clientVersion
+        self.platform = platform
+        self.capabilities = capabilities
+    }
+    
+    func encode() -> Data? {
+        return try? JSONEncoder().encode(self)
+    }
+    
+    static func decode(from data: Data) -> VersionHello? {
+        try? JSONDecoder().decode(VersionHello.self, from: data)
+    }
+}
+
+// Version negotiation acknowledgment
+struct VersionAck: Codable {
+    let agreedVersion: UInt8        // The version both peers will use
+    let serverVersion: String       // Responder's app version
+    let platform: String            // Responder's platform
+    let capabilities: [String]?     // Responder's capabilities
+    let rejected: Bool              // True if no compatible version found
+    let reason: String?             // Reason for rejection if applicable
+    
+    init(agreedVersion: UInt8,
+         serverVersion: String,
+         platform: String,
+         capabilities: [String]? = nil,
+         rejected: Bool = false,
+         reason: String? = nil) {
+        self.agreedVersion = agreedVersion
+        self.serverVersion = serverVersion
+        self.platform = platform
+        self.capabilities = capabilities
+        self.rejected = rejected
+        self.reason = reason
+    }
+    
+    func encode() -> Data? {
+        return try? JSONEncoder().encode(self)
+    }
+    
+    static func decode(from data: Data) -> VersionAck? {
+        try? JSONDecoder().decode(VersionAck.self, from: data)
     }
 }
 
