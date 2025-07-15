@@ -143,13 +143,19 @@ class DeliveryTracker {
     
     func generateAck(for message: BitchatMessage, myPeerID: String, myNickname: String, hopCount: UInt8) -> DeliveryAck? {
         // Don't ACK our own messages
-        guard message.senderPeerID != myPeerID else { return nil }
+        guard message.senderPeerID != myPeerID else { 
+            return nil 
+        }
         
         // Don't ACK broadcasts or system messages
-        guard message.isPrivate || message.channel != nil else { return nil }
+        guard message.isPrivate || message.channel != nil else { 
+            return nil 
+        }
         
         // Don't ACK if we've already sent an ACK for this message
-        guard !sentAckIDs.contains(message.id) else { return nil }
+        guard !sentAckIDs.contains(message.id) else { 
+            return nil 
+        }
         sentAckIDs.insert(message.id)
         
         
