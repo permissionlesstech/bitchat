@@ -40,11 +40,9 @@ class ShareViewController: SLComposeServiceViewController {
             return
         }
         
-        print("ShareExtension: Processing share with \(extensionItem.attachments?.count ?? 0) attachments")
         
         // Get the page title from the compose view or extension item
         let pageTitle = self.contentText ?? extensionItem.attributedContentText?.string ?? extensionItem.attributedTitle?.string
-        print("ShareExtension: Page title: \(pageTitle ?? "none")")
         
         var foundURL: URL? = nil
         let group = DispatchGroup()
@@ -52,20 +50,17 @@ class ShareViewController: SLComposeServiceViewController {
         // IMPORTANT: Check if the NSExtensionItem itself has a URL
         // Safari often provides the URL as an attributedString with a link
         if let attributedText = extensionItem.attributedContentText {
-            print("ShareExtension: Checking attributed text for URLs")
             let text = attributedText.string
             let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
             let matches = detector?.matches(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count))
             if let firstMatch = matches?.first, let url = firstMatch.url {
-                print("ShareExtension: Found URL in attributed text: \(url.absoluteString)")
                 foundURL = url
             }
         }
         
         // Only check attachments if we haven't found a URL yet
         if foundURL == nil {
-            for (index, itemProvider) in (extensionItem.attachments ?? []).enumerated() {
-                print("ShareExtension: Attachment \(index) types: \(itemProvider.registeredTypeIdentifiers)")
+            for (_, itemProvider) in (extensionItem.attachments ?? []).enumerated() {
                 
                 // Try multiple URL type identifiers that Safari might use
                 let urlTypes = [
@@ -81,16 +76,13 @@ class ShareViewController: SLComposeServiceViewController {
                             defer { group.leave() }
                             
                             if let url = item as? URL {
-                                print("ShareExtension: Found URL: \(url.absoluteString)")
                                 foundURL = url
                         } else if let data = item as? Data,
                                   let urlString = String(data: data, encoding: .utf8),
                                   let url = URL(string: urlString) {
-                            print("ShareExtension: Found URL from data: \(url.absoluteString)")
                             foundURL = url
                         } else if let string = item as? String,
                                   let url = URL(string: string) {
-                            print("ShareExtension: Found URL from string: \(url.absoluteString)")
                             foundURL = url
                         }
                     }
@@ -108,7 +100,6 @@ class ShareViewController: SLComposeServiceViewController {
                         // Check if the text is actually a URL
                         if let url = URL(string: text),
                            (url.scheme == "http" || url.scheme == "https") {
-                            print("ShareExtension: Found URL in plain text: \(url.absoluteString)")
                             foundURL = url
                         }
                     }
@@ -126,7 +117,6 @@ class ShareViewController: SLComposeServiceViewController {
                     "title": pageTitle ?? url.host ?? "Shared Link"
                 ]
                 
-                print("ShareExtension: Saving URL share - url: \(url.absoluteString), title: \(urlData["title"] ?? "")")
                 
                 if let jsonData = try? JSONSerialization.data(withJSONObject: urlData),
                    let jsonString = String(data: jsonData, encoding: .utf8) {
@@ -134,7 +124,6 @@ class ShareViewController: SLComposeServiceViewController {
                 }
             } else if let title = pageTitle, !title.isEmpty {
                 // No URL found, just share the text
-                print("ShareExtension: No URL found, sharing as text: \(title)")
                 self?.saveToSharedDefaults(content: title, type: "text")
             }
             
@@ -190,7 +179,6 @@ class ShareViewController: SLComposeServiceViewController {
     private func saveToSharedDefaults(content: String, type: String) {
         // Use app groups to share data between extension and main app
         guard let userDefaults = UserDefaults(suiteName: "group.chat.bitchat") else {
-            print("ShareExtension: Failed to access app group UserDefaults")
             return
         }
         
@@ -199,8 +187,6 @@ class ShareViewController: SLComposeServiceViewController {
         userDefaults.set(Date(), forKey: "sharedContentDate")
         userDefaults.synchronize()
         
-        print("ShareExtension: Saved content of type \(type) to shared defaults")
-        print("ShareExtension: Content: \(content)")
         
         // Force open the main app
         self.openMainApp()

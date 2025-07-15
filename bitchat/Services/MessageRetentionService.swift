@@ -30,24 +30,37 @@ class MessageRetentionService {
     private let encryptionKey: SymmetricKey
     
     private init() {
-        // Get documents directory
-        guard let docsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
-            fatalError("Unable to access documents directory")
+        // Get documents directory with fallback to temp directory
+        if let docsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+            documentsDirectory = docsDir
+        } else {
+            // Fallback to temporary directory if documents directory is not accessible
+            documentsDirectory = FileManager.default.temporaryDirectory
+            SecurityLogger.log("Using temporary directory for message retention", 
+                             category: SecurityLogger.security, level: .warning)
         }
-        documentsDirectory = docsDir
         messagesDirectory = documentsDirectory.appendingPathComponent("Messages", isDirectory: true)
         
         // Create messages directory if it doesn't exist
         try? FileManager.default.createDirectory(at: messagesDirectory, withIntermediateDirectories: true)
         
         // Generate or retrieve encryption key from keychain
+        let loadedKey: SymmetricKey
+        
+        // Try to load from keychain
         if let keyData = KeychainManager.shared.getIdentityKey(forKey: "messageRetentionKey") {
-            encryptionKey = SymmetricKey(data: keyData)
-        } else {
-            // Generate new key and store it
-            encryptionKey = SymmetricKey(size: .bits256)
-            _ = KeychainManager.shared.saveIdentityKey(encryptionKey.withUnsafeBytes { Data($0) }, forKey: "messageRetentionKey")
+            loadedKey = SymmetricKey(data: keyData)
         }
+        // Generate new key if needed
+        else {
+            loadedKey = SymmetricKey(size: .bits256)
+            let keyData = loadedKey.withUnsafeBytes { Data($0) }
+            // Save to keychain
+            _ = KeychainManager.shared.saveIdentityKey(keyData, forKey: "messageRetentionKey")
+        }
+        
+        // Now assign the final value
+        self.encryptionKey = loadedKey
         
         // Clean up old messages on init
         cleanupOldMessages()
