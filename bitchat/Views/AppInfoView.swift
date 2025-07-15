@@ -28,6 +28,8 @@ struct AppInfoView: View {
                 .buttonStyle(.plain)
                 .foregroundColor(textColor)
                 .padding()
+                .accessibilityLabel("Done")
+                .accessibilityHint("Back to main chat")
             }
             .background(backgroundColor.opacity(0.95))
             
@@ -38,6 +40,8 @@ struct AppInfoView: View {
                         Text("bitchat*")
                             .font(.system(size: 32, weight: .bold, design: .monospaced))
                             .foregroundColor(textColor)
+                            .accessibilityAddTraits(.isHeader)
+                            .accessibilityHeading(.h1)
                         
                         Text("mesh sidegroupchat")
                             .font(.system(size: 16, design: .monospaced))
@@ -164,6 +168,8 @@ struct AppInfoView: View {
                         Text("bitchat*")
                             .font(.system(size: 32, weight: .bold, design: .monospaced))
                             .foregroundColor(textColor)
+                            .accessibilityAddTraits(.isHeader)
+                            .accessibilityHeading(.h1)
                         
                         Text("mesh sidegroupchat")
                             .font(.system(size: 16, design: .monospaced))
@@ -286,6 +292,8 @@ struct AppInfoView: View {
                         dismiss()
                     }
                     .foregroundColor(textColor)
+                    .accessibilityLabel("Done")
+                    .accessibilityHint("Back to main chat")
                 }
             }
         }
@@ -310,6 +318,8 @@ struct SectionHeader: View {
             .font(.system(size: 16, weight: .bold, design: .monospaced))
             .foregroundColor(textColor)
             .padding(.top, 8)
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityHeading(.h2)
     }
 }
 
@@ -347,6 +357,7 @@ struct FeatureRow: View {
             
             Spacer()
         }
+        .accessibilityElement(children: .combine)
     }
 }
 
