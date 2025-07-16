@@ -109,6 +109,7 @@ struct AppInfoView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("/j #channel - join or create a channel")
                             Text("/m @name - send private message")
+                            Text("/ping @name - check latency to specific peer")
                             Text("/w - see who's online")
                             Text("/channels - show all discovered channels")
                             Text("/block @name - block a peer")
@@ -235,6 +236,7 @@ struct AppInfoView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("/j #channel - join or create a channel")
                             Text("/m @name - send private message")
+                            Text("/ping @name - check latency to specific peer")
                             Text("/w - see who's online")
                             Text("/channels - show all discovered channels")
                             Text("/block @name - block a peer")

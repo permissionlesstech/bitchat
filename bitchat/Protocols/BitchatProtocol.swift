@@ -87,6 +87,8 @@ enum MessageType: UInt8 {
     case deliveryAck = 0x0A  // Acknowledge message received
     case deliveryStatusRequest = 0x0B  // Request delivery status update
     case readReceipt = 0x0C  // Message has been read/viewed
+    case pingRequest = 0x0D  // Ping request for latency measurement
+    case pongResponse = 0x0E  // Pong response for latency measurement
     
     // Noise Protocol messages
     case noiseHandshakeInit = 0x10  // Noise handshake initiation
@@ -114,6 +116,8 @@ enum MessageType: UInt8 {
         case .deliveryAck: return "deliveryAck"
         case .deliveryStatusRequest: return "deliveryStatusRequest"
         case .readReceipt: return "readReceipt"
+        case .pingRequest: return "pingRequest"
+        case .pongResponse: return "pongResponse"
         case .noiseHandshakeInit: return "noiseHandshakeInit"
         case .noiseHandshakeResp: return "noiseHandshakeResp"
         case .noiseEncrypted: return "noiseEncrypted"
@@ -472,6 +476,60 @@ struct VersionAck: Codable {
     }
 }
 
+// Ping request structure for latency measurement
+struct PingRequest: Codable {
+    let pingID: String
+    let senderID: String
+    let senderNickname: String
+    let targetID: String
+    let targetNickname: String
+    let timestamp: Date
+    
+    init(senderID: String, senderNickname: String, targetID: String, targetNickname: String) {
+        self.pingID = UUID().uuidString
+        self.senderID = senderID
+        self.senderNickname = senderNickname
+        self.targetID = targetID
+        self.targetNickname = targetNickname
+        self.timestamp = Date()
+    }
+    
+    func encode() -> Data? {
+        try? JSONEncoder().encode(self)
+    }
+    
+    static func decode(from data: Data) -> PingRequest? {
+        try? JSONDecoder().decode(PingRequest.self, from: data)
+    }
+}
+
+// Pong response structure for latency measurement
+struct PongResponse: Codable {
+    let originalPingID: String
+    let pongID: String
+    let responderID: String
+    let responderNickname: String
+    let originalTimestamp: Date
+    let responseTimestamp: Date
+    
+    init(originalPing: PingRequest, responderID: String, responderNickname: String) {
+        self.originalPingID = originalPing.pingID
+        self.pongID = UUID().uuidString
+        self.responderID = responderID
+        self.responderNickname = responderNickname
+        self.originalTimestamp = originalPing.timestamp
+        self.responseTimestamp = Date()
+    }
+    
+    func encode() -> Data? {
+        try? JSONEncoder().encode(self)
+    }
+    
+    static func decode(from data: Data) -> PongResponse? {
+        try? JSONDecoder().decode(PongResponse.self, from: data)
+    }
+}
+
 // Delivery status for messages
 enum DeliveryStatus: Codable, Equatable {
     case sending
@@ -558,6 +616,10 @@ protocol BitchatDelegate: AnyObject {
     
     // Channel metadata methods
     func didReceiveChannelMetadata(_ metadata: ChannelMetadata, from peerID: String)
+    
+    // Ping/Pong methods
+    func didReceivePingRequest(_ ping: PingRequest)
+    func didReceivePongResponse(_ pong: PongResponse)
 }
 
 // Provide default implementation to make it effectively optional
@@ -608,6 +670,14 @@ extension BitchatDelegate {
     }
     
     func didReceiveChannelMetadata(_ metadata: ChannelMetadata, from peerID: String) {
+        // Default empty implementation
+    }
+    
+    func didReceivePingRequest(_ ping: PingRequest) {
+        // Default empty implementation
+    }
+    
+    func didReceivePongResponse(_ pong: PongResponse) {
         // Default empty implementation
     }
 }
