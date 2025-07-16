@@ -97,12 +97,10 @@ class KeychainIntegrationTests: XCTestCase {
     func testNoPlaintextInUserDefaults() {
         // Create services to generate keys
         _ = NoiseEncryptionService()
-        _ = MessageRetentionService.shared
         
         // Check UserDefaults for any sensitive data
         let keysToCheck = [
             "bitchat.noiseIdentityKey",
-            "bitchat.messageRetentionKey",
             "bitchat.channelPasswords",
             "bitchat.identityKey",
             "bitchat.staticKey"

@@ -380,7 +380,6 @@ struct ContentView: View {
                     
                     let channelCommandInfo: [(commands: [String], syntax: String?, description: String)] = [
                         (["/pass"], "[password]", "change channel password"),
-                        (["/save"], nil, "save channel messages locally"),
                         (["/transfer"], "<nickname>", "transfer channel ownership")
                     ]
                     
@@ -490,7 +489,6 @@ struct ContentView: View {
                         // Add channel-specific commands if in a channel
                         if viewModel.currentChannel != nil {
                             commandDescriptions.append(("/pass", "change channel password"))
-                            commandDescriptions.append(("/save", "save channel messages locally"))
                             commandDescriptions.append(("/transfer", "transfer channel ownership"))
                         }
                         
@@ -1192,29 +1190,6 @@ struct ContentView: View {
                 Spacer()
                 
                 HStack(spacing: 8) {
-                    // Show retention indicator for all users
-                    if viewModel.retentionEnabledChannels.contains(currentChannel) {
-                        Image(systemName: "bookmark.fill")
-                            .font(.system(size: 16))
-                            .foregroundColor(Color.yellow)
-                            .help("Messages in this channel are being saved locally")
-                            .accessibilityLabel("Message retention enabled")
-                    }
-                    
-                    // Save button - only for channel owner
-                    if viewModel.isChannelOwner(currentChannel) {
-                        Button(action: {
-                            viewModel.sendMessage("/save")
-                        }) {
-                            Image(systemName: viewModel.retentionEnabledChannels.contains(currentChannel) ? "bookmark.slash" : "bookmark")
-                                .font(.system(size: 16))
-                                .foregroundColor(textColor)
-                        }
-                        .buttonStyle(.plain)
-                        .help(viewModel.retentionEnabledChannels.contains(currentChannel) ? "Disable message retention" : "Enable message retention")
-                        .accessibilityLabel(viewModel.retentionEnabledChannels.contains(currentChannel) ? "Disable message retention" : "Enable message retention")
-                    }
-                    
                     // Password button for channel creator only
                     if viewModel.isChannelOwner(currentChannel) {
                         Button(action: {
