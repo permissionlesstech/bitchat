@@ -76,7 +76,6 @@ This project is released into the public domain. See the [LICENSE](LICENSE) file
 - `/clear` - Clear chat messages
 - `/pass [password]` - Set/change channel password (owner only)
 - `/transfer @name` - Transfer channel ownership
-- `/save` - Toggle message retention for channel (owner only)
 
 ### Getting Started
 
@@ -89,7 +88,6 @@ This project is released into the public domain. See the [LICENSE](LICENSE) file
 ### Channel Features
 
 - **Password Protection**: Channel owners can set passwords with `/pass`
-- **Message Retention**: Owners can enable mandatory message saving with `/save`
 - **@ Mentions**: Use `@nickname` to mention users (with autocomplete)
 - **Ownership Transfer**: Pass control to trusted users with `/transfer`
 
