@@ -112,7 +112,31 @@ class NoiseIdentityPersistenceTests: XCTestCase {
     }
     
     // MARK: - Message Retention Key Tests
-    // Message retention feature has been removed
+    
+    func testMessageRetentionKeyPersistence() {
+        // Create first instance
+        _ = MessageRetentionService.shared
+        
+        // Get key from keychain
+        let keyData1 = KeychainManager.shared.getIdentityKey(forKey: "messageRetentionKey")
+        XCTAssertNotNil(keyData1, "Message retention key should be stored")
+        
+        // Simulate app restart by clearing the singleton
+        // (In real app, this would be a new process)
+        
+        // Get key again
+        let keyData2 = KeychainManager.shared.getIdentityKey(forKey: "messageRetentionKey")
+        XCTAssertEqual(keyData1, keyData2, "Message retention key should persist")
+    }
+    
+    func testMessageRetentionKeyNotInUserDefaults() {
+        // Ensure service is initialized
+        _ = MessageRetentionService.shared
+        
+        // Verify key is NOT in UserDefaults
+        let userDefaultsData = UserDefaults.standard.data(forKey: "bitchat.messageRetentionKey")
+        XCTAssertNil(userDefaultsData, "Message retention key should NOT be in UserDefaults")
+    }
     
     // MARK: - Keychain Service Name Tests
     
