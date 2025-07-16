@@ -198,4 +198,45 @@ class BitchatMessageTests: XCTestCase {
         
         XCTAssertEqual(decoded.content, longContent)
     }
+    
+    func testPrivateMessageWithAllFieldsForNoise() {
+        // Test that private messages with ID field (used by Noise) are encoded/decoded correctly
+        let messageID = UUID().uuidString
+        let privateMessage = BitchatMessage(
+            id: messageID,
+            sender: "alice",
+            content: "Hello Bob, this is a private message via Noise",
+            timestamp: Date(),
+            isRelay: false,
+            originalSender: nil,
+            isPrivate: true,
+            recipientNickname: "bob",
+            senderPeerID: "alice-peer-id-123",
+            mentions: nil,
+            channel: nil
+        )
+        
+        // Encode to binary payload (as used by Noise encryption)
+        guard let encoded = privateMessage.toBinaryPayload() else {
+            XCTFail("Failed to encode private message with ID to binary payload")
+            return
+        }
+        
+        // Decode from binary payload (as received from Noise decryption)
+        guard let decoded = BitchatMessage.fromBinaryPayload(encoded) else {
+            XCTFail("Failed to decode private message with ID from binary payload")
+            return
+        }
+        
+        // Verify all fields match
+        XCTAssertEqual(decoded.id, messageID)
+        XCTAssertEqual(decoded.sender, "alice")
+        XCTAssertEqual(decoded.content, "Hello Bob, this is a private message via Noise")
+        XCTAssertEqual(decoded.isPrivate, true)
+        XCTAssertEqual(decoded.recipientNickname, "bob")
+        XCTAssertEqual(decoded.senderPeerID, "alice-peer-id-123")
+        XCTAssertNil(decoded.channel)
+        XCTAssertFalse(decoded.isRelay)
+        XCTAssertNil(decoded.originalSender)
+    }
 }
