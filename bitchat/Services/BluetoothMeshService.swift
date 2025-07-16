@@ -1104,27 +1104,6 @@ class BluetoothMeshService: NSObject {
         }
     }
     
-    func sendChannelRetentionAnnouncement(_ channel: String, enabled: Bool) {
-        messageQueue.async { [weak self] in
-            guard let self = self else { return }
-            
-            // Payload format: channel|enabled|creatorID
-            let enabledFlag = enabled ? "1" : "0"
-            let payload = "\(channel)|\(enabledFlag)|\(self.myPeerID)"
-            
-            let packet = BitchatPacket(
-                type: MessageType.channelRetention.rawValue,
-                senderID: Data(hexString: self.myPeerID) ?? Data(),
-                recipientID: SpecialRecipients.broadcast,
-                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-                payload: Data(payload.utf8),
-                signature: nil,
-                ttl: 5  // Allow wider propagation for channel announcements
-            )
-            
-            self.broadcastPacket(packet)
-        }
-    }
     
     func sendEncryptedChannelMessage(_ content: String, mentions: [String], channel: String, channelKey: SymmetricKey, messageID: String? = nil, timestamp: Date? = nil) {
         messageQueue.async { [weak self] in
@@ -2280,29 +2259,6 @@ class BluetoothMeshService: NSObject {
                 var relayPacket = packet
                 relayPacket.ttl -= 1
                 self.broadcastPacket(relayPacket)
-            }
-            
-        case .channelRetention:
-            if let payloadStr = String(data: packet.payload, encoding: .utf8) {
-                // Parse payload: channel|enabled|creatorID
-                let components = payloadStr.split(separator: "|").map(String.init)
-                if components.count >= 3 {
-                    let channel = components[0]
-                    let enabled = components[1] == "1"
-                    let creatorID = components[2]
-                    
-                    
-                    DispatchQueue.main.async {
-                        self.delegate?.didReceiveChannelRetentionAnnouncement(channel, enabled: enabled, creatorID: creatorID)
-                    }
-                    
-                    // Relay announcement
-                    if packet.ttl > 1 {
-                        var relayPacket = packet
-                        relayPacket.ttl -= 1
-                        self.broadcastPacket(relayPacket)
-                    }
-                }
             }
             
         case .readReceipt:
