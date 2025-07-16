@@ -1,4 +1,11 @@
-// PingTests.swift
+//
+//  PingTests.swift
+// bitchatTests
+//
+// This is free and unencumbered software released into the public domain.
+// For more information, see <https://unlicense.org>
+//
+
 import XCTest
 @testable import bitchat
 
@@ -33,15 +40,17 @@ class PingTests: XCTestCase {
             return
         }
         
-        let decoded = PingRequest.decode(from: encoded)
+        guard let decoded = PingRequest.decode(from: encoded) else {
+            XCTFail("Failed to decode PingRequest")
+            return
+        }
         
-        XCTAssertNotNil(decoded)
-        XCTAssertEqual(decoded?.pingID, ping.pingID)
-        XCTAssertEqual(decoded?.senderID, ping.senderID)
-        XCTAssertEqual(decoded?.senderNickname, ping.senderNickname)
-        XCTAssertEqual(decoded?.targetID, ping.targetID)
-        XCTAssertEqual(decoded?.targetNickname, ping.targetNickname)
-        XCTAssertEqual(decoded?.timestamp.timeIntervalSince1970, ping.timestamp.timeIntervalSince1970, accuracy: 1.0)
+        XCTAssertEqual(decoded.pingID, ping.pingID)
+        XCTAssertEqual(decoded.senderID, ping.senderID)
+        XCTAssertEqual(decoded.senderNickname, ping.senderNickname)
+        XCTAssertEqual(decoded.targetID, ping.targetID)
+        XCTAssertEqual(decoded.targetNickname, ping.targetNickname)
+        XCTAssertEqual(decoded.timestamp.timeIntervalSince1970, ping.timestamp.timeIntervalSince1970, accuracy: 1.0)
     }
     
     func testPongResponseInitialization() {
@@ -83,15 +92,17 @@ class PingTests: XCTestCase {
             return
         }
         
-        let decoded = PongResponse.decode(from: encoded)
+        guard let decoded = PongResponse.decode(from: encoded) else {
+            XCTFail("Failed to decode PongResponse")
+            return
+        }
         
-        XCTAssertNotNil(decoded)
-        XCTAssertEqual(decoded?.originalPingID, pong.originalPingID)
-        XCTAssertEqual(decoded?.pongID, pong.pongID)
-        XCTAssertEqual(decoded?.responderID, pong.responderID)
-        XCTAssertEqual(decoded?.responderNickname, pong.responderNickname)
-        XCTAssertEqual(decoded?.originalTimestamp.timeIntervalSince1970, pong.originalTimestamp.timeIntervalSince1970, accuracy: 1.0)
-        XCTAssertEqual(decoded?.responseTimestamp.timeIntervalSince1970, pong.responseTimestamp.timeIntervalSince1970, accuracy: 1.0)
+        XCTAssertEqual(decoded.originalPingID, pong.originalPingID)
+        XCTAssertEqual(decoded.pongID, pong.pongID)
+        XCTAssertEqual(decoded.responderID, pong.responderID)
+        XCTAssertEqual(decoded.responderNickname, pong.responderNickname)
+        XCTAssertEqual(decoded.originalTimestamp.timeIntervalSince1970, pong.originalTimestamp.timeIntervalSince1970, accuracy: 1.0)
+        XCTAssertEqual(decoded.responseTimestamp.timeIntervalSince1970, pong.responseTimestamp.timeIntervalSince1970, accuracy: 1.0)
     }
     
     func testLatencyCalculation() {
