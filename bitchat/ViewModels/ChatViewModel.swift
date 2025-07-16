@@ -57,8 +57,6 @@ class ChatViewModel: ObservableObject {
     @Published var channelMetadata: [String: ChannelMetadata] = [:]  // channel -> metadata from creator
     @Published var showPasswordPrompt: Bool = false
     @Published var passwordPromptChannel: String? = nil
-    @Published var savedChannels: Set<String> = []  // Channels saved for message retention
-    @Published var retentionEnabledChannels: Set<String> = []  // Channels where owner enabled retention for all members
     @Published var channelVerificationStatus: [String: ChannelVerificationStatus] = [:]  // Track verification status
     
     var meshService = BluetoothMeshService()
@@ -69,7 +67,6 @@ class ChatViewModel: ObservableObject {
     private let channelCreatorsKey = "bitchat.channelCreators"
     // private let channelPasswordsKey = "bitchat.channelPasswords" // Now using Keychain
     private let channelKeyCommitmentsKey = "bitchat.channelKeyCommitments"
-    private let retentionEnabledChannelsKey = "bitchat.retentionEnabledChannels"
     private var nicknameSaveTimer: Timer?
     
     @Published var favoritePeers: Set<String> = []  // Now stores public key fingerprints instead of peer IDs
@@ -96,8 +93,6 @@ class ChatViewModel: ObservableObject {
         loadChannelData()
         loadBlockedUsers()
         loadVerifiedFingerprints()
-        // Load saved channels state
-        savedChannels = MessageRetentionService.shared.getFavoriteChannels()
         meshService.delegate = self
         
         // Log startup info
@@ -252,14 +247,6 @@ class ChatViewModel: ObservableObject {
                 if channelMembers[channel] == nil {
                     channelMembers[channel] = Set()
                 }
-                
-                // Load saved messages if this channel has retention enabled
-                if retentionEnabledChannels.contains(channel) {
-                    let savedMessages = MessageRetentionService.shared.loadMessagesForChannel(channel)
-                    if !savedMessages.isEmpty {
-                        channelMessages[channel] = savedMessages
-                    }
-                }
             }
         }
     }
@@ -291,11 +278,6 @@ class ChatViewModel: ObservableObject {
             channelKeyCommitments = savedCommitments
         }
         
-        // Load retention-enabled channels
-        if let savedRetentionChannels = userDefaults.stringArray(forKey: retentionEnabledChannelsKey) {
-            retentionEnabledChannels = Set(savedRetentionChannels)
-        }
-        
         // Load channel passwords from Keychain
         let savedPasswords = KeychainManager.shared.getAllChannelPasswords()
         channelPasswords = savedPasswords
@@ -322,7 +304,6 @@ class ChatViewModel: ObservableObject {
             _ = KeychainManager.shared.saveChannelPassword(password, for: channel)
         }
         userDefaults.set(channelKeyCommitments, forKey: channelKeyCommitmentsKey)
-        userDefaults.set(Array(retentionEnabledChannels), forKey: retentionEnabledChannelsKey)
         
         // Force synchronize and add a small delay to ensure writes complete
         _ = userDefaults.synchronize()
@@ -574,23 +555,6 @@ class ChatViewModel: ObservableObject {
         // Initialize channel messages if needed
         if channelMessages[channelTag] == nil {
             channelMessages[channelTag] = []
-        }
-        
-        // Load saved messages if this is a favorite channel
-        if MessageRetentionService.shared.getFavoriteChannels().contains(channelTag) {
-            let savedMessages = MessageRetentionService.shared.loadMessagesForChannel(channelTag)
-            if !savedMessages.isEmpty {
-                // Merge saved messages with current messages, avoiding duplicates
-                var existingMessageIDs = Set(channelMessages[channelTag]?.map { $0.id } ?? [])
-                for savedMessage in savedMessages {
-                    if !existingMessageIDs.contains(savedMessage.id) {
-                        channelMessages[channelTag]?.append(savedMessage)
-                        existingMessageIDs.insert(savedMessage.id)
-                    }
-                }
-                // Sort by timestamp
-                channelMessages[channelTag]?.sort { $0.timestamp < $1.timestamp }
-            }
         }
         
         // Hide password prompt if it was showing
@@ -1335,11 +1299,6 @@ class ChatViewModel: ObservableObject {
                 }
                 channelMessages[channel]?.append(message)
                 
-                // Save message if channel has retention enabled
-                if retentionEnabledChannels.contains(channel) {
-                    MessageRetentionService.shared.saveMessage(message, forChannel: channel)
-                }
-                
                 // Track ourselves as a channel member
                 if channelMembers[channel] == nil {
                     channelMembers[channel] = Set()
@@ -1747,11 +1706,6 @@ class ChatViewModel: ObservableObject {
         verifiedFingerprints.removeAll()
         // Verified fingerprints are cleared when identity data is cleared below
         
-        // Clear all retained messages
-        MessageRetentionService.shared.deleteAllStoredMessages()
-        savedChannels.removeAll()
-        retentionEnabledChannels.removeAll()
-        
         // Clear message retry queue
         MessageRetryService.shared.clearRetryQueue()
         
@@ -1760,7 +1714,6 @@ class ChatViewModel: ObservableObject {
         userDefaults.removeObject(forKey: passwordProtectedChannelsKey)
         userDefaults.removeObject(forKey: channelCreatorsKey)
         userDefaults.removeObject(forKey: channelKeyCommitmentsKey)
-        userDefaults.removeObject(forKey: retentionEnabledChannelsKey)
         
         // Reset nickname to anonymous
         nickname = "anon\(Int.random(in: 1000...9999))"
@@ -2478,69 +2431,7 @@ extension ChatViewModel: BitchatDelegate {
     }
     
     func didReceiveChannelRetentionAnnouncement(_ channel: String, enabled: Bool, creatorID: String?) {
-        
-        // Only process if we're a member of this channel
-        guard joinedChannels.contains(channel) else { return }
-        
-        // Verify the announcement is from the channel owner
-        if let creatorID = creatorID, channelCreators[channel] != creatorID {
-            return
-        }
-        
-        // Update retention status
-        if enabled {
-            retentionEnabledChannels.insert(channel)
-            savedChannels.insert(channel)
-            // Ensure channel is in favorites if not already
-            if !MessageRetentionService.shared.getFavoriteChannels().contains(channel) {
-                _ = MessageRetentionService.shared.toggleFavoriteChannel(channel)
-            }
-            
-            // Show system message
-            let systemMessage = BitchatMessage(
-                sender: "system",
-                content: "channel owner enabled message retention for \(channel). all messages will be saved locally.",
-                timestamp: Date(),
-                isRelay: false
-            )
-            if currentChannel == channel {
-                messages.append(systemMessage)
-            } else if var channelMsgs = channelMessages[channel] {
-                channelMsgs.append(systemMessage)
-                channelMessages[channel] = channelMsgs
-            } else {
-                channelMessages[channel] = [systemMessage]
-            }
-        } else {
-            retentionEnabledChannels.remove(channel)
-            savedChannels.remove(channel)
-            
-            // Delete all saved messages for this channel
-            MessageRetentionService.shared.deleteMessagesForChannel(channel)
-            // Remove from favorites if currently set
-            if MessageRetentionService.shared.getFavoriteChannels().contains(channel) {
-                _ = MessageRetentionService.shared.toggleFavoriteChannel(channel)
-            }
-            
-            // Show system message
-            let systemMessage = BitchatMessage(
-                sender: "system",
-                content: "channel owner disabled message retention for \(channel). all saved messages have been deleted.",
-                timestamp: Date(),
-                isRelay: false
-            )
-            if currentChannel == channel {
-                messages.append(systemMessage)
-            } else if var channelMsgs = channelMessages[channel] {
-                channelMsgs.append(systemMessage)
-                channelMessages[channel] = channelMsgs
-            } else {
-                channelMessages[channel] = [systemMessage]
-            }
-        }
-        
-        // Persist retention status
-        userDefaults.set(Array(retentionEnabledChannels), forKey: retentionEnabledChannelsKey)
+        // This feature has been removed
     }
     
     private func handleCommand(_ command: String) {
@@ -2698,9 +2589,6 @@ extension ChatViewModel: BitchatDelegate {
                     if passwordProtectedChannels.contains(channel) {
                         status += " 🔒"
                     }
-                    if retentionEnabledChannels.contains(channel) {
-                        status += " 📌"
-                    }
                     let myFingerprint = getMyFingerprint()
                     if channelCreators[channel] == meshService.myPeerID || channelCreators[channel] == myFingerprint {
                         status += " (owner)"
@@ -2789,92 +2677,6 @@ extension ChatViewModel: BitchatDelegate {
                 // Clear main messages
                 messages.removeAll()
             }
-        case "/save":
-            // Toggle retention for current channel (owner only)
-            guard let channel = currentChannel else {
-                let systemMessage = BitchatMessage(
-                    sender: "system",
-                    content: "you must be in a channel to toggle message retention.",
-                    timestamp: Date(),
-                    isRelay: false
-                )
-                messages.append(systemMessage)
-                break
-            }
-            
-            // Check if user is the channel owner
-            let myFingerprint = getMyFingerprint()
-            guard channelCreators[channel] == meshService.myPeerID || channelCreators[channel] == myFingerprint else {
-                let systemMessage = BitchatMessage(
-                    sender: "system",
-                    content: "only the channel owner can toggle message retention.",
-                    timestamp: Date(),
-                    isRelay: false
-                )
-                messages.append(systemMessage)
-                break
-            }
-            
-            // Toggle retention status
-            let isEnabling = !retentionEnabledChannels.contains(channel)
-            
-            if isEnabling {
-                // Enable retention for this channel
-                retentionEnabledChannels.insert(channel)
-                savedChannels.insert(channel)
-                _ = MessageRetentionService.shared.toggleFavoriteChannel(channel) // Enable if not already
-                
-                // Announce to all members that retention is enabled
-                meshService.sendChannelRetentionAnnouncement(channel, enabled: true)
-                
-                let systemMessage = BitchatMessage(
-                    sender: "system",
-                    content: "message retention enabled for channel \(channel). all members will save messages locally.",
-                    timestamp: Date(),
-                    isRelay: false
-                )
-                messages.append(systemMessage)
-                
-                // Load any previously saved messages
-                let savedMessages = MessageRetentionService.shared.loadMessagesForChannel(channel)
-                if !savedMessages.isEmpty {
-                    // Merge saved messages with current messages, avoiding duplicates
-                    var existingMessageIDs = Set(channelMessages[channel]?.map { $0.id } ?? [])
-                    for savedMessage in savedMessages {
-                        if !existingMessageIDs.contains(savedMessage.id) {
-                            if channelMessages[channel] == nil {
-                                channelMessages[channel] = []
-                            }
-                            channelMessages[channel]?.append(savedMessage)
-                            existingMessageIDs.insert(savedMessage.id)
-                        }
-                    }
-                    // Sort by timestamp
-                    channelMessages[channel]?.sort { $0.timestamp < $1.timestamp }
-                }
-            } else {
-                // Disable retention for this channel
-                retentionEnabledChannels.remove(channel)
-                savedChannels.remove(channel)
-                
-                // Delete all saved messages for this channel
-                MessageRetentionService.shared.deleteMessagesForChannel(channel)
-                _ = MessageRetentionService.shared.toggleFavoriteChannel(channel) // Disable if enabled
-                
-                // Announce to all members that retention is disabled
-                meshService.sendChannelRetentionAnnouncement(channel, enabled: false)
-                
-                let systemMessage = BitchatMessage(
-                    sender: "system",
-                    content: "message retention disabled for channel \(channel). all saved messages will be deleted on all devices.",
-                    timestamp: Date(),
-                    isRelay: false
-                )
-                messages.append(systemMessage)
-            }
-            
-            // Save the updated channel data
-            saveChannelData()
         case "/debug":
             // Debug command to check ownership info
             if let channel = currentChannel {
@@ -3539,11 +3341,6 @@ extension ChatViewModel: BitchatDelegate {
                     // System message - always add
                     channelMessages[channel]?.append(finalMessage)
                     channelMessages[channel]?.sort { $0.timestamp < $1.timestamp }
-                }
-                
-                // Save message if channel has retention enabled
-                if retentionEnabledChannels.contains(channel) {
-                    MessageRetentionService.shared.saveMessage(messageToAdd, forChannel: channel)
                 }
                 
                 // Track channel members - only track the sender as a member
