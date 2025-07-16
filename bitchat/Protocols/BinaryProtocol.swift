@@ -19,7 +19,7 @@ extension Data {
 }
 
 // Binary Protocol Format:
-// Header (Fixed 13 bytes):
+// Header (Fixed 14 bytes):
 // - Version: 1 byte
 // - Type: 1 byte  
 // - TTL: 1 byte
