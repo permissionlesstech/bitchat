@@ -84,7 +84,6 @@ enum MessageType: UInt8 {
     case fragmentContinue = 0x06
     case fragmentEnd = 0x07
     case channelAnnounce = 0x08  // Announce password-protected channel status
-    case channelRetention = 0x09  // Announce channel retention status
     case deliveryAck = 0x0A  // Acknowledge message received
     case deliveryStatusRequest = 0x0B  // Request delivery status update
     case readReceipt = 0x0C  // Message has been read/viewed
@@ -112,7 +111,6 @@ enum MessageType: UInt8 {
         case .fragmentContinue: return "fragmentContinue"
         case .fragmentEnd: return "fragmentEnd"
         case .channelAnnounce: return "channelAnnounce"
-        case .channelRetention: return "channelRetention"
         case .deliveryAck: return "deliveryAck"
         case .deliveryStatusRequest: return "deliveryStatusRequest"
         case .readReceipt: return "readReceipt"
