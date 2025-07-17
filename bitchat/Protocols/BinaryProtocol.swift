@@ -49,17 +49,22 @@ struct BinaryProtocol {
     static func encode(_ packet: BitchatPacket) -> Data? {
         var data = Data()
         
+        
         // Try to compress payload if beneficial
         var payload = packet.payload
         var originalPayloadSize: UInt16? = nil
         var isCompressed = false
         
-        if CompressionUtil.shouldCompress(payload),
-           let compressedPayload = CompressionUtil.compress(payload) {
-            // Store original size for decompression (2 bytes after payload)
-            originalPayloadSize = UInt16(payload.count)
-            payload = compressedPayload
-            isCompressed = true
+        if CompressionUtil.shouldCompress(payload) {
+            if let compressedPayload = CompressionUtil.compress(payload) {
+                // Store original size for decompression (2 bytes after payload)
+                originalPayloadSize = UInt16(payload.count)
+                payload = compressedPayload
+                isCompressed = true
+                
+            } else {
+            }
+        } else {
         }
         
         // Header
@@ -88,6 +93,8 @@ struct BinaryProtocol {
         // Payload length (2 bytes, big-endian) - includes original size if compressed
         let payloadDataSize = payload.count + (isCompressed ? 2 : 0)
         let payloadLength = UInt16(payloadDataSize)
+        
+        
         data.append(UInt8((payloadLength >> 8) & 0xFF))
         data.append(UInt8(payloadLength & 0xFF))
         
@@ -120,37 +127,52 @@ struct BinaryProtocol {
             data.append(signature.prefix(signatureSize))
         }
         
-        return data
+        
+        // Apply padding to standard block sizes for traffic analysis resistance
+        let optimalSize = MessagePadding.optimalBlockSize(for: data.count)
+        let paddedData = MessagePadding.pad(data, toSize: optimalSize)
+        
+        
+        return paddedData
     }
     
     // Decode binary data to BitchatPacket
     static func decode(_ data: Data) -> BitchatPacket? {
-        guard data.count >= headerSize + senderIDSize else { return nil }
+        // Remove padding first
+        let unpaddedData = MessagePadding.unpad(data)
+        
+        
+        guard unpaddedData.count >= headerSize + senderIDSize else { 
+            return nil 
+        }
         
         var offset = 0
         
         // Header
-        let version = data[offset]; offset += 1
-        // Only support version 1
-        guard version == 1 else { return nil }
-        let type = data[offset]; offset += 1
-        let ttl = data[offset]; offset += 1
+        let version = unpaddedData[offset]; offset += 1
+        // Check if version is supported
+        guard ProtocolVersion.isSupported(version) else { 
+            // Log unsupported version for debugging
+            return nil 
+        }
+        let type = unpaddedData[offset]; offset += 1
+        let ttl = unpaddedData[offset]; offset += 1
         
         // Timestamp
-        let timestampData = data[offset..<offset+8]
+        let timestampData = unpaddedData[offset..<offset+8]
         let timestamp = timestampData.reduce(0) { result, byte in
             (result << 8) | UInt64(byte)
         }
         offset += 8
         
         // Flags
-        let flags = data[offset]; offset += 1
+        let flags = unpaddedData[offset]; offset += 1
         let hasRecipient = (flags & Flags.hasRecipient) != 0
         let hasSignature = (flags & Flags.hasSignature) != 0
         let isCompressed = (flags & Flags.isCompressed) != 0
         
         // Payload length
-        let payloadLengthData = data[offset..<offset+2]
+        let payloadLengthData = unpaddedData[offset..<offset+2]
         let payloadLength = payloadLengthData.reduce(0) { result, byte in
             (result << 8) | UInt16(byte)
         }
@@ -165,16 +187,18 @@ struct BinaryProtocol {
             expectedSize += signatureSize
         }
         
-        guard data.count >= expectedSize else { return nil }
+        guard unpaddedData.count >= expectedSize else { 
+            return nil 
+        }
         
         // SenderID
-        let senderID = data[offset..<offset+senderIDSize]
+        let senderID = unpaddedData[offset..<offset+senderIDSize]
         offset += senderIDSize
         
         // RecipientID
         var recipientID: Data?
         if hasRecipient {
-            recipientID = data[offset..<offset+recipientIDSize]
+            recipientID = unpaddedData[offset..<offset+recipientIDSize]
             offset += recipientIDSize
         }
         
@@ -183,14 +207,14 @@ struct BinaryProtocol {
         if isCompressed {
             // First 2 bytes are original size
             guard Int(payloadLength) >= 2 else { return nil }
-            let originalSizeData = data[offset..<offset+2]
+            let originalSizeData = unpaddedData[offset..<offset+2]
             let originalSize = Int(originalSizeData.reduce(0) { result, byte in
                 (result << 8) | UInt16(byte)
             })
             offset += 2
             
             // Compressed payload
-            let compressedPayload = data[offset..<offset+Int(payloadLength)-2]
+            let compressedPayload = unpaddedData[offset..<offset+Int(payloadLength)-2]
             offset += Int(payloadLength) - 2
             
             // Decompress
@@ -199,14 +223,14 @@ struct BinaryProtocol {
             }
             payload = decompressedPayload
         } else {
-            payload = data[offset..<offset+Int(payloadLength)]
+            payload = unpaddedData[offset..<offset+Int(payloadLength)]
             offset += Int(payloadLength)
         }
         
         // Signature
         var signature: Data?
         if hasSignature {
-            signature = data[offset..<offset+signatureSize]
+            signature = unpaddedData[offset..<offset+signatureSize]
         }
         
         return BitchatPacket(
