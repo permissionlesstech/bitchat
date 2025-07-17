@@ -1,0 +1,36 @@
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Kubernetes CLI
+      uses: azure/setup-kubectl@v3
+
+    - name: Deploy PHP app to Kubernetes
+      run: |
+        kubectl apply -f k8s/php-deployment.yaml
+        kubectl apply -f k8s/php-service.yaml
+
+    - name: Deploy HTML app to Kubernetes
+      run: |
+        kubectl apply -f k8s/html-deployment.yaml
+        kubectl apply -f k8s/html-service.yaml
+
+    - name: Deploy IRC bot to Kubernetes
+      run: |
+        kubectl apply -f k8s/irc-deployment.yaml
+        kubectl apply -f k8s/irc-service.yaml
+
+    - name: Deploy bitchat app to Kubernetes
+      run: |
+        kubectl apply -f k8s/bitchat-deployment.yaml
+        kubectl apply -f k8s/bitchat-service.yaml
+    

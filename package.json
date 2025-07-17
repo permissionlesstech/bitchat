@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+  },
+  "devDependencies": {
+    "brew": "^0.0.8",
+    "xcodegen": "^2.2.0"
+  }
+}

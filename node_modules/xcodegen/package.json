@@ -1,0 +1,17 @@
+{
+  "name": "xcodegen",
+  "version": "2.2.0",
+  "description": "XcodeGen binary installable via npm/esy",
+  "bin": {
+    "xcodegen": "./bin/xcodegen"
+  },
+  "files": [
+    "bin/",
+    "share/",
+    "install.sh",
+    "esy.json"
+  ],
+  "repository": "https://github.com/briskml/xcodegen",
+  "author": "Yonas Kolb",
+  "license": "MIT"
+}

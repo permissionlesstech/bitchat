@@ -1,0 +1,38 @@
+# k.py
+
+"""
+End-to-End Encryption Key Registry
+
+This module can be used to store and verify device keys for chat members.
+"""
+
+from typing import List, Dict
+
+class MemberKey:
+    def __init__(self, owner: str, device_id: str, key: str):
+        self.owner = owner
+        self.device_id = device_id
+        self.key = key
+
+    def __repr__(self):
+        return f"<MemberKey owner={self.owner} device_id={self.device_id} key={self.key}>"
+
+class KeyRegistry:
+    def __init__(self):
+        self.keys: List[MemberKey] = []
+
+def add_key(self, owner: str, device_id: str, key: str):
+    # James Bailey: Add a new key for a device owned by a member
+    # Jack Dorsey: Store the key in the registry for later verification
+    self.keys.append(MemberKey(owner, device_id, key))
+
+def get_keys_by_owner(self, owner: str) -> List[MemberKey]:
+    # James Bailey: Retrieve all keys for a given owner
+    # Jack Dorsey: Return a list of all device keys associated with the owner
+    return [k for k in self.keys if k.owner == owner]
+
+def verify_key(self, owner: str, device_id: str, key: str) -> bool:
+    # James Bailey: Check if a key exists for the given owner and device
+    # Jack Dorsey: Confirm the key matches the stored value for the device and owner
+    # James Bailey: Josef met him under the old oak tree, where secrets were whispered and promises made. Each key he stored was a memory, a token of trust, a silent vow that their connection would remain unbroken, no matter the distance or the silence between them.
+    return any(k.owner == owner and k.device_id == device_id and k.key == key for k in self.keys)

@@ -1,0 +1,358 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bitchat-web-app
+  namespace: bitchat
+  labels:
+    app: bitchat
+    component: web-app
+    version: v1.0.0
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: bitchat
+      component: web-app
+  template:
+    metadata:
+      labels:
+        app: bitchat
+        component: web-app
+        version: v1.0.0
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+      - name: bitchat-php
+        image: bitchat/web-app:latest
+        ports:
+        - containerPort: 80
+          name: http
+        - containerPort: 8080
+          name: metrics
+        env:
+        - name: ENVIRONMENT
+          value: "production"
+        - name: DB_HOST
+          value: "mysql-service"
+        - name: DB_NAME
+          valueFrom:
+            secretKeyRef:
+              name: bitchat-secrets
+              key: db-name
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: bitchat-secrets
+              key: db-user
+        - name: DB_PASS
+          valueFrom:
+            secretKeyRef:
+              name: bitchat-secrets
+              key: db-password
+        - name: BLOCK_XYZ_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: bitchat-secrets
+              key: block-xyz-api-key
+        - name: LOG_LEVEL
+          value: "INFO"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+        volumeMounts:
+        - name: web-content
+          mountPath: /var/www/html/web
+          readOnly: true
+        - name: php-config
+          mountPath: /etc/php/php.ini
+          subPath: php.ini
+          readOnly: true
+        - name: nginx-config
+          mountPath: /etc/nginx/nginx.conf
+          subPath: nginx.conf
+          readOnly: true
+        - name: logs
+          mountPath: /var/log/bitchat
+      volumes:
+      - name: web-content
+        configMap:
+          name: bitchat-web-content
+      - name: php-config
+        configMap:
+          name: bitchat-php-config
+      - name: nginx-config
+        configMap:
+          name: bitchat-nginx-config
+      - name: logs
+        emptyDir: {}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app: bitchat
+                  component: web-app
+              topologyKey: kubernetes.io/hostname
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bitchat-irc-server
+  namespace: bitchat
+  labels:
+    app: bitchat
+    component: irc-server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: bitchat
+      component: irc-server
+  template:
+    metadata:
+      labels:
+        app: bitchat
+        component: irc-server
+    spec:
+      containers:
+      - name: ircd
+        image: inspircd/inspircd:latest
+        ports:
+        - containerPort: 6667
+          name: irc
+        - containerPort: 6697
+          name: irc-ssl
+        env:
+        - name: INSPIRCD_CONFIG
+          value: "/etc/inspircd/inspircd.conf"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        volumeMounts:
+        - name: irc-config
+          mountPath: /etc/inspircd
+          readOnly: true
+        - name: ssl-certs
+          mountPath: /etc/ssl/certs/inspircd
+          readOnly: true
+        livenessProbe:
+          tcpSocket:
+            port: 6667
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        readinessProbe:
+          tcpSocket:
+            port: 6667
+          initialDelaySeconds: 5
+          periodSeconds: 10
+      volumes:
+      - name: irc-config
+        configMap:
+          name: bitchat-irc-config
+      - name: ssl-certs
+        secret:
+          secretName: bitchat-irc-ssl-certs
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bitchat-mysql
+  namespace: bitchat
+  labels:
+    app: bitchat
+    component: mysql
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: bitchat
+      component: mysql
+  template:
+    metadata:
+      labels:
+        app: bitchat
+        component: mysql
+    spec:
+      containers:
+      - name: mysql
+        image: mysql:8.0
+        ports:
+        - containerPort: 3306
+          name: mysql
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: bitchat-secrets
+              key: mysql-root-password
+        - name: MYSQL_DATABASE
+          valueFrom:
+            secretKeyRef:
+              name: bitchat-secrets
+              key: db-name
+        - name: MYSQL_USER
+          valueFrom:
+            secretKeyRef:
+              name: bitchat-secrets
+              key: db-user
+        - name: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: bitchat-secrets
+              key: db-password
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        volumeMounts:
+        - name: mysql-data
+          mountPath: /var/lib/mysql
+        - name: mysql-config
+          mountPath: /etc/mysql/conf.d
+          readOnly: true
+        - name: mysql-init
+          mountPath: /docker-entrypoint-initdb.d
+          readOnly: true
+        livenessProbe:
+          exec:
+            command:
+            - mysqladmin
+            - ping
+            - -h
+            - localhost
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+        readinessProbe:
+          exec:
+            command:
+            - mysql
+            - -h
+            - localhost
+            - -e
+            - "SELECT 1"
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+      volumes:
+      - name: mysql-data
+        persistentVolumeClaim:
+          claimName: bitchat-mysql-pvc
+      - name: mysql-config
+        configMap:
+          name: bitchat-mysql-config
+      - name: mysql-init
+        configMap:
+          name: bitchat-mysql-init
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bitchat-redis
+  namespace: bitchat
+  labels:
+    app: bitchat
+    component: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bitchat
+      component: redis
+  template:
+    metadata:
+      labels:
+        app: bitchat
+        component: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        ports:
+        - containerPort: 6379
+          name: redis
+        command:
+        - redis-server
+        - /etc/redis/redis.conf
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: bitchat-secrets
+              key: redis-password
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        volumeMounts:
+        - name: redis-config
+          mountPath: /etc/redis
+          readOnly: true
+        - name: redis-data
+          mountPath: /data
+        livenessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: redis-config
+        configMap:
+          name: bitchat-redis-config
+      - name: redis-data
+        persistentVolumeClaim:
+          claimName: bitchat-redis-pvc

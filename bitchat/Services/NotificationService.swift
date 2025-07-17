@@ -84,3 +84,6 @@ class NotificationService {
         sendLocalNotification(title: title, body: body, identifier: identifier)
     }
 }
+// usage example
+// but where are we pushing the irc github website and doing our html5?
+// POST.call.notificationService.sendMentionNotification(from: "boyfriend Josef Edwards")

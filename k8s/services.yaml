@@ -1,0 +1,293 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: bitchat-web-service
+  namespace: bitchat
+  labels:
+    app: bitchat
+    component: web-app
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 80
+    protocol: TCP
+    name: http
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+    name: metrics
+  selector:
+    app: bitchat
+    component: web-app
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: irc-service
+  namespace: bitchat
+  labels:
+    app: bitchat
+    component: irc-server
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: irc.bitchat.xyz
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 6667
+    targetPort: 6667
+    protocol: TCP
+    name: irc
+  - port: 6697
+    targetPort: 6697
+    protocol: TCP
+    name: irc-ssl
+  selector:
+    app: bitchat
+    component: irc-server
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-service
+  namespace: bitchat
+  labels:
+    app: bitchat
+    component: mysql
+spec:
+  type: ClusterIP
+  ports:
+  - port: 3306
+    targetPort: 3306
+    protocol: TCP
+    name: mysql
+  selector:
+    app: bitchat
+    component: mysql
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+  namespace: bitchat
+  labels:
+    app: bitchat
+    component: redis
+spec:
+  type: ClusterIP
+  ports:
+  - port: 6379
+    targetPort: 6379
+    protocol: TCP
+    name: redis
+  selector:
+    app: bitchat
+    component: redis
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: bitchat-web-ingress
+  namespace: bitchat
+  labels:
+    app: bitchat
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://bitchat.live,https://www.bitchat.live"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Content-Type, Authorization, X-Requested-With"
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/websocket-services: "irc-service"
+    nginx.ingress.kubernetes.io/proxy-set-headers: |
+      map $http_upgrade $connection_upgrade {
+        default upgrade;
+        '' close;
+      }
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      # Security headers
+      add_header X-Frame-Options "SAMEORIGIN" always;
+      add_header X-Content-Type-Options "nosniff" always;
+      add_header X-XSS-Protection "1; mode=block" always;
+      add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+      add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' wss://irc.bitchat.xyz https://block.xyz; font-src 'self'; object-src 'none'; media-src 'self'; child-src 'none';" always;
+      
+      # Rate limiting for API endpoints
+      location /api/ {
+        limit_req zone=api burst=20 nodelay;
+        limit_req_status 429;
+      }
+      
+      # WebSocket upgrade for IRC connections
+      location /irc/ {
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+      }
+spec:
+  tls:
+  - hosts:
+    - bitchat.live
+    - www.bitchat.live
+    - app.bitchat.live
+    secretName: bitchat-tls-cert
+  rules:
+  - host: bitchat.live
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: bitchat-web-service
+            port:
+              number: 80
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: bitchat-web-service
+            port:
+              number: 80
+      - path: /irc
+        pathType: Prefix
+        backend:
+          service:
+            name: irc-service
+            port:
+              number: 6697
+  - host: www.bitchat.live
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: bitchat-web-service
+            port:
+              number: 80
+  - host: app.bitchat.live
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: bitchat-web-service
+            port:
+              number: 80
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: bitchat-network-policy
+  namespace: bitchat
+spec:
+  podSelector:
+    matchLabels:
+      app: bitchat
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    - namespaceSelector:
+        matchLabels:
+          name: cert-manager
+    - podSelector:
+        matchLabels:
+          app: bitchat
+    ports:
+    - protocol: TCP
+      port: 80
+    - protocol: TCP
+      port: 3306
+    - protocol: TCP
+      port: 6379
+    - protocol: TCP
+      port: 6667
+    - protocol: TCP
+      port: 6697
+  egress:
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 80
+  - to:
+    - podSelector:
+        matchLabels:
+          app: bitchat
+    ports:
+    - protocol: TCP
+      port: 3306
+    - protocol: TCP
+      port: 6379
+    - protocol: TCP
+      port: 6667
+    - protocol: TCP
+      port: 6697
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bitchat-monitoring
+  namespace: bitchat
+  labels:
+    app: bitchat
+    component: monitoring
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+    name: metrics
+  selector:
+    app: bitchat
+    component: web-app
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: block-xyz-proxy
+  namespace: bitchat
+  labels:
+    app: bitchat
+    component: block-proxy
+spec:
+  type: ExternalName
+  externalName: block.xyz
+  ports:
+  - port: 443
+    targetPort: 443
+    protocol: TCP
+    name: https
