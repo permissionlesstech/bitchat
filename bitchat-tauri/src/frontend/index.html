@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BitChat - Decentralized Mesh Messaging</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-left">
+                <button id="sidebar-toggle" class="icon-button" title="Toggle Sidebar">
+                    <span class="icon">☰</span>
+                </button>
+                <h1 class="app-title">BitChat</h1>
+                <div class="connection-status" id="connection-status">
+                    <span class="status-indicator offline"></span>
+                    <span class="status-text">Connecting...</span>
+                </div>
+            </div>
+            
+            <div class="header-right">
+                <div class="peer-count" id="peer-count">
+                    <span class="icon">👥</span>
+                    <span class="count">0</span>
+                </div>
+                <button id="settings-button" class="icon-button" title="Settings">
+                    <span class="icon">⚙️</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Sidebar -->
+            <aside class="sidebar" id="sidebar">
+                <div class="sidebar-section">
+                    <h3>Channels</h3>
+                    <div class="channel-list" id="channel-list">
+                        <div class="channel-item active" data-channel="public">
+                            <span class="channel-name"># Public</span>
+                            <span class="unread-count" id="public-unread">0</span>
+                        </div>
+                    </div>
+                    <button class="add-channel-btn" id="add-channel-btn">+ Join Channel</button>
+                </div>
+
+                <div class="sidebar-section">
+                    <h3>Private Messages</h3>
+                    <div class="private-list" id="private-list">
+                        <!-- Private conversations will be added here -->
+                    </div>
+                </div>
+
+                <div class="sidebar-section">
+                    <h3>Online Peers</h3>
+                    <div class="peer-list" id="peer-list">
+                        <!-- Online peers will be added here -->
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Chat Area -->
+            <section class="chat-area">
+                <!-- Chat Header -->
+                <div class="chat-header">
+                    <div class="chat-title" id="chat-title">
+                        <span class="channel-name"># Public</span>
+                        <span class="member-count" id="member-count">0 members</span>
+                    </div>
+                    <div class="chat-actions">
+                        <button id="search-button" class="icon-button" title="Search Messages">
+                            <span class="icon">🔍</span>
+                        </button>
+                        <button id="encryption-status" class="icon-button" title="Encryption Status">
+                            <span class="icon">🔒</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Messages Container -->
+                <div class="messages-container" id="messages-container">
+                    <div class="messages-list" id="messages-list">
+                        <!-- Messages will be added here -->
+                    </div>
+                    
+                    <!-- Typing Indicators -->
+                    <div class="typing-indicators" id="typing-indicators">
+                        <!-- Typing indicators will be shown here -->
+                    </div>
+                </div>
+
+                <!-- Message Input -->
+                <div class="message-input-container">
+                    <div class="input-group">
+                        <textarea 
+                            id="message-input" 
+                            class="message-input" 
+                            placeholder="Type a message... (Enter to send, Shift+Enter for new line)"
+                            rows="1"
+                        ></textarea>
+                        <button id="send-button" class="send-button" title="Send Message">
+                            <span class="icon">📤</span>
+                        </button>
+                    </div>
+                    
+                    <!-- Command Suggestions -->
+                    <div class="command-suggestions" id="command-suggestions">
+                        <!-- Command suggestions will be shown here -->
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Modals -->
+        
+        <!-- Join Channel Modal -->
+        <div class="modal" id="join-channel-modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Join Channel</h3>
+                    <button class="close-button" data-modal="join-channel-modal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="channel-name-input">Channel Name:</label>
+                        <input type="text" id="channel-name-input" placeholder="#general" />
+                    </div>
+                    <div class="form-group">
+                        <label for="channel-password-input">Password (optional):</label>
+                        <input type="password" id="channel-password-input" placeholder="Channel password" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" data-modal="join-channel-modal">Cancel</button>
+                    <button class="btn btn-primary" id="join-channel-confirm">Join</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Modal -->
+        <div class="modal" id="settings-modal">
+            <div class="modal-content large">
+                <div class="modal-header">
+                    <h3>Settings</h3>
+                    <button class="close-button" data-modal="settings-modal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="settings-tabs">
+                        <button class="tab-button active" data-tab="general">General</button>
+                        <button class="tab-button" data-tab="appearance">Appearance</button>
+                        <button class="tab-button" data-tab="privacy">Privacy</button>
+                        <button class="tab-button" data-tab="advanced">Advanced</button>
+                    </div>
+                    
+                    <div class="tab-content">
+                        <!-- General Settings -->
+                        <div class="tab-panel active" id="general-tab">
+                            <div class="form-group">
+                                <label for="nickname-input">Nickname:</label>
+                                <input type="text" id="nickname-input" placeholder="Your nickname" />
+                            </div>
+                            <div class="form-group">
+                                <label>
+                                    <input type="checkbox" id="auto-connect-checkbox" />
+                                    Auto-connect on startup
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label>
+                                    <input type="checkbox" id="save-history-checkbox" />
+                                    Save message history
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- Appearance Settings -->
+                        <div class="tab-panel" id="appearance-tab">
+                            <div class="form-group">
+                                <label for="theme-select">Theme:</label>
+                                <select id="theme-select">
+                                    <option value="dark">Dark</option>
+                                    <option value="light">Light</option>
+                                    <option value="terminal">Terminal</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="font-size-slider">Font Size: <span id="font-size-value">14px</span></label>
+                                <input type="range" id="font-size-slider" min="10" max="24" value="14" />
+                            </div>
+                            <div class="form-group">
+                                <label>
+                                    <input type="checkbox" id="show-timestamps-checkbox" />
+                                    Show timestamps
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- Privacy Settings -->
+                        <div class="tab-panel" id="privacy-tab">
+                            <div class="form-group">
+                                <label>
+                                    <input type="checkbox" id="encryption-enabled-checkbox" />
+                                    Enable encryption
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label>
+                                    <input type="checkbox" id="enhanced-crypto-checkbox" />
+                                    Enhanced cryptography (requires art-of-aegis)
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label>
+                                    <input type="checkbox" id="rotate-peer-id-checkbox" />
+                                    Rotate peer ID periodically
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- Advanced Settings -->
+                        <div class="tab-panel" id="advanced-tab">
+                            <div class="form-group">
+                                <label for="scan-interval-input">Scan Interval (seconds):</label>
+                                <input type="number" id="scan-interval-input" min="1" max="60" value="5" />
+                            </div>
+                            <div class="form-group">
+                                <label for="connection-limit-input">Max Connections:</label>
+                                <input type="number" id="connection-limit-input" min="1" max="20" value="8" />
+                            </div>
+                            <div class="form-group">
+                                <button class="btn btn-danger" id="emergency-wipe-button">
+                                    Emergency Wipe All Data
+                                </button>
+                                <small>This will permanently delete all messages and settings</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" data-modal="settings-modal">Cancel</button>
+                    <button class="btn btn-primary" id="save-settings-button">Save Settings</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Search Modal -->
+        <div class="modal" id="search-modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Search Messages</h3>
+                    <button class="close-button" data-modal="search-modal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="search-input-group">
+                        <input type="text" id="search-input" placeholder="Search messages..." />
+                        <button id="search-execute-button" class="btn btn-primary">Search</button>
+                    </div>
+                    <div class="search-results" id="search-results">
+                        <!-- Search results will be displayed here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div class="toast-container" id="toast-container">
+        <!-- Toast notifications will be added here -->
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Connecting to mesh network...</div>
+    </div>
+
+    <script src="chat.js"></script>
+</body>
+</html>

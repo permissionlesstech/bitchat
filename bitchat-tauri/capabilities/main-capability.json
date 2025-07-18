@@ -1,0 +1,8 @@
+{
+  "identifier": "main-capability",
+  "description": "BitChat main application capabilities",
+  "windows": ["main"],
+  "permissions": [
+    "core:default"
+  ]
+}

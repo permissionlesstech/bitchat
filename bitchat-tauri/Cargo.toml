@@ -1,0 +1,72 @@
+[package]
+name = "bitchat-tauri"
+version = "0.1.0"
+edition = "2021"
+description = "Decentralized peer-to-peer messaging over Bluetooth LE mesh networks with post-quantum cryptography"
+license = "MIT"
+repository = "https://github.com/permissionlesstech/bitchat"
+homepage = "https://github.com/permissionlesstech/bitchat"
+documentation = "https://docs.rs/bitchat-tauri"
+readme = "README.md"
+keywords = ["blockchain", "cryptocurrency", "p2p", "mesh", "post-quantum"]
+categories = ["cryptography", "network-programming", "multimedia::audio"]
+authors = ["BitChat Team <noreply@bitchat.dev>"]
+exclude = [
+    "bitchat.xcodeproj/",
+    "bitchat/",
+    "node_modules/",
+    "*.backup"
+]
+
+[dependencies]
+# Tauri core
+tauri = { version = "2.6.1", features = ["macos-private-api", "devtools"] }
+tauri-build = { version = "2.3.0", features = [] }
+
+# Async runtime
+tokio = { version = "1.38", features = ["rt", "macros", "time", "fs", "io-util", "sync"] }
+futures = "0.3"
+async-trait = "0.1"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Utilities
+uuid = { version = "1.0", features = ["v4", "serde"] }
+anyhow = "1.0"
+thiserror = "1.0"
+log = "0.4"
+env_logger = "0.10"
+chrono = { version = "0.4", features = ["serde"] }
+
+# Bluetooth LE - cross-platform
+btleplug = "0.11"
+
+# Cryptography
+ring = "0.17"
+x25519-dalek = "2.0"
+chacha20poly1305 = "0.10"
+argon2 = "0.5"
+sha2 = "0.10"
+rand = "0.8"
+
+# Compression and performance
+lz4_flex = "0.11"
+dashmap = "5.5"
+parking_lot = "0.12"
+hex = "0.4"
+
+# Full security suite integration
+# Comment out external dependencies for now to compile
+# overlord-pqc = { path = "../Overlord/pqc/engine" }
+# overlord-core = { path = "../Overlord/khthon-core" }
+# overlord-app = { path = "../Overlord/app_layer" }
+# crabcore-aegis = { path = "../crabcore-aegis" }
+
+[features]
+default = []
+# enhanced-crypto = ["art-of-aegis"]
+
+[build-dependencies]
+tauri-build = { version = "2.3.0", features = [] }
