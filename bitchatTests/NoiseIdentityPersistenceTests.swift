@@ -30,7 +30,6 @@ class NoiseIdentityPersistenceTests: XCTestCase {
         // Clear any UserDefaults that might interfere
         UserDefaults.standard.removeObject(forKey: "bitchat.noiseIdentityKey")
         UserDefaults.standard.removeObject(forKey: "bitchat.messageRetentionKey")
-        UserDefaults.standard.synchronize()
     }
     
     // MARK: - Identity Persistence Tests

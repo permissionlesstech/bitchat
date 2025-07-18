@@ -78,7 +78,6 @@ struct BitchatApp: App {
             userDefaults.removeObject(forKey: "sharedContent")
             userDefaults.removeObject(forKey: "sharedContentType")
             userDefaults.removeObject(forKey: "sharedContentDate")
-            userDefaults.synchronize()
             
             // Show notification about shared content
             DispatchQueue.main.async {

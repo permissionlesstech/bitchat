@@ -69,7 +69,7 @@ struct LinkPreviewView: View {
                             .overlay(
                                 Image(systemName: "link")
                                     .font(.system(size: 24))
-                                    .foregroundColor(Color.blue)
+                                    .foregroundStyle(Color.blue)
                             )
                     }
                     #else
@@ -79,7 +79,7 @@ struct LinkPreviewView: View {
                         .overlay(
                             Image(systemName: "link")
                                 .font(.system(size: 24))
-                                .foregroundColor(Color.blue)
+                                .foregroundStyle(Color.blue)
                         )
                     #endif
                 }
@@ -89,7 +89,7 @@ struct LinkPreviewView: View {
                     #if os(iOS)
                     Text(metadata?.title ?? title ?? url.host ?? "Link")
                         .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                        .foregroundColor(textColor)
+                        .foregroundStyle(textColor)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                     #endif
@@ -97,7 +97,7 @@ struct LinkPreviewView: View {
                     // Host
                     Text(url.host ?? url.absoluteString)
                         .font(.system(size: 11, design: .monospaced))
-                        .foregroundColor(textColor.opacity(0.6))
+                        .foregroundStyle(textColor.opacity(0.6))
                         .lineLimit(1)
                 }
                 
@@ -129,21 +129,21 @@ struct LinkPreviewView: View {
                 // Link icon
                 Image(systemName: "link.circle.fill")
                     .font(.system(size: 32))
-                    .foregroundColor(Color.blue.opacity(0.8))
+                    .foregroundStyle(Color.blue.opacity(0.8))
                     .frame(width: 40, height: 40)
                 
                 VStack(alignment: .leading, spacing: 4) {
                     // Title
                     Text(title ?? url.host ?? "Link")
                         .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                        .foregroundColor(textColor)
+                        .foregroundStyle(textColor)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                     
                     // URL
                     Text(url.absoluteString)
                         .font(.system(size: 11, design: .monospaced))
-                        .foregroundColor(Color.blue)
+                        .foregroundStyle(Color.blue)
                         .lineLimit(1)
                         .truncationMode(.middle)
                 }
@@ -153,7 +153,7 @@ struct LinkPreviewView: View {
                 // Arrow indicator
                 Image(systemName: "chevron.right")
                     .font(.system(size: 14))
-                    .foregroundColor(textColor.opacity(0.5))
+                    .foregroundStyle(textColor.opacity(0.5))
             }
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)

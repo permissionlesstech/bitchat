@@ -26,7 +26,7 @@ struct AppInfoView: View {
                     dismiss()
                 }
                 .buttonStyle(.plain)
-                .foregroundColor(textColor)
+                .foregroundStyle(textColor)
                 .padding()
             }
             .background(backgroundColor.opacity(0.95))
@@ -37,11 +37,11 @@ struct AppInfoView: View {
                     VStack(alignment: .center, spacing: 8) {
                         Text("bitchat*")
                             .font(.system(size: 32, weight: .bold, design: .monospaced))
-                            .foregroundColor(textColor)
+                            .foregroundStyle(textColor)
                         
                         Text("mesh sidegroupchat")
                             .font(.system(size: 16, design: .monospaced))
-                            .foregroundColor(secondaryTextColor)
+                            .foregroundStyle(secondaryTextColor)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical)
@@ -99,7 +99,7 @@ struct AppInfoView: View {
                             Text("• triple-tap the logo for panic mode")
                         }
                         .font(.system(size: 14, design: .monospaced))
-                        .foregroundColor(textColor)
+                        .foregroundStyle(textColor)
                     }
                     
                     // Commands
@@ -119,7 +119,7 @@ struct AppInfoView: View {
                             Text("/slap @name - slap with a trout")
                         }
                         .font(.system(size: 14, design: .monospaced))
-                        .foregroundColor(textColor)
+                        .foregroundStyle(textColor)
                     }
                     
                     // Technical Details
@@ -137,7 +137,7 @@ struct AppInfoView: View {
                             Text("storage: Keychain for passwords, encrypted retention")
                         }
                         .font(.system(size: 14, design: .monospaced))
-                        .foregroundColor(textColor)
+                        .foregroundStyle(textColor)
                     }
                     
                     // Version
@@ -145,7 +145,7 @@ struct AppInfoView: View {
                         Spacer()
                         Text("VERSION 1.0.0")
                             .font(.system(size: 12, design: .monospaced))
-                            .foregroundColor(secondaryTextColor)
+                            .foregroundStyle(secondaryTextColor)
                         Spacer()
                     }
                     .padding(.top)
@@ -163,11 +163,11 @@ struct AppInfoView: View {
                     VStack(alignment: .center, spacing: 8) {
                         Text("bitchat*")
                             .font(.system(size: 32, weight: .bold, design: .monospaced))
-                            .foregroundColor(textColor)
+                            .foregroundStyle(textColor)
                         
                         Text("mesh sidegroupchat")
                             .font(.system(size: 16, design: .monospaced))
-                            .foregroundColor(secondaryTextColor)
+                            .foregroundStyle(secondaryTextColor)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical)
@@ -225,7 +225,7 @@ struct AppInfoView: View {
                             Text("• triple-tap the logo for panic mode")
                         }
                         .font(.system(size: 14, design: .monospaced))
-                        .foregroundColor(textColor)
+                        .foregroundStyle(textColor)
                     }
                     
                     // Commands
@@ -245,7 +245,7 @@ struct AppInfoView: View {
                             Text("/slap @name - slap with a trout")
                         }
                         .font(.system(size: 14, design: .monospaced))
-                        .foregroundColor(textColor)
+                        .foregroundStyle(textColor)
                     }
                     
                     // Technical Details
@@ -263,7 +263,7 @@ struct AppInfoView: View {
                             Text("storage: keychain for passwords, encrypted retention")
                         }
                         .font(.system(size: 14, design: .monospaced))
-                        .foregroundColor(textColor)
+                        .foregroundStyle(textColor)
                     }
                     
                     // Version
@@ -271,7 +271,7 @@ struct AppInfoView: View {
                         Spacer()
                         Text("VERSION 1.0.0")
                             .font(.system(size: 12, design: .monospaced))
-                            .foregroundColor(secondaryTextColor)
+                            .foregroundStyle(secondaryTextColor)
                         Spacer()
                     }
                     .padding(.top)
@@ -285,7 +285,7 @@ struct AppInfoView: View {
                     Button("DONE") {
                         dismiss()
                     }
-                    .foregroundColor(textColor)
+                    .foregroundStyle(textColor)
                 }
             }
         }
@@ -308,7 +308,7 @@ struct SectionHeader: View {
     var body: some View {
         Text(title.uppercased())
             .font(.system(size: 16, weight: .bold, design: .monospaced))
-            .foregroundColor(textColor)
+            .foregroundStyle(textColor)
             .padding(.top, 8)
     }
 }
@@ -331,17 +331,17 @@ struct FeatureRow: View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: 20))
-                .foregroundColor(textColor)
+                .foregroundStyle(textColor)
                 .frame(width: 30)
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                    .foregroundColor(textColor)
+                    .foregroundStyle(textColor)
                 
                 Text(description)
                     .font(.system(size: 12, design: .monospaced))
-                    .foregroundColor(secondaryTextColor)
+                    .foregroundStyle(secondaryTextColor)
                     .fixedSize(horizontal: false, vertical: true)
             }
             
