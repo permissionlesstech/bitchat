@@ -1,0 +1,51 @@
+{
+  "productName": "BitChat",
+  "version": "0.1.0",
+  "identifier": "com.permissionlesstech.bitchat",
+  "build": {
+    "beforeDevCommand": "",
+    "beforeBuildCommand": "",
+    "frontendDist": "src/frontend"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "BitChat - Decentralized Mesh Messaging",
+        "url": "index.html",
+        "width": 1000,
+        "height": 700,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": true,
+        "transparent": false,
+        "maximized": false,
+        "visible": true,
+        "center": true,
+        "minWidth": 800,
+        "minHeight": 600
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self' 'unsafe-inline' 'unsafe-eval'; img-src 'self' data: https:;",
+      "capabilities": ["main-capability"]
+    },
+    "macOSPrivateApi": true,
+    "withGlobalTauri": true
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png"
+    ],
+    "resources": [],
+    "externalBin": [],
+    "copyright": "Released into the public domain",
+    "category": "Productivity",
+    "shortDescription": "Decentralized peer-to-peer messaging",
+    "longDescription": "BitChat is a decentralized peer-to-peer messaging app that works over Bluetooth mesh networks. No internet required, no servers, no phone numbers."
+  },
+  "plugins": {}
+}
