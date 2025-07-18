@@ -209,7 +209,6 @@ class ChatViewModel: ObservableObject {
     
     func saveNickname() {
         userDefaults.set(nickname, forKey: nicknameKey)
-        userDefaults.synchronize() // Force immediate save
         
         // Send announce with new nickname to all peers
         meshService.sendBroadcastAnnounce()
@@ -253,7 +252,6 @@ class ChatViewModel: ObservableObject {
     
     private func saveJoinedChannels() {
         userDefaults.set(Array(joinedChannels), forKey: joinedChannelsKey)
-        userDefaults.synchronize()
     }
     
     private func loadChannelData() {
@@ -304,9 +302,6 @@ class ChatViewModel: ObservableObject {
             _ = KeychainManager.shared.saveChannelPassword(password, for: channel)
         }
         userDefaults.set(channelKeyCommitments, forKey: channelKeyCommitmentsKey)
-        
-        // Force synchronize and add a small delay to ensure writes complete
-        _ = userDefaults.synchronize()
         
         // Verify save worked
         _ = userDefaults.dictionary(forKey: channelCreatorsKey) as? [String: String] != nil
@@ -1551,7 +1546,6 @@ class ChatViewModel: ObservableObject {
     @objc private func appWillResignActive() {
         // Save all channel data
         saveChannelData()
-        userDefaults.synchronize()
     }
     
     @objc func applicationWillTerminate() {
@@ -1561,7 +1555,6 @@ class ChatViewModel: ObservableObject {
         
         // Save all channel data
         saveChannelData()
-        userDefaults.synchronize()
         
         // Verify identity key after save
         _ = KeychainManager.shared.verifyIdentityKeyExists()
@@ -1570,7 +1563,6 @@ class ChatViewModel: ObservableObject {
     @objc private func appWillTerminate() {
         // Save all channel data
         saveChannelData()
-        userDefaults.synchronize()
     }
     
     func markPrivateMessagesAsRead(from peerID: String) {
@@ -1743,20 +1735,13 @@ class ChatViewModel: ObservableObject {
         // This will force creation of a new identity (new fingerprint) on next launch
         meshService.emergencyDisconnectAll()
         
-        // Force immediate UserDefaults synchronization
-        userDefaults.synchronize()
-        
         // Force UI update
         objectWillChange.send()
         
     }
     
-    
-    
     func formatTimestamp(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm:ss"
-        return formatter.string(from: date)
+        return date.formatted(date: .omitted, time: .standard)
     }
     
     func getRSSIColor(rssi: Int, colorScheme: ColorScheme) -> Color {

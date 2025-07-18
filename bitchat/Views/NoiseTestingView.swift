@@ -27,14 +27,14 @@ struct NoiseTestingView: View {
             // Header
             Text("NOISE PROTOCOL TEST HELPER")
                 .font(.system(size: 16, weight: .bold, design: .monospaced))
-                .foregroundColor(textColor)
+                .foregroundStyle(textColor)
                 .padding(.bottom)
             
             // Status Overview
             VStack(alignment: .leading, spacing: 8) {
                 Text("CURRENT STATUS:")
                     .font(.system(size: 12, weight: .bold, design: .monospaced))
-                    .foregroundColor(textColor.opacity(0.7))
+                    .foregroundStyle(textColor.opacity(0.7))
                 
                 ForEach(viewModel.connectedPeers, id: \.self) { peerID in
                     let nickname = viewModel.meshService.getPeerNicknames()[peerID] ?? "Unknown"
@@ -43,13 +43,13 @@ struct NoiseTestingView: View {
                     HStack {
                         Image(systemName: status.icon)
                             .font(.system(size: 12))
-                            .foregroundColor(status == .noiseVerified ? Color.green : 
+                            .foregroundStyle(status == .noiseVerified ? Color.green : 
                                            status == .noiseSecured ? textColor :
                                            Color.red)
                         
                         Text("\(nickname): \(status.description)")
                             .font(.system(size: 12, design: .monospaced))
-                            .foregroundColor(textColor)
+                            .foregroundStyle(textColor)
                         
                         Spacer()
                     }
@@ -58,7 +58,7 @@ struct NoiseTestingView: View {
                 if viewModel.connectedPeers.isEmpty {
                     Text("No peers connected")
                         .font(.system(size: 12, design: .monospaced))
-                        .foregroundColor(Color.gray)
+                        .foregroundStyle(Color.gray)
                 }
             }
             .padding()
@@ -69,7 +69,7 @@ struct NoiseTestingView: View {
             ScrollView {
                 Text(testChecklist)
                     .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(textColor)
+                    .foregroundStyle(textColor)
                     .textSelection(.enabled)
             }
             .padding()
@@ -83,7 +83,7 @@ struct NoiseTestingView: View {
                     // This will cause all peers to re-exchange keys
                     viewModel.meshService.sendBroadcastAnnounce()
                 }
-                .foregroundColor(textColor)
+                .foregroundStyle(textColor)
                 
                 Button("Clear Sessions") {
                     // Clear all Noise sessions for testing
@@ -93,7 +93,7 @@ struct NoiseTestingView: View {
                     }
                     viewModel.peerEncryptionStatus.removeAll()
                 }
-                .foregroundColor(Color.orange)
+                .foregroundStyle(Color.orange)
                 
                 Button("Copy Logs") {
                     // Copy test results to clipboard
@@ -115,7 +115,7 @@ struct NoiseTestingView: View {
                     NSPasteboard.general.setString(logs, forType: .string)
                     #endif
                 }
-                .foregroundColor(textColor)
+                .foregroundStyle(textColor)
                 
                 
                 Spacer()

@@ -40,7 +40,6 @@ class PasswordProtectedChannelTests: XCTestCase {
         defaults.removeObject(forKey: "bitchat_channel_creators")
         defaults.removeObject(forKey: "bitchat_channel_passwords")
         defaults.removeObject(forKey: "bitchat_favorite_peers")
-        defaults.synchronize()
     }
     
     override func tearDown() {

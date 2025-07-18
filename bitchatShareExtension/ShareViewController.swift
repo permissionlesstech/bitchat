@@ -185,8 +185,6 @@ class ShareViewController: SLComposeServiceViewController {
         userDefaults.set(content, forKey: "sharedContent")
         userDefaults.set(type, forKey: "sharedContentType")
         userDefaults.set(Date(), forKey: "sharedContentDate")
-        userDefaults.synchronize()
-        
         
         // Force open the main app
         self.openMainApp()
