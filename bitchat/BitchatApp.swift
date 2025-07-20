@@ -9,32 +9,6 @@
 import SwiftUI
 import UserNotifications
 
-@main
-struct BitchatApp: App {
-    @StateObject private var chatViewModel = ChatViewModel()
-    #if os(iOS)
-    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    #endif
-    
-    init() {
-        UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
-    }
-    
-    var body: some Scene {
-        WindowGroup {
-            ContentView()
-                .environmentObject(chatViewModel)
-                .onAppear {
-                    NotificationDelegate.shared.chatViewModel = chatViewModel
-                }
-        }
-        #if os(macOS)
-        .windowStyle(.hiddenTitleBar)
-        .windowResizability(.contentSize)
-        #endif
-    }
-}
-
 #if os(iOS)
 class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
