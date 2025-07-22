@@ -2303,11 +2303,12 @@ class BluetoothMeshService: NSObject {
                     return
                 }
                 
-                // Verify the signature (currently always returns true for compatibility)
-                let bindingData = announcement.peerID.data(using: .utf8)! + announcement.publicKey + announcement.timestamp.timeIntervalSince1970.data
-                if !noiseService.verifySignature(announcement.signature, for: bindingData, publicKey: announcement.publicKey) {
-                    // Log but don't reject - signature verification is temporarily disabled
-                    SecurityLogger.log("Signature verification skipped for \(senderID)", category: SecurityLogger.noise, level: .debug)
+                // Verify the signature using the signing public key
+                let timestampData = String(Int64(announcement.timestamp.timeIntervalSince1970 * 1000)).data(using: .utf8)!
+                let bindingData = announcement.peerID.data(using: .utf8)! + announcement.publicKey + timestampData
+                if !noiseService.verifySignature(announcement.signature, for: bindingData, publicKey: announcement.signingPublicKey) {
+                    SecurityLogger.log("Signature verification failed for \(senderID)", category: SecurityLogger.noise, level: .warning)
+                    return  // Reject announcements with invalid signatures
                 }
                 
                 // Calculate fingerprint from public key
@@ -2319,6 +2320,7 @@ class BluetoothMeshService: NSObject {
                     currentPeerID: announcement.peerID,
                     fingerprint: fingerprint,
                     publicKey: announcement.publicKey,
+                    signingPublicKey: announcement.signingPublicKey,
                     nickname: announcement.nickname,
                     bindingTimestamp: announcement.timestamp,
                     signature: announcement.signature
@@ -3800,23 +3802,27 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             lastIdentityAnnounceTimes["*broadcast*"] = now
         }
         
-        // Get our Noise static public key
+        // Get our Noise static public key and signing public key
         let staticKey = noiseService.getStaticPublicKeyData()
+        let signingKey = noiseService.getSigningPublicKeyData()
         
         // Get nickname from delegate
         let nickname = (delegate as? ChatViewModel)?.nickname ?? "Anonymous"
         
-        // Create the binding data to sign
-        let bindingData = myPeerID.data(using: .utf8)! + staticKey + now.timeIntervalSince1970.data
+        // Create the binding data to sign (peerID + publicKey + timestamp)
+        let timestampData = String(Int64(now.timeIntervalSince1970 * 1000)).data(using: .utf8)!
+        let bindingData = myPeerID.data(using: .utf8)! + staticKey + timestampData
         
-        // Sign the binding with our private key
+        // Sign the binding with our Ed25519 signing key
         let signature = noiseService.signData(bindingData) ?? Data()
         
         // Create the identity announcement
         let announcement = NoiseIdentityAnnouncement(
             peerID: myPeerID,
             publicKey: staticKey,
+            signingPublicKey: signingKey,
             nickname: nickname,
+            timestamp: now,
             previousPeerID: previousPeerID,
             signature: signature
         )
