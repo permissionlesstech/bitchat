@@ -22,9 +22,9 @@ class NotificationService {
     func requestAuthorization() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
             if granted {
-                print("📱 Notification permission granted")
+                // Permission granted
             } else {
-                print("📱 Notification permission denied: \(error?.localizedDescription ?? "Unknown")")
+                // Permission denied
             }
         }
     }
@@ -44,12 +44,8 @@ class NotificationService {
                 trigger: nil // Deliver immediately
             )
             
-            UNUserNotificationCenter.current().add(request) { error in
-                if let error = error {
-                    print("📱 Error sending local notification: \(error)")
-                } else {
-                    print("📱 Local notification sent: \(title)")
-                }
+            UNUserNotificationCenter.current().add(request) { _ in
+                // Notification added
             }
         }
     }
@@ -71,8 +67,6 @@ class NotificationService {
     }
     
     func sendFavoriteOnlineNotification(nickname: String) {
-        print("📱 sendFavoriteOnlineNotification called for: \(nickname)")
-        
         // Send directly without checking app state for favorites
         DispatchQueue.main.async {
             let content = UNMutableNotificationContent()
@@ -86,24 +80,16 @@ class NotificationService {
                 trigger: nil
             )
             
-            UNUserNotificationCenter.current().add(request) { error in
-                if let error = error {
-                    print("📱 Error sending favorite notification: \(error)")
-                } else {
-                    print("📱 Favorite notification sent successfully")
-                }
+            UNUserNotificationCenter.current().add(request) { _ in
+                // Notification added
             }
         }
     }
     
     func sendNetworkAvailableNotification(peerCount: Int) {
-        print("📱 sendNetworkAvailableNotification called with peerCount: \(peerCount)")
-        
         let title = "👥 bitchatters nearby!"
         let body = peerCount == 1 ? "1 person around" : "\(peerCount) people around"
         let identifier = "network-available-\(Date().timeIntervalSince1970)"
-        
-        print("📱 Sending network notification: \(body)")
         
         // For network notifications, we want to show them even in foreground
         // No app state check - let the notification delegate handle presentation
@@ -120,12 +106,8 @@ class NotificationService {
                 trigger: nil // Deliver immediately
             )
             
-            UNUserNotificationCenter.current().add(request) { error in
-                if let error = error {
-                    print("📱 Error sending network notification: \(error)")
-                } else {
-                    print("📱 Network notification sent successfully")
-                }
+            UNUserNotificationCenter.current().add(request) { _ in
+                // Notification added
             }
         }
     }
