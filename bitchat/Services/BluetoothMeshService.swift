@@ -81,6 +81,7 @@ class BluetoothMeshService: NSObject {
     private let maxTTL: UInt8 = 7  // Maximum hops for long-distance delivery
     private var announcedToPeers = Set<String>()  // Track which peers we've announced to
     private var announcedPeers = Set<String>()  // Track peers who have already been announced
+    private var hasNotifiedNetworkAvailable = false  // Track if we've notified about network availability
     private var intentionalDisconnects = Set<String>()  // Track peripherals we're disconnecting intentionally
     private var peerLastSeenTimestamps = LRUCache<String, Date>(maxSize: 100)  // Bounded cache for peer timestamps
     private var cleanupTimer: Timer?  // Timer to clean up stale peers
@@ -599,6 +600,7 @@ class BluetoothMeshService: NSObject {
             activePeers.removeAll()
         }
         announcedPeers.removeAll()
+        hasNotifiedNetworkAvailable = false
         
         // Clear announcement tracking
         announcedToPeers.removeAll()
@@ -1231,6 +1233,7 @@ class BluetoothMeshService: NSObject {
         peripheralRSSI.removeAll()
         announcedToPeers.removeAll()
         announcedPeers.removeAll()
+        hasNotifiedNetworkAvailable = false
         processedMessages.removeAll()
         incomingFragments.removeAll()
         fragmentMetadata.removeAll()
@@ -1331,6 +1334,12 @@ class BluetoothMeshService: NSObject {
         
         if !peersToRemove.isEmpty {
             notifyPeerListUpdate()
+            
+            // Reset notification flag if network is now empty
+            let currentNetworkSize = collectionsQueue.sync { activePeers.count }
+            if currentNetworkSize == 0 {
+                hasNotifiedNetworkAvailable = false
+            }
         }
     }
     
@@ -2078,6 +2087,13 @@ class BluetoothMeshService: NSObject {
                             self.delegate?.didConnectToPeer(senderID)
                         }
                         self.notifyPeerListUpdate(immediate: true)
+                        
+                        // Send network available notification if this is the first peer we've seen
+                        let currentNetworkSize = collectionsQueue.sync { self.activePeers.count }
+                        if currentNetworkSize > 0 && !hasNotifiedNetworkAvailable {
+                            hasNotifiedNetworkAvailable = true
+                            NotificationService.shared.sendNetworkAvailableNotification(peerCount: currentNetworkSize)
+                        }
                         
                         DispatchQueue.main.async {
                             // Check if this is a favorite peer and send notification
@@ -2927,6 +2943,12 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
             if removed {
                 DispatchQueue.main.async {
                     self.delegate?.didDisconnectFromPeer(peerID)
+                }
+                
+                // Reset notification flag if network is now empty
+                let currentNetworkSize = collectionsQueue.sync { activePeers.count }
+                if currentNetworkSize == 0 {
+                    hasNotifiedNetworkAvailable = false
                 }
             }
             self.notifyPeerListUpdate()
