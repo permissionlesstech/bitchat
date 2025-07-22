@@ -58,7 +58,10 @@ class NoiseChannelEncryption {
         }
         
         // Store in keychain
-        _ = KeychainManager.shared.saveChannelPassword(password, for: channel)
+        let saved = KeychainManager.shared.saveChannelPassword(password, for: channel)
+        if saved {
+            SecureLogger.logKeyOperation("set", keyType: "channel key for \(channel)", success: true)
+        }
     }
     
     /// Get channel key
@@ -84,7 +87,10 @@ class NoiseChannelEncryption {
             self.channelKeys.removeValue(forKey: channel)
         }
         
-        _ = KeychainManager.shared.deleteChannelPassword(for: channel)
+        let deleted = KeychainManager.shared.deleteChannelPassword(for: channel)
+        if deleted {
+            SecureLogger.logKeyOperation("remove", keyType: "channel key for \(channel)", success: true)
+        }
     }
     
     // MARK: - Replay Protection
@@ -119,6 +125,7 @@ class NoiseChannelEncryption {
     /// Encrypt message for a channel
     func encryptChannelMessage(_ message: String, for channel: String) throws -> Data {
         guard let key = getChannelKey(for: channel) else {
+            SecureLogger.log("Channel encryption failed - no key for channel: \(channel)", category: SecureLogger.encryption, level: .error)
             throw NoiseChannelError.noChannelKey
         }
         
@@ -137,6 +144,7 @@ class NoiseChannelEncryption {
     /// Decrypt channel message
     func decryptChannelMessage(_ encryptedData: Data, for channel: String) throws -> String {
         guard let key = getChannelKey(for: channel) else {
+            SecureLogger.log("Channel decryption failed - no key for channel: \(channel)", category: SecureLogger.encryption, level: .error)
             throw NoiseChannelError.noChannelKey
         }
         
@@ -157,6 +165,7 @@ class NoiseChannelEncryption {
         let decryptedData = try ChaChaPoly.open(sealedBox, using: key)
         
         guard let message = String(data: decryptedData, encoding: .utf8) else {
+            SecureLogger.log("Channel decryption failed - invalid UTF8 for channel: \(channel)", category: SecureLogger.encryption, level: .error)
             throw NoiseChannelError.decryptionFailed
         }
         
@@ -192,12 +201,15 @@ class NoiseChannelEncryption {
         
         // Verify timestamp is recent (within 5 minutes)
         let age = Date().timeIntervalSince(packet.timestamp)
-        guard age < 300 else { return nil }
+        guard age < 300 else {
+            SecureLogger.log("Expired channel key packet for channel: \(packet.channel), age: \(age)s", category: SecureLogger.security, level: .warning)
+            return nil
+        }
         
         return keyQueue.sync(flags: .barrier) {
             // Check for replay attack
             if receivedNonces.contains(packet.nonce) {
-                SecurityLogger.logSecurityEvent(.replayAttackDetected(channel: packet.channel), level: .warning)
+                SecureLogger.logSecurityEvent(.replayAttackDetected(channel: packet.channel), level: .warning)
                 return nil // This nonce was already processed
             }
             

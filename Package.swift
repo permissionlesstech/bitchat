@@ -17,7 +17,14 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "bitchat",
-            path: "bitchat"
+            path: "bitchat",
+            exclude: [
+                "Info.plist",
+                "Assets.xcassets",
+                "bitchat.entitlements",
+                "bitchat-macOS.entitlements",
+                "LaunchScreen.storyboard"
+            ]
         ),
     ]
 )

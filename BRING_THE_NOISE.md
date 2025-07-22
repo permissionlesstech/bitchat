@@ -199,6 +199,26 @@ enum NoiseError: Error {
 - Automatic cleanup of stale sessions
 - Efficient key rotation
 
+## Protocol Version Negotiation
+
+BitChat implements protocol version negotiation to ensure compatibility between different client versions:
+
+### Version Negotiation Flow
+1. **Version Hello**: Upon connection, peers exchange supported protocol versions
+2. **Version Agreement**: Peers agree on the highest common version
+3. **Graceful Fallback**: Legacy peers without version negotiation assume protocol v1
+
+### Message Types
+```swift
+case versionHello = 0x20    // Announce supported versions
+case versionAck = 0x21      // Acknowledge and agree on version
+```
+
+### Backward Compatibility
+- Peers that don't send version negotiation messages are assumed to support v1
+- Future protocol versions can be added to `ProtocolVersion.supportedVersions`
+- Incompatible peers receive a rejection message and disconnect gracefully
+
 ## Future Enhancements
 
 ### Post-Quantum Readiness
