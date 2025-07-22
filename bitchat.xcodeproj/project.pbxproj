@@ -37,10 +37,8 @@
 		04B6BA572E203D6C0090FE39 /* FingerprintView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04B6BA532E203D6C0090FE39 /* FingerprintView.swift */; };
 		04B6BA582E203D6C0090FE39 /* NoiseTestingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04B6BA542E203D6C0090FE39 /* NoiseTestingView.swift */; };
 		04B6BA5B2E2041220090FE39 /* NoiseIdentityPersistenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04B6BA5A2E2041220090FE39 /* NoiseIdentityPersistenceTests.swift */; };
-		04B6BA5B2E215FDA0090FE39 /* NoisePostQuantum.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04B6BA5A2E215FDA0090FE39 /* NoisePostQuantum.swift */; };
 		04B6BA5C2E2041220090FE39 /* NoiseIdentityPersistenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04B6BA5A2E2041220090FE39 /* NoiseIdentityPersistenceTests.swift */; };
 		04B6BA5C2E215FDA0090FE39 /* NoiseChannelKeyRotation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04B6BA592E215FDA0090FE39 /* NoiseChannelKeyRotation.swift */; };
-		04B6BA5D2E215FDA0090FE39 /* NoisePostQuantum.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04B6BA5A2E215FDA0090FE39 /* NoisePostQuantum.swift */; };
 		04B6BA5E2E215FDA0090FE39 /* NoiseChannelKeyRotation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04B6BA592E215FDA0090FE39 /* NoiseChannelKeyRotation.swift */; };
 		04B6BA672E21601B0090FE39 /* ChannelVerificationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04B6BA5F2E21601B0090FE39 /* ChannelVerificationTests.swift */; };
 		04B6BA682E21601B0090FE39 /* NoiseKeyRotationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04B6BA622E21601B0090FE39 /* NoiseKeyRotationTests.swift */; };
@@ -166,7 +164,6 @@
 		04B6BA542E203D6C0090FE39 /* NoiseTestingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoiseTestingView.swift; sourceTree = "<group>"; };
 		04B6BA592E215FDA0090FE39 /* NoiseChannelKeyRotation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoiseChannelKeyRotation.swift; sourceTree = "<group>"; };
 		04B6BA5A2E2041220090FE39 /* NoiseIdentityPersistenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoiseIdentityPersistenceTests.swift; sourceTree = "<group>"; };
-		04B6BA5A2E215FDA0090FE39 /* NoisePostQuantum.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoisePostQuantum.swift; sourceTree = "<group>"; };
 		04B6BA5F2E21601B0090FE39 /* ChannelVerificationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelVerificationTests.swift; sourceTree = "<group>"; };
 		04B6BA602E21601B0090FE39 /* KeychainIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainIntegrationTests.swift; sourceTree = "<group>"; };
 		04B6BA612E21601B0090FE39 /* NoiseChannelEncryptionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoiseChannelEncryptionTests.swift; sourceTree = "<group>"; };
@@ -218,7 +215,6 @@
 			isa = PBXGroup;
 			children = (
 				04B6BA592E215FDA0090FE39 /* NoiseChannelKeyRotation.swift */,
-				04B6BA5A2E215FDA0090FE39 /* NoisePostQuantum.swift */,
 				04B6BA402E2035530090FE39 /* NoiseChannelEncryption.swift */,
 				04B6BA412E2035530090FE39 /* NoiseProtocol.swift */,
 				04B6BA422E2035530090FE39 /* NoiseSecurityConsiderations.swift */,
@@ -555,7 +551,6 @@
 				4B747085D07A1BCE0F5BA612 /* BinaryProtocol.swift in Sources */,
 				6E7761E21C99F28AE2F9BE5F /* BitchatApp.swift in Sources */,
 				04891CAA2E22971E0064A111 /* LRUCache.swift in Sources */,
-				04B6BA5B2E215FDA0090FE39 /* NoisePostQuantum.swift in Sources */,
 				04B6BA5C2E215FDA0090FE39 /* NoiseChannelKeyRotation.swift in Sources */,
 				923027D6F2F417AFA2488127 /* BitchatProtocol.swift in Sources */,
 				04B6BA452E2035530090FE39 /* NoiseSecurityConsiderations.swift in Sources */,
@@ -591,7 +586,6 @@
 				F455F011B3B648ADA233F998 /* BinaryProtocol.swift in Sources */,
 				10E68BB889356219189E38EC /* BitchatApp.swift in Sources */,
 				04891CA92E22971E0064A111 /* LRUCache.swift in Sources */,
-				04B6BA5D2E215FDA0090FE39 /* NoisePostQuantum.swift in Sources */,
 				04B6BA5E2E215FDA0090FE39 /* NoiseChannelKeyRotation.swift in Sources */,
 				6DE056E1EE9850E9FBF50157 /* BitchatProtocol.swift in Sources */,
 				04B6BA492E2035530090FE39 /* NoiseSecurityConsiderations.swift in Sources */,
