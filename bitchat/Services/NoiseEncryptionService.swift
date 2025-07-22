@@ -207,6 +207,11 @@ class NoiseEncryptionService {
         return sessionManager.getSession(for: peerID)?.isEstablished() ?? false
     }
     
+    /// Check if we have a session (established or handshaking) with a peer
+    func hasSession(with peerID: String) -> Bool {
+        return sessionManager.getSession(for: peerID) != nil
+    }
+    
     // MARK: - Encryption/Decryption
     
     /// Encrypt data for a specific peer
@@ -471,11 +476,14 @@ struct NoiseMessage: Codable {
     }
     
     static func fromBinaryData(_ data: Data) -> NoiseMessage? {
+        // Create defensive copy
+        let dataCopy = Data(data)
+        
         var offset = 0
         
-        guard let type = data.readUInt8(at: &offset),
-              let sessionID = data.readUUID(at: &offset),
-              let payload = data.readData(at: &offset) else { return nil }
+        guard let type = dataCopy.readUInt8(at: &offset),
+              let sessionID = dataCopy.readUUID(at: &offset),
+              let payload = dataCopy.readData(at: &offset) else { return nil }
         
         guard let messageType = NoiseMessageType(rawValue: type) else { return nil }
         
