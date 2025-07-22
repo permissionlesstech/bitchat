@@ -79,7 +79,6 @@ class BluetoothMeshService: NSObject {
     private var activePeers: Set<String> = []  // Track all active peers
     private var peerRSSI: [String: NSNumber] = [:] // Track RSSI values for peers
     private var peripheralRSSI: [String: NSNumber] = [:] // Track RSSI by peripheral ID during discovery
-    private var loggedCryptoErrors = Set<String>()  // Track which peers we've logged crypto errors for
     
     // MARK: - Peer Identity Rotation
     // Mappings between ephemeral peer IDs and permanent fingerprints
@@ -884,8 +883,8 @@ class BluetoothMeshService: NSObject {
     private func notifyPeerIDChange(oldPeerID: String, newPeerID: String, fingerprint: String) {
         DispatchQueue.main.async { [weak self] in
             // Remove old peer ID from active peers and announcedPeers
-            _ = self?.collectionsQueue.sync(flags: .barrier) {
-                self?.activePeers.remove(oldPeerID)
+            self?.collectionsQueue.sync(flags: .barrier) {
+                _ = self?.activePeers.remove(oldPeerID)
                 // Don't pre-insert the new peer ID - let the announce packet handle it
                 // This ensures the connect message logic works properly
             }
@@ -2043,7 +2042,7 @@ class BluetoothMeshService: NSObject {
                         // IMPORTANT: Remove old peer ID from activePeers to prevent duplicates
                         collectionsQueue.sync(flags: .barrier) {
                             if self.activePeers.contains(tempID) {
-                                self.activePeers.remove(tempID)
+                                _ = self.activePeers.remove(tempID)
                             }
                         }
                         
@@ -2160,8 +2159,8 @@ class BluetoothMeshService: NSObject {
                     if String(data: packet.payload, encoding: .utf8) != nil {
                         // Remove from active peers with proper locking
                         collectionsQueue.sync(flags: .barrier) {
-                            self.activePeers.remove(senderID)
-                            self.peerNicknames.removeValue(forKey: senderID)
+                            _ = self.activePeers.remove(senderID)
+                            _ = self.peerNicknames.removeValue(forKey: senderID)
                         }
                         
                         announcedPeers.remove(senderID)
@@ -2848,8 +2847,8 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
                     if removed {
                         }
                     
-                    announcedPeers.remove(peerID)
-                    announcedToPeers.remove(peerID)
+                    _ = announcedPeers.remove(peerID)
+                    _ = announcedToPeers.remove(peerID)
                 } else {
                 }
                 
@@ -3646,7 +3645,21 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             SecurityLogger.log("Version negotiation rejected by \(peerID): \(ack.reason ?? "Unknown reason")", 
                               category: SecurityLogger.session, level: .error)
             versionNegotiationState[peerID] = .failed(reason: ack.reason ?? "Version rejected")
-            // TODO: Handle disconnection
+            
+            // Clean up state for incompatible peer
+            collectionsQueue.sync(flags: .barrier) {
+                _ = self.activePeers.remove(peerID)
+                _ = self.peerNicknames.removeValue(forKey: peerID)
+            }
+            announcedPeers.remove(peerID)
+            
+            // Clean up any Noise session
+            noiseService.removePeer(peerID)
+            
+            // Notify delegate about incompatible peer disconnection
+            DispatchQueue.main.async { [weak self] in
+                self?.delegate?.didDisconnectFromPeer(peerID)
+            }
         } else {
             SecurityLogger.log("Version negotiation successful with \(peerID): agreed on version \(ack.agreedVersion)", 
                               category: SecurityLogger.session, level: .debug)
@@ -3900,7 +3913,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             // Clean up old entries after 10 seconds
             DispatchQueue.main.asyncAfter(deadline: .now() + 10.0) { [weak self] in
                 self?.collectionsQueue.sync(flags: .barrier) {
-                    self?.recentlySentMessages.remove(sendKey)
+                    _ = self?.recentlySentMessages.remove(sendKey)
                 }
             }
             return false
