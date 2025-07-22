@@ -254,13 +254,13 @@ class NoiseSessionManager {
     }
     
     func removeSession(for peerID: String) {
-        _ = managerQueue.sync(flags: .barrier) {
+        managerQueue.sync(flags: .barrier) {
             sessions.removeValue(forKey: peerID)
         }
     }
     
     func migrateSession(from oldPeerID: String, to newPeerID: String) {
-        _ = managerQueue.sync(flags: .barrier) {
+        managerQueue.sync(flags: .barrier) {
             // Check if we have a session for the old peer ID
             if let session = sessions[oldPeerID] {
                 // Move the session to the new peer ID
