@@ -883,7 +883,7 @@ class BluetoothMeshService: NSObject {
     private func notifyPeerIDChange(oldPeerID: String, newPeerID: String, fingerprint: String) {
         DispatchQueue.main.async { [weak self] in
             // Remove old peer ID from active peers and announcedPeers
-            _ = self?.collectionsQueue.sync(flags: .barrier) {
+            self?.collectionsQueue.sync(flags: .barrier) {
                 self?.activePeers.remove(oldPeerID)
                 // Don't pre-insert the new peer ID - let the announce packet handle it
                 // This ensures the connect message logic works properly
