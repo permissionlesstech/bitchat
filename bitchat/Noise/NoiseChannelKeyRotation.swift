@@ -294,36 +294,3 @@ class NoiseChannelKeyRotation {
         }
     }
 }
-
-// MARK: - Future Double Ratchet Support
-
-/// Placeholder for full Double Ratchet implementation
-/// This would handle per-message key derivation and ratcheting
-protocol DoubleRatchetProtocol {
-    /// Initialize a new ratchet session
-    func initializeRatchet(sharedSecret: Data, isInitiator: Bool) throws
-    
-    /// Ratchet forward and get next message key
-    func ratchetEncrypt(_ plaintext: Data) throws -> (ciphertext: Data, header: Data)
-    
-    /// Ratchet forward using received header and decrypt
-    func ratchetDecrypt(_ ciphertext: Data, header: Data) throws -> Data
-}
-
-/// Message header for Double Ratchet (future use)
-struct RatchetHeader: Codable {
-    let publicKey: Data       // Ephemeral public key
-    let previousChainLength: UInt32
-    let messageNumber: UInt32
-}
-
-/// Placeholder for full implementation
-class ChannelDoubleRatchet {
-    // This would implement the full Double Ratchet algorithm
-    // adapted for multi-party channels
-    // Challenges:
-    // - Sender keys for multi-party
-    // - Out-of-order delivery
-    // - State synchronization
-    // - Performance with many members
-}

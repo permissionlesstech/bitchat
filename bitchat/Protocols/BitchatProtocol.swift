@@ -77,7 +77,6 @@ struct MessagePadding {
 
 enum MessageType: UInt8 {
     case announce = 0x01
-    // 0x02 was legacy keyExchange - removed
     case leave = 0x03
     case message = 0x04  // All user messages (private and broadcast)
     case fragmentStart = 0x05
