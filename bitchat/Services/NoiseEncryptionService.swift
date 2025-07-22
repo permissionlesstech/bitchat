@@ -459,6 +459,28 @@ struct NoiseMessage: Codable {
             return nil
         }
     }
+    
+    // MARK: - Binary Encoding
+    
+    func toBinaryData() -> Data {
+        var data = Data()
+        data.appendUInt8(type)
+        data.appendUUID(sessionID)
+        data.appendData(payload)
+        return data
+    }
+    
+    static func fromBinaryData(_ data: Data) -> NoiseMessage? {
+        var offset = 0
+        
+        guard let type = data.readUInt8(at: &offset),
+              let sessionID = data.readUUID(at: &offset),
+              let payload = data.readData(at: &offset) else { return nil }
+        
+        guard let messageType = NoiseMessageType(rawValue: type) else { return nil }
+        
+        return NoiseMessage(type: messageType, sessionID: sessionID, payload: payload)
+    }
 }
 
 // MARK: - Errors
