@@ -9,9 +9,11 @@ A decentralized peer-to-peer messaging app that works over Bluetooth mesh networ
 > [!WARNING]
 > Private message and channel features have not received external security review and may contain vulnerabilities. Do not use for sensitive use cases, and do not rely on its security until it has been reviewed. Now uses the [Noise Protocol](http://www.noiseprotocol.org) for identity and encryption. Public local chat (the main feature) has no security concerns. 
 
+
 ## License
 
 This project is released into the public domain. See the [LICENSE](LICENSE) file for details.
+
 
 ## Features
 
@@ -24,6 +26,25 @@ This project is released into the public domain. See the [LICENSE](LICENSE) file
 - **Universal App**: Native support for iOS and macOS
 - **Emergency Wipe**: Triple-tap to instantly clear all data
 - **Performance Optimizations**: LZ4 message compression, adaptive battery modes, and optimized networking
+
+
+## Technical Architecture
+
+### Binary Protocol
+bitchat uses an efficient binary protocol optimized for Bluetooth LE:
+- Compact packet format with 1-byte type field
+- TTL-based message routing (max 7 hops)
+- Automatic fragmentation for large messages
+- Message deduplication via unique IDs
+
+### Mesh Networking
+- Each device acts as both client and peripheral
+- Automatic peer discovery and connection management
+- Store-and-forward for offline message delivery
+- Adaptive duty cycling for battery optimization
+
+For detailed protocol documentation, see the [Technical Whitepaper](WHITEPAPER.md).
+
 
 ## Setup
 
@@ -66,27 +87,3 @@ This project is released into the public domain. See the [LICENSE](LICENSE) file
 
 Want to try this on macos: `just run` will set it up and run from source. 
 Run `just clean` afterwards to restore things to original state for mobile app building and development.
-
-
-## Technical Architecture
-
-### Binary Protocol
-bitchat uses an efficient binary protocol optimized for Bluetooth LE:
-- Compact packet format with 1-byte type field
-- TTL-based message routing (max 7 hops)
-- Automatic fragmentation for large messages
-- Message deduplication via unique IDs
-
-### Mesh Networking
-- Each device acts as both client and peripheral
-- Automatic peer discovery and connection management
-- Store-and-forward for offline message delivery
-- Adaptive duty cycling for battery optimization
-
-For detailed protocol documentation, see the [Technical Whitepaper](WHITEPAPER.md).
-
-## Building for Production
-
-1. Set your development team in project settings
-2. Configure code signing
-3. Archive and distribute through App Store or TestFlight
