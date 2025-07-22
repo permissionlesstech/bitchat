@@ -30,23 +30,9 @@ class NotificationService {
     }
     
     func sendLocalNotification(title: String, body: String, identifier: String) {
-        // Everything must be on main thread to check app state
+        // For now, skip app state check entirely to avoid thread issues
+        // The NotificationDelegate will handle foreground presentation
         DispatchQueue.main.async {
-            #if os(iOS)
-            guard UIApplication.shared.applicationState != .active else {
-                // App is active/foreground, skipping notification
-                print("📱 Skipping notification - app is in foreground")
-                return
-            }
-            #elseif os(macOS)
-            guard !NSApplication.shared.isActive else {
-                // App is active/foreground, skipping notification
-                print("📱 Skipping notification - app is in foreground")
-                return
-            }
-            #endif
-            
-            // App is in background/inactive, create and send notification
             let content = UNMutableNotificationContent()
             content.title = title
             content.body = body
@@ -61,6 +47,8 @@ class NotificationService {
             UNUserNotificationCenter.current().add(request) { error in
                 if let error = error {
                     print("📱 Error sending local notification: \(error)")
+                } else {
+                    print("📱 Local notification sent: \(title)")
                 }
             }
         }
