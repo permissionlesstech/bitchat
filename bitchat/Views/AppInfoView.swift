@@ -28,8 +28,6 @@ struct AppInfoView: View {
             static let extendedRange = ("antenna.radiowaves.left.and.right", "extended range", "messages relay through peers, increasing the distance")
             static let favorites = ("star.fill", "favorites", "store-and-forward messages for favorite people")
             static let mentions = ("at", "mentions", "use @nickname to notify specific people")
-            static let channels = ("number", "channels", "create #channels for topic-based conversations")
-            static let privateChannels = ("lock.fill", "private channels", "secure channels with passwords and noise encryption")
         }
         
         enum Privacy {
@@ -46,7 +44,6 @@ struct AppInfoView: View {
                 "• swipe left for sidebar",
                 "• tap a peer to start a private chat",
                 "• use @nickname to mention someone",
-                "• use #channelname to create/join channels",
                 "• triple-tap \"bitchat\" for panic mode",
                 "• triple-tap chat messages to clear current chat"
             ]
@@ -55,10 +52,8 @@ struct AppInfoView: View {
         enum Commands {
             static let title = "COMMANDS"
             static let list = [
-                "/j #channel - join or create a channel",
                 "/m @name - send private message",
                 "/w - see who's online",
-                "/channels - show all discovered channels",
                 "/block @name - block a peer",
                 "/block - list blocked peers",
                 "/unblock @name - unblock a peer",
@@ -148,14 +143,6 @@ struct AppInfoView: View {
                 FeatureRow(icon: Strings.Features.mentions.0,
                           title: Strings.Features.mentions.1,
                           description: Strings.Features.mentions.2)
-                
-                FeatureRow(icon: Strings.Features.channels.0,
-                          title: Strings.Features.channels.1,
-                          description: Strings.Features.channels.2)
-                
-                FeatureRow(icon: Strings.Features.privateChannels.0,
-                          title: Strings.Features.privateChannels.1,
-                          description: Strings.Features.privateChannels.2)
             }
             
             // Privacy

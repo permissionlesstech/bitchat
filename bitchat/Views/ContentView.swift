@@ -18,18 +18,10 @@ struct ContentView: View {
     @State private var showSidebar = false
     @State private var sidebarDragOffset: CGFloat = 0
     @State private var showAppInfo = false
-    @State private var showPasswordInput = false
-    @State private var passwordInputChannel: String? = nil
-    @State private var passwordInput = ""
-    @State private var showPasswordPrompt = false
-    @State private var passwordPromptInput = ""
-    @State private var showPasswordError = false
     @State private var showCommandSuggestions = false
     @State private var commandSuggestions: [String] = []
-    @State private var showLeaveChannelAlert = false
     @State private var backSwipeOffset: CGFloat = 0
     @State private var showPrivateChat = false
-    @State private var showChannel = false
     
     private var backgroundColor: Color {
         colorScheme == .dark ? Color.black : Color.white
@@ -84,41 +76,6 @@ struct ContentView: View {
                         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showPrivateChat)
                 }
                 
-                // Channel slide-over
-                if viewModel.currentChannel != nil {
-                    channelView
-                        .frame(width: geometry.size.width)
-                        .background(backgroundColor)
-                        .transition(.asymmetric(
-                            insertion: .move(edge: .trailing),
-                            removal: .move(edge: .trailing)
-                        ))
-                        .offset(x: showChannel ? 0 : geometry.size.width)
-                        .offset(x: backSwipeOffset)
-                        .gesture(
-                            DragGesture()
-                                .onChanged { value in
-                                    if value.translation.width > 0 {
-                                        backSwipeOffset = min(value.translation.width, geometry.size.width)
-                                    }
-                                }
-                                .onEnded { value in
-                                    if value.translation.width > 50 || (value.translation.width > 30 && value.velocity.width > 300) {
-                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                            showChannel = false
-                                            backSwipeOffset = 0
-                                            viewModel.switchToChannel(nil)
-                                        }
-                                    } else {
-                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                            backSwipeOffset = 0
-                                        }
-                                    }
-                                }
-                        )
-                        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showChannel)
-                }
-                
                 // Sidebar overlay
                 HStack(spacing: 0) {
                     // Tap to dismiss area
@@ -152,11 +109,6 @@ struct ContentView: View {
                 showPrivateChat = newValue != nil
             }
         }
-        .onChange(of: viewModel.currentChannel) { newValue in
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                showChannel = newValue != nil
-            }
-        }
         .sheet(isPresented: $showAppInfo) {
             AppInfoView()
         }
@@ -168,63 +120,15 @@ struct ContentView: View {
                 FingerprintView(viewModel: viewModel, peerID: peerID)
             }
         }
-        .alert("Set Channel Password", isPresented: $showPasswordInput) {
-            SecureField("Password", text: $passwordInput)
-            Button("Cancel", role: .cancel) {
-                passwordInput = ""
-                passwordInputChannel = nil
-            }
-            Button("Set Password") {
-                if let channel = passwordInputChannel, !passwordInput.isEmpty {
-                    viewModel.setChannelPassword(passwordInput, for: channel)
-                    passwordInput = ""
-                    passwordInputChannel = nil
-                }
-            }
-        } message: {
-            Text("Enter a password to protect \(passwordInputChannel ?? "channel"). Others will need this password to read messages.")
-        }
-        .alert("Enter Channel Password", isPresented: Binding(
-            get: { viewModel.showPasswordPrompt },
-            set: { viewModel.showPasswordPrompt = $0 }
-        )) {
-            SecureField("Password", text: $passwordPromptInput)
-            Button("Cancel", role: .cancel) {
-                passwordPromptInput = ""
-                viewModel.passwordPromptChannel = nil
-            }
-            Button("Join") {
-                if let channel = viewModel.passwordPromptChannel, !passwordPromptInput.isEmpty {
-                    let success = viewModel.joinChannel(channel, password: passwordPromptInput)
-                    if success {
-                        passwordPromptInput = ""
-                    } else {
-                        // Wrong password - show error
-                        passwordPromptInput = ""
-                        showPasswordError = true
-                    }
-                }
-            }
-        } message: {
-            Text("Channel \(viewModel.passwordPromptChannel ?? "") is password protected. Enter the password to join.")
-        }
-        .alert("Wrong Password", isPresented: $showPasswordError) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text("The password you entered is incorrect. Please try again.")
-        }
     }
     
-    private func messagesView(for channel: String?, privatePeer: String?) -> some View {
+    private func messagesView(privatePeer: String?) -> some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {
                     let messages: [BitchatMessage] = {
                         if let privatePeer = privatePeer {
                             let msgs = viewModel.getPrivateChatMessages(for: privatePeer)
-                            return msgs
-                        } else if let channel = channel {
-                            let msgs = viewModel.getChannelMessages(channel)
                             return msgs
                         } else {
                             return viewModel.messages
@@ -294,7 +198,7 @@ struct ContentView: View {
                 viewModel.sendMessage("/clear")
             }
             .onChange(of: viewModel.messages.count) { _ in
-                if channel == nil && privatePeer == nil && !viewModel.messages.isEmpty {
+                if privatePeer == nil && !viewModel.messages.isEmpty {
                     withAnimation {
                         proxy.scrollTo(viewModel.messages.last?.id, anchor: .bottom)
                     }
@@ -303,15 +207,6 @@ struct ContentView: View {
             .onChange(of: viewModel.privateChats) { _ in
                 if let peerID = privatePeer,
                    let messages = viewModel.privateChats[peerID],
-                   !messages.isEmpty {
-                    withAnimation {
-                        proxy.scrollTo(messages.last?.id, anchor: .bottom)
-                    }
-                }
-            }
-            .onChange(of: viewModel.channelMessages) { _ in
-                if let channelName = channel,
-                   let messages = viewModel.channelMessages[channelName],
                    !messages.isEmpty {
                     withAnimation {
                         proxy.scrollTo(messages.last?.id, anchor: .bottom)
@@ -376,23 +271,14 @@ struct ContentView: View {
                         (["/block"], "[nickname]", "block or list blocked peers"),
                         (["/clear"], nil, "clear chat messages"),
                         (["/hug"], "<nickname>", "send someone a warm hug"),
-                        (["/j", "/join"], "<channel>", "join or create a channel"),
                         (["/m", "/msg"], "<nickname> [message]", "send private message"),
-                        (["/channels"], nil, "show all discovered channels"),
                         (["/slap"], "<nickname>", "slap someone with a trout"),
                         (["/unblock"], "<nickname>", "unblock a peer"),
                         (["/w"], nil, "see who's online")
                     ]
                     
-                    let channelCommandInfo: [(commands: [String], syntax: String?, description: String)] = [
-                        (["/pass"], "[password]", "change channel password"),
-                        (["/transfer"], "<nickname>", "transfer channel ownership")
-                    ]
-                    
                     // Build the display
-                    let allCommands = viewModel.currentChannel != nil 
-                        ? commandInfo + channelCommandInfo 
-                        : commandInfo
+                    let allCommands = commandInfo
                     
                     // Show matching commands
                     ForEach(commandSuggestions, id: \.self) { command in
@@ -450,13 +336,6 @@ struct ContentView: View {
                     .lineLimit(1)
                     .fixedSize()
                     .padding(.leading, 12)
-            } else if let currentChannel = viewModel.currentChannel, viewModel.passwordProtectedChannels.contains(currentChannel) {
-                Text("<@\(viewModel.nickname)> →")
-                    .font(.system(size: 12, weight: .medium, design: .monospaced))
-                    .foregroundColor(Color.orange)
-                    .lineLimit(1)
-                    .fixedSize()
-                    .padding(.leading, 12)
             } else {
                 Text("<@\(viewModel.nickname)>")
                     .font(.system(size: 12, weight: .medium, design: .monospaced))
@@ -479,23 +358,15 @@ struct ContentView: View {
                     // Check for command autocomplete
                     if newValue.hasPrefix("/") && newValue.count >= 1 {
                         // Build context-aware command list
-                        var commandDescriptions = [
+                        let commandDescriptions = [
                             ("/block", "block or list blocked peers"),
-                            ("/channels", "show all discovered channels"),
                             ("/clear", "clear chat messages"),
                             ("/hug", "send someone a warm hug"),
-                            ("/j", "join or create a channel"),
                             ("/m", "send private message"),
                             ("/slap", "slap someone with a trout"),
                             ("/unblock", "unblock a peer"),
                             ("/w", "see who's online")
                         ]
-                        
-                        // Add channel-specific commands if in a channel
-                        if viewModel.currentChannel != nil {
-                            commandDescriptions.append(("/pass", "change channel password"))
-                            commandDescriptions.append(("/transfer", "transfer channel ownership"))
-                        }
                         
                         let input = newValue.lowercased()
                         
@@ -535,8 +406,7 @@ struct ContentView: View {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 20))
                     .foregroundColor(messageText.isEmpty ? Color.gray :
-                                            (viewModel.selectedPrivateChatPeer != nil ||
-                                             (viewModel.currentChannel != nil && viewModel.passwordProtectedChannels.contains(viewModel.currentChannel ?? "")))
+                                            viewModel.selectedPrivateChatPeer != nil
                                              ? Color.orange : textColor)
             }
             .buttonStyle(.plain)
@@ -555,133 +425,6 @@ struct ContentView: View {
     private func sendMessage() {
         viewModel.sendMessage(messageText)
         messageText = ""
-    }
-    
-    @ViewBuilder
-    private var channelsSection: some View {
-        if !viewModel.joinedChannels.isEmpty {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 4) {
-                    Image(systemName: "square.split.2x2")
-                        .font(.system(size: 10))
-                        .accessibilityHidden(true)
-                    Text("CHANNELS")
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                }
-                .foregroundColor(secondaryTextColor)
-                .padding(.horizontal, 12)
-                
-                ForEach(Array(viewModel.joinedChannels).sorted(), id: \.self) { channel in
-                    channelButton(for: channel)
-                }
-            }
-        }
-    }
-    
-    @ViewBuilder
-    private func channelButton(for channel: String) -> some View {
-        Button(action: {
-            // Check if channel needs password and we don't have it
-            if viewModel.passwordProtectedChannels.contains(channel) && viewModel.channelKeys[channel] == nil {
-                // Need password
-                viewModel.passwordPromptChannel = channel
-                viewModel.showPasswordPrompt = true
-            } else {
-                // Can enter channel
-                viewModel.switchToChannel(channel)
-                withAnimation(.spring()) {
-                    showSidebar = false
-                }
-            }
-        }) {
-            HStack {
-                // Lock icon for password protected channels
-                if viewModel.passwordProtectedChannels.contains(channel) {
-                    Image(systemName: "lock.fill")
-                        .font(.system(size: 10))
-                        .foregroundColor(secondaryTextColor)
-                        .accessibilityLabel("Password protected")
-                }
-                
-                Text(channel)
-                    .font(.system(size: 14, design: .monospaced))
-                    .foregroundColor(viewModel.currentChannel == channel ? Color.blue : textColor)
-                
-                Spacer()
-                
-                // Unread count
-                if let unreadCount = viewModel.unreadChannelMessages[channel], unreadCount > 0 {
-                    Text("\(unreadCount)")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .foregroundColor(backgroundColor)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.orange)
-                        .clipShape(Capsule())
-                }
-                
-                // Channel controls
-                if viewModel.currentChannel == channel {
-                    channelControls(for: channel)
-                }
-            }
-        }
-        .buttonStyle(.plain)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 4)
-        .background(viewModel.currentChannel == channel ? backgroundColor.opacity(0.5) : Color.clear)
-    }
-    
-    @ViewBuilder
-    private func channelControls(for channel: String) -> some View {
-        HStack(spacing: 4) {
-            // Password button for channel creator only
-            if viewModel.isChannelOwner(channel) {
-                Button(action: {
-                    // Toggle password protection
-                    if viewModel.passwordProtectedChannels.contains(channel) {
-                        viewModel.removeChannelPassword(for: channel)
-                    } else {
-                        // Show password input
-                        showPasswordInput = true
-                        passwordInputChannel = channel
-                    }
-                }) {
-                    HStack(spacing: 2) {
-                        Image(systemName: viewModel.passwordProtectedChannels.contains(channel) ? "lock.fill" : "lock")
-                            .font(.system(size: 10))
-                    }
-                    .foregroundColor(viewModel.passwordProtectedChannels.contains(channel) ? backgroundColor : secondaryTextColor)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 2)
-                    .background(viewModel.passwordProtectedChannels.contains(channel) ? Color.orange : Color.clear)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 4)
-                            .stroke(viewModel.passwordProtectedChannels.contains(channel) ? Color.orange : secondaryTextColor.opacity(0.5), lineWidth: 1)
-                    )
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(viewModel.passwordProtectedChannels.contains(channel) ? "Remove password" : "Set password")
-            }
-            
-            // Leave button
-            Button(action: {
-                showLeaveChannelAlert = true
-            }) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 14))
-                    .foregroundColor(Color.red.opacity(0.6))
-            }
-            .buttonStyle(.plain)
-            .alert("leave channel", isPresented: $showLeaveChannelAlert) {
-                Button("cancel", role: .cancel) { }
-                Button("leave", role: .destructive) {
-                    viewModel.leaveChannel(channel)
-                }
-            } message: {
-                Text("sure you want to leave \(channel)?")
-            }
-        }
     }
     
     private var sidebarView: some View {
@@ -708,23 +451,10 @@ struct ContentView: View {
             // Rooms and People list
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    // Channels section
-                    channelsSection
-                    
-                    if !viewModel.joinedChannels.isEmpty {
-                        Divider()
-                            .padding(.vertical, 4)
-                    }
-                    
                     // People section
                     VStack(alignment: .leading, spacing: 8) {
                         // Show appropriate header based on context
-                        if let currentChannel = viewModel.currentChannel {
-                            Text("IN \(currentChannel.uppercased())")
-                                .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                                .foregroundColor(secondaryTextColor)
-                                .padding(.horizontal, 12)
-                        } else if !viewModel.connectedPeers.isEmpty {
+                        if !viewModel.connectedPeers.isEmpty {
                             HStack(spacing: 4) {
                                 Image(systemName: "person.2.fill")
                                     .font(.system(size: 10))
@@ -741,38 +471,13 @@ struct ContentView: View {
                                 .font(.system(size: 14, design: .monospaced))
                                 .foregroundColor(secondaryTextColor)
                                 .padding(.horizontal)
-                        } else if let currentChannel = viewModel.currentChannel,
-                                  let channelMemberIDs = viewModel.channelMembers[currentChannel],
-                                  channelMemberIDs.isEmpty {
-                            Text("no one in this channel yet...")
-                                .font(.system(size: 14, design: .monospaced))
-                                .foregroundColor(secondaryTextColor)
-                                .padding(.horizontal)
                         } else {
                             let peerNicknames = viewModel.meshService.getPeerNicknames()
                             let peerRSSI = viewModel.meshService.getPeerRSSI()
                             let myPeerID = viewModel.meshService.myPeerID
                             
-                            // Filter peers based on current channel
-                            let peersToShow: [String] = {
-                                if let currentChannel = viewModel.currentChannel,
-                                   let channelMemberIDs = viewModel.channelMembers[currentChannel] {
-                                    // Show only peers who have sent messages to this channel (including self)
-                                    
-                                    // Start with channel members who are also connected
-                                    var memberPeers = viewModel.connectedPeers.filter { channelMemberIDs.contains($0) }
-                                    
-                                    // Always include ourselves if we're a channel member
-                                    if channelMemberIDs.contains(myPeerID) && !memberPeers.contains(myPeerID) {
-                                        memberPeers.append(myPeerID)
-                                    }
-                                    
-                                    return memberPeers
-                                } else {
-                                    // Show all connected peers in main chat
-                                    return viewModel.connectedPeers
-                                }
-                            }()
+                            // Show all connected peers
+                            let peersToShow: [String] = viewModel.connectedPeers
                             
                         // Sort peers: favorites first, then alphabetically by nickname
                         let sortedPeers = peersToShow.sorted { peer1, peer2 in
@@ -888,7 +593,7 @@ struct ContentView: View {
         VStack(spacing: 0) {
             mainHeaderView
             Divider()
-            messagesView(for: nil, privatePeer: nil)
+            messagesView(privatePeer: nil)
             Divider()
             inputView
         }
@@ -935,7 +640,7 @@ struct ContentView: View {
             VStack(spacing: 0) {
                 privateHeaderView
                 Divider()
-                messagesView(for: nil, privatePeer: viewModel.selectedPrivateChatPeer)
+                messagesView(privatePeer: viewModel.selectedPrivateChatPeer)
                 Divider()
                 inputView
             }
@@ -944,24 +649,6 @@ struct ContentView: View {
         }
     }
     
-    private var channelView: some View {
-        HStack(spacing: 0) {
-            // Vertical separator bar
-            Rectangle()
-                .fill(Color.gray.opacity(0.3))
-                .frame(width: 1)
-            
-            VStack(spacing: 0) {
-                channelHeaderView
-                Divider()
-                messagesView(for: viewModel.currentChannel, privatePeer: nil)
-                Divider()
-                inputView
-            }
-            .background(backgroundColor)
-            .foregroundColor(textColor)
-        }
-    }
     
     private var mainHeaderView: some View {
         HStack(spacing: 0) {
@@ -999,16 +686,6 @@ struct ContentView: View {
             
             // People counter with unread indicator
             HStack(spacing: 4) {
-                // Check for any unread channel messages
-                let hasUnreadChannelMessages = viewModel.unreadChannelMessages.values.contains { $0 > 0 }
-                
-                if hasUnreadChannelMessages {
-                    Image(systemName: "number")
-                        .font(.system(size: 12))
-                        .foregroundColor(Color.blue)
-                        .accessibilityLabel("Unread channel messages")
-                }
-                
                 if !viewModel.unreadPrivateMessages.isEmpty {
                     Image(systemName: "envelope.fill")
                         .font(.system(size: 12))
@@ -1017,7 +694,6 @@ struct ContentView: View {
                 }
                 
                 let otherPeersCount = viewModel.connectedPeers.filter { $0 != viewModel.meshService.myPeerID }.count
-                let channelCount = viewModel.joinedChannels.count
                 
                 HStack(spacing: 4) {
                     // People icon with count
@@ -1027,18 +703,6 @@ struct ContentView: View {
                     Text("\(otherPeersCount)")
                         .font(.system(size: 12, design: .monospaced))
                         .accessibilityHidden(true)
-                    
-                    // Channels icon with count (only if there are channels)
-                    if channelCount > 0 {
-                        Text("·")
-                            .font(.system(size: 12, design: .monospaced))
-                        Image(systemName: "square.split.2x2")
-                            .font(.system(size: 11))
-                            .accessibilityLabel("\(channelCount) active \(channelCount == 1 ? "channel" : "channels")")
-                        Text("\(channelCount)")
-                            .font(.system(size: 12, design: .monospaced))
-                            .accessibilityHidden(true)
-                    }
                 }
                 .foregroundColor(viewModel.isConnected ? textColor : Color.red)
             }
@@ -1123,125 +787,6 @@ struct ContentView: View {
         }
     }
     
-    private var channelHeaderView: some View {
-        Group {
-            if let currentChannel = viewModel.currentChannel {
-                HStack {
-                Button(action: {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        showChannel = false
-                        viewModel.switchToChannel(nil)
-                    }
-                }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 12))
-                        Text("back")
-                            .font(.system(size: 14, design: .monospaced))
-                    }
-                    .foregroundColor(textColor)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Back to main chat")
-                
-                Spacer()
-                
-                Button(action: {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        showSidebar.toggle()
-                        sidebarDragOffset = 0
-                    }
-                }) {
-                    HStack(spacing: 4) {
-                        if viewModel.passwordProtectedChannels.contains(currentChannel) {
-                            Image(systemName: "lock.fill")
-                                .font(.system(size: 14))
-                                .foregroundColor(Color.orange)
-                                .accessibilityLabel("Password protected channel")
-                        }
-                        
-                        Text(currentChannel)
-                            .font(.system(size: 16, weight: .medium, design: .monospaced))
-                            .foregroundColor(viewModel.passwordProtectedChannels.contains(currentChannel) ? Color.orange : Color.blue)
-                        
-                        // Verification status indicator after channel name
-                        if viewModel.passwordProtectedChannels.contains(currentChannel),
-                           let status = viewModel.channelVerificationStatus[currentChannel] {
-                            switch status {
-                            case .verifying:
-                                ProgressView()
-                                    .scaleEffect(0.5)
-                                    .frame(width: 12, height: 12)
-                            case .verified:
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 12))
-                                    .foregroundColor(Color.green)
-                            case .failed:
-                                Image(systemName: "xmark.circle.fill")
-                                    .font(.system(size: 12))
-                                    .foregroundColor(Color.red)
-                            case .unverified:
-                                Image(systemName: "questionmark.circle")
-                                    .font(.system(size: 12))
-                                    .foregroundColor(Color.gray)
-                                    .help("Password verification pending")
-                            }
-                        }
-                    }
-                }
-                .buttonStyle(.plain)
-                .frame(maxWidth: .infinity)
-                
-                Spacer()
-                
-                HStack(spacing: 8) {
-                    // Password button for channel creator only
-                    if viewModel.isChannelOwner(currentChannel) {
-                        Button(action: {
-                            // Toggle password protection
-                            if viewModel.passwordProtectedChannels.contains(currentChannel) {
-                                viewModel.removeChannelPassword(for: currentChannel)
-                            } else {
-                                // Show password input
-                                showPasswordInput = true
-                                passwordInputChannel = currentChannel
-                            }
-                        }) {
-                            Image(systemName: viewModel.passwordProtectedChannels.contains(currentChannel) ? "lock.fill" : "lock")
-                                .font(.system(size: 16))
-                                .foregroundColor(viewModel.passwordProtectedChannels.contains(currentChannel) ? Color.yellow : textColor)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(viewModel.passwordProtectedChannels.contains(currentChannel) ? "Remove channel password" : "Set channel password")
-                    }
-                    
-                    // Leave channel button
-                    Button(action: {
-                        showLeaveChannelAlert = true
-                    }) {
-                        Image(systemName: "xmark.circle")
-                            .font(.system(size: 16))
-                            .foregroundColor(Color.red.opacity(0.8))
-                    }
-                    .buttonStyle(.plain)
-                    .alert("leave channel?", isPresented: $showLeaveChannelAlert) {
-                        Button("cancel", role: .cancel) { }
-                        Button("leave", role: .destructive) {
-                            viewModel.leaveChannel(currentChannel)
-                        }
-                    } message: {
-                        Text("sure you want to leave \(currentChannel)?")
-                    }
-                }
-            }
-            .frame(height: 44)
-            .padding(.horizontal, 12)
-            .background(backgroundColor.opacity(0.95))
-            } else {
-                EmptyView()
-            }
-        }
-    }
 }
 
 // Helper view for rendering message content with clickable hashtags

@@ -251,20 +251,19 @@ extension BitchatMessage {
         var data = Data()
         
         // Message format:
-        // - Flags: 1 byte (bit 0: isRelay, bit 1: isPrivate, bit 2: hasOriginalSender, bit 3: hasRecipientNickname, bit 4: hasSenderPeerID, bit 5: hasMentions, bit 6: hasChannel, bit 7: isEncrypted)
+        // - Flags: 1 byte (bit 0: isRelay, bit 1: isPrivate, bit 2: hasOriginalSender, bit 3: hasRecipientNickname, bit 4: hasSenderPeerID, bit 5: hasMentions)
         // - Timestamp: 8 bytes (seconds since epoch)
         // - ID length: 1 byte
         // - ID: variable
         // - Sender length: 1 byte
         // - Sender: variable
         // - Content length: 2 bytes
-        // - Content: variable (or encrypted content if isEncrypted)
+        // - Content: variable
         // Optional fields based on flags:
         // - Original sender length + data
         // - Recipient nickname length + data
         // - Sender peer ID length + data
         // - Mentions array
-        // - Channel hashtag
         
         var flags: UInt8 = 0
         if isRelay { flags |= 0x01 }
@@ -273,8 +272,6 @@ extension BitchatMessage {
         if recipientNickname != nil { flags |= 0x08 }
         if senderPeerID != nil { flags |= 0x10 }
         if mentions != nil && !mentions!.isEmpty { flags |= 0x20 }
-        if channel != nil { flags |= 0x40 }
-        if isEncrypted { flags |= 0x80 }
         
         data.append(flags)
         
@@ -301,14 +298,8 @@ extension BitchatMessage {
             data.append(0)
         }
         
-        // Content or encrypted content
-        if isEncrypted, let encryptedContent = encryptedContent {
-            let length = UInt16(min(encryptedContent.count, 65535))
-            // Encode length as 2 bytes, big-endian
-            data.append(UInt8((length >> 8) & 0xFF))
-            data.append(UInt8(length & 0xFF))
-            data.append(encryptedContent.prefix(Int(length)))
-        } else if let contentData = content.data(using: .utf8) {
+        // Content
+        if let contentData = content.data(using: .utf8) {
             let length = UInt16(min(contentData.count, 65535))
             // Encode length as 2 bytes, big-endian
             data.append(UInt8((length >> 8) & 0xFF))
@@ -347,11 +338,6 @@ extension BitchatMessage {
             }
         }
         
-        // Channel hashtag
-        if let channel = channel, let channelData = channel.data(using: .utf8) {
-            data.append(UInt8(min(channelData.count, 255)))
-            data.append(channelData.prefix(255))
-        }
         
         return data
     }
@@ -378,8 +364,6 @@ extension BitchatMessage {
         let hasRecipientNickname = (flags & 0x08) != 0
         let hasSenderPeerID = (flags & 0x10) != 0
         let hasMentions = (flags & 0x20) != 0
-        let hasChannel = (flags & 0x40) != 0
-        let isEncrypted = (flags & 0x80) != 0
         
         // Timestamp
         guard offset + 8 <= dataCopy.count else { 
@@ -427,18 +411,7 @@ extension BitchatMessage {
             return nil 
         }
         
-        let content: String
-        let encryptedContent: Data?
-        
-        if isEncrypted {
-            // Content is encrypted, store as Data
-            encryptedContent = dataCopy[offset..<offset+contentLength]
-            content = ""  // Empty placeholder
-        } else {
-            // Normal string content
-            content = String(data: dataCopy[offset..<offset+contentLength], encoding: .utf8) ?? ""
-            encryptedContent = nil
-        }
+        let content = String(data: dataCopy[offset..<offset+contentLength], encoding: .utf8) ?? ""
         offset += contentLength
         
         // Optional fields
@@ -489,16 +462,6 @@ extension BitchatMessage {
             }
         }
         
-        // Channel
-        var channel: String? = nil
-        if hasChannel && offset < dataCopy.count {
-            let length = Int(dataCopy[offset]); offset += 1
-            if offset + length <= dataCopy.count {
-                channel = String(data: dataCopy[offset..<offset+length], encoding: .utf8)
-                offset += length
-            }
-        }
-        
         let message = BitchatMessage(
             id: id,
             sender: sender,
@@ -509,10 +472,7 @@ extension BitchatMessage {
             isPrivate: isPrivate,
             recipientNickname: recipientNickname,
             senderPeerID: senderPeerID,
-            mentions: mentions,
-            channel: channel,
-            encryptedContent: encryptedContent,
-            isEncrypted: isEncrypted
+            mentions: mentions
         )
         return message
     }
