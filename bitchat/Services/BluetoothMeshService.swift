@@ -299,6 +299,7 @@ class BluetoothMeshService: NSObject {
             // Remove old peer ID mapping if exists
             if let existingPeerID = self.fingerprintToPeerID[fingerprint], existingPeerID != newPeerID {
                 oldPeerID = existingPeerID
+                SecureLogger.log("Peer ID rotation detected: \(existingPeerID) -> \(newPeerID) for fingerprint \(fingerprint)", category: SecureLogger.security, level: .info)
                 
                 self.peerIDToFingerprint.removeValue(forKey: existingPeerID)
                 
@@ -420,6 +421,8 @@ class BluetoothMeshService: NSObject {
             
             // Generate new peer ID
             self.myPeerID = self.generateNewPeerID()
+            
+            SecureLogger.log("Peer ID rotated from \(oldID) to \(self.myPeerID)", category: SecureLogger.security, level: .info)
             
             // Update advertising with new peer ID
             DispatchQueue.main.async { [weak self] in
@@ -904,7 +907,6 @@ class BluetoothMeshService: NSObject {
             
             // Encode the ACK
             let ackData = ack.toBinaryData()
-            print("📤 Sending delivery ACK for message \(ack.originalMessageID) to \(recipientID) - binary size: \(ackData.count)")
             
             // Check if we have a Noise session with this peer
             // Use noiseService directly
@@ -933,8 +935,7 @@ class BluetoothMeshService: NSObject {
                     
                     self.broadcastPacket(outerPacket)
                 } catch {
-                    SecurityLogger.log("Failed to encrypt delivery ACK via Noise for \(recipientID): \(error)", 
-                                     category: SecurityLogger.encryption, level: .error)
+                    SecureLogger.logError(error, context: "Failed to encrypt delivery ACK via Noise for \(recipientID)", category: SecureLogger.encryption)
                 }
             } else {
                 // Fall back to legacy encryption
@@ -942,8 +943,7 @@ class BluetoothMeshService: NSObject {
                 do {
                     encryptedPayload = try self.noiseService.encrypt(ackData, for: recipientID)
                 } catch {
-                    SecurityLogger.log("Failed to encrypt delivery ACK for \(recipientID): \(error)", 
-                                     category: SecurityLogger.encryption, level: .error)
+                    SecureLogger.logError(error, context: "Failed to encrypt delivery ACK for \(recipientID)", category: SecureLogger.encryption)
                     return
                 }
                 
@@ -1005,8 +1005,7 @@ class BluetoothMeshService: NSObject {
                         self.broadcastPacket(outerPacket)
                     }
                 } catch {
-                    SecurityLogger.log("Failed to encrypt read receipt via Noise for \(recipientID): \(error)", 
-                                     category: SecurityLogger.encryption, level: .error)
+                    SecureLogger.logError(error, context: "Failed to encrypt read receipt via Noise for \(recipientID)", category: SecureLogger.encryption)
                 }
             } else {
                 // Fall back to legacy encryption
@@ -1203,6 +1202,8 @@ class BluetoothMeshService: NSObject {
     
     // Emergency disconnect for panic situations
     func emergencyDisconnectAll() {
+        SecureLogger.logSecurityEvent(.invalidKey(reason: "Emergency disconnect triggered"), level: .warning)
+        
         // Stop advertising immediately
         if peripheralManager?.isAdvertising == true {
             peripheralManager?.stopAdvertising()
@@ -1214,7 +1215,8 @@ class BluetoothMeshService: NSObject {
         scanDutyCycleTimer = nil
         
         // Disconnect all peripherals
-        for (_, peripheral) in connectedPeripherals {
+        for (peerID, peripheral) in connectedPeripherals {
+            SecureLogger.log("Emergency disconnect peer: \(peerID)", category: SecureLogger.session, level: .warning)
             centralManager?.cancelPeripheralConnection(peripheral)
         }
         
@@ -1662,6 +1664,8 @@ class BluetoothMeshService: NSObject {
             let currentTime = UInt64(Date().timeIntervalSince1970 * 1000) // milliseconds
             let timeDiff = abs(Int64(currentTime) - Int64(packet.timestamp))
             if timeDiff > 300000 { // 5 minutes in milliseconds
+                SecureLogger.logSecurityEvent(.replayAttackDetected(channel: "timestamp-\(senderID)"), level: .warning)
+                SecureLogger.log("Dropped message with stale timestamp. Age: \(timeDiff/1000)s from \(senderID)", category: SecureLogger.security, level: .warning)
                 return
             }
         
@@ -1681,9 +1685,11 @@ class BluetoothMeshService: NSObject {
         if messageBloomFilter.contains(messageID) {
             // Also check exact set for accuracy (bloom filter can have false positives)
             if processedMessages.contains(messageID) {
+                SecureLogger.log("Dropped duplicate message: \(messageID.prefix(20))... from \(senderID)", category: SecureLogger.security, level: .debug)
                 return
             } else {
                 // False positive from Bloom filter
+                SecureLogger.log("Bloom filter false positive for message: \(messageID.prefix(20))...", category: SecureLogger.security, level: .debug)
             }
         }
         
@@ -1800,11 +1806,14 @@ class BluetoothMeshService: NSObject {
                                          Double.random(in: 0...1) < relayProb
                         
                         if shouldRelay {
+                            SecureLogger.log("Relaying broadcast from \(senderID), TTL: \(relayPacket.ttl), peers: \(self.activePeers.count)", category: SecureLogger.noise, level: .debug)
                             // Add random delay to prevent collision storms
                             let delay = Double.random(in: minMessageDelay...maxMessageDelay)
                             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
                                 self?.broadcastPacket(relayPacket)
                             }
+                        } else {
+                            SecureLogger.log("Dropped broadcast relay from \(senderID), TTL: \(relayPacket.ttl), prob: \(relayProb)", category: SecureLogger.noise, level: .debug)
                         }
                     }
                     
@@ -1875,12 +1884,10 @@ class BluetoothMeshService: NSObject {
                             myNickname: myNickname,
                             hopCount: UInt8(self.maxTTL - packet.ttl)
                         ) {
-                            print("💬 Generating delivery ACK for private message \(messageWithPeerID.id) from \(senderID)")
                             self.sendDeliveryAck(ack, to: senderID)
                         }
                     } else {
-                        SecurityLogger.log("Failed to parse private message from binary payload, payload size: \(decryptedPayload.count)", 
-                                         category: SecurityLogger.encryption, level: .error)
+                        SecureLogger.log("Failed to parse private message from binary, size: \(decryptedPayload.count)", category: SecureLogger.encryption, level: .error)
                     }
                     
                 } else if packet.ttl > 0 {
@@ -1918,8 +1925,7 @@ class BluetoothMeshService: NSObject {
                 }
             } else {
                 // No recipient ID - this shouldn't happen for messages
-                SecurityLogger.log("Message packet with no recipient ID from \(senderID)", 
-                                 category: SecurityLogger.encryption, level: .warning)
+                SecureLogger.log("Message packet with no recipient ID from \(senderID)", category: SecureLogger.security, level: .warning)
             }
             
         // Note: 0x02 was legacy keyExchange - removed
@@ -2052,7 +2058,7 @@ class BluetoothMeshService: NSObject {
                     let wasInserted = collectionsQueue.sync(flags: .barrier) {
                         // Final safety check
                         if senderID == self.myPeerID {
-                            SecurityLogger.log("Blocked self from being added to activePeers", category: SecurityLogger.noise, level: .error)
+                            SecureLogger.log("Blocked self from being added to activePeers", category: SecureLogger.noise, level: .error)
                             return false
                         }
                         let result = self.activePeers.insert(senderID).inserted
@@ -2236,8 +2242,8 @@ class BluetoothMeshService: NSObject {
                                 }
                             }
                         } catch {
-                            SecurityLogger.log("Failed to decrypt delivery ACK from \(senderID): \(error)", 
-                                             category: SecurityLogger.encryption, level: .error)
+                            SecureLogger.log("Failed to decrypt delivery ACK from \(senderID): \(error)", 
+                                             category: SecureLogger.encryption, level: .error)
                         }
                     }
             } else if packet.ttl > 0 {
@@ -2304,7 +2310,7 @@ class BluetoothMeshService: NSObject {
                 let payloadCopy = Data(packet.payload)
                 
                 guard !payloadCopy.isEmpty else {
-                    SecurityLogger.log("Received empty NoiseIdentityAnnouncement from \(senderID)", category: SecurityLogger.noise, level: .error)
+                    SecureLogger.log("Received empty NoiseIdentityAnnouncement from \(senderID)", category: SecureLogger.noise, level: .error)
                     return
                 }
                 
@@ -2317,7 +2323,7 @@ class BluetoothMeshService: NSObject {
                 }
                 
                 guard let announcement = announcement else {
-                    SecurityLogger.log("Failed to decode NoiseIdentityAnnouncement from \(senderID), size: \(payloadCopy.count)", category: SecurityLogger.noise, level: .error)
+                    SecureLogger.log("Failed to decode NoiseIdentityAnnouncement from \(senderID), size: \(payloadCopy.count)", category: SecureLogger.noise, level: .error)
                     return
                 }
                 
@@ -2325,7 +2331,7 @@ class BluetoothMeshService: NSObject {
                 let timestampData = String(Int64(announcement.timestamp.timeIntervalSince1970 * 1000)).data(using: .utf8)!
                 let bindingData = announcement.peerID.data(using: .utf8)! + announcement.publicKey + timestampData
                 if !noiseService.verifySignature(announcement.signature, for: bindingData, publicKey: announcement.signingPublicKey) {
-                    SecurityLogger.log("Signature verification failed for \(senderID)", category: SecurityLogger.noise, level: .warning)
+                    SecureLogger.log("Signature verification failed for \(senderID)", category: SecureLogger.noise, level: .warning)
                     return  // Reject announcements with invalid signatures
                 }
                 
@@ -2343,6 +2349,8 @@ class BluetoothMeshService: NSObject {
                     bindingTimestamp: announcement.timestamp,
                     signature: announcement.signature
                 )
+                
+                SecureLogger.log("Creating identity binding for \(announcement.peerID) -> \(fingerprint)", category: SecureLogger.security, level: .info)
                 
                 // Update our mappings
                 updatePeerBinding(announcement.peerID, fingerprint: fingerprint, binding: binding)
@@ -2379,7 +2387,7 @@ class BluetoothMeshService: NSObject {
         case .noiseHandshakeInit:
             // Handle incoming Noise handshake initiation
             let senderID = packet.senderID.hexEncodedString()
-            print("🤝 Received Noise handshake init from \(senderID), payload size: \(packet.payload.count)")
+            SecureLogger.logHandshake("initiation received", peerID: senderID, success: true)
             
             // Check if this handshake is for us or broadcast
             if let recipientID = packet.recipientID,
@@ -2403,8 +2411,8 @@ class BluetoothMeshService: NSObject {
                 // Check if we've completed version negotiation with this peer
                 if negotiatedVersions[senderID] == nil {
                     // Legacy peer - assume version 1 for backward compatibility
-                    SecurityLogger.log("Received Noise handshake from \(senderID) without version negotiation, assuming v1", 
-                                      category: SecurityLogger.session, level: .debug)
+                    SecureLogger.log("Received Noise handshake from \(senderID) without version negotiation, assuming v1", 
+                                      category: SecureLogger.session, level: .debug)
                     negotiatedVersions[senderID] = 1
                     versionNegotiationState[senderID] = .ackReceived(version: 1)
                 }
@@ -2414,7 +2422,7 @@ class BluetoothMeshService: NSObject {
         case .noiseHandshakeResp:
             // Handle Noise handshake response
             let senderID = packet.senderID.hexEncodedString()
-            print("🤝 Received Noise handshake response from \(senderID)")
+            SecureLogger.logHandshake("response received", peerID: senderID, success: true)
             
             // Check if this handshake response is for us
             if let recipientID = packet.recipientID {
@@ -2769,7 +2777,7 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
             
             peerRSSI[peerID] = RSSI
             // Discovered potential peer
-            SecurityLogger.log("Discovered peer with ID: \(peerID), self ID: \(myPeerID)", category: SecurityLogger.noise, level: .debug)
+            SecureLogger.log("Discovered peer with ID: \(peerID), self ID: \(myPeerID)", category: SecureLogger.noise, level: .debug)
         }
         
         // Connection pooling with exponential backoff
@@ -2821,12 +2829,13 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
     }
     
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
+        let tempID = peripheral.identifier.uuidString
+        SecureLogger.log("Peripheral connected: \(tempID)", category: SecureLogger.session, level: .info)
         
         peripheral.delegate = self
         peripheral.discoverServices([BluetoothMeshService.serviceUUID])
         
         // Store peripheral by its system ID temporarily until we get the real peer ID
-        let tempID = peripheral.identifier.uuidString
         connectedPeripherals[tempID] = peripheral
         
         // Connected to peripheral
@@ -2850,8 +2859,16 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
         // Check if this was an intentional disconnect
         if intentionalDisconnects.contains(peripheralID) {
             intentionalDisconnects.remove(peripheralID)
+            SecureLogger.log("Intentional disconnect: \(peripheralID)", category: SecureLogger.session, level: .debug)
             // Don't process this disconnect further
             return
+        }
+        
+        // Log disconnect with error if present
+        if let error = error {
+            SecureLogger.logError(error, context: "Peripheral disconnected: \(peripheralID)", category: SecureLogger.session)
+        } else {
+            SecureLogger.log("Peripheral disconnected normally: \(peripheralID)", category: SecureLogger.session, level: .info)
         }
         
         // Implement exponential backoff for failed connections
@@ -2930,8 +2947,8 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
 extension BluetoothMeshService: CBPeripheralDelegate {
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         if let error = error {
-            SecurityLogger.log("Error discovering services: \(error)", 
-                             category: SecurityLogger.encryption, level: .error)
+            SecureLogger.log("Error discovering services: \(error)", 
+                             category: SecureLogger.encryption, level: .error)
             return
         }
         
@@ -2945,8 +2962,8 @@ extension BluetoothMeshService: CBPeripheralDelegate {
     
     func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
         if let error = error {
-            SecurityLogger.log("Error discovering characteristics: \(error)", 
-                             category: SecurityLogger.encryption, level: .error)
+            SecureLogger.log("Error discovering characteristics: \(error)", 
+                             category: SecureLogger.encryption, level: .error)
             return
         }
         
@@ -3146,7 +3163,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 if peerID != "unknown" && peerID != myPeerID {
                     // Double-check we're not adding ourselves
                     if peerID == self.myPeerID {
-                        SecurityLogger.log("Preventing self from being added as peer (peripheral manager)", category: SecurityLogger.noise, level: .warning)
+                        SecureLogger.log("Preventing self from being added as peer (peripheral manager)", category: SecureLogger.noise, level: .warning)
                         peripheral.respond(to: request, withResult: .success)
                         return
                     }
@@ -3411,11 +3428,11 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
     private func initiateNoiseHandshake(with peerID: String) {
         // Use noiseService directly
         
-        SecurityLogger.log("Initiating Noise handshake with \(peerID)", category: SecurityLogger.noise, level: .info)
+        SecureLogger.log("Initiating Noise handshake with \(peerID)", category: SecureLogger.noise, level: .info)
         
         // Check if we already have an established session
         if noiseService.hasEstablishedSession(with: peerID) {
-            SecurityLogger.log("Already have established session with \(peerID)", category: SecurityLogger.noise, level: .debug)
+            SecureLogger.log("Already have established session with \(peerID)", category: SecureLogger.noise, level: .debug)
             // Clear any lingering handshake attempt time
             handshakeAttemptTimes.removeValue(forKey: peerID)
             return
@@ -3424,7 +3441,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         // Check if we've recently tried to handshake with this peer
         if let lastAttempt = handshakeAttemptTimes[peerID],
            Date().timeIntervalSince(lastAttempt) < handshakeTimeout {
-            SecurityLogger.log("Skipping handshake with \(peerID) - too recent", category: SecurityLogger.noise, level: .debug)
+            SecureLogger.log("Skipping handshake with \(peerID) - too recent", category: SecureLogger.noise, level: .debug)
             return
         }
         
@@ -3434,6 +3451,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         do {
             // Generate handshake initiation message
             let handshakeData = try noiseService.initiateHandshake(with: peerID)
+            SecureLogger.logHandshake("initiated", peerID: peerID, success: true)
             
             // Send handshake initiation
             let packet = BitchatPacket(
@@ -3458,12 +3476,11 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
     
     private func handleNoiseHandshakeMessage(from peerID: String, message: Data, isInitiation: Bool) {
         // Use noiseService directly
-        print("🤝 handleNoiseHandshakeMessage from \(peerID), isInitiation: \(isInitiation), messageSize: \(message.count)")
+        SecureLogger.logHandshake("processing \(isInitiation ? "init" : "response")", peerID: peerID, success: true)
         
         do {
             // Process handshake message
             if let response = try noiseService.processHandshakeMessage(from: peerID, message: message) {
-                print("🤝 Got response from processHandshakeMessage, size: \(response.count)")
                 // Always send responses as handshake response type
                 let packet = BitchatPacket(
                     type: MessageType.noiseHandshakeResp.rawValue,
@@ -3483,7 +3500,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             
             // Check if handshake is complete
             if noiseService.hasEstablishedSession(with: peerID) {
-                print("🎉 Handshake completed with peer: \(peerID)")
+                SecureLogger.logSecurityEvent(.handshakeCompleted(peerID: peerID))
                 // Unlock rotation now that handshake is complete
                 unlockRotation()
                 
@@ -3665,32 +3682,33 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         
         // Safety check for empty data
         guard !dataCopy.isEmpty else {
-            SecurityLogger.log("Received empty version hello data from \(peerID)", category: SecurityLogger.session, level: .error)
+            SecureLogger.log("Received empty version hello data from \(peerID)", category: SecureLogger.session, level: .error)
             return
         }
         
         // Try JSON first if it looks like JSON
         let hello: VersionHello?
         if let firstByte = dataCopy.first, firstByte == 0x7B { // '{' character
-            SecurityLogger.log("Version hello from \(peerID) appears to be JSON (size: \(dataCopy.count))", category: SecurityLogger.session, level: .debug)
+            SecureLogger.log("Version hello from \(peerID) appears to be JSON (size: \(dataCopy.count))", category: SecureLogger.session, level: .debug)
             hello = VersionHello.decode(from: dataCopy) ?? VersionHello.fromBinaryData(dataCopy)
         } else {
-            SecurityLogger.log("Version hello from \(peerID) appears to be binary (size: \(dataCopy.count), first byte: \(dataCopy.first?.description ?? "nil"))", category: SecurityLogger.session, level: .debug)
+            SecureLogger.log("Version hello from \(peerID) appears to be binary (size: \(dataCopy.count), first byte: \(dataCopy.first?.description ?? "nil"))", category: SecureLogger.session, level: .debug)
             hello = VersionHello.fromBinaryData(dataCopy) ?? VersionHello.decode(from: dataCopy)
         }
         
         guard let hello = hello else {
-            SecurityLogger.log("Failed to decode version hello from \(peerID)", category: SecurityLogger.session, level: .error)
+            SecureLogger.log("Failed to decode version hello from \(peerID)", category: SecureLogger.session, level: .error)
             return
         }
         
-        SecurityLogger.log("Received version hello from \(peerID): supported versions \(hello.supportedVersions), preferred \(hello.preferredVersion)", 
-                          category: SecurityLogger.session, level: .debug)
+        SecureLogger.log("Received version hello from \(peerID): supported versions \(hello.supportedVersions), preferred \(hello.preferredVersion)", 
+                          category: SecureLogger.session, level: .debug)
         
         // Find the best common version
         let ourVersions = Array(ProtocolVersion.supportedVersions)
         if let agreedVersion = ProtocolVersion.negotiateVersion(clientVersions: hello.supportedVersions, serverVersions: ourVersions) {
             // We can communicate! Send ACK
+            SecureLogger.log("Version negotiation agreed with \(peerID): v\(agreedVersion) (client: \(hello.clientVersion), platform: \(hello.platform))", category: SecureLogger.session, level: .info)
             negotiatedVersions[peerID] = agreedVersion
             versionNegotiationState[peerID] = .ackReceived(version: agreedVersion)
             
@@ -3709,6 +3727,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             }
         } else {
             // No compatible version
+            SecureLogger.log("Version negotiation failed with \(peerID): No compatible version (client supports: \(hello.supportedVersions))", category: SecureLogger.session, level: .warning)
             versionNegotiationState[peerID] = .failed(reason: "No compatible protocol version")
             
             let ack = VersionAck(
@@ -3736,7 +3755,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         
         // Safety check for empty data
         guard !dataCopy.isEmpty else {
-            SecurityLogger.log("Received empty version ack data from \(peerID)", category: SecurityLogger.session, level: .error)
+            SecureLogger.log("Received empty version ack data from \(peerID)", category: SecureLogger.session, level: .error)
             return
         }
         
@@ -3749,13 +3768,13 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         }
         
         guard let ack = ack else {
-            SecurityLogger.log("Failed to decode version ack from \(peerID)", category: SecurityLogger.session, level: .error)
+            SecureLogger.log("Failed to decode version ack from \(peerID)", category: SecureLogger.session, level: .error)
             return
         }
         
         if ack.rejected {
-            SecurityLogger.log("Version negotiation rejected by \(peerID): \(ack.reason ?? "Unknown reason")", 
-                              category: SecurityLogger.session, level: .error)
+            SecureLogger.log("Version negotiation rejected by \(peerID): \(ack.reason ?? "Unknown reason")", 
+                              category: SecureLogger.session, level: .error)
             versionNegotiationState[peerID] = .failed(reason: ack.reason ?? "Version rejected")
             
             // Clean up state for incompatible peer
@@ -3773,8 +3792,8 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 self?.delegate?.didDisconnectFromPeer(peerID)
             }
         } else {
-            SecurityLogger.log("Version negotiation successful with \(peerID): agreed on version \(ack.agreedVersion)", 
-                              category: SecurityLogger.session, level: .debug)
+            SecureLogger.log("Version negotiation successful with \(peerID): agreed on v\(ack.agreedVersion) (server: \(ack.serverVersion), platform: \(ack.platform))", 
+                              category: SecureLogger.session, level: .info)
             negotiatedVersions[peerID] = ack.agreedVersion
             versionNegotiationState[peerID] = .ackReceived(version: ack.agreedVersion)
             
@@ -3987,7 +4006,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         
         // Check if we have a Noise session with this peer
         if !noiseService.hasEstablishedSession(with: recipientPeerID) {
-            SecurityLogger.log("No Noise session with \(recipientPeerID), initiating handshake", category: SecurityLogger.noise, level: .info)
+            SecureLogger.log("No Noise session with \(recipientPeerID), initiating handshake", category: SecureLogger.noise, level: .info)
             
             // Apply tie-breaker logic for handshake initiation
             if myPeerID < recipientPeerID {
@@ -4005,7 +4024,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                     self.pendingPrivateMessages[recipientPeerID] = []
                 }
                 self.pendingPrivateMessages[recipientPeerID]?.append((content, recipientNickname, messageID ?? UUID().uuidString))
-                SecurityLogger.log("Queued private message for \(recipientPeerID), \(self.pendingPrivateMessages[recipientPeerID]?.count ?? 0) messages pending", category: SecurityLogger.noise, level: .info)
+                SecureLogger.log("Queued private message for \(recipientPeerID), \(self.pendingPrivateMessages[recipientPeerID]?.count ?? 0) messages pending", category: SecureLogger.noise, level: .info)
             }
             return
         }

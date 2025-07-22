@@ -41,7 +41,7 @@ class VersionNegotiationScenarioTests: XCTestCase {
     
     func testMixedVersionNetwork() {
         // Scenario: Network with mixed client versions
-        let clients = [
+        let clients: [[UInt8]] = [
             [1],              // Old client
             [1, 2],           // Mid-version client
             [1, 2, 3]         // New client
@@ -181,13 +181,13 @@ class VersionNegotiationScenarioTests: XCTestCase {
         let clientCapabilities = ["noise", "compression", "multipath"]
         let serverCapabilities = ["noise", "compression", "federation"]
         
-        let hello = VersionHello(
+        _ = VersionHello(
             clientVersion: "1.0.0",
             platform: "iOS",
             capabilities: clientCapabilities
         )
         
-        let ack = VersionAck(
+        _ = VersionAck(
             agreedVersion: 1,
             serverVersion: "1.0.0",
             platform: "macOS",
