@@ -10,6 +10,41 @@ import Foundation
 import CryptoKit
 import os.log
 
+// MARK: - Encryption Status
+
+enum EncryptionStatus: Equatable {
+    case none
+    case noiseHandshaking
+    case noiseSecured
+    case noiseVerified
+    
+    var icon: String {
+        switch self {
+        case .none:
+            return "lock.slash"
+        case .noiseHandshaking:
+            return "lock.rotation"
+        case .noiseSecured:
+            return "lock"
+        case .noiseVerified:
+            return "lock.shield"
+        }
+    }
+    
+    var description: String {
+        switch self {
+        case .none:
+            return "Not encrypted"
+        case .noiseHandshaking:
+            return "Establishing encryption..."
+        case .noiseSecured:
+            return "Encrypted"
+        case .noiseVerified:
+            return "Encrypted & Verified"
+        }
+    }
+}
+
 // MARK: - Noise Encryption Service
 
 class NoiseEncryptionService {
@@ -23,9 +58,6 @@ class NoiseEncryptionService {
     
     // Session manager
     private let sessionManager: NoiseSessionManager
-    
-    // Channel encryption
-    private let channelEncryption = NoiseChannelEncryption()
     
     // Peer fingerprints (SHA256 hash of static public key)
     private var peerFingerprints: [String: String] = [:] // peerID -> fingerprint
@@ -133,7 +165,7 @@ class NoiseEncryptionService {
         let deletedStatic = KeychainManager.shared.deleteIdentityKey(forKey: "noiseStaticKey")
         let deletedSigning = KeychainManager.shared.deleteIdentityKey(forKey: "ed25519SigningKey")
         SecureLogger.logKeyOperation("delete", keyType: "identity keys", success: deletedStatic && deletedSigning)
-        SecureLogger.logSecurityEvent(.invalidKey(reason: "Panic mode activated - identity cleared"), level: .warning)
+        SecureLogger.log("Panic mode activated - identity cleared", category: SecureLogger.security, level: .warning)
         // Stop rekey timer
         stopRekeyTimer()
     }
@@ -340,69 +372,7 @@ class NoiseEncryptionService {
         let hash = SHA256.hash(data: publicKey.rawRepresentation)
         return hash.map { String(format: "%02x", $0) }.joined()
     }
-    
-    // MARK: - Channel Encryption
-    
-    /// Set password for a channel
-    func setChannelPassword(_ password: String, for channel: String) {
-        // Validate channel name
-        guard NoiseSecurityValidator.validateChannelName(channel) else {
-            SecureLogger.log("Invalid channel name for password", category: SecureLogger.security, level: .warning)
-            return
-        }
         
-        // Validate password is not empty
-        guard !password.isEmpty else {
-            SecureLogger.log("Empty password rejected for channel", category: SecureLogger.security, level: .warning)
-            return
-        }
-        
-        channelEncryption.setChannelPassword(password, for: channel)
-        SecureLogger.logKeyOperation("set", keyType: "channel password", success: true)
-    }
-    
-    /// Load channel password from keychain
-    func loadChannelPassword(for channel: String) -> Bool {
-        return channelEncryption.loadChannelPassword(for: channel)
-    }
-    
-    /// Remove channel password
-    func removeChannelPassword(for channel: String) {
-        channelEncryption.removeChannelPassword(for: channel)
-    }
-    
-    /// Encrypt message for a channel
-    func encryptChannelMessage(_ message: String, for channel: String) throws -> Data {
-        return try channelEncryption.encryptChannelMessage(message, for: channel)
-    }
-    
-    /// Decrypt channel message
-    func decryptChannelMessage(_ encryptedData: Data, for channel: String) throws -> String {
-        return try channelEncryption.decryptChannelMessage(encryptedData, for: channel)
-    }
-    
-    /// Share channel password with a peer securely via Noise
-    func shareChannelPassword(_ password: String, channel: String, with peerID: String) throws -> Data? {
-        // Create channel key packet
-        guard let keyPacket = channelEncryption.createChannelKeyPacket(password: password, channel: channel) else {
-            return nil
-        }
-        
-        // Encrypt via Noise session
-        return try encrypt(keyPacket, for: peerID)
-    }
-    
-    /// Process received channel key via Noise
-    func processReceivedChannelKey(_ encryptedData: Data, from peerID: String) throws {
-        // Decrypt via Noise session
-        let decryptedData = try decrypt(encryptedData, from: peerID)
-        
-        // Process channel key packet
-        if let (channel, password) = channelEncryption.processChannelKeyPacket(decryptedData) {
-            setChannelPassword(password, for: channel)
-        }
-    }
-    
     // MARK: - Session Maintenance
     
     private func startRekeyTimer() {
@@ -424,7 +394,7 @@ class NoiseEncryptionService {
             // Attempt to rekey the session
             do {
                 try sessionManager.initiateRekey(for: peerID)
-                SecureLogger.logSecurityEvent(.keyRotation(channel: peerID))
+                SecureLogger.log("Key rotation initiated for peer: \(peerID)", category: SecureLogger.security, level: .info)
                 
                 // Signal that handshake is needed
                 onHandshakeRequired?(peerID)
