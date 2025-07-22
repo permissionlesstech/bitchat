@@ -3436,7 +3436,9 @@ extension ChatViewModel: BitchatDelegate {
         
         #if os(iOS)
         // Haptic feedback for iOS only
-        
+        guard UIApplication.shared.applicationState == .active else {
+            return
+        }
         // Check if this is a hug message directed at the user
         let isHugForMe = message.content.contains("🫂") && 
                          (message.content.contains("hugs \(nickname)") ||
