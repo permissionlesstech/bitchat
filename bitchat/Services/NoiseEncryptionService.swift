@@ -17,6 +17,10 @@ class NoiseEncryptionService {
     private let staticIdentityKey: Curve25519.KeyAgreement.PrivateKey
     public let staticIdentityPublicKey: Curve25519.KeyAgreement.PublicKey
     
+    // Ed25519 signing key (persistent across sessions)
+    private let signingKey: Curve25519.Signing.PrivateKey
+    public let signingPublicKey: Curve25519.Signing.PublicKey
+    
     // Session manager
     private let sessionManager: NoiseSessionManager
     
@@ -63,6 +67,27 @@ class NoiseEncryptionService {
         self.staticIdentityKey = loadedKey
         self.staticIdentityPublicKey = staticIdentityKey.publicKey
         
+        // Load or create signing key pair
+        let loadedSigningKey: Curve25519.Signing.PrivateKey
+        
+        // Try to load from keychain
+        if let signingData = KeychainManager.shared.getIdentityKey(forKey: "ed25519SigningKey"),
+           let key = try? Curve25519.Signing.PrivateKey(rawRepresentation: signingData) {
+            loadedSigningKey = key
+        }
+        // If no signing key exists, create new one
+        else {
+            loadedSigningKey = Curve25519.Signing.PrivateKey()
+            let keyData = loadedSigningKey.rawRepresentation
+            
+            // Save to keychain
+            _ = KeychainManager.shared.saveIdentityKey(keyData, forKey: "ed25519SigningKey")
+        }
+        
+        // Now assign the signing keys
+        self.signingKey = loadedSigningKey
+        self.signingPublicKey = signingKey.publicKey
+        
         // Initialize session manager
         self.sessionManager = NoiseSessionManager(localStaticKey: staticIdentityKey)
         
@@ -82,6 +107,11 @@ class NoiseEncryptionService {
         return staticIdentityPublicKey.rawRepresentation
     }
     
+    /// Get our signing public key for sharing
+    func getSigningPublicKeyData() -> Data {
+        return signingPublicKey.rawRepresentation
+    }
+    
     /// Get our identity fingerprint
     func getIdentityFingerprint() -> String {
         let hash = SHA256.hash(data: staticIdentityPublicKey.rawRepresentation)
@@ -97,25 +127,31 @@ class NoiseEncryptionService {
     func clearPersistentIdentity() {
         // Clear from keychain
         _ = KeychainManager.shared.deleteIdentityKey(forKey: "noiseStaticKey")
+        _ = KeychainManager.shared.deleteIdentityKey(forKey: "ed25519SigningKey")
         // Stop rekey timer
         stopRekeyTimer()
     }
     
-    /// Sign data with our static identity key
+    /// Sign data with our Ed25519 signing key
     func signData(_ data: Data) -> Data? {
-        // For now, use HMAC with the private key as a simple signature
-        // This is not cryptographically ideal but works for identity binding
-        let key = SymmetricKey(data: staticIdentityKey.rawRepresentation)
-        let signature = HMAC<SHA256>.authenticationCode(for: data, using: key)
-        return Data(signature)
+        do {
+            let signature = try signingKey.signature(for: data)
+            return signature
+        } catch {
+            SecurityLogger.logError(error, context: "Failed to sign data", category: SecurityLogger.noise)
+            return nil
+        }
     }
     
-    /// Verify signature with a peer's public key
+    /// Verify signature with a peer's Ed25519 public key
     func verifySignature(_ signature: Data, for data: Data, publicKey: Data) -> Bool {
-        // For verification, we can't use the same HMAC approach since we don't have the private key
-        // For now, we'll skip signature verification but maintain the protocol structure
-        // In production, this should use proper Ed25519 signatures
-        return true  // Temporarily accept all signatures to fix the immediate issue
+        do {
+            let signingPublicKey = try Curve25519.Signing.PublicKey(rawRepresentation: publicKey)
+            return signingPublicKey.isValidSignature(signature, for: data)
+        } catch {
+            SecurityLogger.logError(error, context: "Failed to verify signature", category: SecurityLogger.noise)
+            return false
+        }
     }
     
     // MARK: - Handshake Management
@@ -241,6 +277,24 @@ class NoiseEncryptionService {
             }
             peerFingerprints.removeValue(forKey: peerID)
         }
+    }
+    
+    /// Migrate session when peer ID changes
+    func migratePeerSession(from oldPeerID: String, to newPeerID: String, fingerprint: String) {
+        // First update the fingerprint mappings
+        serviceQueue.sync(flags: .barrier) {
+            // Remove old mapping
+            if let oldFingerprint = peerFingerprints[oldPeerID], oldFingerprint == fingerprint {
+                peerFingerprints.removeValue(forKey: oldPeerID)
+            }
+            
+            // Add new mapping
+            peerFingerprints[newPeerID] = fingerprint
+            fingerprintToPeerID[fingerprint] = newPeerID
+        }
+        
+        // Migrate the session in session manager
+        sessionManager.migrateSession(from: oldPeerID, to: newPeerID)
     }
     
     // MARK: - Private Helpers
