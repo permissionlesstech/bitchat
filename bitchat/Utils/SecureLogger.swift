@@ -66,9 +66,6 @@ class SecureLogger {
         case handshakeCompleted(peerID: String)
         case handshakeFailed(peerID: String, error: String)
         case sessionExpired(peerID: String)
-        case keyRotation(channel: String)
-        case invalidKey(reason: String)
-        case replayAttackDetected(channel: String)
         case authenticationFailed(peerID: String)
         
         var message: String {
@@ -81,12 +78,6 @@ class SecureLogger {
                 return "Handshake failed with peer: \(sanitize(peerID)), error: \(error)"
             case .sessionExpired(let peerID):
                 return "Session expired for peer: \(sanitize(peerID))"
-            case .keyRotation(let channel):
-                return "Key rotation performed for channel: \(sanitize(channel))"
-            case .invalidKey(let reason):
-                return "Invalid key detected: \(reason)"
-            case .replayAttackDetected(let channel):
-                return "Replay attack detected on channel: \(sanitize(channel))"
             case .authenticationFailed(let peerID):
                 return "Authentication failed for peer: \(sanitize(peerID))"
             }
