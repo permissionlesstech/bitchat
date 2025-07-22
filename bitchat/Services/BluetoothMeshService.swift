@@ -3646,7 +3646,16 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             SecurityLogger.log("Version negotiation rejected by \(peerID): \(ack.reason ?? "Unknown reason")", 
                               category: SecurityLogger.session, level: .error)
             versionNegotiationState[peerID] = .failed(reason: ack.reason ?? "Version rejected")
-            // TODO: Handle disconnection
+            
+            // Clean up state for incompatible peer
+            handlePeerDisconnection(peerID)
+            
+            // Notify delegate about incompatible peer
+            DispatchQueue.main.async { [weak self] in
+                if let delegate = self?.delegate as? ChatViewModel {
+                    delegate.showSystemMessage("Unable to connect to \(self?.peerNicknames[peerID] ?? peerID): \(ack.reason ?? "Incompatible protocol version")")
+                }
+            }
         } else {
             SecurityLogger.log("Version negotiation successful with \(peerID): agreed on version \(ack.agreedVersion)", 
                               category: SecurityLogger.session, level: .debug)
