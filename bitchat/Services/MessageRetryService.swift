@@ -16,11 +16,9 @@ struct RetryableMessage {
     let originalTimestamp: Date?
     let content: String
     let mentions: [String]?
-    let channel: String?
     let isPrivate: Bool
     let recipientPeerID: String?
     let recipientNickname: String?
-    let channelKey: Data?
     let retryCount: Int
     let maxRetries: Int = 3
     let nextRetryTime: Date
@@ -53,11 +51,9 @@ class MessageRetryService {
     func addMessageForRetry(
         content: String,
         mentions: [String]? = nil,
-        channel: String? = nil,
         isPrivate: Bool = false,
         recipientPeerID: String? = nil,
         recipientNickname: String? = nil,
-        channelKey: Data? = nil,
         originalMessageID: String? = nil,
         originalTimestamp: Date? = nil
     ) {
@@ -87,11 +83,9 @@ class MessageRetryService {
             originalTimestamp: originalTimestamp,
             content: content,
             mentions: mentions,
-            channel: channel,
             isPrivate: isPrivate,
             recipientPeerID: recipientPeerID,
             recipientNickname: recipientNickname,
-            channelKey: channelKey,
             retryCount: 0,
             nextRetryTime: Date().addingTimeInterval(retryInterval)
         )
@@ -168,43 +162,9 @@ class MessageRetryService {
                             originalTimestamp: message.originalTimestamp,
                             content: message.content,
                             mentions: message.mentions,
-                            channel: message.channel,
                             isPrivate: message.isPrivate,
                             recipientPeerID: message.recipientPeerID,
                             recipientNickname: message.recipientNickname,
-                            channelKey: message.channelKey,
-                            retryCount: message.retryCount + 1,
-                            nextRetryTime: Date().addingTimeInterval(self.retryInterval * Double(message.retryCount + 2))
-                        )
-                        self.retryQueue.append(updatedMessage)
-                    }
-                } else if let channel = message.channel, let channelKeyData = message.channelKey {
-                    // For channel messages, check if we have peers in the channel
-                    if !connectedPeers.isEmpty {
-                        // Recreate SymmetricKey from data
-                        let channelKey = SymmetricKey(data: channelKeyData)
-                        meshService.sendEncryptedChannelMessage(
-                            message.content,
-                            mentions: message.mentions ?? [],
-                            channel: channel,
-                            channelKey: channelKey,
-                            messageID: message.originalMessageID,
-                            timestamp: message.originalTimestamp
-                        )
-                    } else {
-                        // No peers connected, keep in queue
-                        var updatedMessage = message
-                        updatedMessage = RetryableMessage(
-                            id: message.id,
-                            originalMessageID: message.originalMessageID,
-                            originalTimestamp: message.originalTimestamp,
-                            content: message.content,
-                            mentions: message.mentions,
-                            channel: message.channel,
-                            isPrivate: message.isPrivate,
-                            recipientPeerID: message.recipientPeerID,
-                            recipientNickname: message.recipientNickname,
-                            channelKey: message.channelKey,
                             retryCount: message.retryCount + 1,
                             nextRetryTime: Date().addingTimeInterval(self.retryInterval * Double(message.retryCount + 2))
                         )
@@ -216,7 +176,6 @@ class MessageRetryService {
                         meshService.sendMessage(
                             message.content,
                             mentions: message.mentions ?? [],
-                            channel: message.channel,
                             to: nil,
                             messageID: message.originalMessageID,
                             timestamp: message.originalTimestamp
@@ -230,11 +189,9 @@ class MessageRetryService {
                             originalTimestamp: message.originalTimestamp,
                             content: message.content,
                             mentions: message.mentions,
-                            channel: message.channel,
                             isPrivate: message.isPrivate,
                             recipientPeerID: message.recipientPeerID,
                             recipientNickname: message.recipientNickname,
-                            channelKey: message.channelKey,
                             retryCount: message.retryCount + 1,
                             nextRetryTime: Date().addingTimeInterval(self.retryInterval * Double(message.retryCount + 2))
                         )

@@ -753,7 +753,7 @@ class BluetoothMeshService: NSObject {
         self.characteristic = characteristic
     }
     
-    func sendMessage(_ content: String, mentions: [String] = [], channel: String? = nil, to recipientID: String? = nil, messageID: String? = nil, timestamp: Date? = nil) {
+    func sendMessage(_ content: String, mentions: [String] = [], to recipientID: String? = nil, messageID: String? = nil, timestamp: Date? = nil) {
         // Defensive check for empty content
         guard !content.isEmpty else { return }
         messageQueue.async { [weak self] in
@@ -772,8 +772,7 @@ class BluetoothMeshService: NSObject {
                 isPrivate: false,
                 recipientNickname: nil,
                 senderPeerID: self.myPeerID,
-                mentions: mentions.isEmpty ? nil : mentions,
-                channel: channel
+                mentions: mentions.isEmpty ? nil : mentions
             )
             
             if let messageData = message.toBinaryPayload() {
@@ -889,24 +888,6 @@ class BluetoothMeshService: NSObject {
         }
     }
     
-    func sendChannelLeaveNotification(_ channel: String) {
-        messageQueue.async { [weak self] in
-            guard let self = self else { return }
-            
-            // Create a leave packet with channel hashtag as payload
-            let packet = BitchatPacket(
-                type: MessageType.leave.rawValue,
-                senderID: Data(hexString: self.myPeerID) ?? Data(),
-                recipientID: SpecialRecipients.broadcast,  // Broadcast to all
-                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-                payload: Data(channel.utf8),  // Channel hashtag as payload
-                signature: nil,
-                ttl: 3  // Short TTL for leave notifications
-            )
-            
-            self.broadcastPacket(packet)
-        }
-    }
     
     func sendDeliveryAck(_ ack: DeliveryAck, to recipientID: String) {
         messageQueue.async { [weak self] in
@@ -1040,105 +1021,9 @@ class BluetoothMeshService: NSObject {
         }
     }
     
-    func announcePasswordProtectedChannel(_ channel: String, isProtected: Bool = true, creatorID: String? = nil, keyCommitment: String? = nil) {
-        messageQueue.async { [weak self] in
-            guard let self = self else { return }
-            
-            // Payload format: channel|isProtected|creatorID|keyCommitment
-            let protectedFlag = isProtected ? "1" : "0"
-            let creator = creatorID ?? self.myPeerID
-            let commitment = keyCommitment ?? ""
-            let payload = "\(channel)|\(protectedFlag)|\(creator)|\(commitment)"
-            
-            let packet = BitchatPacket(
-                type: MessageType.channelAnnounce.rawValue,
-                senderID: Data(hexString: self.myPeerID) ?? Data(),
-                recipientID: SpecialRecipients.broadcast,
-                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-                payload: Data(payload.utf8),
-                signature: nil,
-                ttl: 5  // Allow wider propagation for channel announcements
-            )
-            
-            self.broadcastPacket(packet)
-        }
-    }
-    
-    func sendChannelMetadata(_ metadata: ChannelMetadata) {
-        messageQueue.async { [weak self] in
-            guard let self = self else { return }
-            
-            let metadataData = metadata.toBinaryData()
-            
-            let packet = BitchatPacket(
-                type: MessageType.channelMetadata.rawValue,
-                senderID: Data(hexString: self.myPeerID) ?? Data(),
-                recipientID: SpecialRecipients.broadcast,
-                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-                payload: metadataData,
-                signature: nil,
-                ttl: 5  // Allow wider propagation for channel metadata
-            )
-            
-            self.broadcastPacket(packet)
-        }
-    }
     
     
-    func sendEncryptedChannelMessage(_ content: String, mentions: [String], channel: String, channelKey: SymmetricKey, messageID: String? = nil, timestamp: Date? = nil) {
-        messageQueue.async { [weak self] in
-            guard let self = self else { return }
-            
-            let nickname = self.delegate as? ChatViewModel
-            let senderNick = nickname?.nickname ?? self.myPeerID
-            
-            // Encrypt the content
-            guard let contentData = content.data(using: .utf8) else { return }
-            
-            // Debug logging removed
-            
-            do {
-                let sealedBox = try AES.GCM.seal(contentData, using: channelKey)
-                guard let encryptedData = sealedBox.combined else {
-                    // Encryption failed to produce combined data
-                    return
-                }
-                
-                // Create message with encrypted content
-                let message = BitchatMessage(
-                    id: messageID,
-                    sender: senderNick,
-                    content: "",  // Empty placeholder since actual content is encrypted
-                    timestamp: timestamp ?? Date(),
-                    isRelay: false,
-                    originalSender: nil,
-                    isPrivate: false,
-                    recipientNickname: nil,
-                    senderPeerID: self.myPeerID,
-                    mentions: mentions.isEmpty ? nil : mentions,
-                    channel: channel,
-                    encryptedContent: encryptedData,
-                    isEncrypted: true
-                )
-                
-                if let messageData = message.toBinaryPayload() {
-                    
-                    let packet = BitchatPacket(
-                        type: MessageType.message.rawValue,
-                        senderID: Data(hexString: self.myPeerID) ?? Data(),
-                        recipientID: SpecialRecipients.broadcast,
-                        timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-                        payload: messageData,
-                        signature: nil,
-                        ttl: self.adaptiveTTL
-                    )
-                    
-                    self.broadcastPacket(packet)
-                }
-            } catch {
-            }
-        }
-    }
+    
     
     private func sendAnnouncementToPeer(_ peerID: String) {
         guard let vm = delegate as? ChatViewModel else { return }
@@ -1209,7 +1094,7 @@ class BluetoothMeshService: NSObject {
     
     // Emergency disconnect for panic situations
     func emergencyDisconnectAll() {
-        SecureLogger.logSecurityEvent(.invalidKey(reason: "Emergency disconnect triggered"), level: .warning)
+        SecureLogger.log("Emergency disconnect triggered", category: SecureLogger.security, level: .warning)
         
         // Stop advertising immediately
         if peripheralManager?.isAdvertising == true {
@@ -1582,11 +1467,9 @@ class BluetoothMeshService: NSObject {
                 MessageRetryService.shared.addMessageForRetry(
                     content: message.content,
                     mentions: message.mentions,
-                    channel: message.channel,
                     isPrivate: message.isPrivate,
                     recipientPeerID: nil,
                     recipientNickname: message.recipientNickname,
-                    channelKey: nil,
                     originalMessageID: message.id,
                     originalTimestamp: message.timestamp
                 )
@@ -1646,24 +1529,12 @@ class BluetoothMeshService: NSObject {
                 // This is our own message that failed to send
                 if packet.type == MessageType.message.rawValue,
                    let message = BitchatMessage.fromBinaryPayload(packet.payload) {
-                    // For encrypted channel messages, we need to preserve the channel key
-                    var channelKeyData: Data? = nil
-                    if let channel = message.channel, message.isEncrypted {
-                        // This is an encrypted channel message
-                        if let viewModel = delegate as? ChatViewModel,
-                           let channelKey = viewModel.channelKeys[channel] {
-                            channelKeyData = channelKey.withUnsafeBytes { Data($0) }
-                        }
-                    }
-                    
                     MessageRetryService.shared.addMessageForRetry(
                         content: message.content,
                         mentions: message.mentions,
-                        channel: message.channel,
                         isPrivate: message.isPrivate,
                         recipientPeerID: nil,
                         recipientNickname: message.recipientNickname,
-                        channelKey: channelKeyData,
                         originalMessageID: message.id,
                         originalTimestamp: message.timestamp
                     )
@@ -1698,7 +1569,7 @@ class BluetoothMeshService: NSObject {
             let currentTime = UInt64(Date().timeIntervalSince1970 * 1000) // milliseconds
             let timeDiff = abs(Int64(currentTime) - Int64(packet.timestamp))
             if timeDiff > 300000 { // 5 minutes in milliseconds
-                SecureLogger.logSecurityEvent(.replayAttackDetected(channel: "timestamp-\(senderID)"), level: .warning)
+                SecureLogger.log("Replay attack detected - timestamp from \(senderID)", category: SecureLogger.security, level: .warning)
                 SecureLogger.log("Dropped message with stale timestamp. Age: \(timeDiff/1000)s from \(senderID)", category: SecureLogger.security, level: .warning)
                 return
             }
@@ -1772,17 +1643,7 @@ class BluetoothMeshService: NSObject {
                             self.peerNicknames[senderID] = message.sender
                         }
                         
-                        // Handle encrypted channel messages
-                        var finalContent = message.content
-                        if message.isEncrypted, let channel = message.channel, let encryptedData = message.encryptedContent {
-                            // Try to decrypt the content
-                            if let decryptedContent = self.delegate?.decryptChannelMessage(encryptedData, channel: channel) {
-                                finalContent = decryptedContent
-                            } else {
-                                // Unable to decrypt - show placeholder
-                                finalContent = "[Encrypted message - password required]"
-                            }
-                        }
+                        let finalContent = message.content
                         
                         let messageWithPeerID = BitchatMessage(
                             id: message.id,  // Preserve the original message ID
@@ -1794,10 +1655,7 @@ class BluetoothMeshService: NSObject {
                             isPrivate: false,
                             recipientNickname: nil,
                             senderPeerID: senderID,
-                            mentions: message.mentions,
-                            channel: message.channel,
-                            encryptedContent: message.encryptedContent,
-                            isEncrypted: message.isEncrypted
+                            mentions: message.mentions
                         )
                         
                         // Track last message time from this peer
@@ -1808,22 +1666,6 @@ class BluetoothMeshService: NSObject {
                             self.delegate?.didReceiveMessage(messageWithPeerID)
                         }
                         
-                        // Generate and send ACK for channel messages if we're mentioned or it's a small channel
-                        let viewModel = self.delegate as? ChatViewModel
-                        let myNickname = viewModel?.nickname ?? self.myPeerID
-                        if let _ = message.channel,
-                           let mentions = message.mentions,
-                           (mentions.contains(myNickname) || self.activePeers.count < 10) {
-                            if let ack = DeliveryTracker.shared.generateAck(
-                                for: messageWithPeerID,
-                                myPeerID: self.myPeerID,
-                                myNickname: myNickname,
-                                hopCount: UInt8(self.maxTTL - packet.ttl)
-                            ) {
-                                SecureLogger.log("Generating delivery ACK for channel mention message \(messageWithPeerID.id)", category: SecureLogger.session, level: .debug)
-                                self.sendDeliveryAck(ack, to: senderID)
-                            }
-                        }
                     }
                     
                     // Relay broadcast messages
@@ -1897,7 +1739,6 @@ class BluetoothMeshService: NSObject {
                             recipientNickname: message.recipientNickname,
                             senderPeerID: senderID,
                             mentions: message.mentions,
-                            channel: message.channel,
                             deliveryStatus: nil  // Will be set to .delivered in ChatViewModel
                         )
                         
@@ -2180,39 +2021,23 @@ class BluetoothMeshService: NSObject {
             
         case .leave:
             let senderID = packet.senderID.hexEncodedString()
-            // Check if payload contains a channel hashtag
-                if let channel = String(data: packet.payload, encoding: .utf8),
-                   channel.hasPrefix("#") {
-                    // Channel leave notification
-                    
-                    DispatchQueue.main.async {
-                        self.delegate?.didReceiveChannelLeave(channel, from: senderID)
-                    }
-                    
-                    // Relay if TTL > 0
-                    if packet.ttl > 1 {
-                        var relayPacket = packet
-                        relayPacket.ttl -= 1
-                        self.broadcastPacket(relayPacket)
-                    }
-                } else {
-                    // Legacy peer disconnect (keeping for backwards compatibility)
-                    if String(data: packet.payload, encoding: .utf8) != nil {
-                        // Remove from active peers with proper locking
-                        collectionsQueue.sync(flags: .barrier) {
-                            _ = self.activePeers.remove(senderID)
-                            _ = self.peerNicknames.removeValue(forKey: senderID)
-                        }
-                        
-                        announcedPeers.remove(senderID)
-                        
-                        // Show leave message
-                        DispatchQueue.main.async {
-                            self.delegate?.didDisconnectFromPeer(senderID)
-                        }
-                        self.notifyPeerListUpdate()
-                    }
+            // Legacy peer disconnect (keeping for backwards compatibility)
+            if String(data: packet.payload, encoding: .utf8) != nil {
+                // Remove from active peers with proper locking
+                collectionsQueue.sync(flags: .barrier) {
+                    _ = self.activePeers.remove(senderID)
+                    _ = self.peerNicknames.removeValue(forKey: senderID)
                 }
+                        
+                
+                announcedPeers.remove(senderID)
+                
+                // Show leave message
+                DispatchQueue.main.async {
+                    self.delegate?.didDisconnectFromPeer(senderID)
+                }
+                self.notifyPeerListUpdate()
+            }
             
         case .fragmentStart, .fragmentContinue, .fragmentEnd:
             // let fragmentTypeStr = packet.type == MessageType.fragmentStart.rawValue ? "START" : 
@@ -2232,29 +2057,6 @@ class BluetoothMeshService: NSObject {
                 self.broadcastPacket(relayPacket)
             }
             
-        case .channelAnnounce:
-            if let payloadStr = String(data: packet.payload, encoding: .utf8) {
-                // Parse payload: channel|isProtected|creatorID|keyCommitment
-                let components = payloadStr.split(separator: "|").map(String.init)
-                if components.count >= 3 {
-                    let channel = components[0]
-                    let isProtected = components[1] == "1"
-                    let creatorID = components[2]
-                    let keyCommitment = components.count >= 4 ? components[3] : nil
-                    
-                    
-                    DispatchQueue.main.async {
-                        self.delegate?.didReceivePasswordProtectedChannelAnnouncement(channel, isProtected: isProtected, creatorID: creatorID, keyCommitment: keyCommitment)
-                    }
-                    
-                    // Relay announcement
-                    if packet.ttl > 1 {
-                        var relayPacket = packet
-                        relayPacket.ttl -= 1
-                        self.broadcastPacket(relayPacket)
-                    }
-                }
-            }
             
         case .deliveryAck:
             // Handle delivery acknowledgment
@@ -2512,34 +2314,6 @@ class BluetoothMeshService: NSObject {
             if !isPeerIDOurs(senderID) {
                 _ = packet.recipientID?.hexEncodedString()
                 handleNoiseEncryptedMessage(from: senderID, encryptedData: packet.payload, originalPacket: packet)
-            }
-            
-        case .channelKeyVerifyRequest:
-            // Handle channel key verification request
-            let senderID = packet.senderID.hexEncodedString()
-            if !isPeerIDOurs(senderID) {
-                handleChannelKeyVerifyRequest(from: senderID, data: packet.payload)
-            }
-            
-        case .channelKeyVerifyResponse:
-            // Handle channel key verification response
-            let senderID = packet.senderID.hexEncodedString()
-            if !isPeerIDOurs(senderID) {
-                handleChannelKeyVerifyResponse(from: senderID, data: packet.payload)
-            }
-            
-        case .channelPasswordUpdate:
-            // Handle channel password update from owner
-            let senderID = packet.senderID.hexEncodedString()
-            if !isPeerIDOurs(senderID) {
-                handleChannelPasswordUpdate(from: senderID, data: packet.payload)
-            }
-            
-        case .channelMetadata:
-            // Handle channel metadata announcement
-            let senderID = packet.senderID.hexEncodedString()
-            if !isPeerIDOurs(senderID) {
-                handleChannelMetadata(from: senderID, data: packet.payload)
             }
             
         case .versionHello:
@@ -3694,52 +3468,6 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         }
     }
     
-    private func handleChannelKeyVerifyRequest(from peerID: String, data: Data) {
-        guard let request = ChannelKeyVerifyRequest.fromBinaryData(data) ?? ChannelKeyVerifyRequest.decode(from: data) else { return }
-        
-        // Forward to delegate (ChatViewModel) to handle
-        DispatchQueue.main.async { [weak self] in
-            self?.delegate?.didReceiveChannelKeyVerifyRequest(request, from: peerID)
-        }
-    }
-    
-    private func handleChannelKeyVerifyResponse(from peerID: String, data: Data) {
-        guard let response = ChannelKeyVerifyResponse.fromBinaryData(data) ?? ChannelKeyVerifyResponse.decode(from: data) else { return }
-        
-        // Forward to delegate (ChatViewModel) to handle
-        DispatchQueue.main.async { [weak self] in
-            self?.delegate?.didReceiveChannelKeyVerifyResponse(response, from: peerID)
-        }
-    }
-    
-    private func handleChannelPasswordUpdate(from peerID: String, data: Data) {
-        // First decrypt the data using Noise session
-        // Use noiseService directly
-        
-        do {
-            // Decrypt the outer message
-            let decryptedData = try noiseService.decrypt(data, from: peerID)
-            
-            // Parse the password update
-            guard let update = ChannelPasswordUpdate.fromBinaryData(decryptedData) ?? ChannelPasswordUpdate.decode(from: decryptedData) else { return }
-            
-            // Forward to delegate (ChatViewModel) to handle
-            DispatchQueue.main.async { [weak self] in
-                self?.delegate?.didReceiveChannelPasswordUpdate(update, from: peerID)
-            }
-        } catch {
-        }
-    }
-    
-    private func handleChannelMetadata(from peerID: String, data: Data) {
-        // Channel metadata is broadcast unencrypted (like channel announcements)
-        guard let metadata = ChannelMetadata.fromBinaryData(data) ?? ChannelMetadata.decode(from: data) else { return }
-        
-        // Forward to delegate (ChatViewModel) to handle
-        DispatchQueue.main.async { [weak self] in
-            self?.delegate?.didReceiveChannelMetadata(metadata, from: peerID)
-        }
-    }
     
     // MARK: - Protocol Version Negotiation
     
@@ -3927,81 +3655,8 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         #endif
     }
     
-    func sendChannelKeyVerifyRequest(_ request: ChannelKeyVerifyRequest, to peers: [String]) {
-        let requestData = request.toBinaryData()
-        
-        // Send to each peer
-        for peerID in peers {
-            let packet = BitchatPacket(
-                type: MessageType.channelKeyVerifyRequest.rawValue,
-                senderID: Data(myPeerID.utf8),
-                recipientID: Data(peerID.utf8),
-                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-                payload: requestData,
-                signature: nil,
-                ttl: 3  // Limited TTL for verification requests
-            )
-            
-            broadcastPacket(packet)
-        }
-    }
     
-    func sendChannelKeyVerifyResponse(_ response: ChannelKeyVerifyResponse, to peerID: String) {
-        let responseData = response.toBinaryData()
-        
-        let packet = BitchatPacket(
-            type: MessageType.channelKeyVerifyResponse.rawValue,
-            senderID: Data(myPeerID.utf8),
-            recipientID: Data(peerID.utf8),
-            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-            payload: responseData,
-            signature: nil,
-            ttl: 3  // Limited TTL for responses
-        )
-        
-        broadcastPacket(packet)
-    }
     
-    func sendChannelPasswordUpdate(_ password: String, channel: String, newCommitment: String, to peerID: String) {
-        // Use noiseService directly
-        
-        // Check if we have a Noise session with this peer
-        if !noiseService.hasEstablishedSession(with: peerID) {
-            return
-        }
-        
-        // Get our fingerprint
-        let myFingerprint = noiseService.getIdentityFingerprint()
-        
-        // Create password update with encrypted password field
-        let update = ChannelPasswordUpdate(
-            channel: channel,
-            ownerID: myPeerID,  // Keep for backward compatibility
-            ownerFingerprint: myFingerprint,
-            encryptedPassword: Data(password.utf8),  // Will be encrypted as whole message
-            newKeyCommitment: newCommitment
-        )
-        
-        let updateData = update.toBinaryData()
-        
-        do {
-            // Encrypt the entire update message
-            let encryptedData = try noiseService.encrypt(updateData, for: peerID)
-            
-            let packet = BitchatPacket(
-                type: MessageType.channelPasswordUpdate.rawValue,
-                senderID: Data(myPeerID.utf8),
-                recipientID: Data(peerID.utf8),
-                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-                payload: encryptedData,
-                signature: nil,
-                ttl: 3  // Limited TTL for password updates
-            )
-            
-            broadcastPacket(packet)
-        } catch {
-        }
-    }
     
     private func sendNoiseIdentityAnnounce(to specificPeerID: String? = nil) {
         // Rate limit identity announcements
