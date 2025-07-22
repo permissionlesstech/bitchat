@@ -68,6 +68,7 @@ class BluetoothMeshService: NSObject {
     
     weak var delegate: BitchatDelegate?
     private let noiseService = NoiseEncryptionService()
+    private let spamProtection = SpamProtectionService()
     
     // Protocol version negotiation state
     private var versionNegotiationState: [String: VersionNegotiationState] = [:]
@@ -1804,6 +1805,12 @@ class BluetoothMeshService: NSObject {
                         let peerID = packet.senderID.hexEncodedString()
                         self.lastMessageFromPeer.set(peerID, value: Date())
                         
+                        // Check for spam patterns before processing
+                        let messageCount = self.lastMessageFromPeer.count
+                        if messageCount > 20 { // More than 20 messages/minute = potential spam
+                            self.spamProtection.recordSpamAttempt(from: peerID)
+                        }
+                        
                         DispatchQueue.main.async {
                             self.delegate?.didReceiveMessage(messageWithPeerID)
                         }
@@ -1904,6 +1911,12 @@ class BluetoothMeshService: NSObject {
                         // Track last message time from this peer
                         let peerID = packet.senderID.hexEncodedString()
                         self.lastMessageFromPeer.set(peerID, value: Date())
+                        
+                        // Check for spam patterns before processing
+                        let messageCount = self.lastMessageFromPeer.count
+                        if messageCount > 20 { // More than 20 messages/minute = potential spam
+                            self.spamProtection.recordSpamAttempt(from: peerID)
+                        }
                         
                         DispatchQueue.main.async {
                             self.delegate?.didReceiveMessage(messageWithPeerID)
@@ -2891,6 +2904,14 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
     
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
         let tempID = peripheral.identifier.uuidString
+        
+        // Check spam protection before proceeding
+        guard spamProtection.shouldAllowConnection(from: tempID) else {
+            SecureLogger.log("Connection blocked by spam protection: \(tempID)", category: SecureLogger.security, level: .warning)
+            central.cancelPeripheralConnection(peripheral)
+            return
+        }
+        
         SecureLogger.log("Peripheral connected: \(tempID)", category: SecureLogger.session, level: .info)
         
         peripheral.delegate = self
@@ -3548,6 +3569,8 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         do {
             // Process handshake message
             if let response = try noiseService.processHandshakeMessage(from: peerID, message: message) {
+                // Record successful handshake for reputation
+                spamProtection.recordSuccessfulHandshake(from: peerID)
                 // Always send responses as handshake response type
                 let packet = BitchatPacket(
                     type: MessageType.noiseHandshakeResp.rawValue,
@@ -3601,6 +3624,8 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         } catch {
             // Handshake failed
             print("❌ Handshake failed with \(peerID): \(error)")
+            // Record handshake failure for spam protection
+            spamProtection.recordHandshakeFailure(from: peerID)
         }
     }
     
