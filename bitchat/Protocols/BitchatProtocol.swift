@@ -77,14 +77,12 @@ struct MessagePadding {
 
 enum MessageType: UInt8 {
     case announce = 0x01
-    // 0x02 was legacy keyExchange - removed
     case leave = 0x03
     case message = 0x04  // All user messages (private and broadcast)
     case fragmentStart = 0x05
     case fragmentContinue = 0x06
     case fragmentEnd = 0x07
     case channelAnnounce = 0x08  // Announce password-protected channel status
-    case channelRetention = 0x09  // Announce channel retention status
     case deliveryAck = 0x0A  // Acknowledge message received
     case deliveryStatusRequest = 0x0B  // Request delivery status update
     case readReceipt = 0x0C  // Message has been read/viewed
@@ -99,6 +97,10 @@ enum MessageType: UInt8 {
     case channelPasswordUpdate = 0x16    // Distribute new password to channel members
     case channelMetadata = 0x17         // Announce channel creator and metadata
     
+    // Protocol version negotiation
+    case versionHello = 0x20            // Initial version announcement
+    case versionAck = 0x21              // Version acknowledgment
+    
     var description: String {
         switch self {
         case .announce: return "announce"
@@ -108,7 +110,6 @@ enum MessageType: UInt8 {
         case .fragmentContinue: return "fragmentContinue"
         case .fragmentEnd: return "fragmentEnd"
         case .channelAnnounce: return "channelAnnounce"
-        case .channelRetention: return "channelRetention"
         case .deliveryAck: return "deliveryAck"
         case .deliveryStatusRequest: return "deliveryStatusRequest"
         case .readReceipt: return "readReceipt"
@@ -120,6 +121,8 @@ enum MessageType: UInt8 {
         case .channelKeyVerifyResponse: return "channelKeyVerifyResponse"
         case .channelPasswordUpdate: return "channelPasswordUpdate"
         case .channelMetadata: return "channelMetadata"
+        case .versionHello: return "versionHello"
+        case .versionAck: return "versionAck"
         }
     }
 }
@@ -343,16 +346,18 @@ struct ChannelMetadata: Codable {
 struct NoiseIdentityAnnouncement: Codable {
     let peerID: String               // Current ephemeral peer ID
     let publicKey: Data              // Noise static public key
+    let signingPublicKey: Data       // Ed25519 signing public key
     let nickname: String             // Current nickname
     let timestamp: Date              // When this binding was created
     let previousPeerID: String?      // Previous peer ID (for smooth transition)
     let signature: Data              // Signature proving ownership
     
-    init(peerID: String, publicKey: Data, nickname: String, previousPeerID: String? = nil, signature: Data) {
+    init(peerID: String, publicKey: Data, signingPublicKey: Data, nickname: String, timestamp: Date, previousPeerID: String? = nil, signature: Data) {
         self.peerID = peerID
         self.publicKey = publicKey
+        self.signingPublicKey = signingPublicKey
         self.nickname = nickname
-        self.timestamp = Date()
+        self.timestamp = timestamp
         self.previousPeerID = previousPeerID
         self.signature = signature
     }
@@ -362,7 +367,7 @@ struct NoiseIdentityAnnouncement: Codable {
     }
     
     static func decode(from data: Data) -> NoiseIdentityAnnouncement? {
-        try? JSONDecoder().decode(NoiseIdentityAnnouncement.self, from: data)
+        return try? JSONDecoder().decode(NoiseIdentityAnnouncement.self, from: data)
     }
 }
 
@@ -371,14 +376,108 @@ struct PeerIdentityBinding {
     let currentPeerID: String        // Current ephemeral ID
     let fingerprint: String          // Permanent cryptographic identity
     let publicKey: Data              // Noise static public key
+    let signingPublicKey: Data       // Ed25519 signing public key
     let nickname: String             // Last known nickname
     let bindingTimestamp: Date       // When this binding was created
     let signature: Data              // Cryptographic proof of binding
     
     // Verify the binding signature
     func verify() -> Bool {
-        // TODO: Implement signature verification
-        return true
+        let bindingData = currentPeerID.data(using: .utf8)! + publicKey + 
+                         String(Int64(bindingTimestamp.timeIntervalSince1970 * 1000)).data(using: .utf8)!
+        
+        do {
+            let signingKey = try Curve25519.Signing.PublicKey(rawRepresentation: signingPublicKey)
+            return signingKey.isValidSignature(signature, for: bindingData)
+        } catch {
+            return false
+        }
+    }
+}
+
+// MARK: - Protocol Version Negotiation
+
+// Protocol version constants
+struct ProtocolVersion {
+    static let current: UInt8 = 1
+    static let minimum: UInt8 = 1
+    static let maximum: UInt8 = 1
+    
+    // Future versions can be added here
+    static let supportedVersions: Set<UInt8> = [1]
+    
+    static func isSupported(_ version: UInt8) -> Bool {
+        return supportedVersions.contains(version)
+    }
+    
+    static func negotiateVersion(clientVersions: [UInt8], serverVersions: [UInt8]) -> UInt8? {
+        // Find the highest common version
+        let clientSet = Set(clientVersions)
+        let serverSet = Set(serverVersions)
+        let common = clientSet.intersection(serverSet)
+        
+        return common.max()
+    }
+}
+
+// Version negotiation hello message
+struct VersionHello: Codable {
+    let supportedVersions: [UInt8]  // List of supported protocol versions
+    let preferredVersion: UInt8     // Preferred version (usually the latest)
+    let clientVersion: String       // App version string (e.g., "1.0.0")
+    let platform: String            // Platform identifier (e.g., "iOS", "macOS")
+    let capabilities: [String]?     // Optional capability flags for future extensions
+    
+    init(supportedVersions: [UInt8] = Array(ProtocolVersion.supportedVersions), 
+         preferredVersion: UInt8 = ProtocolVersion.current,
+         clientVersion: String,
+         platform: String,
+         capabilities: [String]? = nil) {
+        self.supportedVersions = supportedVersions
+        self.preferredVersion = preferredVersion
+        self.clientVersion = clientVersion
+        self.platform = platform
+        self.capabilities = capabilities
+    }
+    
+    func encode() -> Data? {
+        return try? JSONEncoder().encode(self)
+    }
+    
+    static func decode(from data: Data) -> VersionHello? {
+        try? JSONDecoder().decode(VersionHello.self, from: data)
+    }
+}
+
+// Version negotiation acknowledgment
+struct VersionAck: Codable {
+    let agreedVersion: UInt8        // The version both peers will use
+    let serverVersion: String       // Responder's app version
+    let platform: String            // Responder's platform
+    let capabilities: [String]?     // Responder's capabilities
+    let rejected: Bool              // True if no compatible version found
+    let reason: String?             // Reason for rejection if applicable
+    
+    init(agreedVersion: UInt8,
+         serverVersion: String,
+         platform: String,
+         capabilities: [String]? = nil,
+         rejected: Bool = false,
+         reason: String? = nil) {
+        self.agreedVersion = agreedVersion
+        self.serverVersion = serverVersion
+        self.platform = platform
+        self.capabilities = capabilities
+        self.rejected = rejected
+        self.reason = reason
+    }
+    
+    func encode() -> Data? {
+        return try? JSONEncoder().encode(self)
+    }
+    
+    static func decode(from data: Data) -> VersionAck? {
+        try? JSONDecoder().decode(VersionAck.self, from: data)
     }
 }
 

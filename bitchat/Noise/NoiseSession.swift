@@ -254,8 +254,21 @@ class NoiseSessionManager {
     }
     
     func removeSession(for peerID: String) {
-        _ = managerQueue.sync(flags: .barrier) {
-            sessions.removeValue(forKey: peerID)
+        managerQueue.sync(flags: .barrier) {
+            _ = sessions.removeValue(forKey: peerID)
+        }
+    }
+    
+    func migrateSession(from oldPeerID: String, to newPeerID: String) {
+        managerQueue.sync(flags: .barrier) {
+            // Check if we have a session for the old peer ID
+            if let session = sessions[oldPeerID] {
+                // Move the session to the new peer ID
+                sessions[newPeerID] = session
+                _ = sessions.removeValue(forKey: oldPeerID)
+                
+                SecurityLogger.log("Migrated Noise session from \(oldPeerID) to \(newPeerID)", category: SecurityLogger.noise, level: .info)
+            }
         }
     }
     
@@ -277,7 +290,7 @@ class NoiseSessionManager {
             
             // Remove any existing non-established session
             if let existingSession = sessions[peerID], !existingSession.isEstablished() {
-                sessions.removeValue(forKey: peerID)
+                _ = sessions.removeValue(forKey: peerID)
             }
             
             // Create new initiator session
@@ -293,7 +306,7 @@ class NoiseSessionManager {
                 return handshakeData
             } catch {
                 // Clean up failed session
-                sessions.removeValue(forKey: peerID)
+                _ = sessions.removeValue(forKey: peerID)
                 throw error
             }
         }
@@ -306,23 +319,16 @@ class NoiseSessionManager {
             var existingSession: NoiseSession? = nil
             
             if let existing = sessions[peerID] {
-                // If we have an established session, we might need to help the other side complete theirs
+                // If we have an established session, reject new handshake attempts
                 if existing.isEstablished() {
-                    // If this is a handshake initiation (32 bytes), the other side doesn't have a session
-                    // We should complete the handshake to help them establish their session
-                    if message.count == 32 {
-                        // Remove existing session and create new one
-                        sessions.removeValue(forKey: peerID)
-                        shouldCreateNew = true
-                    } else {
-                        // For other handshake messages, ignore if already established
-                        throw NoiseSessionError.alreadyEstablished
-                    }
+                    // Don't destroy our working session just because the other side is confused
+                    // They should detect the established session through successful message exchange
+                    throw NoiseSessionError.alreadyEstablished
                 } else {
                     // If we're in the middle of a handshake and receive a new initiation,
                     // reset and start fresh (the other side may have restarted)
                     if existing.getState() == .handshaking && message.count == 32 {
-                        sessions.removeValue(forKey: peerID)
+                        _ = sessions.removeValue(forKey: peerID)
                         shouldCreateNew = true
                     } else {
                         existingSession = existing
@@ -363,7 +369,7 @@ class NoiseSessionManager {
                 return response
             } catch {
                 // Reset the session on handshake failure so next attempt can start fresh
-                sessions.removeValue(forKey: peerID)
+                _ = sessions.removeValue(forKey: peerID)
                 
                 // Schedule callback outside the synchronized block to prevent deadlock
                 DispatchQueue.global().async { [weak self] in

@@ -12,6 +12,14 @@
 		04891CAA2E22971E0064A111 /* LRUCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04891CA82E22971E0064A111 /* LRUCache.swift */; };
 		04AD0B4E2E25B9580002A40A /* IdentityModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E2446380E7A44E49A35B664 /* IdentityModels.swift */; };
 		04AD0B4F2E25B9580002A40A /* SecureIdentityStateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EE9D4FA625C4671ACD371D4 /* SecureIdentityStateManager.swift */; };
+		04AD0B542E2678220002A40A /* VersionNegotiationIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04AD0B522E2678220002A40A /* VersionNegotiationIntegrationTests.swift */; };
+		04AD0B552E2678220002A40A /* BinaryProtocolVersionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04AD0B502E2678220002A40A /* BinaryProtocolVersionTests.swift */; };
+		04AD0B562E2678220002A40A /* ProtocolVersionNegotiationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04AD0B512E2678220002A40A /* ProtocolVersionNegotiationTests.swift */; };
+		04AD0B572E2678220002A40A /* VersionNegotiationScenarioTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04AD0B532E2678220002A40A /* VersionNegotiationScenarioTests.swift */; };
+		04AD0B582E2678220002A40A /* VersionNegotiationIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04AD0B522E2678220002A40A /* VersionNegotiationIntegrationTests.swift */; };
+		04AD0B592E2678220002A40A /* BinaryProtocolVersionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04AD0B502E2678220002A40A /* BinaryProtocolVersionTests.swift */; };
+		04AD0B5A2E2678220002A40A /* ProtocolVersionNegotiationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04AD0B512E2678220002A40A /* ProtocolVersionNegotiationTests.swift */; };
+		04AD0B5B2E2678220002A40A /* VersionNegotiationScenarioTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04AD0B532E2678220002A40A /* VersionNegotiationScenarioTests.swift */; };
 		04B6BA3E2E2035220090FE39 /* NoiseProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04B6BA3D2E2035220090FE39 /* NoiseProtocolTests.swift */; };
 		04B6BA3F2E2035220090FE39 /* NoiseProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04B6BA3D2E2035220090FE39 /* NoiseProtocolTests.swift */; };
 		04B6BA452E2035530090FE39 /* NoiseSecurityConsiderations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04B6BA422E2035530090FE39 /* NoiseSecurityConsiderations.swift */; };
@@ -29,10 +37,8 @@
 		04B6BA572E203D6C0090FE39 /* FingerprintView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04B6BA532E203D6C0090FE39 /* FingerprintView.swift */; };
 		04B6BA582E203D6C0090FE39 /* NoiseTestingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04B6BA542E203D6C0090FE39 /* NoiseTestingView.swift */; };
 		04B6BA5B2E2041220090FE39 /* NoiseIdentityPersistenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04B6BA5A2E2041220090FE39 /* NoiseIdentityPersistenceTests.swift */; };
-		04B6BA5B2E215FDA0090FE39 /* NoisePostQuantum.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04B6BA5A2E215FDA0090FE39 /* NoisePostQuantum.swift */; };
 		04B6BA5C2E2041220090FE39 /* NoiseIdentityPersistenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04B6BA5A2E2041220090FE39 /* NoiseIdentityPersistenceTests.swift */; };
 		04B6BA5C2E215FDA0090FE39 /* NoiseChannelKeyRotation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04B6BA592E215FDA0090FE39 /* NoiseChannelKeyRotation.swift */; };
-		04B6BA5D2E215FDA0090FE39 /* NoisePostQuantum.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04B6BA5A2E215FDA0090FE39 /* NoisePostQuantum.swift */; };
 		04B6BA5E2E215FDA0090FE39 /* NoiseChannelKeyRotation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04B6BA592E215FDA0090FE39 /* NoiseChannelKeyRotation.swift */; };
 		04B6BA672E21601B0090FE39 /* ChannelVerificationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04B6BA5F2E21601B0090FE39 /* ChannelVerificationTests.swift */; };
 		04B6BA682E21601B0090FE39 /* NoiseKeyRotationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04B6BA622E21601B0090FE39 /* NoiseKeyRotationTests.swift */; };
@@ -64,9 +70,7 @@
 		24F17B1446E13F42652B7B08 /* PasswordProtectedChannelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 036A1A705AAF9EC21F4354BE /* PasswordProtectedChannelTests.swift */; };
 		2E71E320EA921498C57E023B /* BitchatMessageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FA8FF26ABDC1C642A8C7AE5 /* BitchatMessageTests.swift */; };
 		31D147471B9F4E2815352DDA /* LinkPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AC141774F6671FCDC347DC7 /* LinkPreviewView.swift */; };
-		4274B6016F755946FBF2513E /* MessageRetentionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67A85BFDDE65B4CD8BDF6DDB /* MessageRetentionService.swift */; };
 		4B747085D07A1BCE0F5BA612 /* BinaryProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2136C3E22D02D4A8DBE7EAB /* BinaryProtocol.swift */; };
-		4E778E5A414571ACAC2A0F01 /* MessageRetentionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67A85BFDDE65B4CD8BDF6DDB /* MessageRetentionService.swift */; };
 		5D95F2BFBE257A1225998389 /* BatteryOptimizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED176FF3B274E35C2D827894 /* BatteryOptimizer.swift */; };
 		61C81ED5F679D5E973EE0C07 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3448F84BF86A42A3CC4A9379 /* NotificationService.swift */; };
 		6DE056E1EE9850E9FBF50157 /* BitchatProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 229F17B68CFF7AB1BC91C847 /* BitchatProtocol.swift */; };
@@ -146,6 +150,10 @@
 		036A1A705AAF9EC21F4354BE /* PasswordProtectedChannelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasswordProtectedChannelTests.swift; sourceTree = "<group>"; };
 		03C57F452B55FD0FD8F51421 /* bitchatTests_macOS.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = bitchatTests_macOS.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		04891CA82E22971E0064A111 /* LRUCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LRUCache.swift; sourceTree = "<group>"; };
+		04AD0B502E2678220002A40A /* BinaryProtocolVersionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BinaryProtocolVersionTests.swift; sourceTree = "<group>"; };
+		04AD0B512E2678220002A40A /* ProtocolVersionNegotiationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolVersionNegotiationTests.swift; sourceTree = "<group>"; };
+		04AD0B522E2678220002A40A /* VersionNegotiationIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VersionNegotiationIntegrationTests.swift; sourceTree = "<group>"; };
+		04AD0B532E2678220002A40A /* VersionNegotiationScenarioTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VersionNegotiationScenarioTests.swift; sourceTree = "<group>"; };
 		04B6BA3D2E2035220090FE39 /* NoiseProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoiseProtocolTests.swift; sourceTree = "<group>"; };
 		04B6BA402E2035530090FE39 /* NoiseChannelEncryption.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoiseChannelEncryption.swift; sourceTree = "<group>"; };
 		04B6BA412E2035530090FE39 /* NoiseProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoiseProtocol.swift; sourceTree = "<group>"; };
@@ -156,7 +164,6 @@
 		04B6BA542E203D6C0090FE39 /* NoiseTestingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoiseTestingView.swift; sourceTree = "<group>"; };
 		04B6BA592E215FDA0090FE39 /* NoiseChannelKeyRotation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoiseChannelKeyRotation.swift; sourceTree = "<group>"; };
 		04B6BA5A2E2041220090FE39 /* NoiseIdentityPersistenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoiseIdentityPersistenceTests.swift; sourceTree = "<group>"; };
-		04B6BA5A2E215FDA0090FE39 /* NoisePostQuantum.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoisePostQuantum.swift; sourceTree = "<group>"; };
 		04B6BA5F2E21601B0090FE39 /* ChannelVerificationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelVerificationTests.swift; sourceTree = "<group>"; };
 		04B6BA602E21601B0090FE39 /* KeychainIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainIntegrationTests.swift; sourceTree = "<group>"; };
 		04B6BA612E21601B0090FE39 /* NoiseChannelEncryptionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoiseChannelEncryptionTests.swift; sourceTree = "<group>"; };
@@ -181,7 +188,6 @@
 		527EB217EFDFAD4CF1C91F07 /* bitchat.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = bitchat.entitlements; sourceTree = "<group>"; };
 		53D535D9CE0B875F47402290 /* BinaryProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BinaryProtocolTests.swift; sourceTree = "<group>"; };
 		61F92EBA29C47C0FCC482F1F /* bitchatShareExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.extensionkit-extension"; path = bitchatShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		67A85BFDDE65B4CD8BDF6DDB /* MessageRetentionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageRetentionService.swift; sourceTree = "<group>"; };
 		6E2446380E7A44E49A35B664 /* IdentityModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdentityModels.swift; sourceTree = "<group>"; };
 		763E0DBA9492A654FC0CDCB9 /* AppInfoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppInfoView.swift; sourceTree = "<group>"; };
 		8DE9CDF66D4E52D268851048 /* MessagePaddingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessagePaddingTests.swift; sourceTree = "<group>"; };
@@ -209,7 +215,6 @@
 			isa = PBXGroup;
 			children = (
 				04B6BA592E215FDA0090FE39 /* NoiseChannelKeyRotation.swift */,
-				04B6BA5A2E215FDA0090FE39 /* NoisePostQuantum.swift */,
 				04B6BA402E2035530090FE39 /* NoiseChannelEncryption.swift */,
 				04B6BA412E2035530090FE39 /* NoiseProtocol.swift */,
 				04B6BA422E2035530090FE39 /* NoiseSecurityConsiderations.swift */,
@@ -324,6 +329,10 @@
 		C3D98EB3E1B455E321F519F4 /* bitchatTests */ = {
 			isa = PBXGroup;
 			children = (
+				04AD0B502E2678220002A40A /* BinaryProtocolVersionTests.swift */,
+				04AD0B512E2678220002A40A /* ProtocolVersionNegotiationTests.swift */,
+				04AD0B522E2678220002A40A /* VersionNegotiationIntegrationTests.swift */,
+				04AD0B532E2678220002A40A /* VersionNegotiationScenarioTests.swift */,
 				04B6BA5F2E21601B0090FE39 /* ChannelVerificationTests.swift */,
 				04B6BA602E21601B0090FE39 /* KeychainIntegrationTests.swift */,
 				04B6BA612E21601B0090FE39 /* NoiseChannelEncryptionTests.swift */,
@@ -351,7 +360,6 @@
 				D5C3D880FF8AE1673B20E1E3 /* BluetoothMeshService.swift */,
 				12B9C3EDF3BC73D3BC106DA4 /* DeliveryTracker.swift */,
 				136696FC4436A02D98CE6A77 /* KeychainManager.swift */,
-				67A85BFDDE65B4CD8BDF6DDB /* MessageRetentionService.swift */,
 				AA4D7595A613F7ED3B386132 /* MessageRetryService.swift */,
 				3448F84BF86A42A3CC4A9379 /* NotificationService.swift */,
 			);
@@ -543,7 +551,6 @@
 				4B747085D07A1BCE0F5BA612 /* BinaryProtocol.swift in Sources */,
 				6E7761E21C99F28AE2F9BE5F /* BitchatApp.swift in Sources */,
 				04891CAA2E22971E0064A111 /* LRUCache.swift in Sources */,
-				04B6BA5B2E215FDA0090FE39 /* NoisePostQuantum.swift in Sources */,
 				04B6BA5C2E215FDA0090FE39 /* NoiseChannelKeyRotation.swift in Sources */,
 				923027D6F2F417AFA2488127 /* BitchatProtocol.swift in Sources */,
 				04B6BA452E2035530090FE39 /* NoiseSecurityConsiderations.swift in Sources */,
@@ -564,7 +571,6 @@
 				31D147471B9F4E2815352DDA /* LinkPreviewView.swift in Sources */,
 				04B6BA572E203D6C0090FE39 /* FingerprintView.swift in Sources */,
 				04B6BA582E203D6C0090FE39 /* NoiseTestingView.swift in Sources */,
-				4E778E5A414571ACAC2A0F01 /* MessageRetentionService.swift in Sources */,
 				C99763A4761567F587D21688 /* MessageRetryService.swift in Sources */,
 				749D8CF8A362B6CD0786782D /* NotificationService.swift in Sources */,
 				0245710AEAA58AD0A1425234 /* OptimizedBloomFilter.swift in Sources */,
@@ -580,7 +586,6 @@
 				F455F011B3B648ADA233F998 /* BinaryProtocol.swift in Sources */,
 				10E68BB889356219189E38EC /* BitchatApp.swift in Sources */,
 				04891CA92E22971E0064A111 /* LRUCache.swift in Sources */,
-				04B6BA5D2E215FDA0090FE39 /* NoisePostQuantum.swift in Sources */,
 				04B6BA5E2E215FDA0090FE39 /* NoiseChannelKeyRotation.swift in Sources */,
 				6DE056E1EE9850E9FBF50157 /* BitchatProtocol.swift in Sources */,
 				04B6BA492E2035530090FE39 /* NoiseSecurityConsiderations.swift in Sources */,
@@ -601,7 +606,6 @@
 				7A5B1AB5642FEC168E917949 /* LinkPreviewView.swift in Sources */,
 				04B6BA552E203D6C0090FE39 /* FingerprintView.swift in Sources */,
 				04B6BA562E203D6C0090FE39 /* NoiseTestingView.swift in Sources */,
-				4274B6016F755946FBF2513E /* MessageRetentionService.swift in Sources */,
 				CEAE115C9C3EB3C4ED82F128 /* MessageRetryService.swift in Sources */,
 				61C81ED5F679D5E973EE0C07 /* NotificationService.swift in Sources */,
 				1F48A8CEEE9399D1EBD08F0C /* OptimizedBloomFilter.swift in Sources */,
@@ -613,6 +617,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				8F0BFC2D2B2A5E7B70C3B485 /* BinaryProtocolTests.swift in Sources */,
+				04AD0B582E2678220002A40A /* VersionNegotiationIntegrationTests.swift in Sources */,
+				04AD0B592E2678220002A40A /* BinaryProtocolVersionTests.swift in Sources */,
+				04AD0B5A2E2678220002A40A /* ProtocolVersionNegotiationTests.swift in Sources */,
+				04AD0B5B2E2678220002A40A /* VersionNegotiationScenarioTests.swift in Sources */,
 				04B6BA6F2E21601B0090FE39 /* ChannelVerificationTests.swift in Sources */,
 				04B6BA702E21601B0090FE39 /* NoiseKeyRotationTests.swift in Sources */,
 				04B6BA712E21601B0090FE39 /* NoiseRateLimiterTests.swift in Sources */,
@@ -635,6 +643,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				CDAD6629EB69916B95C80DAF /* BinaryProtocolTests.swift in Sources */,
+				04AD0B542E2678220002A40A /* VersionNegotiationIntegrationTests.swift in Sources */,
+				04AD0B552E2678220002A40A /* BinaryProtocolVersionTests.swift in Sources */,
+				04AD0B562E2678220002A40A /* ProtocolVersionNegotiationTests.swift in Sources */,
+				04AD0B572E2678220002A40A /* VersionNegotiationScenarioTests.swift in Sources */,
 				04B6BA672E21601B0090FE39 /* ChannelVerificationTests.swift in Sources */,
 				04B6BA682E21601B0090FE39 /* NoiseKeyRotationTests.swift in Sources */,
 				04B6BA692E21601B0090FE39 /* NoiseRateLimiterTests.swift in Sources */,
