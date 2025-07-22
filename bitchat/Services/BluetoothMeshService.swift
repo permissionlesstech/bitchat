@@ -1353,19 +1353,16 @@ class BluetoothMeshService: NSObject {
         // Check if we should reset the notification flag
         if let emptyTime = networkBecameEmptyTime {
             let currentNetworkSize = collectionsQueue.sync { activePeers.count }
-            print("📱 Checking network empty state: size=\(currentNetworkSize), emptyTime=\(emptyTime)")
             if currentNetworkSize == 0 {
                 // Network is still empty, check if enough time has passed
                 let timeSinceEmpty = Date().timeIntervalSince(emptyTime)
                 if timeSinceEmpty >= networkEmptyResetDelay {
                     // Reset the flag after network has been empty for the delay period
-                    print("📱 Resetting notification flag after \(timeSinceEmpty)s of empty network")
                     hasNotifiedNetworkAvailable = false
                     // Keep the empty time set so we don't immediately notify again
                 }
             } else {
                 // Network is no longer empty, clear the empty time
-                print("📱 Network no longer empty, clearing empty time")
                 networkBecameEmptyTime = nil
             }
         }
@@ -1978,7 +1975,6 @@ class BluetoothMeshService: NSObject {
                 
                 // Check if we've already announced this peer
                 let isFirstAnnounce = !announcedPeers.contains(senderID)
-                print("📱 Peer announce: \(senderID), isFirstAnnounce: \(isFirstAnnounce)")
                 
                 // Clean up stale peer IDs with the same nickname
                 collectionsQueue.sync(flags: .barrier) {
@@ -2103,9 +2099,7 @@ class BluetoothMeshService: NSObject {
                         return result
                     }
                     if wasInserted {
-                        print("📱 Added peer \(senderID) (\(nickname)) to active peers")
-                    } else {
-                        print("📱 Peer \(senderID) already in active peers")
+                        // Added peer \(senderID) (\(nickname)) to active peers
                     }
                     
                     // Show join message only for first announce AND if we actually added the peer
@@ -2121,8 +2115,6 @@ class BluetoothMeshService: NSObject {
                         
                         // Send network available notification if appropriate
                         let currentNetworkSize = collectionsQueue.sync { self.activePeers.count }
-                        print("📱 Network size after peer announce: \(currentNetworkSize), hasNotified: \(hasNotifiedNetworkAvailable)")
-                        
                         if currentNetworkSize > 0 {
                             // Clear empty time since network is active
                             networkBecameEmptyTime = nil
@@ -2134,24 +2126,17 @@ class BluetoothMeshService: NSObject {
                                 
                                 if let lastNotification = lastNetworkNotificationTime {
                                     let timeSinceLastNotification = now.timeIntervalSince(lastNotification)
-                                    print("📱 Time since last notification: \(timeSinceLastNotification)s, cooldown: \(networkNotificationCooldown)s")
                                     if timeSinceLastNotification < networkNotificationCooldown {
                                         // Too soon to send another notification
                                         shouldSendNotification = false
-                                        print("📱 Skipping notification - cooldown period active")
                                     }
                                 }
                                 
                                 if shouldSendNotification {
-                                    print("📱 Triggering network availability notification for \(currentNetworkSize) peers")
                                     hasNotifiedNetworkAvailable = true
                                     lastNetworkNotificationTime = now
                                     NotificationService.shared.sendNetworkAvailableNotification(peerCount: currentNetworkSize)
-                                } else {
-                                    print("📱 Not sending notification - cooldown active")
                                 }
-                            } else {
-                                print("📱 Not sending notification - already notified")
                             }
                         }
                         
