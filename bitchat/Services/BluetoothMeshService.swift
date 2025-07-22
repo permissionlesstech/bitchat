@@ -1820,7 +1820,7 @@ class BluetoothMeshService: NSObject {
                                 myNickname: myNickname,
                                 hopCount: UInt8(self.maxTTL - packet.ttl)
                             ) {
-                                print("🔔 Generating delivery ACK for channel mention message \(messageWithPeerID.id)")
+                                SecureLogger.log("Generating delivery ACK for channel mention message \(messageWithPeerID.id)", category: SecureLogger.session, level: .debug)
                                 self.sendDeliveryAck(ack, to: senderID)
                             }
                         }
@@ -2455,7 +2455,7 @@ class BluetoothMeshService: NSObject {
                !isPeerIDOurs(recipientID.hexEncodedString()) {
                 // Not for us, relay if TTL > 0
                 if packet.ttl > 0 {
-                    print("🔀 Relaying handshake init packet, TTL: \(packet.ttl)")
+                    SecureLogger.log("Relaying handshake init packet, TTL: \(packet.ttl)", category: SecureLogger.session, level: .debug)
                     var relayPacket = packet
                     relayPacket.ttl -= 1
                     broadcastPacket(relayPacket)
@@ -2465,7 +2465,7 @@ class BluetoothMeshService: NSObject {
             if !isPeerIDOurs(senderID) {
                 // Check if we already have a session (established or handshaking)
                 if noiseService.hasSession(with: senderID) {
-                    print("⚠️ Received handshake init from \(senderID) but already have session/handshaking - ignoring duplicate")
+                    SecureLogger.log("Received handshake init from \(senderID) but already have session/handshaking - ignoring duplicate", category: SecureLogger.noise, level: .warning)
                     return
                 }
                 
@@ -2488,11 +2488,11 @@ class BluetoothMeshService: NSObject {
             // Check if this handshake response is for us
             if let recipientID = packet.recipientID {
                 let recipientIDStr = recipientID.hexEncodedString()
-                print("🤝 Response targeted to: \(recipientIDStr), is us: \(isPeerIDOurs(recipientIDStr))")
+                SecureLogger.log("Response targeted to: \(recipientIDStr), is us: \(isPeerIDOurs(recipientIDStr))", category: SecureLogger.noise, level: .debug)
                 if !isPeerIDOurs(recipientIDStr) {
                     // Not for us, relay if TTL > 0
                     if packet.ttl > 0 {
-                        print("🔀 Relaying handshake response packet, TTL: \(packet.ttl)")
+                        SecureLogger.log("Relaying handshake response packet, TTL: \(packet.ttl)", category: SecureLogger.session, level: .debug)
                         var relayPacket = packet
                         relayPacket.ttl -= 1
                         broadcastPacket(relayPacket)
@@ -2502,7 +2502,7 @@ class BluetoothMeshService: NSObject {
             }
             
             if !isPeerIDOurs(senderID) {
-                print("🤝 Processing handshake response from \(senderID)")
+                SecureLogger.log("Processing handshake response from \(senderID)", category: SecureLogger.noise, level: .info)
                 handleNoiseHandshakeMessage(from: senderID, message: packet.payload, isInitiation: false)
             }
             
@@ -3474,14 +3474,14 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             guard let self = self,
                   let pendingMessages = self.pendingPrivateMessages[peerID] else { return }
             
-            print("📬 Sending \(pendingMessages.count) pending private messages to \(peerID)")
+            SecureLogger.log("Sending \(pendingMessages.count) pending private messages to \(peerID)", category: SecureLogger.session, level: .info)
             
             // Clear pending messages for this peer
             self.pendingPrivateMessages.removeValue(forKey: peerID)
             
             // Send each pending message
             for (content, recipientNickname, messageID) in pendingMessages {
-                print("📬 Sending pending message \(messageID) to \(peerID)")
+                SecureLogger.log("Sending pending message \(messageID) to \(peerID)", category: SecureLogger.session, level: .debug)
                 // Use async to avoid blocking the queue
                 DispatchQueue.global().async { [weak self] in
                     self?.sendPrivateMessage(content, to: peerID, recipientNickname: recipientNickname, messageID: messageID)
@@ -3562,7 +3562,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 // Use broadcastPacket instead of sendPacket to ensure it goes through the mesh
                 broadcastPacket(packet)
             } else {
-                print("🤝 No response needed from processHandshakeMessage")
+                SecureLogger.log("No response needed from processHandshakeMessage", category: SecureLogger.noise, level: .debug)
             }
             
             // Check if handshake is complete
@@ -3597,10 +3597,10 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             }
         } catch NoiseSessionError.alreadyEstablished {
             // Session already established, ignore handshake
-            print("🤝 Handshake already established with \(peerID)")
+            SecureLogger.log("Handshake already established with \(peerID)", category: SecureLogger.noise, level: .info)
         } catch {
             // Handshake failed
-            print("❌ Handshake failed with \(peerID): \(error)")
+            SecureLogger.log("Handshake failed with \(peerID): \(error)", category: SecureLogger.noise, level: .error)
         }
     }
     
@@ -3629,9 +3629,9 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         
         do {
             // Decrypt the message
-            print("🔓 Attempting to decrypt Noise message from \(peerID), encrypted size: \(encryptedData.count)")
+            SecureLogger.log("Attempting to decrypt Noise message from \(peerID), encrypted size: \(encryptedData.count)", category: SecureLogger.encryption, level: .debug)
             let decryptedData = try noiseService.decrypt(encryptedData, from: peerID)
-            print("🔓 Successfully decrypted message from \(peerID), decrypted size: \(decryptedData.count)")
+            SecureLogger.log("Successfully decrypted message from \(peerID), decrypted size: \(decryptedData.count)", category: SecureLogger.encryption, level: .debug)
             
             // Check if this is a special format message (type marker + payload)
             if decryptedData.count > 1 {
@@ -3644,7 +3644,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                     
                     // Decode the delivery ACK - try binary first, then JSON
                     if let ack = DeliveryAck.fromBinaryData(ackData) {
-                        print("📨 Received binary delivery ACK via Noise: \(ack.originalMessageID) from \(ack.recipientNickname)")
+                        SecureLogger.log("Received binary delivery ACK via Noise: \(ack.originalMessageID) from \(ack.recipientNickname)", category: SecureLogger.session, level: .debug)
                         
                         // Process the ACK
                         DeliveryTracker.shared.processDeliveryAck(ack)
@@ -3655,7 +3655,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                         }
                         return
                     } else if let ack = DeliveryAck.decode(from: ackData) {
-                        print("📨 Received JSON delivery ACK via Noise: \(ack.originalMessageID) from \(ack.recipientNickname)")
+                        SecureLogger.log("Received JSON delivery ACK via Noise: \(ack.originalMessageID) from \(ack.recipientNickname)", category: SecureLogger.session, level: .debug)
                         
                         // Process the ACK
                         DeliveryTracker.shared.processDeliveryAck(ack)
@@ -3666,30 +3666,30 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                         }
                         return
                     } else {
-                        print("⚠️ Failed to decode delivery ACK via Noise - data size: \(ackData.count)")
+                        SecureLogger.log("Failed to decode delivery ACK via Noise - data size: \(ackData.count)", category: SecureLogger.session, level: .warning)
                     }
                 }
             }
             
             // Try to parse as a full inner packet (for backward compatibility and other message types)
             if let innerPacket = BitchatPacket.from(decryptedData) {
-                print("📦 Successfully parsed inner packet - type: \(MessageType(rawValue: innerPacket.type)?.description ?? "unknown"), from: \(innerPacket.senderID.hexEncodedString()), to: \(innerPacket.recipientID?.hexEncodedString() ?? "broadcast")")
+                SecureLogger.log("Successfully parsed inner packet - type: \(MessageType(rawValue: innerPacket.type)?.description ?? "unknown"), from: \(innerPacket.senderID.hexEncodedString()), to: \(innerPacket.recipientID?.hexEncodedString() ?? "broadcast")", category: SecureLogger.session, level: .debug)
                 
                 // Process the decrypted inner packet
                 // The packet will be handled according to its recipient ID
                 // If it's for us, it won't be relayed
                 handleReceivedPacket(innerPacket, from: peerID)
             } else {
-                print("⚠️ Failed to parse inner packet from decrypted data")
+                SecureLogger.log("Failed to parse inner packet from decrypted data", category: SecureLogger.encryption, level: .warning)
             }
         } catch {
             // Failed to decrypt - might need to re-establish session
-            print("❌ Failed to decrypt Noise message from \(peerID): \(error)")
+            SecureLogger.log("Failed to decrypt Noise message from \(peerID): \(error)", category: SecureLogger.encryption, level: .error)
             if !noiseService.hasEstablishedSession(with: peerID) {
-                print("🔄 No Noise session with \(peerID), initiating handshake")
+                SecureLogger.log("No Noise session with \(peerID), initiating handshake", category: SecureLogger.noise, level: .info)
                 initiateNoiseHandshake(with: peerID)
             } else {
-                print("⚠️ Have session with \(peerID) but decryption failed")
+                SecureLogger.log("Have session with \(peerID) but decryption failed", category: SecureLogger.encryption, level: .warning)
             }
         }
     }
@@ -4156,9 +4156,9 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         
         do {
             // Encrypt with Noise
-            print("🔐 Encrypting private message \(msgID) for \(recipientPeerID)")
+            SecureLogger.log("Encrypting private message \(msgID) for \(recipientPeerID)", category: SecureLogger.encryption, level: .debug)
             let encryptedData = try noiseService.encrypt(innerData, for: recipientPeerID)
-            print("🔐 Successfully encrypted message, size: \(encryptedData.count)")
+            SecureLogger.log("Successfully encrypted message, size: \(encryptedData.count)", category: SecureLogger.encryption, level: .debug)
             
             // Send as Noise encrypted message
             let outerPacket = BitchatPacket(
@@ -4171,11 +4171,11 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 ttl: adaptiveTTL
             )
             
-            print("📤 Broadcasting encrypted private message \(msgID) to \(recipientPeerID)")
+            SecureLogger.log("Broadcasting encrypted private message \(msgID) to \(recipientPeerID)", category: SecureLogger.session, level: .info)
             broadcastPacket(outerPacket)
         } catch {
             // Failed to encrypt message
-            print("❌ Failed to encrypt private message \(msgID) for \(recipientPeerID): \(error)")
+            SecureLogger.log("Failed to encrypt private message \(msgID) for \(recipientPeerID): \(error)", category: SecureLogger.encryption, level: .error)
         }
     }
 }

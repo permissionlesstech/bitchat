@@ -3635,7 +3635,7 @@ extension ChatViewModel: BitchatDelegate {
     }
     
     private func updateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) {
-        print("🔄 Updating UI delivery status for message \(messageID): \(status)")
+        SecureLogger.log("Updating UI delivery status for message \(messageID): \(status)", category: SecureLogger.session, level: .debug)
         
         // Helper function to check if we should skip this update
         func shouldSkipUpdate(currentStatus: DeliveryStatus?, newStatus: DeliveryStatus) -> Bool {
