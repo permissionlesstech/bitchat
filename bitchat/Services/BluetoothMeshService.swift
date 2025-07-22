@@ -84,8 +84,8 @@ class BluetoothMeshService: NSObject {
     private var hasNotifiedNetworkAvailable = false  // Track if we've notified about network availability
     private var lastNetworkNotificationTime: Date?  // Track when we last sent a network notification
     private var networkBecameEmptyTime: Date?  // Track when the network became empty
-    private let networkNotificationCooldown: TimeInterval = 600  // 10 minutes between notifications
-    private let networkEmptyResetDelay: TimeInterval = 300  // 5 minutes before resetting notification flag
+    private let networkNotificationCooldown: TimeInterval = 300  // 5 minutes between notifications
+    private let networkEmptyResetDelay: TimeInterval = 60  // 1 minute before resetting notification flag
     private var intentionalDisconnects = Set<String>()  // Track peripherals we're disconnecting intentionally
     private var peerLastSeenTimestamps = LRUCache<String, Date>(maxSize: 100)  // Bounded cache for peer timestamps
     private var cleanupTimer: Timer?  // Timer to clean up stale peers
