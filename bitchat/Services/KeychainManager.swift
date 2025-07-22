@@ -58,6 +58,7 @@ class KeychainManager {
                 // Save to new service
                 if saveIdentityKey(data, forKey: "noiseStaticKey") {
                     migratedItems += 1
+                    SecureLogger.logKeyOperation("migrate", keyType: "noiseStaticKey", success: true)
                 }
                 // Delete from old service
                 let deleteQuery: [String: Any] = [
@@ -98,7 +99,9 @@ class KeychainManager {
     
     func saveChannelPassword(_ password: String, for channel: String) -> Bool {
         let key = "channel_\(channel)"
-        return save(password, forKey: key)
+        let result = save(password, forKey: key)
+        SecureLogger.logKeyOperation("save", keyType: "channel password for \(channel)", success: result)
+        return result
     }
     
     func getChannelPassword(for channel: String) -> String? {
@@ -108,7 +111,9 @@ class KeychainManager {
     
     func deleteChannelPassword(for channel: String) -> Bool {
         let key = "channel_\(channel)"
-        return delete(forKey: key)
+        let result = delete(forKey: key)
+        SecureLogger.logKeyOperation("delete", keyType: "channel password for \(channel)", success: result)
+        return result
     }
     
     func getAllChannelPasswords() -> [String: String] {
@@ -150,7 +155,9 @@ class KeychainManager {
     
     func saveIdentityKey(_ keyData: Data, forKey key: String) -> Bool {
         let fullKey = "identity_\(key)"
-        return saveData(keyData, forKey: fullKey)
+        let result = saveData(keyData, forKey: fullKey)
+        SecureLogger.logKeyOperation("save", keyType: key, success: result)
+        return result
     }
     
     func getIdentityKey(forKey key: String) -> Data? {
@@ -159,7 +166,9 @@ class KeychainManager {
     }
     
     func deleteIdentityKey(forKey key: String) -> Bool {
-        return delete(forKey: "identity_\(key)")
+        let result = delete(forKey: "identity_\(key)")
+        SecureLogger.logKeyOperation("delete", keyType: key, success: result)
+        return result
     }
     
     // MARK: - Generic Operations
@@ -201,9 +210,9 @@ class KeychainManager {
         if status == errSecSuccess {
             return true
         } else if status == -34018 {
-            SecurityLogger.logError(NSError(domain: "Keychain", code: -34018), context: "Missing keychain entitlement", category: SecurityLogger.keychain)
+            SecureLogger.logError(NSError(domain: "Keychain", code: -34018), context: "Missing keychain entitlement", category: SecureLogger.keychain)
         } else if status != errSecDuplicateItem {
-            SecurityLogger.logError(NSError(domain: "Keychain", code: Int(status)), context: "Error saving to keychain", category: SecurityLogger.keychain)
+            SecureLogger.logError(NSError(domain: "Keychain", code: Int(status)), context: "Error saving to keychain", category: SecureLogger.keychain)
         }
         
         return false
@@ -234,7 +243,7 @@ class KeychainManager {
         if status == errSecSuccess {
             return result as? Data
         } else if status == -34018 {
-            SecurityLogger.logError(NSError(domain: "Keychain", code: -34018), context: "Missing keychain entitlement", category: SecurityLogger.keychain)
+            SecureLogger.logError(NSError(domain: "Keychain", code: -34018), context: "Missing keychain entitlement", category: SecureLogger.keychain)
         }
         
         return nil
@@ -281,6 +290,7 @@ class KeychainManager {
     
     // Delete ALL keychain data for panic mode
     func deleteAllKeychainData() -> Bool {
+        SecureLogger.logSecurityEvent(.invalidKey(reason: "Panic mode - deleting all keychain data"), level: .warning)
         
         var totalDeleted = 0
         
@@ -328,6 +338,7 @@ class KeychainManager {
                     let deleteStatus = SecItemDelete(deleteQuery as CFDictionary)
                     if deleteStatus == errSecSuccess {
                         totalDeleted += 1
+                        SecureLogger.log("Deleted keychain item: \(account) from \(service)", category: SecureLogger.keychain, level: .info)
                     }
                 }
             }
@@ -357,6 +368,7 @@ class KeychainManager {
             }
         }
         
+        SecureLogger.log("Panic mode cleanup completed. Total items deleted: \(totalDeleted)", category: SecureLogger.keychain, level: .warning)
         
         return totalDeleted > 0
     }
