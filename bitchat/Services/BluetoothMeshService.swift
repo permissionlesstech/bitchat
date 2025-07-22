@@ -170,7 +170,7 @@ class BluetoothMeshService: NSObject {
     // Fragment handling with security limits
     private var incomingFragments: [String: [Int: Data]] = [:]  // fragmentID -> [index: data]
     private var fragmentMetadata: [String: (originalType: UInt8, totalFragments: Int, timestamp: Date)] = [:]
-    private let maxFragmentSize = 500  // Optimized for BLE 5.0 extended data length
+    private let maxFragmentSize = 469 // 512 bytes max MTU - 43 bytes for headers and metadata
     private let maxConcurrentFragmentSessions = 20  // Limit concurrent fragment sessions to prevent DoS
     private let fragmentTimeout: TimeInterval = 30  // 30 seconds timeout for incomplete fragments
     
