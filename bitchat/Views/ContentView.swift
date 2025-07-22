@@ -244,7 +244,7 @@ struct ContentView: View {
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             } else {
                                 // Regular messages with natural text wrapping
-                                VStack(alignment: .leading, spacing: 8) {
+                                VStack(alignment: .leading, spacing: 2) {
                                     HStack(alignment: .top, spacing: 0) {
                                         // Single text view for natural wrapping
                                         Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme))
@@ -266,14 +266,16 @@ struct ContentView: View {
                                         let cleanContent = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
                                         if cleanContent.hasPrefix("👇") {
                                             LinkPreviewView(url: markdownLink.url, title: markdownLink.title)
-                                                .padding(.top, 4)
+                                                .padding(.top, 2)
+                                                .id("\(message.id)-\(markdownLink.url.absoluteString)")
                                         }
                                     } else {
                                         // Check for plain URLs
                                         let urls = message.content.extractURLs()
-                                        ForEach(urls.prefix(3), id: \.url) { urlInfo in
+                                        ForEach(Array(urls.prefix(3).enumerated()), id: \.offset) { index, urlInfo in
                                             LinkPreviewView(url: urlInfo.url, title: nil)
-                                                .padding(.top, 4)
+                                                .padding(.top, 2)
+                                                .id("\(message.id)-\(urlInfo.url.absoluteString)")
                                         }
                                     }
                                 }
@@ -287,6 +289,10 @@ struct ContentView: View {
                 .padding(.vertical, 8)
             }
             .background(backgroundColor)
+            .onTapGesture(count: 3) {
+                // Triple-tap to clear current chat
+                viewModel.sendMessage("/clear")
+            }
             .onChange(of: viewModel.messages.count) { _ in
                 if channel == nil && privatePeer == nil && !viewModel.messages.isEmpty {
                     withAnimation {
@@ -464,7 +470,6 @@ struct ContentView: View {
                 .textFieldStyle(.plain)
                 .font(.system(size: 14, design: .monospaced))
                 .foregroundColor(textColor)
-                .autocorrectionDisabled()
                 .focused($isTextFieldFocused)
                 .onChange(of: messageText) { newValue in
                     // Get cursor position (approximate - end of text for now)
@@ -802,8 +807,8 @@ struct ContentView: View {
                                         .foregroundColor(Color.orange)
                                         .accessibilityLabel("Unread message from \(displayName)")
                                 } else {
-                                    Image(systemName: "radiowaves.left")
-                                        .font(.system(size: 12))
+                                    Image(systemName: "circle.fill")
+                                        .font(.system(size: 8))
                                         .foregroundColor(viewModel.getRSSIColor(rssi: rssi, colorScheme: colorScheme))
                                         .accessibilityLabel("Signal strength: \(rssi > -60 ? "excellent" : rssi > -70 ? "good" : rssi > -80 ? "fair" : "poor")")
                                 }
@@ -959,8 +964,8 @@ struct ContentView: View {
     }
     
     private var mainHeaderView: some View {
-        HStack(spacing: 4) {
-            Text("bitchat*")
+        HStack(spacing: 0) {
+            Text("bitchat/")
                 .font(.system(size: 18, weight: .medium, design: .monospaced))
                 .foregroundColor(textColor)
                 .onTapGesture(count: 3) {
