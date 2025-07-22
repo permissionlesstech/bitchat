@@ -3368,6 +3368,14 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         
         SecurityLogger.log("Initiating Noise handshake with \(peerID)", category: SecurityLogger.noise, level: .info)
         
+        // Check if we already have an established session
+        if noiseService.hasEstablishedSession(with: peerID) {
+            SecurityLogger.log("Already have established session with \(peerID)", category: SecurityLogger.noise, level: .debug)
+            // Clear any lingering handshake attempt time
+            handshakeAttemptTimes.removeValue(forKey: peerID)
+            return
+        }
+        
         // Check if we've recently tried to handshake with this peer
         if let lastAttempt = handshakeAttemptTimes[peerID],
            Date().timeIntervalSince(lastAttempt) < handshakeTimeout {
