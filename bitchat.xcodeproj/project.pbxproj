@@ -9,9 +9,7 @@
 /* Begin PBXBuildFile section */
 		0245710AEAA58AD0A1425234 /* OptimizedBloomFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB043CA5EEB9AC8B07D61E97 /* OptimizedBloomFilter.swift */; };
 		04636BBA2E2FAA1700FBCFA8 /* BinaryEncodingUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04636BB82E2FAA1700FBCFA8 /* BinaryEncodingUtils.swift */; };
-		04636BBB2E2FAA1700FBCFA8 /* BinaryMessageHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04636BB92E2FAA1700FBCFA8 /* BinaryMessageHandler.swift */; };
 		04636BBC2E2FAA1700FBCFA8 /* BinaryEncodingUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04636BB82E2FAA1700FBCFA8 /* BinaryEncodingUtils.swift */; };
-		04636BBD2E2FAA1700FBCFA8 /* BinaryMessageHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04636BB92E2FAA1700FBCFA8 /* BinaryMessageHandler.swift */; };
 		04636BBF2E2FCA8A00FBCFA8 /* SecureLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04636BBE2E2FCA8A00FBCFA8 /* SecureLogger.swift */; };
 		04636BC02E2FCA8A00FBCFA8 /* SecureLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04636BBE2E2FCA8A00FBCFA8 /* SecureLogger.swift */; };
 		04891CA92E22971E0064A111 /* LRUCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04891CA82E22971E0064A111 /* LRUCache.swift */; };
@@ -154,7 +152,6 @@
 		036A1A705AAF9EC21F4354BE /* PasswordProtectedChannelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasswordProtectedChannelTests.swift; sourceTree = "<group>"; };
 		03C57F452B55FD0FD8F51421 /* bitchatTests_macOS.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = bitchatTests_macOS.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		04636BB82E2FAA1700FBCFA8 /* BinaryEncodingUtils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BinaryEncodingUtils.swift; sourceTree = "<group>"; };
-		04636BB92E2FAA1700FBCFA8 /* BinaryMessageHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BinaryMessageHandler.swift; sourceTree = "<group>"; };
 		04636BBE2E2FCA8A00FBCFA8 /* SecureLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureLogger.swift; sourceTree = "<group>"; };
 		04891CA82E22971E0064A111 /* LRUCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LRUCache.swift; sourceTree = "<group>"; };
 		04AD0B502E2678220002A40A /* BinaryProtocolVersionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BinaryProtocolVersionTests.swift; sourceTree = "<group>"; };
@@ -327,7 +324,6 @@
 			isa = PBXGroup;
 			children = (
 				04636BB82E2FAA1700FBCFA8 /* BinaryEncodingUtils.swift */,
-				04636BB92E2FAA1700FBCFA8 /* BinaryMessageHandler.swift */,
 				A2136C3E22D02D4A8DBE7EAB /* BinaryProtocol.swift */,
 				229F17B68CFF7AB1BC91C847 /* BitchatProtocol.swift */,
 			);
@@ -574,7 +570,6 @@
 				04B6BA792E2166A50090FE39 /* NoiseTestingHelper.swift in Sources */,
 				FB8819B4C84FAFEF5C36B216 /* KeychainManager.swift in Sources */,
 				04636BBA2E2FAA1700FBCFA8 /* BinaryEncodingUtils.swift in Sources */,
-				04636BBB2E2FAA1700FBCFA8 /* BinaryMessageHandler.swift in Sources */,
 				04AD0B4E2E25B9580002A40A /* IdentityModels.swift in Sources */,
 				04AD0B4F2E25B9580002A40A /* SecureIdentityStateManager.swift in Sources */,
 				31D147471B9F4E2815352DDA /* LinkPreviewView.swift in Sources */,
@@ -611,7 +606,6 @@
 				04B6BA7B2E2166A50090FE39 /* NoiseTestingHelper.swift in Sources */,
 				8F737CE0435792CC2AD65FCB /* KeychainManager.swift in Sources */,
 				04636BBC2E2FAA1700FBCFA8 /* BinaryEncodingUtils.swift in Sources */,
-				04636BBD2E2FAA1700FBCFA8 /* BinaryMessageHandler.swift in Sources */,
 				0FBC81FF78CF4711B78E092A /* IdentityModels.swift in Sources */,
 				1AF9F9036DEE42408D557A87 /* SecureIdentityStateManager.swift in Sources */,
 				7A5B1AB5642FEC168E917949 /* LinkPreviewView.swift in Sources */,
