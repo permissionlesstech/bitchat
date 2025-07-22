@@ -609,7 +609,7 @@ extension NoiseHandshakeState {
         
         // Check against known bad points
         if lowOrderPoints.contains(keyData) {
-            SecureLogger.logSecurityEvent(.invalidKey(reason: "Low-order point detected"), level: .warning)
+            SecureLogger.log("Low-order point detected", category: SecureLogger.security, level: .warning)
             throw NoiseError.invalidPublicKey
         }
         
@@ -619,7 +619,7 @@ extension NoiseHandshakeState {
             return publicKey
         } catch {
             // If CryptoKit rejects it, it's invalid
-            SecureLogger.logSecurityEvent(.invalidKey(reason: "CryptoKit validation failed"), level: .warning)
+            SecureLogger.log("CryptoKit validation failed", category: SecureLogger.security, level: .warning)
             throw NoiseError.invalidPublicKey
         }
     }

@@ -233,10 +233,6 @@ protocol BinaryEncodable {
 enum BinaryMessageType: UInt8 {
     case deliveryAck = 0x01
     case readReceipt = 0x02
-    case channelKeyVerifyRequest = 0x03
-    case channelKeyVerifyResponse = 0x04
-    case channelPasswordUpdate = 0x05
-    case channelMetadata = 0x06
     case versionHello = 0x07
     case versionAck = 0x08
     case noiseIdentityAnnouncement = 0x09

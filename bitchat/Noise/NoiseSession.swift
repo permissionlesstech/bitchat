@@ -443,8 +443,6 @@ class NoiseSessionManager {
     }
     
     func initiateRekey(for peerID: String) throws {
-        SecureLogger.logSecurityEvent(.keyRotation(channel: peerID))
-        
         // Remove old session
         removeSession(for: peerID)
         

@@ -286,7 +286,7 @@ class SecureIdentityStateManager {
     // MARK: - Cleanup
     
     func clearAllIdentityData() {
-        SecureLogger.logSecurityEvent(.invalidKey(reason: "Clearing all identity data"), level: .warning)
+        SecureLogger.log("Clearing all identity data", category: SecureLogger.security, level: .warning)
         
         queue.async(flags: .barrier) {
             self.cache = IdentityCache()
