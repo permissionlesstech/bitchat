@@ -82,6 +82,10 @@ class BluetoothMeshService: NSObject {
     private var announcedToPeers = Set<String>()  // Track which peers we've announced to
     private var announcedPeers = Set<String>()  // Track peers who have already been announced
     private var hasNotifiedNetworkAvailable = false  // Track if we've notified about network availability
+    private var lastNetworkNotificationTime: Date?  // Track when we last sent a network notification
+    private var networkBecameEmptyTime: Date?  // Track when the network became empty
+    private let networkNotificationCooldown: TimeInterval = 600  // 10 minutes between notifications
+    private let networkEmptyResetDelay: TimeInterval = 300  // 5 minutes before resetting notification flag
     private var intentionalDisconnects = Set<String>()  // Track peripherals we're disconnecting intentionally
     private var peerLastSeenTimestamps = LRUCache<String, Date>(maxSize: 100)  // Bounded cache for peer timestamps
     private var cleanupTimer: Timer?  // Timer to clean up stale peers
@@ -600,7 +604,8 @@ class BluetoothMeshService: NSObject {
             activePeers.removeAll()
         }
         announcedPeers.removeAll()
-        hasNotifiedNetworkAvailable = false
+        // For normal disconnect, respect the timing
+        networkBecameEmptyTime = Date()
         
         // Clear announcement tracking
         announcedToPeers.removeAll()
@@ -1233,7 +1238,10 @@ class BluetoothMeshService: NSObject {
         peripheralRSSI.removeAll()
         announcedToPeers.removeAll()
         announcedPeers.removeAll()
+        // For emergency/panic, reset immediately
         hasNotifiedNetworkAvailable = false
+        networkBecameEmptyTime = nil
+        lastNetworkNotificationTime = nil
         processedMessages.removeAll()
         incomingFragments.removeAll()
         fragmentMetadata.removeAll()
@@ -1335,10 +1343,27 @@ class BluetoothMeshService: NSObject {
         if !peersToRemove.isEmpty {
             notifyPeerListUpdate()
             
-            // Reset notification flag if network is now empty
+            // Mark when network became empty, but don't reset flag immediately
+            let currentNetworkSize = collectionsQueue.sync { activePeers.count }
+            if currentNetworkSize == 0 && networkBecameEmptyTime == nil {
+                networkBecameEmptyTime = Date()
+            }
+        }
+        
+        // Check if we should reset the notification flag
+        if let emptyTime = networkBecameEmptyTime {
             let currentNetworkSize = collectionsQueue.sync { activePeers.count }
             if currentNetworkSize == 0 {
-                hasNotifiedNetworkAvailable = false
+                // Network is still empty, check if enough time has passed
+                let timeSinceEmpty = Date().timeIntervalSince(emptyTime)
+                if timeSinceEmpty >= networkEmptyResetDelay {
+                    // Reset the flag after network has been empty for the delay period
+                    hasNotifiedNetworkAvailable = false
+                    // Keep the empty time set so we don't immediately notify again
+                }
+            } else {
+                // Network is no longer empty, clear the empty time
+                networkBecameEmptyTime = nil
             }
         }
     }
@@ -2088,11 +2113,31 @@ class BluetoothMeshService: NSObject {
                         }
                         self.notifyPeerListUpdate(immediate: true)
                         
-                        // Send network available notification if this is the first peer we've seen
+                        // Send network available notification if appropriate
                         let currentNetworkSize = collectionsQueue.sync { self.activePeers.count }
-                        if currentNetworkSize > 0 && !hasNotifiedNetworkAvailable {
-                            hasNotifiedNetworkAvailable = true
-                            NotificationService.shared.sendNetworkAvailableNotification(peerCount: currentNetworkSize)
+                        if currentNetworkSize > 0 {
+                            // Clear empty time since network is active
+                            networkBecameEmptyTime = nil
+                            
+                            if !hasNotifiedNetworkAvailable {
+                                // Check if enough time has passed since last notification
+                                let now = Date()
+                                var shouldSendNotification = true
+                                
+                                if let lastNotification = lastNetworkNotificationTime {
+                                    let timeSinceLastNotification = now.timeIntervalSince(lastNotification)
+                                    if timeSinceLastNotification < networkNotificationCooldown {
+                                        // Too soon to send another notification
+                                        shouldSendNotification = false
+                                    }
+                                }
+                                
+                                if shouldSendNotification {
+                                    hasNotifiedNetworkAvailable = true
+                                    lastNetworkNotificationTime = now
+                                    NotificationService.shared.sendNetworkAvailableNotification(peerCount: currentNetworkSize)
+                                }
+                            }
                         }
                         
                         DispatchQueue.main.async {
@@ -2945,10 +2990,10 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
                     self.delegate?.didDisconnectFromPeer(peerID)
                 }
                 
-                // Reset notification flag if network is now empty
+                // Mark when network became empty, but don't reset flag immediately
                 let currentNetworkSize = collectionsQueue.sync { activePeers.count }
-                if currentNetworkSize == 0 {
-                    hasNotifiedNetworkAvailable = false
+                if currentNetworkSize == 0 && networkBecameEmptyTime == nil {
+                    networkBecameEmptyTime = Date()
                 }
             }
             self.notifyPeerListUpdate()
