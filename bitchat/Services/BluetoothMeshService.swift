@@ -364,6 +364,9 @@ class BluetoothMeshService: NSObject {
             
             // Notify about the change if it's a rotation
             if let oldID = oldPeerID {
+                // Migrate Noise session to new peer ID
+                self.noiseService.migratePeerSession(from: oldID, to: newPeerID, fingerprint: fingerprint)
+                
                 self.notifyPeerIDChange(oldPeerID: oldID, newPeerID: newPeerID, fingerprint: fingerprint)
             }
         }
