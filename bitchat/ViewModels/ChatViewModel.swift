@@ -122,21 +122,7 @@ class ChatViewModel: ObservableObject {
             .sink { [weak self] (messageID, status) in
                 self?.updateMessageDeliveryStatus(messageID, status: status)
             }
-        
-        // Show welcome message after delay if still no peers
-        DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak self] in
-            guard let self = self else { return }
-            if self.connectedPeers.isEmpty && self.messages.isEmpty {
-                let welcomeMessage = BitchatMessage(
-                    sender: "system",
-                    content: "get people around you to download bitchat…and chat with them here!",
-                    timestamp: Date(),
-                    isRelay: false
-                )
-                self.messages.append(welcomeMessage)
-            }
-        }
-        
+                
         // When app becomes active, send read receipts for visible messages
         #if os(macOS)
         NotificationCenter.default.addObserver(
@@ -2061,12 +2047,7 @@ class ChatViewModel: ObservableObject {
         } else {
             // System message
             var contentStyle = AttributeContainer()
-            // Check for welcome message
-            if message.content.contains("get people around you to download bitchat") {
-                contentStyle.foregroundColor = Color.blue
-            } else {
-                contentStyle.foregroundColor = Color.gray
-            }
+            contentStyle.foregroundColor = Color.gray
             let content = AttributedString("* \(message.content) *")
             contentStyle.font = .system(size: 12, design: .monospaced).italic()
             result.append(content.mergingAttributes(contentStyle))
