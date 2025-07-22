@@ -466,6 +466,4 @@ struct NoiseMessage: Codable {
 enum NoiseEncryptionError: Error {
     case handshakeRequired
     case sessionNotEstablished
-    case invalidMessage
-    case handshakeFailed(Error)
 }
