@@ -1978,7 +1978,7 @@ class BluetoothMeshService: NSObject {
                 
                 // Check if we've already announced this peer
                 let isFirstAnnounce = !announcedPeers.contains(senderID)
-                print("📱 Peer announce: \(senderID), isFirstAnnounce: \(isFirstAnnounce), wasInserted: \(wasInserted ?? false)")
+                print("📱 Peer announce: \(senderID), isFirstAnnounce: \(isFirstAnnounce)")
                 
                 // Clean up stale peer IDs with the same nickname
                 collectionsQueue.sync(flags: .barrier) {
@@ -2103,7 +2103,9 @@ class BluetoothMeshService: NSObject {
                         return result
                     }
                     if wasInserted {
-                        // Added peer \(senderID) (\(nickname)) to active peers
+                        print("📱 Added peer \(senderID) (\(nickname)) to active peers")
+                    } else {
+                        print("📱 Peer \(senderID) already in active peers")
                     }
                     
                     // Show join message only for first announce AND if we actually added the peer
