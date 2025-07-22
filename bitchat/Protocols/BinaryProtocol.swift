@@ -128,51 +128,66 @@ struct BinaryProtocol {
         }
         
         
-        // Apply padding to standard block sizes for traffic analysis resistance
-        let optimalSize = MessagePadding.optimalBlockSize(for: data.count)
-        let paddedData = MessagePadding.pad(data, toSize: optimalSize)
+        // Skip padding for Noise handshake messages to avoid corruption
+        let shouldSkipPadding = packet.type == MessageType.noiseHandshakeInit.rawValue ||
+                                packet.type == MessageType.noiseHandshakeResp.rawValue
         
-        
-        return paddedData
+        if shouldSkipPadding {
+            return data
+        } else {
+            // Apply padding to standard block sizes for traffic analysis resistance
+            let optimalSize = MessagePadding.optimalBlockSize(for: data.count)
+            let paddedData = MessagePadding.pad(data, toSize: optimalSize)
+            return paddedData
+        }
     }
     
     // Decode binary data to BitchatPacket
     static func decode(_ data: Data) -> BitchatPacket? {
-        // Remove padding first
-        let unpaddedData = MessagePadding.unpad(data)
+        // Check if we have enough data to read the header
+        guard data.count >= headerSize + senderIDSize else { 
+            return nil 
+        }
         
+        // Peek at the message type to determine if we should skip unpadding
+        let type = data[1]  // Type is at offset 1 (after version)
+        let shouldSkipUnpadding = type == MessageType.noiseHandshakeInit.rawValue ||
+                                  type == MessageType.noiseHandshakeResp.rawValue
         
-        guard unpaddedData.count >= headerSize + senderIDSize else { 
+        // Only unpad if not a handshake message
+        let workingData = shouldSkipUnpadding ? data : MessagePadding.unpad(data)
+        
+        guard workingData.count >= headerSize + senderIDSize else { 
             return nil 
         }
         
         var offset = 0
         
         // Header
-        let version = unpaddedData[offset]; offset += 1
+        let version = workingData[offset]; offset += 1
         // Check if version is supported
         guard ProtocolVersion.isSupported(version) else { 
             // Log unsupported version for debugging
             return nil 
         }
-        let type = unpaddedData[offset]; offset += 1
-        let ttl = unpaddedData[offset]; offset += 1
+        let decodedType = workingData[offset]; offset += 1
+        let ttl = workingData[offset]; offset += 1
         
         // Timestamp
-        let timestampData = unpaddedData[offset..<offset+8]
+        let timestampData = workingData[offset..<offset+8]
         let timestamp = timestampData.reduce(0) { result, byte in
             (result << 8) | UInt64(byte)
         }
         offset += 8
         
         // Flags
-        let flags = unpaddedData[offset]; offset += 1
+        let flags = workingData[offset]; offset += 1
         let hasRecipient = (flags & Flags.hasRecipient) != 0
         let hasSignature = (flags & Flags.hasSignature) != 0
         let isCompressed = (flags & Flags.isCompressed) != 0
         
         // Payload length
-        let payloadLengthData = unpaddedData[offset..<offset+2]
+        let payloadLengthData = workingData[offset..<offset+2]
         let payloadLength = payloadLengthData.reduce(0) { result, byte in
             (result << 8) | UInt16(byte)
         }
@@ -187,18 +202,18 @@ struct BinaryProtocol {
             expectedSize += signatureSize
         }
         
-        guard unpaddedData.count >= expectedSize else { 
+        guard workingData.count >= expectedSize else { 
             return nil 
         }
         
         // SenderID
-        let senderID = unpaddedData[offset..<offset+senderIDSize]
+        let senderID = workingData[offset..<offset+senderIDSize]
         offset += senderIDSize
         
         // RecipientID
         var recipientID: Data?
         if hasRecipient {
-            recipientID = unpaddedData[offset..<offset+recipientIDSize]
+            recipientID = workingData[offset..<offset+recipientIDSize]
             offset += recipientIDSize
         }
         
@@ -207,14 +222,14 @@ struct BinaryProtocol {
         if isCompressed {
             // First 2 bytes are original size
             guard Int(payloadLength) >= 2 else { return nil }
-            let originalSizeData = unpaddedData[offset..<offset+2]
+            let originalSizeData = workingData[offset..<offset+2]
             let originalSize = Int(originalSizeData.reduce(0) { result, byte in
                 (result << 8) | UInt16(byte)
             })
             offset += 2
             
             // Compressed payload
-            let compressedPayload = unpaddedData[offset..<offset+Int(payloadLength)-2]
+            let compressedPayload = workingData[offset..<offset+Int(payloadLength)-2]
             offset += Int(payloadLength) - 2
             
             // Decompress
@@ -223,18 +238,18 @@ struct BinaryProtocol {
             }
             payload = decompressedPayload
         } else {
-            payload = unpaddedData[offset..<offset+Int(payloadLength)]
+            payload = workingData[offset..<offset+Int(payloadLength)]
             offset += Int(payloadLength)
         }
         
         // Signature
         var signature: Data?
         if hasSignature {
-            signature = unpaddedData[offset..<offset+signatureSize]
+            signature = workingData[offset..<offset+signatureSize]
         }
         
         return BitchatPacket(
-            type: type,
+            type: decodedType,
             senderID: senderID,
             recipientID: recipientID,
             timestamp: timestamp,
