@@ -20,9 +20,11 @@ class NotificationService {
     private init() {}
     
     func requestAuthorization() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
             if granted {
-                // Permission granted
+                print("📱 Notification permission granted")
+            } else {
+                print("📱 Notification permission denied: \(error?.localizedDescription ?? "Unknown")")
             }
         }
     }
@@ -87,8 +89,29 @@ class NotificationService {
     func sendNetworkAvailableNotification(peerCount: Int) {
         let title = "👥 bitchatters nearby!"
         let body = peerCount == 1 ? "1 person around" : "\(peerCount) people around"
-        let identifier = "network-available"
+        let identifier = "network-available-\(Date().timeIntervalSince1970)"
         
-        sendLocalNotification(title: title, body: body, identifier: identifier)
+        print("📱 Sending network notification: \(body)")
+        
+        // For network notifications, we want to show them even in foreground
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+        content.interruptionLevel = .timeSensitive  // Make it more prominent
+        
+        let request = UNNotificationRequest(
+            identifier: identifier,
+            content: content,
+            trigger: nil // Deliver immediately
+        )
+        
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("📱 Error sending network notification: \(error)")
+            } else {
+                print("📱 Network notification sent successfully")
+            }
+        }
     }
 }
