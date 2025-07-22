@@ -206,12 +206,74 @@ struct DeliveryAck: Codable {
         self.hopCount = hopCount
     }
     
+    // For binary decoding
+    private init(originalMessageID: String, ackID: String, recipientID: String, recipientNickname: String, timestamp: Date, hopCount: UInt8) {
+        self.originalMessageID = originalMessageID
+        self.ackID = ackID
+        self.recipientID = recipientID
+        self.recipientNickname = recipientNickname
+        self.timestamp = timestamp
+        self.hopCount = hopCount
+    }
+    
     func encode() -> Data? {
         try? JSONEncoder().encode(self)
     }
     
     static func decode(from data: Data) -> DeliveryAck? {
         try? JSONDecoder().decode(DeliveryAck.self, from: data)
+    }
+    
+    // MARK: - Binary Encoding
+    
+    func toBinaryData() -> Data {
+        var data = Data()
+        data.appendUUID(originalMessageID)
+        data.appendUUID(ackID)
+        // RecipientID as 8-byte hex string
+        var recipientData = Data()
+        var tempID = recipientID
+        while tempID.count >= 2 && recipientData.count < 8 {
+            let hexByte = String(tempID.prefix(2))
+            if let byte = UInt8(hexByte, radix: 16) {
+                recipientData.append(byte)
+            }
+            tempID = String(tempID.dropFirst(2))
+        }
+        while recipientData.count < 8 {
+            recipientData.append(0)
+        }
+        data.append(recipientData)
+        data.appendUInt8(hopCount)
+        data.appendDate(timestamp)
+        data.appendString(recipientNickname)
+        return data
+    }
+    
+    static func fromBinaryData(_ data: Data) -> DeliveryAck? {
+        // Minimum size: 2 UUIDs (32) + recipientID (8) + hopCount (1) + timestamp (8) + min nickname
+        guard data.count >= 50 else { return nil }
+        
+        var offset = 0
+        
+        guard let originalMessageID = data.readUUID(at: &offset),
+              let ackID = data.readUUID(at: &offset) else { return nil }
+        
+        guard offset + 8 <= data.count else { return nil }
+        let recipientIDData = data[offset..<offset + 8]
+        offset += 8
+        let recipientID = recipientIDData.hexEncodedString()
+        
+        guard let hopCount = data.readUInt8(at: &offset),
+              let timestamp = data.readDate(at: &offset),
+              let recipientNickname = data.readString(at: &offset) else { return nil }
+        
+        return DeliveryAck(originalMessageID: originalMessageID,
+                           ackID: ackID,
+                           recipientID: recipientID,
+                           recipientNickname: recipientNickname,
+                           timestamp: timestamp,
+                           hopCount: hopCount)
     }
 }
 
@@ -231,12 +293,70 @@ struct ReadReceipt: Codable {
         self.timestamp = Date()
     }
     
+    // For binary decoding
+    private init(originalMessageID: String, receiptID: String, readerID: String, readerNickname: String, timestamp: Date) {
+        self.originalMessageID = originalMessageID
+        self.receiptID = receiptID
+        self.readerID = readerID
+        self.readerNickname = readerNickname
+        self.timestamp = timestamp
+    }
+    
     func encode() -> Data? {
         try? JSONEncoder().encode(self)
     }
     
     static func decode(from data: Data) -> ReadReceipt? {
         try? JSONDecoder().decode(ReadReceipt.self, from: data)
+    }
+    
+    // MARK: - Binary Encoding
+    
+    func toBinaryData() -> Data {
+        var data = Data()
+        data.appendUUID(originalMessageID)
+        data.appendUUID(receiptID)
+        // ReaderID as 8-byte hex string
+        var readerData = Data()
+        var tempID = readerID
+        while tempID.count >= 2 && readerData.count < 8 {
+            let hexByte = String(tempID.prefix(2))
+            if let byte = UInt8(hexByte, radix: 16) {
+                readerData.append(byte)
+            }
+            tempID = String(tempID.dropFirst(2))
+        }
+        while readerData.count < 8 {
+            readerData.append(0)
+        }
+        data.append(readerData)
+        data.appendDate(timestamp)
+        data.appendString(readerNickname)
+        return data
+    }
+    
+    static func fromBinaryData(_ data: Data) -> ReadReceipt? {
+        // Minimum size: 2 UUIDs (32) + readerID (8) + timestamp (8) + min nickname
+        guard data.count >= 49 else { return nil }
+        
+        var offset = 0
+        
+        guard let originalMessageID = data.readUUID(at: &offset),
+              let receiptID = data.readUUID(at: &offset) else { return nil }
+        
+        guard offset + 8 <= data.count else { return nil }
+        let readerIDData = data[offset..<offset + 8]
+        offset += 8
+        let readerID = readerIDData.hexEncodedString()
+        
+        guard let timestamp = data.readDate(at: &offset),
+              let readerNickname = data.readString(at: &offset) else { return nil }
+        
+        return ReadReceipt(originalMessageID: originalMessageID,
+                          receiptID: receiptID,
+                          readerID: readerID,
+                          readerNickname: readerNickname,
+                          timestamp: timestamp)
     }
 }
 
@@ -254,12 +374,63 @@ struct ChannelKeyVerifyRequest: Codable {
         self.timestamp = Date()
     }
     
+    // For binary decoding
+    private init(channel: String, requesterID: String, keyCommitment: String, timestamp: Date) {
+        self.channel = channel
+        self.requesterID = requesterID
+        self.keyCommitment = keyCommitment
+        self.timestamp = timestamp
+    }
+    
     func encode() -> Data? {
         return try? JSONEncoder().encode(self)
     }
     
     static func decode(from data: Data) -> ChannelKeyVerifyRequest? {
         try? JSONDecoder().decode(ChannelKeyVerifyRequest.self, from: data)
+    }
+    
+    // MARK: - Binary Encoding
+    
+    func toBinaryData() -> Data {
+        var data = Data()
+        data.appendString(channel)
+        // RequesterID as 8-byte hex string
+        var requesterData = Data()
+        var tempID = requesterID
+        while tempID.count >= 2 && requesterData.count < 8 {
+            let hexByte = String(tempID.prefix(2))
+            if let byte = UInt8(hexByte, radix: 16) {
+                requesterData.append(byte)
+            }
+            tempID = String(tempID.dropFirst(2))
+        }
+        while requesterData.count < 8 {
+            requesterData.append(0)
+        }
+        data.append(requesterData)
+        data.appendString(keyCommitment)
+        data.appendDate(timestamp)
+        return data
+    }
+    
+    static func fromBinaryData(_ data: Data) -> ChannelKeyVerifyRequest? {
+        var offset = 0
+        
+        guard let channel = data.readString(at: &offset) else { return nil }
+        
+        guard offset + 8 <= data.count else { return nil }
+        let requesterIDData = data[offset..<offset + 8]
+        offset += 8
+        let requesterID = requesterIDData.hexEncodedString()
+        
+        guard let keyCommitment = data.readString(at: &offset),
+              let timestamp = data.readDate(at: &offset) else { return nil }
+        
+        return ChannelKeyVerifyRequest(channel: channel,
+                                       requesterID: requesterID,
+                                       keyCommitment: keyCommitment,
+                                       timestamp: timestamp)
     }
 }
 
@@ -277,12 +448,65 @@ struct ChannelKeyVerifyResponse: Codable {
         self.timestamp = Date()
     }
     
+    // For binary decoding
+    private init(channel: String, responderID: String, verified: Bool, timestamp: Date) {
+        self.channel = channel
+        self.responderID = responderID
+        self.verified = verified
+        self.timestamp = timestamp
+    }
+    
     func encode() -> Data? {
         return try? JSONEncoder().encode(self)
     }
     
     static func decode(from data: Data) -> ChannelKeyVerifyResponse? {
         try? JSONDecoder().decode(ChannelKeyVerifyResponse.self, from: data)
+    }
+    
+    // MARK: - Binary Encoding
+    
+    func toBinaryData() -> Data {
+        var data = Data()
+        data.appendString(channel)
+        // ResponderID as 8-byte hex string
+        var responderData = Data()
+        var tempID = responderID
+        while tempID.count >= 2 && responderData.count < 8 {
+            let hexByte = String(tempID.prefix(2))
+            if let byte = UInt8(hexByte, radix: 16) {
+                responderData.append(byte)
+            }
+            tempID = String(tempID.dropFirst(2))
+        }
+        while responderData.count < 8 {
+            responderData.append(0)
+        }
+        data.append(responderData)
+        data.appendUInt8(verified ? 1 : 0)
+        data.appendDate(timestamp)
+        return data
+    }
+    
+    static func fromBinaryData(_ data: Data) -> ChannelKeyVerifyResponse? {
+        var offset = 0
+        
+        guard let channel = data.readString(at: &offset) else { return nil }
+        
+        guard offset + 8 <= data.count else { return nil }
+        let responderIDData = data[offset..<offset + 8]
+        offset += 8
+        let responderID = responderIDData.hexEncodedString()
+        
+        guard let verifiedByte = data.readUInt8(at: &offset),
+              let timestamp = data.readDate(at: &offset) else { return nil }
+        
+        let verified = verifiedByte != 0
+        
+        return ChannelKeyVerifyResponse(channel: channel,
+                                        responderID: responderID,
+                                        verified: verified,
+                                        timestamp: timestamp)
     }
 }
 
@@ -304,12 +528,71 @@ struct ChannelPasswordUpdate: Codable {
         self.timestamp = Date()
     }
     
+    // For binary decoding
+    private init(channel: String, ownerID: String, ownerFingerprint: String, encryptedPassword: Data, newKeyCommitment: String, timestamp: Date) {
+        self.channel = channel
+        self.ownerID = ownerID
+        self.ownerFingerprint = ownerFingerprint
+        self.encryptedPassword = encryptedPassword
+        self.newKeyCommitment = newKeyCommitment
+        self.timestamp = timestamp
+    }
+    
     func encode() -> Data? {
         return try? JSONEncoder().encode(self)
     }
     
     static func decode(from data: Data) -> ChannelPasswordUpdate? {
         try? JSONDecoder().decode(ChannelPasswordUpdate.self, from: data)
+    }
+    
+    // MARK: - Binary Encoding
+    
+    func toBinaryData() -> Data {
+        var data = Data()
+        data.appendString(channel)
+        // OwnerID as 8-byte hex string
+        var ownerData = Data()
+        var tempID = ownerID
+        while tempID.count >= 2 && ownerData.count < 8 {
+            let hexByte = String(tempID.prefix(2))
+            if let byte = UInt8(hexByte, radix: 16) {
+                ownerData.append(byte)
+            }
+            tempID = String(tempID.dropFirst(2))
+        }
+        while ownerData.count < 8 {
+            ownerData.append(0)
+        }
+        data.append(ownerData)
+        data.appendString(ownerFingerprint)
+        data.appendData(encryptedPassword)
+        data.appendString(newKeyCommitment)
+        data.appendDate(timestamp)
+        return data
+    }
+    
+    static func fromBinaryData(_ data: Data) -> ChannelPasswordUpdate? {
+        var offset = 0
+        
+        guard let channel = data.readString(at: &offset) else { return nil }
+        
+        guard offset + 8 <= data.count else { return nil }
+        let ownerIDData = data[offset..<offset + 8]
+        offset += 8
+        let ownerID = ownerIDData.hexEncodedString()
+        
+        guard let ownerFingerprint = data.readString(at: &offset),
+              let encryptedPassword = data.readData(at: &offset),
+              let newKeyCommitment = data.readString(at: &offset),
+              let timestamp = data.readDate(at: &offset) else { return nil }
+        
+        return ChannelPasswordUpdate(channel: channel,
+                                     ownerID: ownerID,
+                                     ownerFingerprint: ownerFingerprint,
+                                     encryptedPassword: encryptedPassword,
+                                     newKeyCommitment: newKeyCommitment,
+                                     timestamp: timestamp)
     }
 }
 
@@ -331,12 +614,90 @@ struct ChannelMetadata: Codable {
         self.keyCommitment = keyCommitment
     }
     
+    // For binary decoding
+    private init(channel: String, creatorID: String, creatorFingerprint: String, createdAt: Date, isPasswordProtected: Bool, keyCommitment: String?) {
+        self.channel = channel
+        self.creatorID = creatorID
+        self.creatorFingerprint = creatorFingerprint
+        self.createdAt = createdAt
+        self.isPasswordProtected = isPasswordProtected
+        self.keyCommitment = keyCommitment
+    }
+    
     func encode() -> Data? {
         return try? JSONEncoder().encode(self)
     }
     
     static func decode(from data: Data) -> ChannelMetadata? {
         try? JSONDecoder().decode(ChannelMetadata.self, from: data)
+    }
+    
+    // MARK: - Binary Encoding
+    
+    func toBinaryData() -> Data {
+        var data = Data()
+        
+        // Flags byte: bit 0 = hasKeyCommitment
+        var flags: UInt8 = 0
+        if keyCommitment != nil { flags |= 0x01 }
+        data.appendUInt8(flags)
+        
+        data.appendString(channel)
+        // CreatorID as 8-byte hex string
+        var creatorData = Data()
+        var tempID = creatorID
+        while tempID.count >= 2 && creatorData.count < 8 {
+            let hexByte = String(tempID.prefix(2))
+            if let byte = UInt8(hexByte, radix: 16) {
+                creatorData.append(byte)
+            }
+            tempID = String(tempID.dropFirst(2))
+        }
+        while creatorData.count < 8 {
+            creatorData.append(0)
+        }
+        data.append(creatorData)
+        data.appendString(creatorFingerprint)
+        data.appendDate(createdAt)
+        data.appendUInt8(isPasswordProtected ? 1 : 0)
+        
+        if let keyCommitment = keyCommitment {
+            data.appendString(keyCommitment)
+        }
+        
+        return data
+    }
+    
+    static func fromBinaryData(_ data: Data) -> ChannelMetadata? {
+        var offset = 0
+        
+        guard let flags = data.readUInt8(at: &offset) else { return nil }
+        let hasKeyCommitment = (flags & 0x01) != 0
+        
+        guard let channel = data.readString(at: &offset) else { return nil }
+        
+        guard offset + 8 <= data.count else { return nil }
+        let creatorIDData = data[offset..<offset + 8]
+        offset += 8
+        let creatorID = creatorIDData.hexEncodedString()
+        
+        guard let creatorFingerprint = data.readString(at: &offset),
+              let createdAt = data.readDate(at: &offset),
+              let isPasswordProtectedByte = data.readUInt8(at: &offset) else { return nil }
+        
+        let isPasswordProtected = isPasswordProtectedByte != 0
+        
+        var keyCommitment: String? = nil
+        if hasKeyCommitment {
+            keyCommitment = data.readString(at: &offset)
+        }
+        
+        return ChannelMetadata(channel: channel,
+                              creatorID: creatorID,
+                              creatorFingerprint: creatorFingerprint,
+                              createdAt: createdAt,
+                              isPasswordProtected: isPasswordProtected,
+                              keyCommitment: keyCommitment)
     }
 }
 
@@ -368,6 +729,96 @@ struct NoiseIdentityAnnouncement: Codable {
     
     static func decode(from data: Data) -> NoiseIdentityAnnouncement? {
         return try? JSONDecoder().decode(NoiseIdentityAnnouncement.self, from: data)
+    }
+    
+    // MARK: - Binary Encoding
+    
+    func toBinaryData() -> Data {
+        var data = Data()
+        
+        // Flags byte: bit 0 = hasPreviousPeerID
+        var flags: UInt8 = 0
+        if previousPeerID != nil { flags |= 0x01 }
+        data.appendUInt8(flags)
+        
+        // PeerID as 8-byte hex string
+        var peerData = Data()
+        var tempID = peerID
+        while tempID.count >= 2 && peerData.count < 8 {
+            let hexByte = String(tempID.prefix(2))
+            if let byte = UInt8(hexByte, radix: 16) {
+                peerData.append(byte)
+            }
+            tempID = String(tempID.dropFirst(2))
+        }
+        while peerData.count < 8 {
+            peerData.append(0)
+        }
+        data.append(peerData)
+        
+        data.appendData(publicKey)
+        data.appendData(signingPublicKey)
+        data.appendString(nickname)
+        data.appendDate(timestamp)
+        
+        if let previousPeerID = previousPeerID {
+            // Previous PeerID as 8-byte hex string
+            var prevData = Data()
+            var tempPrevID = previousPeerID
+            while tempPrevID.count >= 2 && prevData.count < 8 {
+                let hexByte = String(tempPrevID.prefix(2))
+                if let byte = UInt8(hexByte, radix: 16) {
+                    prevData.append(byte)
+                }
+                tempPrevID = String(tempPrevID.dropFirst(2))
+            }
+            while prevData.count < 8 {
+                prevData.append(0)
+            }
+            data.append(prevData)
+        }
+        
+        data.appendData(signature)
+        
+        return data
+    }
+    
+    static func fromBinaryData(_ data: Data) -> NoiseIdentityAnnouncement? {
+        // Minimum size check
+        guard data.count >= 20 else { return nil }
+        
+        var offset = 0
+        
+        guard let flags = data.readUInt8(at: &offset) else { return nil }
+        let hasPreviousPeerID = (flags & 0x01) != 0
+        
+        guard offset + 8 <= data.count else { return nil }
+        let peerIDData = data[offset..<offset + 8]
+        offset += 8
+        let peerID = peerIDData.hexEncodedString()
+        
+        guard let publicKey = data.readData(at: &offset),
+              let signingPublicKey = data.readData(at: &offset),
+              let nickname = data.readString(at: &offset),
+              let timestamp = data.readDate(at: &offset) else { return nil }
+        
+        var previousPeerID: String? = nil
+        if hasPreviousPeerID {
+            guard offset + 8 <= data.count else { return nil }
+            let previousPeerIDData = data[offset..<offset + 8]
+            offset += 8
+            previousPeerID = previousPeerIDData.hexEncodedString()
+        }
+        
+        guard let signature = data.readData(at: &offset) else { return nil }
+        
+        return NoiseIdentityAnnouncement(peerID: peerID,
+                                        publicKey: publicKey,
+                                        signingPublicKey: signingPublicKey,
+                                        nickname: nickname,
+                                        timestamp: timestamp,
+                                        previousPeerID: previousPeerID,
+                                        signature: signature)
     }
 }
 
@@ -447,6 +898,73 @@ struct VersionHello: Codable {
     static func decode(from data: Data) -> VersionHello? {
         try? JSONDecoder().decode(VersionHello.self, from: data)
     }
+    
+    // MARK: - Binary Encoding
+    
+    func toBinaryData() -> Data {
+        var data = Data()
+        
+        // Flags byte: bit 0 = hasCapabilities
+        var flags: UInt8 = 0
+        if capabilities != nil { flags |= 0x01 }
+        data.appendUInt8(flags)
+        
+        // Supported versions array
+        data.appendUInt8(UInt8(supportedVersions.count))
+        for version in supportedVersions {
+            data.appendUInt8(version)
+        }
+        
+        data.appendUInt8(preferredVersion)
+        data.appendString(clientVersion)
+        data.appendString(platform)
+        
+        if let capabilities = capabilities {
+            data.appendUInt8(UInt8(capabilities.count))
+            for capability in capabilities {
+                data.appendString(capability)
+            }
+        }
+        
+        return data
+    }
+    
+    static func fromBinaryData(_ data: Data) -> VersionHello? {
+        // Minimum size check: flags(1) + versionCount(1) + at least one version(1) + preferredVersion(1) + min strings
+        guard data.count >= 4 else { return nil }
+        
+        var offset = 0
+        
+        guard let flags = data.readUInt8(at: &offset) else { return nil }
+        let hasCapabilities = (flags & 0x01) != 0
+        
+        guard let versionCount = data.readUInt8(at: &offset) else { return nil }
+        var supportedVersions: [UInt8] = []
+        for _ in 0..<versionCount {
+            guard let version = data.readUInt8(at: &offset) else { return nil }
+            supportedVersions.append(version)
+        }
+        
+        guard let preferredVersion = data.readUInt8(at: &offset),
+              let clientVersion = data.readString(at: &offset),
+              let platform = data.readString(at: &offset) else { return nil }
+        
+        var capabilities: [String]? = nil
+        if hasCapabilities {
+            guard let capCount = data.readUInt8(at: &offset) else { return nil }
+            capabilities = []
+            for _ in 0..<capCount {
+                guard let capability = data.readString(at: &offset) else { return nil }
+                capabilities?.append(capability)
+            }
+        }
+        
+        return VersionHello(supportedVersions: supportedVersions,
+                           preferredVersion: preferredVersion,
+                           clientVersion: clientVersion,
+                           platform: platform,
+                           capabilities: capabilities)
+    }
 }
 
 // Version negotiation acknowledgment
@@ -478,6 +996,76 @@ struct VersionAck: Codable {
     
     static func decode(from data: Data) -> VersionAck? {
         try? JSONDecoder().decode(VersionAck.self, from: data)
+    }
+    
+    // MARK: - Binary Encoding
+    
+    func toBinaryData() -> Data {
+        var data = Data()
+        
+        // Flags byte: bit 0 = hasCapabilities, bit 1 = hasReason
+        var flags: UInt8 = 0
+        if capabilities != nil { flags |= 0x01 }
+        if reason != nil { flags |= 0x02 }
+        data.appendUInt8(flags)
+        
+        data.appendUInt8(agreedVersion)
+        data.appendString(serverVersion)
+        data.appendString(platform)
+        data.appendUInt8(rejected ? 1 : 0)
+        
+        if let capabilities = capabilities {
+            data.appendUInt8(UInt8(capabilities.count))
+            for capability in capabilities {
+                data.appendString(capability)
+            }
+        }
+        
+        if let reason = reason {
+            data.appendString(reason)
+        }
+        
+        return data
+    }
+    
+    static func fromBinaryData(_ data: Data) -> VersionAck? {
+        // Minimum size: flags(1) + version(1) + rejected(1) + min strings
+        guard data.count >= 5 else { return nil }
+        
+        var offset = 0
+        
+        guard let flags = data.readUInt8(at: &offset) else { return nil }
+        let hasCapabilities = (flags & 0x01) != 0
+        let hasReason = (flags & 0x02) != 0
+        
+        guard let agreedVersion = data.readUInt8(at: &offset),
+              let serverVersion = data.readString(at: &offset),
+              let platform = data.readString(at: &offset),
+              let rejectedByte = data.readUInt8(at: &offset) else { return nil }
+        
+        let rejected = rejectedByte != 0
+        
+        var capabilities: [String]? = nil
+        if hasCapabilities {
+            guard let capCount = data.readUInt8(at: &offset) else { return nil }
+            capabilities = []
+            for _ in 0..<capCount {
+                guard let capability = data.readString(at: &offset) else { return nil }
+                capabilities?.append(capability)
+            }
+        }
+        
+        var reason: String? = nil
+        if hasReason {
+            reason = data.readString(at: &offset)
+        }
+        
+        return VersionAck(agreedVersion: agreedVersion,
+                         serverVersion: serverVersion,
+                         platform: platform,
+                         capabilities: capabilities,
+                         rejected: rejected,
+                         reason: reason)
     }
 }
 

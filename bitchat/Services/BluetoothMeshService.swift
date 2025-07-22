@@ -18,32 +18,7 @@ import IOKit.ps
 import UIKit
 #endif
 
-// Extension for hex encoding/decoding
-extension Data {
-    func hexEncodedString() -> String {
-        if self.isEmpty {
-            return ""
-        }
-        return self.map { String(format: "%02x", $0) }.joined()
-    }
-    
-    init?(hexString: String) {
-        let len = hexString.count / 2
-        var data = Data(capacity: len)
-        var index = hexString.startIndex
-        
-        for _ in 0..<len {
-            let nextIndex = hexString.index(index, offsetBy: 2)
-            guard let byte = UInt8(String(hexString[index..<nextIndex]), radix: 16) else {
-                return nil
-            }
-            data.append(byte)
-            index = nextIndex
-        }
-        
-        self = data
-    }
-}
+// Hex encoding/decoding is now in BinaryEncodingUtils.swift
 
 // Extension for TimeInterval to Data conversion
 extension TimeInterval {
@@ -928,9 +903,7 @@ class BluetoothMeshService: NSObject {
             guard let self = self else { return }
             
             // Encode the ACK
-            guard let ackData = ack.encode() else {
-                return
-            }
+            let ackData = ack.toBinaryData()
             
             // Check if we have a Noise session with this peer
             // Use noiseService directly
@@ -995,9 +968,7 @@ class BluetoothMeshService: NSObject {
             guard let self = self else { return }
             
             // Encode the receipt
-            guard let receiptData = receipt.encode() else {
-                return
-            }
+            let receiptData = receipt.toBinaryData()
             
             // Check if we have a Noise session with this peer
             // Use noiseService directly
@@ -1090,7 +1061,7 @@ class BluetoothMeshService: NSObject {
         messageQueue.async { [weak self] in
             guard let self = self else { return }
             
-            guard let metadataData = metadata.encode() else { return }
+            let metadataData = metadata.toBinaryData()
             
             let packet = BitchatPacket(
                 type: MessageType.channelMetadata.rawValue,
@@ -2222,10 +2193,18 @@ class BluetoothMeshService: NSObject {
                 // This ACK is for us
                 let senderID = packet.senderID.hexEncodedString()
                 // Check if payload is already decrypted (came through Noise)
-                    if let ack = DeliveryAck.decode(from: packet.payload) {
+                    if let ack = DeliveryAck.fromBinaryData(packet.payload) {
                         // Already decrypted - process directly
                         DeliveryTracker.shared.processDeliveryAck(ack)
                         
+                        
+                        // Notify delegate
+                        DispatchQueue.main.async {
+                            self.delegate?.didReceiveDeliveryAck(ack)
+                        }
+                    } else if let ack = DeliveryAck.decode(from: packet.payload) {
+                        // Fallback to JSON for backward compatibility
+                        DeliveryTracker.shared.processDeliveryAck(ack)
                         
                         // Notify delegate
                         DispatchQueue.main.async {
@@ -2235,10 +2214,18 @@ class BluetoothMeshService: NSObject {
                         // Try legacy decryption
                         do {
                             let decryptedData = try noiseService.decrypt(packet.payload, from: senderID)
-                            if let ack = DeliveryAck.decode(from: decryptedData) {
+                            if let ack = DeliveryAck.fromBinaryData(decryptedData) {
                                 // Process the ACK
                                 DeliveryTracker.shared.processDeliveryAck(ack)
                                 
+                                
+                                // Notify delegate
+                                DispatchQueue.main.async {
+                                    self.delegate?.didReceiveDeliveryAck(ack)
+                                }
+                            } else if let ack = DeliveryAck.decode(from: decryptedData) {
+                                // Fallback to JSON
+                                DeliveryTracker.shared.processDeliveryAck(ack)
                                 
                                 // Notify delegate
                                 DispatchQueue.main.async {
@@ -2270,8 +2257,13 @@ class BluetoothMeshService: NSObject {
                 // This read receipt is for us
                 let senderID = packet.senderID.hexEncodedString()
                 // Check if payload is already decrypted (came through Noise)
-                    if let receipt = ReadReceipt.decode(from: packet.payload) {
+                    if let receipt = ReadReceipt.fromBinaryData(packet.payload) {
                         // Already decrypted - process directly
+                        DispatchQueue.main.async {
+                            self.delegate?.didReceiveReadReceipt(receipt)
+                        }
+                    } else if let receipt = ReadReceipt.decode(from: packet.payload) {
+                        // Fallback to JSON for backward compatibility
                         DispatchQueue.main.async {
                             self.delegate?.didReceiveReadReceipt(receipt)
                         }
@@ -2279,8 +2271,13 @@ class BluetoothMeshService: NSObject {
                         // Try legacy decryption
                         do {
                             let decryptedData = try noiseService.decrypt(packet.payload, from: senderID)
-                            if let receipt = ReadReceipt.decode(from: decryptedData) {
+                            if let receipt = ReadReceipt.fromBinaryData(decryptedData) {
                                 // Process the read receipt
+                                DispatchQueue.main.async {
+                                    self.delegate?.didReceiveReadReceipt(receipt)
+                                }
+                            } else if let receipt = ReadReceipt.decode(from: decryptedData) {
+                                // Fallback to JSON
                                 DispatchQueue.main.async {
                                     self.delegate?.didReceiveReadReceipt(receipt)
                                 }
@@ -2301,7 +2298,7 @@ class BluetoothMeshService: NSObject {
             let senderID = packet.senderID.hexEncodedString()
             if senderID != myPeerID && !isPeerIDOurs(senderID) {
                 // Decode the announcement
-                guard let announcement = NoiseIdentityAnnouncement.decode(from: packet.payload) else {
+                guard let announcement = NoiseIdentityAnnouncement.fromBinaryData(packet.payload) ?? NoiseIdentityAnnouncement.decode(from: packet.payload) else {
                     return
                 }
                 
@@ -3535,7 +3532,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
     }
     
     private func handleChannelKeyVerifyRequest(from peerID: String, data: Data) {
-        guard let request = ChannelKeyVerifyRequest.decode(from: data) else { return }
+        guard let request = ChannelKeyVerifyRequest.fromBinaryData(data) ?? ChannelKeyVerifyRequest.decode(from: data) else { return }
         
         // Forward to delegate (ChatViewModel) to handle
         DispatchQueue.main.async { [weak self] in
@@ -3544,7 +3541,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
     }
     
     private func handleChannelKeyVerifyResponse(from peerID: String, data: Data) {
-        guard let response = ChannelKeyVerifyResponse.decode(from: data) else { return }
+        guard let response = ChannelKeyVerifyResponse.fromBinaryData(data) ?? ChannelKeyVerifyResponse.decode(from: data) else { return }
         
         // Forward to delegate (ChatViewModel) to handle
         DispatchQueue.main.async { [weak self] in
@@ -3561,7 +3558,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             let decryptedData = try noiseService.decrypt(data, from: peerID)
             
             // Parse the password update
-            guard let update = ChannelPasswordUpdate.decode(from: decryptedData) else { return }
+            guard let update = ChannelPasswordUpdate.fromBinaryData(decryptedData) ?? ChannelPasswordUpdate.decode(from: decryptedData) else { return }
             
             // Forward to delegate (ChatViewModel) to handle
             DispatchQueue.main.async { [weak self] in
@@ -3573,7 +3570,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
     
     private func handleChannelMetadata(from peerID: String, data: Data) {
         // Channel metadata is broadcast unencrypted (like channel announcements)
-        guard let metadata = ChannelMetadata.decode(from: data) else { return }
+        guard let metadata = ChannelMetadata.fromBinaryData(data) ?? ChannelMetadata.decode(from: data) else { return }
         
         // Forward to delegate (ChatViewModel) to handle
         DispatchQueue.main.async { [weak self] in
@@ -3584,7 +3581,26 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
     // MARK: - Protocol Version Negotiation
     
     private func handleVersionHello(from peerID: String, data: Data, peripheral: CBPeripheral? = nil) {
-        guard let hello = VersionHello.decode(from: data) else {
+        // Create a copy to avoid potential race conditions
+        let dataCopy = Data(data)
+        
+        // Safety check for empty data
+        guard !dataCopy.isEmpty else {
+            SecurityLogger.log("Received empty version hello data from \(peerID)", category: SecurityLogger.session, level: .error)
+            return
+        }
+        
+        // Try JSON first if it looks like JSON
+        let hello: VersionHello?
+        if let firstByte = dataCopy.first, firstByte == 0x7B { // '{' character
+            SecurityLogger.log("Version hello from \(peerID) appears to be JSON (size: \(dataCopy.count))", category: SecurityLogger.session, level: .debug)
+            hello = VersionHello.decode(from: dataCopy) ?? VersionHello.fromBinaryData(dataCopy)
+        } else {
+            SecurityLogger.log("Version hello from \(peerID) appears to be binary (size: \(dataCopy.count), first byte: \(dataCopy.first?.description ?? "nil"))", category: SecurityLogger.session, level: .debug)
+            hello = VersionHello.fromBinaryData(dataCopy) ?? VersionHello.decode(from: dataCopy)
+        }
+        
+        guard let hello = hello else {
             SecurityLogger.log("Failed to decode version hello from \(peerID)", category: SecurityLogger.session, level: .error)
             return
         }
@@ -3636,7 +3652,24 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
     }
     
     private func handleVersionAck(from peerID: String, data: Data) {
-        guard let ack = VersionAck.decode(from: data) else {
+        // Create a copy to avoid potential race conditions
+        let dataCopy = Data(data)
+        
+        // Safety check for empty data
+        guard !dataCopy.isEmpty else {
+            SecurityLogger.log("Received empty version ack data from \(peerID)", category: SecurityLogger.session, level: .error)
+            return
+        }
+        
+        // Try JSON first if it looks like JSON
+        let ack: VersionAck?
+        if let firstByte = dataCopy.first, firstByte == 0x7B { // '{' character
+            ack = VersionAck.decode(from: dataCopy) ?? VersionAck.fromBinaryData(dataCopy)
+        } else {
+            ack = VersionAck.fromBinaryData(dataCopy) ?? VersionAck.decode(from: dataCopy)
+        }
+        
+        guard let ack = ack else {
             SecurityLogger.log("Failed to decode version ack from \(peerID)", category: SecurityLogger.session, level: .error)
             return
         }
@@ -3678,7 +3711,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             platform: getPlatformString()
         )
         
-        guard let helloData = hello.encode() else { return }
+        let helloData = hello.toBinaryData()
         
         let packet = BitchatPacket(
             type: MessageType.versionHello.rawValue,
@@ -3704,7 +3737,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
     }
     
     private func sendVersionAck(_ ack: VersionAck, to peerID: String) {
-        guard let ackData = ack.encode() else { return }
+        let ackData = ack.toBinaryData()
         
         let packet = BitchatPacket(
             type: MessageType.versionAck.rawValue,
@@ -3730,7 +3763,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
     }
     
     func sendChannelKeyVerifyRequest(_ request: ChannelKeyVerifyRequest, to peers: [String]) {
-        guard let requestData = request.encode() else { return }
+        let requestData = request.toBinaryData()
         
         // Send to each peer
         for peerID in peers {
@@ -3749,7 +3782,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
     }
     
     func sendChannelKeyVerifyResponse(_ response: ChannelKeyVerifyResponse, to peerID: String) {
-        guard let responseData = response.encode() else { return }
+        let responseData = response.toBinaryData()
         
         let packet = BitchatPacket(
             type: MessageType.channelKeyVerifyResponse.rawValue,
@@ -3784,7 +3817,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             newKeyCommitment: newCommitment
         )
         
-        guard let updateData = update.encode() else { return }
+        let updateData = update.toBinaryData()
         
         do {
             // Encrypt the entire update message
@@ -3852,9 +3885,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         )
         
         // Encode the announcement
-        guard let announcementData = announcement.encode() else {
-            return
-        }
+        let announcementData = announcement.toBinaryData()
         
         let packet = BitchatPacket(
             type: MessageType.noiseIdentityAnnounce.rawValue,
