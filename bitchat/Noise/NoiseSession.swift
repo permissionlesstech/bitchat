@@ -255,7 +255,7 @@ class NoiseSessionManager {
     
     func removeSession(for peerID: String) {
         managerQueue.sync(flags: .barrier) {
-            sessions.removeValue(forKey: peerID)
+            _ = sessions.removeValue(forKey: peerID)
         }
     }
     
@@ -265,7 +265,7 @@ class NoiseSessionManager {
             if let session = sessions[oldPeerID] {
                 // Move the session to the new peer ID
                 sessions[newPeerID] = session
-                sessions.removeValue(forKey: oldPeerID)
+                _ = sessions.removeValue(forKey: oldPeerID)
                 
                 SecurityLogger.log("Migrated Noise session from \(oldPeerID) to \(newPeerID)", category: SecurityLogger.noise, level: .info)
             }
@@ -290,7 +290,7 @@ class NoiseSessionManager {
             
             // Remove any existing non-established session
             if let existingSession = sessions[peerID], !existingSession.isEstablished() {
-                sessions.removeValue(forKey: peerID)
+                _ = sessions.removeValue(forKey: peerID)
             }
             
             // Create new initiator session
@@ -306,7 +306,7 @@ class NoiseSessionManager {
                 return handshakeData
             } catch {
                 // Clean up failed session
-                sessions.removeValue(forKey: peerID)
+                _ = sessions.removeValue(forKey: peerID)
                 throw error
             }
         }
@@ -328,7 +328,7 @@ class NoiseSessionManager {
                     // If we're in the middle of a handshake and receive a new initiation,
                     // reset and start fresh (the other side may have restarted)
                     if existing.getState() == .handshaking && message.count == 32 {
-                        sessions.removeValue(forKey: peerID)
+                        _ = sessions.removeValue(forKey: peerID)
                         shouldCreateNew = true
                     } else {
                         existingSession = existing
@@ -369,7 +369,7 @@ class NoiseSessionManager {
                 return response
             } catch {
                 // Reset the session on handshake failure so next attempt can start fresh
-                sessions.removeValue(forKey: peerID)
+                _ = sessions.removeValue(forKey: peerID)
                 
                 // Schedule callback outside the synchronized block to prevent deadlock
                 DispatchQueue.global().async { [weak self] in
