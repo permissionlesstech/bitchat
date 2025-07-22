@@ -30,19 +30,7 @@ class NotificationService {
     }
     
     func sendLocalNotification(title: String, body: String, identifier: String) {
-        // Create notification content first (thread-safe)
-        let content = UNMutableNotificationContent()
-        content.title = title
-        content.body = body
-        content.sound = .default
-        
-        let request = UNNotificationRequest(
-            identifier: identifier,
-            content: content,
-            trigger: nil // Deliver immediately
-        )
-        
-        // Check app state on main thread and send notification
+        // Everything must be on main thread to check app state
         DispatchQueue.main.async {
             #if os(iOS)
             guard UIApplication.shared.applicationState != .active else {
@@ -58,7 +46,18 @@ class NotificationService {
             }
             #endif
             
-            // App is in background/inactive, send notification
+            // App is in background/inactive, create and send notification
+            let content = UNMutableNotificationContent()
+            content.title = title
+            content.body = body
+            content.sound = .default
+            
+            let request = UNNotificationRequest(
+                identifier: identifier,
+                content: content,
+                trigger: nil // Deliver immediately
+            )
+            
             UNUserNotificationCenter.current().add(request) { error in
                 if let error = error {
                     print("📱 Error sending local notification: \(error)")
