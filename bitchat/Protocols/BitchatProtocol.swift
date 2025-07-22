@@ -347,16 +347,18 @@ struct ChannelMetadata: Codable {
 struct NoiseIdentityAnnouncement: Codable {
     let peerID: String               // Current ephemeral peer ID
     let publicKey: Data              // Noise static public key
+    let signingPublicKey: Data       // Ed25519 signing public key
     let nickname: String             // Current nickname
     let timestamp: Date              // When this binding was created
     let previousPeerID: String?      // Previous peer ID (for smooth transition)
     let signature: Data              // Signature proving ownership
     
-    init(peerID: String, publicKey: Data, nickname: String, previousPeerID: String? = nil, signature: Data) {
+    init(peerID: String, publicKey: Data, signingPublicKey: Data, nickname: String, timestamp: Date, previousPeerID: String? = nil, signature: Data) {
         self.peerID = peerID
         self.publicKey = publicKey
+        self.signingPublicKey = signingPublicKey
         self.nickname = nickname
-        self.timestamp = Date()
+        self.timestamp = timestamp
         self.previousPeerID = previousPeerID
         self.signature = signature
     }
@@ -366,7 +368,7 @@ struct NoiseIdentityAnnouncement: Codable {
     }
     
     static func decode(from data: Data) -> NoiseIdentityAnnouncement? {
-        try? JSONDecoder().decode(NoiseIdentityAnnouncement.self, from: data)
+        return try? JSONDecoder().decode(NoiseIdentityAnnouncement.self, from: data)
     }
 }
 
@@ -375,14 +377,22 @@ struct PeerIdentityBinding {
     let currentPeerID: String        // Current ephemeral ID
     let fingerprint: String          // Permanent cryptographic identity
     let publicKey: Data              // Noise static public key
+    let signingPublicKey: Data       // Ed25519 signing public key
     let nickname: String             // Last known nickname
     let bindingTimestamp: Date       // When this binding was created
     let signature: Data              // Cryptographic proof of binding
     
     // Verify the binding signature
     func verify() -> Bool {
-        // TODO: Implement signature verification
-        return true
+        let bindingData = currentPeerID.data(using: .utf8)! + publicKey + 
+                         String(Int64(bindingTimestamp.timeIntervalSince1970 * 1000)).data(using: .utf8)!
+        
+        do {
+            let signingKey = try Curve25519.Signing.PublicKey(rawRepresentation: signingPublicKey)
+            return signingKey.isValidSignature(signature, for: bindingData)
+        } catch {
+            return false
+        }
     }
 }
 
