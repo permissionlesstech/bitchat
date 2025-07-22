@@ -251,22 +251,23 @@ struct DeliveryAck: Codable {
     }
     
     static func fromBinaryData(_ data: Data) -> DeliveryAck? {
+        // Create defensive copy
+        let dataCopy = Data(data)
+        
         // Minimum size: 2 UUIDs (32) + recipientID (8) + hopCount (1) + timestamp (8) + min nickname
-        guard data.count >= 50 else { return nil }
+        guard dataCopy.count >= 50 else { return nil }
         
         var offset = 0
         
-        guard let originalMessageID = data.readUUID(at: &offset),
-              let ackID = data.readUUID(at: &offset) else { return nil }
+        guard let originalMessageID = dataCopy.readUUID(at: &offset),
+              let ackID = dataCopy.readUUID(at: &offset) else { return nil }
         
-        guard offset + 8 <= data.count else { return nil }
-        let recipientIDData = data[offset..<offset + 8]
-        offset += 8
+        guard let recipientIDData = dataCopy.readFixedBytes(at: &offset, count: 8) else { return nil }
         let recipientID = recipientIDData.hexEncodedString()
         
-        guard let hopCount = data.readUInt8(at: &offset),
-              let timestamp = data.readDate(at: &offset),
-              let recipientNickname = data.readString(at: &offset) else { return nil }
+        guard let hopCount = dataCopy.readUInt8(at: &offset),
+              let timestamp = dataCopy.readDate(at: &offset),
+              let recipientNickname = dataCopy.readString(at: &offset) else { return nil }
         
         return DeliveryAck(originalMessageID: originalMessageID,
                            ackID: ackID,
@@ -336,21 +337,22 @@ struct ReadReceipt: Codable {
     }
     
     static func fromBinaryData(_ data: Data) -> ReadReceipt? {
+        // Create defensive copy
+        let dataCopy = Data(data)
+        
         // Minimum size: 2 UUIDs (32) + readerID (8) + timestamp (8) + min nickname
-        guard data.count >= 49 else { return nil }
+        guard dataCopy.count >= 49 else { return nil }
         
         var offset = 0
         
-        guard let originalMessageID = data.readUUID(at: &offset),
-              let receiptID = data.readUUID(at: &offset) else { return nil }
+        guard let originalMessageID = dataCopy.readUUID(at: &offset),
+              let receiptID = dataCopy.readUUID(at: &offset) else { return nil }
         
-        guard offset + 8 <= data.count else { return nil }
-        let readerIDData = data[offset..<offset + 8]
-        offset += 8
+        guard let readerIDData = dataCopy.readFixedBytes(at: &offset, count: 8) else { return nil }
         let readerID = readerIDData.hexEncodedString()
         
-        guard let timestamp = data.readDate(at: &offset),
-              let readerNickname = data.readString(at: &offset) else { return nil }
+        guard let timestamp = dataCopy.readDate(at: &offset),
+              let readerNickname = dataCopy.readString(at: &offset) else { return nil }
         
         return ReadReceipt(originalMessageID: originalMessageID,
                           receiptID: receiptID,
@@ -415,17 +417,18 @@ struct ChannelKeyVerifyRequest: Codable {
     }
     
     static func fromBinaryData(_ data: Data) -> ChannelKeyVerifyRequest? {
+        // Create defensive copy
+        let dataCopy = Data(data)
+        
         var offset = 0
         
-        guard let channel = data.readString(at: &offset) else { return nil }
+        guard let channel = dataCopy.readString(at: &offset) else { return nil }
         
-        guard offset + 8 <= data.count else { return nil }
-        let requesterIDData = data[offset..<offset + 8]
-        offset += 8
+        guard let requesterIDData = dataCopy.readFixedBytes(at: &offset, count: 8) else { return nil }
         let requesterID = requesterIDData.hexEncodedString()
         
-        guard let keyCommitment = data.readString(at: &offset),
-              let timestamp = data.readDate(at: &offset) else { return nil }
+        guard let keyCommitment = dataCopy.readString(at: &offset),
+              let timestamp = dataCopy.readDate(at: &offset) else { return nil }
         
         return ChannelKeyVerifyRequest(channel: channel,
                                        requesterID: requesterID,
@@ -489,17 +492,18 @@ struct ChannelKeyVerifyResponse: Codable {
     }
     
     static func fromBinaryData(_ data: Data) -> ChannelKeyVerifyResponse? {
+        // Create defensive copy
+        let dataCopy = Data(data)
+        
         var offset = 0
         
-        guard let channel = data.readString(at: &offset) else { return nil }
+        guard let channel = dataCopy.readString(at: &offset) else { return nil }
         
-        guard offset + 8 <= data.count else { return nil }
-        let responderIDData = data[offset..<offset + 8]
-        offset += 8
+        guard let responderIDData = dataCopy.readFixedBytes(at: &offset, count: 8) else { return nil }
         let responderID = responderIDData.hexEncodedString()
         
-        guard let verifiedByte = data.readUInt8(at: &offset),
-              let timestamp = data.readDate(at: &offset) else { return nil }
+        guard let verifiedByte = dataCopy.readUInt8(at: &offset),
+              let timestamp = dataCopy.readDate(at: &offset) else { return nil }
         
         let verified = verifiedByte != 0
         
@@ -573,19 +577,20 @@ struct ChannelPasswordUpdate: Codable {
     }
     
     static func fromBinaryData(_ data: Data) -> ChannelPasswordUpdate? {
+        // Create defensive copy
+        let dataCopy = Data(data)
+        
         var offset = 0
         
-        guard let channel = data.readString(at: &offset) else { return nil }
+        guard let channel = dataCopy.readString(at: &offset) else { return nil }
         
-        guard offset + 8 <= data.count else { return nil }
-        let ownerIDData = data[offset..<offset + 8]
-        offset += 8
+        guard let ownerIDData = dataCopy.readFixedBytes(at: &offset, count: 8) else { return nil }
         let ownerID = ownerIDData.hexEncodedString()
         
-        guard let ownerFingerprint = data.readString(at: &offset),
-              let encryptedPassword = data.readData(at: &offset),
-              let newKeyCommitment = data.readString(at: &offset),
-              let timestamp = data.readDate(at: &offset) else { return nil }
+        guard let ownerFingerprint = dataCopy.readString(at: &offset),
+              let encryptedPassword = dataCopy.readData(at: &offset),
+              let newKeyCommitment = dataCopy.readString(at: &offset),
+              let timestamp = dataCopy.readDate(at: &offset) else { return nil }
         
         return ChannelPasswordUpdate(channel: channel,
                                      ownerID: ownerID,
@@ -669,27 +674,28 @@ struct ChannelMetadata: Codable {
     }
     
     static func fromBinaryData(_ data: Data) -> ChannelMetadata? {
+        // Create defensive copy
+        let dataCopy = Data(data)
+        
         var offset = 0
         
-        guard let flags = data.readUInt8(at: &offset) else { return nil }
+        guard let flags = dataCopy.readUInt8(at: &offset) else { return nil }
         let hasKeyCommitment = (flags & 0x01) != 0
         
-        guard let channel = data.readString(at: &offset) else { return nil }
+        guard let channel = dataCopy.readString(at: &offset) else { return nil }
         
-        guard offset + 8 <= data.count else { return nil }
-        let creatorIDData = data[offset..<offset + 8]
-        offset += 8
+        guard let creatorIDData = dataCopy.readFixedBytes(at: &offset, count: 8) else { return nil }
         let creatorID = creatorIDData.hexEncodedString()
         
-        guard let creatorFingerprint = data.readString(at: &offset),
-              let createdAt = data.readDate(at: &offset),
-              let isPasswordProtectedByte = data.readUInt8(at: &offset) else { return nil }
+        guard let creatorFingerprint = dataCopy.readString(at: &offset),
+              let createdAt = dataCopy.readDate(at: &offset),
+              let isPasswordProtectedByte = dataCopy.readUInt8(at: &offset) else { return nil }
         
         let isPasswordProtected = isPasswordProtectedByte != 0
         
         var keyCommitment: String? = nil
         if hasKeyCommitment {
-            keyCommitment = data.readString(at: &offset)
+            keyCommitment = dataCopy.readString(at: &offset)
         }
         
         return ChannelMetadata(channel: channel,
@@ -784,33 +790,34 @@ struct NoiseIdentityAnnouncement: Codable {
     }
     
     static func fromBinaryData(_ data: Data) -> NoiseIdentityAnnouncement? {
-        // Minimum size check
-        guard data.count >= 20 else { return nil }
+        // Create defensive copy
+        let dataCopy = Data(data)
+        
+        // Minimum size check: flags(1) + peerID(8) + min data lengths
+        guard dataCopy.count >= 20 else { return nil }
         
         var offset = 0
         
-        guard let flags = data.readUInt8(at: &offset) else { return nil }
+        guard let flags = dataCopy.readUInt8(at: &offset) else { return nil }
         let hasPreviousPeerID = (flags & 0x01) != 0
         
-        guard offset + 8 <= data.count else { return nil }
-        let peerIDData = data[offset..<offset + 8]
-        offset += 8
-        let peerID = peerIDData.hexEncodedString()
+        // Read peerID using safe method
+        guard let peerIDBytes = dataCopy.readFixedBytes(at: &offset, count: 8) else { return nil }
+        let peerID = peerIDBytes.hexEncodedString()
         
-        guard let publicKey = data.readData(at: &offset),
-              let signingPublicKey = data.readData(at: &offset),
-              let nickname = data.readString(at: &offset),
-              let timestamp = data.readDate(at: &offset) else { return nil }
+        guard let publicKey = dataCopy.readData(at: &offset),
+              let signingPublicKey = dataCopy.readData(at: &offset),
+              let nickname = dataCopy.readString(at: &offset),
+              let timestamp = dataCopy.readDate(at: &offset) else { return nil }
         
         var previousPeerID: String? = nil
         if hasPreviousPeerID {
-            guard offset + 8 <= data.count else { return nil }
-            let previousPeerIDData = data[offset..<offset + 8]
-            offset += 8
-            previousPeerID = previousPeerIDData.hexEncodedString()
+            // Read previousPeerID using safe method
+            guard let prevIDBytes = dataCopy.readFixedBytes(at: &offset, count: 8) else { return nil }
+            previousPeerID = prevIDBytes.hexEncodedString()
         }
         
-        guard let signature = data.readData(at: &offset) else { return nil }
+        guard let signature = dataCopy.readData(at: &offset) else { return nil }
         
         return NoiseIdentityAnnouncement(peerID: peerID,
                                         publicKey: publicKey,
@@ -930,31 +937,34 @@ struct VersionHello: Codable {
     }
     
     static func fromBinaryData(_ data: Data) -> VersionHello? {
+        // Create defensive copy
+        let dataCopy = Data(data)
+        
         // Minimum size check: flags(1) + versionCount(1) + at least one version(1) + preferredVersion(1) + min strings
-        guard data.count >= 4 else { return nil }
+        guard dataCopy.count >= 4 else { return nil }
         
         var offset = 0
         
-        guard let flags = data.readUInt8(at: &offset) else { return nil }
+        guard let flags = dataCopy.readUInt8(at: &offset) else { return nil }
         let hasCapabilities = (flags & 0x01) != 0
         
-        guard let versionCount = data.readUInt8(at: &offset) else { return nil }
+        guard let versionCount = dataCopy.readUInt8(at: &offset) else { return nil }
         var supportedVersions: [UInt8] = []
         for _ in 0..<versionCount {
-            guard let version = data.readUInt8(at: &offset) else { return nil }
+            guard let version = dataCopy.readUInt8(at: &offset) else { return nil }
             supportedVersions.append(version)
         }
         
-        guard let preferredVersion = data.readUInt8(at: &offset),
-              let clientVersion = data.readString(at: &offset),
-              let platform = data.readString(at: &offset) else { return nil }
+        guard let preferredVersion = dataCopy.readUInt8(at: &offset),
+              let clientVersion = dataCopy.readString(at: &offset),
+              let platform = dataCopy.readString(at: &offset) else { return nil }
         
         var capabilities: [String]? = nil
         if hasCapabilities {
-            guard let capCount = data.readUInt8(at: &offset) else { return nil }
+            guard let capCount = dataCopy.readUInt8(at: &offset) else { return nil }
             capabilities = []
             for _ in 0..<capCount {
-                guard let capability = data.readString(at: &offset) else { return nil }
+                guard let capability = dataCopy.readString(at: &offset) else { return nil }
                 capabilities?.append(capability)
             }
         }
@@ -1029,35 +1039,38 @@ struct VersionAck: Codable {
     }
     
     static func fromBinaryData(_ data: Data) -> VersionAck? {
+        // Create defensive copy
+        let dataCopy = Data(data)
+        
         // Minimum size: flags(1) + version(1) + rejected(1) + min strings
-        guard data.count >= 5 else { return nil }
+        guard dataCopy.count >= 5 else { return nil }
         
         var offset = 0
         
-        guard let flags = data.readUInt8(at: &offset) else { return nil }
+        guard let flags = dataCopy.readUInt8(at: &offset) else { return nil }
         let hasCapabilities = (flags & 0x01) != 0
         let hasReason = (flags & 0x02) != 0
         
-        guard let agreedVersion = data.readUInt8(at: &offset),
-              let serverVersion = data.readString(at: &offset),
-              let platform = data.readString(at: &offset),
-              let rejectedByte = data.readUInt8(at: &offset) else { return nil }
+        guard let agreedVersion = dataCopy.readUInt8(at: &offset),
+              let serverVersion = dataCopy.readString(at: &offset),
+              let platform = dataCopy.readString(at: &offset),
+              let rejectedByte = dataCopy.readUInt8(at: &offset) else { return nil }
         
         let rejected = rejectedByte != 0
         
         var capabilities: [String]? = nil
         if hasCapabilities {
-            guard let capCount = data.readUInt8(at: &offset) else { return nil }
+            guard let capCount = dataCopy.readUInt8(at: &offset) else { return nil }
             capabilities = []
             for _ in 0..<capCount {
-                guard let capability = data.readString(at: &offset) else { return nil }
+                guard let capability = dataCopy.readString(at: &offset) else { return nil }
                 capabilities?.append(capability)
             }
         }
         
         var reason: String? = nil
         if hasReason {
-            reason = data.readString(at: &offset)
+            reason = dataCopy.readString(at: &offset)
         }
         
         return VersionAck(agreedVersion: agreedVersion,
