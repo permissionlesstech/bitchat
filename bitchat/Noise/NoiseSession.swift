@@ -127,6 +127,8 @@ class NoiseSession {
                 state = .established
                 handshakeState = nil // Clear handshake state
                 
+                SecureLogger.logSecurityEvent(.handshakeCompleted(peerID: peerID))
+                
                 return nil
             } else {
                 // Generate response
@@ -148,6 +150,8 @@ class NoiseSession {
                     
                     state = .established
                     handshakeState = nil // Clear handshake state
+                    
+                    SecureLogger.logSecurityEvent(.handshakeCompleted(peerID: peerID))
                 }
                 
                 return response
@@ -208,12 +212,17 @@ class NoiseSession {
     
     func reset() {
         sessionQueue.sync(flags: .barrier) {
+            let wasEstablished = state == .established
             state = .uninitialized
             handshakeState = nil
             sendCipher = nil
             receiveCipher = nil
             sentHandshakeMessages.removeAll()
             handshakeHash = nil
+            
+            if wasEstablished {
+                SecureLogger.logSecurityEvent(.sessionExpired(peerID: peerID))
+            }
         }
     }
 }
@@ -255,6 +264,9 @@ class NoiseSessionManager {
     
     func removeSession(for peerID: String) {
         managerQueue.sync(flags: .barrier) {
+            if let session = sessions[peerID], session.isEstablished() {
+                SecureLogger.logSecurityEvent(.sessionExpired(peerID: peerID))
+            }
             _ = sessions.removeValue(forKey: peerID)
         }
     }
@@ -267,7 +279,7 @@ class NoiseSessionManager {
                 sessions[newPeerID] = session
                 _ = sessions.removeValue(forKey: oldPeerID)
                 
-                SecurityLogger.log("Migrated Noise session from \(oldPeerID) to \(newPeerID)", category: SecurityLogger.noise, level: .info)
+                SecureLogger.log("Migrated Noise session from \(oldPeerID) to \(newPeerID)", category: SecureLogger.noise, level: .info)
             }
         }
     }
@@ -307,6 +319,7 @@ class NoiseSessionManager {
             } catch {
                 // Clean up failed session
                 _ = sessions.removeValue(forKey: peerID)
+                SecureLogger.logSecurityEvent(.handshakeFailed(peerID: peerID, error: error.localizedDescription), level: .error)
                 throw error
             }
         }
@@ -323,6 +336,7 @@ class NoiseSessionManager {
                 if existing.isEstablished() {
                     // Don't destroy our working session just because the other side is confused
                     // They should detect the established session through successful message exchange
+                    SecureLogger.log("Rejecting handshake attempt - session already established with \(peerID)", category: SecureLogger.session, level: .debug)
                     throw NoiseSessionError.alreadyEstablished
                 } else {
                     // If we're in the middle of a handshake and receive a new initiation,
@@ -376,6 +390,7 @@ class NoiseSessionManager {
                     self?.onSessionFailed?(peerID, error)
                 }
                 
+                SecureLogger.logSecurityEvent(.handshakeFailed(peerID: peerID, error: error.localizedDescription), level: .error)
                 throw error
             }
         }
@@ -428,6 +443,8 @@ class NoiseSessionManager {
     }
     
     func initiateRekey(for peerID: String) throws {
+        SecureLogger.logSecurityEvent(.keyRotation(channel: peerID))
+        
         // Remove old session
         removeSession(for: peerID)
         
