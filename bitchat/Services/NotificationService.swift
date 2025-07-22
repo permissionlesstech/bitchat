@@ -30,36 +30,39 @@ class NotificationService {
     }
     
     func sendLocalNotification(title: String, body: String, identifier: String) {
-        // Check if app is in foreground (must be on main thread)
+        // Create notification content first (thread-safe)
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+        
+        let request = UNNotificationRequest(
+            identifier: identifier,
+            content: content,
+            trigger: nil // Deliver immediately
+        )
+        
+        // Check app state on main thread and send notification
         DispatchQueue.main.async {
             #if os(iOS)
             guard UIApplication.shared.applicationState != .active else {
                 // App is active/foreground, skipping notification
+                print("📱 Skipping notification - app is in foreground")
                 return
             }
-            // App state checked, sending notification
             #elseif os(macOS)
-            // On macOS, check if app is active
             guard !NSApplication.shared.isActive else {
                 // App is active/foreground, skipping notification
+                print("📱 Skipping notification - app is in foreground")
                 return
             }
-            // App is not active, sending notification
             #endif
             
-            let content = UNMutableNotificationContent()
-            content.title = title
-            content.body = body
-            content.sound = .default
-            
-            let request = UNNotificationRequest(
-                identifier: identifier,
-                content: content,
-                trigger: nil // Deliver immediately
-            )
-            
-            UNUserNotificationCenter.current().add(request) { _ in
-                // Notification added
+            // App is in background/inactive, send notification
+            UNUserNotificationCenter.current().add(request) { error in
+                if let error = error {
+                    print("📱 Error sending local notification: \(error)")
+                }
             }
         }
     }
@@ -81,11 +84,29 @@ class NotificationService {
     }
     
     func sendFavoriteOnlineNotification(nickname: String) {
-        let title = "⭐ \(nickname) is online!"
-        let body = "wanna get in there?"
-        let identifier = "favorite-online-\(UUID().uuidString)"
+        print("📱 sendFavoriteOnlineNotification called for: \(nickname)")
         
-        sendLocalNotification(title: title, body: body, identifier: identifier)
+        // Send directly without checking app state for favorites
+        DispatchQueue.main.async {
+            let content = UNMutableNotificationContent()
+            content.title = "⭐ \(nickname) is online!"
+            content.body = "wanna get in there?"
+            content.sound = .default
+            
+            let request = UNNotificationRequest(
+                identifier: "favorite-online-\(UUID().uuidString)",
+                content: content,
+                trigger: nil
+            )
+            
+            UNUserNotificationCenter.current().add(request) { error in
+                if let error = error {
+                    print("📱 Error sending favorite notification: \(error)")
+                } else {
+                    print("📱 Favorite notification sent successfully")
+                }
+            }
+        }
     }
     
     func sendNetworkAvailableNotification(peerCount: Int) {
