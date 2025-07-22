@@ -12,6 +12,8 @@
 		04636BBB2E2FAA1700FBCFA8 /* BinaryMessageHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04636BB92E2FAA1700FBCFA8 /* BinaryMessageHandler.swift */; };
 		04636BBC2E2FAA1700FBCFA8 /* BinaryEncodingUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04636BB82E2FAA1700FBCFA8 /* BinaryEncodingUtils.swift */; };
 		04636BBD2E2FAA1700FBCFA8 /* BinaryMessageHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04636BB92E2FAA1700FBCFA8 /* BinaryMessageHandler.swift */; };
+		04636BBF2E2FCA8A00FBCFA8 /* SecureLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04636BBE2E2FCA8A00FBCFA8 /* SecureLogger.swift */; };
+		04636BC02E2FCA8A00FBCFA8 /* SecureLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04636BBE2E2FCA8A00FBCFA8 /* SecureLogger.swift */; };
 		04891CA92E22971E0064A111 /* LRUCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04891CA82E22971E0064A111 /* LRUCache.swift */; };
 		04891CAA2E22971E0064A111 /* LRUCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04891CA82E22971E0064A111 /* LRUCache.swift */; };
 		04AD0B4E2E25B9580002A40A /* IdentityModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E2446380E7A44E49A35B664 /* IdentityModels.swift */; };
@@ -61,9 +63,7 @@
 		04B6BA752E21601B0090FE39 /* KeychainIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04B6BA602E21601B0090FE39 /* KeychainIntegrationTests.swift */; };
 		04B6BA762E21601B0090FE39 /* NoiseChannelEncryptionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04B6BA612E21601B0090FE39 /* NoiseChannelEncryptionTests.swift */; };
 		04B6BA792E2166A50090FE39 /* NoiseTestingHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04B6BA772E2166A50090FE39 /* NoiseTestingHelper.swift */; };
-		04B6BA7A2E2166A50090FE39 /* SecurityLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04B6BA782E2166A50090FE39 /* SecurityLogger.swift */; };
 		04B6BA7B2E2166A50090FE39 /* NoiseTestingHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04B6BA772E2166A50090FE39 /* NoiseTestingHelper.swift */; };
-		04B6BA7C2E2166A50090FE39 /* SecurityLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04B6BA782E2166A50090FE39 /* SecurityLogger.swift */; };
 		0DAFF1DDE9BA83FF648D5AB3 /* BitchatMessageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FA8FF26ABDC1C642A8C7AE5 /* BitchatMessageTests.swift */; };
 		0FBC81FF78CF4711B78E092A /* IdentityModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E2446380E7A44E49A35B664 /* IdentityModels.swift */; };
 		10E68BB889356219189E38EC /* BitchatApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF625BB3AD919322C01A46B2 /* BitchatApp.swift */; };
@@ -155,6 +155,7 @@
 		03C57F452B55FD0FD8F51421 /* bitchatTests_macOS.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = bitchatTests_macOS.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		04636BB82E2FAA1700FBCFA8 /* BinaryEncodingUtils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BinaryEncodingUtils.swift; sourceTree = "<group>"; };
 		04636BB92E2FAA1700FBCFA8 /* BinaryMessageHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BinaryMessageHandler.swift; sourceTree = "<group>"; };
+		04636BBE2E2FCA8A00FBCFA8 /* SecureLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureLogger.swift; sourceTree = "<group>"; };
 		04891CA82E22971E0064A111 /* LRUCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LRUCache.swift; sourceTree = "<group>"; };
 		04AD0B502E2678220002A40A /* BinaryProtocolVersionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BinaryProtocolVersionTests.swift; sourceTree = "<group>"; };
 		04AD0B512E2678220002A40A /* ProtocolVersionNegotiationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolVersionNegotiationTests.swift; sourceTree = "<group>"; };
@@ -179,7 +180,6 @@
 		04B6BA652E21601B0090FE39 /* NoiseSecurityValidatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoiseSecurityValidatorTests.swift; sourceTree = "<group>"; };
 		04B6BA662E21601B0090FE39 /* SecureNoiseSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureNoiseSessionTests.swift; sourceTree = "<group>"; };
 		04B6BA772E2166A50090FE39 /* NoiseTestingHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoiseTestingHelper.swift; sourceTree = "<group>"; };
-		04B6BA782E2166A50090FE39 /* SecurityLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityLogger.swift; sourceTree = "<group>"; };
 		12B9C3EDF3BC73D3BC106DA4 /* DeliveryTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeliveryTracker.swift; sourceTree = "<group>"; };
 		136696FC4436A02D98CE6A77 /* KeychainManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainManager.swift; sourceTree = "<group>"; };
 		1EB3A8FE16333ED12FCB8ACB /* BloomFilterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BloomFilterTests.swift; sourceTree = "<group>"; };
@@ -279,9 +279,9 @@
 		9A78348821A7D3374607D4E3 /* Utils */ = {
 			isa = PBXGroup;
 			children = (
+				04636BBE2E2FCA8A00FBCFA8 /* SecureLogger.swift */,
 				04891CA82E22971E0064A111 /* LRUCache.swift */,
 				04B6BA772E2166A50090FE39 /* NoiseTestingHelper.swift */,
-				04B6BA782E2166A50090FE39 /* SecurityLogger.swift */,
 				ED176FF3B274E35C2D827894 /* BatteryOptimizer.swift */,
 				32F149C43D1915831B60FE09 /* CompressionUtil.swift */,
 				CB043CA5EEB9AC8B07D61E97 /* OptimizedBloomFilter.swift */,
@@ -572,7 +572,6 @@
 				04B6BA4F2E2038A70090FE39 /* NoiseEncryptionService.swift in Sources */,
 				8DCEEA289EF7C49E7CD38B08 /* DeliveryTracker.swift in Sources */,
 				04B6BA792E2166A50090FE39 /* NoiseTestingHelper.swift in Sources */,
-				04B6BA7A2E2166A50090FE39 /* SecurityLogger.swift in Sources */,
 				FB8819B4C84FAFEF5C36B216 /* KeychainManager.swift in Sources */,
 				04636BBA2E2FAA1700FBCFA8 /* BinaryEncodingUtils.swift in Sources */,
 				04636BBB2E2FAA1700FBCFA8 /* BinaryMessageHandler.swift in Sources */,
@@ -583,6 +582,7 @@
 				04B6BA582E203D6C0090FE39 /* NoiseTestingView.swift in Sources */,
 				C99763A4761567F587D21688 /* MessageRetryService.swift in Sources */,
 				749D8CF8A362B6CD0786782D /* NotificationService.swift in Sources */,
+				04636BBF2E2FCA8A00FBCFA8 /* SecureLogger.swift in Sources */,
 				0245710AEAA58AD0A1425234 /* OptimizedBloomFilter.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -609,7 +609,6 @@
 				04B6BA4E2E2038A70090FE39 /* NoiseEncryptionService.swift in Sources */,
 				CD0AE423F03AC52BAFC16834 /* DeliveryTracker.swift in Sources */,
 				04B6BA7B2E2166A50090FE39 /* NoiseTestingHelper.swift in Sources */,
-				04B6BA7C2E2166A50090FE39 /* SecurityLogger.swift in Sources */,
 				8F737CE0435792CC2AD65FCB /* KeychainManager.swift in Sources */,
 				04636BBC2E2FAA1700FBCFA8 /* BinaryEncodingUtils.swift in Sources */,
 				04636BBD2E2FAA1700FBCFA8 /* BinaryMessageHandler.swift in Sources */,
@@ -620,6 +619,7 @@
 				04B6BA562E203D6C0090FE39 /* NoiseTestingView.swift in Sources */,
 				CEAE115C9C3EB3C4ED82F128 /* MessageRetryService.swift in Sources */,
 				61C81ED5F679D5E973EE0C07 /* NotificationService.swift in Sources */,
+				04636BC02E2FCA8A00FBCFA8 /* SecureLogger.swift in Sources */,
 				1F48A8CEEE9399D1EBD08F0C /* OptimizedBloomFilter.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

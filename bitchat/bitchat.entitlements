@@ -8,5 +8,7 @@
 	<array>
 		<string>group.chat.bitchat</string>
 	</array>
+	<key>com.apple.security.device.bluetooth</key>
+	<true/>
 </dict>
 </plist>
