@@ -30,35 +30,37 @@ class NotificationService {
     }
     
     func sendLocalNotification(title: String, body: String, identifier: String) {
-        // Check if app is in foreground
-        #if os(iOS)
-        guard UIApplication.shared.applicationState != .active else {
-            // App is active/foreground, skipping notification
-            return
-        }
-        // App state checked, sending notification
-        #elseif os(macOS)
-        // On macOS, check if app is active
-        guard !NSApplication.shared.isActive else {
-            // App is active/foreground, skipping notification
-            return
-        }
-        // App is not active, sending notification
-        #endif
-        
-        let content = UNMutableNotificationContent()
-        content.title = title
-        content.body = body
-        content.sound = .default
-        
-        let request = UNNotificationRequest(
-            identifier: identifier,
-            content: content,
-            trigger: nil // Deliver immediately
-        )
-        
-        UNUserNotificationCenter.current().add(request) { _ in
-            // Notification added
+        // Check if app is in foreground (must be on main thread)
+        DispatchQueue.main.async {
+            #if os(iOS)
+            guard UIApplication.shared.applicationState != .active else {
+                // App is active/foreground, skipping notification
+                return
+            }
+            // App state checked, sending notification
+            #elseif os(macOS)
+            // On macOS, check if app is active
+            guard !NSApplication.shared.isActive else {
+                // App is active/foreground, skipping notification
+                return
+            }
+            // App is not active, sending notification
+            #endif
+            
+            let content = UNMutableNotificationContent()
+            content.title = title
+            content.body = body
+            content.sound = .default
+            
+            let request = UNNotificationRequest(
+                identifier: identifier,
+                content: content,
+                trigger: nil // Deliver immediately
+            )
+            
+            UNUserNotificationCenter.current().add(request) { _ in
+                // Notification added
+            }
         }
     }
     
@@ -87,6 +89,8 @@ class NotificationService {
     }
     
     func sendNetworkAvailableNotification(peerCount: Int) {
+        print("📱 sendNetworkAvailableNotification called with peerCount: \(peerCount)")
+        
         let title = "👥 bitchatters nearby!"
         let body = peerCount == 1 ? "1 person around" : "\(peerCount) people around"
         let identifier = "network-available-\(Date().timeIntervalSince1970)"
@@ -94,23 +98,26 @@ class NotificationService {
         print("📱 Sending network notification: \(body)")
         
         // For network notifications, we want to show them even in foreground
-        let content = UNMutableNotificationContent()
-        content.title = title
-        content.body = body
-        content.sound = .default
-        content.interruptionLevel = .timeSensitive  // Make it more prominent
-        
-        let request = UNNotificationRequest(
-            identifier: identifier,
-            content: content,
-            trigger: nil // Deliver immediately
-        )
-        
-        UNUserNotificationCenter.current().add(request) { error in
-            if let error = error {
-                print("📱 Error sending network notification: \(error)")
-            } else {
-                print("📱 Network notification sent successfully")
+        // No app state check - let the notification delegate handle presentation
+        DispatchQueue.main.async {
+            let content = UNMutableNotificationContent()
+            content.title = title
+            content.body = body
+            content.sound = .default
+            content.interruptionLevel = .timeSensitive  // Make it more prominent
+            
+            let request = UNNotificationRequest(
+                identifier: identifier,
+                content: content,
+                trigger: nil // Deliver immediately
+            )
+            
+            UNUserNotificationCenter.current().add(request) { error in
+                if let error = error {
+                    print("📱 Error sending network notification: \(error)")
+                } else {
+                    print("📱 Network notification sent successfully")
+                }
             }
         }
     }
