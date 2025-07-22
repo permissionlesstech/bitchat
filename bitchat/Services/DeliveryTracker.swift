@@ -71,6 +71,8 @@ class DeliveryTracker {
         // Don't track broadcasts or certain message types
         guard message.isPrivate || message.channel != nil else { return }
         
+        print("📮 Tracking message \(message.id) - private: \(message.isPrivate), channel: \(message.channel ?? "none"), recipient: \(recipientNickname)")
+        
         
         let delivery = PendingDelivery(
             messageID: message.id,
@@ -89,9 +91,21 @@ class DeliveryTracker {
         pendingDeliveries[message.id] = delivery
         pendingLock.unlock()
         
-        // Update status to sent
+        // Update status to sent (only if not already delivered)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-            self?.updateDeliveryStatus(message.id, status: .sent)
+            guard let self = self else { return }
+            
+            self.pendingLock.lock()
+            let stillPending = self.pendingDeliveries[message.id] != nil
+            self.pendingLock.unlock()
+            
+            // Only update to sent if still pending (not already delivered)
+            if stillPending {
+                print("⏱️ Updating message \(message.id) to sent status (still pending)")
+                self.updateDeliveryStatus(message.id, status: .sent)
+            } else {
+                print("✋ Skipping sent status update for \(message.id) - already delivered")
+            }
         }
         
         // Schedule timeout (outside of lock)
@@ -102,9 +116,11 @@ class DeliveryTracker {
         pendingLock.lock()
         defer { pendingLock.unlock() }
         
+        print("✅ Processing delivery ACK for message \(ack.originalMessageID) from \(ack.recipientNickname)")
         
         // Prevent duplicate ACK processing
         guard !receivedAckIDs.contains(ack.ackID) else {
+            print("⚠️ Duplicate ACK \(ack.ackID) - ignoring")
             return
         }
         receivedAckIDs.insert(ack.ackID)
@@ -112,6 +128,7 @@ class DeliveryTracker {
         // Find the pending delivery
         guard var delivery = pendingDeliveries[ack.originalMessageID] else {
             // Message might have already been delivered or timed out
+            print("⚠️ No pending delivery found for message \(ack.originalMessageID)")
             return
         }
         
@@ -136,6 +153,7 @@ class DeliveryTracker {
             }
         } else {
             // Direct message - mark as delivered
+            print("💬 Marking private message \(ack.originalMessageID) as delivered to \(ack.recipientNickname)")
             updateDeliveryStatus(ack.originalMessageID, status: .delivered(to: ack.recipientNickname, at: Date()))
             pendingDeliveries.removeValue(forKey: ack.originalMessageID)
         }
@@ -180,6 +198,7 @@ class DeliveryTracker {
     // MARK: - Private Methods
     
     private func updateDeliveryStatus(_ messageID: String, status: DeliveryStatus) {
+        print("📊 Updating delivery status for message \(messageID): \(status)")
         DispatchQueue.main.async { [weak self] in
             self?.deliveryStatusUpdated.send((messageID: messageID, status: status))
         }

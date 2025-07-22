@@ -210,6 +210,15 @@ extension Data {
         
         return result.uppercased()
     }
+    
+    func readFixedBytes(at offset: inout Int, count: Int) -> Data? {
+        guard offset + count <= self.count else { return nil }
+        
+        let data = self[offset..<offset + count]
+        offset += count
+        
+        return data
+    }
 }
 
 // MARK: - Binary Message Protocol
