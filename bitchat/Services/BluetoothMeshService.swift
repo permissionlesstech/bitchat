@@ -884,7 +884,7 @@ class BluetoothMeshService: NSObject {
         DispatchQueue.main.async { [weak self] in
             // Remove old peer ID from active peers and announcedPeers
             self?.collectionsQueue.sync(flags: .barrier) {
-                self?.activePeers.remove(oldPeerID)
+                _ = self?.activePeers.remove(oldPeerID)
                 // Don't pre-insert the new peer ID - let the announce packet handle it
                 // This ensures the connect message logic works properly
             }
@@ -2042,7 +2042,7 @@ class BluetoothMeshService: NSObject {
                         // IMPORTANT: Remove old peer ID from activePeers to prevent duplicates
                         collectionsQueue.sync(flags: .barrier) {
                             if self.activePeers.contains(tempID) {
-                                self.activePeers.remove(tempID)
+                                _ = self.activePeers.remove(tempID)
                             }
                         }
                         
@@ -2159,8 +2159,8 @@ class BluetoothMeshService: NSObject {
                     if String(data: packet.payload, encoding: .utf8) != nil {
                         // Remove from active peers with proper locking
                         collectionsQueue.sync(flags: .barrier) {
-                            self.activePeers.remove(senderID)
-                            self.peerNicknames.removeValue(forKey: senderID)
+                            _ = self.activePeers.remove(senderID)
+                            _ = self.peerNicknames.removeValue(forKey: senderID)
                         }
                         
                         announcedPeers.remove(senderID)
@@ -2847,8 +2847,8 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
                     if removed {
                         }
                     
-                    announcedPeers.remove(peerID)
-                    announcedToPeers.remove(peerID)
+                    _ = announcedPeers.remove(peerID)
+                    _ = announcedToPeers.remove(peerID)
                 } else {
                 }
                 
@@ -3648,8 +3648,8 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             
             // Clean up state for incompatible peer
             collectionsQueue.sync(flags: .barrier) {
-                self.activePeers.remove(peerID)
-                self.peerNicknames.removeValue(forKey: peerID)
+                _ = self.activePeers.remove(peerID)
+                _ = self.peerNicknames.removeValue(forKey: peerID)
             }
             announcedPeers.remove(peerID)
             
@@ -3913,7 +3913,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             // Clean up old entries after 10 seconds
             DispatchQueue.main.asyncAfter(deadline: .now() + 10.0) { [weak self] in
                 self?.collectionsQueue.sync(flags: .barrier) {
-                    self?.recentlySentMessages.remove(sendKey)
+                    _ = self?.recentlySentMessages.remove(sendKey)
                 }
             }
             return false
