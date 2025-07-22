@@ -319,18 +319,11 @@ class NoiseSessionManager {
             var existingSession: NoiseSession? = nil
             
             if let existing = sessions[peerID] {
-                // If we have an established session, we might need to help the other side complete theirs
+                // If we have an established session, reject new handshake attempts
                 if existing.isEstablished() {
-                    // If this is a handshake initiation (32 bytes), the other side doesn't have a session
-                    // We should complete the handshake to help them establish their session
-                    if message.count == 32 {
-                        // Remove existing session and create new one
-                        sessions.removeValue(forKey: peerID)
-                        shouldCreateNew = true
-                    } else {
-                        // For other handshake messages, ignore if already established
-                        throw NoiseSessionError.alreadyEstablished
-                    }
+                    // Don't destroy our working session just because the other side is confused
+                    // They should detect the established session through successful message exchange
+                    throw NoiseSessionError.alreadyEstablished
                 } else {
                     // If we're in the middle of a handshake and receive a new initiation,
                     // reset and start fresh (the other side may have restarted)
