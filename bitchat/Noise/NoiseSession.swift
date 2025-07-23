@@ -338,12 +338,14 @@ class NoiseSessionManager {
             var existingSession: NoiseSession? = nil
             
             if let existing = sessions[peerID] {
-                // If we have an established session, reject new handshake attempts
+                // If we have an established session, the peer must have cleared their session
+                // for a good reason (e.g., decryption failure, restart, etc.)
+                // We should accept the new handshake to re-establish encryption
                 if existing.isEstablished() {
-                    // Don't destroy our working session just because the other side is confused
-                    // They should detect the established session through successful message exchange
-                    SecureLogger.log("Rejecting handshake attempt - session already established with \(peerID)", category: SecureLogger.session, level: .debug)
-                    throw NoiseSessionError.alreadyEstablished
+                    SecureLogger.log("Accepting handshake from \(peerID) despite existing session - peer likely cleared their session", 
+                                   category: SecureLogger.session, level: .info)
+                    _ = sessions.removeValue(forKey: peerID)
+                    shouldCreateNew = true
                 } else {
                     // If we're in the middle of a handshake and receive a new initiation,
                     // reset and start fresh (the other side may have restarted)

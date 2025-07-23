@@ -511,6 +511,168 @@ final class IntegrationTests: XCTestCase {
     
     // MARK: - Security Integration Tests
     
+    func testHandshakeAfterNACKDecryptionFailure() throws {
+        // Test the specific scenario where decryption fails, NACK is sent, and handshake is re-established
+        connect("Alice", "Bob")
+        
+        // Establish initial Noise session
+        try establishNoiseSession("Alice", "Bob")
+        
+        let expectation = XCTestExpectation(description: "Handshake re-established after NACK")
+        var nackSent = false
+        var newHandshakeCompleted = false
+        
+        // Exchange some messages to establish nonce state
+        for i in 0..<5 {
+            let msg = try noiseManagers["Alice"]!.encrypt("Message \(i)".data(using: .utf8)!, for: TestConstants.testPeerID2)
+            _ = try noiseManagers["Bob"]!.decrypt(msg, from: TestConstants.testPeerID1)
+        }
+        
+        // Simulate nonce desynchronization - Alice sends messages Bob doesn't receive
+        for _ in 0..<3 {
+            _ = try noiseManagers["Alice"]!.encrypt("Lost message".data(using: .utf8)!, for: TestConstants.testPeerID2)
+        }
+        
+        // Setup Bob's handler to send NACK on decryption failure
+        nodes["Bob"]!.packetDeliveryHandler = { packet in
+            if packet.type == MessageType.noiseEncrypted.rawValue {
+                do {
+                    _ = try self.noiseManagers["Bob"]!.decrypt(packet.payload, from: TestConstants.testPeerID1)
+                } catch {
+                    // Decryption failed - send NACK
+                    nackSent = true
+                    let nack = ProtocolNack(
+                        originalPacketID: UUID().uuidString,
+                        senderID: TestConstants.testPeerID2,
+                        receiverID: TestConstants.testPeerID1,
+                        packetType: packet.type,
+                        reason: "Decryption failed - session out of sync",
+                        errorCode: .decryptionFailed
+                    )
+                    
+                    let nackData = nack.toBinaryData()
+                    let nackPacket = TestHelpers.createTestPacket(
+                        type: MessageType.protocolNack.rawValue,
+                        payload: nackData
+                    )
+                    self.nodes["Alice"]!.simulateIncomingPacket(nackPacket)
+                    
+                    // Bob clears session
+                    self.noiseManagers["Bob"]!.removeSession(for: TestConstants.testPeerID1)
+                }
+            } else if packet.type == MessageType.noiseHandshakeInit.rawValue {
+                // Bob receives handshake init from Alice after NACK
+                do {
+                    let response = try self.noiseManagers["Bob"]!.handleIncomingHandshake(
+                        from: TestConstants.testPeerID1,
+                        message: packet.payload
+                    )
+                    if let resp = response {
+                        let responsePacket = TestHelpers.createTestPacket(
+                            type: MessageType.noiseHandshakeResp.rawValue,
+                            payload: resp
+                        )
+                        self.nodes["Alice"]!.simulateIncomingPacket(responsePacket)
+                    }
+                } catch {
+                    XCTFail("Bob failed to handle handshake: \(error)")
+                }
+            }
+        }
+        
+        // Setup Alice's handler to clear session on NACK and initiate handshake
+        nodes["Alice"]!.packetDeliveryHandler = { packet in
+            if packet.type == MessageType.protocolNack.rawValue {
+                // Alice receives NACK - clear session
+                self.noiseManagers["Alice"]!.removeSession(for: TestConstants.testPeerID2)
+                
+                // Initiate new handshake
+                do {
+                    let handshakeInit = try self.noiseManagers["Alice"]!.initiateHandshake(with: TestConstants.testPeerID2)
+                    let handshakePacket = TestHelpers.createTestPacket(
+                        type: MessageType.noiseHandshakeInit.rawValue,
+                        payload: handshakeInit
+                    )
+                    self.nodes["Bob"]!.simulateIncomingPacket(handshakePacket)
+                } catch {
+                    XCTFail("Alice failed to initiate handshake: \(error)")
+                }
+            } else if packet.type == MessageType.noiseHandshakeResp.rawValue {
+                // Complete handshake
+                do {
+                    let final = try self.noiseManagers["Alice"]!.handleIncomingHandshake(
+                        from: TestConstants.testPeerID2,
+                        message: packet.payload
+                    )
+                    if let finalMsg = final {
+                        let finalPacket = TestHelpers.createTestPacket(
+                            type: MessageType.noiseHandshakeResp.rawValue,
+                            payload: finalMsg
+                        )
+                        self.nodes["Bob"]!.simulateIncomingPacket(finalPacket)
+                        
+                        // Try sending a message with new session
+                        let testMsg = try self.noiseManagers["Alice"]!.encrypt(
+                            "After re-handshake".data(using: .utf8)!,
+                            for: TestConstants.testPeerID2
+                        )
+                        let msgPacket = TestHelpers.createTestPacket(
+                            type: MessageType.noiseEncrypted.rawValue,
+                            payload: testMsg
+                        )
+                        self.nodes["Bob"]!.simulateIncomingPacket(msgPacket)
+                    }
+                } catch {
+                    XCTFail("Alice failed to complete handshake: \(error)")
+                }
+            }
+        }
+        
+        // Add final handler to verify message works
+        let originalHandler = nodes["Bob"]!.packetDeliveryHandler
+        nodes["Bob"]!.packetDeliveryHandler = { packet in
+            originalHandler?(packet)
+            
+            if packet.type == MessageType.noiseHandshakeResp.rawValue && packet.senderID.hexEncodedString() == TestConstants.testPeerID1 {
+                // Final handshake message received
+                do {
+                    _ = try self.noiseManagers["Bob"]!.handleIncomingHandshake(
+                        from: TestConstants.testPeerID1,
+                        message: packet.payload
+                    )
+                } catch {
+                    XCTFail("Bob failed to complete handshake: \(error)")
+                }
+            } else if packet.type == MessageType.noiseEncrypted.rawValue && nackSent {
+                // Try to decrypt with new session
+                do {
+                    let decrypted = try self.noiseManagers["Bob"]!.decrypt(packet.payload, from: TestConstants.testPeerID1)
+                    if let msg = String(data: decrypted, encoding: .utf8), msg == "After re-handshake" {
+                        newHandshakeCompleted = true
+                        expectation.fulfill()
+                    }
+                } catch {
+                    XCTFail("Bob failed to decrypt after re-handshake: \(error)")
+                }
+            }
+        }
+        
+        // Trigger the scenario - send desynchronized message
+        let desyncMsg = try noiseManagers["Alice"]!.encrypt(
+            "This will fail".data(using: .utf8)!,
+            for: TestConstants.testPeerID2
+        )
+        let desyncPacket = TestHelpers.createTestPacket(
+            type: MessageType.noiseEncrypted.rawValue,
+            payload: desyncMsg
+        )
+        nodes["Bob"]!.simulateIncomingPacket(desyncPacket)
+        
+        wait(for: [expectation], timeout: TestConstants.defaultTimeout)
+        XCTAssertTrue(nackSent, "NACK should have been sent")
+        XCTAssertTrue(newHandshakeCompleted, "New handshake should have completed")
+    }
+    
     func testEndToEndSecurityScenario() throws {
         connect("Alice", "Bob")
         connect("Bob", "Charlie") // Charlie will try to eavesdrop

@@ -859,9 +859,11 @@ class ChatViewModel: ObservableObject {
             return primaryColor
         } else if let peerID = message.senderPeerID ?? getPeerIDForNickname(message.sender),
                   let rssi = meshService.getPeerRSSI()[peerID] {
+            // Use actual RSSI value
             return getRSSIColor(rssi: rssi.intValue, colorScheme: colorScheme)
         } else {
-            return primaryColor.opacity(0.9)
+            // No RSSI data available - use a neutral color
+            return primaryColor.opacity(0.7)
         }
     }
     
@@ -960,9 +962,11 @@ class ChatViewModel: ObservableObject {
                 senderColor = primaryColor
             } else if let peerID = message.senderPeerID ?? getPeerIDForNickname(message.sender),
                       let rssi = meshService.getPeerRSSI()[peerID] {
+                // Use actual RSSI value
                 senderColor = getRSSIColor(rssi: rssi.intValue, colorScheme: colorScheme)
             } else {
-                senderColor = primaryColor.opacity(0.9)
+                // No RSSI data available - use a neutral color
+                senderColor = primaryColor.opacity(0.7)
             }
             
             senderStyle.foregroundColor = senderColor
@@ -1103,9 +1107,11 @@ class ChatViewModel: ObservableObject {
                 senderColor = primaryColor
             } else if let peerID = message.senderPeerID ?? getPeerIDForNickname(message.sender),
                       let rssi = meshService.getPeerRSSI()[peerID] {
+                // Use actual RSSI value
                 senderColor = getRSSIColor(rssi: rssi.intValue, colorScheme: colorScheme)
             } else {
-                senderColor = primaryColor.opacity(0.9)
+                // No RSSI data available - use a neutral color
+                senderColor = primaryColor.opacity(0.7)
             }
             
             senderStyle.foregroundColor = senderColor
