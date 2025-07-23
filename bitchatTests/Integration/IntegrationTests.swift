@@ -208,7 +208,7 @@ final class IntegrationTests: XCTestCase {
             if packet.type == 0x01 {
                 plainCount += 1
             } else if packet.type == 0x02 {
-                if let decrypted = try? self.noiseManagers["Bob"]!.decrypt(packet.payload, from: TestConstants.testPeerID1) {
+                if let _ = try? self.noiseManagers["Bob"]!.decrypt(packet.payload, from: TestConstants.testPeerID1) {
                     encryptedCount += 1
                 }
             }
