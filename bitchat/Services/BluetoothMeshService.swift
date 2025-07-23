@@ -1159,6 +1159,16 @@ class BluetoothMeshService: NSObject {
         // Clear persistent identity
         noiseService.clearPersistentIdentity()
         
+        // Clear all handshake coordinator states
+        handshakeCoordinator.clearAllHandshakeStates()
+        
+        // Clear handshake attempt times
+        handshakeAttemptTimes.removeAll()
+        
+        // Notify UI that all peers are disconnected
+        DispatchQueue.main.async { [weak self] in
+            self?.delegate?.didUpdatePeerList([])
+        }
     }
     
     private func getAllConnectedPeerIDs() -> [String] {
