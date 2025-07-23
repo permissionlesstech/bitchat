@@ -208,7 +208,7 @@ final class IntegrationTests: XCTestCase {
             if packet.type == 0x01 {
                 plainCount += 1
             } else if packet.type == 0x02 {
-                if let decrypted = try? self.noiseManagers["Bob"]!.decrypt(packet.payload, from: TestConstants.testPeerID1) {
+                if let _ = try? self.noiseManagers["Bob"]!.decrypt(packet.payload, from: TestConstants.testPeerID1) {
                     encryptedCount += 1
                 }
             }
@@ -268,6 +268,124 @@ final class IntegrationTests: XCTestCase {
         
         wait(for: [expectation], timeout: TestConstants.longTimeout)
         XCTAssertEqual(receivedMessages.count, totalMessages)
+    }
+    
+    func testPeerPresenceTrackingAndReconnection() {
+        // Test peer presence tracking and identity announcement on reconnection
+        connect("Alice", "Bob")
+        
+        // Establish Noise sessions
+        do {
+            try establishNoiseSession("Alice", "Bob")
+        } catch {
+            XCTFail("Failed to establish Noise session: \(error)")
+        }
+        
+        let expectation = XCTestExpectation(description: "Peer reconnection handled")
+        var bobReceivedIdentityAnnounce = false
+        var aliceReceivedIdentityAnnounce = false
+        
+        // Track identity announcements
+        nodes["Bob"]!.packetDeliveryHandler = { packet in
+            if packet.type == MessageType.noiseIdentityAnnounce.rawValue {
+                bobReceivedIdentityAnnounce = true
+                if aliceReceivedIdentityAnnounce {
+                    expectation.fulfill()
+                }
+            }
+        }
+        
+        nodes["Alice"]!.packetDeliveryHandler = { packet in
+            if packet.type == MessageType.noiseIdentityAnnounce.rawValue {
+                aliceReceivedIdentityAnnounce = true
+                if bobReceivedIdentityAnnounce {
+                    expectation.fulfill()
+                }
+            }
+        }
+        
+        // Simulate disconnect (out of range)
+        disconnect("Alice", "Bob")
+        
+        // Wait to simulate extended disconnect period
+        Thread.sleep(forTimeInterval: 0.5)
+        
+        // Reconnect
+        connect("Alice", "Bob")
+        
+        // Both should receive identity announcements after reconnection
+        wait(for: [expectation], timeout: TestConstants.defaultTimeout)
+        XCTAssertTrue(bobReceivedIdentityAnnounce)
+        XCTAssertTrue(aliceReceivedIdentityAnnounce)
+    }
+    
+    func testEncryptedMessageAfterPeerRestart() {
+        // Test that encrypted messages work after one peer restarts
+        connect("Alice", "Bob")
+        do {
+            try establishNoiseSession("Alice", "Bob")
+        } catch {
+            XCTFail("Failed to establish Noise session: \(error)")
+        }
+        
+        // Exchange an encrypted message
+        let firstExpectation = XCTestExpectation(description: "First message received")
+        nodes["Bob"]!.messageDeliveryHandler = { message in
+            if message.content == "Before restart" && message.isPrivate {
+                firstExpectation.fulfill()
+            }
+        }
+        
+        nodes["Alice"]!.sendPrivateMessage("Before restart", to: TestConstants.testPeerID2, recipientNickname: "Bob")
+        wait(for: [firstExpectation], timeout: TestConstants.defaultTimeout)
+        
+        // Simulate Bob restart by recreating his Noise manager
+        let bobKey = Curve25519.KeyAgreement.PrivateKey()
+        noiseManagers["Bob"] = NoiseSessionManager(localStaticKey: bobKey)
+        
+        // Bob should initiate new handshake
+        let handshakeExpectation = XCTestExpectation(description: "New handshake completed")
+        
+        nodes["Bob"]!.packetDeliveryHandler = { packet in
+            if packet.type == MessageType.noiseHandshakeInit.rawValue {
+                // Bob initiates new handshake after restart
+                do {
+                    let response = try self.noiseManagers["Alice"]!.handleIncomingHandshake(
+                        from: TestConstants.testPeerID2,
+                        message: packet.payload
+                    )
+                    if let resp = response {
+                        // Send response back to Bob
+                        let responsePacket = TestHelpers.createTestPacket(
+                            type: MessageType.noiseHandshakeResp.rawValue,
+                            payload: resp
+                        )
+                        self.nodes["Bob"]!.simulateIncomingPacket(responsePacket)
+                    }
+                } catch {
+                    XCTFail("Handshake handling failed: \(error)")
+                }
+            } else if packet.type == MessageType.noiseHandshakeResp.rawValue && packet.senderID.hexEncodedString() == TestConstants.testPeerID1 {
+                // Final handshake message (message 3 in XX pattern)
+                handshakeExpectation.fulfill()
+            }
+        }
+        
+        // Trigger handshake by trying to send a message
+        nodes["Bob"]!.sendPrivateMessage("After restart", to: TestConstants.testPeerID1, recipientNickname: "Alice")
+        
+        wait(for: [handshakeExpectation], timeout: TestConstants.defaultTimeout)
+        
+        // Now messages should work again
+        let secondExpectation = XCTestExpectation(description: "Message after restart received")
+        nodes["Alice"]!.messageDeliveryHandler = { message in
+            if message.content == "After restart success" && message.isPrivate {
+                secondExpectation.fulfill()
+            }
+        }
+        
+        nodes["Bob"]!.sendPrivateMessage("After restart success", to: TestConstants.testPeerID1, recipientNickname: "Alice")
+        wait(for: [secondExpectation], timeout: TestConstants.defaultTimeout)
     }
     
     func testLargeScaleNetwork() {
