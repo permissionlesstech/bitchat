@@ -345,10 +345,24 @@ class BluetoothMeshService: NSObject {
             
             // Notify about the change if it's a rotation
             if let oldID = oldPeerID {
-                // Migrate Noise session to new peer ID
-                self.noiseService.migratePeerSession(from: oldID, to: newPeerID, fingerprint: fingerprint)
+                // Clear the old session instead of migrating it
+                // This ensures both peers do a fresh handshake after ID rotation
+                self.noiseService.removePeer(oldID)
+                
+                // Reset handshake state for both old and new peer IDs
+                self.handshakeCoordinator.resetHandshakeState(for: oldID)
+                self.handshakeCoordinator.resetHandshakeState(for: newPeerID)
+                
+                // Log the peer ID rotation
+                SecureLogger.log("Cleared session for peer ID rotation: \(oldID) -> \(newPeerID), will establish fresh handshake", 
+                               category: SecureLogger.handshake, level: .info)
                 
                 self.notifyPeerIDChange(oldPeerID: oldID, newPeerID: newPeerID, fingerprint: fingerprint)
+                
+                // Trigger handshake after a short delay to allow the peer to settle
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                    self?.initiateNoiseHandshake(with: newPeerID)
+                }
             }
         }
     }
