@@ -68,6 +68,7 @@ class BluetoothMeshService: NSObject {
     
     weak var delegate: BitchatDelegate?
     private let noiseService = NoiseEncryptionService()
+    private let handshakeCoordinator = NoiseHandshakeCoordinator()
     
     // Protocol version negotiation state
     private var versionNegotiationState: [String: VersionNegotiationState] = [:]
@@ -518,6 +519,13 @@ class BluetoothMeshService: NSObject {
         cleanupTimer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { [weak self] _ in
             self?.cleanupStalePeers()
         }
+        
+        // Log handshake states periodically for debugging
+        #if DEBUG
+        Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
+            self?.handshakeCoordinator.logHandshakeStates()
+        }
+        #endif
         
         // Schedule first peer ID rotation
         scheduleNextRotation()
@@ -3276,16 +3284,27 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             SecureLogger.log("Already have established session with \(peerID)", category: SecureLogger.noise, level: .debug)
             // Clear any lingering handshake attempt time
             handshakeAttemptTimes.removeValue(forKey: peerID)
+            handshakeCoordinator.recordHandshakeSuccess(peerID: peerID)
             return
         }
         
-        // Check if we've recently tried to handshake with this peer
-        if let lastAttempt = handshakeAttemptTimes[peerID],
-           Date().timeIntervalSince(lastAttempt) < handshakeTimeout {
-            SecureLogger.log("Skipping handshake with \(peerID) - too recent", category: SecureLogger.noise, level: .debug)
+        // Check with coordinator if we should initiate
+        if !handshakeCoordinator.shouldInitiateHandshake(myPeerID: myPeerID, remotePeerID: peerID) {
+            SecureLogger.log("Coordinator says we should not initiate handshake with \(peerID)", category: SecureLogger.handshake, level: .debug)
             return
         }
         
+        // Check if there's a retry delay
+        if let retryDelay = handshakeCoordinator.getRetryDelay(for: peerID), retryDelay > 0 {
+            SecureLogger.log("Waiting \(retryDelay)s before retrying handshake with \(peerID)", category: SecureLogger.handshake, level: .debug)
+            DispatchQueue.main.asyncAfter(deadline: .now() + retryDelay) { [weak self] in
+                self?.initiateNoiseHandshake(with: peerID)
+            }
+            return
+        }
+        
+        // Record that we're initiating
+        handshakeCoordinator.recordHandshakeInitiation(peerID: peerID)
         handshakeAttemptTimes[peerID] = Date()
         
         
@@ -3310,14 +3329,33 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             
         } catch NoiseSessionError.alreadyEstablished {
             // Session already established, no need to handshake
+            handshakeCoordinator.recordHandshakeSuccess(peerID: peerID)
         } catch {
-            // Failed to initiate handshake silently
+            // Failed to initiate handshake
+            handshakeCoordinator.recordHandshakeFailure(peerID: peerID, reason: error.localizedDescription)
+            SecureLogger.logSecurityEvent(.handshakeFailed(peerID: peerID, error: error.localizedDescription))
         }
     }
     
     private func handleNoiseHandshakeMessage(from peerID: String, message: Data, isInitiation: Bool) {
         // Use noiseService directly
         SecureLogger.logHandshake("processing \(isInitiation ? "init" : "response")", peerID: peerID, success: true)
+        
+        // Check for duplicate handshake messages
+        if handshakeCoordinator.isDuplicateHandshakeMessage(message) {
+            SecureLogger.log("Duplicate handshake message from \(peerID), ignoring", category: SecureLogger.handshake, level: .debug)
+            return
+        }
+        
+        // If this is an initiation, check if we should accept it
+        if isInitiation {
+            if !handshakeCoordinator.shouldAcceptHandshakeInitiation(myPeerID: myPeerID, remotePeerID: peerID) {
+                SecureLogger.log("Coordinator says we should not accept handshake from \(peerID)", category: SecureLogger.handshake, level: .debug)
+                return
+            }
+            // Record that we're responding
+            handshakeCoordinator.recordHandshakeResponse(peerID: peerID)
+        }
         
         do {
             // Process handshake message
@@ -3346,6 +3384,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 unlockRotation()
                 
                 // Session established successfully
+                handshakeCoordinator.recordHandshakeSuccess(peerID: peerID)
                 
                 // Clear handshake attempt time on success
                 handshakeAttemptTimes.removeValue(forKey: peerID)
@@ -3372,8 +3411,11 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         } catch NoiseSessionError.alreadyEstablished {
             // Session already established, ignore handshake
             SecureLogger.log("Handshake already established with \(peerID)", category: SecureLogger.noise, level: .info)
+            handshakeCoordinator.recordHandshakeSuccess(peerID: peerID)
         } catch {
             // Handshake failed
+            handshakeCoordinator.recordHandshakeFailure(peerID: peerID, reason: error.localizedDescription)
+            SecureLogger.logSecurityEvent(.handshakeFailed(peerID: peerID, error: error.localizedDescription))
             SecureLogger.log("Handshake failed with \(peerID): \(error)", category: SecureLogger.noise, level: .error)
         }
     }
@@ -3581,6 +3623,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             
             // Clean up any Noise session
             noiseService.removePeer(peerID)
+            handshakeCoordinator.resetHandshakeState(for: peerID)
             
             // Notify delegate about incompatible peer disconnection
             DispatchQueue.main.async { [weak self] in
