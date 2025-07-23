@@ -128,16 +128,6 @@ let encrypted = try noiseService.encrypt(messageData, for: peerID)
 let decrypted = try noiseService.decrypt(encryptedData, from: peerID)
 ```
 
-### Channel Encryption
-
-Password-protected channels use Noise for key distribution:
-
-```swift
-// Share channel key securely
-let keyPacket = createChannelKeyPacket(password: password, channel: channel)
-let encrypted = try encrypt(keyPacket, for: peerID)
-```
-
 ## Security Properties
 
 ### Forward Secrecy
@@ -156,15 +146,6 @@ let encrypted = try encrypt(keyPacket, for: peerID)
 - No persistent session identifiers
 
 ## Implementation Details
-
-### Key Derivation
-```swift
-// HKDF for key derivation
-func hkdf(salt: Data, ikm: Data, info: Data, length: Int) -> Data
-
-// Derive channel keys with PBKDF2
-func deriveChannelKey(password: String, salt: Data) -> SymmetricKey
-```
 
 ### Cryptographic Primitives
 - **DH**: X25519 (Curve25519)
