@@ -12,6 +12,22 @@
 		04636BBC2E2FAA1700FBCFA8 /* BinaryEncodingUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04636BB82E2FAA1700FBCFA8 /* BinaryEncodingUtils.swift */; };
 		04636BBF2E2FCA8A00FBCFA8 /* SecureLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04636BBE2E2FCA8A00FBCFA8 /* SecureLogger.swift */; };
 		04636BC02E2FCA8A00FBCFA8 /* SecureLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04636BBE2E2FCA8A00FBCFA8 /* SecureLogger.swift */; };
+		04636BD12E30BE5100FBCFA8 /* BinaryProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04636BCC2E30BE5100FBCFA8 /* BinaryProtocolTests.swift */; };
+		04636BD22E30BE5100FBCFA8 /* MockNoiseSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04636BC82E30BE5100FBCFA8 /* MockNoiseSession.swift */; };
+		04636BD32E30BE5100FBCFA8 /* PrivateChatE2ETests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04636BC42E30BE5100FBCFA8 /* PrivateChatE2ETests.swift */; };
+		04636BD42E30BE5100FBCFA8 /* TestConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04636BCE2E30BE5100FBCFA8 /* TestConstants.swift */; };
+		04636BD52E30BE5100FBCFA8 /* MockBluetoothMeshService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04636BC72E30BE5100FBCFA8 /* MockBluetoothMeshService.swift */; };
+		04636BD62E30BE5100FBCFA8 /* NoiseProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04636BCA2E30BE5100FBCFA8 /* NoiseProtocolTests.swift */; };
+		04636BD72E30BE5100FBCFA8 /* TestHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04636BCF2E30BE5100FBCFA8 /* TestHelpers.swift */; };
+		04636BD82E30BE5100FBCFA8 /* PublicChatE2ETests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04636BC52E30BE5100FBCFA8 /* PublicChatE2ETests.swift */; };
+		04636BD92E30BE5100FBCFA8 /* BinaryProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04636BCC2E30BE5100FBCFA8 /* BinaryProtocolTests.swift */; };
+		04636BDA2E30BE5100FBCFA8 /* MockNoiseSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04636BC82E30BE5100FBCFA8 /* MockNoiseSession.swift */; };
+		04636BDB2E30BE5100FBCFA8 /* PrivateChatE2ETests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04636BC42E30BE5100FBCFA8 /* PrivateChatE2ETests.swift */; };
+		04636BDC2E30BE5100FBCFA8 /* TestConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04636BCE2E30BE5100FBCFA8 /* TestConstants.swift */; };
+		04636BDD2E30BE5100FBCFA8 /* MockBluetoothMeshService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04636BC72E30BE5100FBCFA8 /* MockBluetoothMeshService.swift */; };
+		04636BDE2E30BE5100FBCFA8 /* NoiseProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04636BCA2E30BE5100FBCFA8 /* NoiseProtocolTests.swift */; };
+		04636BDF2E30BE5100FBCFA8 /* TestHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04636BCF2E30BE5100FBCFA8 /* TestHelpers.swift */; };
+		04636BE02E30BE5100FBCFA8 /* PublicChatE2ETests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04636BC52E30BE5100FBCFA8 /* PublicChatE2ETests.swift */; };
 		04891CA92E22971E0064A111 /* LRUCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04891CA82E22971E0064A111 /* LRUCache.swift */; };
 		04891CAA2E22971E0064A111 /* LRUCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04891CA82E22971E0064A111 /* LRUCache.swift */; };
 		04AD0B4E2E25B9580002A40A /* IdentityModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E2446380E7A44E49A35B664 /* IdentityModels.swift */; };
@@ -106,6 +122,14 @@
 		03C57F452B55FD0FD8F51421 /* bitchatTests_macOS.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = bitchatTests_macOS.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		04636BB82E2FAA1700FBCFA8 /* BinaryEncodingUtils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BinaryEncodingUtils.swift; sourceTree = "<group>"; };
 		04636BBE2E2FCA8A00FBCFA8 /* SecureLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureLogger.swift; sourceTree = "<group>"; };
+		04636BC42E30BE5100FBCFA8 /* PrivateChatE2ETests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivateChatE2ETests.swift; sourceTree = "<group>"; };
+		04636BC52E30BE5100FBCFA8 /* PublicChatE2ETests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicChatE2ETests.swift; sourceTree = "<group>"; };
+		04636BC72E30BE5100FBCFA8 /* MockBluetoothMeshService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockBluetoothMeshService.swift; sourceTree = "<group>"; };
+		04636BC82E30BE5100FBCFA8 /* MockNoiseSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockNoiseSession.swift; sourceTree = "<group>"; };
+		04636BCA2E30BE5100FBCFA8 /* NoiseProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoiseProtocolTests.swift; sourceTree = "<group>"; };
+		04636BCC2E30BE5100FBCFA8 /* BinaryProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BinaryProtocolTests.swift; sourceTree = "<group>"; };
+		04636BCE2E30BE5100FBCFA8 /* TestConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestConstants.swift; sourceTree = "<group>"; };
+		04636BCF2E30BE5100FBCFA8 /* TestHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestHelpers.swift; sourceTree = "<group>"; };
 		04891CA82E22971E0064A111 /* LRUCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LRUCache.swift; sourceTree = "<group>"; };
 		04B6BA412E2035530090FE39 /* NoiseProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoiseProtocol.swift; sourceTree = "<group>"; };
 		04B6BA422E2035530090FE39 /* NoiseSecurityConsiderations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoiseSecurityConsiderations.swift; sourceTree = "<group>"; };
@@ -145,6 +169,49 @@
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
+		04636BC62E30BE5100FBCFA8 /* EndToEnd */ = {
+			isa = PBXGroup;
+			children = (
+				04636BC42E30BE5100FBCFA8 /* PrivateChatE2ETests.swift */,
+				04636BC52E30BE5100FBCFA8 /* PublicChatE2ETests.swift */,
+			);
+			path = EndToEnd;
+			sourceTree = "<group>";
+		};
+		04636BC92E30BE5100FBCFA8 /* Mocks */ = {
+			isa = PBXGroup;
+			children = (
+				04636BC72E30BE5100FBCFA8 /* MockBluetoothMeshService.swift */,
+				04636BC82E30BE5100FBCFA8 /* MockNoiseSession.swift */,
+			);
+			path = Mocks;
+			sourceTree = "<group>";
+		};
+		04636BCB2E30BE5100FBCFA8 /* Noise */ = {
+			isa = PBXGroup;
+			children = (
+				04636BCA2E30BE5100FBCFA8 /* NoiseProtocolTests.swift */,
+			);
+			path = Noise;
+			sourceTree = "<group>";
+		};
+		04636BCD2E30BE5100FBCFA8 /* Protocol */ = {
+			isa = PBXGroup;
+			children = (
+				04636BCC2E30BE5100FBCFA8 /* BinaryProtocolTests.swift */,
+			);
+			path = Protocol;
+			sourceTree = "<group>";
+		};
+		04636BD02E30BE5100FBCFA8 /* TestUtilities */ = {
+			isa = PBXGroup;
+			children = (
+				04636BCE2E30BE5100FBCFA8 /* TestConstants.swift */,
+				04636BCF2E30BE5100FBCFA8 /* TestHelpers.swift */,
+			);
+			path = TestUtilities;
+			sourceTree = "<group>";
+		};
 		04B6BA442E2035530090FE39 /* Noise */ = {
 			isa = PBXGroup;
 			children = (
@@ -260,6 +327,11 @@
 		C3D98EB3E1B455E321F519F4 /* bitchatTests */ = {
 			isa = PBXGroup;
 			children = (
+				04636BC62E30BE5100FBCFA8 /* EndToEnd */,
+				04636BC92E30BE5100FBCFA8 /* Mocks */,
+				04636BCB2E30BE5100FBCFA8 /* Noise */,
+				04636BCD2E30BE5100FBCFA8 /* Protocol */,
+				04636BD02E30BE5100FBCFA8 /* TestUtilities */,
 				D69A18D27F9A565FD6041E12 /* Info.plist */,
 			);
 			path = bitchatTests;
@@ -522,6 +594,14 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				04636BD92E30BE5100FBCFA8 /* BinaryProtocolTests.swift in Sources */,
+				04636BDA2E30BE5100FBCFA8 /* MockNoiseSession.swift in Sources */,
+				04636BDB2E30BE5100FBCFA8 /* PrivateChatE2ETests.swift in Sources */,
+				04636BDC2E30BE5100FBCFA8 /* TestConstants.swift in Sources */,
+				04636BDD2E30BE5100FBCFA8 /* MockBluetoothMeshService.swift in Sources */,
+				04636BDE2E30BE5100FBCFA8 /* NoiseProtocolTests.swift in Sources */,
+				04636BDF2E30BE5100FBCFA8 /* TestHelpers.swift in Sources */,
+				04636BE02E30BE5100FBCFA8 /* PublicChatE2ETests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -529,6 +609,14 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				04636BD12E30BE5100FBCFA8 /* BinaryProtocolTests.swift in Sources */,
+				04636BD22E30BE5100FBCFA8 /* MockNoiseSession.swift in Sources */,
+				04636BD32E30BE5100FBCFA8 /* PrivateChatE2ETests.swift in Sources */,
+				04636BD42E30BE5100FBCFA8 /* TestConstants.swift in Sources */,
+				04636BD52E30BE5100FBCFA8 /* MockBluetoothMeshService.swift in Sources */,
+				04636BD62E30BE5100FBCFA8 /* NoiseProtocolTests.swift in Sources */,
+				04636BD72E30BE5100FBCFA8 /* TestHelpers.swift in Sources */,
+				04636BD82E30BE5100FBCFA8 /* PublicChatE2ETests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
