@@ -7,6 +7,7 @@
 //
 
 import XCTest
+import CryptoKit
 @testable import bitchat
 
 final class PrivateChatE2ETests: XCTestCase {
@@ -134,7 +135,7 @@ final class PrivateChatE2ETests: XCTestCase {
                     hopCount: 1
                 ) {
                     // Send ACK back
-                    let ackData = ack.serialize()
+                    let ackData = ack.encode()!
                     let ackPacket = TestHelpers.createTestPacket(
                         type: 0x03,
                         senderID: TestConstants.testPeerID2,
@@ -149,20 +150,25 @@ final class PrivateChatE2ETests: XCTestCase {
         // Setup Alice to process ACK
         alice.packetDeliveryHandler = { packet in
             if packet.type == 0x03 {
-                if let ack = DeliveryAck.deserialize(from: packet.payload) {
+                if let ack = DeliveryAck.decode(from: packet.payload) {
                     self.deliveryTracker.processDeliveryAck(ack)
                 }
             }
         }
         
         // Track the message
-        let message = TestHelpers.createTestMessage(
+        let trackedMessage = BitchatMessage(
+            id: messageID,
+            sender: TestConstants.testNickname1,
             content: TestConstants.testMessage1,
+            timestamp: Date(),
+            isRelay: false,
+            originalSender: nil,
             isPrivate: true,
-            recipientNickname: TestConstants.testNickname2
+            recipientNickname: TestConstants.testNickname2,
+            senderPeerID: TestConstants.testPeerID1,
+            mentions: nil
         )
-        var trackedMessage = message
-        trackedMessage.id = messageID
         
         deliveryTracker.trackMessage(
             trackedMessage,
@@ -187,8 +193,8 @@ final class PrivateChatE2ETests: XCTestCase {
         let messageID = UUID().uuidString
         let expectation = XCTestExpectation(description: "Delivery failed due to timeout")
         
-        // Use shorter timeout for testing
-        let shortTimeoutTracker = DeliveryTracker()
+        // Use shared instance (can't create new one due to private init)
+        let shortTimeoutTracker = DeliveryTracker.shared
         
         let cancellable = shortTimeoutTracker.deliveryStatusUpdated.sink { update in
             if update.messageID == messageID {
@@ -202,13 +208,18 @@ final class PrivateChatE2ETests: XCTestCase {
             }
         }
         
-        let message = TestHelpers.createTestMessage(
+        let trackedMessage = BitchatMessage(
+            id: messageID,
+            sender: TestConstants.testNickname1,
             content: TestConstants.testMessage1,
+            timestamp: Date(),
+            isRelay: false,
+            originalSender: nil,
             isPrivate: true,
-            recipientNickname: TestConstants.testNickname2
+            recipientNickname: TestConstants.testNickname2,
+            senderPeerID: TestConstants.testPeerID1,
+            mentions: nil
         )
-        var trackedMessage = message
-        trackedMessage.id = messageID
         
         // Track with short timeout (will use default 30s for private messages)
         shortTimeoutTracker.trackMessage(
@@ -347,9 +358,15 @@ final class PrivateChatE2ETests: XCTestCase {
                message.isPrivate {
                 do {
                     let encrypted = try aliceManager.encrypt(packet.payload, for: TestConstants.testPeerID2)
-                    var encryptedPacket = packet
-                    encryptedPacket.type = 0x02 // Encrypted message type
-                    encryptedPacket.payload = encrypted
+                    let encryptedPacket = BitchatPacket(
+                        type: 0x02, // Encrypted message type
+                        senderID: packet.senderID,
+                        recipientID: packet.recipientID,
+                        timestamp: packet.timestamp,
+                        payload: encrypted,
+                        signature: packet.signature,
+                        ttl: packet.ttl
+                    )
                     self.bob.simulateIncomingPacket(encryptedPacket)
                 } catch {
                     XCTFail("Encryption failed: \(error)")
@@ -527,7 +544,7 @@ final class PrivateChatE2ETests: XCTestCase {
                 myNickname: TestConstants.testNickname2,
                 hopCount: 1
             ) {
-                let ackData = ack.serialize()
+                let ackData = ack.encode()!
                 let ackPacket = TestHelpers.createTestPacket(
                     type: 0x03,
                     senderID: TestConstants.testPeerID2,
@@ -548,8 +565,8 @@ final class PrivateChatE2ETests: XCTestCase {
     
     private func createMockService(peerID: String, nickname: String) -> MockBluetoothMeshService {
         let service = MockBluetoothMeshService()
-        service.peerID = peerID
-        service.nickname = nickname
+        service.myPeerID = peerID
+        service.mockNickname = nickname
         return service
     }
     

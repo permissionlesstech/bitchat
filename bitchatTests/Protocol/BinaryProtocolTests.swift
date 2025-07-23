@@ -58,8 +58,9 @@ final class BinaryProtocolTests: XCTestCase {
     }
     
     func testPacketWithSignature() throws {
-        var packet = TestHelpers.createTestPacket()
-        packet.signature = TestConstants.testSignature
+        let packet = TestHelpers.createTestPacket(
+            signature: TestConstants.testSignature
+        )
         
         // Encode and decode
         guard let encodedData = BinaryProtocol.encode(packet),
@@ -208,9 +209,18 @@ final class BinaryProtocolTests: XCTestCase {
     }
     
     func testRelayMessageEncoding() throws {
-        var message = TestHelpers.createTestMessage()
-        message.isRelay = true
-        message.originalSender = TestConstants.testNickname3
+        let message = BitchatMessage(
+            id: UUID().uuidString,
+            sender: TestConstants.testNickname1,
+            content: TestConstants.testMessage1,
+            timestamp: Date(),
+            isRelay: true,
+            originalSender: TestConstants.testNickname3,
+            isPrivate: false,
+            recipientNickname: nil,
+            senderPeerID: TestConstants.testPeerID1,
+            mentions: nil
+        )
         
         guard let payload = message.toBinaryPayload(),
               let decodedMessage = BitchatMessage.fromBinaryPayload(payload) else {
@@ -234,7 +244,7 @@ final class BinaryProtocolTests: XCTestCase {
         XCTAssertNil(BinaryProtocol.decode(random))
         
         // Corrupted header
-        var packet = TestHelpers.createTestPacket()
+        let packet = TestHelpers.createTestPacket()
         guard var encoded = BinaryProtocol.encode(packet) else {
             XCTFail("Failed to encode test packet")
             return
@@ -275,17 +285,8 @@ final class BinaryProtocolTests: XCTestCase {
     // MARK: - Protocol Version Tests
     
     func testProtocolVersionHandling() throws {
-        // Test with supported version
-        let packet = BitchatPacket(
-            version: 1,
-            type: 0x01,
-            senderID: TestConstants.testPeerID1.data(using: .utf8)!,
-            recipientID: nil,
-            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-            payload: "test".data(using: .utf8)!,
-            signature: nil,
-            ttl: 3
-        )
+        // Test with supported version (version is always 1 in init)
+        let packet = TestHelpers.createTestPacket()
         
         guard let encoded = BinaryProtocol.encode(packet),
               let decoded = BinaryProtocol.decode(encoded) else {
@@ -297,14 +298,16 @@ final class BinaryProtocolTests: XCTestCase {
     }
     
     func testUnsupportedProtocolVersion() throws {
-        // Create packet with unsupported version
-        var packet = TestHelpers.createTestPacket()
-        packet.version = 99 // Unsupported version
+        // Create packet data with unsupported version
+        let packet = TestHelpers.createTestPacket()
         
-        guard let encoded = BinaryProtocol.encode(packet) else {
+        guard var encoded = BinaryProtocol.encode(packet) else {
             XCTFail("Failed to encode packet")
             return
         }
+        
+        // Manually change version byte to unsupported value
+        encoded[0] = 99 // Unsupported version
         
         // Should fail to decode
         XCTAssertNil(BinaryProtocol.decode(encoded))

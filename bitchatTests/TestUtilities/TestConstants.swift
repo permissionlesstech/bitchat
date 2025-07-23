@@ -28,6 +28,5 @@ struct TestConstants {
     static let testMessage3 = "This is a test message"
     static let testLongMessage = String(repeating: "This is a long message. ", count: 100)
     
-    static let testRoomID = "test-room"
     static let testSignature = Data(repeating: 0xAB, count: 64)
 }

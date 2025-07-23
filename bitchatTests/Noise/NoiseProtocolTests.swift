@@ -84,13 +84,13 @@ final class NoiseProtocolTests: XCTestCase {
         )
         
         // Cannot process message before starting handshake
-        XCTAssertThrows(try aliceSession.processHandshakeMessage(Data()))
+        XCTAssertThrowsError(try aliceSession.processHandshakeMessage(Data()))
         
         // Start handshake
         _ = try aliceSession.startHandshake()
         
         // Cannot start handshake twice
-        XCTAssertThrows(try aliceSession.startHandshake())
+        XCTAssertThrowsError(try aliceSession.startHandshake())
     }
     
     // MARK: - Encryption/Decryption Tests
@@ -150,8 +150,8 @@ final class NoiseProtocolTests: XCTestCase {
         let plaintext = "test".data(using: .utf8)!
         
         // Should throw when not established
-        XCTAssertThrows(try aliceSession.encrypt(plaintext))
-        XCTAssertThrows(try aliceSession.decrypt(plaintext))
+        XCTAssertThrowsError(try aliceSession.encrypt(plaintext))
+        XCTAssertThrowsError(try aliceSession.decrypt(plaintext))
     }
     
     // MARK: - Session Manager Tests
@@ -255,7 +255,7 @@ final class NoiseProtocolTests: XCTestCase {
         ciphertext[ciphertext.count / 2] ^= 0xFF
         
         // Decryption should fail
-        XCTAssertThrows(try bobSession.decrypt(ciphertext))
+        XCTAssertThrowsError(try bobSession.decrypt(ciphertext))
     }
     
     func testReplayPrevention() throws {
@@ -268,7 +268,7 @@ final class NoiseProtocolTests: XCTestCase {
         _ = try bobSession.decrypt(ciphertext)
         
         // Replaying the same ciphertext should fail
-        XCTAssertThrows(try bobSession.decrypt(ciphertext))
+        XCTAssertThrowsError(try bobSession.decrypt(ciphertext))
     }
     
     func testSessionIsolation() throws {
@@ -288,7 +288,7 @@ final class NoiseProtocolTests: XCTestCase {
         let ciphertext1 = try aliceSession1.encrypt(plaintext)
         
         // Should not be able to decrypt with session 2
-        XCTAssertThrows(try bobSession2.decrypt(ciphertext1))
+        XCTAssertThrowsError(try bobSession2.decrypt(ciphertext1))
         
         // But should work with correct session
         let decrypted = try bobSession1.decrypt(ciphertext1)
