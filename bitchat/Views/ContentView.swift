@@ -495,7 +495,7 @@ struct ContentView: View {
                         
                         ForEach(sortedPeers, id: \.self) { peerID in
                             let displayName = peerID == myPeerID ? viewModel.nickname : (peerNicknames[peerID] ?? "anon\(peerID.prefix(4))")
-                            let rssi = peerRSSI[peerID]?.intValue ?? -100
+                            let rssi = peerRSSI[peerID]?.intValue
                             let isFavorite = viewModel.isFavorite(peerID: peerID)
                             let isMe = peerID == myPeerID
                             
@@ -511,11 +511,17 @@ struct ContentView: View {
                                         .font(.system(size: 12))
                                         .foregroundColor(Color.orange)
                                         .accessibilityLabel("Unread message from \(displayName)")
-                                } else {
+                                } else if let rssi = rssi {
                                     Image(systemName: "circle.fill")
                                         .font(.system(size: 8))
                                         .foregroundColor(viewModel.getRSSIColor(rssi: rssi, colorScheme: colorScheme))
                                         .accessibilityLabel("Signal strength: \(rssi > -60 ? "excellent" : rssi > -70 ? "good" : rssi > -80 ? "fair" : "poor")")
+                                } else {
+                                    // No RSSI data available
+                                    Image(systemName: "circle")
+                                        .font(.system(size: 8))
+                                        .foregroundColor(Color.secondary.opacity(0.5))
+                                        .accessibilityLabel("Signal strength: unknown")
                                 }
                                 
                                 // Peer name
