@@ -41,19 +41,16 @@ class DeliveryTracker {
         let recipientID: String
         let recipientNickname: String
         let retryCount: Int
-        let isChannelMessage: Bool
         let isFavorite: Bool
-        var ackedBy: Set<String> = []  // For tracking partial channel delivery
-        let expectedRecipients: Int  // For channel messages
         var timeoutTimer: Timer?
         
         var isTimedOut: Bool {
-            let timeout: TimeInterval = isFavorite ? 300 : (isChannelMessage ? 60 : 30)
+            let timeout: TimeInterval = isFavorite ? 300 : 30
             return Date().timeIntervalSince(sentAt) > timeout
         }
         
         var shouldRetry: Bool {
-            return retryCount < 3 && isFavorite && !isChannelMessage
+            return retryCount < 3 && isFavorite
         }
     }
     
@@ -68,8 +65,10 @@ class DeliveryTracker {
     // MARK: - Public Methods
     
     func trackMessage(_ message: BitchatMessage, recipientID: String, recipientNickname: String, isFavorite: Bool = false, expectedRecipients: Int = 1) {
-        // Don't track broadcasts or certain message types
-        guard message.isPrivate || message.channel != nil else { return }
+        // Only track private messages
+        guard message.isPrivate else { return }
+        
+        SecureLogger.log("Tracking message \(message.id) - private: \(message.isPrivate), recipient: \(recipientNickname)", category: SecureLogger.session, level: .info)
         
         
         let delivery = PendingDelivery(
@@ -78,9 +77,7 @@ class DeliveryTracker {
             recipientID: recipientID,
             recipientNickname: recipientNickname,
             retryCount: 0,
-            isChannelMessage: message.channel != nil,
             isFavorite: isFavorite,
-            expectedRecipients: expectedRecipients,
             timeoutTimer: nil
         )
         
@@ -89,9 +86,21 @@ class DeliveryTracker {
         pendingDeliveries[message.id] = delivery
         pendingLock.unlock()
         
-        // Update status to sent
+        // Update status to sent (only if not already delivered)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-            self?.updateDeliveryStatus(message.id, status: .sent)
+            guard let self = self else { return }
+            
+            self.pendingLock.lock()
+            let stillPending = self.pendingDeliveries[message.id] != nil
+            self.pendingLock.unlock()
+            
+            // Only update to sent if still pending (not already delivered)
+            if stillPending {
+                SecureLogger.log("Updating message \(message.id) to sent status (still pending)", category: SecureLogger.session, level: .debug)
+                self.updateDeliveryStatus(message.id, status: .sent)
+            } else {
+                SecureLogger.log("Skipping sent status update for \(message.id) - already delivered", category: SecureLogger.session, level: .debug)
+            }
         }
         
         // Schedule timeout (outside of lock)
@@ -102,43 +111,29 @@ class DeliveryTracker {
         pendingLock.lock()
         defer { pendingLock.unlock() }
         
+        SecureLogger.log("Processing delivery ACK for message \(ack.originalMessageID) from \(ack.recipientNickname)", category: SecureLogger.session, level: .info)
         
         // Prevent duplicate ACK processing
         guard !receivedAckIDs.contains(ack.ackID) else {
+            SecureLogger.log("Duplicate ACK \(ack.ackID) - ignoring", category: SecureLogger.session, level: .warning)
             return
         }
         receivedAckIDs.insert(ack.ackID)
         
         // Find the pending delivery
-        guard var delivery = pendingDeliveries[ack.originalMessageID] else {
+        guard let delivery = pendingDeliveries[ack.originalMessageID] else {
             // Message might have already been delivered or timed out
+            SecureLogger.log("No pending delivery found for message \(ack.originalMessageID)", category: SecureLogger.session, level: .warning)
             return
         }
         
         // Cancel timeout timer
         delivery.timeoutTimer?.invalidate()
         
-        if delivery.isChannelMessage {
-            // Track partial delivery for channel messages
-            delivery.ackedBy.insert(ack.recipientID)
-            pendingDeliveries[ack.originalMessageID] = delivery
-            
-            let deliveredCount = delivery.ackedBy.count
-            let totalExpected = delivery.expectedRecipients
-            
-            if deliveredCount >= totalExpected || deliveredCount >= max(1, totalExpected / 2) {
-                // Consider delivered if we got ACKs from at least half the expected recipients
-                updateDeliveryStatus(ack.originalMessageID, status: .delivered(to: "\(deliveredCount) members", at: Date()))
-                pendingDeliveries.removeValue(forKey: ack.originalMessageID)
-            } else {
-                // Update partial delivery status
-                updateDeliveryStatus(ack.originalMessageID, status: .partiallyDelivered(reached: deliveredCount, total: totalExpected))
-            }
-        } else {
-            // Direct message - mark as delivered
-            updateDeliveryStatus(ack.originalMessageID, status: .delivered(to: ack.recipientNickname, at: Date()))
-            pendingDeliveries.removeValue(forKey: ack.originalMessageID)
-        }
+        // Direct message - mark as delivered
+        SecureLogger.log("Marking private message \(ack.originalMessageID) as delivered to \(ack.recipientNickname)", category: SecureLogger.session, level: .info)
+        updateDeliveryStatus(ack.originalMessageID, status: .delivered(to: ack.recipientNickname, at: Date()))
+        pendingDeliveries.removeValue(forKey: ack.originalMessageID)
     }
     
     func generateAck(for message: BitchatMessage, myPeerID: String, myNickname: String, hopCount: UInt8) -> DeliveryAck? {
@@ -147,8 +142,8 @@ class DeliveryTracker {
             return nil 
         }
         
-        // Don't ACK broadcasts or system messages
-        guard message.isPrivate || message.channel != nil else { 
+        // Only ACK private messages
+        guard message.isPrivate else { 
             return nil 
         }
         
@@ -180,6 +175,7 @@ class DeliveryTracker {
     // MARK: - Private Methods
     
     private func updateDeliveryStatus(_ messageID: String, status: DeliveryStatus) {
+        SecureLogger.log("Updating delivery status for message \(messageID): \(status)", category: SecureLogger.session, level: .debug)
         DispatchQueue.main.async { [weak self] in
             self?.deliveryStatusUpdated.send((messageID: messageID, status: status))
         }
@@ -193,11 +189,9 @@ class DeliveryTracker {
             return
         }
         let isFavorite = delivery.isFavorite
-        let isChannelMessage = delivery.isChannelMessage
         pendingLock.unlock()
         
-        let timeout = isFavorite ? favoriteTimeout :
-                     (isChannelMessage ? roomMessageTimeout : privateMessageTimeout)
+        let timeout = isFavorite ? favoriteTimeout : privateMessageTimeout
         
         let timer = Timer.scheduledTimer(withTimeInterval: timeout, repeats: false) { [weak self] _ in
             self?.handleTimeout(messageID: messageID)
@@ -219,7 +213,6 @@ class DeliveryTracker {
         }
         
         let shouldRetry = delivery.shouldRetry
-        let isChannelMessage = delivery.isChannelMessage
         
         if shouldRetry {
             pendingLock.unlock()
@@ -227,7 +220,7 @@ class DeliveryTracker {
             retryDelivery(messageID: messageID)
         } else {
             // Mark as failed
-            let reason = isChannelMessage ? "No response from channel members" : "Message not delivered"
+            let reason = "Message not delivered"
             pendingDeliveries.removeValue(forKey: messageID)
             pendingLock.unlock()
             updateDeliveryStatus(messageID, status: .failed(reason: reason))
@@ -248,10 +241,7 @@ class DeliveryTracker {
             recipientID: delivery.recipientID,
             recipientNickname: delivery.recipientNickname,
             retryCount: delivery.retryCount + 1,
-            isChannelMessage: delivery.isChannelMessage,
             isFavorite: delivery.isFavorite,
-            ackedBy: delivery.ackedBy,
-            expectedRecipients: delivery.expectedRecipients,
             timeoutTimer: nil
         )
         

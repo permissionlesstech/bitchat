@@ -58,6 +58,7 @@ class KeychainManager {
                 // Save to new service
                 if saveIdentityKey(data, forKey: "noiseStaticKey") {
                     migratedItems += 1
+                    SecureLogger.logKeyOperation("migrate", keyType: "noiseStaticKey", success: true)
                 }
                 // Delete from old service
                 let deleteQuery: [String: Any] = [
@@ -94,63 +95,13 @@ class KeychainManager {
         #endif
     }
     
-    // MARK: - Channel Passwords
-    
-    func saveChannelPassword(_ password: String, for channel: String) -> Bool {
-        let key = "channel_\(channel)"
-        return save(password, forKey: key)
-    }
-    
-    func getChannelPassword(for channel: String) -> String? {
-        let key = "channel_\(channel)"
-        return retrieve(forKey: key)
-    }
-    
-    func deleteChannelPassword(for channel: String) -> Bool {
-        let key = "channel_\(channel)"
-        return delete(forKey: key)
-    }
-    
-    func getAllChannelPasswords() -> [String: String] {
-        var passwords: [String: String] = [:]
-        
-        // Build query without kSecReturnData to avoid error -50
-        var query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecMatchLimit as String: kSecMatchLimitAll,
-            kSecReturnAttributes as String: true
-        ]
-        
-        // For sandboxed apps, use the app group
-        if isSandboxed() {
-            query[kSecAttrAccessGroup as String] = appGroup
-        }
-        
-        var result: AnyObject?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-        
-        if status == errSecSuccess, let items = result as? [[String: Any]] {
-            for item in items {
-                if let account = item[kSecAttrAccount as String] as? String,
-                   account.hasPrefix("channel_") {
-                    // Now retrieve the actual password data for this specific item
-                    let channel = String(account.dropFirst(8)) // Remove "channel_" prefix
-                    if let password = getChannelPassword(for: channel) {
-                        passwords[channel] = password
-                    }
-                }
-            }
-        }
-        
-        return passwords
-    }
-    
     // MARK: - Identity Keys
     
     func saveIdentityKey(_ keyData: Data, forKey key: String) -> Bool {
         let fullKey = "identity_\(key)"
-        return saveData(keyData, forKey: fullKey)
+        let result = saveData(keyData, forKey: fullKey)
+        SecureLogger.logKeyOperation("save", keyType: key, success: result)
+        return result
     }
     
     func getIdentityKey(forKey key: String) -> Data? {
@@ -159,7 +110,9 @@ class KeychainManager {
     }
     
     func deleteIdentityKey(forKey key: String) -> Bool {
-        return delete(forKey: "identity_\(key)")
+        let result = delete(forKey: "identity_\(key)")
+        SecureLogger.logKeyOperation("delete", keyType: key, success: result)
+        return result
     }
     
     // MARK: - Generic Operations
@@ -201,9 +154,9 @@ class KeychainManager {
         if status == errSecSuccess {
             return true
         } else if status == -34018 {
-            SecurityLogger.logError(NSError(domain: "Keychain", code: -34018), context: "Missing keychain entitlement", category: SecurityLogger.keychain)
+            SecureLogger.logError(NSError(domain: "Keychain", code: -34018), context: "Missing keychain entitlement", category: SecureLogger.keychain)
         } else if status != errSecDuplicateItem {
-            SecurityLogger.logError(NSError(domain: "Keychain", code: Int(status)), context: "Error saving to keychain", category: SecurityLogger.keychain)
+            SecureLogger.logError(NSError(domain: "Keychain", code: Int(status)), context: "Error saving to keychain", category: SecureLogger.keychain)
         }
         
         return false
@@ -234,7 +187,7 @@ class KeychainManager {
         if status == errSecSuccess {
             return result as? Data
         } else if status == -34018 {
-            SecurityLogger.logError(NSError(domain: "Keychain", code: -34018), context: "Missing keychain entitlement", category: SecurityLogger.keychain)
+            SecureLogger.logError(NSError(domain: "Keychain", code: -34018), context: "Missing keychain entitlement", category: SecureLogger.keychain)
         }
         
         return nil
@@ -281,6 +234,7 @@ class KeychainManager {
     
     // Delete ALL keychain data for panic mode
     func deleteAllKeychainData() -> Bool {
+        SecureLogger.log("Panic mode - deleting all keychain data", category: SecureLogger.security, level: .warning)
         
         var totalDeleted = 0
         
@@ -328,6 +282,7 @@ class KeychainManager {
                     let deleteStatus = SecItemDelete(deleteQuery as CFDictionary)
                     if deleteStatus == errSecSuccess {
                         totalDeleted += 1
+                        SecureLogger.log("Deleted keychain item: \(account) from \(service)", category: SecureLogger.keychain, level: .info)
                     }
                 }
             }
@@ -357,6 +312,7 @@ class KeychainManager {
             }
         }
         
+        SecureLogger.log("Panic mode cleanup completed. Total items deleted: \(totalDeleted)", category: SecureLogger.keychain, level: .warning)
         
         return totalDeleted > 0
     }

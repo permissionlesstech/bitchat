@@ -61,16 +61,6 @@ struct NoiseSecurityValidator {
                peerID.count <= 64 && 
                peerID.rangeOfCharacter(from: validCharset.inverted) == nil
     }
-    
-    /// Validate channel name format
-    static func validateChannelName(_ channel: String) -> Bool {
-        // Channel should start with # and contain valid characters
-        let validCharset = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
-        return channel.hasPrefix("#") && 
-               channel.count > 1 && 
-               channel.count <= 32 &&
-               channel.dropFirst().rangeOfCharacter(from: validCharset.inverted) == nil
-    }
 }
 
 // MARK: - Enhanced Noise Session with Security
@@ -167,6 +157,7 @@ class NoiseRateLimiter {
             // Check global rate limit first
             globalHandshakeTimestamps = globalHandshakeTimestamps.filter { $0 > oneMinuteAgo }
             if globalHandshakeTimestamps.count >= NoiseSecurityConstants.maxGlobalHandshakesPerMinute {
+                SecureLogger.log("Global handshake rate limit exceeded: \(globalHandshakeTimestamps.count)/\(NoiseSecurityConstants.maxGlobalHandshakesPerMinute) per minute", category: SecureLogger.security, level: .warning)
                 return false
             }
             
@@ -175,6 +166,7 @@ class NoiseRateLimiter {
             timestamps = timestamps.filter { $0 > oneMinuteAgo }
             
             if timestamps.count >= NoiseSecurityConstants.maxHandshakesPerMinute {
+                SecureLogger.log("Per-peer handshake rate limit exceeded for \(peerID): \(timestamps.count)/\(NoiseSecurityConstants.maxHandshakesPerMinute) per minute", category: SecureLogger.security, level: .warning)
                 return false
             }
             
@@ -194,6 +186,7 @@ class NoiseRateLimiter {
             // Check global rate limit first
             globalMessageTimestamps = globalMessageTimestamps.filter { $0 > oneSecondAgo }
             if globalMessageTimestamps.count >= NoiseSecurityConstants.maxGlobalMessagesPerSecond {
+                SecureLogger.log("Global message rate limit exceeded: \(globalMessageTimestamps.count)/\(NoiseSecurityConstants.maxGlobalMessagesPerSecond) per second", category: SecureLogger.security, level: .warning)
                 return false
             }
             
@@ -202,6 +195,7 @@ class NoiseRateLimiter {
             timestamps = timestamps.filter { $0 > oneSecondAgo }
             
             if timestamps.count >= NoiseSecurityConstants.maxMessagesPerSecond {
+                SecureLogger.log("Per-peer message rate limit exceeded for \(peerID): \(timestamps.count)/\(NoiseSecurityConstants.maxMessagesPerSecond) per second", category: SecureLogger.security, level: .warning)
                 return false
             }
             
@@ -228,54 +222,6 @@ enum NoiseSecurityError: Error {
     case sessionExhausted
     case messageTooLarge
     case invalidPeerID
-    case invalidChannelName
     case rateLimitExceeded
     case handshakeTimeout
 }
-
-// MARK: - Security Audit Checklist
-
-/*
- SECURITY AUDIT CHECKLIST:
- 
- 1. KEY MANAGEMENT
-    ✓ Static keys stored in Keychain (most secure iOS storage)
-    ✓ Keys cleared on panic mode
-    ✓ Ephemeral keys generated per session
-    ✓ No key reuse across sessions
- 
- 2. PROTOCOL SECURITY
-    ✓ Using Noise XX pattern for mutual authentication
-    ✓ Forward secrecy via ephemeral keys
-    ✓ Replay protection via nonce counter
-    ✓ AEAD encryption (ChaCha20-Poly1305)
-    ✓ SHA-256 for hashing
- 
- 3. IMPLEMENTATION SECURITY
-    ✓ Message size limits to prevent DoS
-    ✓ Session timeout to limit exposure
-    ✓ Message count limits to prevent nonce reuse
-    ✓ Rate limiting for handshakes and messages
-    ✓ Input validation for all user data
-    ✓ Thread-safe operations
- 
- 4. NETWORK SECURITY
-    ✓ Messages padded to standard sizes for traffic analysis resistance
-    ✓ Cover traffic for anonymity
-    ✓ No metadata leakage in protocol
-    ✓ Fingerprint verification for identity
- 
- 5. EDGE CASES HANDLED
-    ✓ Incomplete handshakes timeout
-    ✓ Duplicate handshake messages ignored
-    ✓ Session renegotiation when needed
-    ✓ Graceful handling of decryption failures
-    ✓ Memory limits on message sizes
- 
- 6. FUTURE IMPROVEMENTS
-    - Implement post-quantum key exchange (when available)
-    - Add perfect forward secrecy for channel keys
-    - Implement key rotation for long-lived channels
-    - Add security event logging
-    - Implement secure key backup/restore
- */
