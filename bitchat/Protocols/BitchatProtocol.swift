@@ -41,9 +41,20 @@ struct MessagePadding {
         
         // Last byte tells us how much padding to remove
         let paddingLength = Int(data[data.count - 1])
-        guard paddingLength > 0 && paddingLength <= data.count else { return data }
+        guard paddingLength > 0 && paddingLength <= data.count else { 
+            // Debug logging for 243-byte packets
+            if data.count == 243 {
+            }
+            return data 
+        }
         
-        return data.prefix(data.count - paddingLength)
+        let result = data.prefix(data.count - paddingLength)
+        
+        // Debug logging for 243-byte packets
+        if data.count == 243 {
+        }
+        
+        return result
     }
     
     // Find optimal block size for data
@@ -66,17 +77,44 @@ struct MessagePadding {
 
 enum MessageType: UInt8 {
     case announce = 0x01
-    case keyExchange = 0x02
     case leave = 0x03
     case message = 0x04  // All user messages (private and broadcast)
     case fragmentStart = 0x05
     case fragmentContinue = 0x06
     case fragmentEnd = 0x07
-    case channelAnnounce = 0x08  // Announce password-protected channel status
-    case channelRetention = 0x09  // Announce channel retention status
     case deliveryAck = 0x0A  // Acknowledge message received
     case deliveryStatusRequest = 0x0B  // Request delivery status update
     case readReceipt = 0x0C  // Message has been read/viewed
+    
+    // Noise Protocol messages
+    case noiseHandshakeInit = 0x10  // Noise handshake initiation
+    case noiseHandshakeResp = 0x11  // Noise handshake response
+    case noiseEncrypted = 0x12      // Noise encrypted transport message
+    case noiseIdentityAnnounce = 0x13  // Announce static public key for discovery
+    
+    // Protocol version negotiation
+    case versionHello = 0x20            // Initial version announcement
+    case versionAck = 0x21              // Version acknowledgment
+    
+    var description: String {
+        switch self {
+        case .announce: return "announce"
+        case .leave: return "leave"
+        case .message: return "message"
+        case .fragmentStart: return "fragmentStart"
+        case .fragmentContinue: return "fragmentContinue"
+        case .fragmentEnd: return "fragmentEnd"
+        case .deliveryAck: return "deliveryAck"
+        case .deliveryStatusRequest: return "deliveryStatusRequest"
+        case .readReceipt: return "readReceipt"
+        case .noiseHandshakeInit: return "noiseHandshakeInit"
+        case .noiseHandshakeResp: return "noiseHandshakeResp"
+        case .noiseEncrypted: return "noiseEncrypted"
+        case .noiseIdentityAnnounce: return "noiseIdentityAnnounce"
+        case .versionHello: return "versionHello"
+        case .versionAck: return "versionAck"
+        }
+    }
 }
 
 // Special recipient ID for broadcast messages
@@ -109,7 +147,17 @@ struct BitchatPacket: Codable {
     init(type: UInt8, ttl: UInt8, senderID: String, payload: Data) {
         self.version = 1
         self.type = type
-        self.senderID = senderID.data(using: .utf8)!
+        // Convert hex string peer ID to binary data (8 bytes)
+        var senderData = Data()
+        var tempID = senderID
+        while tempID.count >= 2 {
+            let hexByte = String(tempID.prefix(2))
+            if let byte = UInt8(hexByte, radix: 16) {
+                senderData.append(byte)
+            }
+            tempID = String(tempID.dropFirst(2))
+        }
+        self.senderID = senderData
         self.recipientID = nil
         self.timestamp = UInt64(Date().timeIntervalSince1970 * 1000) // milliseconds
         self.payload = payload
@@ -148,12 +196,75 @@ struct DeliveryAck: Codable {
         self.hopCount = hopCount
     }
     
+    // For binary decoding
+    private init(originalMessageID: String, ackID: String, recipientID: String, recipientNickname: String, timestamp: Date, hopCount: UInt8) {
+        self.originalMessageID = originalMessageID
+        self.ackID = ackID
+        self.recipientID = recipientID
+        self.recipientNickname = recipientNickname
+        self.timestamp = timestamp
+        self.hopCount = hopCount
+    }
+    
     func encode() -> Data? {
         try? JSONEncoder().encode(self)
     }
     
     static func decode(from data: Data) -> DeliveryAck? {
         try? JSONDecoder().decode(DeliveryAck.self, from: data)
+    }
+    
+    // MARK: - Binary Encoding
+    
+    func toBinaryData() -> Data {
+        var data = Data()
+        data.appendUUID(originalMessageID)
+        data.appendUUID(ackID)
+        // RecipientID as 8-byte hex string
+        var recipientData = Data()
+        var tempID = recipientID
+        while tempID.count >= 2 && recipientData.count < 8 {
+            let hexByte = String(tempID.prefix(2))
+            if let byte = UInt8(hexByte, radix: 16) {
+                recipientData.append(byte)
+            }
+            tempID = String(tempID.dropFirst(2))
+        }
+        while recipientData.count < 8 {
+            recipientData.append(0)
+        }
+        data.append(recipientData)
+        data.appendUInt8(hopCount)
+        data.appendDate(timestamp)
+        data.appendString(recipientNickname)
+        return data
+    }
+    
+    static func fromBinaryData(_ data: Data) -> DeliveryAck? {
+        // Create defensive copy
+        let dataCopy = Data(data)
+        
+        // Minimum size: 2 UUIDs (32) + recipientID (8) + hopCount (1) + timestamp (8) + min nickname
+        guard dataCopy.count >= 50 else { return nil }
+        
+        var offset = 0
+        
+        guard let originalMessageID = dataCopy.readUUID(at: &offset),
+              let ackID = dataCopy.readUUID(at: &offset) else { return nil }
+        
+        guard let recipientIDData = dataCopy.readFixedBytes(at: &offset, count: 8) else { return nil }
+        let recipientID = recipientIDData.hexEncodedString()
+        
+        guard let hopCount = dataCopy.readUInt8(at: &offset),
+              let timestamp = dataCopy.readDate(at: &offset),
+              let recipientNickname = dataCopy.readString(at: &offset) else { return nil }
+        
+        return DeliveryAck(originalMessageID: originalMessageID,
+                           ackID: ackID,
+                           recipientID: recipientID,
+                           recipientNickname: recipientNickname,
+                           timestamp: timestamp,
+                           hopCount: hopCount)
     }
 }
 
@@ -173,12 +284,447 @@ struct ReadReceipt: Codable {
         self.timestamp = Date()
     }
     
+    // For binary decoding
+    private init(originalMessageID: String, receiptID: String, readerID: String, readerNickname: String, timestamp: Date) {
+        self.originalMessageID = originalMessageID
+        self.receiptID = receiptID
+        self.readerID = readerID
+        self.readerNickname = readerNickname
+        self.timestamp = timestamp
+    }
+    
     func encode() -> Data? {
         try? JSONEncoder().encode(self)
     }
     
     static func decode(from data: Data) -> ReadReceipt? {
         try? JSONDecoder().decode(ReadReceipt.self, from: data)
+    }
+    
+    // MARK: - Binary Encoding
+    
+    func toBinaryData() -> Data {
+        var data = Data()
+        data.appendUUID(originalMessageID)
+        data.appendUUID(receiptID)
+        // ReaderID as 8-byte hex string
+        var readerData = Data()
+        var tempID = readerID
+        while tempID.count >= 2 && readerData.count < 8 {
+            let hexByte = String(tempID.prefix(2))
+            if let byte = UInt8(hexByte, radix: 16) {
+                readerData.append(byte)
+            }
+            tempID = String(tempID.dropFirst(2))
+        }
+        while readerData.count < 8 {
+            readerData.append(0)
+        }
+        data.append(readerData)
+        data.appendDate(timestamp)
+        data.appendString(readerNickname)
+        return data
+    }
+    
+    static func fromBinaryData(_ data: Data) -> ReadReceipt? {
+        // Create defensive copy
+        let dataCopy = Data(data)
+        
+        // Minimum size: 2 UUIDs (32) + readerID (8) + timestamp (8) + min nickname
+        guard dataCopy.count >= 49 else { return nil }
+        
+        var offset = 0
+        
+        guard let originalMessageID = dataCopy.readUUID(at: &offset),
+              let receiptID = dataCopy.readUUID(at: &offset) else { return nil }
+        
+        guard let readerIDData = dataCopy.readFixedBytes(at: &offset, count: 8) else { return nil }
+        let readerID = readerIDData.hexEncodedString()
+        
+        guard let timestamp = dataCopy.readDate(at: &offset),
+              let readerNickname = dataCopy.readString(at: &offset) else { return nil }
+        
+        return ReadReceipt(originalMessageID: originalMessageID,
+                          receiptID: receiptID,
+                          readerID: readerID,
+                          readerNickname: readerNickname,
+                          timestamp: timestamp)
+    }
+}
+
+
+// MARK: - Peer Identity Rotation
+
+// Enhanced identity announcement with rotation support
+struct NoiseIdentityAnnouncement: Codable {
+    let peerID: String               // Current ephemeral peer ID
+    let publicKey: Data              // Noise static public key
+    let signingPublicKey: Data       // Ed25519 signing public key
+    let nickname: String             // Current nickname
+    let timestamp: Date              // When this binding was created
+    let previousPeerID: String?      // Previous peer ID (for smooth transition)
+    let signature: Data              // Signature proving ownership
+    
+    init(peerID: String, publicKey: Data, signingPublicKey: Data, nickname: String, timestamp: Date, previousPeerID: String? = nil, signature: Data) {
+        self.peerID = peerID
+        self.publicKey = publicKey
+        self.signingPublicKey = signingPublicKey
+        self.nickname = nickname
+        self.timestamp = timestamp
+        self.previousPeerID = previousPeerID
+        self.signature = signature
+    }
+    
+    func encode() -> Data? {
+        return try? JSONEncoder().encode(self)
+    }
+    
+    static func decode(from data: Data) -> NoiseIdentityAnnouncement? {
+        return try? JSONDecoder().decode(NoiseIdentityAnnouncement.self, from: data)
+    }
+    
+    // MARK: - Binary Encoding
+    
+    func toBinaryData() -> Data {
+        var data = Data()
+        
+        // Flags byte: bit 0 = hasPreviousPeerID
+        var flags: UInt8 = 0
+        if previousPeerID != nil { flags |= 0x01 }
+        data.appendUInt8(flags)
+        
+        // PeerID as 8-byte hex string
+        var peerData = Data()
+        var tempID = peerID
+        while tempID.count >= 2 && peerData.count < 8 {
+            let hexByte = String(tempID.prefix(2))
+            if let byte = UInt8(hexByte, radix: 16) {
+                peerData.append(byte)
+            }
+            tempID = String(tempID.dropFirst(2))
+        }
+        while peerData.count < 8 {
+            peerData.append(0)
+        }
+        data.append(peerData)
+        
+        data.appendData(publicKey)
+        data.appendData(signingPublicKey)
+        data.appendString(nickname)
+        data.appendDate(timestamp)
+        
+        if let previousPeerID = previousPeerID {
+            // Previous PeerID as 8-byte hex string
+            var prevData = Data()
+            var tempPrevID = previousPeerID
+            while tempPrevID.count >= 2 && prevData.count < 8 {
+                let hexByte = String(tempPrevID.prefix(2))
+                if let byte = UInt8(hexByte, radix: 16) {
+                    prevData.append(byte)
+                }
+                tempPrevID = String(tempPrevID.dropFirst(2))
+            }
+            while prevData.count < 8 {
+                prevData.append(0)
+            }
+            data.append(prevData)
+        }
+        
+        data.appendData(signature)
+        
+        return data
+    }
+    
+    static func fromBinaryData(_ data: Data) -> NoiseIdentityAnnouncement? {
+        // Create defensive copy
+        let dataCopy = Data(data)
+        
+        // Minimum size check: flags(1) + peerID(8) + min data lengths
+        guard dataCopy.count >= 20 else { return nil }
+        
+        var offset = 0
+        
+        guard let flags = dataCopy.readUInt8(at: &offset) else { return nil }
+        let hasPreviousPeerID = (flags & 0x01) != 0
+        
+        // Read peerID using safe method
+        guard let peerIDBytes = dataCopy.readFixedBytes(at: &offset, count: 8) else { return nil }
+        let peerID = peerIDBytes.hexEncodedString()
+        
+        guard let publicKey = dataCopy.readData(at: &offset),
+              let signingPublicKey = dataCopy.readData(at: &offset),
+              let nickname = dataCopy.readString(at: &offset),
+              let timestamp = dataCopy.readDate(at: &offset) else { return nil }
+        
+        var previousPeerID: String? = nil
+        if hasPreviousPeerID {
+            // Read previousPeerID using safe method
+            guard let prevIDBytes = dataCopy.readFixedBytes(at: &offset, count: 8) else { return nil }
+            previousPeerID = prevIDBytes.hexEncodedString()
+        }
+        
+        guard let signature = dataCopy.readData(at: &offset) else { return nil }
+        
+        return NoiseIdentityAnnouncement(peerID: peerID,
+                                        publicKey: publicKey,
+                                        signingPublicKey: signingPublicKey,
+                                        nickname: nickname,
+                                        timestamp: timestamp,
+                                        previousPeerID: previousPeerID,
+                                        signature: signature)
+    }
+}
+
+// Binding between ephemeral peer ID and cryptographic identity
+struct PeerIdentityBinding {
+    let currentPeerID: String        // Current ephemeral ID
+    let fingerprint: String          // Permanent cryptographic identity
+    let publicKey: Data              // Noise static public key
+    let signingPublicKey: Data       // Ed25519 signing public key
+    let nickname: String             // Last known nickname
+    let bindingTimestamp: Date       // When this binding was created
+    let signature: Data              // Cryptographic proof of binding
+    
+    // Verify the binding signature
+    func verify() -> Bool {
+        let bindingData = currentPeerID.data(using: .utf8)! + publicKey + 
+                         String(Int64(bindingTimestamp.timeIntervalSince1970 * 1000)).data(using: .utf8)!
+        
+        do {
+            let signingKey = try Curve25519.Signing.PublicKey(rawRepresentation: signingPublicKey)
+            return signingKey.isValidSignature(signature, for: bindingData)
+        } catch {
+            return false
+        }
+    }
+}
+
+// MARK: - Protocol Version Negotiation
+
+// Protocol version constants
+struct ProtocolVersion {
+    static let current: UInt8 = 1
+    static let minimum: UInt8 = 1
+    static let maximum: UInt8 = 1
+    
+    // Future versions can be added here
+    static let supportedVersions: Set<UInt8> = [1]
+    
+    static func isSupported(_ version: UInt8) -> Bool {
+        return supportedVersions.contains(version)
+    }
+    
+    static func negotiateVersion(clientVersions: [UInt8], serverVersions: [UInt8]) -> UInt8? {
+        // Find the highest common version
+        let clientSet = Set(clientVersions)
+        let serverSet = Set(serverVersions)
+        let common = clientSet.intersection(serverSet)
+        
+        return common.max()
+    }
+}
+
+// Version negotiation hello message
+struct VersionHello: Codable {
+    let supportedVersions: [UInt8]  // List of supported protocol versions
+    let preferredVersion: UInt8     // Preferred version (usually the latest)
+    let clientVersion: String       // App version string (e.g., "1.0.0")
+    let platform: String            // Platform identifier (e.g., "iOS", "macOS")
+    let capabilities: [String]?     // Optional capability flags for future extensions
+    
+    init(supportedVersions: [UInt8] = Array(ProtocolVersion.supportedVersions), 
+         preferredVersion: UInt8 = ProtocolVersion.current,
+         clientVersion: String,
+         platform: String,
+         capabilities: [String]? = nil) {
+        self.supportedVersions = supportedVersions
+        self.preferredVersion = preferredVersion
+        self.clientVersion = clientVersion
+        self.platform = platform
+        self.capabilities = capabilities
+    }
+    
+    func encode() -> Data? {
+        return try? JSONEncoder().encode(self)
+    }
+    
+    static func decode(from data: Data) -> VersionHello? {
+        try? JSONDecoder().decode(VersionHello.self, from: data)
+    }
+    
+    // MARK: - Binary Encoding
+    
+    func toBinaryData() -> Data {
+        var data = Data()
+        
+        // Flags byte: bit 0 = hasCapabilities
+        var flags: UInt8 = 0
+        if capabilities != nil { flags |= 0x01 }
+        data.appendUInt8(flags)
+        
+        // Supported versions array
+        data.appendUInt8(UInt8(supportedVersions.count))
+        for version in supportedVersions {
+            data.appendUInt8(version)
+        }
+        
+        data.appendUInt8(preferredVersion)
+        data.appendString(clientVersion)
+        data.appendString(platform)
+        
+        if let capabilities = capabilities {
+            data.appendUInt8(UInt8(capabilities.count))
+            for capability in capabilities {
+                data.appendString(capability)
+            }
+        }
+        
+        return data
+    }
+    
+    static func fromBinaryData(_ data: Data) -> VersionHello? {
+        // Create defensive copy
+        let dataCopy = Data(data)
+        
+        // Minimum size check: flags(1) + versionCount(1) + at least one version(1) + preferredVersion(1) + min strings
+        guard dataCopy.count >= 4 else { return nil }
+        
+        var offset = 0
+        
+        guard let flags = dataCopy.readUInt8(at: &offset) else { return nil }
+        let hasCapabilities = (flags & 0x01) != 0
+        
+        guard let versionCount = dataCopy.readUInt8(at: &offset) else { return nil }
+        var supportedVersions: [UInt8] = []
+        for _ in 0..<versionCount {
+            guard let version = dataCopy.readUInt8(at: &offset) else { return nil }
+            supportedVersions.append(version)
+        }
+        
+        guard let preferredVersion = dataCopy.readUInt8(at: &offset),
+              let clientVersion = dataCopy.readString(at: &offset),
+              let platform = dataCopy.readString(at: &offset) else { return nil }
+        
+        var capabilities: [String]? = nil
+        if hasCapabilities {
+            guard let capCount = dataCopy.readUInt8(at: &offset) else { return nil }
+            capabilities = []
+            for _ in 0..<capCount {
+                guard let capability = dataCopy.readString(at: &offset) else { return nil }
+                capabilities?.append(capability)
+            }
+        }
+        
+        return VersionHello(supportedVersions: supportedVersions,
+                           preferredVersion: preferredVersion,
+                           clientVersion: clientVersion,
+                           platform: platform,
+                           capabilities: capabilities)
+    }
+}
+
+// Version negotiation acknowledgment
+struct VersionAck: Codable {
+    let agreedVersion: UInt8        // The version both peers will use
+    let serverVersion: String       // Responder's app version
+    let platform: String            // Responder's platform
+    let capabilities: [String]?     // Responder's capabilities
+    let rejected: Bool              // True if no compatible version found
+    let reason: String?             // Reason for rejection if applicable
+    
+    init(agreedVersion: UInt8,
+         serverVersion: String,
+         platform: String,
+         capabilities: [String]? = nil,
+         rejected: Bool = false,
+         reason: String? = nil) {
+        self.agreedVersion = agreedVersion
+        self.serverVersion = serverVersion
+        self.platform = platform
+        self.capabilities = capabilities
+        self.rejected = rejected
+        self.reason = reason
+    }
+    
+    func encode() -> Data? {
+        return try? JSONEncoder().encode(self)
+    }
+    
+    static func decode(from data: Data) -> VersionAck? {
+        try? JSONDecoder().decode(VersionAck.self, from: data)
+    }
+    
+    // MARK: - Binary Encoding
+    
+    func toBinaryData() -> Data {
+        var data = Data()
+        
+        // Flags byte: bit 0 = hasCapabilities, bit 1 = hasReason
+        var flags: UInt8 = 0
+        if capabilities != nil { flags |= 0x01 }
+        if reason != nil { flags |= 0x02 }
+        data.appendUInt8(flags)
+        
+        data.appendUInt8(agreedVersion)
+        data.appendString(serverVersion)
+        data.appendString(platform)
+        data.appendUInt8(rejected ? 1 : 0)
+        
+        if let capabilities = capabilities {
+            data.appendUInt8(UInt8(capabilities.count))
+            for capability in capabilities {
+                data.appendString(capability)
+            }
+        }
+        
+        if let reason = reason {
+            data.appendString(reason)
+        }
+        
+        return data
+    }
+    
+    static func fromBinaryData(_ data: Data) -> VersionAck? {
+        // Create defensive copy
+        let dataCopy = Data(data)
+        
+        // Minimum size: flags(1) + version(1) + rejected(1) + min strings
+        guard dataCopy.count >= 5 else { return nil }
+        
+        var offset = 0
+        
+        guard let flags = dataCopy.readUInt8(at: &offset) else { return nil }
+        let hasCapabilities = (flags & 0x01) != 0
+        let hasReason = (flags & 0x02) != 0
+        
+        guard let agreedVersion = dataCopy.readUInt8(at: &offset),
+              let serverVersion = dataCopy.readString(at: &offset),
+              let platform = dataCopy.readString(at: &offset),
+              let rejectedByte = dataCopy.readUInt8(at: &offset) else { return nil }
+        
+        let rejected = rejectedByte != 0
+        
+        var capabilities: [String]? = nil
+        if hasCapabilities {
+            guard let capCount = dataCopy.readUInt8(at: &offset) else { return nil }
+            capabilities = []
+            for _ in 0..<capCount {
+                guard let capability = dataCopy.readString(at: &offset) else { return nil }
+                capabilities?.append(capability)
+            }
+        }
+        
+        var reason: String? = nil
+        if hasReason {
+            reason = dataCopy.readString(at: &offset)
+        }
+        
+        return VersionAck(agreedVersion: agreedVersion,
+                         serverVersion: serverVersion,
+                         platform: platform,
+                         capabilities: capabilities,
+                         rejected: rejected,
+                         reason: reason)
     }
 }
 
@@ -220,12 +766,9 @@ struct BitchatMessage: Codable, Equatable {
     let recipientNickname: String?
     let senderPeerID: String?
     let mentions: [String]?  // Array of mentioned nicknames
-    let channel: String?  // Channel hashtag (e.g., "#general")
-    let encryptedContent: Data?  // For password-protected rooms
-    let isEncrypted: Bool  // Flag to indicate if content is encrypted
     var deliveryStatus: DeliveryStatus? // Delivery tracking
     
-    init(id: String? = nil, sender: String, content: String, timestamp: Date, isRelay: Bool, originalSender: String? = nil, isPrivate: Bool = false, recipientNickname: String? = nil, senderPeerID: String? = nil, mentions: [String]? = nil, channel: String? = nil, encryptedContent: Data? = nil, isEncrypted: Bool = false, deliveryStatus: DeliveryStatus? = nil) {
+    init(id: String? = nil, sender: String, content: String, timestamp: Date, isRelay: Bool, originalSender: String? = nil, isPrivate: Bool = false, recipientNickname: String? = nil, senderPeerID: String? = nil, mentions: [String]? = nil, deliveryStatus: DeliveryStatus? = nil) {
         self.id = id ?? UUID().uuidString
         self.sender = sender
         self.content = content
@@ -236,9 +779,6 @@ struct BitchatMessage: Codable, Equatable {
         self.recipientNickname = recipientNickname
         self.senderPeerID = senderPeerID
         self.mentions = mentions
-        self.channel = channel
-        self.encryptedContent = encryptedContent
-        self.isEncrypted = isEncrypted
         self.deliveryStatus = deliveryStatus ?? (isPrivate ? .sending : nil)
     }
 }
@@ -248,10 +788,6 @@ protocol BitchatDelegate: AnyObject {
     func didConnectToPeer(_ peerID: String)
     func didDisconnectFromPeer(_ peerID: String)
     func didUpdatePeerList(_ peers: [String])
-    func didReceiveChannelLeave(_ channel: String, from peerID: String)
-    func didReceivePasswordProtectedChannelAnnouncement(_ channel: String, isProtected: Bool, creatorID: String?, keyCommitment: String?)
-    func didReceiveChannelRetentionAnnouncement(_ channel: String, enabled: Bool, creatorID: String?)
-    func decryptChannelMessage(_ encryptedContent: Data, channel: String) -> String?
     
     // Optional method to check if a fingerprint belongs to a favorite peer
     func isFavorite(fingerprint: String) -> Bool
@@ -266,23 +802,6 @@ protocol BitchatDelegate: AnyObject {
 extension BitchatDelegate {
     func isFavorite(fingerprint: String) -> Bool {
         return false
-    }
-    
-    func didReceiveChannelLeave(_ channel: String, from peerID: String) {
-        // Default empty implementation
-    }
-    
-    func didReceivePasswordProtectedChannelAnnouncement(_ channel: String, isProtected: Bool, creatorID: String?, keyCommitment: String?) {
-        // Default empty implementation
-    }
-    
-    func didReceiveChannelRetentionAnnouncement(_ channel: String, enabled: Bool, creatorID: String?) {
-        // Default empty implementation
-    }
-    
-    func decryptChannelMessage(_ encryptedContent: Data, channel: String) -> String? {
-        // Default returns nil (unable to decrypt)
-        return nil
     }
     
     func didReceiveDeliveryAck(_ ack: DeliveryAck) {
