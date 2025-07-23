@@ -3421,6 +3421,14 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 
                 // Send any cached store-and-forward messages
                 sendCachedMessages(to: peerID)
+                
+                // Notify delegate to update UI encryption status
+                DispatchQueue.main.async { [weak self] in
+                    // Force UI to refresh by sending a peer list update
+                    if let peers = self?.collectionsQueue.sync(execute: { Array(self?.activePeers ?? []) }) {
+                        self?.delegate?.didUpdatePeerList(peers)
+                    }
+                }
             }
         } catch NoiseSessionError.alreadyEstablished {
             // Session already established, ignore handshake
