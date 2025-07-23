@@ -7,6 +7,7 @@
 //
 
 import XCTest
+import CryptoKit
 @testable import bitchat
 
 final class IntegrationTests: XCTestCase {
@@ -40,7 +41,7 @@ final class IntegrationTests: XCTestCase {
         var messageMatrix: [String: Set<String>] = [:]
         
         // Each node should receive messages from all others
-        for (senderName, sender) in nodes {
+        for (senderName, _) in nodes {
             messageMatrix[senderName] = []
             
             for (receiverName, receiver) in nodes where receiverName != senderName {
@@ -106,7 +107,7 @@ final class IntegrationTests: XCTestCase {
         connect("Charlie", "David")
         
         let expectation = XCTestExpectation(description: "Partitions merge and communicate")
-        var messagesBeforeMerge = 0
+        let messagesBeforeMerge = 0
         var messagesAfterMerge = 0
         
         // Monitor cross-partition messages
@@ -189,8 +190,15 @@ final class IntegrationTests: XCTestCase {
             } else if packet.type == 0x02 { // Would be encrypted
                 // Simulate encryption
                 if let encrypted = try? self.noiseManagers["Alice"]!.encrypt(packet.payload, for: TestConstants.testPeerID2) {
-                    var encPacket = packet
-                    encPacket.payload = encrypted
+                    let encPacket = BitchatPacket(
+                        type: packet.type,
+                        senderID: packet.senderID,
+                        recipientID: packet.recipientID,
+                        timestamp: packet.timestamp,
+                        payload: encrypted,
+                        signature: packet.signature,
+                        ttl: packet.ttl
+                    )
                     self.nodes["Bob"]!.simulateIncomingPacket(encPacket)
                 }
             }
@@ -403,9 +411,15 @@ final class IntegrationTests: XCTestCase {
                message.isPrivate && packet.recipientID != nil {
                 // Encrypt private messages
                 if let encrypted = try? self.noiseManagers["Alice"]!.encrypt(packet.payload, for: TestConstants.testPeerID2) {
-                    var encPacket = packet
-                    encPacket.type = 0x02
-                    encPacket.payload = encrypted
+                    let encPacket = BitchatPacket(
+                        type: 0x02,
+                        senderID: packet.senderID,
+                        recipientID: packet.recipientID,
+                        timestamp: packet.timestamp,
+                        payload: encrypted,
+                        signature: packet.signature,
+                        ttl: packet.ttl
+                    )
                     self.nodes["Bob"]!.simulateIncomingPacket(encPacket)
                 }
             }
@@ -451,8 +465,8 @@ final class IntegrationTests: XCTestCase {
     
     private func createNode(_ name: String, peerID: String) {
         let node = MockBluetoothMeshService()
-        node.peerID = peerID
-        node.nickname = name
+        node.myPeerID = peerID
+        node.mockNickname = name
         nodes[name] = node
         
         // Create Noise manager
@@ -490,16 +504,29 @@ final class IntegrationTests: XCTestCase {
             if let message = BitchatMessage.fromBinaryPayload(packet.payload) {
                 guard message.senderPeerID != node.peerID else { return }
                 
-                var relayMessage = message
-                if !relayMessage.isRelay {
-                    relayMessage.isRelay = true
-                    relayMessage.originalSender = message.sender
-                }
+                let relayMessage = BitchatMessage(
+                    id: message.id,
+                    sender: message.sender,
+                    content: message.content,
+                    timestamp: message.timestamp,
+                    isRelay: true,
+                    originalSender: message.isRelay ? message.originalSender : message.sender,
+                    isPrivate: message.isPrivate,
+                    recipientNickname: message.recipientNickname,
+                    senderPeerID: message.senderPeerID,
+                    mentions: message.mentions
+                )
                 
                 if let relayPayload = relayMessage.toBinaryPayload() {
-                    var relayPacket = packet
-                    relayPacket.payload = relayPayload
-                    relayPacket.ttl = packet.ttl - 1
+                    let relayPacket = BitchatPacket(
+                        type: packet.type,
+                        senderID: packet.senderID,
+                        recipientID: packet.recipientID,
+                        timestamp: packet.timestamp,
+                        payload: relayPayload,
+                        signature: packet.signature,
+                        ttl: packet.ttl - 1
+                    )
                     
                     for hop in nextHops {
                         self.nodes[hop]?.simulateIncomingPacket(relayPacket)

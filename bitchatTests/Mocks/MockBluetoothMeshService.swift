@@ -17,44 +17,58 @@ class MockBluetoothMeshService: BluetoothMeshService {
     var messageDeliveryHandler: ((BitchatMessage) -> Void)?
     var packetDeliveryHandler: ((BitchatPacket) -> Void)?
     
+    // Override these properties
+    var mockNickname: String = "MockUser"
+    
+    override var myPeerID: String {
+        didSet {
+            // Update when changed
+        }
+    }
+    
+    var nickname: String {
+        return mockNickname
+    }
+    
+    var peerID: String {
+        return myPeerID
+    }
+    
     override init() {
         super.init()
+        self.myPeerID = "MOCK1234"
     }
     
     func simulateConnectedPeer(_ peerID: String) {
         connectedPeers.insert(peerID)
-        delegate?.bluetoothMeshService(self, didConnectToPeer: peerID, peerInfo: PeerInfo(
-            mcPeerID: MCPeerID(displayName: peerID),
-            peerID: peerID,
-            nickname: "Test User",
-            publicKey: nil,
-            capabilities: PeerCapabilities(supportedProtocolVersions: [1])
-        ))
+        delegate?.didConnectToPeer(peerID)
+        delegate?.didUpdatePeerList(Array(connectedPeers))
     }
     
     func simulateDisconnectedPeer(_ peerID: String) {
         connectedPeers.remove(peerID)
-        delegate?.bluetoothMeshService(self, didDisconnectFromPeer: peerID)
+        delegate?.didDisconnectFromPeer(peerID)
+        delegate?.didUpdatePeerList(Array(connectedPeers))
     }
     
     override func sendMessage(_ content: String, mentions: [String], to room: String? = nil, messageID: String? = nil, timestamp: Date? = nil) {
         let message = BitchatMessage(
             id: messageID ?? UUID().uuidString,
-            sender: nickname,
+            sender: mockNickname,
             content: content,
             timestamp: timestamp ?? Date(),
             isRelay: false,
             originalSender: nil,
             isPrivate: false,
             recipientNickname: nil,
-            senderPeerID: peerID,
+            senderPeerID: myPeerID,
             mentions: mentions.isEmpty ? nil : mentions
         )
         
         if let payload = message.toBinaryPayload() {
             let packet = BitchatPacket(
                 type: 0x01,
-                senderID: peerID.data(using: .utf8)!,
+                senderID: myPeerID.data(using: .utf8)!,
                 recipientID: nil,
                 timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                 payload: payload,
@@ -67,7 +81,7 @@ class MockBluetoothMeshService: BluetoothMeshService {
             
             // Simulate local echo
             DispatchQueue.main.async { [weak self] in
-                self?.delegate?.bluetoothMeshService(self!, didReceiveMessage: message)
+                self?.delegate?.didReceiveMessage(message)
             }
             
             // Call delivery handler if set
@@ -78,21 +92,21 @@ class MockBluetoothMeshService: BluetoothMeshService {
     override func sendPrivateMessage(_ content: String, to recipientPeerID: String, recipientNickname: String, messageID: String? = nil) {
         let message = BitchatMessage(
             id: messageID ?? UUID().uuidString,
-            sender: nickname,
+            sender: mockNickname,
             content: content,
             timestamp: Date(),
             isRelay: false,
             originalSender: nil,
             isPrivate: true,
             recipientNickname: recipientNickname,
-            senderPeerID: peerID,
+            senderPeerID: myPeerID,
             mentions: nil
         )
         
         if let payload = message.toBinaryPayload() {
             let packet = BitchatPacket(
                 type: 0x01,
-                senderID: peerID.data(using: .utf8)!,
+                senderID: myPeerID.data(using: .utf8)!,
                 recipientID: recipientPeerID.data(using: .utf8)!,
                 timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                 payload: payload,
@@ -105,7 +119,7 @@ class MockBluetoothMeshService: BluetoothMeshService {
             
             // Simulate local echo
             DispatchQueue.main.async { [weak self] in
-                self?.delegate?.bluetoothMeshService(self!, didReceiveMessage: message)
+                self?.delegate?.didReceiveMessage(message)
             }
             
             // Call delivery handler if set
@@ -114,18 +128,18 @@ class MockBluetoothMeshService: BluetoothMeshService {
     }
     
     func simulateIncomingMessage(_ message: BitchatMessage) {
-        delegate?.bluetoothMeshService(self, didReceiveMessage: message)
+        delegate?.didReceiveMessage(message)
     }
     
     func simulateIncomingPacket(_ packet: BitchatPacket) {
         // Process through the actual handling logic
         if let message = BitchatMessage.fromBinaryPayload(packet.payload) {
-            delegate?.bluetoothMeshService(self, didReceiveMessage: message)
+            delegate?.didReceiveMessage(message)
         }
         packetDeliveryHandler?(packet)
     }
     
-    override func getConnectedPeers() -> [String] {
+    func getConnectedPeers() -> [String] {
         return Array(connectedPeers)
     }
 }

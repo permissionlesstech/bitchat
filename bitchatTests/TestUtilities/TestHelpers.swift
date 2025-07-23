@@ -20,14 +20,9 @@ class TestHelpers {
         return (privateKey, publicKey)
     }
     
-    static func generateTestIdentity(peerID: String, nickname: String) -> UserProfile {
+    static func generateTestIdentity(peerID: String, nickname: String) -> (peerID: String, nickname: String, privateKey: Curve25519.KeyAgreement.PrivateKey, publicKey: Curve25519.KeyAgreement.PublicKey) {
         let (privateKey, publicKey) = generateTestKeyPair()
-        return UserProfile(
-            nickname: nickname,
-            peerID: peerID,
-            publicKey: publicKey.rawRepresentation,
-            privateKey: privateKey.rawRepresentation
-        )
+        return (peerID: peerID, nickname: nickname, privateKey: privateKey, publicKey: publicKey)
     }
     
     // MARK: - Message Creation
@@ -59,6 +54,7 @@ class TestHelpers {
         senderID: String = TestConstants.testPeerID1,
         recipientID: String? = nil,
         payload: Data = "test payload".data(using: .utf8)!,
+        signature: Data? = nil,
         ttl: UInt8 = 3
     ) -> BitchatPacket {
         return BitchatPacket(
@@ -67,7 +63,7 @@ class TestHelpers {
             recipientID: recipientID?.data(using: .utf8),
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
             payload: payload,
-            signature: nil,
+            signature: signature,
             ttl: ttl
         )
     }
