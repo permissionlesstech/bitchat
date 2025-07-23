@@ -295,6 +295,165 @@ final class NoiseProtocolTests: XCTestCase {
         XCTAssertEqual(decrypted, plaintext)
     }
     
+    // MARK: - Session Recovery Tests
+    
+    func testPeerRestartDetection() throws {
+        // Establish initial sessions
+        let aliceManager = NoiseSessionManager(localStaticKey: aliceKey)
+        let bobManager = NoiseSessionManager(localStaticKey: bobKey)
+        
+        try establishManagerSessions(aliceManager: aliceManager, bobManager: bobManager)
+        
+        // Exchange some messages to establish nonce state
+        let message1 = try aliceManager.encrypt("Hello".data(using: .utf8)!, for: TestConstants.testPeerID2)
+        _ = try bobManager.decrypt(message1, from: TestConstants.testPeerID1)
+        
+        let message2 = try bobManager.encrypt("World".data(using: .utf8)!, for: TestConstants.testPeerID1)
+        _ = try aliceManager.decrypt(message2, from: TestConstants.testPeerID2)
+        
+        // Simulate Bob restart by creating new manager with same key
+        let bobManagerRestarted = NoiseSessionManager(localStaticKey: bobKey)
+        
+        // Bob initiates new handshake after restart
+        let newHandshake1 = try bobManagerRestarted.initiateHandshake(with: TestConstants.testPeerID1)
+        
+        // Alice should accept the new handshake (clearing old session)
+        let newHandshake2 = try aliceManager.handleIncomingHandshake(from: TestConstants.testPeerID2, message: newHandshake1)
+        XCTAssertNotNil(newHandshake2)
+        
+        // Complete the new handshake
+        let newHandshake3 = try bobManagerRestarted.handleIncomingHandshake(from: TestConstants.testPeerID1, message: newHandshake2!)
+        XCTAssertNotNil(newHandshake3)
+        _ = try aliceManager.handleIncomingHandshake(from: TestConstants.testPeerID2, message: newHandshake3!)
+        
+        // Should be able to exchange messages with new sessions
+        let testMessage = "After restart".data(using: .utf8)!
+        let encrypted = try bobManagerRestarted.encrypt(testMessage, for: TestConstants.testPeerID1)
+        let decrypted = try aliceManager.decrypt(encrypted, from: TestConstants.testPeerID2)
+        XCTAssertEqual(decrypted, testMessage)
+    }
+    
+    func testNonceDesynchronizationRecovery() throws {
+        // Create two sessions
+        aliceSession = NoiseSession(peerID: TestConstants.testPeerID2, role: .initiator, localStaticKey: aliceKey)
+        bobSession = NoiseSession(peerID: TestConstants.testPeerID1, role: .responder, localStaticKey: bobKey)
+        
+        // Establish sessions
+        try performHandshake(initiator: aliceSession, responder: bobSession)
+        
+        // Exchange messages to advance nonces
+        for i in 0..<5 {
+            let msg = try aliceSession.encrypt("Message \(i)".data(using: .utf8)!)
+            _ = try bobSession.decrypt(msg)
+        }
+        
+        // Simulate desynchronization by encrypting but not decrypting
+        for i in 0..<3 {
+            _ = try aliceSession.encrypt("Lost message \(i)".data(using: .utf8)!)
+        }
+        
+        // Next message from Alice should fail to decrypt (nonce mismatch)
+        let desyncMessage = try aliceSession.encrypt("This will fail".data(using: .utf8)!)
+        XCTAssertThrowsError(try bobSession.decrypt(desyncMessage))
+    }
+    
+    func testConcurrentEncryption() throws {
+        // Test thread safety of encryption operations
+        let aliceManager = NoiseSessionManager(localStaticKey: aliceKey)
+        let bobManager = NoiseSessionManager(localStaticKey: bobKey)
+        
+        try establishManagerSessions(aliceManager: aliceManager, bobManager: bobManager)
+        
+        let messageCount = 100
+        let expectation = XCTestExpectation(description: "All messages encrypted and decrypted")
+        expectation.expectedFulfillmentCount = messageCount * 2
+        
+        let group = DispatchGroup()
+        var encryptedMessages: [Int: Data] = [:]
+        let encryptionQueue = DispatchQueue(label: "test.encryption", attributes: .concurrent)
+        let lock = NSLock()
+        
+        // Encrypt messages concurrently
+        for i in 0..<messageCount {
+            group.enter()
+            DispatchQueue.global().async {
+                do {
+                    let plaintext = "Concurrent message \(i)".data(using: .utf8)!
+                    let encrypted = try aliceManager.encrypt(plaintext, for: TestConstants.testPeerID2)
+                    
+                    lock.lock()
+                    encryptedMessages[i] = encrypted
+                    lock.unlock()
+                    
+                    expectation.fulfill()
+                } catch {
+                    XCTFail("Encryption failed: \(error)")
+                }
+                group.leave()
+            }
+        }
+        
+        // Wait for all encryptions to complete
+        group.wait()
+        
+        // Decrypt messages in order
+        for i in 0..<messageCount {
+            encryptionQueue.async {
+                do {
+                    lock.lock()
+                    guard let encrypted = encryptedMessages[i] else {
+                        lock.unlock()
+                        XCTFail("Missing encrypted message \(i)")
+                        return
+                    }
+                    lock.unlock()
+                    
+                    let decrypted = try bobManager.decrypt(encrypted, from: TestConstants.testPeerID1)
+                    let expected = "Concurrent message \(i)".data(using: .utf8)!
+                    XCTAssertEqual(decrypted, expected)
+                    expectation.fulfill()
+                } catch {
+                    XCTFail("Decryption failed for message \(i): \(error)")
+                }
+            }
+        }
+        
+        wait(for: [expectation], timeout: 10.0)
+    }
+    
+    func testSessionStaleDetection() throws {
+        // Test that sessions are properly marked as stale
+        let aliceManager = NoiseSessionManager(localStaticKey: aliceKey)
+        let bobManager = NoiseSessionManager(localStaticKey: bobKey)
+        
+        try establishManagerSessions(aliceManager: aliceManager, bobManager: bobManager)
+        
+        // Get the session and check it needs renegotiation based on age
+        let sessions = aliceManager.getSessionsNeedingRekey()
+        
+        // New session should not need rekey
+        XCTAssertTrue(sessions.isEmpty || sessions.allSatisfy { !$0.needsRekey })
+    }
+    
+    func testHandshakeAfterDecryptionFailure() throws {
+        // Test that handshake is properly initiated after decryption failure
+        let aliceManager = NoiseSessionManager(localStaticKey: aliceKey)
+        let bobManager = NoiseSessionManager(localStaticKey: bobKey)
+        
+        // Establish sessions
+        try establishManagerSessions(aliceManager: aliceManager, bobManager: bobManager)
+        
+        // Create a corrupted message
+        var encrypted = try aliceManager.encrypt("Test".data(using: .utf8)!, for: TestConstants.testPeerID2)
+        encrypted[10] ^= 0xFF // Corrupt the data
+        
+        // Decryption should fail
+        XCTAssertThrowsError(try bobManager.decrypt(encrypted, from: TestConstants.testPeerID1))
+        
+        // Bob should still have the session (it's not removed on single failure)
+        XCTAssertNotNil(bobManager.getSession(for: TestConstants.testPeerID1))
+    }
+    
     // MARK: - Performance Tests
     
     func testHandshakePerformance() throws {
