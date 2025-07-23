@@ -17,7 +17,7 @@ class NoiseHandshakeCoordinator {
         case idle
         case waitingToInitiate(since: Date)
         case initiating(attempt: Int, lastAttempt: Date)
-        case responding
+        case responding(since: Date)
         case waitingForResponse(messagesSent: [Data], timeout: Date)
         case established(since: Date)
         case failed(reason: String, canRetry: Bool, lastAttempt: Date)
@@ -101,7 +101,7 @@ class NoiseHandshakeCoordinator {
     /// Record that we're responding to a handshake
     func recordHandshakeResponse(peerID: String) {
         handshakeQueue.async(flags: .barrier) {
-            self.handshakeStates[peerID] = .responding
+            self.handshakeStates[peerID] = .responding(since: Date())
             SecureLogger.log("Recording handshake response to \(peerID)", 
                            category: SecureLogger.handshake, level: .info)
         }
@@ -206,6 +206,48 @@ class NoiseHandshakeCoordinator {
         }
     }
     
+    /// Clean up stale handshake states
+    func cleanupStaleHandshakes(staleTimeout: TimeInterval = 30.0) -> [String] {
+        return handshakeQueue.sync {
+            let now = Date()
+            var stalePeerIDs: [String] = []
+            
+            for (peerID, state) in handshakeStates {
+                var isStale = false
+                
+                switch state {
+                case .initiating(_, let lastAttempt):
+                    if now.timeIntervalSince(lastAttempt) > staleTimeout {
+                        isStale = true
+                    }
+                case .responding(let since):
+                    if now.timeIntervalSince(since) > staleTimeout {
+                        isStale = true
+                    }
+                case .waitingForResponse(_, let timeout):
+                    if now > timeout {
+                        isStale = true
+                    }
+                default:
+                    break
+                }
+                
+                if isStale {
+                    stalePeerIDs.append(peerID)
+                    SecureLogger.log("Found stale handshake state for \(peerID): \(state)", 
+                                   category: SecureLogger.handshake, level: .warning)
+                }
+            }
+            
+            // Clean up stale states
+            for peerID in stalePeerIDs {
+                handshakeStates.removeValue(forKey: peerID)
+            }
+            
+            return stalePeerIDs
+        }
+    }
+    
     /// Get current handshake state
     func getHandshakeState(for peerID: String) -> HandshakeState {
         return handshakeQueue.sync {
@@ -240,8 +282,8 @@ class NoiseHandshakeCoordinator {
                     stateDesc = "waiting to initiate (since \(since))"
                 case .initiating(let attempt, let lastAttempt):
                     stateDesc = "initiating (attempt \(attempt), last: \(lastAttempt))"
-                case .responding:
-                    stateDesc = "responding"
+                case .responding(let since):
+                    stateDesc = "responding (since: \(since))"
                 case .waitingForResponse(let messages, let timeout):
                     stateDesc = "waiting for response (\(messages.count) messages, timeout: \(timeout))"
                 case .established(let since):

@@ -1172,21 +1172,33 @@ class ChatViewModel: ObservableObject {
     // MARK: - Noise Protocol Support
     
     func updateEncryptionStatusForPeers() {
+        for peerID in connectedPeers {
+            updateEncryptionStatusForPeer(peerID)
+        }
+    }
+    
+    func updateEncryptionStatusForPeer(_ peerID: String) {
         let noiseService = meshService.getNoiseService()
         
-        for peerID in connectedPeers {
-            if noiseService.hasEstablishedSession(with: peerID) {
-                // Check if fingerprint is verified using our persisted data
-                if let fingerprint = noiseService.getPeerFingerprint(peerID),
-                   verifiedFingerprints.contains(fingerprint) {
-                    peerEncryptionStatus[peerID] = .noiseVerified
-                } else {
-                    peerEncryptionStatus[peerID] = .noiseSecured
-                }
+        if noiseService.hasEstablishedSession(with: peerID) {
+            // Check if fingerprint is verified using our persisted data
+            if let fingerprint = getFingerprint(for: peerID),
+               verifiedFingerprints.contains(fingerprint) {
+                peerEncryptionStatus[peerID] = .noiseVerified
             } else {
-                // Always use Noise - no legacy encryption
-                peerEncryptionStatus[peerID] = .noiseHandshaking
+                peerEncryptionStatus[peerID] = .noiseSecured
             }
+        } else if noiseService.hasSession(with: peerID) {
+            // Session exists but not established - handshaking
+            peerEncryptionStatus[peerID] = .noiseHandshaking
+        } else {
+            // No session at all
+            peerEncryptionStatus[peerID] = Optional.none
+        }
+        
+        // Force UI update
+        DispatchQueue.main.async { [weak self] in
+            self?.objectWillChange.send()
         }
     }
     
@@ -1194,31 +1206,64 @@ class ChatViewModel: ObservableObject {
         // This must be a pure function - no state mutations allowed
         // to avoid SwiftUI update loops
         
-        // Check if we have a fingerprint for this peer
-        if let fingerprint = getFingerprint(for: peerID) {
-            // Check if this fingerprint is verified
-            if verifiedFingerprints.contains(fingerprint) {
-                // Return verified if we have a Noise session
-                if meshService.getNoiseService().hasEstablishedSession(with: peerID) {
+        let hasEstablished = meshService.getNoiseService().hasEstablishedSession(with: peerID)
+        let hasSession = meshService.getNoiseService().hasSession(with: peerID)
+        let storedStatus = peerEncryptionStatus[peerID]
+        
+        // First check if we have an established session
+        if hasEstablished {
+            // We have encryption, now check if it's verified
+            if let fingerprint = getFingerprint(for: peerID) {
+                if verifiedFingerprints.contains(fingerprint) {
                     return .noiseVerified
+                } else {
+                    return .noiseSecured
                 }
-            } else if meshService.getNoiseService().hasEstablishedSession(with: peerID) {
-                return .noiseSecured
             }
+            // We have a session but no fingerprint yet - still secured
+            return .noiseSecured
+        }
+        
+        // Check if handshaking
+        if hasSession {
+            return .noiseHandshaking
         }
         
         // Fall back to stored status
-        return peerEncryptionStatus[peerID] ?? .none
+        let finalStatus = storedStatus ?? .none
+        
+        // Only log occasionally to avoid spam
+        if Int.random(in: 0..<100) == 0 {
+            SecureLogger.log("getEncryptionStatus for \(peerID): hasEstablished=\(hasEstablished), hasSession=\(hasSession), stored=\(String(describing: storedStatus)), final=\(finalStatus)", category: SecureLogger.security, level: .debug)
+        }
+        
+        return finalStatus
     }
     
     // Update encryption status in appropriate places, not during view updates
     private func updateEncryptionStatus(for peerID: String) {
-        if let fingerprint = getFingerprint(for: peerID) {
-            if verifiedFingerprints.contains(fingerprint) && meshService.getNoiseService().hasEstablishedSession(with: peerID) {
-                peerEncryptionStatus[peerID] = .noiseVerified
-            } else if meshService.getNoiseService().hasEstablishedSession(with: peerID) {
+        let noiseService = meshService.getNoiseService()
+        
+        if noiseService.hasEstablishedSession(with: peerID) {
+            if let fingerprint = getFingerprint(for: peerID) {
+                if verifiedFingerprints.contains(fingerprint) {
+                    peerEncryptionStatus[peerID] = .noiseVerified
+                } else {
+                    peerEncryptionStatus[peerID] = .noiseSecured
+                }
+            } else {
+                // Session established but no fingerprint yet
                 peerEncryptionStatus[peerID] = .noiseSecured
             }
+        } else if noiseService.hasSession(with: peerID) {
+            peerEncryptionStatus[peerID] = .noiseHandshaking
+        } else {
+            peerEncryptionStatus[peerID] = Optional.none
+        }
+        
+        // Trigger UI update
+        DispatchQueue.main.async { [weak self] in
+            self?.objectWillChange.send()
         }
     }
     
@@ -1322,12 +1367,21 @@ class ChatViewModel: ObservableObject {
         // Set up authentication callback
         noiseService.onPeerAuthenticated = { [weak self] peerID, fingerprint in
             DispatchQueue.main.async {
+                guard let self = self else { return }
+                
+                SecureLogger.log("ChatViewModel: Peer authenticated - \(peerID), fingerprint: \(fingerprint)", category: SecureLogger.security, level: .info)
+                
                 // Update encryption status
-                if self?.verifiedFingerprints.contains(fingerprint) == true {
-                    self?.peerEncryptionStatus[peerID] = .noiseVerified
+                if self.verifiedFingerprints.contains(fingerprint) {
+                    self.peerEncryptionStatus[peerID] = .noiseVerified
+                    SecureLogger.log("ChatViewModel: Setting encryption status to noiseVerified for \(peerID)", category: SecureLogger.security, level: .info)
                 } else {
-                    self?.peerEncryptionStatus[peerID] = .noiseSecured
+                    self.peerEncryptionStatus[peerID] = .noiseSecured
+                    SecureLogger.log("ChatViewModel: Setting encryption status to noiseSecured for \(peerID)", category: SecureLogger.security, level: .info)
                 }
+                
+                // Force UI update
+                self.objectWillChange.send()
             }
         }
         
@@ -2023,6 +2077,17 @@ extension ChatViewModel: BitchatDelegate {
     func didDisconnectFromPeer(_ peerID: String) {
         // Remove ephemeral session from identity manager
         SecureIdentityStateManager.shared.removeEphemeralSession(peerID: peerID)
+        
+        // Clear sent read receipts for this peer since they'll need to be resent after reconnection
+        // Only clear receipts for messages from this specific peer
+        if let messages = privateChats[peerID] {
+            for message in messages {
+                // Remove read receipts for messages FROM this peer (not TO this peer)
+                if message.senderPeerID == peerID {
+                    sentReadReceipts.remove(message.id)
+                }
+            }
+        }
         
         // Resolve nickname using helper
         let displayName = resolveNickname(for: peerID)
