@@ -1963,6 +1963,27 @@ class BluetoothMeshService: NSObject {
                 // Update peer availability
                 self.updatePeerAvailability(senderID)
                 
+                // IMPORTANT: Update peripheral mapping for ALL message types including handshakes
+                // This ensures disconnect messages work even if peer disconnects right after handshake
+                if let peripheral = peripheral {
+                    let peripheralID = peripheral.identifier.uuidString
+                    
+                    // Check if we need to update the mapping
+                    if peerIDByPeripheralID[peripheralID] != senderID {
+                        SecureLogger.log("Updating peripheral mapping: \(peripheralID) -> \(senderID)", 
+                                       category: SecureLogger.session, level: .debug)
+                        peerIDByPeripheralID[peripheralID] = senderID
+                        
+                        // Also ensure connectedPeripherals has the correct mapping
+                        // Remove any temp ID mapping if it exists
+                        let tempIDToRemove = connectedPeripherals.first(where: { $0.value == peripheral && $0.key != senderID })?.key
+                        if let tempID = tempIDToRemove {
+                            connectedPeripherals.removeValue(forKey: tempID)
+                        }
+                        connectedPeripherals[senderID] = peripheral
+                    }
+                }
+                
                 // Check if this is a reconnection after a long silence
                 let wasReconnection: Bool
                 if let lastHeard = self.lastHeardFromPeer[senderID] {
@@ -3256,6 +3277,10 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
         let tempID = peripheral.identifier.uuidString
         SecureLogger.log("Peripheral connected: \(tempID)", category: SecureLogger.session, level: .info)
         
+        // Log current mapping state for debugging
+        SecureLogger.log("Current peerIDByPeripheralID mappings: \(peerIDByPeripheralID.keys.joined(separator: ", "))", 
+                       category: SecureLogger.session, level: .debug)
+        
         peripheral.delegate = self
         peripheral.discoverServices([BluetoothMeshService.serviceUUID])
         
@@ -3299,15 +3324,31 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
         // Find the real peer ID for this peripheral
         var realPeerID: String? = nil
         
-        // First check if we have a direct mapping from peripheral to peer ID
-        for (peerID, connectedPeripheral) in connectedPeripherals {
-            if connectedPeripheral.identifier == peripheral.identifier {
-                realPeerID = peerID.count == 16 ? peerID : nil
-                break
+        // First check our peripheral ID to peer ID mapping
+        if let peerID = peerIDByPeripheralID[peripheralID] {
+            realPeerID = peerID
+            SecureLogger.log("Found peer ID \(peerID) from peerIDByPeripheralID for peripheral \(peripheralID)", 
+                           category: SecureLogger.session, level: .debug)
+        } else {
+            SecureLogger.log("No mapping in peerIDByPeripheralID for peripheral \(peripheralID), checking connectedPeripherals", 
+                           category: SecureLogger.session, level: .debug)
+            
+            // Fallback: check if we have a direct mapping from peripheral to peer ID
+            for (peerID, connectedPeripheral) in connectedPeripherals {
+                if connectedPeripheral.identifier == peripheral.identifier {
+                    // Check if this is a real peer ID (16 hex chars) not a temp ID
+                    if peerID.count == 16 && peerID.allSatisfy({ $0.isHexDigit }) {
+                        realPeerID = peerID
+                        SecureLogger.log("Found peer ID \(peerID) from connectedPeripherals fallback", 
+                                       category: SecureLogger.session, level: .debug)
+                        break
+                    } else {
+                        SecureLogger.log("Skipping non-peer ID '\(peerID)' (length: \(peerID.count))", 
+                                       category: SecureLogger.session, level: .debug)
+                    }
+                }
             }
         }
-        
-        // If not found in connected peripherals, we don't have a mapping
         
         // Update connection state immediately if we have a real peer ID
         if let peerID = realPeerID {
