@@ -454,6 +454,89 @@ final class NoiseProtocolTests: XCTestCase {
         XCTAssertNotNil(bobManager.getSession(for: TestConstants.testPeerID1))
     }
     
+    func testHandshakeAlwaysAcceptedWithExistingSession() throws {
+        // Test that handshake is always accepted even with existing valid session
+        let aliceManager = NoiseSessionManager(localStaticKey: aliceKey)
+        let bobManager = NoiseSessionManager(localStaticKey: bobKey)
+        
+        // Establish sessions
+        try establishManagerSessions(aliceManager: aliceManager, bobManager: bobManager)
+        
+        // Verify sessions are established
+        XCTAssertTrue(aliceManager.getSession(for: TestConstants.testPeerID2)?.isEstablished() ?? false)
+        XCTAssertTrue(bobManager.getSession(for: TestConstants.testPeerID1)?.isEstablished() ?? false)
+        
+        // Exchange messages to verify sessions work
+        let testMessage = "Session works".data(using: .utf8)!
+        let encrypted = try aliceManager.encrypt(testMessage, for: TestConstants.testPeerID2)
+        let decrypted = try bobManager.decrypt(encrypted, from: TestConstants.testPeerID1)
+        XCTAssertEqual(decrypted, testMessage)
+        
+        // Alice clears her session (simulating decryption failure)
+        aliceManager.removeSession(for: TestConstants.testPeerID2)
+        
+        // Alice initiates new handshake despite Bob having valid session
+        let newHandshake1 = try aliceManager.initiateHandshake(with: TestConstants.testPeerID2)
+        
+        // Bob should accept the new handshake even though he has a valid session
+        let newHandshake2 = try bobManager.handleIncomingHandshake(from: TestConstants.testPeerID1, message: newHandshake1)
+        XCTAssertNotNil(newHandshake2, "Bob should accept handshake despite having valid session")
+        
+        // Complete the handshake
+        let newHandshake3 = try aliceManager.handleIncomingHandshake(from: TestConstants.testPeerID2, message: newHandshake2!)
+        XCTAssertNotNil(newHandshake3)
+        _ = try bobManager.handleIncomingHandshake(from: TestConstants.testPeerID1, message: newHandshake3!)
+        
+        // Verify new sessions work
+        let testMessage2 = "New session works".data(using: .utf8)!
+        let encrypted2 = try aliceManager.encrypt(testMessage2, for: TestConstants.testPeerID2)
+        let decrypted2 = try bobManager.decrypt(encrypted2, from: TestConstants.testPeerID1)
+        XCTAssertEqual(decrypted2, testMessage2)
+    }
+    
+    func testNonceDesynchronizationCausesRehandshake() throws {
+        // Test that nonce desynchronization leads to proper re-handshake
+        let aliceManager = NoiseSessionManager(localStaticKey: aliceKey)
+        let bobManager = NoiseSessionManager(localStaticKey: bobKey)
+        
+        // Establish sessions
+        try establishManagerSessions(aliceManager: aliceManager, bobManager: bobManager)
+        
+        // Exchange messages normally
+        for i in 0..<5 {
+            let msg = try aliceManager.encrypt("Message \(i)".data(using: .utf8)!, for: TestConstants.testPeerID2)
+            _ = try bobManager.decrypt(msg, from: TestConstants.testPeerID1)
+        }
+        
+        // Simulate desynchronization - Alice sends messages that Bob doesn't receive
+        for i in 0..<3 {
+            _ = try aliceManager.encrypt("Lost message \(i)".data(using: .utf8)!, for: TestConstants.testPeerID2)
+        }
+        
+        // Next message from Alice should fail to decrypt at Bob (nonce mismatch)
+        let desyncMessage = try aliceManager.encrypt("This will fail".data(using: .utf8)!, for: TestConstants.testPeerID2)
+        XCTAssertThrowsError(try bobManager.decrypt(desyncMessage, from: TestConstants.testPeerID1), "Should fail due to nonce mismatch")
+        
+        // Bob clears session and initiates new handshake
+        bobManager.removeSession(for: TestConstants.testPeerID1)
+        let rehandshake1 = try bobManager.initiateHandshake(with: TestConstants.testPeerID1)
+        
+        // Alice should accept despite having a "valid" (but desynced) session
+        let rehandshake2 = try aliceManager.handleIncomingHandshake(from: TestConstants.testPeerID2, message: rehandshake1)
+        XCTAssertNotNil(rehandshake2, "Alice should accept handshake to fix desync")
+        
+        // Complete handshake
+        let rehandshake3 = try bobManager.handleIncomingHandshake(from: TestConstants.testPeerID1, message: rehandshake2!)
+        XCTAssertNotNil(rehandshake3)
+        _ = try aliceManager.handleIncomingHandshake(from: TestConstants.testPeerID2, message: rehandshake3!)
+        
+        // Verify communication works again
+        let testResynced = "Resynced".data(using: .utf8)!
+        let encryptedResync = try aliceManager.encrypt(testResynced, for: TestConstants.testPeerID2)
+        let decryptedResync = try bobManager.decrypt(encryptedResync, from: TestConstants.testPeerID1)
+        XCTAssertEqual(decryptedResync, testResynced)
+    }
+    
     // MARK: - Performance Tests
     
     func testHandshakePerformance() throws {
