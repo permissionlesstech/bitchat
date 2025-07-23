@@ -21,9 +21,9 @@ class DeliveryTracker {
     private var sentAckIDs = Set<String>()
     
     // Timeout configuration
-    private let privateMessageTimeout: TimeInterval = 30  // 30 seconds
-    private let roomMessageTimeout: TimeInterval = 60     // 1 minute
-    private let favoriteTimeout: TimeInterval = 300       // 5 minutes for favorites
+    private let privateMessageTimeout: TimeInterval = 120  // 2 minutes
+    private let roomMessageTimeout: TimeInterval = 180     // 3 minutes
+    private let favoriteTimeout: TimeInterval = 600       // 10 minutes for favorites
     
     // Retry configuration
     private let maxRetries = 3
