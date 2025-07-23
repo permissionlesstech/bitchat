@@ -1953,9 +1953,11 @@ extension ChatViewModel: BitchatDelegate {
                     }
                 }
             } else {
-                // System message - always add
-                messages.append(finalMessage)
-                messages.sort { $0.timestamp < $1.timestamp }
+                // System message - check for empty content before adding
+                if !finalMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    messages.append(finalMessage)
+                    messages.sort { $0.timestamp < $1.timestamp }
+                }
             }
         }
         
@@ -2067,9 +2069,12 @@ extension ChatViewModel: BitchatDelegate {
         // Resolve nickname using helper
         let displayName = resolveNickname(for: peerID)
         
+        // Ensure we have a valid display name
+        let finalDisplayName = displayName.isEmpty ? "peer" : displayName
+        
         let systemMessage = BitchatMessage(
             sender: "system",
-            content: "\(displayName) connected",
+            content: "\(finalDisplayName) connected",
             timestamp: Date(),
             isRelay: false,
             originalSender: nil
@@ -2098,9 +2103,12 @@ extension ChatViewModel: BitchatDelegate {
         // Resolve nickname using helper
         let displayName = resolveNickname(for: peerID)
         
+        // Ensure we have a valid display name
+        let finalDisplayName = displayName.isEmpty ? "peer" : displayName
+        
         let systemMessage = BitchatMessage(
             sender: "system",
-            content: "\(displayName) disconnected",
+            content: "\(finalDisplayName) disconnected",
             timestamp: Date(),
             isRelay: false,
             originalSender: nil
