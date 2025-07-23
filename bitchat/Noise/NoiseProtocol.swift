@@ -53,11 +53,13 @@ struct NoiseProtocolName {
 class NoiseCipherState {
     private var key: SymmetricKey?
     private var nonce: UInt64 = 0
+    private var useExtractedNonce: Bool = false
     
     init() {}
     
-    init(key: SymmetricKey) {
+    init(key: SymmetricKey, useExtractedNonce: Bool = false) {
         self.key = key
+        self.useExtractedNonce = useExtractedNonce
     }
     
     func initializeKey(_ key: SymmetricKey) {
@@ -67,6 +69,41 @@ class NoiseCipherState {
     
     func hasKey() -> Bool {
         return key != nil
+    }
+    
+    /// Extract nonce from combined payload <nonce><ciphertext>
+    /// Returns tuple of (nonce, ciphertext) or nil if invalid
+    private func extractNonceFromCiphertextPayload(_ combinedPayload: Data) throws -> (nonce: UInt64, ciphertext: Data)? {
+        guard combinedPayload.count >= 2 else {
+            return nil
+        }
+
+        // Extract 2-byte nonce (big-endian unsigned short)
+        let nonceData = combinedPayload.prefix(2)
+        let extractedNonce = nonceData.withUnsafeBytes { (bytes: UnsafeRawBufferPointer) -> UInt64 in
+            let byteArray = bytes.bindMemory(to: UInt8.self)
+            return UInt64(byteArray[0]) << 8 | UInt64(byteArray[1])
+        }
+
+        // Extract ciphertext (remaining bytes)
+        let ciphertext = combinedPayload.dropFirst(2)
+
+        // Check if extracted nonce is greater than current received count
+        if extractedNonce < nonce {
+            SecureLogger.log("Received older nonce \(extractedNonce) when expecting >= \(nonce) - potential replay or reordering")
+            throw NoiseError.invalidCiphertext
+        }
+
+        return (nonce: extractedNonce, ciphertext: Data(ciphertext))
+    }
+
+    /// Convert nonce to 2-byte array (big-endian)
+    private func nonceToBytes(_ nonce: UInt64) -> Data {
+        let nonceValue = UInt16(nonce & 0xFFFF) // Keep only lower 16 bits
+        var bytes = Data(count: 2)
+        bytes[0] = UInt8(nonceValue >> 8)     // High byte
+        bytes[1] = UInt8(nonceValue & 0xFF)   // Low byte
+        return bytes
     }
     
     func encrypt(plaintext: Data, associatedData: Data = Data()) throws -> Data {
@@ -79,19 +116,29 @@ class NoiseCipherState {
         
         // Create nonce from counter
         var nonceData = Data(count: 12)
-        withUnsafeBytes(of: nonce.littleEndian) { bytes in
+        withUnsafeBytes(of: currentNonce.littleEndian) { bytes in
             nonceData.replaceSubrange(4..<12, with: bytes)
         }
         
         let sealedBox = try ChaChaPoly.seal(plaintext, using: key, nonce: ChaChaPoly.Nonce(data: nonceData), authenticating: associatedData)
+        // increment local nonce
         nonce += 1
+               
+        // Create combined payload: <nonce><ciphertext>
+        let combinedPayload: Data
+        if (useExtractedNonce) {
+            let nonceBytes = nonceToBytes(currentNonce)
+            combinedPayload = nonceBytes + sealedBox.ciphertext + sealedBox.tag
+        } else {
+            combinedPayload = sealedBox.ciphertext + sealedBox.tag
+        }
         
-        // Log high nonce values that might indicate issues
+        // Log high nonce values that might indicate issues (nonce wraps at 2^16)
         if currentNonce > 1000000 {
             SecureLogger.log("High nonce value detected: \(currentNonce) - consider rekeying", category: SecureLogger.encryption, level: .warning)
         }
         
-        return sealedBox.ciphertext + sealedBox.tag
+        return combinedPayload
     }
     
     func decrypt(ciphertext: Data, associatedData: Data = Data()) throws -> Data {
@@ -103,12 +150,25 @@ class NoiseCipherState {
             throw NoiseError.invalidCiphertext
         }
         
-        // Debug logging for nonce tracking
-        let currentNonce = nonce
-        
-        // Split ciphertext and tag
-        let encryptedData = ciphertext.prefix(ciphertext.count - 16)
-        let tag = ciphertext.suffix(16)
+        let encryptedData: Data
+        let tag: Data
+        if useExtractedNonce {
+            // Extract nonce and ciphertext from combined payload
+            guard let (extractedNonce, actualCiphertext) = try extractNonceFromCiphertextPayload(ciphertext) else {
+                SecureLogger.log("Decrypt failed: Could not extract nonce from payload")
+                throw NoiseError.invalidCiphertext
+            }
+
+            // Split ciphertext and tag
+            encryptedData = actualCiphertext.prefix(actualCiphertext.count - 16)
+            tag = actualCiphertext.suffix(16)
+            // Set local nonce
+            nonce = extractedNonce
+        } else {
+            // Split ciphertext and tag
+            encryptedData = ciphertext.prefix(ciphertext.count - 16)
+            tag = ciphertext.suffix(16)
+        }
         
         // Create nonce from counter
         var nonceData = Data(count: 12)
@@ -123,8 +183,8 @@ class NoiseCipherState {
         )
         
         // Log high nonce values that might indicate issues
-        if currentNonce > 1000000 {
-            SecureLogger.log("High nonce value detected: \(currentNonce) - consider rekeying", category: SecureLogger.encryption, level: .warning)
+        if nonce > 1000000 {
+            SecureLogger.log("High nonce value detected: \(nonce) - consider rekeying", category: SecureLogger.encryption, level: .warning)
         }
         
         do {
@@ -133,7 +193,7 @@ class NoiseCipherState {
             return plaintext
         } catch {
             // Log authentication failures with nonce info
-            SecureLogger.log("Decryption failed at nonce \(currentNonce)", category: SecureLogger.encryption, level: .error)
+            SecureLogger.log("Decryption failed at nonce \(nonce)", category: SecureLogger.encryption, level: .error)
             throw error
         }
     }
@@ -213,8 +273,8 @@ class NoiseSymmetricState {
         let tempKey1 = SymmetricKey(data: output[0])
         let tempKey2 = SymmetricKey(data: output[1])
         
-        let c1 = NoiseCipherState(key: tempKey1)
-        let c2 = NoiseCipherState(key: tempKey2)
+        let c1 = NoiseCipherState(key: tempKey1, useExtractedNonce: true)
+        let c2 = NoiseCipherState(key: tempKey2, useExtractedNonce: true)
         
         return (c1, c2)
     }
