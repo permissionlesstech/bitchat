@@ -201,17 +201,26 @@ class BluetoothMeshService: NSObject {
     private func writeToPeripheral(_ data: Data, peripheral: CBPeripheral, characteristic: CBCharacteristic, peerID: String? = nil) {
         let peripheralID = peripheral.identifier.uuidString
         
-        if peripheral.state == .connected {
-            // Direct write if connected
-            let writeType: CBCharacteristicWriteType = data.count > 512 ? .withResponse : .withoutResponse
-            peripheral.writeValue(data, for: characteristic, type: writeType)
-            
-            // Update activity tracking
-            updatePeripheralActivity(peripheralID)
-        } else {
+        // Double check the peripheral state to avoid API misuse
+        guard peripheral.state == .connected else {
             // Queue write for disconnected peripheral
             queueWrite(data: data, peripheralID: peripheralID, peerID: peerID)
+            return
         }
+        
+        // Verify characteristic is valid and writable
+        guard characteristic.properties.contains(.write) || characteristic.properties.contains(.writeWithoutResponse) else {
+            SecureLogger.log("Characteristic does not support writing for peripheral \(peripheralID)", 
+                           category: SecureLogger.session, level: .warning)
+            return
+        }
+        
+        // Direct write if connected
+        let writeType: CBCharacteristicWriteType = data.count > 512 ? .withResponse : .withoutResponse
+        peripheral.writeValue(data, for: characteristic, type: writeType)
+        
+        // Update activity tracking
+        updatePeripheralActivity(peripheralID)
     }
     
     private func queueWrite(data: Data, peripheralID: String, peerID: String?) {
@@ -263,10 +272,17 @@ class BluetoothMeshService: NSObject {
         // Process queued writes with small delay between them
         for (index, queuedWrite) in queue.enumerated() {
             DispatchQueue.main.asyncAfter(deadline: .now() + Double(index) * 0.01) { [weak self] in
-                guard peripheral.state == .connected else { return }
+                guard let self = self,
+                      peripheral.state == .connected,
+                      characteristic.properties.contains(.write) || characteristic.properties.contains(.writeWithoutResponse) else { 
+                    return 
+                }
                 
                 let writeType: CBCharacteristicWriteType = queuedWrite.data.count > 512 ? .withResponse : .withoutResponse
                 peripheral.writeValue(queuedWrite.data, for: characteristic, type: writeType)
+                
+                // Update activity tracking
+                self.updatePeripheralActivity(peripheralID)
             }
         }
     }
