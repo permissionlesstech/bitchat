@@ -299,6 +299,7 @@ class NoiseHandshakeState {
             throw NoiseError.handshakeComplete
         }
         
+        SecureLogger.log("NoiseHandshake[\(role)]: Writing message \(currentPattern + 1)/\(messagePatterns.count)", category: SecureLogger.noise, level: .info)
         
         var messageBuffer = Data()
         let patterns = messagePatterns[currentPattern]
@@ -390,6 +391,7 @@ class NoiseHandshakeState {
             throw NoiseError.handshakeComplete
         }
         
+        SecureLogger.log("NoiseHandshake[\(role)]: Reading message \(currentPattern + 1)/\(messagePatterns.count)", category: SecureLogger.noise, level: .info)
         
         var buffer = message
         let patterns = messagePatterns[currentPattern]
