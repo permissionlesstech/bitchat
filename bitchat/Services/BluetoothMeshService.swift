@@ -551,6 +551,9 @@ class BluetoothMeshService: NSObject {
                 // Register with ChatViewModel for verification tracking
                 DispatchQueue.main.async {
                     (self?.delegate as? ChatViewModel)?.registerPeerPublicKey(peerID: peerID, publicKeyData: publicKeyData)
+                    
+                    // Force UI to update encryption status after authentication
+                    (self?.delegate as? ChatViewModel)?.updateEncryptionStatusForPeers()
                 }
             }
             
@@ -3299,6 +3302,12 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             // Clear any lingering handshake attempt time
             handshakeAttemptTimes.removeValue(forKey: peerID)
             handshakeCoordinator.recordHandshakeSuccess(peerID: peerID)
+            
+            // Force UI update since we have an existing session
+            DispatchQueue.main.async { [weak self] in
+                (self?.delegate as? ChatViewModel)?.updateEncryptionStatusForPeers()
+            }
+            
             return
         }
         
@@ -3421,14 +3430,6 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 
                 // Send any cached store-and-forward messages
                 sendCachedMessages(to: peerID)
-                
-                // Notify delegate to update UI encryption status
-                DispatchQueue.main.async { [weak self] in
-                    // Force UI to refresh by sending a peer list update
-                    if let peers = self?.collectionsQueue.sync(execute: { Array(self?.activePeers ?? []) }) {
-                        self?.delegate?.didUpdatePeerList(peers)
-                    }
-                }
             }
         } catch NoiseSessionError.alreadyEstablished {
             // Session already established, ignore handshake
