@@ -254,4 +254,13 @@ class NoiseHandshakeCoordinator {
             SecureLogger.log("========================", category: SecureLogger.handshake, level: .debug)
         }
     }
+    
+    /// Clear all handshake states - used during panic mode
+    func clearAllHandshakeStates() {
+        handshakeQueue.async(flags: .barrier) {
+            SecureLogger.log("Clearing all handshake states for panic mode", category: SecureLogger.handshake, level: .warning)
+            self.handshakeStates.removeAll()
+            self.processedHandshakeMessages.removeAll()
+        }
+    }
 }
