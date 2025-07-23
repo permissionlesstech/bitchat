@@ -101,14 +101,29 @@ final class PublicChatE2ETests: XCTestCase {
                message.sender == TestConstants.testNickname1 {
                 
                 // Create relay message
-                var relayMessage = message
-                relayMessage.isRelay = true
-                relayMessage.originalSender = message.sender
+                let relayMessage = BitchatMessage(
+                    id: message.id,
+                    sender: message.sender,
+                    content: message.content,
+                    timestamp: message.timestamp,
+                    isRelay: true,
+                    originalSender: message.sender,
+                    isPrivate: message.isPrivate,
+                    recipientNickname: message.recipientNickname,
+                    senderPeerID: message.senderPeerID,
+                    mentions: message.mentions
+                )
                 
                 if let relayPayload = relayMessage.toBinaryPayload() {
-                    var relayPacket = packet
-                    relayPacket.payload = relayPayload
-                    relayPacket.ttl = packet.ttl - 1
+                    let relayPacket = BitchatPacket(
+                        type: packet.type,
+                        senderID: packet.senderID,
+                        recipientID: packet.recipientID,
+                        timestamp: packet.timestamp,
+                        payload: relayPayload,
+                        signature: packet.signature,
+                        ttl: packet.ttl - 1
+                    )
                     
                     // Simulate relay to Charlie
                     self.charlie.simulateIncomingPacket(relayPacket)
@@ -394,8 +409,8 @@ final class PublicChatE2ETests: XCTestCase {
     
     private func createMockService(peerID: String, nickname: String) -> MockBluetoothMeshService {
         let service = MockBluetoothMeshService()
-        service.peerID = peerID
-        service.nickname = nickname
+        service.myPeerID = peerID
+        service.mockNickname = nickname
         return service
     }
     
@@ -414,17 +429,29 @@ final class PublicChatE2ETests: XCTestCase {
                 guard message.senderPeerID != node.peerID else { return }
                 
                 // Create relay message
-                var relayMessage = message
-                if !relayMessage.isRelay {
-                    relayMessage.isRelay = true
-                    relayMessage.originalSender = message.sender
-                }
+                let relayMessage = BitchatMessage(
+                    id: message.id,
+                    sender: message.sender,
+                    content: message.content,
+                    timestamp: message.timestamp,
+                    isRelay: true,
+                    originalSender: message.isRelay ? message.originalSender : message.sender,
+                    isPrivate: message.isPrivate,
+                    recipientNickname: message.recipientNickname,
+                    senderPeerID: message.senderPeerID,
+                    mentions: message.mentions
+                )
                 
                 if let relayPayload = relayMessage.toBinaryPayload() {
-                    var relayPacket = packet
-                    relayPacket.payload = relayPayload
-                    relayPacket.ttl = packet.ttl - 1
-                    relayPacket.senderID = node.peerID.data(using: .utf8)!
+                    let relayPacket = BitchatPacket(
+                        type: packet.type,
+                        senderID: node.peerID.data(using: .utf8)!,
+                        recipientID: packet.recipientID,
+                        timestamp: packet.timestamp,
+                        payload: relayPayload,
+                        signature: packet.signature,
+                        ttl: packet.ttl - 1
+                    )
                     
                     // Relay to next hops
                     for nextHop in nextHops {

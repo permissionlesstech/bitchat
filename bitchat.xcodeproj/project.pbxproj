@@ -28,6 +28,8 @@
 		04636BDE2E30BE5100FBCFA8 /* NoiseProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04636BCA2E30BE5100FBCFA8 /* NoiseProtocolTests.swift */; };
 		04636BDF2E30BE5100FBCFA8 /* TestHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04636BCF2E30BE5100FBCFA8 /* TestHelpers.swift */; };
 		04636BE02E30BE5100FBCFA8 /* PublicChatE2ETests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04636BC52E30BE5100FBCFA8 /* PublicChatE2ETests.swift */; };
+		04636BE82E30BEC600FBCFA8 /* IntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04636BE12E30BEC600FBCFA8 /* IntegrationTests.swift */; };
+		04636BEB2E30BEC600FBCFA8 /* IntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04636BE12E30BEC600FBCFA8 /* IntegrationTests.swift */; };
 		04891CA92E22971E0064A111 /* LRUCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04891CA82E22971E0064A111 /* LRUCache.swift */; };
 		04891CAA2E22971E0064A111 /* LRUCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04891CA82E22971E0064A111 /* LRUCache.swift */; };
 		04AD0B4E2E25B9580002A40A /* IdentityModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E2446380E7A44E49A35B664 /* IdentityModels.swift */; };
@@ -130,6 +132,7 @@
 		04636BCC2E30BE5100FBCFA8 /* BinaryProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BinaryProtocolTests.swift; sourceTree = "<group>"; };
 		04636BCE2E30BE5100FBCFA8 /* TestConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestConstants.swift; sourceTree = "<group>"; };
 		04636BCF2E30BE5100FBCFA8 /* TestHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestHelpers.swift; sourceTree = "<group>"; };
+		04636BE12E30BEC600FBCFA8 /* IntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntegrationTests.swift; sourceTree = "<group>"; };
 		04891CA82E22971E0064A111 /* LRUCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LRUCache.swift; sourceTree = "<group>"; };
 		04B6BA412E2035530090FE39 /* NoiseProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoiseProtocol.swift; sourceTree = "<group>"; };
 		04B6BA422E2035530090FE39 /* NoiseSecurityConsiderations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoiseSecurityConsiderations.swift; sourceTree = "<group>"; };
@@ -210,6 +213,14 @@
 				04636BCF2E30BE5100FBCFA8 /* TestHelpers.swift */,
 			);
 			path = TestUtilities;
+			sourceTree = "<group>";
+		};
+		04636BE22E30BEC600FBCFA8 /* Integration */ = {
+			isa = PBXGroup;
+			children = (
+				04636BE12E30BEC600FBCFA8 /* IntegrationTests.swift */,
+			);
+			path = Integration;
 			sourceTree = "<group>";
 		};
 		04B6BA442E2035530090FE39 /* Noise */ = {
@@ -327,6 +338,7 @@
 		C3D98EB3E1B455E321F519F4 /* bitchatTests */ = {
 			isa = PBXGroup;
 			children = (
+				04636BE22E30BEC600FBCFA8 /* Integration */,
 				04636BC62E30BE5100FBCFA8 /* EndToEnd */,
 				04636BC92E30BE5100FBCFA8 /* Mocks */,
 				04636BCB2E30BE5100FBCFA8 /* Noise */,
@@ -595,6 +607,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				04636BD92E30BE5100FBCFA8 /* BinaryProtocolTests.swift in Sources */,
+				04636BE82E30BEC600FBCFA8 /* IntegrationTests.swift in Sources */,
 				04636BDA2E30BE5100FBCFA8 /* MockNoiseSession.swift in Sources */,
 				04636BDB2E30BE5100FBCFA8 /* PrivateChatE2ETests.swift in Sources */,
 				04636BDC2E30BE5100FBCFA8 /* TestConstants.swift in Sources */,
@@ -610,6 +623,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				04636BD12E30BE5100FBCFA8 /* BinaryProtocolTests.swift in Sources */,
+				04636BEB2E30BEC600FBCFA8 /* IntegrationTests.swift in Sources */,
 				04636BD22E30BE5100FBCFA8 /* MockNoiseSession.swift in Sources */,
 				04636BD32E30BE5100FBCFA8 /* PrivateChatE2ETests.swift in Sources */,
 				04636BD42E30BE5100FBCFA8 /* TestConstants.swift in Sources */,
