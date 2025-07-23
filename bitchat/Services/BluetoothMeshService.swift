@@ -107,6 +107,13 @@ class BluetoothMeshService: NSObject {
     private var rotationLocked = false  // Prevent rotation during critical operations
     private var rotationTimer: Timer?  // Timer for scheduled rotations
     
+    // MARK: - Identity Cache
+    // In-memory cache for peer public keys to avoid keychain lookups
+    private var peerPublicKeyCache: [String: Data] = [:]  // PeerID -> Public Key Data
+    private var peerSigningKeyCache: [String: Data] = [:]  // PeerID -> Signing Key Data
+    private let identityCacheTTL: TimeInterval = 3600.0  // 1 hour TTL
+    private var identityCacheTimestamps: [String: Date] = [:]  // Track when entries were cached
+    
     weak var delegate: BitchatDelegate?
     private let noiseService = NoiseEncryptionService()
     private let handshakeCoordinator = NoiseHandshakeCoordinator()
@@ -115,8 +122,196 @@ class BluetoothMeshService: NSObject {
     private var versionNegotiationState: [String: VersionNegotiationState] = [:]
     private var negotiatedVersions: [String: UInt8] = [:]  // peerID -> agreed version
     
+    // MARK: - Write Queue for Disconnected Peripherals
+    private struct QueuedWrite {
+        let data: Data
+        let peripheralID: String
+        let peerID: String?
+        let timestamp: Date
+        let retryCount: Int
+    }
+    
+    private var writeQueue: [String: [QueuedWrite]] = [:]  // PeripheralID -> Queue of writes
+    private let writeQueueLock = NSLock()
+    private let maxWriteQueueSize = 50  // Max queued writes per peripheral
+    private let maxWriteRetries = 3
+    private let writeQueueTTL: TimeInterval = 60.0  // Expire queued writes after 1 minute
+    private var writeQueueTimer: Timer?  // Timer for processing expired writes
+    
+    // MARK: - Connection Pooling
+    private let maxConnectedPeripherals = 10  // Limit simultaneous connections
+    private let maxScanningDuration: TimeInterval = 5.0  // Stop scanning after 5 seconds to save battery
+    
     func getNoiseService() -> NoiseEncryptionService {
         return noiseService
+    }
+    
+    // MARK: - Identity Cache Methods
+    
+    func getCachedPublicKey(for peerID: String) -> Data? {
+        return collectionsQueue.sync {
+            // Check if cache entry exists and is not expired
+            if let timestamp = identityCacheTimestamps[peerID],
+               Date().timeIntervalSince(timestamp) < identityCacheTTL {
+                return peerPublicKeyCache[peerID]
+            }
+            return nil
+        }
+    }
+    
+    func getCachedSigningKey(for peerID: String) -> Data? {
+        return collectionsQueue.sync {
+            // Check if cache entry exists and is not expired
+            if let timestamp = identityCacheTimestamps[peerID],
+               Date().timeIntervalSince(timestamp) < identityCacheTTL {
+                return peerSigningKeyCache[peerID]
+            }
+            return nil
+        }
+    }
+    
+    private func cleanExpiredIdentityCache() {
+        collectionsQueue.async(flags: .barrier) { [weak self] in
+            guard let self = self else { return }
+            
+            let now = Date()
+            var expiredPeerIDs: [String] = []
+            
+            for (peerID, timestamp) in self.identityCacheTimestamps {
+                if now.timeIntervalSince(timestamp) >= self.identityCacheTTL {
+                    expiredPeerIDs.append(peerID)
+                }
+            }
+            
+            for peerID in expiredPeerIDs {
+                self.peerPublicKeyCache.removeValue(forKey: peerID)
+                self.peerSigningKeyCache.removeValue(forKey: peerID)
+                self.identityCacheTimestamps.removeValue(forKey: peerID)
+            }
+            
+            if !expiredPeerIDs.isEmpty {
+                SecureLogger.log("Cleaned \(expiredPeerIDs.count) expired identity cache entries", 
+                               category: SecureLogger.session, level: .debug)
+            }
+        }
+    }
+    
+    // MARK: - Write Queue Management
+    
+    private func writeToPeripheral(_ data: Data, peripheral: CBPeripheral, characteristic: CBCharacteristic, peerID: String? = nil) {
+        let peripheralID = peripheral.identifier.uuidString
+        
+        // Double check the peripheral state to avoid API misuse
+        guard peripheral.state == .connected else {
+            // Queue write for disconnected peripheral
+            queueWrite(data: data, peripheralID: peripheralID, peerID: peerID)
+            return
+        }
+        
+        // Verify characteristic is valid and writable
+        guard characteristic.properties.contains(.write) || characteristic.properties.contains(.writeWithoutResponse) else {
+            SecureLogger.log("Characteristic does not support writing for peripheral \(peripheralID)", 
+                           category: SecureLogger.session, level: .warning)
+            return
+        }
+        
+        // Direct write if connected
+        let writeType: CBCharacteristicWriteType = data.count > 512 ? .withResponse : .withoutResponse
+        peripheral.writeValue(data, for: characteristic, type: writeType)
+        
+        // Update activity tracking
+        updatePeripheralActivity(peripheralID)
+    }
+    
+    private func queueWrite(data: Data, peripheralID: String, peerID: String?) {
+        writeQueueLock.lock()
+        defer { writeQueueLock.unlock() }
+        
+        // Check backpressure - drop oldest if queue is full
+        var queue = writeQueue[peripheralID] ?? []
+        
+        if queue.count >= maxWriteQueueSize {
+            // Remove oldest entries
+            let removeCount = queue.count - maxWriteQueueSize + 1
+            queue.removeFirst(removeCount)
+            SecureLogger.log("Write queue full for \(peripheralID), dropped \(removeCount) oldest writes", 
+                           category: SecureLogger.session, level: .warning)
+        }
+        
+        let queuedWrite = QueuedWrite(
+            data: data,
+            peripheralID: peripheralID,
+            peerID: peerID,
+            timestamp: Date(),
+            retryCount: 0
+        )
+        
+        queue.append(queuedWrite)
+        writeQueue[peripheralID] = queue
+        
+        SecureLogger.log("Queued write for disconnected peripheral \(peripheralID), queue size: \(queue.count)", 
+                       category: SecureLogger.session, level: .debug)
+    }
+    
+    private func processWriteQueue(for peripheral: CBPeripheral) {
+        guard peripheral.state == .connected,
+              let characteristic = peripheralCharacteristics[peripheral] else { return }
+        
+        let peripheralID = peripheral.identifier.uuidString
+        
+        writeQueueLock.lock()
+        let queue = writeQueue[peripheralID] ?? []
+        writeQueue[peripheralID] = []
+        writeQueueLock.unlock()
+        
+        if !queue.isEmpty {
+            SecureLogger.log("Processing \(queue.count) queued writes for \(peripheralID)", 
+                           category: SecureLogger.session, level: .info)
+        }
+        
+        // Process queued writes with small delay between them
+        for (index, queuedWrite) in queue.enumerated() {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(index) * 0.01) { [weak self] in
+                guard let self = self,
+                      peripheral.state == .connected,
+                      characteristic.properties.contains(.write) || characteristic.properties.contains(.writeWithoutResponse) else { 
+                    return 
+                }
+                
+                let writeType: CBCharacteristicWriteType = queuedWrite.data.count > 512 ? .withResponse : .withoutResponse
+                peripheral.writeValue(queuedWrite.data, for: characteristic, type: writeType)
+                
+                // Update activity tracking
+                self.updatePeripheralActivity(peripheralID)
+            }
+        }
+    }
+    
+    private func cleanExpiredWriteQueues() {
+        writeQueueLock.lock()
+        defer { writeQueueLock.unlock() }
+        
+        let now = Date()
+        var expiredWrites = 0
+        
+        for (peripheralID, queue) in writeQueue {
+            let filteredQueue = queue.filter { write in
+                now.timeIntervalSince(write.timestamp) < writeQueueTTL
+            }
+            
+            expiredWrites += queue.count - filteredQueue.count
+            
+            if filteredQueue.isEmpty {
+                writeQueue.removeValue(forKey: peripheralID)
+            } else {
+                writeQueue[peripheralID] = filteredQueue
+            }
+        }
+        
+        if expiredWrites > 0 {
+            SecureLogger.log("Cleaned \(expiredWrites) expired queued writes", 
+                           category: SecureLogger.session, level: .debug)
+        }
     }
     private let messageQueue = DispatchQueue(label: "bitchat.messageQueue", attributes: .concurrent) // Concurrent queue with barriers
     private let processedMessages = BoundedSet<String>(maxSize: 1000)  // Bounded to prevent memory growth
@@ -214,6 +409,8 @@ class BluetoothMeshService: NSObject {
     private var connectionPool: [String: CBPeripheral] = [:]
     private var connectionAttempts: [String: Int] = [:]
     private var connectionBackoff: [String: TimeInterval] = [:]
+    private var lastActivityByPeripheralID: [String: Date] = [:]  // Track last activity for LRU
+    private var peerIDByPeripheralID: [String: String] = [:]  // Map peripheral ID to peer ID
     private let maxConnectionAttempts = 3
     private let baseBackoffInterval: TimeInterval = 1.0
     
@@ -304,10 +501,9 @@ class BluetoothMeshService: NSObject {
                         self.broadcastPacket(messages[0])
                     } else if let dest = destination,
                               let peripheral = self.connectedPeripherals[dest],
-                              peripheral.state == .connected,
                               let characteristic = self.peripheralCharacteristics[peripheral] {
                         if let data = messages[0].toBinaryData() {
-                            peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
+                            self.writeToPeripheral(data, peripheral: peripheral, characteristic: characteristic, peerID: dest)
                         }
                     }
                 } else {
@@ -323,7 +519,7 @@ class BluetoothMeshService: NSObject {
                                       peripheral.state == .connected,
                                       let characteristic = self?.peripheralCharacteristics[peripheral] {
                                 if let data = message.toBinaryData() {
-                                    peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
+                                    self?.writeToPeripheral(data, peripheral: peripheral, characteristic: characteristic, peerID: dest)
                                 }
                             }
                         }
@@ -396,6 +592,11 @@ class BluetoothMeshService: NSObject {
             self.peerIDToFingerprint[newPeerID] = fingerprint
             self.fingerprintToPeerID[fingerprint] = newPeerID
             self.peerIdentityBindings[fingerprint] = binding
+            
+            // Cache public keys to avoid keychain lookups
+            self.peerPublicKeyCache[newPeerID] = binding.publicKey
+            self.peerSigningKeyCache[newPeerID] = binding.signingPublicKey
+            self.identityCacheTimestamps[newPeerID] = Date()
             
             // Also update nickname from binding
             self.peerNicknames[newPeerID] = binding.nickname
@@ -641,6 +842,16 @@ class BluetoothMeshService: NSObject {
         // Start peer availability checking timer (every 5 seconds)
         availabilityCheckTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
             self?.checkPeerAvailability()
+        }
+        
+        // Start write queue cleanup timer (every 30 seconds)
+        writeQueueTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
+            self?.cleanExpiredWriteQueues()
+        }
+        
+        // Start identity cache cleanup timer (every hour)
+        Timer.scheduledTimer(withTimeInterval: 3600.0, repeats: true) { [weak self] _ in
+            self?.cleanExpiredIdentityCache()
         }
         
         // Log handshake states periodically for debugging and clean up stale states
@@ -1239,8 +1450,7 @@ class BluetoothMeshService: NSObject {
             if let peripheral = connectedPeripherals[peerID],
                peripheral.state == .connected,
                let characteristic = peripheral.services?.first(where: { $0.uuid == BluetoothMeshService.serviceUUID })?.characteristics?.first(where: { $0.uuid == BluetoothMeshService.characteristicUUID }) {
-                let writeType: CBCharacteristicWriteType = characteristic.properties.contains(.write) ? .withResponse : .withoutResponse
-                peripheral.writeValue(data, for: characteristic, type: writeType)
+                writeToPeripheral(data, peripheral: peripheral, characteristic: characteristic, peerID: peerID)
             } else {
             }
         } else {
@@ -1602,7 +1812,7 @@ class BluetoothMeshService: NSObject {
             for (index, storedMessage) in messagesToSend.enumerated() {
                 let delay = Double(index) * 0.02 // 20ms between messages for faster sync
                 
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak peripheral] in
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self, weak peripheral] in
                     guard let peripheral = peripheral,
                           peripheral.state == .connected else {
                         return
@@ -1613,7 +1823,7 @@ class BluetoothMeshService: NSObject {
                     
                     if let data = packetToSend.toBinaryData(),
                        characteristic.properties.contains(.writeWithoutResponse) {
-                        peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
+                        self?.writeToPeripheral(data, peripheral: peripheral, characteristic: characteristic, peerID: peerID)
                     }
                 }
             }
@@ -1691,18 +1901,14 @@ class BluetoothMeshService: NSObject {
         
         // Send to connected peripherals (as central)
         var sentToPeripherals = 0
-        for (_, peripheral) in connectedPeripherals {
+        for (peerID, peripheral) in connectedPeripherals {
             if let characteristic = peripheralCharacteristics[peripheral] {
                 // Check if peripheral is connected before writing
                 if peripheral.state == .connected {
-                    // Use withoutResponse for faster transmission when possible
-                    // Only use withResponse for critical messages or when MTU negotiation needed
-                    let writeType: CBCharacteristicWriteType = data.count > 512 ? .withResponse : .withoutResponse
-                    
                     // Additional safety check for characteristic properties
                     if characteristic.properties.contains(.write) || 
                        characteristic.properties.contains(.writeWithoutResponse) {
-                        peripheral.writeValue(data, for: characteristic, type: writeType)
+                        writeToPeripheral(data, peripheral: peripheral, characteristic: characteristic, peerID: peerID)
                         sentToPeripherals += 1
                     }
                 } else {
@@ -1756,6 +1962,27 @@ class BluetoothMeshService: NSObject {
             if !senderID.isEmpty && senderID != self.myPeerID {
                 // Update peer availability
                 self.updatePeerAvailability(senderID)
+                
+                // IMPORTANT: Update peripheral mapping for ALL message types including handshakes
+                // This ensures disconnect messages work even if peer disconnects right after handshake
+                if let peripheral = peripheral {
+                    let peripheralID = peripheral.identifier.uuidString
+                    
+                    // Check if we need to update the mapping
+                    if peerIDByPeripheralID[peripheralID] != senderID {
+                        SecureLogger.log("Updating peripheral mapping: \(peripheralID) -> \(senderID)", 
+                                       category: SecureLogger.session, level: .debug)
+                        peerIDByPeripheralID[peripheralID] = senderID
+                        
+                        // Also ensure connectedPeripherals has the correct mapping
+                        // Remove any temp ID mapping if it exists
+                        let tempIDToRemove = connectedPeripherals.first(where: { $0.value == peripheral && $0.key != senderID })?.key
+                        if let tempID = tempIDToRemove {
+                            connectedPeripherals.removeValue(forKey: tempID)
+                        }
+                        connectedPeripherals[senderID] = peripheral
+                    }
+                }
                 
                 // Check if this is a reconnection after a long silence
                 let wasReconnection: Bool
@@ -2126,6 +2353,8 @@ class BluetoothMeshService: NSObject {
                         self.connectedPeripherals.removeValue(forKey: tempID)
                         // Add real peer ID mapping
                         self.connectedPeripherals[senderID] = peripheral
+                        // Update peripheral ID to peer ID mapping
+                        self.peerIDByPeripheralID[peripheral.identifier.uuidString] = senderID
                         
                         // IMPORTANT: Remove old peer ID from activePeers to prevent duplicates
                         collectionsQueue.sync(flags: .barrier) {
@@ -3008,6 +3237,20 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
         
         // New peripheral - add to pool and connect
         if !discoveredPeripherals.contains(peripheral) {
+            // Check connection pool limits
+            let connectedCount = connectionPool.values.filter { $0.state == .connected }.count
+            if connectedCount >= maxConnectedPeripherals {
+                // Connection pool is full - find least recently used peripheral to disconnect
+                if let lruPeripheralID = findLeastRecentlyUsedPeripheral() {
+                    if let lruPeripheral = connectionPool[lruPeripheralID] {
+                        SecureLogger.log("Connection pool full, disconnecting LRU peripheral: \(lruPeripheralID)", 
+                                       category: SecureLogger.session, level: .debug)
+                        central.cancelPeripheralConnection(lruPeripheral)
+                        connectionPool.removeValue(forKey: lruPeripheralID)
+                    }
+                }
+            }
+            
             discoveredPeripherals.append(peripheral)
             peripheral.delegate = self
             connectionPool[peripheralID] = peripheral
@@ -3033,6 +3276,10 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
         let tempID = peripheral.identifier.uuidString
         SecureLogger.log("Peripheral connected: \(tempID)", category: SecureLogger.session, level: .info)
+        
+        // Log current mapping state for debugging
+        SecureLogger.log("Current peerIDByPeripheralID mappings: \(peerIDByPeripheralID.keys.joined(separator: ", "))", 
+                       category: SecureLogger.session, level: .debug)
         
         peripheral.delegate = self
         peripheral.discoverServices([BluetoothMeshService.serviceUUID])
@@ -3077,15 +3324,31 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
         // Find the real peer ID for this peripheral
         var realPeerID: String? = nil
         
-        // First check if we have a direct mapping from peripheral to peer ID
-        for (peerID, connectedPeripheral) in connectedPeripherals {
-            if connectedPeripheral.identifier == peripheral.identifier {
-                realPeerID = peerID.count == 16 ? peerID : nil
-                break
+        // First check our peripheral ID to peer ID mapping
+        if let peerID = peerIDByPeripheralID[peripheralID] {
+            realPeerID = peerID
+            SecureLogger.log("Found peer ID \(peerID) from peerIDByPeripheralID for peripheral \(peripheralID)", 
+                           category: SecureLogger.session, level: .debug)
+        } else {
+            SecureLogger.log("No mapping in peerIDByPeripheralID for peripheral \(peripheralID), checking connectedPeripherals", 
+                           category: SecureLogger.session, level: .debug)
+            
+            // Fallback: check if we have a direct mapping from peripheral to peer ID
+            for (peerID, connectedPeripheral) in connectedPeripherals {
+                if connectedPeripheral.identifier == peripheral.identifier {
+                    // Check if this is a real peer ID (16 hex chars) not a temp ID
+                    if peerID.count == 16 && peerID.allSatisfy({ $0.isHexDigit }) {
+                        realPeerID = peerID
+                        SecureLogger.log("Found peer ID \(peerID) from connectedPeripherals fallback", 
+                                       category: SecureLogger.session, level: .debug)
+                        break
+                    } else {
+                        SecureLogger.log("Skipping non-peer ID '\(peerID)' (length: \(peerID.count))", 
+                                       category: SecureLogger.session, level: .debug)
+                    }
+                }
             }
         }
-        
-        // If not found in connected peripherals, we don't have a mapping
         
         // Update connection state immediately if we have a real peer ID
         if let peerID = realPeerID {
@@ -3123,6 +3386,10 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
             connectionAttempts[peripheralID] = 0
             connectionBackoff.removeValue(forKey: peripheralID)
         }
+        
+        // Clean up peripheral tracking
+        peerIDByPeripheralID.removeValue(forKey: peripheralID)
+        lastActivityByPeripheralID.removeValue(forKey: peripheralID)
         
         // Find peer ID for this peripheral (could be temp ID or real ID)
         var foundPeerID: String? = nil
@@ -3272,8 +3539,7 @@ extension BluetoothMeshService: CBPeripheralDelegate {
                             payload: Data(vm.nickname.utf8)
                         )
                         if let data = announcePacket.toBinaryData() {
-                            let writeType: CBCharacteristicWriteType = characteristic.properties.contains(.write) ? .withResponse : .withoutResponse
-                            peripheral.writeValue(data, for: characteristic, type: writeType)
+                            self.writeToPeripheral(data, peripheral: peripheral, characteristic: characteristic, peerID: nil)
                         }
                     }
                 }
@@ -3285,6 +3551,9 @@ extension BluetoothMeshService: CBPeripheralDelegate {
         guard let data = characteristic.value else {
             return
         }
+        
+        // Update activity tracking for this peripheral
+        updatePeripheralActivity(peripheral.identifier.uuidString)
         
         
         guard let packet = BitchatPacket.from(data) else { 
@@ -4348,8 +4617,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
            let characteristic = peripheralCharacteristics[peripheral] {
             // Send directly to specific peripheral
             if let data = packet.toBinaryData() {
-                let writeType: CBCharacteristicWriteType = characteristic.properties.contains(.write) ? .withResponse : .withoutResponse
-                peripheral.writeValue(data, for: characteristic, type: writeType)
+                writeToPeripheral(data, peripheral: peripheral, characteristic: characteristic, peerID: nil)
             }
         } else {
             // Broadcast to all
@@ -4897,5 +5165,41 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             SecureLogger.log("Failed to encrypt private message \(msgID) for \(recipientPeerID): \(error)", category: SecureLogger.encryption, level: .error)
         }
         } // End of encryptionQueue.async
+    }
+    
+    // MARK: - Connection Pool Management
+    
+    private func findLeastRecentlyUsedPeripheral() -> String? {
+        var lruPeripheralID: String?
+        var oldestActivityTime = Date()
+        
+        for (peripheralID, peripheral) in connectionPool {
+            // Only consider connected peripherals
+            guard peripheral.state == .connected else { continue }
+            
+            // Skip if this peripheral has an active peer connection
+            if let peerID = peerIDByPeripheralID[peripheralID],
+               activePeers.contains(peerID) {
+                continue
+            }
+            
+            // Find the least recently used peripheral based on last activity
+            if let lastActivity = lastActivityByPeripheralID[peripheralID],
+               lastActivity < oldestActivityTime {
+                oldestActivityTime = lastActivity
+                lruPeripheralID = peripheralID
+            } else if lastActivityByPeripheralID[peripheralID] == nil {
+                // If no activity recorded, it's a candidate for removal
+                lruPeripheralID = peripheralID
+                break
+            }
+        }
+        
+        return lruPeripheralID
+    }
+    
+    // Track activity for peripherals
+    private func updatePeripheralActivity(_ peripheralID: String) {
+        lastActivityByPeripheralID[peripheralID] = Date()
     }
 }
