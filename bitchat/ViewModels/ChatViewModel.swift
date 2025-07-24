@@ -36,6 +36,11 @@ class ChatViewModel: ObservableObject {
     @Published var autocompleteRange: NSRange? = nil
     @Published var selectedAutocompleteIndex: Int = 0
     
+    // Autocomplete optimization
+    private let mentionRegex = try? NSRegularExpression(pattern: "@([a-zA-Z0-9_]*)$", options: [])
+    private var cachedNicknames: [String] = []
+    private var lastNicknameUpdate: Date = .distantPast
+    
     // Temporary property to fix compilation
     @Published var showPasswordPrompt = false
     
@@ -837,49 +842,76 @@ class ChatViewModel: ObservableObject {
     }
     
     func updateAutocomplete(for text: String, cursorPosition: Int) {
+        // Quick early exit for empty text
+        guard cursorPosition > 0 else {
+            if showAutocomplete {
+                showAutocomplete = false
+                autocompleteSuggestions = []
+                autocompleteRange = nil
+            }
+            return
+        }
+        
         // Find @ symbol before cursor
         let beforeCursor = String(text.prefix(cursorPosition))
         
-        // Look for @ pattern
-        let pattern = "@([a-zA-Z0-9_]*)$"
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: []),
+        // Use cached regex
+        guard let regex = mentionRegex,
               let match = regex.firstMatch(in: beforeCursor, options: [], range: NSRange(location: 0, length: beforeCursor.count)) else {
-            showAutocomplete = false
-            autocompleteSuggestions = []
-            autocompleteRange = nil
+            if showAutocomplete {
+                showAutocomplete = false
+                autocompleteSuggestions = []
+                autocompleteRange = nil
+            }
             return
         }
         
         // Extract the partial nickname
         let partialRange = match.range(at: 1)
         guard let range = Range(partialRange, in: beforeCursor) else {
-            showAutocomplete = false
-            autocompleteSuggestions = []
-            autocompleteRange = nil
+            if showAutocomplete {
+                showAutocomplete = false
+                autocompleteSuggestions = []
+                autocompleteRange = nil
+            }
             return
         }
         
         let partial = String(beforeCursor[range]).lowercased()
         
-        // Get all available nicknames (excluding self)
-        let peerNicknames = meshService.getPeerNicknames()
-        let allNicknames = Array(peerNicknames.values)
+        // Update cached nicknames only if peer list changed (check every 1 second max)
+        let now = Date()
+        if now.timeIntervalSince(lastNicknameUpdate) > 1.0 || cachedNicknames.isEmpty {
+            let peerNicknames = meshService.getPeerNicknames()
+            cachedNicknames = Array(peerNicknames.values).sorted()
+            lastNicknameUpdate = now
+        }
         
-        // Filter suggestions
-        let suggestions = allNicknames.filter { nick in
+        // Filter suggestions using cached nicknames
+        let suggestions = cachedNicknames.filter { nick in
             nick.lowercased().hasPrefix(partial)
-        }.sorted()
+        }
         
+        // Batch UI updates
         if !suggestions.isEmpty {
-            autocompleteSuggestions = suggestions
-            showAutocomplete = true
-            autocompleteRange = match.range(at: 0) // Store full @mention range
+            // Only update if suggestions changed
+            if autocompleteSuggestions != suggestions {
+                autocompleteSuggestions = suggestions
+            }
+            if !showAutocomplete {
+                showAutocomplete = true
+            }
+            if autocompleteRange != match.range(at: 0) {
+                autocompleteRange = match.range(at: 0)
+            }
             selectedAutocompleteIndex = 0
         } else {
-            showAutocomplete = false
-            autocompleteSuggestions = []
-            autocompleteRange = nil
-            selectedAutocompleteIndex = 0
+            if showAutocomplete {
+                showAutocomplete = false
+                autocompleteSuggestions = []
+                autocompleteRange = nil
+                selectedAutocompleteIndex = 0
+            }
         }
     }
     

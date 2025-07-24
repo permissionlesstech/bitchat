@@ -28,6 +28,7 @@ struct ContentView: View {
     @FocusState private var isNicknameFieldFocused: Bool
     @State private var lastScrollTime: Date = .distantPast
     @State private var scrollThrottleTimer: Timer?
+    @State private var autocompleteDebounceTimer: Timer?
     
     private var backgroundColor: Color {
         colorScheme == .dark ? Color.black : Color.white
@@ -158,6 +159,11 @@ struct ContentView: View {
             }
             
             Button("cancel", role: .cancel) {}
+        }
+        .onDisappear {
+            // Clean up timers
+            scrollThrottleTimer?.invalidate()
+            autocompleteDebounceTimer?.invalidate()
         }
     }
     
@@ -399,11 +405,17 @@ struct ContentView: View {
                 .focused($isTextFieldFocused)
                 .padding(.leading, 12)
                 .onChange(of: messageText) { newValue in
-                    // Get cursor position (approximate - end of text for now)
-                    let cursorPosition = newValue.count
-                    viewModel.updateAutocomplete(for: newValue, cursorPosition: cursorPosition)
+                    // Cancel previous debounce timer
+                    autocompleteDebounceTimer?.invalidate()
                     
-                    // Check for command autocomplete
+                    // Debounce autocomplete updates to reduce calls during rapid typing
+                    autocompleteDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: false) { _ in
+                        // Get cursor position (approximate - end of text for now)
+                        let cursorPosition = newValue.count
+                        viewModel.updateAutocomplete(for: newValue, cursorPosition: cursorPosition)
+                    }
+                    
+                    // Check for command autocomplete (instant, no debounce needed)
                     if newValue.hasPrefix("/") && newValue.count >= 1 {
                         // Build context-aware command list
                         let commandDescriptions = [
