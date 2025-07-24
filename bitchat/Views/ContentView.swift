@@ -211,7 +211,8 @@ struct ContentView: View {
                                     if !urls.isEmpty {
                                         ForEach(Array(urls.prefix(3).enumerated()), id: \.offset) { index, urlInfo in
                                             LinkPreviewView(url: urlInfo.url, title: nil)
-                                                .padding(.top, 2)
+                                                .padding(.top, 3)
+                                                .padding(.horizontal, 1)
                                                 .id("\(message.id)-\(urlInfo.url.absoluteString)")
                                         }
                                     }
