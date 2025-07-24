@@ -93,17 +93,20 @@ struct ContentView: View {
                             insertion: .move(edge: .trailing),
                             removal: .move(edge: .trailing)
                         ))
-                        .offset(x: showPrivateChat ? -1 : geometry.size.width)
-                        .offset(x: backSwipeOffset)
+                        .offset(x: showPrivateChat ? -1 : max(0, geometry.size.width))
+                        .offset(x: backSwipeOffset.isNaN ? 0 : backSwipeOffset)
                         .gesture(
                             DragGesture()
                                 .onChanged { value in
-                                    if value.translation.width > 0 {
-                                        backSwipeOffset = min(value.translation.width, geometry.size.width)
+                                    if value.translation.width > 0 && !value.translation.width.isNaN {
+                                        let maxWidth = max(0, geometry.size.width)
+                                        backSwipeOffset = min(value.translation.width, maxWidth.isNaN ? 0 : maxWidth)
                                     }
                                 }
                                 .onEnded { value in
-                                    if value.translation.width > 50 || (value.translation.width > 30 && value.velocity.width > 300) {
+                                    let translation = value.translation.width.isNaN ? 0 : value.translation.width
+                                    let velocity = value.velocity.width.isNaN ? 0 : value.velocity.width
+                                    if translation > 50 || (translation > 30 && velocity > 300) {
                                         withAnimation(.easeOut(duration: 0.2)) {
                                             showPrivateChat = false
                                             backSwipeOffset = 0
@@ -134,22 +137,26 @@ struct ContentView: View {
                     if showSidebar || sidebarDragOffset != 0 {
                         sidebarView
                             #if os(macOS)
-                            .frame(width: min(300, geometry.size.width * 0.4))
+                            .frame(width: min(300, max(0, geometry.size.width.isNaN ? 300 : geometry.size.width) * 0.4))
                             #else
-                            .frame(width: geometry.size.width * 0.7)
+                            .frame(width: max(0, geometry.size.width.isNaN ? 300 : geometry.size.width) * 0.7)
                             #endif
                             .transition(.move(edge: .trailing))
                     } else {
                         // Empty placeholder when hidden
                         Color.clear
                             #if os(macOS)
-                            .frame(width: min(300, geometry.size.width * 0.4))
+                            .frame(width: min(300, max(0, geometry.size.width.isNaN ? 300 : geometry.size.width) * 0.4))
                             #else
-                            .frame(width: geometry.size.width * 0.7)
+                            .frame(width: max(0, geometry.size.width.isNaN ? 300 : geometry.size.width) * 0.7)
                             #endif
                     }
                 }
-                .offset(x: showSidebar ? -sidebarDragOffset : geometry.size.width - sidebarDragOffset)
+                .offset(x: {
+                    let dragOffset = sidebarDragOffset.isNaN ? 0 : sidebarDragOffset
+                    let width = geometry.size.width.isNaN ? 0 : max(0, geometry.size.width)
+                    return showSidebar ? -dragOffset : width - dragOffset
+                }())
                 .animation(.easeInOut(duration: 0.25), value: showSidebar)
             }
         }
@@ -452,6 +459,8 @@ struct ContentView: View {
                 .foregroundColor(textColor)
                 .focused($isTextFieldFocused)
                 .padding(.leading, 12)
+                .autocorrectionDisabled(true)
+                .textInputAutocapitalization(.never)
                 .onChange(of: messageText) { newValue in
                     // Cancel previous debounce timer
                     autocompleteDebounceTimer?.invalidate()
@@ -715,23 +724,26 @@ struct ContentView: View {
         .gesture(
             DragGesture()
                 .onChanged { value in
-                    if !showSidebar && value.translation.width < 0 {
-                        sidebarDragOffset = max(value.translation.width, -300)
-                    } else if showSidebar && value.translation.width > 0 {
-                        sidebarDragOffset = min(-300 + value.translation.width, 0)
+                    let translation = value.translation.width.isNaN ? 0 : value.translation.width
+                    if !showSidebar && translation < 0 {
+                        sidebarDragOffset = max(translation, -300)
+                    } else if showSidebar && translation > 0 {
+                        sidebarDragOffset = min(-300 + translation, 0)
                     }
                 }
                 .onEnded { value in
+                    let translation = value.translation.width.isNaN ? 0 : value.translation.width
+                    let velocity = value.velocity.width.isNaN ? 0 : value.velocity.width
                     withAnimation(.easeOut(duration: 0.2)) {
                         if !showSidebar {
-                            if value.translation.width < -100 || (value.translation.width < -50 && value.velocity.width < -500) {
+                            if translation < -100 || (translation < -50 && velocity < -500) {
                                 showSidebar = true
                                 sidebarDragOffset = 0
                             } else {
                                 sidebarDragOffset = 0
                             }
                         } else {
-                            if value.translation.width > 100 || (value.translation.width > 50 && value.velocity.width > 500) {
+                            if translation > 100 || (translation > 50 && velocity > 500) {
                                 showSidebar = false
                                 sidebarDragOffset = 0
                             } else {
@@ -788,6 +800,8 @@ struct ContentView: View {
                     .frame(maxWidth: 100)
                     .foregroundColor(textColor)
                     .focused($isNicknameFieldFocused)
+                    .autocorrectionDisabled(true)
+                    .textInputAutocapitalization(.never)
                     .onChange(of: isNicknameFieldFocused) { isFocused in
                         if !isFocused {
                             // Only validate when losing focus
