@@ -8,6 +8,31 @@
 
 import SwiftUI
 
+// Lazy loading wrapper for link previews
+struct LazyLinkPreviewView: View {
+    let url: URL
+    let title: String?
+    @State private var isVisible = false
+    
+    var body: some View {
+        GeometryReader { geometry in
+            if isVisible {
+                LinkPreviewView(url: url, title: title)
+            } else {
+                // Placeholder while not visible
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color.gray.opacity(0.1))
+                    .frame(height: 80)
+                    .onAppear {
+                        // Only load when view appears on screen
+                        isVisible = true
+                    }
+            }
+        }
+        .frame(height: 80)
+    }
+}
+
 struct ContentView: View {
     @EnvironmentObject var viewModel: ChatViewModel
     @State private var messageText = ""
@@ -94,13 +119,24 @@ struct ContentView: View {
                             }
                         }
                     
-                    sidebarView
-                        #if os(macOS)
-                        .frame(width: min(300, geometry.size.width * 0.4))
-                        #else
-                        .frame(width: geometry.size.width * 0.7)
-                        #endif
-                        .transition(.move(edge: .trailing))
+                    // Only render sidebar content when it's visible or animating
+                    if showSidebar || sidebarDragOffset != 0 {
+                        sidebarView
+                            #if os(macOS)
+                            .frame(width: min(300, geometry.size.width * 0.4))
+                            #else
+                            .frame(width: geometry.size.width * 0.7)
+                            #endif
+                            .transition(.move(edge: .trailing))
+                    } else {
+                        // Empty placeholder when hidden
+                        Color.clear
+                            #if os(macOS)
+                            .frame(width: min(300, geometry.size.width * 0.4))
+                            #else
+                            .frame(width: geometry.size.width * 0.7)
+                            #endif
+                    }
                 }
                 .offset(x: showSidebar ? -sidebarDragOffset : geometry.size.width - sidebarDragOffset)
                 .animation(.easeInOut(duration: 0.25), value: showSidebar)
@@ -217,7 +253,7 @@ struct ContentView: View {
                                     if !urls.isEmpty {
                                         ForEach(urls.prefix(3).indices, id: \.self) { index in
                                             let urlInfo = urls[index]
-                                            LinkPreviewView(url: urlInfo.url, title: nil)
+                                            LazyLinkPreviewView(url: urlInfo.url, title: nil)
                                                 .padding(.top, 3)
                                                 .padding(.horizontal, 1)
                                                 .id("\(message.id)-\(urlInfo.url.absoluteString)")
