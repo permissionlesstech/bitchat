@@ -917,6 +917,11 @@ class BluetoothMeshService: NSObject {
             self?.checkPeerAvailability()
         }
         
+        // Start RSSI update timer (every 10 seconds)
+        Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
+            self?.updateAllPeripheralRSSI()
+        }
+        
         // Start write queue cleanup timer (every 30 seconds)
         writeQueueTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
             self?.cleanExpiredWriteQueues()
@@ -2586,15 +2591,43 @@ class BluetoothMeshService: NSObject {
                     if peripheralToUpdate == nil {
                         SecureLogger.log("handleReceivedPacket: No peripheral passed and no existing mapping for \(senderID)", category: SecureLogger.session, level: .debug)
                         
-                        // Try to find peripheral by checking all connected peripherals for matching peer ID
+                        // Try to find an unidentified peripheral that might be this peer
                         // This handles case where announce is relayed and we need to update RSSI mapping
-                        for (tempID, _) in self.connectedPeripherals {
-                            // Check if this might be a temp ID for our sender
-                            if tempID.count == 36 { // UUID length
-                                SecureLogger.log("handleReceivedPacket: Checking if temp ID \(tempID) might be for sender \(senderID)", category: SecureLogger.session, level: .debug)
-                                // We can't definitively match without more info, but we can try to transfer RSSI
-                                // if we later get a direct packet from this peer
+                        var unmappedPeripherals: [(String, CBPeripheral)] = []
+                        for (tempID, peripheral) in self.connectedPeripherals {
+                            // Check if this is a temp ID (UUID format, not a peer ID)
+                            if tempID.count == 36 && tempID.contains("-") { // UUID length with dashes
+                                unmappedPeripherals.append((tempID, peripheral))
+                                SecureLogger.log("handleReceivedPacket: Found unmapped peripheral with temp ID \(tempID)", category: SecureLogger.session, level: .debug)
                             }
+                        }
+                        
+                        // If we have exactly one unmapped peripheral and no other peers, it's likely this one
+                        if unmappedPeripherals.count == 1 && self.peerNicknames.count == 0 {
+                            let (tempID, peripheral) = unmappedPeripherals[0]
+                            SecureLogger.log("handleReceivedPacket: Single unmapped peripheral \(tempID), assuming it's \(senderID)", category: SecureLogger.session, level: .info)
+                            peripheralToUpdate = peripheral
+                            
+                            // Remove temp mapping and add real mapping
+                            self.connectedPeripherals.removeValue(forKey: tempID)
+                            self.connectedPeripherals[senderID] = peripheral
+                            
+                            // Transfer RSSI if available
+                            if let rssi = self.peripheralRSSI[tempID] {
+                                SecureLogger.log("handleReceivedPacket: Transferring RSSI \(rssi) from \(tempID) to \(senderID)", category: SecureLogger.session, level: .debug)
+                                self.peripheralRSSI[senderID] = rssi
+                                self.peerRSSI[senderID] = rssi
+                            }
+                            
+                            // Also check the peripheral's UUID-based RSSI
+                            let peripheralUUID = peripheral.identifier.uuidString
+                            if let rssi = self.peripheralRSSI[peripheralUUID] {
+                                SecureLogger.log("handleReceivedPacket: Also found RSSI \(rssi) under peripheral UUID \(peripheralUUID)", category: SecureLogger.session, level: .debug)
+                                self.peerRSSI[senderID] = rssi
+                            }
+                        } else if unmappedPeripherals.count > 1 {
+                            SecureLogger.log("handleReceivedPacket: Multiple unmapped peripherals (\(unmappedPeripherals.count)), cannot determine which is \(senderID)", category: SecureLogger.session, level: .debug)
+                            // TODO: Could use timing heuristics or other methods to match
                         }
                     }
                 }
@@ -5685,6 +5718,19 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         // Process timeouts outside the sync block
         for packetID in timedOutPackets {
             checkAckTimeout(for: packetID)
+        }
+    }
+    
+    // Update RSSI for all connected peripherals
+    private func updateAllPeripheralRSSI() {
+        SecureLogger.log("updateAllPeripheralRSSI: Starting periodic RSSI update", category: SecureLogger.session, level: .debug)
+        
+        // Read RSSI for all connected peripherals
+        for (peerID, peripheral) in connectedPeripherals {
+            if peripheral.state == .connected {
+                SecureLogger.log("updateAllPeripheralRSSI: Reading RSSI for peer \(peerID)", category: SecureLogger.session, level: .debug)
+                peripheral.readRSSI()
+            }
         }
     }
     
