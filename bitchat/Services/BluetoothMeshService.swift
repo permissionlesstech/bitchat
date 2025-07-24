@@ -1977,8 +1977,12 @@ class BluetoothMeshService: NSObject {
             return
         }
         
+        // Track which peers we've sent to (to avoid duplicates)
+        var sentToPeers = Set<String>()
+        
         // Send to connected peripherals (as central)
         var sentToPeripherals = 0
+        // Broadcasting to connected peripherals
         for (peerID, peripheral) in connectedPeripherals {
             if let characteristic = peripheralCharacteristics[peripheral] {
                 // Check if peripheral is connected before writing
@@ -1986,8 +1990,10 @@ class BluetoothMeshService: NSObject {
                     // Additional safety check for characteristic properties
                     if characteristic.properties.contains(.write) || 
                        characteristic.properties.contains(.writeWithoutResponse) {
+                        // Writing packet to peripheral
                         writeToPeripheral(data, peripheral: peripheral, characteristic: characteristic, peerID: peerID)
                         sentToPeripherals += 1
+                        sentToPeers.insert(peerID)
                     }
                 } else {
                     if let peerID = connectedPeripherals.first(where: { $0.value == peripheral })?.key {
@@ -1998,15 +2004,18 @@ class BluetoothMeshService: NSObject {
             }
         }
         
-        // Send to subscribed centrals (as peripheral)
+        // Send to subscribed centrals (as peripheral) - but only if we didn't already send via peripheral connections
         var sentToCentrals = 0
-        if let char = characteristic, !subscribedCentrals.isEmpty {
-            // Send to all subscribed centrals
-            // Note: Large packets should already be fragmented by the check at the beginning of broadcastPacket
+        if let char = characteristic, !subscribedCentrals.isEmpty && sentToPeripherals == 0 {
+            // Only send to centrals if we haven't sent via peripheral connections
+            // This prevents duplicate sends in 2-peer networks where peers connect both ways
+            // Broadcasting to subscribed centrals
             let success = peripheralManager?.updateValue(data, for: char, onSubscribedCentrals: nil) ?? false
             if success {
                 sentToCentrals = subscribedCentrals.count
             }
+        } else if sentToPeripherals > 0 && !subscribedCentrals.isEmpty {
+            // Skip central broadcast - already sent via peripherals
         }
         
         // If no peers received the message, add to retry queue ONLY if it's our own message
@@ -2128,12 +2137,19 @@ class BluetoothMeshService: NSObject {
                 messageTypeName = "NOISE_ENCRYPTED"
             case .leave:
                 messageTypeName = "LEAVE"
+            case .readReceipt:
+                messageTypeName = "READ_RECEIPT"
+            case .versionHello:
+                messageTypeName = "VERSION_HELLO"
+            case .versionAck:
+                messageTypeName = "VERSION_ACK"
+            case .systemValidation:
+                messageTypeName = "SYSTEM_VALIDATION"
             default:
                 messageTypeName = "UNKNOWN(\(packet.type))"
             }
             
-            SecureLogger.log("Processing \(messageTypeName) from \(senderID), seq#\(packet.sequenceNumber)", 
-                           category: SecureLogger.session, level: .debug)
+            // Processing packet
             
             // Rate limiting check with message type awareness
             let isHighPriority = [MessageType.protocolAck.rawValue,
@@ -2299,14 +2315,12 @@ class BluetoothMeshService: NSObject {
                         let rssiValue = peerRSSI[senderID]?.intValue ?? -70
                         let relayProb = self.calculateRelayProbability(baseProb: self.adaptiveRelayProbability, rssi: rssiValue)
                         
-                        // Relay based on probability - no forced relay for small networks
-                        // TTL >= 4 gets a slight boost but not guaranteed relay
-                        let ttlBoost = relayPacket.ttl >= 4 ? 0.2 : 0.0
-                        let effectiveProb = min(1.0, relayProb + ttlBoost)
-                        let shouldRelay = Double.random(in: 0...1) < effectiveProb
+                        // Relay based on probability only - no TTL boost if base probability is 0
+                        let effectiveProb = relayProb > 0 ? relayProb : 0.0
+                        let shouldRelay = effectiveProb > 0 && Double.random(in: 0...1) < effectiveProb
                         
                         if shouldRelay {
-                            SecureLogger.log("Relaying broadcast from \(senderID), TTL: \(relayPacket.ttl), peers: \(self.activePeers.count), RSSI: \(rssiValue), prob: \(String(format: "%.2f", relayProb))", category: SecureLogger.noise, level: .debug)
+                            // Relaying broadcast
                             // High priority messages relay immediately, others use exponential delay
                             if self.isHighPriorityMessage(type: relayPacket.type) {
                                 self.broadcastPacket(relayPacket)
@@ -2315,7 +2329,7 @@ class BluetoothMeshService: NSObject {
                                 self.scheduleRelay(relayPacket, messageID: messageID, delay: delay)
                             }
                         } else {
-                            SecureLogger.log("Dropped broadcast relay from \(senderID), TTL: \(relayPacket.ttl), prob: \(relayProb)", category: SecureLogger.noise, level: .debug)
+                            // Dropped broadcast relay
                         }
                     }
                     
@@ -2410,10 +2424,8 @@ class BluetoothMeshService: NSObject {
                     let baseProb = min(self.adaptiveRelayProbability + 0.15, 1.0)  // Boost by 15%
                     let relayProb = self.calculateRelayProbability(baseProb: baseProb, rssi: rssiValue)
                     
-                    // Always relay if TTL is high or we have few peers
-                    let shouldRelay = relayPacket.ttl >= 4 || 
-                                     self.activePeers.count <= 3 ||
-                                     Double.random(in: 0...1) < relayProb
+                    // Relay based on probability only - no forced relay for small networks
+                    let shouldRelay = Double.random(in: 0...1) < relayProb
                     
                     if shouldRelay {
                         // High priority messages relay immediately, others use exponential delay
@@ -2769,17 +2781,17 @@ class BluetoothMeshService: NSObject {
                isPeerIDOurs(recipientIDData.hexEncodedString()) {
                 // This read receipt is for us
                 let senderID = packet.senderID.hexEncodedString()
-                SecureLogger.log("Received read receipt from \(senderID)", category: SecureLogger.session, level: .info)
+                // Received read receipt
                 // Check if payload is already decrypted (came through Noise)
                     if let receipt = ReadReceipt.fromBinaryData(packet.payload) {
                         // Already decrypted - process directly
-                        SecureLogger.log("Processing read receipt for message \(receipt.originalMessageID) from \(receipt.readerID)", category: SecureLogger.session, level: .info)
+                        // Processing read receipt
                         DispatchQueue.main.async {
                             self.delegate?.didReceiveReadReceipt(receipt)
                         }
                     } else if let receipt = ReadReceipt.decode(from: packet.payload) {
                         // Fallback to JSON for backward compatibility
-                        SecureLogger.log("Processing read receipt (JSON) for message \(receipt.originalMessageID) from \(receipt.readerID)", category: SecureLogger.session, level: .info)
+                        // Processing read receipt (JSON)
                         DispatchQueue.main.async {
                             self.delegate?.didReceiveReadReceipt(receipt)
                         }
@@ -2819,8 +2831,7 @@ class BluetoothMeshService: NSObject {
                !isPeerIDOurs(recipientID.hexEncodedString()) {
                 // Not for us, relay if TTL > 0
                 if packet.ttl > 0 {
-                    SecureLogger.log("Relaying identity announce packet to \(recipientID.hexEncodedString()), TTL: \(packet.ttl)", 
-                                   category: SecureLogger.session, level: .debug)
+                    // Relay identity announce
                     var relayPacket = packet
                     relayPacket.ttl -= 1
                     let delay = self.exponentialRelayDelay()
@@ -2952,7 +2963,7 @@ class BluetoothMeshService: NSObject {
                !isPeerIDOurs(recipientID.hexEncodedString()) {
                 // Not for us, relay if TTL > 0
                 if packet.ttl > 0 {
-                    SecureLogger.log("Relaying handshake init packet, TTL: \(packet.ttl)", category: SecureLogger.session, level: .debug)
+                    // Relay handshake init
                     var relayPacket = packet
                     relayPacket.ttl -= 1
                     broadcastPacket(relayPacket)
@@ -3019,7 +3030,7 @@ class BluetoothMeshService: NSObject {
                 if !isPeerIDOurs(recipientIDStr) {
                     // Not for us, relay if TTL > 0
                     if packet.ttl > 0 {
-                        SecureLogger.log("Relaying handshake response packet, TTL: \(packet.ttl)", category: SecureLogger.session, level: .debug)
+                        // Relay handshake response
                         var relayPacket = packet
                         relayPacket.ttl -= 1
                         broadcastPacket(relayPacket)
@@ -3463,10 +3474,10 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
     
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
         let tempID = peripheral.identifier.uuidString
-        SecureLogger.log("Peripheral connected: \(tempID)", category: SecureLogger.session, level: .info)
+        // Peripheral connected
         
-        // Log current mapping state for debugging
-        SecureLogger.log("Current peerIDByPeripheralID mappings: \(peerIDByPeripheralID.keys.joined(separator: ", "))", 
+        // Current mapping state for debugging
+        SecureLogger.log("Current peerIDByPeripheralID mappings:", 
                        category: SecureLogger.session, level: .debug)
         
         peripheral.delegate = self
@@ -4205,8 +4216,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         if let pendingRelay = pendingRelays[messageID] {
             pendingRelay.cancel()
             pendingRelays.removeValue(forKey: messageID)
-            SecureLogger.log("Cancelled pending relay for message \(messageID) - another node relayed it", 
-                           category: SecureLogger.noise, level: .debug)
+            // Cancelled pending relay - another node handled it
         }
     }
     
@@ -4260,16 +4270,15 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             
             // Clean up pending relays
             self.pendingRelaysLock.lock()
-            let pendingRelayCount = self.pendingRelays.count
+            _ = self.pendingRelays.count
             self.pendingRelaysLock.unlock()
             
             // Clean up rate limiters
             self.cleanupRateLimiters()
             
             // Log memory status
-            let cleanupTime = Date().timeIntervalSince(startTime)
-            SecureLogger.log("Memory cleanup completed in \(String(format: "%.3f", cleanupTime))s - fragments: \(self.incomingFragments.count), pending messages: \(self.pendingPrivateMessages.count), cached sent: \(self.cachedMessagesSentToPeer.count), pending relays: \(pendingRelayCount)", 
-                           category: SecureLogger.session, level: .debug)
+            _ = Date().timeIntervalSince(startTime)
+            // Memory cleanup completed
             
             // Estimate current memory usage and log if high
             let estimatedMemory = self.estimateMemoryUsage()
@@ -4789,7 +4798,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         do {
             // Process handshake message
             if let response = try noiseService.processHandshakeMessage(from: peerID, message: message) {
-                SecureLogger.log("Handshake processing returned response of size \(response.count), sending back to \(peerID)", category: SecureLogger.noise, level: .info)
+                // Handshake response ready to send
                 
                 // Always send responses as handshake response type
                 let packet = BitchatPacket(
@@ -4814,8 +4823,8 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             
             // Check if handshake is complete
             let sessionEstablished = noiseService.hasEstablishedSession(with: peerID)
-            let newState = handshakeCoordinator.getHandshakeState(for: peerID)
-            SecureLogger.log("After processing handshake message - sessionEstablished: \(sessionEstablished), newState: \(newState)", category: SecureLogger.noise, level: .info)
+            _ = handshakeCoordinator.getHandshakeState(for: peerID)
+            // Handshake state updated
             
             if sessionEstablished {
                 SecureLogger.logSecurityEvent(.handshakeCompleted(peerID: peerID))
@@ -4897,14 +4906,14 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         
         do {
             // Decrypt the message
-            SecureLogger.log("Attempting to decrypt Noise message from \(peerID), encrypted size: \(encryptedData.count)", category: SecureLogger.encryption, level: .debug)
+            // Attempting to decrypt
             let decryptedData = try noiseService.decrypt(encryptedData, from: peerID)
-            SecureLogger.log("Successfully decrypted message from \(peerID), decrypted size: \(decryptedData.count)", category: SecureLogger.encryption, level: .debug)
+            // Successfully decrypted message
             
             // Update last successful message time
             lastSuccessfulMessageTime[peerID] = Date()
             
-            // Send protocol ACK after successful decryption
+            // Send protocol ACK after successful decryption (only once per encrypted packet)
             sendProtocolAck(for: originalPacket, to: peerID)
             
             // If we can decrypt messages from this peer, they should be in activePeers
@@ -5151,8 +5160,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 self?.delegate?.didDisconnectFromPeer(peerID)
             }
         } else {
-            SecureLogger.log("Version negotiation successful with \(peerID): agreed on v\(ack.agreedVersion) (server: \(ack.serverVersion), platform: \(ack.platform))", 
-                              category: SecureLogger.session, level: .info)
+            // Version negotiation successful
             negotiatedVersions[peerID] = ack.agreedVersion
             versionNegotiationState[peerID] = .ackReceived(version: ack.agreedVersion)
             
@@ -5228,12 +5236,14 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             return
         }
         
-        SecureLogger.log("Received protocol ACK from \(peerID) for packet \(ack.originalPacketID), type: \(ack.packetType)", 
+        SecureLogger.log("Received protocol ACK from \(peerID) for packet \(ack.originalPacketID), type: \(ack.packetType), ackID: \(ack.ackID)", 
                        category: SecureLogger.session, level: .debug)
         
         // Remove from pending ACKs and mark as acknowledged
+        // Note: readUUID returns uppercase, but we track with lowercase
+        let normalizedPacketID = ack.originalPacketID.lowercased()
         _ = collectionsQueue.sync(flags: .barrier) {
-            pendingAcks.removeValue(forKey: ack.originalPacketID)
+            pendingAcks.removeValue(forKey: normalizedPacketID)
         }
         
         // Track this packet as acknowledged to prevent future retries
@@ -5242,7 +5252,6 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         // Keep only recent acknowledged packets (last 1000)
         if acknowledgedPackets.count > 1000 {
             // Remove oldest entries (this is approximate since Set doesn't maintain order)
-            let toRemove = acknowledgedPackets.count - 1000
             acknowledgedPackets = Set(Array(acknowledgedPackets).suffix(1000))
         }
         acknowledgedPacketsLock.unlock()
@@ -5251,11 +5260,10 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         if let messageType = MessageType(rawValue: ack.packetType) {
             switch messageType {
             case .noiseHandshakeInit, .noiseHandshakeResp:
-                SecureLogger.log("Handshake packet \(ack.originalPacketID) confirmed by \(peerID)", 
-                               category: SecureLogger.handshake, level: .info)
+                SecureLogger.log("Handshake confirmed by \(peerID)", category: SecureLogger.handshake, level: .info)
             case .noiseEncrypted:
-                SecureLogger.log("Encrypted message \(ack.originalPacketID) confirmed by \(peerID)", 
-                               category: SecureLogger.encryption, level: .debug)
+                // Encrypted message confirmed
+                break
             default:
                 break
             }
@@ -5332,6 +5340,11 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         // Generate packet ID from packet content hash
         let packetID = generatePacketID(for: packet)
         
+        // Debug: log packet details
+        _ = packet.senderID.prefix(4).hexEncodedString()
+        _ = packet.recipientID?.prefix(4).hexEncodedString() ?? "nil"
+        // Send protocol ACK
+        
         let ack = ProtocolAck(
             originalPacketID: packetID,
             senderID: packet.senderID.hexEncodedString(),
@@ -5381,19 +5394,46 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         broadcastPacket(nackPacket)
     }
     
-    // Generate unique packet ID from packet content
+    // Generate unique packet ID from immutable packet fields
     private func generatePacketID(for packet: BitchatPacket) -> String {
-        // Use hash of packet data for unique ID
-        if let data = packet.toBinaryData() {
-            let hash = SHA256.hash(data: data)
-            return hash.map { String(format: "%02x", $0) }.prefix(16).joined()
-        }
-        return UUID().uuidString
+        // Use only immutable fields for ID generation to ensure consistency
+        // across network hops (TTL changes, so can't use full packet data)
+        
+        // Create a deterministic ID using SHA256 of immutable fields
+        var data = Data()
+        data.append(packet.senderID)
+        data.append(contentsOf: withUnsafeBytes(of: packet.sequenceNumber) { Array($0) })
+        data.append(contentsOf: withUnsafeBytes(of: packet.timestamp) { Array($0) })
+        data.append(packet.type)
+        
+        let hash = SHA256.hash(data: data)
+        let hashData = Data(hash)
+        
+        // Take first 16 bytes for UUID format
+        let bytes = Array(hashData.prefix(16))
+        
+        // Format as UUID
+        let p1 = String(format: "%02x%02x%02x%02x", bytes[0], bytes[1], bytes[2], bytes[3])
+        let p2 = String(format: "%02x%02x", bytes[4], bytes[5])
+        let p3 = String(format: "%02x%02x", bytes[6], bytes[7])
+        let p4 = String(format: "%02x%02x", bytes[8], bytes[9])
+        let p5 = String(format: "%02x%02x%02x%02x%02x%02x", bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15])
+        
+        let result = "\(p1)-\(p2)-\(p3)-\(p4)-\(p5)"
+        
+        // Generated packet ID for tracking
+        
+        return result
     }
     
     // Track packets that need ACKs
     private func trackPacketForAck(_ packet: BitchatPacket) {
         let packetID = generatePacketID(for: packet)
+        
+        // Debug: log packet details
+        _ = packet.senderID.prefix(4).hexEncodedString()
+        _ = packet.recipientID?.prefix(4).hexEncodedString() ?? "nil"
+        // Track packet for ACK
         
         collectionsQueue.sync(flags: .barrier) {
             pendingAcks[packetID] = (packet: packet, timestamp: Date(), retries: 0)
@@ -5415,7 +5455,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         
         if isAcknowledged {
             // Already acknowledged, remove from pending and don't retry
-            collectionsQueue.sync(flags: .barrier) {
+            _ = collectionsQueue.sync(flags: .barrier) {
                 pendingAcks.removeValue(forKey: packetID)
             }
             SecureLogger.log("Packet \(packetID) already acknowledged, cancelling retries", 
@@ -5451,6 +5491,8 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                                               retries: pending.retries + 1)
                 
                 // Resend the packet
+                SecureLogger.log("Resending packet seq#\(pending.packet.sequenceNumber) due to ACK timeout (retry \(pending.retries + 1))", 
+                               category: SecureLogger.session, level: .debug)
                 DispatchQueue.main.async {
                     self.broadcastPacket(pending.packet)
                 }
