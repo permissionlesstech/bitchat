@@ -183,7 +183,7 @@ struct ContentView: View {
                     // Implement windowing - show last 100 messages for performance
                     let windowedMessages = messages.suffix(100)
                     
-                    ForEach(Array(windowedMessages), id: \.id) { message in
+                    ForEach(windowedMessages, id: \.id) { message in
                         VStack(alignment: .leading, spacing: 0) {
                             // Check if current user is mentioned
                             let _ = message.mentions?.contains(viewModel.nickname) ?? false
@@ -215,7 +215,8 @@ struct ContentView: View {
                                     // Check for plain URLs
                                     let urls = message.content.extractURLs()
                                     if !urls.isEmpty {
-                                        ForEach(Array(urls.prefix(3).enumerated()), id: \.offset) { index, urlInfo in
+                                        ForEach(urls.prefix(3).indices, id: \.self) { index in
+                                            let urlInfo = urls[index]
                                             LinkPreviewView(url: urlInfo.url, title: nil)
                                                 .padding(.top, 3)
                                                 .padding(.horizontal, 1)
@@ -305,7 +306,7 @@ struct ContentView: View {
             // @mentions autocomplete
             if viewModel.showAutocomplete && !viewModel.autocompleteSuggestions.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(viewModel.autocompleteSuggestions.enumerated()), id: \.element) { index, suggestion in
+                    ForEach(viewModel.autocompleteSuggestions, id: \.self) { suggestion in
                         Button(action: {
                             _ = viewModel.completeNickname(suggestion, in: &messageText)
                         }) {
@@ -539,39 +540,49 @@ struct ContentView: View {
                             // Show all connected peers
                             let peersToShow: [String] = viewModel.connectedPeers
                             
-                        // Sort peers: favorites first, then alphabetically by nickname
-                        let sortedPeers = peersToShow.sorted { peer1, peer2 in
-                            let isFav1 = viewModel.isFavorite(peerID: peer1)
-                            let isFav2 = viewModel.isFavorite(peerID: peer2)
-                            
-                            if isFav1 != isFav2 {
-                                return isFav1 // Favorites come first
+                            // Pre-compute peer data outside ForEach to reduce overhead
+                            struct PeerDisplayData: Identifiable {
+                                let id: String
+                                let displayName: String
+                                let rssi: Int?
+                                let isFavorite: Bool
+                                let isMe: Bool
+                                let hasUnreadMessages: Bool
+                                let encryptionStatus: EncryptionStatus
                             }
                             
-                            let name1 = peerNicknames[peer1] ?? "anon\(peer1.prefix(4))"
-                            let name2 = peerNicknames[peer2] ?? "anon\(peer2.prefix(4))"
-                            return name1 < name2
-                        }
+                            let peerData = peersToShow.map { peerID in
+                                PeerDisplayData(
+                                    id: peerID,
+                                    displayName: peerID == myPeerID ? viewModel.nickname : (peerNicknames[peerID] ?? "anon\(peerID.prefix(4))"),
+                                    rssi: peerRSSI[peerID]?.intValue,
+                                    isFavorite: viewModel.isFavorite(peerID: peerID),
+                                    isMe: peerID == myPeerID,
+                                    hasUnreadMessages: viewModel.unreadPrivateMessages.contains(peerID),
+                                    encryptionStatus: viewModel.getEncryptionStatus(for: peerID)
+                                )
+                            }.sorted { peer1, peer2 in
+                                // Sort: favorites first, then alphabetically by nickname
+                                if peer1.isFavorite != peer2.isFavorite {
+                                    return peer1.isFavorite
+                                }
+                                return peer1.displayName < peer2.displayName
+                            }
                         
-                        ForEach(sortedPeers, id: \.self) { peerID in
-                            let displayName = peerID == myPeerID ? viewModel.nickname : (peerNicknames[peerID] ?? "anon\(peerID.prefix(4))")
-                            let rssi = peerRSSI[peerID]?.intValue
-                            let isFavorite = viewModel.isFavorite(peerID: peerID)
-                            let isMe = peerID == myPeerID
-                            
+                        ForEach(peerData) { peer in
                             HStack(spacing: 8) {
                                 // Signal strength indicator or unread message icon
-                                if isMe {
+                                if peer.isMe {
                                     Image(systemName: "person.fill")
                                         .font(.system(size: 10))
                                         .foregroundColor(textColor)
                                         .accessibilityLabel("You")
-                                } else if viewModel.unreadPrivateMessages.contains(peerID) {
+                                } else if peer.hasUnreadMessages {
                                     Image(systemName: "envelope.fill")
                                         .font(.system(size: 12))
                                         .foregroundColor(Color.orange)
-                                        .accessibilityLabel("Unread message from \(displayName)")
-                                } else if let rssi = rssi {
+                                        .accessibilityLabel("Unread message from \(peer.displayName)")
+                                } else if let rssi = peer.rssi {
                                     Image(systemName: "circle.fill")
                                         .font(.system(size: 8))
                                         .foregroundColor(viewModel.getRSSIColor(rssi: rssi, colorScheme: colorScheme))
@@ -585,49 +596,48 @@ struct ContentView: View {
                                 }
                                 
                                 // Peer name
-                                if isMe {
+                                if peer.isMe {
                                     HStack {
-                                        Text(displayName + " (you)")
+                                        Text(peer.displayName + " (you)")
                                             .font(.system(size: 14, design: .monospaced))
                                             .foregroundColor(textColor)
                                         
                                         Spacer()
                                     }
                                 } else {
-                                    Text(displayName)
+                                    Text(peer.displayName)
                                         .font(.system(size: 14, design: .monospaced))
-                                        .foregroundColor(peerNicknames[peerID] != nil ? textColor : secondaryTextColor)
+                                        .foregroundColor(peerNicknames[peer.id] != nil ? textColor : secondaryTextColor)
                                     
                                     // Encryption status icon (after peer name)
-                                    let encryptionStatus = viewModel.getEncryptionStatus(for: peerID)
-                                    Image(systemName: encryptionStatus.icon)
+                                    Image(systemName: peer.encryptionStatus.icon)
                                         .font(.system(size: 10))
-                                        .foregroundColor(encryptionStatus == .noiseVerified ? Color.green : 
-                                                       encryptionStatus == .noiseSecured ? textColor :
-                                                       encryptionStatus == .noiseHandshaking ? Color.orange :
+                                        .foregroundColor(peer.encryptionStatus == .noiseVerified ? Color.green : 
+                                                       peer.encryptionStatus == .noiseSecured ? textColor :
+                                                       peer.encryptionStatus == .noiseHandshaking ? Color.orange :
                                                        Color.red)
-                                        .accessibilityLabel("Encryption: \(encryptionStatus == .noiseVerified ? "verified" : encryptionStatus == .noiseSecured ? "secured" : encryptionStatus == .noiseHandshaking ? "establishing" : "none")")
+                                        .accessibilityLabel("Encryption: \(peer.encryptionStatus == .noiseVerified ? "verified" : peer.encryptionStatus == .noiseSecured ? "secured" : peer.encryptionStatus == .noiseHandshaking ? "establishing" : "none")")
                                     
                                     Spacer()
                                     
                                     // Favorite star
                                     Button(action: {
-                                        viewModel.toggleFavorite(peerID: peerID)
+                                        viewModel.toggleFavorite(peerID: peer.id)
                                     }) {
-                                        Image(systemName: isFavorite ? "star.fill" : "star")
+                                        Image(systemName: peer.isFavorite ? "star.fill" : "star")
                                             .font(.system(size: 12))
-                                            .foregroundColor(isFavorite ? Color.yellow : secondaryTextColor)
+                                            .foregroundColor(peer.isFavorite ? Color.yellow : secondaryTextColor)
                                     }
                                     .buttonStyle(.plain)
-                                    .accessibilityLabel(isFavorite ? "Remove \(displayName) from favorites" : "Add \(displayName) to favorites")
+                                    .accessibilityLabel(peer.isFavorite ? "Remove \(peer.displayName) from favorites" : "Add \(peer.displayName) to favorites")
                                 }
                             }
                             .padding(.horizontal)
                             .padding(.vertical, 8)
                             .contentShape(Rectangle())
                             .onTapGesture {
-                                if !isMe && peerNicknames[peerID] != nil {
-                                    viewModel.startPrivateChat(with: peerID)
+                                if !peer.isMe && peerNicknames[peer.id] != nil {
+                                    viewModel.startPrivateChat(with: peer.id)
                                     withAnimation(.easeInOut(duration: 0.2)) {
                                         showSidebar = false
                                         sidebarDragOffset = 0
@@ -635,9 +645,9 @@ struct ContentView: View {
                                 }
                             }
                             .onTapGesture(count: 2) {
-                                if !isMe {
+                                if !peer.isMe {
                                     // Show fingerprint on double tap
-                                    viewModel.showFingerprint(for: peerID)
+                                    viewModel.showFingerprint(for: peer.id)
                                 }
                             }
                         }
