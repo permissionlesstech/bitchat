@@ -163,18 +163,20 @@ struct ContentView: View {
     
     private func messagesView(privatePeer: String?) -> some View {
         ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 2) {
-                    let messages: [BitchatMessage] = {
-                        if let privatePeer = privatePeer {
-                            let msgs = viewModel.getPrivateChatMessages(for: privatePeer)
-                            return msgs
-                        } else {
-                            return viewModel.messages
-                        }
-                    }()
-                    
-                    ForEach(messages, id: \.id) { message in
+            List {
+                let messages: [BitchatMessage] = {
+                    if let privatePeer = privatePeer {
+                        let msgs = viewModel.getPrivateChatMessages(for: privatePeer)
+                        return msgs
+                    } else {
+                        return viewModel.messages
+                    }
+                }()
+                
+                // Implement windowing - show last 100 messages for performance
+                let windowedMessages = messages.suffix(100)
+                
+                ForEach(Array(windowedMessages), id: \.id) { message in
                         VStack(alignment: .leading, spacing: 4) {
                             // Check if current user is mentioned
                             let _ = message.mentions?.contains(viewModel.nickname) ?? false
@@ -208,24 +210,26 @@ struct ContentView: View {
                                         // Don't show link preview if the message is just the emoji
                                         let cleanContent = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
                                         if cleanContent.hasPrefix("👇") {
-                                            LinkPreviewView(url: markdownLink.url, title: markdownLink.title)
-                                                .padding(.top, 2)
-                                                .id("\(message.id)-\(markdownLink.url.absoluteString)")
+                                            LazyLinkPreviewView(
+                                                url: markdownLink.url,
+                                                title: markdownLink.title,
+                                                id: "\(message.id)-\(markdownLink.url.absoluteString)"
+                                            )
                                         }
                                     } else {
                                         // Check for plain URLs
                                         let urls = message.content.extractURLs()
                                         ForEach(Array(urls.prefix(3).enumerated()), id: \.offset) { index, urlInfo in
-                                            LinkPreviewView(url: urlInfo.url, title: nil)
-                                                .padding(.top, 2)
-                                                .id("\(message.id)-\(urlInfo.url.absoluteString)")
+                                            LazyLinkPreviewView(
+                                                url: urlInfo.url,
+                                                title: nil,
+                                                id: "\(message.id)-\(urlInfo.url.absoluteString)"
+                                            )
                                         }
                                     }
                                 }
                             }
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 2)
                         .id(message.id)
                         .contentShape(Rectangle())
                         .onTapGesture {
@@ -236,10 +240,13 @@ struct ContentView: View {
                                 showMessageActions = true
                             }
                         }
+                        .listRowInsets(EdgeInsets(top: 2, leading: 12, bottom: 2, trailing: 12))
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(backgroundColor)
                     }
-                }
-                .padding(.vertical, 8)
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
             .background(backgroundColor)
             .onTapGesture(count: 3) {
                 // Triple-tap to clear current chat
@@ -248,7 +255,9 @@ struct ContentView: View {
             .onChange(of: viewModel.messages.count) { _ in
                 if privatePeer == nil && !viewModel.messages.isEmpty {
                     withAnimation {
-                        proxy.scrollTo(viewModel.messages.last?.id, anchor: .bottom)
+                        // Scroll to last message in windowed view
+                        let lastId = viewModel.messages.suffix(100).last?.id
+                        proxy.scrollTo(lastId, anchor: .bottom)
                     }
                 }
             }
@@ -257,7 +266,9 @@ struct ContentView: View {
                    let messages = viewModel.privateChats[peerID],
                    !messages.isEmpty {
                     withAnimation {
-                        proxy.scrollTo(messages.last?.id, anchor: .bottom)
+                        // Scroll to last message in windowed view
+                        let lastId = messages.suffix(100).last?.id
+                        proxy.scrollTo(lastId, anchor: .bottom)
                     }
                 }
             }
@@ -937,6 +948,34 @@ struct MessageContentView: View {
         }
         
         return segments
+    }
+}
+
+// Lazy loading wrapper for LinkPreviewView
+struct LazyLinkPreviewView: View {
+    let url: URL
+    let title: String?
+    let id: String
+    
+    @State private var shouldLoad = false
+    
+    var body: some View {
+        Group {
+            if shouldLoad {
+                LinkPreviewView(url: url, title: title)
+                    .padding(.top, 2)
+                    .id(id)
+            }
+        }
+        .onAppear {
+            // Delay loading to improve scroll performance
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                shouldLoad = true
+            }
+        }
+        .onDisappear {
+            shouldLoad = false
+        }
     }
 }
 

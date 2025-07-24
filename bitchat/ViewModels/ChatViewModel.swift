@@ -938,9 +938,15 @@ class ChatViewModel: ObservableObject {
     }
     
     func formatMessageAsText(_ message: BitchatMessage, colorScheme: ColorScheme) -> AttributedString {
+        // Check cache first
+        let isDark = colorScheme == .dark
+        if let cachedText = message.getCachedFormattedText(isDark: isDark) {
+            return cachedText
+        }
+        
+        // Not cached, format the message
         var result = AttributedString()
         
-        let isDark = colorScheme == .dark
         let primaryColor = isDark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
         let secondaryColor = primaryColor.opacity(0.7)
         
@@ -1074,6 +1080,9 @@ class ChatViewModel: ObservableObject {
             contentStyle.font = .system(size: 12, design: .monospaced).italic()
             result.append(content.mergingAttributes(contentStyle))
         }
+        
+        // Cache the formatted text
+        message.setCachedFormattedText(result, isDark: isDark)
         
         return result
     }
@@ -2223,21 +2232,17 @@ extension ChatViewModel: BitchatDelegate {
         if let index = messages.firstIndex(where: { $0.id == messageID }) {
             let currentStatus = messages[index].deliveryStatus
             if !shouldSkipUpdate(currentStatus: currentStatus, newStatus: status) {
-                var updatedMessage = messages[index]
-                updatedMessage.deliveryStatus = status
-                messages[index] = updatedMessage
+                messages[index].deliveryStatus = status
             }
         }
         
         // Update in private chats
         var updatedPrivateChats = privateChats
-        for (peerID, var chatMessages) in updatedPrivateChats {
+        for (peerID, chatMessages) in updatedPrivateChats {
             if let index = chatMessages.firstIndex(where: { $0.id == messageID }) {
                 let currentStatus = chatMessages[index].deliveryStatus
                 if !shouldSkipUpdate(currentStatus: currentStatus, newStatus: status) {
-                    var updatedMessage = chatMessages[index]
-                    updatedMessage.deliveryStatus = status
-                    chatMessages[index] = updatedMessage
+                    chatMessages[index].deliveryStatus = status
                     updatedPrivateChats[peerID] = chatMessages
                 }
             }
