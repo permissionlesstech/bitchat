@@ -25,6 +25,7 @@ struct ContentView: View {
     @State private var showMessageActions = false
     @State private var selectedMessageSender: String?
     @State private var selectedMessageSenderID: String?
+    @FocusState private var isNicknameFieldFocused: Bool
     
     private var backgroundColor: Color {
         colorScheme == .dark ? Color.black : Color.white
@@ -727,11 +728,15 @@ struct ContentView: View {
                     .font(.system(size: 14, design: .monospaced))
                     .frame(maxWidth: 100)
                     .foregroundColor(textColor)
-                    .onChange(of: viewModel.nickname) { _ in
-                        viewModel.saveNickname()
+                    .focused($isNicknameFieldFocused)
+                    .onChange(of: isNicknameFieldFocused) { isFocused in
+                        if !isFocused {
+                            // Only validate when losing focus
+                            viewModel.validateAndSaveNickname()
+                        }
                     }
                     .onSubmit {
-                        viewModel.saveNickname()
+                        viewModel.validateAndSaveNickname()
                     }
             }
             
