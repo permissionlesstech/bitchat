@@ -22,6 +22,9 @@ struct ContentView: View {
     @State private var commandSuggestions: [String] = []
     @State private var backSwipeOffset: CGFloat = 0
     @State private var showPrivateChat = false
+    @State private var showMessageActions = false
+    @State private var selectedMessageSender: String?
+    @State private var selectedMessageSenderID: String?
     
     private var backgroundColor: Color {
         colorScheme == .dark ? Color.black : Color.white
@@ -120,6 +123,41 @@ struct ContentView: View {
                 FingerprintView(viewModel: viewModel, peerID: peerID)
             }
         }
+        .confirmationDialog(
+            selectedMessageSender.map { "@\($0)" } ?? "Actions",
+            isPresented: $showMessageActions,
+            titleVisibility: .visible
+        ) {
+            Button("private message") {
+                if let peerID = selectedMessageSenderID {
+                    viewModel.startPrivateChat(with: peerID)
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showSidebar = false
+                        sidebarDragOffset = 0
+                    }
+                }
+            }
+            
+            Button("hug") {
+                if let sender = selectedMessageSender {
+                    viewModel.sendMessage("/hug @\(sender)")
+                }
+            }
+            
+            Button("slap") {
+                if let sender = selectedMessageSender {
+                    viewModel.sendMessage("/slap @\(sender)")
+                }
+            }
+            
+            Button("BLOCK", role: .destructive) {
+                if let sender = selectedMessageSender {
+                    viewModel.sendMessage("/block \(sender)")
+                }
+            }
+            
+            Button("cancel", role: .cancel) {}
+        }
     }
     
     private func messagesView(privatePeer: String?) -> some View {
@@ -188,6 +226,15 @@ struct ContentView: View {
                         .padding(.horizontal, 12)
                         .padding(.vertical, 2)
                         .id(message.id)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            // Only show actions for messages from other users (not system or self)
+                            if message.sender != "system" && message.sender != viewModel.nickname {
+                                selectedMessageSender = message.sender
+                                selectedMessageSenderID = message.senderPeerID
+                                showMessageActions = true
+                            }
+                        }
                     }
                 }
                 .padding(.vertical, 8)
