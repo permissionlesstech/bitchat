@@ -1968,7 +1968,10 @@ extension ChatViewModel: BitchatDelegate {
         if isMentioned && message.sender != nickname {
             NotificationService.shared.sendMentionNotification(from: message.sender, message: message.content)
         } else if message.isPrivate && message.sender != nickname {
-            NotificationService.shared.sendPrivateMessageNotification(from: message.sender, message: message.content)
+            // Only send notification if the private chat is not currently open
+            if selectedPrivateChatPeer != message.senderPeerID {
+                NotificationService.shared.sendPrivateMessageNotification(from: message.sender, message: message.content, peerID: message.senderPeerID ?? "")
+            }
         }
         
         #if os(iOS)

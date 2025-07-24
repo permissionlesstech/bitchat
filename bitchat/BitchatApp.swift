@@ -147,17 +147,14 @@ class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
     
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
         let identifier = response.notification.request.identifier
+        let userInfo = response.notification.request.content.userInfo
         
         // Check if this is a private message notification
         if identifier.hasPrefix("private-") {
-            // Extract sender from notification title
-            let title = response.notification.request.content.title
-            if let senderName = title.replacingOccurrences(of: "Private message from ", with: "").nilIfEmpty {
-                // Find peer ID and open chat
-                if let peerID = chatViewModel?.getPeerIDForNickname(senderName) {
-                    DispatchQueue.main.async {
-                        self.chatViewModel?.startPrivateChat(with: peerID)
-                    }
+            // Get peer ID from userInfo
+            if let peerID = userInfo["peerID"] as? String {
+                DispatchQueue.main.async {
+                    self.chatViewModel?.startPrivateChat(with: peerID)
                 }
             }
         }
@@ -166,7 +163,22 @@ class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
     }
     
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
-        // Show notification even when app is in foreground (for testing)
+        let identifier = notification.request.identifier
+        let userInfo = notification.request.content.userInfo
+        
+        // Check if this is a private message notification
+        if identifier.hasPrefix("private-") {
+            // Get peer ID from userInfo
+            if let peerID = userInfo["peerID"] as? String {
+                // Don't show notification if the private chat is already open
+                if chatViewModel?.selectedPrivateChatPeer == peerID {
+                    completionHandler([])
+                    return
+                }
+            }
+        }
+        
+        // Show notification in all other cases
         completionHandler([.banner, .sound])
     }
 }
