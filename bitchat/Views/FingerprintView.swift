@@ -13,13 +13,14 @@ struct FingerprintView: View {
     let peerID: String
     @Environment(\.dismiss) var dismiss
     @Environment(\.colorScheme) var colorScheme
+    @EnvironmentObject var themeManager: ThemeManager
     
     private var textColor: Color {
-        colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
+        themeManager.primaryTextColor(for: colorScheme)
     }
     
     private var backgroundColor: Color {
-        colorScheme == .dark ? Color.black : Color.white
+        themeManager.backgroundColor(for: colorScheme)
     }
     
     var body: some View {
@@ -47,7 +48,7 @@ struct FingerprintView: View {
                 HStack {
                     Image(systemName: encryptionStatus.icon)
                         .font(.system(size: 20))
-                        .foregroundColor(encryptionStatus == .noiseVerified ? Color.green : textColor)
+                        .foregroundColor(encryptionStatus == .noiseVerified ? themeManager.successColor(for: colorScheme) : textColor)
                     
                     VStack(alignment: .leading, spacing: 4) {
                         Text(peerNickname)
@@ -62,7 +63,7 @@ struct FingerprintView: View {
                     Spacer()
                 }
                 .padding()
-                .background(Color.gray.opacity(0.1))
+                .background(themeManager.secondaryBackgroundColor(for: colorScheme).opacity(0.1))
                 .cornerRadius(8)
                 
                 // Their fingerprint
@@ -80,7 +81,7 @@ struct FingerprintView: View {
                             .fixedSize(horizontal: false, vertical: true)
                             .padding()
                             .frame(maxWidth: .infinity)
-                            .background(Color.gray.opacity(0.1))
+                            .background(themeManager.secondaryBackgroundColor(for: colorScheme).opacity(0.1))
                             .cornerRadius(8)
                             .contextMenu {
                                 Button("Copy") {
@@ -95,7 +96,7 @@ struct FingerprintView: View {
                     } else {
                         Text("not available - handshake in progress")
                             .font(.system(size: 14, design: .monospaced))
-                            .foregroundColor(Color.orange)
+                            .foregroundColor(themeManager.warningColor(for: colorScheme))
                             .padding()
                     }
                 }
@@ -115,7 +116,7 @@ struct FingerprintView: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .padding()
                         .frame(maxWidth: .infinity)
-                        .background(Color.gray.opacity(0.1))
+                        .background(themeManager.secondaryBackgroundColor(for: colorScheme).opacity(0.1))
                         .cornerRadius(8)
                         .contextMenu {
                             Button("Copy") {
@@ -136,7 +137,7 @@ struct FingerprintView: View {
                     VStack(spacing: 12) {
                         Text(isVerified ? "✓ VERIFIED" : "⚠️ NOT VERIFIED")
                             .font(.system(size: 14, weight: .bold, design: .monospaced))
-                            .foregroundColor(isVerified ? Color.green : Color.orange)
+                            .foregroundColor(isVerified ? themeManager.successColor(for: colorScheme) : themeManager.warningColor(for: colorScheme))
                             .frame(maxWidth: .infinity)
                         
                         Text(isVerified ? 
@@ -156,10 +157,10 @@ struct FingerprintView: View {
                             }) {
                                 Text("MARK AS VERIFIED")
                                     .font(.system(size: 14, weight: .bold, design: .monospaced))
-                                    .foregroundColor(.white)
+                                    .foregroundColor(themeManager.backgroundColor(for: colorScheme))
                                     .padding(.horizontal, 20)
                                     .padding(.vertical, 10)
-                                    .background(Color.green)
+                                    .background(themeManager.successColor(for: colorScheme))
                                     .cornerRadius(8)
                             }
                             .buttonStyle(PlainButtonStyle())
