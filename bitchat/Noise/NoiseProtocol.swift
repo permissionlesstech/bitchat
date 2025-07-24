@@ -190,7 +190,6 @@ class NoiseCipherState {
         }
         
         let sealedBox = try ChaChaPoly.seal(plaintext, using: key, nonce: ChaChaPoly.Nonce(data: nonceData), authenticating: associatedData)
-        // log like: Log.d(TAG, "✅ ANDROID ENCRYPT: ${data.size} → ${combinedPayload.size} bytes (nonce: $currentNonce, ciphertext: ${ciphertextLength}) for $peerID (msg #$messagesSent, role: ${if (isInitiator) "INITIATOR" else "RESPONDER"})")
         // increment local nonce
         nonce += 1
                
@@ -207,9 +206,7 @@ class NoiseCipherState {
         if currentNonce > Self.HIGH_NONCE_WARNING_THRESHOLD {
             SecureLogger.log("High nonce value detected: \(currentNonce) - consider rekeying", category: SecureLogger.encryption, level: .warning)
         }
-        
-        SecureLogger.log("✅ IOS ENCRYPT: \(plaintext.count) → \(combinedPayload.count) bytes (nonce: \(currentNonce), ciphertext: \(sealedBox.ciphertext.count))")
-        
+                
         return combinedPayload
     }
     
@@ -273,9 +270,7 @@ class NoiseCipherState {
             if useExtractedNonce {
                 // Mark nonce as seen after successful decryption
                 markNonceAsSeen(decryptionNonce)
-            } 
-            
-            SecureLogger.log("✅ IOS DECRYPT: Decrypt with nonce: \(decryptionNonce)")
+            }
             nonce += 1
             return plaintext
         } catch {
@@ -290,7 +285,6 @@ class NoiseCipherState {
 // MARK: - Symmetric State
 
 class NoiseSymmetricState {
-    private let logger = Logger(subsystem: "chat.bitchat.app", category: "NoiseSymmetric")
     private var cipherState: NoiseCipherState
     private var chainingKey: Data
     private var hash: Data
@@ -306,46 +300,17 @@ class NoiseSymmetricState {
             self.hash = Data(SHA256.hash(data: nameData))
         }
         self.chainingKey = self.hash
-        
-        // LOGGING: Initial symmetric state after protocol name initialization
-        logger.debug("=== IOS SYMMETRIC STATE INITIALIZED ===")
-        logger.debug("Protocol: \(protocolName)")
-        logger.debug("Initial hash (h): \(self.hash.map { String(format: "%02x", $0) }.joined())")
-        logger.debug("Initial chaining key (ck): \(self.chainingKey.map { String(format: "%02x", $0) }.joined())")
-        logger.debug("Hash length: \(self.hash.count)")
-        logger.debug("========================================")
     }
     
     func mixKey(_ inputKeyMaterial: Data) {
-        // LOGGING: Before mixKey operation
-        logger.debug("*** iOS mixKey() BEFORE ***")
-        logger.debug("Input data (\(inputKeyMaterial.count) bytes): \(inputKeyMaterial.map { String(format: "%02x", $0) }.joined())")
-        logger.debug("Current CK: \(self.chainingKey.map { String(format: "%02x", $0) }.joined())")
-        logger.debug("Current Hash: \(self.hash.map { String(format: "%02x", $0) }.joined())")
-        
         let output = hkdf(chainingKey: chainingKey, inputKeyMaterial: inputKeyMaterial, numOutputs: 2)
         chainingKey = output[0]
         let tempKey = SymmetricKey(data: output[1])
         cipherState.initializeKey(tempKey)
-        
-        // LOGGING: After mixKey operation
-        logger.debug("*** iOS mixKey() AFTER ***")
-        logger.debug("New CK: \(self.chainingKey.map { String(format: "%02x", $0) }.joined())")
-        logger.debug("Hash unchanged: \(self.hash.map { String(format: "%02x", $0) }.joined())")
-        logger.debug("Cipher now has key: \(self.cipherState.hasKey())")
     }
     
     func mixHash(_ data: Data) {
-        // LOGGING: Before mixHash operation
-        logger.debug("*** iOS mixHash() BEFORE ***")
-        logger.debug("Input data (\(data.count) bytes): \(data.map { String(format: "%02x", $0) }.joined())")
-        logger.debug("Current Hash: \(self.hash.map { String(format: "%02x", $0) }.joined())")
-        
         hash = Data(SHA256.hash(data: hash + data))
-        
-        // LOGGING: After mixHash operation
-        logger.debug("*** iOS mixHash() AFTER ***")
-        logger.debug("New Hash: \(self.hash.map { String(format: "%02x", $0) }.joined())")
     }
     
     func mixKeyAndHash(_ inputKeyMaterial: Data) {
@@ -460,48 +425,26 @@ class NoiseHandshakeState {
     }
     
     private func mixPreMessageKeys() {
-        let logger = Logger(subsystem: "chat.bitchat.app", category: "NoiseHandshake")
-        
-        // Log the symmetric state BEFORE any mixing operations
-        logger.debug("=== iOS HANDSHAKE START - INITIAL STATE ===")
-        logger.debug("Protocol: \(self.symmetricState.getHandshakeHash())")
-        logger.debug("Role: \(self.role == .initiator ? "INITIATOR" : "RESPONDER")")
-        logger.debug("Initial symmetric hash: \(self.symmetricState.getHandshakeHash().map { String(format: "%02x", $0) }.joined())")
-        
         // Mix prologue (empty for XX pattern normally)
-        logger.debug("Mixing empty prologue")
         symmetricState.mixHash(Data()) // Empty prologue for XX pattern
-        logger.debug("Hash after empty prologue: \(self.symmetricState.getHandshakeHash().map { String(format: "%02x", $0) }.joined())")
-        
         // For XX pattern, no pre-message keys
         // For IK/NK patterns, we'd mix the responder's static key here
         switch pattern {
         case .XX:
-            logger.debug("XX pattern - no pre-message keys to mix")
             break // No pre-message keys
         case .IK, .NK:
             if role == .initiator, let remoteStatic = remoteStaticPublic {
-                logger.debug("Mixing remote static public key (initiator)")
                 let hashBeforeRemote = symmetricState.getHandshakeHash()
                 symmetricState.mixHash(remoteStatic.rawRepresentation)
-                logger.debug("Hash before remote static: \(hashBeforeRemote.map { String(format: "%02x", $0) }.joined())")
-                logger.debug("Hash after remote static: \(self.symmetricState.getHandshakeHash().map { String(format: "%02x", $0) }.joined())")
             }
         }
-        
-        // Log final state after all initialization
-        logger.debug("=== iOS HANDSHAKE START - FINAL STATE ===")
-        logger.debug("Final symmetric hash after mixPreMessageKeys(): \(self.symmetricState.getHandshakeHash().map { String(format: "%02x", $0) }.joined())")
-        logger.debug("=============================================")
     }
     
     func writeMessage(payload: Data = Data()) throws -> Data {
         guard currentPattern < messagePatterns.count else {
             throw NoiseError.handshakeComplete
         }
-        
-        SecureLogger.log("NoiseHandshake[\(role)]: Writing message \(currentPattern + 1)/\(messagePatterns.count)", category: SecureLogger.noise, level: .info)
-        
+                
         var messageBuffer = Data()
         let patterns = messagePatterns[currentPattern]
         
@@ -591,9 +534,7 @@ class NoiseHandshakeState {
         guard currentPattern < messagePatterns.count else {
             throw NoiseError.handshakeComplete
         }
-        
-        SecureLogger.log("NoiseHandshake[\(role)]: Reading message \(currentPattern + 1)/\(messagePatterns.count)", category: SecureLogger.noise, level: .info)
-        
+                
         var buffer = message
         let patterns = messagePatterns[currentPattern]
         
