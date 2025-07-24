@@ -988,8 +988,12 @@ class ChatViewModel: ObservableObject {
             let hashtagRegex = try? NSRegularExpression(pattern: hashtagPattern, options: [])
             let mentionRegex = try? NSRegularExpression(pattern: mentionPattern, options: [])
             
+            // Use NSDataDetector for URL detection
+            let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
+            
             let hashtagMatches = hashtagRegex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
             let mentionMatches = mentionRegex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
+            let urlMatches = detector?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
             
             // Combine and sort matches
             var allMatches: [(range: NSRange, type: String)] = []
@@ -998,6 +1002,9 @@ class ChatViewModel: ObservableObject {
             }
             for match in mentionMatches {
                 allMatches.append((match.range(at: 0), "mention"))
+            }
+            for match in urlMatches {
+                allMatches.append((match.range, "url"))
             }
             allMatches.sort { $0.range.location < $1.range.location }
             
@@ -1029,6 +1036,9 @@ class ChatViewModel: ObservableObject {
                         matchStyle.underlineStyle = .single
                     } else if type == "mention" {
                         matchStyle.foregroundColor = Color.orange
+                    } else if type == "url" {
+                        matchStyle.foregroundColor = Color.blue
+                        matchStyle.underlineStyle = .single
                     }
                     
                     result.append(AttributedString(matchText).mergingAttributes(matchStyle))
