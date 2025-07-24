@@ -314,7 +314,25 @@ class BluetoothMeshService: NSObject {
         }
     }
     private let messageQueue = DispatchQueue(label: "bitchat.messageQueue", attributes: .concurrent) // Concurrent queue with barriers
-    private let processedMessages = BoundedSet<String>(maxSize: 10000)  // Increased 10x for better duplicate detection
+    
+    // Message state tracking for better duplicate detection
+    private struct MessageState {
+        let firstSeen: Date
+        var lastSeen: Date
+        var seenCount: Int
+        var relayed: Bool
+        var acknowledged: Bool
+        
+        mutating func updateSeen() {
+            lastSeen = Date()
+            seenCount += 1
+        }
+    }
+    
+    private var processedMessages = [String: MessageState]()  // Track full message state
+    private let processedMessagesLock = NSLock()
+    private let maxProcessedMessages = 10000
+    
     private let maxTTL: UInt8 = 7  // Maximum hops for long-distance delivery
     private var announcedToPeers = Set<String>()  // Track which peers we've announced to
     private var announcedPeers = Set<String>()  // Track peers who have already been announced
@@ -471,18 +489,23 @@ class BluetoothMeshService: NSObject {
     }
     
     private var adaptiveRelayProbability: Double {
-        // Keep relay probability high enough to ensure delivery
+        // Adjust relay probability based on network size
+        // Small networks don't need 100% relay - RSSI will handle edge nodes
         let networkSize = estimatedNetworkSize
-        if networkSize <= 10 {
-            return 1.0  // 100% for small networks
+        if networkSize <= 2 {
+            return 0.0   // 0% for 2 nodes - no relay needed with only 2 peers
+        } else if networkSize <= 5 {
+            return 0.5   // 50% for very small networks
+        } else if networkSize <= 10 {
+            return 0.6   // 60% for small networks
         } else if networkSize <= 30 {
-            return 0.85 // 85% - most nodes relay
+            return 0.7   // 70% for medium networks
         } else if networkSize <= 50 {
-            return 0.7  // 70% - still high probability
+            return 0.6   // 60% for larger networks
         } else if networkSize <= 100 {
-            return 0.55 // 55% - over half relay
+            return 0.5   // 50% for big networks
         } else {
-            return 0.4  // 40% minimum - never go below this
+            return 0.4   // 40% minimum for very large networks
         }
     }
     
@@ -496,6 +519,10 @@ class BluetoothMeshService: NSObject {
     private let maxCachedMessagesSentToPeer = 1000
     private let maxMemoryUsageBytes = 50 * 1024 * 1024  // 50MB limit
     private var memoryCleanupTimer: Timer?
+    
+    // Track acknowledged packets to prevent unnecessary retries
+    private var acknowledgedPackets = Set<String>()
+    private let acknowledgedPacketsLock = NSLock()
     
     // Rate limiting for flood control with separate limits for different message types
     private var messageRateLimiter: [String: [Date]] = [:]  // peerID -> recent message timestamps
@@ -867,7 +894,9 @@ class BluetoothMeshService: NSObject {
                 self.messageBloomFilter = OptimizedBloomFilter.adaptive(for: networkSize)
                 
                 // Clear other duplicate detection sets
+                self.processedMessagesLock.lock()
                 self.processedMessages.removeAll()
+                self.processedMessagesLock.unlock()
                 
             }
         }
@@ -1062,22 +1091,13 @@ class BluetoothMeshService: NSObject {
         )
         
         
-        // Initial send with smart collision avoidance
+        // Single send with smart collision avoidance
         let initialDelay = self.smartCollisionAvoidanceDelay(baseDelay: self.randomDelay())
         DispatchQueue.main.asyncAfter(deadline: .now() + initialDelay) { [weak self] in
             self?.broadcastPacket(announcePacket)
             
             // Also send Noise identity announcement
             self?.sendNoiseIdentityAnnounce()
-        }
-        
-        // Send multiple times for reliability with smart collision avoidance
-        for baseDelay in [0.2, 0.5, 1.0] {
-            let adjustedDelay = self.smartCollisionAvoidanceDelay(baseDelay: baseDelay)
-            DispatchQueue.main.asyncAfter(deadline: .now() + adjustedDelay) { [weak self] in
-                guard let self = self else { return }
-                self.broadcastPacket(announcePacket)
-            }
         }
     }
     
@@ -1218,17 +1238,10 @@ class BluetoothMeshService: NSObject {
                         self.recentlySentMessages.remove(msgID)
                     }
                     
-                    // Add smart collision avoidance before initial send
+                    // Single send with smart collision avoidance
                     let initialDelay = self.smartCollisionAvoidanceDelay(baseDelay: self.randomDelay())
                     DispatchQueue.main.asyncAfter(deadline: .now() + initialDelay) { [weak self] in
                         self?.broadcastPacket(packet)
-                    }
-                    
-                    // Single retry for reliability with collision avoidance
-                    let retryDelay = self.smartCollisionAvoidanceDelay(baseDelay: 0.3)
-                    DispatchQueue.main.asyncAfter(deadline: .now() + retryDelay) { [weak self] in
-                        self?.broadcastPacket(packet)
-                        // Re-sending message
                     }
                 }
             }
@@ -1575,7 +1588,9 @@ class BluetoothMeshService: NSObject {
         hasNotifiedNetworkAvailable = false
         networkBecameEmptyTime = nil
         lastNetworkNotificationTime = nil
+        processedMessagesLock.lock()
         processedMessages.removeAll()
+        processedMessagesLock.unlock()
         incomingFragments.removeAll()
         
         // Clear all encryption queues
@@ -2149,12 +2164,20 @@ class BluetoothMeshService: NSObject {
         let messageID = "\(senderID)-\(packet.sequenceNumber)"
         
         // Check if we've seen this exact message before (sequence + sender)
-        if processedMessages.contains(messageID) {
-            SecureLogger.log("Dropped duplicate message seq#\(packet.sequenceNumber) from \(senderID)", category: SecureLogger.security, level: .debug)
+        processedMessagesLock.lock()
+        if let existingState = processedMessages[messageID] {
+            // Update the state
+            var updatedState = existingState
+            updatedState.updateSeen()
+            processedMessages[messageID] = updatedState
+            processedMessagesLock.unlock()
+            
+            SecureLogger.log("Dropped duplicate message seq#\(packet.sequenceNumber) from \(senderID) (seen \(updatedState.seenCount) times)", category: SecureLogger.security, level: .debug)
             // Cancel any pending relay for this message
             cancelPendingRelay(messageID: messageID)
             return
         }
+        processedMessagesLock.unlock()
         
         // Check if this is an old message (sequence number rollback)
         if let lastSeenSeq = peerSequenceNumbers[senderID] {
@@ -2168,14 +2191,35 @@ class BluetoothMeshService: NSObject {
         // Use bloom filter for efficient duplicate detection
         if messageBloomFilter.contains(messageID) {
             // Double check with exact set (bloom filter can have false positives)
-            if !processedMessages.contains(messageID) {
+            processedMessagesLock.lock()
+            let isProcessed = processedMessages[messageID] != nil
+            processedMessagesLock.unlock()
+            if !isProcessed {
                 SecureLogger.log("Bloom filter false positive for message: \(messageID)", category: SecureLogger.security, level: .debug)
             }
         }
         
         // Record this message as processed
         messageBloomFilter.insert(messageID)
-        processedMessages.insert(messageID)
+        processedMessagesLock.lock()
+        processedMessages[messageID] = MessageState(
+            firstSeen: Date(),
+            lastSeen: Date(),
+            seenCount: 1,
+            relayed: false,
+            acknowledged: false
+        )
+        
+        // Prune old entries if needed
+        if processedMessages.count > maxProcessedMessages {
+            // Remove oldest entries
+            let sortedByFirstSeen = processedMessages.sorted { $0.value.firstSeen < $1.value.firstSeen }
+            let toRemove = sortedByFirstSeen.prefix(processedMessages.count - maxProcessedMessages + 1000)
+            for (key, _) in toRemove {
+                processedMessages.removeValue(forKey: key)
+            }
+        }
+        processedMessagesLock.unlock()
         
         // Update last seen sequence number for this peer
         peerSequenceNumbers[senderID] = max(packet.sequenceNumber, peerSequenceNumbers[senderID] ?? 0)
@@ -2255,11 +2299,11 @@ class BluetoothMeshService: NSObject {
                         let rssiValue = peerRSSI[senderID]?.intValue ?? -70
                         let relayProb = self.calculateRelayProbability(baseProb: self.adaptiveRelayProbability, rssi: rssiValue)
                         
-                        // Always relay if TTL is high (fresh messages need to spread)
-                        // or if we have few peers (ensure coverage in sparse networks)
-                        let shouldRelay = relayPacket.ttl >= 4 || 
-                                         self.activePeers.count <= 3 ||
-                                         Double.random(in: 0...1) < relayProb
+                        // Relay based on probability - no forced relay for small networks
+                        // TTL >= 4 gets a slight boost but not guaranteed relay
+                        let ttlBoost = relayPacket.ttl >= 4 ? 0.2 : 0.0
+                        let effectiveProb = min(1.0, relayProb + ttlBoost)
+                        let shouldRelay = Double.random(in: 0...1) < effectiveProb
                         
                         if shouldRelay {
                             SecureLogger.log("Relaying broadcast from \(senderID), TTL: \(relayPacket.ttl), peers: \(self.activePeers.count), RSSI: \(rssiValue), prob: \(String(format: "%.2f", relayProb))", category: SecureLogger.noise, level: .debug)
@@ -3672,21 +3716,18 @@ extension BluetoothMeshService: CBPeripheralDelegate {
                 self.sendVersionHello(to: peripheral)
                 
                 // Send announce packet after version negotiation completes
-                // Send multiple times for reliability
                 if let vm = self.delegate as? ChatViewModel {
-                    // Send announces multiple times with delays
-                    for delay in [0.3, 0.8, 1.5] {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-                            guard let self = self else { return }
-                            let announcePacket = BitchatPacket(
-                                type: MessageType.announce.rawValue,
-                                ttl: 3,
-                                senderID: self.myPeerID,
-                                payload: Data(vm.nickname.utf8),
-                                sequenceNumber: self.getNextSequenceNumber()
-                            )
-                            self.broadcastPacket(announcePacket)
-                        }
+                    // Send single announce with slight delay
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                        guard let self = self else { return }
+                        let announcePacket = BitchatPacket(
+                            type: MessageType.announce.rawValue,
+                            ttl: 3,
+                            senderID: self.myPeerID,
+                            payload: Data(vm.nickname.utf8),
+                            sequenceNumber: self.getNextSequenceNumber()
+                        )
+                        self.broadcastPacket(announcePacket)
                     }
                     
                     // Also send targeted announce to this specific peripheral
@@ -4079,6 +4120,18 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         }
     }
     
+    // Calculate exponential backoff for retries
+    private func calculateExponentialBackoff(retry: Int) -> TimeInterval {
+        // Start with 1s, double each time: 1s, 2s, 4s, 8s, 16s, max 30s
+        let baseDelay = 1.0
+        let maxDelay = 30.0
+        let delay = min(maxDelay, baseDelay * pow(2.0, Double(retry - 1)))
+        
+        // Add 10% jitter to prevent synchronized retries
+        let jitter = delay * 0.1 * (Double.random(in: -1...1))
+        return delay + jitter
+    }
+    
     // MARK: - Collision Avoidance
     
     // Calculate jitter based on node ID to spread transmissions
@@ -4125,6 +4178,14 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             self.pendingRelaysLock.lock()
             self.pendingRelays.removeValue(forKey: messageID)
             self.pendingRelaysLock.unlock()
+            
+            // Mark this message as relayed
+            self.processedMessagesLock.lock()
+            if var state = self.processedMessages[messageID] {
+                state.relayed = true
+                self.processedMessages[messageID] = state
+            }
+            self.processedMessagesLock.unlock()
             
             // Actually relay the packet
             self.broadcastPacket(packet)
@@ -4226,8 +4287,10 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         
         var totalBytes = 0
         
-        // Processed messages (string storage)
-        totalBytes += processedMessages.count * 100  // messageID strings
+        // Processed messages (string storage + MessageState)
+        processedMessagesLock.lock()
+        totalBytes += processedMessages.count * 150  // messageID strings + MessageState struct
+        processedMessagesLock.unlock()
         
         // Fragments
         for (_, fragments) in incomingFragments {
@@ -5168,10 +5231,21 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         SecureLogger.log("Received protocol ACK from \(peerID) for packet \(ack.originalPacketID), type: \(ack.packetType)", 
                        category: SecureLogger.session, level: .debug)
         
-        // Remove from pending ACKs
+        // Remove from pending ACKs and mark as acknowledged
         _ = collectionsQueue.sync(flags: .barrier) {
             pendingAcks.removeValue(forKey: ack.originalPacketID)
         }
+        
+        // Track this packet as acknowledged to prevent future retries
+        acknowledgedPacketsLock.lock()
+        acknowledgedPackets.insert(ack.originalPacketID)
+        // Keep only recent acknowledged packets (last 1000)
+        if acknowledgedPackets.count > 1000 {
+            // Remove oldest entries (this is approximate since Set doesn't maintain order)
+            let toRemove = acknowledgedPackets.count - 1000
+            acknowledgedPackets = Set(Array(acknowledgedPackets).suffix(1000))
+        }
+        acknowledgedPacketsLock.unlock()
         
         // Handle specific packet types that need ACK confirmation
         if let messageType = MessageType(rawValue: ack.packetType) {
@@ -5325,17 +5399,47 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             pendingAcks[packetID] = (packet: packet, timestamp: Date(), retries: 0)
         }
         
-        // Schedule timeout check
-        DispatchQueue.main.asyncAfter(deadline: .now() + ackTimeout) { [weak self] in
+        // Schedule timeout check with initial delay (using exponential backoff starting at 1s)
+        let initialDelay = calculateExponentialBackoff(retry: 1) // 1 second initial delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + initialDelay) { [weak self] in
             self?.checkAckTimeout(for: packetID)
         }
     }
     
     // Check for ACK timeout and retry if needed
     private func checkAckTimeout(for packetID: String) {
+        // Check if already acknowledged
+        acknowledgedPacketsLock.lock()
+        let isAcknowledged = acknowledgedPackets.contains(packetID)
+        acknowledgedPacketsLock.unlock()
+        
+        if isAcknowledged {
+            // Already acknowledged, remove from pending and don't retry
+            collectionsQueue.sync(flags: .barrier) {
+                pendingAcks.removeValue(forKey: packetID)
+            }
+            SecureLogger.log("Packet \(packetID) already acknowledged, cancelling retries", 
+                           category: SecureLogger.session, level: .debug)
+            return
+        }
+        
         collectionsQueue.sync(flags: .barrier) { [weak self] in
             guard let self = self,
                   let pending = self.pendingAcks[packetID] else { return }
+            
+            // Check if this is a handshake packet and we already have an established session
+            if pending.packet.type == MessageType.noiseHandshakeInit.rawValue ||
+               pending.packet.type == MessageType.noiseHandshakeResp.rawValue {
+                // Extract peer ID from packet
+                let peerID = pending.packet.recipientID?.hexEncodedString() ?? ""
+                if !peerID.isEmpty && self.noiseService.hasEstablishedSession(with: peerID) {
+                    // We have an established session, don't retry handshake packets
+                    SecureLogger.log("Not retrying handshake packet \(packetID) - session already established with \(peerID)", 
+                                   category: SecureLogger.handshake, level: .info)
+                    self.pendingAcks.removeValue(forKey: packetID)
+                    return
+                }
+            }
             
             if pending.retries < self.maxAckRetries {
                 // Retry sending the packet
@@ -5351,8 +5455,9 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                     self.broadcastPacket(pending.packet)
                 }
                 
-                // Schedule next timeout check
-                DispatchQueue.main.asyncAfter(deadline: .now() + self.ackTimeout) {
+                // Schedule next timeout check with exponential backoff
+                let backoffDelay = self.calculateExponentialBackoff(retry: pending.retries + 1)
+                DispatchQueue.main.asyncAfter(deadline: .now() + backoffDelay) {
                     self.checkAckTimeout(for: packetID)
                 }
             } else {
