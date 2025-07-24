@@ -2558,16 +2558,22 @@ class BluetoothMeshService: NSObject {
                 
                 // Update peripheral mapping if we have it
                 if let peripheral = peripheral {
+                    SecureLogger.log("handleReceivedPacket: Updating peripheral mapping for announce from \(senderID)", category: SecureLogger.session, level: .debug)
+                    SecureLogger.log("handleReceivedPacket: Current connectedPeripherals: \(self.connectedPeripherals.keys.joined(separator: ", "))", category: SecureLogger.session, level: .debug)
+                    
                     // Find and remove any temp ID mapping for this peripheral
                     var tempIDToRemove: String? = nil
                     for (id, per) in self.connectedPeripherals {
                         if per == peripheral && id != senderID {
+                            SecureLogger.log("handleReceivedPacket: Found temp ID \(id) for peripheral that announced as \(senderID)", category: SecureLogger.session, level: .debug)
                             tempIDToRemove = id
                             break
                         }
                     }
                     
                     if let tempID = tempIDToRemove {
+                        SecureLogger.log("handleReceivedPacket: Transferring from temp ID \(tempID) to real peer ID \(senderID)", category: SecureLogger.session, level: .debug)
+                        
                         // Remove temp mapping
                         self.connectedPeripherals.removeValue(forKey: tempID)
                         // Add real peer ID mapping
@@ -2577,12 +2583,14 @@ class BluetoothMeshService: NSObject {
                         
                         // Transfer RSSI from temp ID to real peer ID
                         if let tempRSSI = self.peripheralRSSI[tempID] {
+                            SecureLogger.log("handleReceivedPacket: Transferring RSSI \(tempRSSI) from peripheralRSSI[\(tempID)] to peerRSSI[\(senderID)]", category: SecureLogger.session, level: .debug)
                             self.peerRSSI[senderID] = tempRSSI
                             self.peripheralRSSI.removeValue(forKey: tempID)
                         }
                         // Also check if RSSI is stored by peripheral UUID
                         let peripheralUUID = peripheral.identifier.uuidString
                         if let peripheralStoredRSSI = self.peripheralRSSI[peripheralUUID] {
+                            SecureLogger.log("handleReceivedPacket: Also storing RSSI \(peripheralStoredRSSI) from peripheralRSSI[\(peripheralUUID)] to peerRSSI[\(senderID)]", category: SecureLogger.session, level: .debug)
                             self.peerRSSI[senderID] = peripheralStoredRSSI
                         }
                         
@@ -2594,6 +2602,11 @@ class BluetoothMeshService: NSObject {
                         }
                         
                         // Don't notify about disconnect - this is just cleanup of temporary ID
+                    } else {
+                        SecureLogger.log("handleReceivedPacket: No temp ID found for peripheral, directly mapping \(senderID)", category: SecureLogger.session, level: .debug)
+                        // No temp ID found, just add the mapping
+                        self.connectedPeripherals[senderID] = peripheral
+                        self.peerIDByPeripheralID[peripheral.identifier.uuidString] = senderID
                     }
                 }
                 
