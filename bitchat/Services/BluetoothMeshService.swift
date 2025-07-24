@@ -2495,18 +2495,13 @@ class BluetoothMeshService: NSObject {
                         // Mark as gracefully left to prevent duplicate disconnect message
                         self.gracefullyLeftPeers.insert(senderID)
                         
-                        // Remove after a delay to handle race conditions with physical disconnect
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak self] in
-                            self?.gracefullyLeftPeers.remove(senderID)
-                        }
-                        
-                        SecureLogger.log("📴 Peer left network: \(senderID) (\(nickname))", category: SecureLogger.session, level: .info)
+                        SecureLogger.log("📴 Peer left network: \(senderID) (\(nickname)) - marked as gracefully left", category: SecureLogger.session, level: .info)
                     }
                 }
                 
                 announcedPeers.remove(senderID)
                 
-                // Show leave message
+                // Show disconnect message immediately when peer leaves
                 DispatchQueue.main.async {
                     self.delegate?.didDisconnectFromPeer(senderID)
                 }
@@ -3376,8 +3371,18 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
             // Reset handshake state to prevent stuck handshakes
             handshakeCoordinator.resetHandshakeState(for: peerID)
             
-            // Notify delegate immediately about disconnect (unless peer gracefully left)
-            if !gracefullyLeftPeers.contains(peerID) {
+            // Check if peer gracefully left and notify delegate
+            let shouldNotifyDisconnect = collectionsQueue.sync {
+                let isGracefullyLeft = self.gracefullyLeftPeers.contains(peerID)
+                if isGracefullyLeft {
+                    SecureLogger.log("Physical disconnect for \(peerID) - was gracefully left, NOT notifying delegate", category: SecureLogger.session, level: .info)
+                } else {
+                    SecureLogger.log("Physical disconnect for \(peerID) - was NOT gracefully left, will notify delegate", category: SecureLogger.session, level: .info)
+                }
+                return !isGracefullyLeft
+            }
+            
+            if shouldNotifyDisconnect {
                 DispatchQueue.main.async {
                     self.delegate?.didDisconnectFromPeer(peerID)
                 }
@@ -3442,6 +3447,7 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
                         } else {
                             // Peer gracefully left, just clean up the tracking
                             self.gracefullyLeftPeers.remove(peerID)
+                            SecureLogger.log("Cleaning up gracefullyLeftPeers for \(peerID)", category: SecureLogger.session, level: .debug)
                         }
                     }
                     
