@@ -605,7 +605,8 @@ struct ContentView: View {
                             let peerData = peersToShow.map { peerID in
                                 let rssiValue = peerRSSI[peerID]?.intValue
                                 if rssiValue == nil {
-                                    print("ContentView: No RSSI for peer \(peerID)")
+                                    print("ContentView: No RSSI for peer \(peerID) in dictionary with \(peerRSSI.count) entries")
+                                    print("ContentView: peerRSSI keys: \(peerRSSI.keys.joined(separator: ", "))")
                                 } else {
                                     print("ContentView: RSSI for peer \(peerID) is \(rssiValue!)")
                                 }

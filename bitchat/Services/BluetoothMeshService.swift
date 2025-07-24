@@ -1558,6 +1558,18 @@ class BluetoothMeshService: NSObject {
             SecureLogger.log("  peerRSSI[\(peerID)] = \(rssi)", category: SecureLogger.session, level: .debug)
         }
         
+        // Log connectedPeripherals state
+        SecureLogger.log("connectedPeripherals has \(connectedPeripherals.count) entries:", category: SecureLogger.session, level: .debug)
+        for (peerID, peripheral) in connectedPeripherals {
+            SecureLogger.log("  connectedPeripherals[\(peerID)] = \(peripheral.identifier.uuidString)", category: SecureLogger.session, level: .debug)
+        }
+        
+        // Log peripheralRSSI state
+        SecureLogger.log("peripheralRSSI has \(peripheralRSSI.count) entries:", category: SecureLogger.session, level: .debug)
+        for (id, rssi) in peripheralRSSI {
+            SecureLogger.log("  peripheralRSSI[\(id)] = \(rssi)", category: SecureLogger.session, level: .debug)
+        }
+        
         // Also check peripheralRSSI for any connected peripherals
         // This handles cases where RSSI is stored under temp IDs
         for (peerID, peripheral) in connectedPeripherals {
@@ -1577,6 +1589,11 @@ class BluetoothMeshService: NSObject {
                     rssiValues[peerID] = rssi
                 } else {
                     SecureLogger.log("  No RSSI found in any fallback location for peer \(peerID)", category: SecureLogger.session, level: .debug)
+                    
+                    // Last resort: check if this peerID exists as a key in peripheralRSSI
+                    for (key, _) in peripheralRSSI {
+                        SecureLogger.log("    Checking peripheralRSSI key \(key) against peerID \(peerID)", category: SecureLogger.session, level: .debug)
+                    }
                 }
             }
         }
