@@ -983,7 +983,9 @@ class ChatViewModel: ObservableObject {
             
             // Use consistent color for all senders
             senderStyle.foregroundColor = primaryColor
-            senderStyle.font = .system(size: 14, weight: .medium, design: .monospaced)
+            // Bold the user's own nickname
+            let fontWeight: Font.Weight = message.sender == nickname ? .bold : .medium
+            senderStyle.font = .system(size: 14, weight: fontWeight, design: .monospaced)
             result.append(sender.mergingAttributes(senderStyle))
             
             // Process content with hashtags and mentions
@@ -1104,7 +1106,9 @@ class ChatViewModel: ObservableObject {
             
             // Use consistent color for all senders
             senderStyle.foregroundColor = primaryColor
-            senderStyle.font = .system(size: 12, weight: .medium, design: .monospaced)
+            // Bold the user's own nickname
+            let fontWeight: Font.Weight = message.sender == nickname ? .bold : .medium
+            senderStyle.font = .system(size: 12, weight: fontWeight, design: .monospaced)
             result.append(sender.mergingAttributes(senderStyle))
             
             
