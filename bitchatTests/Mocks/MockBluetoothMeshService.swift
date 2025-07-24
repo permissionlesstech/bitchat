@@ -73,7 +73,8 @@ class MockBluetoothMeshService: BluetoothMeshService {
                 timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                 payload: payload,
                 signature: nil,
-                ttl: 3
+                ttl: 3,
+                sequenceNumber: 1
             )
             
             sentMessages.append((message, packet))
@@ -111,7 +112,8 @@ class MockBluetoothMeshService: BluetoothMeshService {
                 timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                 payload: payload,
                 signature: nil,
-                ttl: 3
+                ttl: 3,
+                sequenceNumber: 1
             )
             
             sentMessages.append((message, packet))

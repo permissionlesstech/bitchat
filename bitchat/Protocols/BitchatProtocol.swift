@@ -139,8 +139,9 @@ struct BitchatPacket: Codable {
     let payload: Data
     let signature: Data?
     var ttl: UInt8
+    let sequenceNumber: UInt32  // New field for duplicate detection
     
-    init(type: UInt8, senderID: Data, recipientID: Data?, timestamp: UInt64, payload: Data, signature: Data?, ttl: UInt8) {
+    init(type: UInt8, senderID: Data, recipientID: Data?, timestamp: UInt64, payload: Data, signature: Data?, ttl: UInt8, sequenceNumber: UInt32 = 0) {
         self.version = 1
         self.type = type
         self.senderID = senderID
@@ -149,10 +150,11 @@ struct BitchatPacket: Codable {
         self.payload = payload
         self.signature = signature
         self.ttl = ttl
+        self.sequenceNumber = sequenceNumber
     }
     
     // Convenience initializer for new binary format
-    init(type: UInt8, ttl: UInt8, senderID: String, payload: Data) {
+    init(type: UInt8, ttl: UInt8, senderID: String, payload: Data, sequenceNumber: UInt32 = 0) {
         self.version = 1
         self.type = type
         // Convert hex string peer ID to binary data (8 bytes)
@@ -171,6 +173,7 @@ struct BitchatPacket: Codable {
         self.payload = payload
         self.signature = nil
         self.ttl = ttl
+        self.sequenceNumber = sequenceNumber
     }
     
     var data: Data? {
