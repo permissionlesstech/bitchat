@@ -882,16 +882,8 @@ class ChatViewModel: ObservableObject {
         let isDark = colorScheme == .dark
         let primaryColor = isDark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
         
-        if message.sender == nickname {
-            return primaryColor
-        } else if let peerID = message.senderPeerID ?? getPeerIDForNickname(message.sender),
-                  let rssi = meshService.getPeerRSSI()[peerID] {
-            // Use actual RSSI value
-            return getRSSIColor(rssi: rssi.intValue, colorScheme: colorScheme)
-        } else {
-            // No RSSI data available - use a neutral color
-            return primaryColor.opacity(0.7)
-        }
+        // Always use the same color for all senders - no RSSI-based coloring
+        return primaryColor
     }
     
     
@@ -989,20 +981,8 @@ class ChatViewModel: ObservableObject {
             let sender = AttributedString("<@\(message.sender)> ")
             var senderStyle = AttributeContainer()
             
-            // Get sender color
-            let senderColor: Color
-            if message.sender == nickname {
-                senderColor = primaryColor
-            } else if let peerID = message.senderPeerID ?? getPeerIDForNickname(message.sender),
-                      let rssi = meshService.getPeerRSSI()[peerID] {
-                // Use actual RSSI value
-                senderColor = getRSSIColor(rssi: rssi.intValue, colorScheme: colorScheme)
-            } else {
-                // No RSSI data available - use a neutral color
-                senderColor = primaryColor.opacity(0.7)
-            }
-            
-            senderStyle.foregroundColor = senderColor
+            // Use consistent color for all senders
+            senderStyle.foregroundColor = primaryColor
             senderStyle.font = .system(size: 14, weight: .medium, design: .monospaced)
             result.append(sender.mergingAttributes(senderStyle))
             
@@ -1122,20 +1102,8 @@ class ChatViewModel: ObservableObject {
             let sender = AttributedString("<\(message.sender)> ")
             var senderStyle = AttributeContainer()
             
-            // Get RSSI-based color
-            let senderColor: Color
-            if message.sender == nickname {
-                senderColor = primaryColor
-            } else if let peerID = message.senderPeerID ?? getPeerIDForNickname(message.sender),
-                      let rssi = meshService.getPeerRSSI()[peerID] {
-                // Use actual RSSI value
-                senderColor = getRSSIColor(rssi: rssi.intValue, colorScheme: colorScheme)
-            } else {
-                // No RSSI data available - use a neutral color
-                senderColor = primaryColor.opacity(0.7)
-            }
-            
-            senderStyle.foregroundColor = senderColor
+            // Use consistent color for all senders
+            senderStyle.foregroundColor = primaryColor
             senderStyle.font = .system(size: 12, weight: .medium, design: .monospaced)
             result.append(sender.mergingAttributes(senderStyle))
             
