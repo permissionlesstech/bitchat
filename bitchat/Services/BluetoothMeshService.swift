@@ -3376,9 +3376,11 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
             // Reset handshake state to prevent stuck handshakes
             handshakeCoordinator.resetHandshakeState(for: peerID)
             
-            // Notify delegate immediately about disconnect
-            DispatchQueue.main.async {
-                self.delegate?.didDisconnectFromPeer(peerID)
+            // Notify delegate immediately about disconnect (unless peer gracefully left)
+            if !gracefullyLeftPeers.contains(peerID) {
+                DispatchQueue.main.async {
+                    self.delegate?.didDisconnectFromPeer(peerID)
+                }
             }
         }
         
