@@ -57,10 +57,24 @@ class NoiseHandshakeCoordinator {
     }
     
     /// Check if we should initiate handshake with a peer
-    func shouldInitiateHandshake(myPeerID: String, remotePeerID: String) -> Bool {
+    func shouldInitiateHandshake(myPeerID: String, remotePeerID: String, forceIfStale: Bool = false) -> Bool {
         return handshakeQueue.sync {
             // Check if we're already in an active handshake
             if let state = handshakeStates[remotePeerID], state.isActive {
+                // Check if the handshake is stale and we should force a new one
+                if forceIfStale {
+                    switch state {
+                    case .initiating(_, let lastAttempt):
+                        if Date().timeIntervalSince(lastAttempt) > handshakeTimeout {
+                            SecureLogger.log("Forcing new handshake with \(remotePeerID) - previous stuck in initiating", 
+                                           category: SecureLogger.handshake, level: .warning)
+                            return true
+                        }
+                    default:
+                        break
+                    }
+                }
+                
                 SecureLogger.log("Already in active handshake with \(remotePeerID), state: \(state)", 
                                category: SecureLogger.handshake, level: .debug)
                 return false
@@ -252,6 +266,26 @@ class NoiseHandshakeCoordinator {
     func getHandshakeState(for peerID: String) -> HandshakeState {
         return handshakeQueue.sync {
             return handshakeStates[peerID] ?? .idle
+        }
+    }
+    
+    /// Get current retry count for a peer
+    func getRetryCount(for peerID: String) -> Int {
+        return handshakeQueue.sync {
+            switch handshakeStates[peerID] {
+            case .initiating(let attempt, _):
+                return attempt - 1  // Attempts start at 1, retries start at 0
+            default:
+                return 0
+            }
+        }
+    }
+    
+    /// Increment retry count for a peer
+    func incrementRetryCount(for peerID: String) {
+        handshakeQueue.async(flags: .barrier) {
+            let currentAttempt = self.getCurrentAttempt(for: peerID)
+            self.handshakeStates[peerID] = .initiating(attempt: currentAttempt + 1, lastAttempt: Date())
         }
     }
     
