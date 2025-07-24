@@ -26,6 +26,8 @@ struct ContentView: View {
     @State private var selectedMessageSender: String?
     @State private var selectedMessageSenderID: String?
     @FocusState private var isNicknameFieldFocused: Bool
+    @State private var lastScrollTime: Date = .distantPast
+    @State private var scrollThrottleTimer: Timer?
     
     private var backgroundColor: Color {
         colorScheme == .dark ? Color.black : Color.white
@@ -65,19 +67,18 @@ struct ContentView: View {
                                 }
                                 .onEnded { value in
                                     if value.translation.width > 50 || (value.translation.width > 30 && value.velocity.width > 300) {
-                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                        withAnimation(.easeOut(duration: 0.2)) {
                                             showPrivateChat = false
                                             backSwipeOffset = 0
                                             viewModel.endPrivateChat()
                                         }
                                     } else {
-                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                        withAnimation(.easeOut(duration: 0.15)) {
                                             backSwipeOffset = 0
                                         }
                                     }
                                 }
                         )
-                        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showPrivateChat)
                 }
                 
                 // Sidebar overlay
@@ -86,7 +87,7 @@ struct ContentView: View {
                     Color.clear
                         .contentShape(Rectangle())
                         .onTapGesture {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            withAnimation(.easeInOut(duration: 0.2)) {
                                 showSidebar = false
                                 sidebarDragOffset = 0
                             }
@@ -101,15 +102,14 @@ struct ContentView: View {
                         .transition(.move(edge: .trailing))
                 }
                 .offset(x: showSidebar ? -sidebarDragOffset : geometry.size.width - sidebarDragOffset)
-                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showSidebar)
-                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: sidebarDragOffset)
+                .animation(.easeInOut(duration: 0.25), value: showSidebar)
             }
         }
         #if os(macOS)
         .frame(minWidth: 600, minHeight: 400)
         #endif
         .onChange(of: viewModel.selectedPrivateChatPeer) { newValue in
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            withAnimation(.easeInOut(duration: 0.2)) {
                 showPrivateChat = newValue != nil
             }
         }
@@ -132,7 +132,7 @@ struct ContentView: View {
             Button("private message") {
                 if let peerID = selectedMessageSenderID {
                     viewModel.startPrivateChat(with: peerID)
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    withAnimation(.easeInOut(duration: 0.2)) {
                         showSidebar = false
                         sidebarDragOffset = 0
                     }
@@ -242,10 +242,19 @@ struct ContentView: View {
             }
             .onChange(of: viewModel.messages.count) { _ in
                 if privatePeer == nil && !viewModel.messages.isEmpty {
-                    withAnimation {
-                        // Scroll to last message in windowed view
-                        let lastId = viewModel.messages.suffix(100).last?.id
-                        proxy.scrollTo(lastId, anchor: .bottom)
+                    // Throttle scroll animations to prevent excessive UI updates
+                    let now = Date()
+                    if now.timeIntervalSince(lastScrollTime) > 0.5 {
+                        // Immediate scroll if enough time has passed
+                        lastScrollTime = now
+                        proxy.scrollTo(viewModel.messages.suffix(100).last?.id, anchor: .bottom)
+                    } else {
+                        // Schedule a delayed scroll
+                        scrollThrottleTimer?.invalidate()
+                        scrollThrottleTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
+                            lastScrollTime = Date()
+                            proxy.scrollTo(viewModel.messages.suffix(100).last?.id, anchor: .bottom)
+                        }
                     }
                 }
             }
@@ -253,10 +262,17 @@ struct ContentView: View {
                 if let peerID = privatePeer,
                    let messages = viewModel.privateChats[peerID],
                    !messages.isEmpty {
-                    withAnimation {
-                        // Scroll to last message in windowed view
-                        let lastId = messages.suffix(100).last?.id
-                        proxy.scrollTo(lastId, anchor: .bottom)
+                    // Same throttling for private chats
+                    let now = Date()
+                    if now.timeIntervalSince(lastScrollTime) > 0.5 {
+                        lastScrollTime = now
+                        proxy.scrollTo(messages.suffix(100).last?.id, anchor: .bottom)
+                    } else {
+                        scrollThrottleTimer?.invalidate()
+                        scrollThrottleTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
+                            lastScrollTime = Date()
+                            proxy.scrollTo(messages.suffix(100).last?.id, anchor: .bottom)
+                        }
                     }
                 }
             }
@@ -600,7 +616,7 @@ struct ContentView: View {
                             .onTapGesture {
                                 if !isMe && peerNicknames[peerID] != nil {
                                     viewModel.startPrivateChat(with: peerID)
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
                                         showSidebar = false
                                         sidebarDragOffset = 0
                                     }
@@ -647,7 +663,7 @@ struct ContentView: View {
                     }
                 }
                 .onEnded { value in
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    withAnimation(.easeOut(duration: 0.2)) {
                         if !showSidebar {
                             if value.translation.width < -100 || (value.translation.width < -50 && value.velocity.width < -500) {
                                 showSidebar = true
@@ -749,7 +765,7 @@ struct ContentView: View {
                 .foregroundColor(viewModel.isConnected ? textColor : Color.red)
             }
             .onTapGesture {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                withAnimation(.easeInOut(duration: 0.2)) {
                     showSidebar.toggle()
                     sidebarDragOffset = 0
                 }
@@ -766,7 +782,7 @@ struct ContentView: View {
                let privatePeerNick = viewModel.meshService.getPeerNicknames()[privatePeerID] {
                 HStack {
                     Button(action: {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        withAnimation(.easeInOut(duration: 0.2)) {
                             showPrivateChat = false
                             viewModel.endPrivateChat()
                         }
