@@ -537,7 +537,10 @@ struct ContentView: View {
             .background(backgroundColor.opacity(0.95))
         }
         .onAppear {
-            isTextFieldFocused = true
+            // Delay keyboard focus to avoid iOS constraint warnings
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                isTextFieldFocused = true
+            }
         }
     }
     
