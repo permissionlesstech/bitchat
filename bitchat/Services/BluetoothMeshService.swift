@@ -2485,6 +2485,8 @@ class BluetoothMeshService: NSObject {
             if let nickname = String(data: packet.payload, encoding: .utf8) {
                 let senderID = packet.senderID.hexEncodedString()
                 
+                SecureLogger.log("handleReceivedPacket: Received announce from \(senderID), peripheral is \(peripheral != nil ? "present" : "nil")", category: SecureLogger.session, level: .debug)
+                
                 // Ignore if it's from ourselves (including previous peer IDs)
                 if isPeerIDOurs(senderID) {
                     return
@@ -2557,7 +2559,19 @@ class BluetoothMeshService: NSObject {
                 }
                 
                 // Update peripheral mapping if we have it
-                if let peripheral = peripheral {
+                // If peripheral is nil (e.g., from relay), try to find it
+                var peripheralToUpdate = peripheral
+                if peripheralToUpdate == nil {
+                    // Look for any peripheral that might be this peer
+                    // First check if we already have a mapping for this peer ID
+                    peripheralToUpdate = self.connectedPeripherals[senderID]
+                    
+                    if peripheralToUpdate == nil {
+                        SecureLogger.log("handleReceivedPacket: No peripheral passed and no existing mapping for \(senderID)", category: SecureLogger.session, level: .debug)
+                    }
+                }
+                
+                if let peripheral = peripheralToUpdate {
                     SecureLogger.log("handleReceivedPacket: Updating peripheral mapping for announce from \(senderID)", category: SecureLogger.session, level: .debug)
                     SecureLogger.log("handleReceivedPacket: Current connectedPeripherals: \(self.connectedPeripherals.keys.joined(separator: ", "))", category: SecureLogger.session, level: .debug)
                     
