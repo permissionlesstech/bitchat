@@ -8,6 +8,17 @@
 
 import SwiftUI
 
+// Pre-computed peer data for performance
+struct PeerDisplayData: Identifiable {
+    let id: String
+    let displayName: String
+    let rssi: Int?
+    let isFavorite: Bool
+    let isMe: Bool
+    let hasUnreadMessages: Bool
+    let encryptionStatus: EncryptionStatus
+}
+
 // Lazy loading wrapper for link previews
 struct LazyLinkPreviewView: View {
     let url: URL
@@ -577,16 +588,6 @@ struct ContentView: View {
                             let peersToShow: [String] = viewModel.connectedPeers
                             
                             // Pre-compute peer data outside ForEach to reduce overhead
-                            struct PeerDisplayData: Identifiable {
-                                let id: String
-                                let displayName: String
-                                let rssi: Int?
-                                let isFavorite: Bool
-                                let isMe: Bool
-                                let hasUnreadMessages: Bool
-                                let encryptionStatus: EncryptionStatus
-                            }
-                            
                             let peerData = peersToShow.map { peerID in
                                 PeerDisplayData(
                                     id: peerID,
