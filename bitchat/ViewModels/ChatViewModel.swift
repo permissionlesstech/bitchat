@@ -747,6 +747,10 @@ class ChatViewModel: ObservableObject {
         // Clear read receipt tracking
         sentReadReceipts.removeAll()
         
+        // Clear all caches
+        invalidateEncryptionCache()
+        invalidateRSSIColorCache()
+        
         // Disconnect from all peers and clear persistent identity
         // This will force creation of a new identity (new fingerprint) on next launch
         meshService.emergencyDisconnectAll()
@@ -1212,6 +1216,9 @@ class ChatViewModel: ObservableObject {
             peerEncryptionStatus[peerID] = Optional.none
         }
         
+        // Invalidate cache when encryption status changes
+        invalidateEncryptionCache(for: peerID)
+        
         // Force UI update
         DispatchQueue.main.async { [weak self] in
             self?.objectWillChange.send()
@@ -1298,6 +1305,9 @@ class ChatViewModel: ObservableObject {
         } else {
             peerEncryptionStatus[peerID] = Optional.none
         }
+        
+        // Invalidate cache when encryption status changes
+        invalidateEncryptionCache(for: peerID)
         
         // Trigger UI update
         DispatchQueue.main.async { [weak self] in
@@ -1418,6 +1428,9 @@ class ChatViewModel: ObservableObject {
                     SecureLogger.log("ChatViewModel: Setting encryption status to noiseSecured for \(peerID)", category: SecureLogger.security, level: .info)
                 }
                 
+                // Invalidate cache when encryption status changes
+                self.invalidateEncryptionCache(for: peerID)
+                
                 // Force UI update
                 self.objectWillChange.send()
             }
@@ -1426,7 +1439,14 @@ class ChatViewModel: ObservableObject {
         // Set up handshake required callback
         noiseService.onHandshakeRequired = { [weak self] peerID in
             DispatchQueue.main.async {
-                self?.peerEncryptionStatus[peerID] = .noiseHandshaking
+                guard let self = self else { return }
+                self.peerEncryptionStatus[peerID] = .noiseHandshaking
+                
+                // Invalidate cache when encryption status changes
+                self.invalidateEncryptionCache(for: peerID)
+                
+                // Force UI update
+                self.objectWillChange.send()
             }
         }
     }
@@ -2168,6 +2188,9 @@ extension ChatViewModel: BitchatDelegate {
             
             // Update encryption status for all peers
             self.updateEncryptionStatusForPeers()
+            
+            // Invalidate RSSI cache since peer data may have changed
+            self.invalidateRSSIColorCache()
 
             // Explicitly notify SwiftUI that the object has changed.
             self.objectWillChange.send()
