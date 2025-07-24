@@ -385,7 +385,7 @@ class BluetoothMeshService: NSObject {
     
     // Track when we last sent identity announcements to prevent flooding
     private var lastIdentityAnnounceTimes: [String: Date] = [:]
-    private let identityAnnounceMinInterval: TimeInterval = 2.0  // Minimum 2 seconds between announcements per peer
+    private let identityAnnounceMinInterval: TimeInterval = 10.0  // Minimum 10 seconds between announcements per peer
     
     // Track handshake attempts to handle timeouts
     private var handshakeAttemptTimes: [String: Date] = [:]
@@ -409,6 +409,8 @@ class BluetoothMeshService: NSObject {
     private let maxAckRetries = 3
     private var ackTimer: Timer?
     private var advertisingTimer: Timer?  // Timer for interval-based advertising
+    private var connectionKeepAliveTimer: Timer?  // Timer to send keepalive pings
+    private let keepAliveInterval: TimeInterval = 20.0  // Send keepalive every 20 seconds
     
     // Timing randomization for privacy (now with exponential distribution)
     private let minMessageDelay: TimeInterval = 0.01  // 10ms minimum for faster sync
@@ -903,8 +905,8 @@ class BluetoothMeshService: NSObject {
             self?.checkAckTimeouts()
         }
         
-        // Start peer availability checking timer (every 5 seconds)
-        availabilityCheckTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+        // Start peer availability checking timer (every 15 seconds)
+        availabilityCheckTimer = Timer.scheduledTimer(withTimeInterval: 15.0, repeats: true) { [weak self] _ in
             self?.checkPeerAvailability()
         }
         
@@ -925,6 +927,11 @@ class BluetoothMeshService: NSObject {
         
         // Start memory cleanup timer (every minute)
         startMemoryCleanupTimer()
+        
+        // Start connection keep-alive timer to prevent iOS BLE timeouts
+        connectionKeepAliveTimer = Timer.scheduledTimer(withTimeInterval: keepAliveInterval, repeats: true) { [weak self] _ in
+            self?.sendKeepAlivePings()
+        }
         
         // Log handshake states periodically for debugging and clean up stale states
         #if DEBUG
@@ -996,6 +1003,8 @@ class BluetoothMeshService: NSObject {
         cleanupTimer?.invalidate()
         rotationTimer?.invalidate()
         memoryCleanupTimer?.invalidate()
+        connectionKeepAliveTimer?.invalidate()
+        availabilityCheckTimer?.invalidate()
     }
     
     @objc private func appWillTerminate() {
@@ -1091,8 +1100,8 @@ class BluetoothMeshService: NSObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + initialDelay) { [weak self] in
             self?.broadcastPacket(announcePacket)
             
-            // Also send Noise identity announcement
-            self?.sendNoiseIdentityAnnounce()
+            // Don't automatically send identity announcement on startup
+            // Let it happen naturally when peers connect
         }
     }
     
@@ -3154,7 +3163,7 @@ class BluetoothMeshService: NSObject {
             let senderID = packet.senderID.hexEncodedString()
             if !isPeerIDOurs(senderID) {
                 _ = packet.recipientID?.hexEncodedString()
-                handleNoiseEncryptedMessage(from: senderID, encryptedData: packet.payload, originalPacket: packet)
+                handleNoiseEncryptedMessage(from: senderID, encryptedData: packet.payload, originalPacket: packet, peripheral: peripheral)
             }
             
         case .versionHello:
@@ -4071,8 +4080,9 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         if !subscribedCentrals.contains(central) {
             subscribedCentrals.append(central)
             
-            // Send Noise identity announcement to newly connected central
-            sendNoiseIdentityAnnounce()
+            // Only send identity announcement if we haven't recently
+            // This reduces spam when multiple centrals connect quickly
+            // sendNoiseIdentityAnnounce() will check rate limits internally
             
             // Update peer list to show we're connected (even without peer ID yet)
             self.notifyPeerListUpdate()
@@ -4712,6 +4722,26 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         initiateNoiseHandshake(with: peerID)
     }
     
+    // Send keep-alive pings to all connected peers to prevent iOS BLE timeouts
+    private func sendKeepAlivePings() {
+        let connectedPeers = collectionsQueue.sync {
+            return Array(activePeers).filter { peerID in
+                // Only send keepalive to authenticated peers
+                return peerConnectionStates[peerID] == .authenticated
+            }
+        }
+        
+        for peerID in connectedPeers {
+            // Don't spam if we recently heard from them
+            if let lastHeard = lastHeardFromPeer[peerID], 
+               Date().timeIntervalSince(lastHeard) < keepAliveInterval / 2 {
+                continue  // Skip if we heard from them in the last 10 seconds
+            }
+            
+            validateNoiseSession(with: peerID)
+        }
+    }
+    
     // Validate an existing Noise session by sending an encrypted ping
     private func validateNoiseSession(with peerID: String) {
         let encryptionQueue = getEncryptionQueue(for: peerID)
@@ -4998,7 +5028,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         }
     }
     
-    private func handleNoiseEncryptedMessage(from peerID: String, encryptedData: Data, originalPacket: BitchatPacket) {
+    private func handleNoiseEncryptedMessage(from peerID: String, encryptedData: Data, originalPacket: BitchatPacket, peripheral: CBPeripheral? = nil) {
         // Use noiseService directly
         
         // For Noise encrypted messages, we need to decrypt first to check the inner packet
@@ -5092,7 +5122,8 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 // Process the decrypted inner packet
                 // The packet will be handled according to its recipient ID
                 // If it's for us, it won't be relayed
-                handleReceivedPacket(innerPacket, from: peerID)
+                // Pass the peripheral context for proper ACK routing
+                handleReceivedPacket(innerPacket, from: peerID, peripheral: peripheral)
             } else {
                 SecureLogger.log("Failed to parse inner packet from decrypted data", category: SecureLogger.encryption, level: .warning)
             }
@@ -5154,6 +5185,17 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         
         // Update last connection time
         lastConnectionTime[peerID] = Date()
+        
+        // Check if we've already negotiated version with this peer
+        if let existingVersion = negotiatedVersions[peerID] {
+            SecureLogger.log("Already negotiated version \(existingVersion) with \(peerID), skipping re-negotiation", 
+                           category: SecureLogger.session, level: .debug)
+            // If we have a session, validate it
+            if noiseService.hasEstablishedSession(with: peerID) {
+                validateNoiseSession(with: peerID)
+            }
+            return
+        }
         
         // Try JSON first if it looks like JSON
         let hello: VersionHello?
@@ -5673,9 +5715,9 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 let hasConnection = connectionState == .connected || connectionState == .authenticating || connectionState == .authenticated
                 
                 // Peer is available if:
-                // 1. We have an active connection AND heard from them recently, OR
+                // 1. We have an active connection (regardless of last heard time), OR
                 // 2. We're authenticated and heard from them within timeout period
-                let isAvailable = (hasConnection && timeSinceLastHeard < 60.0) || 
+                let isAvailable = hasConnection || 
                                 (connectionState == .authenticated && timeSinceLastHeard < peerAvailabilityTimeout)
                 
                 if wasAvailable != isAvailable {
