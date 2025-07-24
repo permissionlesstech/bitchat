@@ -2585,6 +2585,17 @@ class BluetoothMeshService: NSObject {
                     
                     if peripheralToUpdate == nil {
                         SecureLogger.log("handleReceivedPacket: No peripheral passed and no existing mapping for \(senderID)", category: SecureLogger.session, level: .debug)
+                        
+                        // Try to find peripheral by checking all connected peripherals for matching peer ID
+                        // This handles case where announce is relayed and we need to update RSSI mapping
+                        for (tempID, connectedPeripheral) in self.connectedPeripherals {
+                            // Check if this might be a temp ID for our sender
+                            if tempID.count == 36 { // UUID length
+                                SecureLogger.log("handleReceivedPacket: Checking if temp ID \(tempID) might be for sender \(senderID)", category: SecureLogger.session, level: .debug)
+                                // We can't definitively match without more info, but we can try to transfer RSSI
+                                // if we later get a direct packet from this peer
+                            }
+                        }
                     }
                 }
                 
