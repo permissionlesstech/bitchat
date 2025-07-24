@@ -603,10 +603,16 @@ struct ContentView: View {
                             
                             // Pre-compute peer data outside ForEach to reduce overhead
                             let peerData = peersToShow.map { peerID in
-                                PeerDisplayData(
+                                let rssiValue = peerRSSI[peerID]?.intValue
+                                if rssiValue == nil {
+                                    print("ContentView: No RSSI for peer \(peerID)")
+                                } else {
+                                    print("ContentView: RSSI for peer \(peerID) is \(rssiValue!)")
+                                }
+                                return PeerDisplayData(
                                     id: peerID,
                                     displayName: peerID == myPeerID ? viewModel.nickname : (peerNicknames[peerID] ?? "anon\(peerID.prefix(4))"),
-                                    rssi: peerRSSI[peerID]?.intValue,
+                                    rssi: rssiValue,
                                     isFavorite: viewModel.isFavorite(peerID: peerID),
                                     isMe: peerID == myPeerID,
                                     hasUnreadMessages: viewModel.unreadPrivateMessages.contains(peerID),

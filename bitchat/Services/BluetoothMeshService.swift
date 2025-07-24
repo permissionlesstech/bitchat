@@ -91,6 +91,7 @@ class BluetoothMeshService: NSObject {
     private var activePeers: Set<String> = []  // Track all active peers
     private var peerRSSI: [String: NSNumber] = [:] // Track RSSI values for peers
     private var peripheralRSSI: [String: NSNumber] = [:] // Track RSSI by peripheral ID during discovery
+    private var rssiRetryCount: [String: Int] = [:] // Track RSSI retry attempts per peripheral
     
     // Per-peer encryption queues to prevent nonce desynchronization
     private var peerEncryptionQueues: [String: DispatchQueue] = [:]
@@ -1548,9 +1549,41 @@ class BluetoothMeshService: NSObject {
     }
     
     func getPeerRSSI() -> [String: NSNumber] {
-        // Return actual RSSI values only - no fake defaults
-        // UI should handle missing values gracefully
-        return peerRSSI
+        var rssiValues = peerRSSI
+        
+        SecureLogger.log("getPeerRSSI() called - peerRSSI has \(peerRSSI.count) entries", category: SecureLogger.session, level: .debug)
+        
+        // Log current peerRSSI contents
+        for (peerID, rssi) in peerRSSI {
+            SecureLogger.log("  peerRSSI[\(peerID)] = \(rssi)", category: SecureLogger.session, level: .debug)
+        }
+        
+        // Also check peripheralRSSI for any connected peripherals
+        // This handles cases where RSSI is stored under temp IDs
+        for (peerID, peripheral) in connectedPeripherals {
+            // If we don't have RSSI for this peer ID
+            if rssiValues[peerID] == nil {
+                SecureLogger.log("No RSSI for peer \(peerID), checking fallbacks...", category: SecureLogger.session, level: .debug)
+                
+                // Check if we have RSSI stored by peripheral ID
+                let peripheralID = peripheral.identifier.uuidString
+                if let rssi = peripheralRSSI[peripheralID] {
+                    SecureLogger.log("  Found RSSI \(rssi) in peripheralRSSI[\(peripheralID)]", category: SecureLogger.session, level: .debug)
+                    rssiValues[peerID] = rssi
+                }
+                // Also check if RSSI is stored under the peer ID as a temp ID
+                else if let rssi = peripheralRSSI[peerID] {
+                    SecureLogger.log("  Found RSSI \(rssi) in peripheralRSSI[\(peerID)]", category: SecureLogger.session, level: .debug)
+                    rssiValues[peerID] = rssi
+                } else {
+                    SecureLogger.log("  No RSSI found in any fallback location for peer \(peerID)", category: SecureLogger.session, level: .debug)
+                }
+            }
+        }
+        
+        SecureLogger.log("getPeerRSSI() returning \(rssiValues.count) RSSI values", category: SecureLogger.session, level: .debug)
+        
+        return rssiValues
     }
     
     // Emergency disconnect for panic situations
@@ -1582,6 +1615,7 @@ class BluetoothMeshService: NSObject {
         activePeers.removeAll()
         peerRSSI.removeAll()
         peripheralRSSI.removeAll()
+        rssiRetryCount.removeAll()
         announcedToPeers.removeAll()
         announcedPeers.removeAll()
         // For emergency/panic, reset immediately
@@ -2541,6 +2575,17 @@ class BluetoothMeshService: NSObject {
                         // Update peripheral ID to peer ID mapping
                         self.peerIDByPeripheralID[peripheral.identifier.uuidString] = senderID
                         
+                        // Transfer RSSI from temp ID to real peer ID
+                        if let tempRSSI = self.peripheralRSSI[tempID] {
+                            self.peerRSSI[senderID] = tempRSSI
+                            self.peripheralRSSI.removeValue(forKey: tempID)
+                        }
+                        // Also check if RSSI is stored by peripheral UUID
+                        let peripheralUUID = peripheral.identifier.uuidString
+                        if let peripheralStoredRSSI = self.peripheralRSSI[peripheralUUID] {
+                            self.peerRSSI[senderID] = peripheralStoredRSSI
+                        }
+                        
                         // IMPORTANT: Remove old peer ID from activePeers to prevent duplicates
                         collectionsQueue.sync(flags: .barrier) {
                             if self.activePeers.contains(tempID) {
@@ -3380,6 +3425,7 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
         lastRSSIUpdate[peripheralID] = Date()
         
         // Store RSSI by peripheral ID for later use
+        SecureLogger.log("Discovery: Storing RSSI \(RSSI) for peripheral \(peripheralID)", category: SecureLogger.session, level: .debug)
         peripheralRSSI[peripheralID] = RSSI
         
         // Extract peer ID from name (no prefix for stealth)
@@ -3387,16 +3433,21 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
         if let name = peripheral.name, name.count == 16 {
             // Assume 16-character hex names are peer IDs
             let peerID = name
+            SecureLogger.log("Discovery: Found peer ID \(peerID) from peripheral name", category: SecureLogger.session, level: .debug)
             
             // Don't process our own advertisements (including previous peer IDs)
             if isPeerIDOurs(peerID) {
+                SecureLogger.log("Discovery: Ignoring our own peer ID \(peerID)", category: SecureLogger.session, level: .debug)
                 return
             }
             
             // Validate RSSI before storing
             let rssiValue = RSSI.intValue
             if rssiValue != 127 && rssiValue >= -100 && rssiValue <= 0 {
+                SecureLogger.log("Discovery: Storing valid RSSI \(RSSI) for peer \(peerID)", category: SecureLogger.session, level: .debug)
                 peerRSSI[peerID] = RSSI
+            } else {
+                SecureLogger.log("Discovery: Invalid RSSI \(rssiValue) for peer \(peerID), not storing", category: SecureLogger.session, level: .debug)
             }
             // Discovered potential peer
             SecureLogger.log("Discovered peer with ID: \(peerID), self ID: \(myPeerID)", category: SecureLogger.noise, level: .debug)
@@ -3485,6 +3536,7 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
         
         // Store peripheral by its system ID temporarily until we get the real peer ID
         connectedPeripherals[tempID] = peripheral
+        SecureLogger.log("didConnect: Stored peripheral with temp ID \(tempID)", category: SecureLogger.session, level: .debug)
         
         // Update connection state to connected (but not authenticated yet)
         // We don't know the real peer ID yet, so we can't update the state
@@ -3493,6 +3545,7 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
         // This prevents the connect/disconnect/connect pattern
         
         // Request RSSI reading
+        SecureLogger.log("didConnect: Requesting initial RSSI read for peripheral \(tempID)", category: SecureLogger.session, level: .debug)
         peripheral.readRSSI()
         
         // iOS 11+ BLE 5.0: Request 2M PHY for better range and speed
@@ -3504,6 +3557,9 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
     
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
         let peripheralID = peripheral.identifier.uuidString
+        
+        // Clean up RSSI retry count
+        rssiRetryCount.removeValue(forKey: peripheralID)
         
         // Check if this was an intentional disconnect
         if intentionalDisconnects.contains(peripheralID) {
@@ -3806,39 +3862,73 @@ extension BluetoothMeshService: CBPeripheralDelegate {
     }
     
     func peripheral(_ peripheral: CBPeripheral, didReadRSSI RSSI: NSNumber, error: Error?) {
-        guard error == nil else { return }
+        let peripheralID = peripheral.identifier.uuidString
+        
+        if let error = error {
+            SecureLogger.log("didReadRSSI: Error reading RSSI for peripheral \(peripheralID): \(error)", category: SecureLogger.session, level: .error)
+            return
+        }
         
         // Validate RSSI value - 127 means no RSSI available
         let rssiValue = RSSI.intValue
+        SecureLogger.log("didReadRSSI: Got RSSI \(rssiValue) for peripheral \(peripheralID)", category: SecureLogger.session, level: .debug)
         
         // Only store valid RSSI values
         if rssiValue == 127 || rssiValue < -100 || rssiValue > 0 {
-            SecureLogger.log("Invalid RSSI value \(rssiValue) from peripheral, will retry", category: SecureLogger.session, level: .debug)
+            // Track retry count
+            let retryCount = rssiRetryCount[peripheralID] ?? 0
+            rssiRetryCount[peripheralID] = retryCount + 1
             
-            // Retry sooner if we got an invalid value
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak peripheral] in
-                guard let peripheral = peripheral, peripheral.state == .connected else { return }
-                peripheral.readRSSI()
+            SecureLogger.log("didReadRSSI: Invalid RSSI \(rssiValue), retry attempt \(retryCount + 1)/5", category: SecureLogger.session, level: .debug)
+            
+            // Retry up to 5 times with exponential backoff
+            if retryCount < 5 {
+                let delay = min(0.2 * pow(2.0, Double(retryCount)), 2.0) // 0.2s, 0.4s, 0.8s, 1.6s, 2.0s max
+                SecureLogger.log("didReadRSSI: Scheduling retry in \(delay)s", category: SecureLogger.session, level: .debug)
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self, weak peripheral] in
+                    guard let peripheral = peripheral, peripheral.state == .connected else { 
+                        self?.rssiRetryCount.removeValue(forKey: peripheralID)
+                        SecureLogger.log("didReadRSSI: Peripheral disconnected, canceling retry", category: SecureLogger.session, level: .debug)
+                        return 
+                    }
+                    SecureLogger.log("didReadRSSI: Retrying RSSI read for peripheral \(peripheralID)", category: SecureLogger.session, level: .debug)
+                    peripheral.readRSSI()
+                }
+            } else {
+                // Give up after 5 retries, reset counter
+                rssiRetryCount.removeValue(forKey: peripheralID)
+                SecureLogger.log("didReadRSSI: Failed to get valid RSSI after 5 retries for peripheral \(peripheralID)", category: SecureLogger.session, level: .error)
             }
             return
         }
         
+        // Valid RSSI received, reset retry count
+        rssiRetryCount.removeValue(forKey: peripheralID)
+        SecureLogger.log("didReadRSSI: Valid RSSI \(RSSI) received, storing for peripheral \(peripheralID)", category: SecureLogger.session, level: .debug)
+        
+        // Store RSSI by peripheral ID for fallback lookup
+        peripheralRSSI[peripheralID] = RSSI
+        
         // Find the peer ID for this peripheral
         if let peerID = connectedPeripherals.first(where: { $0.value == peripheral })?.key {
+            SecureLogger.log("didReadRSSI: Found peer ID \(peerID) for peripheral \(peripheralID)", category: SecureLogger.session, level: .debug)
             // Handle both temp IDs and real peer IDs
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
                 
                 if peerID.count != 16 {
                     // It's a temp ID, store RSSI temporarily
+                    SecureLogger.log("didReadRSSI: Peer ID \(peerID) is temp ID (length \(peerID.count)), storing RSSI \(RSSI) temporarily", category: SecureLogger.session, level: .debug)
                     self.peripheralRSSI[peerID] = RSSI
                     // Keep trying to read RSSI until we get real peer ID
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak peripheral] in
                         guard let peripheral = peripheral, peripheral.state == .connected else { return }
+                        SecureLogger.log("didReadRSSI: Re-reading RSSI for temp ID \(peerID)", category: SecureLogger.session, level: .debug)
                         peripheral.readRSSI()
                     }
                 } else {
                     // It's a real peer ID, store it
+                    SecureLogger.log("didReadRSSI: Peer ID \(peerID) is real (length 16), storing RSSI \(RSSI) in peerRSSI", category: SecureLogger.session, level: .debug)
                     self.peerRSSI[peerID] = RSSI
                     // Force UI update when we have a real peer ID
                     self.notifyPeerListUpdate()
@@ -3848,8 +3938,12 @@ extension BluetoothMeshService: CBPeripheralDelegate {
             // Periodically update RSSI
             DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak peripheral] in
                 guard let peripheral = peripheral, peripheral.state == .connected else { return }
+                SecureLogger.log("didReadRSSI: Periodic RSSI update for peripheral \(peripheralID)", category: SecureLogger.session, level: .debug)
                 peripheral.readRSSI()
             }
+        } else {
+            SecureLogger.log("didReadRSSI: Could not find peer ID for peripheral \(peripheralID) in connectedPeripherals", category: SecureLogger.session, level: .error)
+            SecureLogger.log("didReadRSSI: connectedPeripherals keys: \(connectedPeripherals.keys.joined(separator: ", "))", category: SecureLogger.session, level: .debug)
         }
     }
 }
