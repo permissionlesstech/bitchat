@@ -324,6 +324,7 @@ class BluetoothMeshService: NSObject {
     private let networkNotificationCooldown: TimeInterval = 300  // 5 minutes between notifications
     private let networkEmptyResetDelay: TimeInterval = 60  // 1 minute before resetting notification flag
     private var intentionalDisconnects = Set<String>()  // Track peripherals we're disconnecting intentionally
+    private var gracefullyLeftPeers = Set<String>()  // Track peers that sent leave messages
     private var peerLastSeenTimestamps = LRUCache<String, Date>(maxSize: 100)  // Bounded cache for peer timestamps
     private var cleanupTimer: Timer?  // Timer to clean up stale peers
     
@@ -2491,6 +2492,14 @@ class BluetoothMeshService: NSObject {
                     let nickname = self.peerNicknames.removeValue(forKey: senderID) ?? "unknown"
                     
                     if wasRemoved {
+                        // Mark as gracefully left to prevent duplicate disconnect message
+                        self.gracefullyLeftPeers.insert(senderID)
+                        
+                        // Remove after a delay to handle race conditions with physical disconnect
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak self] in
+                            self?.gracefullyLeftPeers.remove(senderID)
+                        }
+                        
                         SecureLogger.log("📴 Peer left network: \(senderID) (\(nickname))", category: SecureLogger.session, level: .info)
                     }
                 }
@@ -3424,8 +3433,14 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
                 if peerID.count == 16 {  // Real peer ID (8 bytes = 16 hex chars)
                     removed = activePeers.remove(peerID) != nil
                     if removed {
-                        let nickname = self.peerNicknames[peerID] ?? "unknown"
-                        SecureLogger.log("📴 Peer disconnected from network: \(peerID) (\(nickname))", category: SecureLogger.session, level: .info)
+                        // Only log disconnect if peer didn't gracefully leave
+                        if !self.gracefullyLeftPeers.contains(peerID) {
+                            let nickname = self.peerNicknames[peerID] ?? "unknown"
+                            SecureLogger.log("📴 Peer disconnected from network: \(peerID) (\(nickname))", category: SecureLogger.session, level: .info)
+                        } else {
+                            // Peer gracefully left, just clean up the tracking
+                            self.gracefullyLeftPeers.remove(peerID)
+                        }
                     }
                     
                     _ = announcedPeers.remove(peerID)
@@ -3600,7 +3615,8 @@ extension BluetoothMeshService: CBPeripheralDelegate {
             
             // Retry sooner if we got an invalid value
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak peripheral] in
-                peripheral?.readRSSI()
+                guard let peripheral = peripheral, peripheral.state == .connected else { return }
+                peripheral.readRSSI()
             }
             return
         }
@@ -3616,7 +3632,8 @@ extension BluetoothMeshService: CBPeripheralDelegate {
                     self.peripheralRSSI[peerID] = RSSI
                     // Keep trying to read RSSI until we get real peer ID
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak peripheral] in
-                        peripheral?.readRSSI()
+                        guard let peripheral = peripheral, peripheral.state == .connected else { return }
+                        peripheral.readRSSI()
                     }
                 } else {
                     // It's a real peer ID, store it
@@ -3628,7 +3645,8 @@ extension BluetoothMeshService: CBPeripheralDelegate {
             
             // Periodically update RSSI
             DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak peripheral] in
-                peripheral?.readRSSI()
+                guard let peripheral = peripheral, peripheral.state == .connected else { return }
+                peripheral.readRSSI()
             }
         }
     }
