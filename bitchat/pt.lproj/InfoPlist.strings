@@ -1,0 +1,2 @@
+"NSBluetoothAlwaysUsageDescription" = "O Bitchat usa Bluetooth para criar uma rede mesh segura para conversar com usuários próximos.";
+"NSBluetoothPeripheralUsageDescription" = "O Bitchat usa Bluetooth para descobrir e se conectar com outros usuários Bitchat próximos.";
