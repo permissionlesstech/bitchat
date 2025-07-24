@@ -2638,6 +2638,13 @@ class BluetoothMeshService: NSObject {
                         // No temp ID found, just add the mapping
                         self.connectedPeripherals[senderID] = peripheral
                         self.peerIDByPeripheralID[peripheral.identifier.uuidString] = senderID
+                        
+                        // Check if RSSI is stored under peripheral UUID and transfer it
+                        let peripheralUUID = peripheral.identifier.uuidString
+                        if let peripheralStoredRSSI = self.peripheralRSSI[peripheralUUID] {
+                            SecureLogger.log("handleReceivedPacket: Transferring RSSI \(peripheralStoredRSSI) from peripheralRSSI[\(peripheralUUID)] to peerRSSI[\(senderID)]", category: SecureLogger.session, level: .debug)
+                            self.peerRSSI[senderID] = peripheralStoredRSSI
+                        }
                     }
                 }
                 
