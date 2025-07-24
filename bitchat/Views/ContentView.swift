@@ -110,6 +110,12 @@ struct ContentView: View {
                 showPrivateChat = newValue != nil
             }
         }
+        .onChange(of: showSidebar) { isOpen in
+            if isOpen {
+                // Auto-dismiss keyboard when sidebar opens
+                isTextFieldFocused = false
+            }
+        }
         .sheet(isPresented: $showAppInfo) {
             AppInfoView()
         }
