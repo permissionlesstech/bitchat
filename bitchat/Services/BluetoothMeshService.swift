@@ -2602,10 +2602,10 @@ class BluetoothMeshService: NSObject {
                             }
                         }
                         
-                        // If we have exactly one unmapped peripheral and no other peers, it's likely this one
-                        if unmappedPeripherals.count == 1 && self.peerNicknames.count == 0 {
+                        // If we have exactly one unmapped peripheral, it's likely this one
+                        if unmappedPeripherals.count == 1 {
                             let (tempID, peripheral) = unmappedPeripherals[0]
-                            SecureLogger.log("handleReceivedPacket: Single unmapped peripheral \(tempID), assuming it's \(senderID)", category: SecureLogger.session, level: .info)
+                            SecureLogger.log("handleReceivedPacket: Single unmapped peripheral \(tempID), mapping to \(senderID)", category: SecureLogger.session, level: .info)
                             peripheralToUpdate = peripheral
                             
                             // Remove temp mapping and add real mapping
@@ -2614,14 +2614,17 @@ class BluetoothMeshService: NSObject {
                             
                             // Transfer RSSI if available
                             if let rssi = self.peripheralRSSI[tempID] {
-                                SecureLogger.log("handleReceivedPacket: Transferring RSSI \(rssi) from \(tempID) to \(senderID)", category: SecureLogger.session, level: .debug)
+                                SecureLogger.log("handleReceivedPacket: Transferring RSSI \(rssi) from \(tempID) to \(senderID)", category: SecureLogger.session, level: .info)
+                                self.peripheralRSSI.removeValue(forKey: tempID)
                                 self.peripheralRSSI[senderID] = rssi
                                 self.peerRSSI[senderID] = rssi
                             }
                             
                             // Also check the peripheral's UUID-based RSSI
                             let peripheralUUID = peripheral.identifier.uuidString
-                            if let rssi = self.peripheralRSSI[peripheralUUID] {
+                            if peripheralUUID == tempID && peripheralRSSI[peripheralUUID] != nil {
+                                // Already handled above
+                            } else if let rssi = self.peripheralRSSI[peripheralUUID] {
                                 SecureLogger.log("handleReceivedPacket: Also found RSSI \(rssi) under peripheral UUID \(peripheralUUID)", category: SecureLogger.session, level: .debug)
                                 self.peerRSSI[senderID] = rssi
                             }
