@@ -8,6 +8,42 @@
 
 import SwiftUI
 
+// Pre-computed peer data for performance
+struct PeerDisplayData: Identifiable {
+    let id: String
+    let displayName: String
+    let rssi: Int?
+    let isFavorite: Bool
+    let isMe: Bool
+    let hasUnreadMessages: Bool
+    let encryptionStatus: EncryptionStatus
+}
+
+// Lazy loading wrapper for link previews
+struct LazyLinkPreviewView: View {
+    let url: URL
+    let title: String?
+    @State private var isVisible = false
+    
+    var body: some View {
+        GeometryReader { geometry in
+            if isVisible {
+                LinkPreviewView(url: url, title: title)
+            } else {
+                // Placeholder while not visible
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color.gray.opacity(0.1))
+                    .frame(height: 80)
+                    .onAppear {
+                        // Only load when view appears on screen
+                        isVisible = true
+                    }
+            }
+        }
+        .frame(height: 80)
+    }
+}
+
 struct ContentView: View {
     @EnvironmentObject var viewModel: ChatViewModel
     @State private var messageText = ""
@@ -22,6 +58,13 @@ struct ContentView: View {
     @State private var commandSuggestions: [String] = []
     @State private var backSwipeOffset: CGFloat = 0
     @State private var showPrivateChat = false
+    @State private var showMessageActions = false
+    @State private var selectedMessageSender: String?
+    @State private var selectedMessageSenderID: String?
+    @FocusState private var isNicknameFieldFocused: Bool
+    @State private var lastScrollTime: Date = .distantPast
+    @State private var scrollThrottleTimer: Timer?
+    @State private var autocompleteDebounceTimer: Timer?
     
     private var backgroundColor: Color {
         colorScheme == .dark ? Color.black : Color.white
@@ -50,7 +93,7 @@ struct ContentView: View {
                             insertion: .move(edge: .trailing),
                             removal: .move(edge: .trailing)
                         ))
-                        .offset(x: showPrivateChat ? 0 : geometry.size.width)
+                        .offset(x: showPrivateChat ? -1 : geometry.size.width)
                         .offset(x: backSwipeOffset)
                         .gesture(
                             DragGesture()
@@ -61,19 +104,18 @@ struct ContentView: View {
                                 }
                                 .onEnded { value in
                                     if value.translation.width > 50 || (value.translation.width > 30 && value.velocity.width > 300) {
-                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                        withAnimation(.easeOut(duration: 0.2)) {
                                             showPrivateChat = false
                                             backSwipeOffset = 0
                                             viewModel.endPrivateChat()
                                         }
                                     } else {
-                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                        withAnimation(.easeOut(duration: 0.15)) {
                                             backSwipeOffset = 0
                                         }
                                     }
                                 }
                         )
-                        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showPrivateChat)
                 }
                 
                 // Sidebar overlay
@@ -82,30 +124,40 @@ struct ContentView: View {
                     Color.clear
                         .contentShape(Rectangle())
                         .onTapGesture {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            withAnimation(.easeInOut(duration: 0.2)) {
                                 showSidebar = false
                                 sidebarDragOffset = 0
                             }
                         }
                     
-                    sidebarView
-                        #if os(macOS)
-                        .frame(width: min(300, geometry.size.width * 0.4))
-                        #else
-                        .frame(width: geometry.size.width * 0.7)
-                        #endif
-                        .transition(.move(edge: .trailing))
+                    // Only render sidebar content when it's visible or animating
+                    if showSidebar || sidebarDragOffset != 0 {
+                        sidebarView
+                            #if os(macOS)
+                            .frame(width: min(300, geometry.size.width * 0.4))
+                            #else
+                            .frame(width: geometry.size.width * 0.7)
+                            #endif
+                            .transition(.move(edge: .trailing))
+                    } else {
+                        // Empty placeholder when hidden
+                        Color.clear
+                            #if os(macOS)
+                            .frame(width: min(300, geometry.size.width * 0.4))
+                            #else
+                            .frame(width: geometry.size.width * 0.7)
+                            #endif
+                    }
                 }
                 .offset(x: showSidebar ? -sidebarDragOffset : geometry.size.width - sidebarDragOffset)
-                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showSidebar)
-                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: sidebarDragOffset)
+                .animation(.easeInOut(duration: 0.25), value: showSidebar)
             }
         }
         #if os(macOS)
         .frame(minWidth: 600, minHeight: 400)
         #endif
         .onChange(of: viewModel.selectedPrivateChatPeer) { newValue in
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            withAnimation(.easeInOut(duration: 0.2)) {
                 showPrivateChat = newValue != nil
             }
         }
@@ -120,12 +172,52 @@ struct ContentView: View {
                 FingerprintView(viewModel: viewModel, peerID: peerID)
             }
         }
+        .confirmationDialog(
+            selectedMessageSender.map { "@\($0)" } ?? "Actions",
+            isPresented: $showMessageActions,
+            titleVisibility: .visible
+        ) {
+            Button("private message") {
+                if let peerID = selectedMessageSenderID {
+                    viewModel.startPrivateChat(with: peerID)
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showSidebar = false
+                        sidebarDragOffset = 0
+                    }
+                }
+            }
+            
+            Button("hug") {
+                if let sender = selectedMessageSender {
+                    viewModel.sendMessage("/hug @\(sender)")
+                }
+            }
+            
+            Button("slap") {
+                if let sender = selectedMessageSender {
+                    viewModel.sendMessage("/slap @\(sender)")
+                }
+            }
+            
+            Button("BLOCK", role: .destructive) {
+                if let sender = selectedMessageSender {
+                    viewModel.sendMessage("/block \(sender)")
+                }
+            }
+            
+            Button("cancel", role: .cancel) {}
+        }
+        .onDisappear {
+            // Clean up timers
+            scrollThrottleTimer?.invalidate()
+            autocompleteDebounceTimer?.invalidate()
+        }
     }
     
     private func messagesView(privatePeer: String?) -> some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 0) {
                     let messages: [BitchatMessage] = {
                         if let privatePeer = privatePeer {
                             let msgs = viewModel.getPrivateChatMessages(for: privatePeer)
@@ -135,8 +227,11 @@ struct ContentView: View {
                         }
                     }()
                     
-                    ForEach(messages, id: \.id) { message in
-                        VStack(alignment: .leading, spacing: 4) {
+                    // Implement windowing - show last 100 messages for performance
+                    let windowedMessages = messages.suffix(100)
+                    
+                    ForEach(windowedMessages, id: \.id) { message in
+                        VStack(alignment: .leading, spacing: 0) {
                             // Check if current user is mentioned
                             let _ = message.mentions?.contains(viewModel.nickname) ?? false
                             
@@ -148,7 +243,7 @@ struct ContentView: View {
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             } else {
                                 // Regular messages with natural text wrapping
-                                VStack(alignment: .leading, spacing: 2) {
+                                VStack(alignment: .leading, spacing: 0) {
                                     HStack(alignment: .top, spacing: 0) {
                                         // Single text view for natural wrapping
                                         Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme))
@@ -164,33 +259,35 @@ struct ContentView: View {
                                         }
                                     }
                                     
-                                    // Check for links and show preview
-                                    if let markdownLink = message.content.extractMarkdownLink() {
-                                        // Don't show link preview if the message is just the emoji
-                                        let cleanContent = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
-                                        if cleanContent.hasPrefix("👇") {
-                                            LinkPreviewView(url: markdownLink.url, title: markdownLink.title)
-                                                .padding(.top, 2)
-                                                .id("\(message.id)-\(markdownLink.url.absoluteString)")
-                                        }
-                                    } else {
-                                        // Check for plain URLs
-                                        let urls = message.content.extractURLs()
-                                        ForEach(Array(urls.prefix(3).enumerated()), id: \.offset) { index, urlInfo in
-                                            LinkPreviewView(url: urlInfo.url, title: nil)
-                                                .padding(.top, 2)
+                                    // Check for plain URLs
+                                    let urls = message.content.extractURLs()
+                                    if !urls.isEmpty {
+                                        ForEach(urls.prefix(3).indices, id: \.self) { index in
+                                            let urlInfo = urls[index]
+                                            LazyLinkPreviewView(url: urlInfo.url, title: nil)
+                                                .padding(.top, 3)
+                                                .padding(.horizontal, 1)
                                                 .id("\(message.id)-\(urlInfo.url.absoluteString)")
                                         }
                                     }
                                 }
                             }
                         }
+                        .id(message.id)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            // Only show actions for messages from other users (not system or self)
+                            if message.sender != "system" && message.sender != viewModel.nickname {
+                                selectedMessageSender = message.sender
+                                selectedMessageSenderID = message.senderPeerID
+                                showMessageActions = true
+                            }
+                        }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 2)
-                        .id(message.id)
                     }
                 }
-                .padding(.vertical, 8)
+                .padding(.vertical, 4)
             }
             .background(backgroundColor)
             .onTapGesture(count: 3) {
@@ -199,8 +296,19 @@ struct ContentView: View {
             }
             .onChange(of: viewModel.messages.count) { _ in
                 if privatePeer == nil && !viewModel.messages.isEmpty {
-                    withAnimation {
-                        proxy.scrollTo(viewModel.messages.last?.id, anchor: .bottom)
+                    // Throttle scroll animations to prevent excessive UI updates
+                    let now = Date()
+                    if now.timeIntervalSince(lastScrollTime) > 0.5 {
+                        // Immediate scroll if enough time has passed
+                        lastScrollTime = now
+                        proxy.scrollTo(viewModel.messages.suffix(100).last?.id, anchor: .bottom)
+                    } else {
+                        // Schedule a delayed scroll
+                        scrollThrottleTimer?.invalidate()
+                        scrollThrottleTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
+                            lastScrollTime = Date()
+                            proxy.scrollTo(viewModel.messages.suffix(100).last?.id, anchor: .bottom)
+                        }
                     }
                 }
             }
@@ -208,8 +316,17 @@ struct ContentView: View {
                 if let peerID = privatePeer,
                    let messages = viewModel.privateChats[peerID],
                    !messages.isEmpty {
-                    withAnimation {
-                        proxy.scrollTo(messages.last?.id, anchor: .bottom)
+                    // Same throttling for private chats
+                    let now = Date()
+                    if now.timeIntervalSince(lastScrollTime) > 0.5 {
+                        lastScrollTime = now
+                        proxy.scrollTo(messages.suffix(100).last?.id, anchor: .bottom)
+                    } else {
+                        scrollThrottleTimer?.invalidate()
+                        scrollThrottleTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
+                            lastScrollTime = Date()
+                            proxy.scrollTo(messages.suffix(100).last?.id, anchor: .bottom)
+                        }
                     }
                 }
             }
@@ -236,7 +353,7 @@ struct ContentView: View {
             // @mentions autocomplete
             if viewModel.showAutocomplete && !viewModel.autocompleteSuggestions.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(viewModel.autocompleteSuggestions.enumerated()), id: \.element) { index, suggestion in
+                    ForEach(viewModel.autocompleteSuggestions, id: \.self) { suggestion in
                         Button(action: {
                             _ = viewModel.completeNickname(suggestion, in: &messageText)
                         }) {
@@ -329,33 +446,24 @@ struct ContentView: View {
             }
             
             HStack(alignment: .center, spacing: 4) {
-            if viewModel.selectedPrivateChatPeer != nil {
-                Text("<@\(viewModel.nickname)> →")
-                    .font(.system(size: 12, weight: .medium, design: .monospaced))
-                    .foregroundColor(Color.orange)
-                    .lineLimit(1)
-                    .fixedSize()
-                    .padding(.leading, 12)
-            } else {
-                Text("<@\(viewModel.nickname)>")
-                    .font(.system(size: 12, weight: .medium, design: .monospaced))
-                    .foregroundColor(textColor)
-                    .lineLimit(1)
-                    .fixedSize()
-                    .padding(.leading, 12)
-            }
-            
-            TextField("", text: $messageText)
+            TextField("type a message...", text: $messageText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 14, design: .monospaced))
                 .foregroundColor(textColor)
                 .focused($isTextFieldFocused)
+                .padding(.leading, 12)
                 .onChange(of: messageText) { newValue in
-                    // Get cursor position (approximate - end of text for now)
-                    let cursorPosition = newValue.count
-                    viewModel.updateAutocomplete(for: newValue, cursorPosition: cursorPosition)
+                    // Cancel previous debounce timer
+                    autocompleteDebounceTimer?.invalidate()
                     
-                    // Check for command autocomplete
+                    // Debounce autocomplete updates to reduce calls during rapid typing
+                    autocompleteDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: false) { _ in
+                        // Get cursor position (approximate - end of text for now)
+                        let cursorPosition = newValue.count
+                        viewModel.updateAutocomplete(for: newValue, cursorPosition: cursorPosition)
+                    }
+                    
+                    // Check for command autocomplete (instant, no debounce needed)
                     if newValue.hasPrefix("/") && newValue.count >= 1 {
                         // Build context-aware command list
                         let commandDescriptions = [
@@ -437,7 +545,7 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 0) {
                 // Header - match main toolbar height
                 HStack {
-                    Text("YOUR NETWORK")
+                    Text("NETWORK")
                         .font(.system(size: 16, weight: .bold, design: .monospaced))
                         .foregroundColor(textColor)
                     Spacer()
@@ -467,7 +575,7 @@ struct ContentView: View {
                         }
                         
                         if viewModel.connectedPeers.isEmpty {
-                            Text("no one connected...")
+                            Text("nobody around...")
                                 .font(.system(size: 14, design: .monospaced))
                                 .foregroundColor(secondaryTextColor)
                                 .padding(.horizontal)
@@ -479,39 +587,39 @@ struct ContentView: View {
                             // Show all connected peers
                             let peersToShow: [String] = viewModel.connectedPeers
                             
-                        // Sort peers: favorites first, then alphabetically by nickname
-                        let sortedPeers = peersToShow.sorted { peer1, peer2 in
-                            let isFav1 = viewModel.isFavorite(peerID: peer1)
-                            let isFav2 = viewModel.isFavorite(peerID: peer2)
-                            
-                            if isFav1 != isFav2 {
-                                return isFav1 // Favorites come first
+                            // Pre-compute peer data outside ForEach to reduce overhead
+                            let peerData = peersToShow.map { peerID in
+                                PeerDisplayData(
+                                    id: peerID,
+                                    displayName: peerID == myPeerID ? viewModel.nickname : (peerNicknames[peerID] ?? "anon\(peerID.prefix(4))"),
+                                    rssi: peerRSSI[peerID]?.intValue,
+                                    isFavorite: viewModel.isFavorite(peerID: peerID),
+                                    isMe: peerID == myPeerID,
+                                    hasUnreadMessages: viewModel.unreadPrivateMessages.contains(peerID),
+                                    encryptionStatus: viewModel.getEncryptionStatus(for: peerID)
+                                )
+                            }.sorted { peer1, peer2 in
+                                // Sort: favorites first, then alphabetically by nickname
+                                if peer1.isFavorite != peer2.isFavorite {
+                                    return peer1.isFavorite
+                                }
+                                return peer1.displayName < peer2.displayName
                             }
-                            
-                            let name1 = peerNicknames[peer1] ?? "anon\(peer1.prefix(4))"
-                            let name2 = peerNicknames[peer2] ?? "anon\(peer2.prefix(4))"
-                            return name1 < name2
-                        }
                         
-                        ForEach(sortedPeers, id: \.self) { peerID in
-                            let displayName = peerID == myPeerID ? viewModel.nickname : (peerNicknames[peerID] ?? "anon\(peerID.prefix(4))")
-                            let rssi = peerRSSI[peerID]?.intValue
-                            let isFavorite = viewModel.isFavorite(peerID: peerID)
-                            let isMe = peerID == myPeerID
-                            
+                        ForEach(peerData) { peer in
                             HStack(spacing: 8) {
                                 // Signal strength indicator or unread message icon
-                                if isMe {
+                                if peer.isMe {
                                     Image(systemName: "person.fill")
                                         .font(.system(size: 10))
                                         .foregroundColor(textColor)
                                         .accessibilityLabel("You")
-                                } else if viewModel.unreadPrivateMessages.contains(peerID) {
+                                } else if peer.hasUnreadMessages {
                                     Image(systemName: "envelope.fill")
                                         .font(.system(size: 12))
                                         .foregroundColor(Color.orange)
-                                        .accessibilityLabel("Unread message from \(displayName)")
-                                } else if let rssi = rssi {
+                                        .accessibilityLabel("Unread message from \(peer.displayName)")
+                                } else if let rssi = peer.rssi {
                                     Image(systemName: "circle.fill")
                                         .font(.system(size: 8))
                                         .foregroundColor(viewModel.getRSSIColor(rssi: rssi, colorScheme: colorScheme))
@@ -525,61 +633,60 @@ struct ContentView: View {
                                 }
                                 
                                 // Peer name
-                                if isMe {
+                                if peer.isMe {
                                     HStack {
-                                        Text(displayName + " (you)")
+                                        Text(peer.displayName + " (you)")
                                             .font(.system(size: 14, design: .monospaced))
                                             .foregroundColor(textColor)
                                         
                                         Spacer()
                                     }
                                 } else {
-                                    Button(action: {
-                                        if peerNicknames[peerID] != nil {
-                                            viewModel.startPrivateChat(with: peerID)
-                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                                showSidebar = false
-                                                sidebarDragOffset = 0
-                                            }
-                                        }
-                                    }) {
-                                        Text(displayName)
-                                            .font(.system(size: 14, design: .monospaced))
-                                            .foregroundColor(peerNicknames[peerID] != nil ? textColor : secondaryTextColor)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .disabled(peerNicknames[peerID] == nil)
-                                    .onTapGesture(count: 2) {
-                                        // Show fingerprint on double tap
-                                        viewModel.showFingerprint(for: peerID)
-                                    }
+                                    Text(peer.displayName)
+                                        .font(.system(size: 14, design: .monospaced))
+                                        .foregroundColor(peerNicknames[peer.id] != nil ? textColor : secondaryTextColor)
                                     
                                     // Encryption status icon (after peer name)
-                                    let encryptionStatus = viewModel.getEncryptionStatus(for: peerID)
-                                    Image(systemName: encryptionStatus.icon)
+                                    Image(systemName: peer.encryptionStatus.icon)
                                         .font(.system(size: 10))
-                                        .foregroundColor(encryptionStatus == .noiseVerified ? Color.green : 
-                                                       encryptionStatus == .noiseSecured ? textColor :
-                                                       encryptionStatus == .noiseHandshaking ? Color.orange :
+                                        .foregroundColor(peer.encryptionStatus == .noiseVerified ? Color.green : 
+                                                       peer.encryptionStatus == .noiseSecured ? textColor :
+                                                       peer.encryptionStatus == .noiseHandshaking ? Color.orange :
                                                        Color.red)
-                                        .accessibilityLabel("Encryption: \(encryptionStatus == .noiseVerified ? "verified" : encryptionStatus == .noiseSecured ? "secured" : encryptionStatus == .noiseHandshaking ? "establishing" : "none")")
+                                        .accessibilityLabel("Encryption: \(peer.encryptionStatus == .noiseVerified ? "verified" : peer.encryptionStatus == .noiseSecured ? "secured" : peer.encryptionStatus == .noiseHandshaking ? "establishing" : "none")")
                                     
                                     Spacer()
                                     
                                     // Favorite star
                                     Button(action: {
-                                        viewModel.toggleFavorite(peerID: peerID)
+                                        viewModel.toggleFavorite(peerID: peer.id)
                                     }) {
-                                        Image(systemName: isFavorite ? "star.fill" : "star")
+                                        Image(systemName: peer.isFavorite ? "star.fill" : "star")
                                             .font(.system(size: 12))
-                                            .foregroundColor(isFavorite ? Color.yellow : secondaryTextColor)
+                                            .foregroundColor(peer.isFavorite ? Color.yellow : secondaryTextColor)
                                     }
                                     .buttonStyle(.plain)
-                                    .accessibilityLabel(isFavorite ? "Remove \(displayName) from favorites" : "Add \(displayName) to favorites")
+                                    .accessibilityLabel(peer.isFavorite ? "Remove \(peer.displayName) from favorites" : "Add \(peer.displayName) to favorites")
                                 }
                             }
                             .padding(.horizontal)
                             .padding(.vertical, 8)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                if !peer.isMe && peerNicknames[peer.id] != nil {
+                                    viewModel.startPrivateChat(with: peer.id)
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        showSidebar = false
+                                        sidebarDragOffset = 0
+                                    }
+                                }
+                            }
+                            .onTapGesture(count: 2) {
+                                if !peer.isMe {
+                                    // Show fingerprint on double tap
+                                    viewModel.showFingerprint(for: peer.id)
+                                }
+                            }
                         }
                         }
                     }
@@ -615,7 +722,7 @@ struct ContentView: View {
                     }
                 }
                 .onEnded { value in
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    withAnimation(.easeOut(duration: 0.2)) {
                         if !showSidebar {
                             if value.translation.width < -100 || (value.translation.width < -50 && value.velocity.width < -500) {
                                 showSidebar = true
@@ -680,11 +787,15 @@ struct ContentView: View {
                     .font(.system(size: 14, design: .monospaced))
                     .frame(maxWidth: 100)
                     .foregroundColor(textColor)
-                    .onChange(of: viewModel.nickname) { _ in
-                        viewModel.saveNickname()
+                    .focused($isNicknameFieldFocused)
+                    .onChange(of: isNicknameFieldFocused) { isFocused in
+                        if !isFocused {
+                            // Only validate when losing focus
+                            viewModel.validateAndSaveNickname()
+                        }
                     }
                     .onSubmit {
-                        viewModel.saveNickname()
+                        viewModel.validateAndSaveNickname()
                     }
             }
             
@@ -713,7 +824,7 @@ struct ContentView: View {
                 .foregroundColor(viewModel.isConnected ? textColor : Color.red)
             }
             .onTapGesture {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                withAnimation(.easeInOut(duration: 0.2)) {
                     showSidebar.toggle()
                     sidebarDragOffset = 0
                 }
@@ -730,7 +841,7 @@ struct ContentView: View {
                let privatePeerNick = viewModel.meshService.getPeerNicknames()[privatePeerID] {
                 HStack {
                     Button(action: {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        withAnimation(.easeInOut(duration: 0.2)) {
                             showPrivateChat = false
                             viewModel.endPrivateChat()
                         }

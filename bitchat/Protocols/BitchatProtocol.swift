@@ -929,7 +929,7 @@ enum DeliveryStatus: Codable, Equatable {
     }
 }
 
-struct BitchatMessage: Codable, Equatable {
+class BitchatMessage: Codable {
     let id: String
     let sender: String
     let content: String
@@ -941,6 +941,23 @@ struct BitchatMessage: Codable, Equatable {
     let senderPeerID: String?
     let mentions: [String]?  // Array of mentioned nicknames
     var deliveryStatus: DeliveryStatus? // Delivery tracking
+    
+    // Cached formatted text (not included in Codable)
+    private var _cachedFormattedText: [String: AttributedString] = [:]
+    
+    func getCachedFormattedText(isDark: Bool) -> AttributedString? {
+        return _cachedFormattedText["\(isDark)"]
+    }
+    
+    func setCachedFormattedText(_ text: AttributedString, isDark: Bool) {
+        _cachedFormattedText["\(isDark)"] = text
+    }
+    
+    // Codable implementation
+    enum CodingKeys: String, CodingKey {
+        case id, sender, content, timestamp, isRelay, originalSender
+        case isPrivate, recipientNickname, senderPeerID, mentions, deliveryStatus
+    }
     
     init(id: String? = nil, sender: String, content: String, timestamp: Date, isRelay: Bool, originalSender: String? = nil, isPrivate: Bool = false, recipientNickname: String? = nil, senderPeerID: String? = nil, mentions: [String]? = nil, deliveryStatus: DeliveryStatus? = nil) {
         self.id = id ?? UUID().uuidString
@@ -954,6 +971,23 @@ struct BitchatMessage: Codable, Equatable {
         self.senderPeerID = senderPeerID
         self.mentions = mentions
         self.deliveryStatus = deliveryStatus ?? (isPrivate ? .sending : nil)
+    }
+}
+
+// Equatable conformance for BitchatMessage
+extension BitchatMessage: Equatable {
+    static func == (lhs: BitchatMessage, rhs: BitchatMessage) -> Bool {
+        return lhs.id == rhs.id &&
+               lhs.sender == rhs.sender &&
+               lhs.content == rhs.content &&
+               lhs.timestamp == rhs.timestamp &&
+               lhs.isRelay == rhs.isRelay &&
+               lhs.originalSender == rhs.originalSender &&
+               lhs.isPrivate == rhs.isPrivate &&
+               lhs.recipientNickname == rhs.recipientNickname &&
+               lhs.senderPeerID == rhs.senderPeerID &&
+               lhs.mentions == rhs.mentions &&
+               lhs.deliveryStatus == rhs.deliveryStatus
     }
 }
 
