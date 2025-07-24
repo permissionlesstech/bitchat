@@ -17,15 +17,15 @@ import UIKit
 
 class ChatViewModel: ObservableObject {
     @Published var messages: [BitchatMessage] = []
+    private let maxMessages = 1337 // Maximum messages before oldest are removed
     @Published var connectedPeers: [String] = []
-    @Published var nickname: String = "" {
-        didSet {
-            nicknameSaveTimer?.invalidate()
-            nicknameSaveTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
-                self.saveNickname()
-            }
-        }
-    }
+    
+    // Message batching for performance
+    private var pendingMessages: [BitchatMessage] = []
+    private var pendingPrivateMessages: [String: [BitchatMessage]] = [:] // peerID -> messages
+    private var messageBatchTimer: Timer?
+    private let messageBatchInterval: TimeInterval = 0.1 // 100ms batching window
+    @Published var nickname: String = ""
     @Published var isConnected = false
     @Published var privateChats: [String: [BitchatMessage]] = [:] // peerID -> messages
     @Published var selectedPrivateChatPeer: String? = nil
@@ -36,13 +36,21 @@ class ChatViewModel: ObservableObject {
     @Published var autocompleteRange: NSRange? = nil
     @Published var selectedAutocompleteIndex: Int = 0
     
+    // Autocomplete optimization
+    private let mentionRegex = try? NSRegularExpression(pattern: "@([a-zA-Z0-9_]*)$", options: [])
+    private var cachedNicknames: [String] = []
+    private var lastNicknameUpdate: Date = .distantPast
+    
     // Temporary property to fix compilation
     @Published var showPasswordPrompt = false
     
     var meshService = BluetoothMeshService()
     private let userDefaults = UserDefaults.standard
     private let nicknameKey = "bitchat.nickname"
-    private var nicknameSaveTimer: Timer?
+    
+    // Caches for expensive computations
+    private var rssiColorCache: [String: Color] = [:] // key: "\(rssi)_\(isDark)"
+    private var encryptionStatusCache: [String: EncryptionStatus] = [:] // key: peerID
     
     @Published var favoritePeers: Set<String> = []  // Now stores public key fingerprints instead of peer IDs
     private var peerIDToPublicKeyFingerprint: [String: String] = [:]  // Maps ephemeral peer IDs to persistent fingerprints
@@ -151,6 +159,9 @@ class ChatViewModel: ObservableObject {
     }
     
     deinit {
+        // Clean up timer
+        messageBatchTimer?.invalidate()
+        
         // Force immediate save
         userDefaults.synchronize()
     }
@@ -170,6 +181,14 @@ class ChatViewModel: ObservableObject {
         
         // Send announce with new nickname to all peers
         meshService.sendBroadcastAnnounce()
+    }
+    
+    func validateAndSaveNickname() {
+        // Check if nickname is empty or just whitespace
+        if nickname.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            nickname = "anon\(Int.random(in: 1000...9999))"
+        }
+        saveNickname()
     }
     
     private func loadFavorites() {
@@ -317,6 +336,7 @@ class ChatViewModel: ObservableObject {
                         privateChats[currentPeerID] = []
                     }
                     privateChats[currentPeerID]?.append(contentsOf: oldMessages)
+                    trimPrivateChatMessagesIfNeeded(for: currentPeerID)
                     privateChats.removeValue(forKey: oldPeerID)
                 }
                 
@@ -372,8 +392,12 @@ class ChatViewModel: ObservableObject {
                 mentions: mentions.isEmpty ? nil : mentions,
             )
             
-            // Add to main messages
+            // Add to main messages immediately for user feedback
             messages.append(message)
+            trimMessagesIfNeeded()
+            
+            // Force immediate UI update for user's own messages
+            objectWillChange.send()
             
             // Send via mesh with mentions
             meshService.sendMessage(content, mentions: mentions)
@@ -420,12 +444,13 @@ class ChatViewModel: ObservableObject {
             privateChats[peerID] = []
         }
         privateChats[peerID]?.append(message)
+        trimPrivateChatMessagesIfNeeded(for: peerID)
         
         // Track the message for delivery confirmation
         let isFavorite = isFavorite(peerID: peerID)
         DeliveryTracker.shared.trackMessage(message, recipientID: peerID, recipientNickname: recipientNickname, isFavorite: isFavorite)
         
-        // Trigger UI update
+        // Immediate UI update for user's own messages
         objectWillChange.send()
         
         // Send via mesh with the same message ID
@@ -501,6 +526,7 @@ class ChatViewModel: ObservableObject {
             // Initialize chat history with migrated messages if any
             if !migratedMessages.isEmpty {
                 privateChats[peerID] = migratedMessages.sorted { $0.timestamp < $1.timestamp }
+                trimPrivateChatMessagesIfNeeded(for: peerID)
             } else {
                 privateChats[peerID] = []
             }
@@ -561,6 +587,7 @@ class ChatViewModel: ObservableObject {
                 privateChats[peerID] = []
             }
             privateChats[peerID]?.append(localNotification)
+            trimPrivateChatMessagesIfNeeded(for: peerID)
             
         } else {
             // In public chat - send to everyone
@@ -573,15 +600,21 @@ class ChatViewModel: ObservableObject {
                 timestamp: Date(),
                 isRelay: false
             )
-            messages.append(localNotification)
+            // System messages can be batched
+            addMessageToBatch(localNotification)
         }
     }
     
     @objc private func appWillResignActive() {
+        // Flush any pending messages when app goes to background
+        flushMessageBatchImmediately()
+        
         userDefaults.synchronize()
     }
     
     @objc func applicationWillTerminate() {
+        // Flush any pending messages immediately
+        flushMessageBatchImmediately()
         
         // Verify identity key is still there
         _ = KeychainManager.shared.verifyIdentityKeyExists()
@@ -593,6 +626,9 @@ class ChatViewModel: ObservableObject {
     }
     
     @objc private func appWillTerminate() {
+        // Flush any pending messages immediately
+        flushMessageBatchImmediately()
+        
         userDefaults.synchronize()
     }
     
@@ -696,6 +732,9 @@ class ChatViewModel: ObservableObject {
     
     // PANIC: Emergency data clearing for activist safety
     func panicClearAllData() {
+        // Flush any pending messages immediately before clearing
+        flushMessageBatchImmediately()
+        
         // Clear all messages
         messages.removeAll()
         privateChats.removeAll()
@@ -743,6 +782,10 @@ class ChatViewModel: ObservableObject {
         // Clear read receipt tracking
         sentReadReceipts.removeAll()
         
+        // Clear all caches
+        invalidateEncryptionCache()
+        invalidateRSSIColorCache()
+        
         // Disconnect from all peers and clear persistent identity
         // This will force creation of a new identity (new fingerprint) on next launch
         meshService.emergencyDisconnectAll()
@@ -765,71 +808,110 @@ class ChatViewModel: ObservableObject {
     
     func getRSSIColor(rssi: Int, colorScheme: ColorScheme) -> Color {
         let isDark = colorScheme == .dark
+        let cacheKey = "\(rssi)_\(isDark)"
+        
+        // Check cache first
+        if let cachedColor = rssiColorCache[cacheKey] {
+            return cachedColor
+        }
+        
         // RSSI typically ranges from -30 (excellent) to -90 (poor)
         // We'll map this to colors from green (strong) to red (weak)
         
+        let color: Color
         if rssi >= -50 {
             // Excellent signal: bright green
-            return isDark ? Color(red: 0.0, green: 1.0, blue: 0.0) : Color(red: 0.0, green: 0.7, blue: 0.0)
+            color = isDark ? Color(red: 0.0, green: 1.0, blue: 0.0) : Color(red: 0.0, green: 0.7, blue: 0.0)
         } else if rssi >= -60 {
             // Good signal: green-yellow
-            return isDark ? Color(red: 0.5, green: 1.0, blue: 0.0) : Color(red: 0.3, green: 0.7, blue: 0.0)
+            color = isDark ? Color(red: 0.5, green: 1.0, blue: 0.0) : Color(red: 0.3, green: 0.7, blue: 0.0)
         } else if rssi >= -70 {
             // Fair signal: yellow
-            return isDark ? Color(red: 1.0, green: 1.0, blue: 0.0) : Color(red: 0.7, green: 0.7, blue: 0.0)
+            color = isDark ? Color(red: 1.0, green: 1.0, blue: 0.0) : Color(red: 0.7, green: 0.7, blue: 0.0)
         } else if rssi >= -80 {
             // Weak signal: orange
-            return isDark ? Color(red: 1.0, green: 0.6, blue: 0.0) : Color(red: 0.8, green: 0.4, blue: 0.0)
+            color = isDark ? Color(red: 1.0, green: 0.6, blue: 0.0) : Color(red: 0.8, green: 0.4, blue: 0.0)
         } else {
             // Poor signal: red
-            return isDark ? Color(red: 1.0, green: 0.2, blue: 0.2) : Color(red: 0.8, green: 0.0, blue: 0.0)
+            color = isDark ? Color(red: 1.0, green: 0.2, blue: 0.2) : Color(red: 0.8, green: 0.0, blue: 0.0)
         }
+        
+        // Cache the result
+        rssiColorCache[cacheKey] = color
+        return color
     }
     
     func updateAutocomplete(for text: String, cursorPosition: Int) {
+        // Quick early exit for empty text
+        guard cursorPosition > 0 else {
+            if showAutocomplete {
+                showAutocomplete = false
+                autocompleteSuggestions = []
+                autocompleteRange = nil
+            }
+            return
+        }
+        
         // Find @ symbol before cursor
         let beforeCursor = String(text.prefix(cursorPosition))
         
-        // Look for @ pattern
-        let pattern = "@([a-zA-Z0-9_]*)$"
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: []),
+        // Use cached regex
+        guard let regex = mentionRegex,
               let match = regex.firstMatch(in: beforeCursor, options: [], range: NSRange(location: 0, length: beforeCursor.count)) else {
-            showAutocomplete = false
-            autocompleteSuggestions = []
-            autocompleteRange = nil
+            if showAutocomplete {
+                showAutocomplete = false
+                autocompleteSuggestions = []
+                autocompleteRange = nil
+            }
             return
         }
         
         // Extract the partial nickname
         let partialRange = match.range(at: 1)
         guard let range = Range(partialRange, in: beforeCursor) else {
-            showAutocomplete = false
-            autocompleteSuggestions = []
-            autocompleteRange = nil
+            if showAutocomplete {
+                showAutocomplete = false
+                autocompleteSuggestions = []
+                autocompleteRange = nil
+            }
             return
         }
         
         let partial = String(beforeCursor[range]).lowercased()
         
-        // Get all available nicknames (excluding self)
-        let peerNicknames = meshService.getPeerNicknames()
-        let allNicknames = Array(peerNicknames.values)
+        // Update cached nicknames only if peer list changed (check every 1 second max)
+        let now = Date()
+        if now.timeIntervalSince(lastNicknameUpdate) > 1.0 || cachedNicknames.isEmpty {
+            let peerNicknames = meshService.getPeerNicknames()
+            cachedNicknames = Array(peerNicknames.values).sorted()
+            lastNicknameUpdate = now
+        }
         
-        // Filter suggestions
-        let suggestions = allNicknames.filter { nick in
+        // Filter suggestions using cached nicknames
+        let suggestions = cachedNicknames.filter { nick in
             nick.lowercased().hasPrefix(partial)
-        }.sorted()
+        }
         
+        // Batch UI updates
         if !suggestions.isEmpty {
-            autocompleteSuggestions = suggestions
-            showAutocomplete = true
-            autocompleteRange = match.range(at: 0) // Store full @mention range
+            // Only update if suggestions changed
+            if autocompleteSuggestions != suggestions {
+                autocompleteSuggestions = suggestions
+            }
+            if !showAutocomplete {
+                showAutocomplete = true
+            }
+            if autocompleteRange != match.range(at: 0) {
+                autocompleteRange = match.range(at: 0)
+            }
             selectedAutocompleteIndex = 0
         } else {
-            showAutocomplete = false
-            autocompleteSuggestions = []
-            autocompleteRange = nil
-            selectedAutocompleteIndex = 0
+            if showAutocomplete {
+                showAutocomplete = false
+                autocompleteSuggestions = []
+                autocompleteRange = nil
+                selectedAutocompleteIndex = 0
+            }
         }
     }
     
@@ -855,16 +937,8 @@ class ChatViewModel: ObservableObject {
         let isDark = colorScheme == .dark
         let primaryColor = isDark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
         
-        if message.sender == nickname {
-            return primaryColor
-        } else if let peerID = message.senderPeerID ?? getPeerIDForNickname(message.sender),
-                  let rssi = meshService.getPeerRSSI()[peerID] {
-            // Use actual RSSI value
-            return getRSSIColor(rssi: rssi.intValue, colorScheme: colorScheme)
-        } else {
-            // No RSSI data available - use a neutral color
-            return primaryColor.opacity(0.7)
-        }
+        // Always use the same color for all senders - no RSSI-based coloring
+        return primaryColor
     }
     
     
@@ -938,9 +1012,15 @@ class ChatViewModel: ObservableObject {
     }
     
     func formatMessageAsText(_ message: BitchatMessage, colorScheme: ColorScheme) -> AttributedString {
+        // Check cache first
+        let isDark = colorScheme == .dark
+        if let cachedText = message.getCachedFormattedText(isDark: isDark) {
+            return cachedText
+        }
+        
+        // Not cached, format the message
         var result = AttributedString()
         
-        let isDark = colorScheme == .dark
         let primaryColor = isDark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
         let secondaryColor = primaryColor.opacity(0.7)
         
@@ -956,50 +1036,15 @@ class ChatViewModel: ObservableObject {
             let sender = AttributedString("<@\(message.sender)> ")
             var senderStyle = AttributeContainer()
             
-            // Get sender color
-            let senderColor: Color
-            if message.sender == nickname {
-                senderColor = primaryColor
-            } else if let peerID = message.senderPeerID ?? getPeerIDForNickname(message.sender),
-                      let rssi = meshService.getPeerRSSI()[peerID] {
-                // Use actual RSSI value
-                senderColor = getRSSIColor(rssi: rssi.intValue, colorScheme: colorScheme)
-            } else {
-                // No RSSI data available - use a neutral color
-                senderColor = primaryColor.opacity(0.7)
-            }
-            
-            senderStyle.foregroundColor = senderColor
-            senderStyle.font = .system(size: 14, weight: .medium, design: .monospaced)
+            // Use consistent color for all senders
+            senderStyle.foregroundColor = primaryColor
+            // Bold the user's own nickname
+            let fontWeight: Font.Weight = message.sender == nickname ? .bold : .medium
+            senderStyle.font = .system(size: 14, weight: fontWeight, design: .monospaced)
             result.append(sender.mergingAttributes(senderStyle))
             
-            // Process content with hashtags, mentions, and markdown links
-            var content = message.content
-            
-            // First, check if content starts with 👇 followed by markdown link
-            if content.hasPrefix("👇 [") {
-                // This is a URL share - remove everything after the emoji
-                if let linkStart = content.firstIndex(of: "[") {
-                    let indexBeforeLink = content.index(before: linkStart)
-                    content = String(content[..<indexBeforeLink])
-                }
-            } else {
-                // Handle normal markdown links
-                let markdownLinkPattern = #"\[([^\]]+)\]\(([^)]+)\)"#
-                if let markdownRegex = try? NSRegularExpression(pattern: markdownLinkPattern, options: []) {
-                    let markdownMatches = markdownRegex.matches(in: content, options: [], range: NSRange(location: 0, length: content.count))
-                    
-                    // Process matches in reverse order to maintain string indices
-                    for match in markdownMatches.reversed() {
-                        if let fullRange = Range(match.range, in: content),
-                           let titleRange = Range(match.range(at: 1), in: content) {
-                            // Normal markdown link - replace with just the title
-                            let linkTitle = String(content[titleRange])
-                            content.replaceSubrange(fullRange, with: linkTitle)
-                        }
-                    }
-                }
-            }
+            // Process content with hashtags and mentions
+            let content = message.content
             
             let hashtagPattern = "#([a-zA-Z0-9_]+)"
             let mentionPattern = "@([a-zA-Z0-9_]+)"
@@ -1007,8 +1052,12 @@ class ChatViewModel: ObservableObject {
             let hashtagRegex = try? NSRegularExpression(pattern: hashtagPattern, options: [])
             let mentionRegex = try? NSRegularExpression(pattern: mentionPattern, options: [])
             
+            // Use NSDataDetector for URL detection
+            let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
+            
             let hashtagMatches = hashtagRegex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
             let mentionMatches = mentionRegex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
+            let urlMatches = detector?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
             
             // Combine and sort matches
             var allMatches: [(range: NSRange, type: String)] = []
@@ -1017,6 +1066,9 @@ class ChatViewModel: ObservableObject {
             }
             for match in mentionMatches {
                 allMatches.append((match.range(at: 0), "mention"))
+            }
+            for match in urlMatches {
+                allMatches.append((match.range, "url"))
             }
             allMatches.sort { $0.range.location < $1.range.location }
             
@@ -1048,6 +1100,9 @@ class ChatViewModel: ObservableObject {
                         matchStyle.underlineStyle = .single
                     } else if type == "mention" {
                         matchStyle.foregroundColor = Color.orange
+                    } else if type == "url" {
+                        matchStyle.foregroundColor = Color.blue
+                        matchStyle.underlineStyle = .single
                     }
                     
                     result.append(AttributedString(matchText).mergingAttributes(matchStyle))
@@ -1075,6 +1130,9 @@ class ChatViewModel: ObservableObject {
             result.append(content.mergingAttributes(contentStyle))
         }
         
+        // Cache the formatted text
+        message.setCachedFormattedText(result, isDark: isDark)
+        
         return result
     }
     
@@ -1101,21 +1159,11 @@ class ChatViewModel: ObservableObject {
             let sender = AttributedString("<\(message.sender)> ")
             var senderStyle = AttributeContainer()
             
-            // Get RSSI-based color
-            let senderColor: Color
-            if message.sender == nickname {
-                senderColor = primaryColor
-            } else if let peerID = message.senderPeerID ?? getPeerIDForNickname(message.sender),
-                      let rssi = meshService.getPeerRSSI()[peerID] {
-                // Use actual RSSI value
-                senderColor = getRSSIColor(rssi: rssi.intValue, colorScheme: colorScheme)
-            } else {
-                // No RSSI data available - use a neutral color
-                senderColor = primaryColor.opacity(0.7)
-            }
-            
-            senderStyle.foregroundColor = senderColor
-            senderStyle.font = .system(size: 12, weight: .medium, design: .monospaced)
+            // Use consistent color for all senders
+            senderStyle.foregroundColor = primaryColor
+            // Bold the user's own nickname
+            let fontWeight: Font.Weight = message.sender == nickname ? .bold : .medium
+            senderStyle.font = .system(size: 12, weight: fontWeight, design: .monospaced)
             result.append(sender.mergingAttributes(senderStyle))
             
             
@@ -1202,6 +1250,9 @@ class ChatViewModel: ObservableObject {
             peerEncryptionStatus[peerID] = Optional.none
         }
         
+        // Invalidate cache when encryption status changes
+        invalidateEncryptionCache(for: peerID)
+        
         // Force UI update
         DispatchQueue.main.async { [weak self] in
             self?.objectWillChange.send()
@@ -1209,6 +1260,11 @@ class ChatViewModel: ObservableObject {
     }
     
     func getEncryptionStatus(for peerID: String) -> EncryptionStatus {
+        // Check cache first
+        if let cachedStatus = encryptionStatusCache[peerID] {
+            return cachedStatus
+        }
+        
         // This must be a pure function - no state mutations allowed
         // to avoid SwiftUI update loops
         
@@ -1216,34 +1272,143 @@ class ChatViewModel: ObservableObject {
         let hasSession = meshService.getNoiseService().hasSession(with: peerID)
         let storedStatus = peerEncryptionStatus[peerID]
         
+        let status: EncryptionStatus
+        
         // First check if we have an established session
         if hasEstablished {
             // We have encryption, now check if it's verified
             if let fingerprint = getFingerprint(for: peerID) {
                 if verifiedFingerprints.contains(fingerprint) {
-                    return .noiseVerified
+                    status = .noiseVerified
                 } else {
-                    return .noiseSecured
+                    status = .noiseSecured
                 }
+            } else {
+                // We have a session but no fingerprint yet - still secured
+                status = .noiseSecured
             }
-            // We have a session but no fingerprint yet - still secured
-            return .noiseSecured
+        } else if hasSession {
+            // Check if handshaking
+            status = .noiseHandshaking
+        } else {
+            // Fall back to stored status
+            status = storedStatus ?? .none
         }
         
-        // Check if handshaking
-        if hasSession {
-            return .noiseHandshaking
-        }
-        
-        // Fall back to stored status
-        let finalStatus = storedStatus ?? .none
+        // Cache the result
+        encryptionStatusCache[peerID] = status
         
         // Only log occasionally to avoid spam
         if Int.random(in: 0..<100) == 0 {
-            SecureLogger.log("getEncryptionStatus for \(peerID): hasEstablished=\(hasEstablished), hasSession=\(hasSession), stored=\(String(describing: storedStatus)), final=\(finalStatus)", category: SecureLogger.security, level: .debug)
+            SecureLogger.log("getEncryptionStatus for \(peerID): hasEstablished=\(hasEstablished), hasSession=\(hasSession), stored=\(String(describing: storedStatus)), final=\(status)", category: SecureLogger.security, level: .debug)
         }
         
-        return finalStatus
+        return status
+    }
+    
+    // Clear caches when data changes
+    private func invalidateEncryptionCache(for peerID: String? = nil) {
+        if let peerID = peerID {
+            encryptionStatusCache.removeValue(forKey: peerID)
+        } else {
+            encryptionStatusCache.removeAll()
+        }
+    }
+    
+    private func invalidateRSSIColorCache() {
+        rssiColorCache.removeAll()
+    }
+    
+    // Trim messages to keep only the most recent maxMessages
+    private func trimMessagesIfNeeded() {
+        if messages.count > maxMessages {
+            let removeCount = messages.count - maxMessages
+            messages.removeFirst(removeCount)
+        }
+    }
+    
+    // Trim private chat messages to keep only the most recent maxMessages
+    private func trimPrivateChatMessagesIfNeeded(for peerID: String) {
+        if let count = privateChats[peerID]?.count, count > maxMessages {
+            let removeCount = count - maxMessages
+            privateChats[peerID]?.removeFirst(removeCount)
+        }
+    }
+    
+    // MARK: - Message Batching
+    
+    private func addMessageToBatch(_ message: BitchatMessage) {
+        pendingMessages.append(message)
+        scheduleBatchFlush()
+    }
+    
+    private func addPrivateMessageToBatch(_ message: BitchatMessage, for peerID: String) {
+        if pendingPrivateMessages[peerID] == nil {
+            pendingPrivateMessages[peerID] = []
+        }
+        pendingPrivateMessages[peerID]?.append(message)
+        scheduleBatchFlush()
+    }
+    
+    private func scheduleBatchFlush() {
+        // Cancel existing timer
+        messageBatchTimer?.invalidate()
+        
+        // Schedule new flush
+        messageBatchTimer = Timer.scheduledTimer(withTimeInterval: messageBatchInterval, repeats: false) { [weak self] _ in
+            self?.flushMessageBatch()
+        }
+    }
+    
+    private func flushMessageBatch() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            // Process pending public messages
+            if !self.pendingMessages.isEmpty {
+                let messagesToAdd = self.pendingMessages
+                self.pendingMessages.removeAll()
+                
+                // Add all messages at once
+                self.messages.append(contentsOf: messagesToAdd)
+                
+                // Sort once after batch addition
+                self.messages.sort { $0.timestamp < $1.timestamp }
+                
+                // Trim once if needed
+                self.trimMessagesIfNeeded()
+            }
+            
+            // Process pending private messages
+            if !self.pendingPrivateMessages.isEmpty {
+                let privateMessageBatches = self.pendingPrivateMessages
+                self.pendingPrivateMessages.removeAll()
+                
+                for (peerID, messagesToAdd) in privateMessageBatches {
+                    if self.privateChats[peerID] == nil {
+                        self.privateChats[peerID] = []
+                    }
+                    
+                    // Add all messages for this peer at once
+                    self.privateChats[peerID]?.append(contentsOf: messagesToAdd)
+                    
+                    // Sort once after batch addition
+                    self.privateChats[peerID]?.sort { $0.timestamp < $1.timestamp }
+                    
+                    // Trim once if needed
+                    self.trimPrivateChatMessagesIfNeeded(for: peerID)
+                }
+            }
+            
+            // Single UI update for all changes
+            self.objectWillChange.send()
+        }
+    }
+    
+    // Force immediate flush for high-priority messages
+    private func flushMessageBatchImmediately() {
+        messageBatchTimer?.invalidate()
+        flushMessageBatch()
     }
     
     // Update encryption status in appropriate places, not during view updates
@@ -1266,6 +1431,9 @@ class ChatViewModel: ObservableObject {
         } else {
             peerEncryptionStatus[peerID] = Optional.none
         }
+        
+        // Invalidate cache when encryption status changes
+        invalidateEncryptionCache(for: peerID)
         
         // Trigger UI update
         DispatchQueue.main.async { [weak self] in
@@ -1386,6 +1554,9 @@ class ChatViewModel: ObservableObject {
                     SecureLogger.log("ChatViewModel: Setting encryption status to noiseSecured for \(peerID)", category: SecureLogger.security, level: .info)
                 }
                 
+                // Invalidate cache when encryption status changes
+                self.invalidateEncryptionCache(for: peerID)
+                
                 // Force UI update
                 self.objectWillChange.send()
             }
@@ -1394,7 +1565,14 @@ class ChatViewModel: ObservableObject {
         // Set up handshake required callback
         noiseService.onHandshakeRequired = { [weak self] peerID in
             DispatchQueue.main.async {
-                self?.peerEncryptionStatus[peerID] = .noiseHandshaking
+                guard let self = self else { return }
+                self.peerEncryptionStatus[peerID] = .noiseHandshaking
+                
+                // Invalidate cache when encryption status changes
+                self.invalidateEncryptionCache(for: peerID)
+                
+                // Force UI update
+                self.objectWillChange.send()
             }
         }
     }
@@ -1811,6 +1989,7 @@ extension ChatViewModel: BitchatDelegate {
                     
                     // Initialize with migrated messages
                     privateChats[peerID] = migratedMessages
+                    trimPrivateChatMessagesIfNeeded(for: peerID)
                 }
                 
                 if privateChats[peerID] == nil {
@@ -1849,14 +2028,10 @@ extension ChatViewModel: BitchatDelegate {
                     )
                 }
                 
-                privateChats[peerID]?.append(messageToStore)
-                // Sort messages by timestamp to ensure proper ordering
-                privateChats[peerID]?.sort { $0.timestamp < $1.timestamp }
+                // Use batching for private messages
+                addPrivateMessageToBatch(messageToStore, for: peerID)
                 
                 // Debug logging
-                
-                // Trigger UI update for private chats
-                objectWillChange.send()
                 
                 // Check if we're in a private chat with this peer's fingerprint
                 // This handles reconnections with new peer IDs
@@ -1925,9 +2100,7 @@ extension ChatViewModel: BitchatDelegate {
             if finalMessage.sender != nickname && finalMessage.sender != "system" {
                 // Skip empty or whitespace-only messages
                 if !finalMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    messages.append(finalMessage)
-                    // Sort messages by timestamp to ensure proper ordering
-                    messages.sort { $0.timestamp < $1.timestamp }
+                    addMessageToBatch(finalMessage)
                 }
             } else if finalMessage.sender != "system" {
                 // Our own message - check if we already have it (by ID and content)
@@ -1948,15 +2121,13 @@ extension ChatViewModel: BitchatDelegate {
                     // This is a message we sent from another device or it's missing locally
                     // Skip empty or whitespace-only messages
                     if !finalMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        messages.append(finalMessage)
-                        messages.sort { $0.timestamp < $1.timestamp }
+                        addMessageToBatch(finalMessage)
                     }
                 }
             } else {
                 // System message - check for empty content before adding
                 if !finalMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    messages.append(finalMessage)
-                    messages.sort { $0.timestamp < $1.timestamp }
+                    addMessageToBatch(finalMessage)
                 }
             }
         }
@@ -1968,7 +2139,10 @@ extension ChatViewModel: BitchatDelegate {
         if isMentioned && message.sender != nickname {
             NotificationService.shared.sendMentionNotification(from: message.sender, message: message.content)
         } else if message.isPrivate && message.sender != nickname {
-            NotificationService.shared.sendPrivateMessageNotification(from: message.sender, message: message.content)
+            // Only send notification if the private chat is not currently open
+            if selectedPrivateChatPeer != message.senderPeerID {
+                NotificationService.shared.sendPrivateMessageNotification(from: message.sender, message: message.content, peerID: message.senderPeerID ?? "")
+            }
         }
         
         #if os(iOS)
@@ -2079,10 +2253,8 @@ extension ChatViewModel: BitchatDelegate {
             isRelay: false,
             originalSender: nil
         )
-        messages.append(systemMessage)
-        
-        // Force UI update
-        objectWillChange.send()
+        // Batch system messages
+        addMessageToBatch(systemMessage)
     }
     
     func didDisconnectFromPeer(_ peerID: String) {
@@ -2113,10 +2285,8 @@ extension ChatViewModel: BitchatDelegate {
             isRelay: false,
             originalSender: nil
         )
-        messages.append(systemMessage)
-        
-        // Force UI update
-        objectWillChange.send()
+        // Batch system messages
+        addMessageToBatch(systemMessage)
     }
     
     func didUpdatePeerList(_ peers: [String]) {
@@ -2133,6 +2303,9 @@ extension ChatViewModel: BitchatDelegate {
             
             // Update encryption status for all peers
             self.updateEncryptionStatusForPeers()
+            
+            // Invalidate RSSI cache since peer data may have changed
+            self.invalidateRSSIColorCache()
 
             // Explicitly notify SwiftUI that the object has changed.
             self.objectWillChange.send()
@@ -2220,21 +2393,17 @@ extension ChatViewModel: BitchatDelegate {
         if let index = messages.firstIndex(where: { $0.id == messageID }) {
             let currentStatus = messages[index].deliveryStatus
             if !shouldSkipUpdate(currentStatus: currentStatus, newStatus: status) {
-                var updatedMessage = messages[index]
-                updatedMessage.deliveryStatus = status
-                messages[index] = updatedMessage
+                messages[index].deliveryStatus = status
             }
         }
         
         // Update in private chats
         var updatedPrivateChats = privateChats
-        for (peerID, var chatMessages) in updatedPrivateChats {
+        for (peerID, chatMessages) in updatedPrivateChats {
             if let index = chatMessages.firstIndex(where: { $0.id == messageID }) {
                 let currentStatus = chatMessages[index].deliveryStatus
                 if !shouldSkipUpdate(currentStatus: currentStatus, newStatus: status) {
-                    var updatedMessage = chatMessages[index]
-                    updatedMessage.deliveryStatus = status
-                    chatMessages[index] = updatedMessage
+                    chatMessages[index].deliveryStatus = status
                     updatedPrivateChats[peerID] = chatMessages
                 }
             }
