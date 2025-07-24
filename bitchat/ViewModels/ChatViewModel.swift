@@ -17,6 +17,7 @@ import UIKit
 
 class ChatViewModel: ObservableObject {
     @Published var messages: [BitchatMessage] = []
+    private let maxMessages = 1337 // Maximum messages before oldest are removed
     @Published var connectedPeers: [String] = []
     @Published var nickname: String = ""
     @Published var isConnected = false
@@ -321,6 +322,7 @@ class ChatViewModel: ObservableObject {
                         privateChats[currentPeerID] = []
                     }
                     privateChats[currentPeerID]?.append(contentsOf: oldMessages)
+                    trimPrivateChatMessagesIfNeeded(for: currentPeerID)
                     privateChats.removeValue(forKey: oldPeerID)
                 }
                 
@@ -378,6 +380,7 @@ class ChatViewModel: ObservableObject {
             
             // Add to main messages
             messages.append(message)
+            trimMessagesIfNeeded()
             
             // Send via mesh with mentions
             meshService.sendMessage(content, mentions: mentions)
@@ -424,6 +427,7 @@ class ChatViewModel: ObservableObject {
             privateChats[peerID] = []
         }
         privateChats[peerID]?.append(message)
+        trimPrivateChatMessagesIfNeeded(for: peerID)
         
         // Track the message for delivery confirmation
         let isFavorite = isFavorite(peerID: peerID)
@@ -505,6 +509,7 @@ class ChatViewModel: ObservableObject {
             // Initialize chat history with migrated messages if any
             if !migratedMessages.isEmpty {
                 privateChats[peerID] = migratedMessages.sorted { $0.timestamp < $1.timestamp }
+                trimPrivateChatMessagesIfNeeded(for: peerID)
             } else {
                 privateChats[peerID] = []
             }
@@ -565,6 +570,7 @@ class ChatViewModel: ObservableObject {
                 privateChats[peerID] = []
             }
             privateChats[peerID]?.append(localNotification)
+            trimPrivateChatMessagesIfNeeded(for: peerID)
             
         } else {
             // In public chat - send to everyone
@@ -578,6 +584,7 @@ class ChatViewModel: ObservableObject {
                 isRelay: false
             )
             messages.append(localNotification)
+            trimMessagesIfNeeded()
         }
     }
     
@@ -1285,6 +1292,22 @@ class ChatViewModel: ObservableObject {
         rssiColorCache.removeAll()
     }
     
+    // Trim messages to keep only the most recent maxMessages
+    private func trimMessagesIfNeeded() {
+        if messages.count > maxMessages {
+            let removeCount = messages.count - maxMessages
+            messages.removeFirst(removeCount)
+        }
+    }
+    
+    // Trim private chat messages to keep only the most recent maxMessages
+    private func trimPrivateChatMessagesIfNeeded(for peerID: String) {
+        if let count = privateChats[peerID]?.count, count > maxMessages {
+            let removeCount = count - maxMessages
+            privateChats[peerID]?.removeFirst(removeCount)
+        }
+    }
+    
     // Update encryption status in appropriate places, not during view updates
     private func updateEncryptionStatus(for peerID: String) {
         let noiseService = meshService.getNoiseService()
@@ -1863,6 +1886,7 @@ extension ChatViewModel: BitchatDelegate {
                     
                     // Initialize with migrated messages
                     privateChats[peerID] = migratedMessages
+                    trimPrivateChatMessagesIfNeeded(for: peerID)
                 }
                 
                 if privateChats[peerID] == nil {
@@ -1904,6 +1928,7 @@ extension ChatViewModel: BitchatDelegate {
                 privateChats[peerID]?.append(messageToStore)
                 // Sort messages by timestamp to ensure proper ordering
                 privateChats[peerID]?.sort { $0.timestamp < $1.timestamp }
+                trimPrivateChatMessagesIfNeeded(for: peerID)
                 
                 // Debug logging
                 
@@ -1980,6 +2005,7 @@ extension ChatViewModel: BitchatDelegate {
                     messages.append(finalMessage)
                     // Sort messages by timestamp to ensure proper ordering
                     messages.sort { $0.timestamp < $1.timestamp }
+                    trimMessagesIfNeeded()
                 }
             } else if finalMessage.sender != "system" {
                 // Our own message - check if we already have it (by ID and content)
@@ -2002,6 +2028,7 @@ extension ChatViewModel: BitchatDelegate {
                     if !finalMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         messages.append(finalMessage)
                         messages.sort { $0.timestamp < $1.timestamp }
+                        trimMessagesIfNeeded()
                     }
                 }
             } else {
@@ -2009,6 +2036,7 @@ extension ChatViewModel: BitchatDelegate {
                 if !finalMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     messages.append(finalMessage)
                     messages.sort { $0.timestamp < $1.timestamp }
+                    trimMessagesIfNeeded()
                 }
             }
         }
@@ -2135,6 +2163,7 @@ extension ChatViewModel: BitchatDelegate {
             originalSender: nil
         )
         messages.append(systemMessage)
+        trimMessagesIfNeeded()
         
         // Force UI update
         objectWillChange.send()
@@ -2169,6 +2198,7 @@ extension ChatViewModel: BitchatDelegate {
             originalSender: nil
         )
         messages.append(systemMessage)
+        trimMessagesIfNeeded()
         
         // Force UI update
         objectWillChange.send()
