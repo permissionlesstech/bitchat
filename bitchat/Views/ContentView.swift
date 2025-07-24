@@ -460,7 +460,9 @@ struct ContentView: View {
                 .focused($isTextFieldFocused)
                 .padding(.leading, 12)
                 .autocorrectionDisabled(true)
+                #if os(iOS)
                 .textInputAutocapitalization(.never)
+                #endif
                 .onChange(of: messageText) { newValue in
                     // Cancel previous debounce timer
                     autocompleteDebounceTimer?.invalidate()
@@ -801,7 +803,9 @@ struct ContentView: View {
                     .foregroundColor(textColor)
                     .focused($isNicknameFieldFocused)
                     .autocorrectionDisabled(true)
+                    #if os(iOS)
                     .textInputAutocapitalization(.never)
+                    #endif
                     .onChange(of: isNicknameFieldFocused) { isFocused in
                         if !isFocused {
                             // Only validate when losing focus
