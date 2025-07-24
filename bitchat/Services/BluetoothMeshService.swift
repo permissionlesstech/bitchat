@@ -1578,6 +1578,11 @@ class BluetoothMeshService: NSObject {
         // Also check peripheralRSSI for any connected peripherals
         // This handles cases where RSSI is stored under temp IDs
         for (peerID, peripheral) in connectedPeripherals {
+            // Skip temp IDs when iterating
+            if peerID.count != 16 {
+                continue
+            }
+            
             // If we don't have RSSI for this peer ID
             if rssiValues[peerID] == nil {
                 SecureLogger.log("No RSSI for peer \(peerID), checking fallbacks...", category: SecureLogger.session, level: .debug)
@@ -1599,6 +1604,20 @@ class BluetoothMeshService: NSObject {
                     for (key, _) in peripheralRSSI {
                         SecureLogger.log("    Checking peripheralRSSI key \(key) against peerID \(peerID)", category: SecureLogger.session, level: .debug)
                     }
+                }
+            }
+        }
+        
+        // Also check for any known peers that might have RSSI in peerRSSI but not in connectedPeripherals
+        for (peerID, _) in peerNicknames {
+            if rssiValues[peerID] == nil && peerID.count == 16 {
+                // Check if we have RSSI stored directly
+                if let rssi = peerRSSI[peerID] {
+                    SecureLogger.log("Found RSSI \(rssi) for known peer \(peerID) in peerRSSI", category: SecureLogger.session, level: .debug)
+                    rssiValues[peerID] = rssi
+                } else if let rssi = peripheralRSSI[peerID] {
+                    SecureLogger.log("Found RSSI \(rssi) for known peer \(peerID) in peripheralRSSI", category: SecureLogger.session, level: .debug)
+                    rssiValues[peerID] = rssi
                 }
             }
         }
