@@ -52,7 +52,7 @@ struct NoiseProtocolName {
 
 class NoiseCipherState {
     // Constants for replay protection
-    private static let NONCE_SIZE_BYTES = 8
+    private static let NONCE_SIZE_BYTES = 4
     private static let REPLAY_WINDOW_SIZE = 1024
     private static let REPLAY_WINDOW_BYTES = REPLAY_WINDOW_SIZE / 8 // 128 bytes
     private static let HIGH_NONCE_WARNING_THRESHOLD: UInt64 = 1_000_000_000
@@ -142,7 +142,7 @@ class NoiseCipherState {
             return nil
         }
 
-        // Extract 8-byte nonce (big-endian)
+        // Extract 4-byte nonce (big-endian)
         let nonceData = combinedPayload.prefix(Self.NONCE_SIZE_BYTES)
         let extractedNonce = nonceData.withUnsafeBytes { (bytes: UnsafeRawBufferPointer) -> UInt64 in
             let byteArray = bytes.bindMemory(to: UInt8.self)
@@ -159,11 +159,13 @@ class NoiseCipherState {
         return (nonce: extractedNonce, ciphertext: Data(ciphertext))
     }
 
-    /// Convert nonce to 8-byte array (big-endian)
+    /// Convert nonce to 4-byte array (big-endian)
     private func nonceToBytes(_ nonce: UInt64) -> Data {
         var bytes = Data(count: Self.NONCE_SIZE_BYTES)
         withUnsafeBytes(of: nonce.bigEndian) { ptr in
-            bytes.replaceSubrange(0..<Self.NONCE_SIZE_BYTES, with: ptr)
+            // Copy only the last 4 bytes from the 8-byte UInt64 
+            let sourceBytes = ptr.bindMemory(to: UInt8.self)
+            bytes.replaceSubrange(0..<Self.NONCE_SIZE_BYTES, with: sourceBytes.suffix(Self.NONCE_SIZE_BYTES))
         }
         return bytes
     }
@@ -175,6 +177,11 @@ class NoiseCipherState {
         
         // Debug logging for nonce tracking
         let currentNonce = nonce
+        
+        // Check if nonce exceeds 4-byte limit (UInt32 max value)
+        guard nonce <= UInt64(UInt32.max) - 1 else {
+            throw NoiseError.nonceExceeded
+        }
         
         // Create nonce from counter
         var nonceData = Data(count: 12)
@@ -765,6 +772,7 @@ enum NoiseError: Error {
     case authenticationFailure
     case invalidPublicKey
     case replayDetected
+    case nonceExceeded
 }
 
 // MARK: - Key Validation
