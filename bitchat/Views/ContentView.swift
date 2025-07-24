@@ -600,6 +600,7 @@ struct ContentView: View {
                             
                             // Show all connected peers
                             let peersToShow: [String] = viewModel.connectedPeers
+                            print("ContentView: Showing \(peersToShow.count) peers: \(peersToShow.joined(separator: ", "))")
                             
                             // Pre-compute peer data outside ForEach to reduce overhead
                             let peerData = peersToShow.map { peerID in
