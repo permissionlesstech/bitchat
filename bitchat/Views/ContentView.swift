@@ -50,7 +50,7 @@ struct ContentView: View {
                             insertion: .move(edge: .trailing),
                             removal: .move(edge: .trailing)
                         ))
-                        .offset(x: showPrivateChat ? 0 : geometry.size.width)
+                        .offset(x: showPrivateChat ? -1 : geometry.size.width)
                         .offset(x: backSwipeOffset)
                         .gesture(
                             DragGesture()
@@ -437,7 +437,7 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 0) {
                 // Header - match main toolbar height
                 HStack {
-                    Text("YOUR NETWORK")
+                    Text("NETWORK")
                         .font(.system(size: 16, weight: .bold, design: .monospaced))
                         .foregroundColor(textColor)
                     Spacer()
@@ -467,7 +467,7 @@ struct ContentView: View {
                         }
                         
                         if viewModel.connectedPeers.isEmpty {
-                            Text("no one connected...")
+                            Text("nobody around...")
                                 .font(.system(size: 14, design: .monospaced))
                                 .foregroundColor(secondaryTextColor)
                                 .padding(.horizontal)
@@ -534,25 +534,9 @@ struct ContentView: View {
                                         Spacer()
                                     }
                                 } else {
-                                    Button(action: {
-                                        if peerNicknames[peerID] != nil {
-                                            viewModel.startPrivateChat(with: peerID)
-                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                                showSidebar = false
-                                                sidebarDragOffset = 0
-                                            }
-                                        }
-                                    }) {
-                                        Text(displayName)
-                                            .font(.system(size: 14, design: .monospaced))
-                                            .foregroundColor(peerNicknames[peerID] != nil ? textColor : secondaryTextColor)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .disabled(peerNicknames[peerID] == nil)
-                                    .onTapGesture(count: 2) {
-                                        // Show fingerprint on double tap
-                                        viewModel.showFingerprint(for: peerID)
-                                    }
+                                    Text(displayName)
+                                        .font(.system(size: 14, design: .monospaced))
+                                        .foregroundColor(peerNicknames[peerID] != nil ? textColor : secondaryTextColor)
                                     
                                     // Encryption status icon (after peer name)
                                     let encryptionStatus = viewModel.getEncryptionStatus(for: peerID)
@@ -580,6 +564,22 @@ struct ContentView: View {
                             }
                             .padding(.horizontal)
                             .padding(.vertical, 8)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                if !isMe && peerNicknames[peerID] != nil {
+                                    viewModel.startPrivateChat(with: peerID)
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                        showSidebar = false
+                                        sidebarDragOffset = 0
+                                    }
+                                }
+                            }
+                            .onTapGesture(count: 2) {
+                                if !isMe {
+                                    // Show fingerprint on double tap
+                                    viewModel.showFingerprint(for: peerID)
+                                }
+                            }
                         }
                         }
                     }
