@@ -979,33 +979,8 @@ class ChatViewModel: ObservableObject {
             senderStyle.font = .system(size: 14, weight: .medium, design: .monospaced)
             result.append(sender.mergingAttributes(senderStyle))
             
-            // Process content with hashtags, mentions, and markdown links
-            var content = message.content
-            
-            // First, check if content starts with 👇 followed by markdown link
-            if content.hasPrefix("👇 [") {
-                // This is a URL share - remove everything after the emoji
-                if let linkStart = content.firstIndex(of: "[") {
-                    let indexBeforeLink = content.index(before: linkStart)
-                    content = String(content[..<indexBeforeLink])
-                }
-            } else {
-                // Handle normal markdown links
-                let markdownLinkPattern = #"\[([^\]]+)\]\(([^)]+)\)"#
-                if let markdownRegex = try? NSRegularExpression(pattern: markdownLinkPattern, options: []) {
-                    let markdownMatches = markdownRegex.matches(in: content, options: [], range: NSRange(location: 0, length: content.count))
-                    
-                    // Process matches in reverse order to maintain string indices
-                    for match in markdownMatches.reversed() {
-                        if let fullRange = Range(match.range, in: content),
-                           let titleRange = Range(match.range(at: 1), in: content) {
-                            // Normal markdown link - replace with just the title
-                            let linkTitle = String(content[titleRange])
-                            content.replaceSubrange(fullRange, with: linkTitle)
-                        }
-                    }
-                }
-            }
+            // Process content with hashtags and mentions
+            let content = message.content
             
             let hashtagPattern = "#([a-zA-Z0-9_]+)"
             let mentionPattern = "@([a-zA-Z0-9_]+)"
