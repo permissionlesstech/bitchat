@@ -600,19 +600,27 @@ struct ContentView: View {
                             
                             // Show all connected peers
                             let peersToShow: [String] = viewModel.connectedPeers
+                            let _ = print("ContentView: Showing \(peersToShow.count) peers: \(peersToShow.joined(separator: ", "))")
                             
                             // Pre-compute peer data outside ForEach to reduce overhead
                             let peerData = peersToShow.map { peerID in
-                                PeerDisplayData(
+                                let rssiValue = peerRSSI[peerID]?.intValue
+                                if rssiValue == nil {
+                                    print("ContentView: No RSSI for peer \(peerID) in dictionary with \(peerRSSI.count) entries")
+                                    print("ContentView: peerRSSI keys: \(peerRSSI.keys.joined(separator: ", "))")
+                                } else {
+                                    print("ContentView: RSSI for peer \(peerID) is \(rssiValue!)")
+                                }
+                                return PeerDisplayData(
                                     id: peerID,
                                     displayName: peerID == myPeerID ? viewModel.nickname : (peerNicknames[peerID] ?? "anon\(peerID.prefix(4))"),
-                                    rssi: peerRSSI[peerID]?.intValue,
+                                    rssi: rssiValue,
                                     isFavorite: viewModel.isFavorite(peerID: peerID),
                                     isMe: peerID == myPeerID,
                                     hasUnreadMessages: viewModel.unreadPrivateMessages.contains(peerID),
                                     encryptionStatus: viewModel.getEncryptionStatus(for: peerID)
                                 )
-                            }.sorted { peer1, peer2 in
+                            }.sorted { (peer1: PeerDisplayData, peer2: PeerDisplayData) in
                                 // Sort: favorites first, then alphabetically by nickname
                                 if peer1.isFavorite != peer2.isFavorite {
                                     return peer1.isFavorite
