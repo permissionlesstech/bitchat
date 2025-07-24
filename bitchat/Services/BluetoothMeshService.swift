@@ -465,15 +465,6 @@ class BluetoothMeshService: NSObject {
         return max(activePeers.count, connectedPeripherals.count)
     }
     
-    // Sequence number tracking for duplicate detection
-    private var currentSequenceNumber: UInt32 = 0
-    private var peerSequenceNumbers: [String: UInt32] = [:]  // Track last seen sequence per peer
-    
-    private func getNextSequenceNumber() -> UInt32 {
-        currentSequenceNumber += 1
-        return currentSequenceNumber
-    }
-    
     // Adaptive parameters based on network size
     private var adaptiveTTL: UInt8 {
         // Keep TTL high enough for messages to travel far
@@ -1092,9 +1083,7 @@ class BluetoothMeshService: NSObject {
             type: MessageType.announce.rawValue,
             ttl: 3,  // Increase TTL so announce reaches all peers
             senderID: myPeerID,
-            payload: Data(vm.nickname.utf8),
-            sequenceNumber: getNextSequenceNumber()
-        )
+            payload: Data(vm.nickname.utf8)        )
         
         
         // Single send with smart collision avoidance
@@ -1225,9 +1214,7 @@ class BluetoothMeshService: NSObject {
                     timestamp: UInt64(Date().timeIntervalSince1970 * 1000), // milliseconds
                     payload: messageData,
                     signature: nil,
-                    ttl: self.adaptiveTTL,
-                    sequenceNumber: self.getNextSequenceNumber()
-                )
+                    ttl: self.adaptiveTTL                )
                 
                 // Track this message to prevent duplicate sends
                 let msgID = "\(packet.timestamp)-\(self.myPeerID)-\(packet.payload.prefix(32).hashValue)"
@@ -1354,9 +1341,7 @@ class BluetoothMeshService: NSObject {
                         timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                         payload: encryptedPayload,
                         signature: nil,
-                        ttl: 3,
-                        sequenceNumber: self.getNextSequenceNumber()
-                    )
+                        ttl: 3                    )
                     
                     self.broadcastPacket(outerPacket)
                 } catch {
@@ -1380,8 +1365,7 @@ class BluetoothMeshService: NSObject {
                     timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                     payload: encryptedPayload,
                     signature: nil,  // ACKs don't need signatures
-                    ttl: 3,  // Limited TTL for ACKs
-                    sequenceNumber: self.getNextSequenceNumber()
+                    ttl: 3  // Limited TTL for ACKs
                 )
                 
                 // Send immediately without delay (ACKs should be fast)
@@ -1440,9 +1424,7 @@ class BluetoothMeshService: NSObject {
                         timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                         payload: receiptData,
                         signature: nil,
-                        ttl: 3,
-                        sequenceNumber: self.getNextSequenceNumber()
-                    )
+                        ttl: 3                    )
                     
                     // Encrypt the entire inner packet
                     if let innerData = innerPacket.toBinaryData() {
@@ -1456,9 +1438,7 @@ class BluetoothMeshService: NSObject {
                             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                             payload: encryptedInnerData,
                             signature: nil,
-                            ttl: 3,
-                            sequenceNumber: self.getNextSequenceNumber()
-                        )
+                            ttl: 3                        )
                         
                         SecureLogger.log("Sending encrypted read receipt for message \(receipt.originalMessageID) to \(recipientID)", category: SecureLogger.noise, level: .info)
                         self.broadcastPacket(outerPacket)
@@ -1511,9 +1491,7 @@ class BluetoothMeshService: NSObject {
             type: MessageType.announce.rawValue,
             ttl: 3,  // Allow relay for better reach
             senderID: myPeerID,
-            payload: Data(vm.nickname.utf8),
-            sequenceNumber: getNextSequenceNumber()
-        )
+            payload: Data(vm.nickname.utf8)        )
         
         if let data = packet.toBinaryData() {
             // Try both broadcast and targeted send
@@ -1539,9 +1517,7 @@ class BluetoothMeshService: NSObject {
             type: MessageType.leave.rawValue,
             ttl: 1,  // Don't relay leave messages
             senderID: myPeerID,
-            payload: Data(vm.nickname.utf8),
-            sequenceNumber: getNextSequenceNumber()
-        )
+            payload: Data(vm.nickname.utf8)        )
         
         broadcastPacket(packet)
     }
@@ -2213,7 +2189,7 @@ class BluetoothMeshService: NSObject {
             
             if senderID != self.myPeerID && isRateLimited(peerID: senderID, messageType: packet.type) {
                 if !isHighPriority {
-                    SecureLogger.log("RATE_LIMITED: Dropped \(messageTypeName) from \(senderID) (seq#\(packet.sequenceNumber))", 
+                    SecureLogger.log("RATE_LIMITED: Dropped \(messageTypeName) from \(senderID)", 
                                    category: SecureLogger.security, level: .warning)
                     return
                 } else {
@@ -2227,10 +2203,10 @@ class BluetoothMeshService: NSObject {
                 recordMessage(from: senderID, messageType: packet.type)
             }
         
-        // Sequence-based duplicate detection for more reliability
-        let messageID = "\(senderID)-\(packet.sequenceNumber)"
+        // Content-based duplicate detection using packet ID
+        let messageID = generatePacketID(for: packet)
         
-        // Check if we've seen this exact message before (sequence + sender)
+        // Check if we've seen this exact message before
         processedMessagesLock.lock()
         if let existingState = processedMessages[messageID] {
             // Update the state
@@ -2239,21 +2215,12 @@ class BluetoothMeshService: NSObject {
             processedMessages[messageID] = updatedState
             processedMessagesLock.unlock()
             
-            SecureLogger.log("Dropped duplicate message seq#\(packet.sequenceNumber) from \(senderID) (seen \(updatedState.seenCount) times)", category: SecureLogger.security, level: .debug)
+            SecureLogger.log("Dropped duplicate message from \(senderID) (seen \(updatedState.seenCount) times)", category: SecureLogger.security, level: .debug)
             // Cancel any pending relay for this message
             cancelPendingRelay(messageID: messageID)
             return
         }
         processedMessagesLock.unlock()
-        
-        // Check if this is an old message (sequence number rollback)
-        if let lastSeenSeq = peerSequenceNumbers[senderID] {
-            // Allow some out-of-order tolerance (up to 100 messages)
-            if packet.sequenceNumber < lastSeenSeq && (lastSeenSeq - packet.sequenceNumber) > 100 {
-                SecureLogger.log("Dropped old message seq#\(packet.sequenceNumber) from \(senderID), last seen: \(lastSeenSeq)", category: SecureLogger.security, level: .debug)
-                return
-            }
-        }
         
         // Use bloom filter for efficient duplicate detection
         if messageBloomFilter.contains(messageID) {
@@ -2288,8 +2255,6 @@ class BluetoothMeshService: NSObject {
         }
         processedMessagesLock.unlock()
         
-        // Update last seen sequence number for this peer
-        peerSequenceNumbers[senderID] = max(packet.sequenceNumber, peerSequenceNumbers[senderID] ?? 0)
         
         // Log statistics periodically
         if messageBloomFilter.insertCount % 100 == 0 {
@@ -3297,9 +3262,7 @@ class BluetoothMeshService: NSObject {
                 timestamp: packet.timestamp,  // Use original timestamp
                 payload: fragmentPayload,
                 signature: nil,  // Fragments don't need signatures
-                ttl: packet.ttl,
-                sequenceNumber: getNextSequenceNumber()
-            )
+                ttl: packet.ttl            )
             
             // Send fragments with linear delay
             let totalDelay = Double(index) * delayBetweenFragments
@@ -3874,9 +3837,7 @@ extension BluetoothMeshService: CBPeripheralDelegate {
                             type: MessageType.announce.rawValue,
                             ttl: 3,
                             senderID: self.myPeerID,
-                            payload: Data(vm.nickname.utf8),
-                            sequenceNumber: self.getNextSequenceNumber()
-                        )
+                            payload: Data(vm.nickname.utf8)                        )
                         self.broadcastPacket(announcePacket)
                     }
                     
@@ -3891,9 +3852,7 @@ extension BluetoothMeshService: CBPeripheralDelegate {
                             type: MessageType.announce.rawValue,
                             ttl: 3,
                             senderID: self.myPeerID,
-                            payload: Data(vm.nickname.utf8),
-                            sequenceNumber: self.getNextSequenceNumber()
-                        )
+                            payload: Data(vm.nickname.utf8)                        )
                         if let data = announcePacket.toBinaryData() {
                             self.writeToPeripheral(data, peripheral: peripheral, characteristic: characteristic, peerID: nil)
                         }
@@ -4775,9 +4734,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                     timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                     payload: encrypted,
                     signature: nil,
-                    ttl: 1,
-                    sequenceNumber: self.getNextSequenceNumber()
-                )
+                    ttl: 1                )
                 
                 self.broadcastPacket(packet)
                 
@@ -4896,8 +4853,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                 payload: handshakeData,
                 signature: nil,
-                ttl: 6, // Increased TTL for better delivery on startup
-                sequenceNumber: getNextSequenceNumber()
+                ttl: 6 // Increased TTL for better delivery on startup
             )
             
             // Track packet for ACK
@@ -4970,8 +4926,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                     timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                     payload: response,
                     signature: nil,
-                    ttl: 6,  // Increased TTL for better delivery on startup
-                    sequenceNumber: getNextSequenceNumber()
+                    ttl: 6  // Increased TTL for better delivery on startup
                 )
                 
                 // Track packet for ACK
@@ -5344,9 +5299,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             type: MessageType.versionHello.rawValue,
             ttl: 1,  // Version negotiation is direct, no relay
             senderID: myPeerID,
-            payload: helloData,
-            sequenceNumber: getNextSequenceNumber()
-        )
+            payload: helloData        )
         
         // Mark that we initiated version negotiation
         // We don't know the peer ID yet from peripheral, so we'll track it when we get the response
@@ -5373,8 +5326,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
             payload: ackData,
             signature: nil,
-            ttl: 1,  // Direct response, no relay
-            sequenceNumber: getNextSequenceNumber()
+            ttl: 1  // Direct response, no relay
         )
         
         broadcastPacket(packet)
@@ -5522,8 +5474,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
             payload: ack.toBinaryData(),
             signature: nil,
-            ttl: 3,  // ACKs don't need to travel far
-            sequenceNumber: getNextSequenceNumber()
+            ttl: 3  // ACKs don't need to travel far
         )
         
         broadcastPacket(ackPacket)
@@ -5549,8 +5500,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
             payload: nack.toBinaryData(),
             signature: nil,
-            ttl: 3,  // NACKs don't need to travel far
-            sequenceNumber: getNextSequenceNumber()
+            ttl: 3  // NACKs don't need to travel far
         )
         
         broadcastPacket(nackPacket)
@@ -5564,9 +5514,10 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         // Create a deterministic ID using SHA256 of immutable fields
         var data = Data()
         data.append(packet.senderID)
-        data.append(contentsOf: withUnsafeBytes(of: packet.sequenceNumber) { Array($0) })
         data.append(contentsOf: withUnsafeBytes(of: packet.timestamp) { Array($0) })
         data.append(packet.type)
+        // Add first 32 bytes of payload for uniqueness
+        data.append(packet.payload.prefix(32))
         
         let hash = SHA256.hash(data: data)
         let hashData = Data(hash)
@@ -5653,7 +5604,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                                               retries: pending.retries + 1)
                 
                 // Resend the packet
-                SecureLogger.log("Resending packet seq#\(pending.packet.sequenceNumber) due to ACK timeout (retry \(pending.retries + 1))", 
+                SecureLogger.log("Resending packet due to ACK timeout (retry \(pending.retries + 1))", 
                                category: SecureLogger.session, level: .debug)
                 DispatchQueue.main.async {
                     self.broadcastPacket(pending.packet)
@@ -5834,9 +5785,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
             payload: announcementData,
             signature: nil,
-            ttl: adaptiveTTL,
-            sequenceNumber: getNextSequenceNumber()
-        )
+            ttl: adaptiveTTL        )
         
         if let targetPeer = specificPeerID {
             SecureLogger.log("Sending targeted identity announce to \(targetPeer)", 
@@ -5958,8 +5907,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
             payload: messageData,
             signature: nil,
-            ttl: self.adaptiveTTL, // Inner packet needs valid TTL for processing after decryption
-            sequenceNumber: getNextSequenceNumber()
+            ttl: self.adaptiveTTL // Inner packet needs valid TTL for processing after decryption
         )
         
         guard let innerData = innerPacket.toBinaryData() else { return }
@@ -5981,9 +5929,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                 payload: encryptedData,
                 signature: nil,
-                ttl: adaptiveTTL,
-                sequenceNumber: getNextSequenceNumber()
-            )
+                ttl: adaptiveTTL            )
             
             SecureLogger.log("Broadcasting encrypted private message \(msgID) to \(recipientPeerID)", category: SecureLogger.session, level: .info)
             
