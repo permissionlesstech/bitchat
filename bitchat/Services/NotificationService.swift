@@ -29,7 +29,7 @@ class NotificationService {
         }
     }
     
-    func sendLocalNotification(title: String, body: String, identifier: String) {
+    func sendLocalNotification(title: String, body: String, identifier: String, userInfo: [String: Any]? = nil) {
         // For now, skip app state check entirely to avoid thread issues
         // The NotificationDelegate will handle foreground presentation
         DispatchQueue.main.async {
@@ -37,6 +37,9 @@ class NotificationService {
             content.title = title
             content.body = body
             content.sound = .default
+            if let userInfo = userInfo {
+                content.userInfo = userInfo
+            }
             
             let request = UNNotificationRequest(
                 identifier: identifier,
@@ -58,12 +61,13 @@ class NotificationService {
         sendLocalNotification(title: title, body: body, identifier: identifier)
     }
     
-    func sendPrivateMessageNotification(from sender: String, message: String) {
+    func sendPrivateMessageNotification(from sender: String, message: String, peerID: String) {
         let title = "🔒 private message from \(sender)"
         let body = message
         let identifier = "private-\(UUID().uuidString)"
+        let userInfo = ["peerID": peerID, "senderName": sender]
         
-        sendLocalNotification(title: title, body: body, identifier: identifier)
+        sendLocalNotification(title: title, body: body, identifier: identifier, userInfo: userInfo)
     }
     
     func sendFavoriteOnlineNotification(nickname: String) {

@@ -25,9 +25,9 @@ enum EncryptionStatus: Equatable {
         case .noiseHandshaking:
             return "lock.rotation"
         case .noiseSecured:
-            return "lock"
+            return "lock.fill"  // Changed from "lock" to "lock.fill" for filled lock
         case .noiseVerified:
-            return "lock.shield"
+            return "lock.shield.fill"  // Changed to filled version for consistency
         }
     }
     
