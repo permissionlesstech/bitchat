@@ -18,7 +18,7 @@ struct AppInfoView: View {
     
     // MARK: - Constants
     private enum Strings {
-        static let appName = "bitchat/"
+        static let appName = "bitchat"
         static let tagline = "mesh sidegroupchat"
         
         enum Features {
@@ -49,18 +49,9 @@ struct AppInfoView: View {
             ]
         }
         
-        enum Commands {
-            static let title = "COMMANDS"
-            static let list = [
-                "/m @name - send private message",
-                "/w - see who's online",
-                "/block @name - block a peer",
-                "/block - list blocked peers",
-                "/unblock @name - unblock a peer",
-                "/clear - clear current chat",
-                "/hug @name - send someone a hug",
-                "/slap @name - slap with a trout"
-            ]
+        enum Warning {
+            static let title = "WARNING"
+            static let message = "private message security has not yet been fully audited. do not use for critical situations until this warning disappears."
         }
     }
     
@@ -175,18 +166,21 @@ struct AppInfoView: View {
                 .foregroundColor(textColor)
             }
             
-            // Commands
-            VStack(alignment: .leading, spacing: 16) {
-                SectionHeader(Strings.Commands.title)
+            // Warning
+            VStack(alignment: .leading, spacing: 6) {
+                SectionHeader(Strings.Warning.title)
+                    .foregroundColor(Color.red)
                 
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(Strings.Commands.list, id: \.self) { command in
-                        Text(command)
-                    }
-                }
-                .font(.system(size: 14, design: .monospaced))
-                .foregroundColor(textColor)
+                Text(Strings.Warning.message)
+                    .font(.system(size: 14, design: .monospaced))
+                    .foregroundColor(Color.red)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            .padding(.top, 6)
+            .padding(.bottom, 16)
+            .padding(.horizontal)
+            .background(Color.red.opacity(0.1))
+            .cornerRadius(8)
             
             .padding(.top)
         }
