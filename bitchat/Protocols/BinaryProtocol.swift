@@ -19,11 +19,12 @@ extension Data {
 }
 
 // Binary Protocol Format:
-// Header (Fixed 13 bytes):
+// Header (Fixed 17 bytes):
 // - Version: 1 byte
 // - Type: 1 byte  
 // - TTL: 1 byte
 // - Timestamp: 8 bytes (UInt64)
+// - SequenceNumber: 4 bytes (UInt32)
 // - Flags: 1 byte (bit 0: hasRecipient, bit 1: hasSignature)
 // - PayloadLength: 2 bytes (UInt16)
 //
@@ -34,7 +35,7 @@ extension Data {
 // - Signature: 64 bytes (if hasSignature flag set)
 
 struct BinaryProtocol {
-    static let headerSize = 13
+    static let headerSize = 17
     static let senderIDSize = 8
     static let recipientIDSize = 8
     static let signatureSize = 64
@@ -75,6 +76,11 @@ struct BinaryProtocol {
         // Timestamp (8 bytes, big-endian)
         for i in (0..<8).reversed() {
             data.append(UInt8((packet.timestamp >> (i * 8)) & 0xFF))
+        }
+        
+        // Sequence number (4 bytes, big-endian)
+        for i in (0..<4).reversed() {
+            data.append(UInt8((packet.sequenceNumber >> (i * 8)) & 0xFF))
         }
         
         // Flags
@@ -165,6 +171,13 @@ struct BinaryProtocol {
         }
         offset += 8
         
+        // Sequence number
+        let sequenceData = unpaddedData[offset..<offset+4]
+        let sequenceNumber = sequenceData.reduce(0) { result, byte in
+            (result << 8) | UInt32(byte)
+        }
+        offset += 4
+        
         // Flags
         let flags = unpaddedData[offset]; offset += 1
         let hasRecipient = (flags & Flags.hasRecipient) != 0
@@ -240,7 +253,8 @@ struct BinaryProtocol {
             timestamp: timestamp,
             payload: payload,
             signature: signature,
-            ttl: ttl
+            ttl: ttl,
+            sequenceNumber: sequenceNumber
         )
     }
 }
