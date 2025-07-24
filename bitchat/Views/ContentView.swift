@@ -600,7 +600,7 @@ struct ContentView: View {
                             
                             // Show all connected peers
                             let peersToShow: [String] = viewModel.connectedPeers
-                            print("ContentView: Showing \(peersToShow.count) peers: \(peersToShow.joined(separator: ", "))")
+                            let _ = print("ContentView: Showing \(peersToShow.count) peers: \(peersToShow.joined(separator: ", "))")
                             
                             // Pre-compute peer data outside ForEach to reduce overhead
                             let peerData = peersToShow.map { peerID in
@@ -620,7 +620,7 @@ struct ContentView: View {
                                     hasUnreadMessages: viewModel.unreadPrivateMessages.contains(peerID),
                                     encryptionStatus: viewModel.getEncryptionStatus(for: peerID)
                                 )
-                            }.sorted { peer1, peer2 in
+                            }.sorted { (peer1: PeerDisplayData, peer2: PeerDisplayData) in
                                 // Sort: favorites first, then alphabetically by nickname
                                 if peer1.isFavorite != peer2.isFavorite {
                                     return peer1.isFavorite

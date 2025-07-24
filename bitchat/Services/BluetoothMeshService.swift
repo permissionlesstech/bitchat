@@ -2588,7 +2588,7 @@ class BluetoothMeshService: NSObject {
                         
                         // Try to find peripheral by checking all connected peripherals for matching peer ID
                         // This handles case where announce is relayed and we need to update RSSI mapping
-                        for (tempID, connectedPeripheral) in self.connectedPeripherals {
+                        for (tempID, _) in self.connectedPeripherals {
                             // Check if this might be a temp ID for our sender
                             if tempID.count == 36 { // UUID length
                                 SecureLogger.log("handleReceivedPacket: Checking if temp ID \(tempID) might be for sender \(senderID)", category: SecureLogger.session, level: .debug)
