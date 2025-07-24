@@ -561,7 +561,7 @@ class ChatViewModel: ObservableObject {
         guard let messageID = notification.userInfo?["messageID"] as? String else { return }
         
         // Find the message to retry
-        if let message = displayedMessages.first(where: { $0.id == messageID }) {
+        if let message = messages.first(where: { $0.id == messageID }) {
             SecureLogger.log("Retrying message \(messageID) to \(message.recipientNickname ?? "unknown")", 
                            category: SecureLogger.session, level: .info)
             
@@ -572,7 +572,11 @@ class ChatViewModel: ObservableObject {
                 updateMessageDeliveryStatus(messageID, status: .sending)
                 
                 // Resend via mesh service
-                meshService.sendMessage(message, toPeer: peerID)
+                meshService.sendMessage(message.content, 
+                                      mentions: message.mentions ?? [], 
+                                      to: peerID,
+                                      messageID: messageID,
+                                      timestamp: message.timestamp)
             }
         }
     }
