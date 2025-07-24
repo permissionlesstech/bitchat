@@ -13,7 +13,7 @@ struct NoiseTestingView: View {
     @ObservedObject var viewModel: ChatViewModel
     @Environment(\.colorScheme) var colorScheme
     @EnvironmentObject var themeManager: ThemeManager
-    @State private var testChecklist = NoiseTestingHelper.shared.getTestChecklist()
+    @State private var testChecklist = "Noise testing checklist is currently unavailable."
     
     private var textColor: Color {
         themeManager.primaryTextColor(for: colorScheme)
