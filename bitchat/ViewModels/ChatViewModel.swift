@@ -36,6 +36,10 @@ class ChatViewModel: ObservableObject {
     private let userDefaults = UserDefaults.standard
     private let nicknameKey = "bitchat.nickname"
     
+    // Caches for expensive computations
+    private var rssiColorCache: [String: Color] = [:] // key: "\(rssi)_\(isDark)"
+    private var encryptionStatusCache: [String: EncryptionStatus] = [:] // key: peerID
+    
     @Published var favoritePeers: Set<String> = []  // Now stores public key fingerprints instead of peer IDs
     private var peerIDToPublicKeyFingerprint: [String: String] = [:]  // Maps ephemeral peer IDs to persistent fingerprints
     private var blockedUsers: Set<String> = []  // Stores public key fingerprints of blocked users
@@ -765,25 +769,37 @@ class ChatViewModel: ObservableObject {
     
     func getRSSIColor(rssi: Int, colorScheme: ColorScheme) -> Color {
         let isDark = colorScheme == .dark
+        let cacheKey = "\(rssi)_\(isDark)"
+        
+        // Check cache first
+        if let cachedColor = rssiColorCache[cacheKey] {
+            return cachedColor
+        }
+        
         // RSSI typically ranges from -30 (excellent) to -90 (poor)
         // We'll map this to colors from green (strong) to red (weak)
         
+        let color: Color
         if rssi >= -50 {
             // Excellent signal: bright green
-            return isDark ? Color(red: 0.0, green: 1.0, blue: 0.0) : Color(red: 0.0, green: 0.7, blue: 0.0)
+            color = isDark ? Color(red: 0.0, green: 1.0, blue: 0.0) : Color(red: 0.0, green: 0.7, blue: 0.0)
         } else if rssi >= -60 {
             // Good signal: green-yellow
-            return isDark ? Color(red: 0.5, green: 1.0, blue: 0.0) : Color(red: 0.3, green: 0.7, blue: 0.0)
+            color = isDark ? Color(red: 0.5, green: 1.0, blue: 0.0) : Color(red: 0.3, green: 0.7, blue: 0.0)
         } else if rssi >= -70 {
             // Fair signal: yellow
-            return isDark ? Color(red: 1.0, green: 1.0, blue: 0.0) : Color(red: 0.7, green: 0.7, blue: 0.0)
+            color = isDark ? Color(red: 1.0, green: 1.0, blue: 0.0) : Color(red: 0.7, green: 0.7, blue: 0.0)
         } else if rssi >= -80 {
             // Weak signal: orange
-            return isDark ? Color(red: 1.0, green: 0.6, blue: 0.0) : Color(red: 0.8, green: 0.4, blue: 0.0)
+            color = isDark ? Color(red: 1.0, green: 0.6, blue: 0.0) : Color(red: 0.8, green: 0.4, blue: 0.0)
         } else {
             // Poor signal: red
-            return isDark ? Color(red: 1.0, green: 0.2, blue: 0.2) : Color(red: 0.8, green: 0.0, blue: 0.0)
+            color = isDark ? Color(red: 1.0, green: 0.2, blue: 0.2) : Color(red: 0.8, green: 0.0, blue: 0.0)
         }
+        
+        // Cache the result
+        rssiColorCache[cacheKey] = color
+        return color
     }
     
     func updateAutocomplete(for text: String, cursorPosition: Int) {
@@ -1203,6 +1219,11 @@ class ChatViewModel: ObservableObject {
     }
     
     func getEncryptionStatus(for peerID: String) -> EncryptionStatus {
+        // Check cache first
+        if let cachedStatus = encryptionStatusCache[peerID] {
+            return cachedStatus
+        }
+        
         // This must be a pure function - no state mutations allowed
         // to avoid SwiftUI update loops
         
@@ -1210,34 +1231,51 @@ class ChatViewModel: ObservableObject {
         let hasSession = meshService.getNoiseService().hasSession(with: peerID)
         let storedStatus = peerEncryptionStatus[peerID]
         
+        let status: EncryptionStatus
+        
         // First check if we have an established session
         if hasEstablished {
             // We have encryption, now check if it's verified
             if let fingerprint = getFingerprint(for: peerID) {
                 if verifiedFingerprints.contains(fingerprint) {
-                    return .noiseVerified
+                    status = .noiseVerified
                 } else {
-                    return .noiseSecured
+                    status = .noiseSecured
                 }
+            } else {
+                // We have a session but no fingerprint yet - still secured
+                status = .noiseSecured
             }
-            // We have a session but no fingerprint yet - still secured
-            return .noiseSecured
+        } else if hasSession {
+            // Check if handshaking
+            status = .noiseHandshaking
+        } else {
+            // Fall back to stored status
+            status = storedStatus ?? .none
         }
         
-        // Check if handshaking
-        if hasSession {
-            return .noiseHandshaking
-        }
-        
-        // Fall back to stored status
-        let finalStatus = storedStatus ?? .none
+        // Cache the result
+        encryptionStatusCache[peerID] = status
         
         // Only log occasionally to avoid spam
         if Int.random(in: 0..<100) == 0 {
-            SecureLogger.log("getEncryptionStatus for \(peerID): hasEstablished=\(hasEstablished), hasSession=\(hasSession), stored=\(String(describing: storedStatus)), final=\(finalStatus)", category: SecureLogger.security, level: .debug)
+            SecureLogger.log("getEncryptionStatus for \(peerID): hasEstablished=\(hasEstablished), hasSession=\(hasSession), stored=\(String(describing: storedStatus)), final=\(status)", category: SecureLogger.security, level: .debug)
         }
         
-        return finalStatus
+        return status
+    }
+    
+    // Clear caches when data changes
+    private func invalidateEncryptionCache(for peerID: String? = nil) {
+        if let peerID = peerID {
+            encryptionStatusCache.removeValue(forKey: peerID)
+        } else {
+            encryptionStatusCache.removeAll()
+        }
+    }
+    
+    private func invalidateRSSIColorCache() {
+        rssiColorCache.removeAll()
     }
     
     // Update encryption status in appropriate places, not during view updates
