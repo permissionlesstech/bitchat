@@ -18,14 +18,7 @@ import UIKit
 class ChatViewModel: ObservableObject {
     @Published var messages: [BitchatMessage] = []
     @Published var connectedPeers: [String] = []
-    @Published var nickname: String = "" {
-        didSet {
-            nicknameSaveTimer?.invalidate()
-            nicknameSaveTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
-                self.saveNickname()
-            }
-        }
-    }
+    @Published var nickname: String = ""
     @Published var isConnected = false
     @Published var privateChats: [String: [BitchatMessage]] = [:] // peerID -> messages
     @Published var selectedPrivateChatPeer: String? = nil
@@ -42,7 +35,6 @@ class ChatViewModel: ObservableObject {
     var meshService = BluetoothMeshService()
     private let userDefaults = UserDefaults.standard
     private let nicknameKey = "bitchat.nickname"
-    private var nicknameSaveTimer: Timer?
     
     @Published var favoritePeers: Set<String> = []  // Now stores public key fingerprints instead of peer IDs
     private var peerIDToPublicKeyFingerprint: [String: String] = [:]  // Maps ephemeral peer IDs to persistent fingerprints
@@ -170,6 +162,14 @@ class ChatViewModel: ObservableObject {
         
         // Send announce with new nickname to all peers
         meshService.sendBroadcastAnnounce()
+    }
+    
+    func validateAndSaveNickname() {
+        // Check if nickname is empty or just whitespace
+        if nickname.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            nickname = "anon\(Int.random(in: 1000...9999))"
+        }
+        saveNickname()
     }
     
     private func loadFavorites() {
