@@ -410,49 +410,19 @@ extension String {
     func extractURLs() -> [(url: URL, range: Range<String.Index>)] {
         var urls: [(URL, Range<String.Index>)] = []
         
-        // Check for markdown-style links [title](url)
-        let markdownPattern = #"\[([^\]]+)\]\(([^)]+)\)"#
-        if let regex = try? NSRegularExpression(pattern: markdownPattern) {
-            let matches = regex.matches(in: self, range: NSRange(location: 0, length: self.utf16.count))
-            for match in matches {
-                if let urlRange = Range(match.range(at: 2), in: self),
-                   let url = URL(string: String(self[urlRange])),
-                   let fullRange = Range(match.range, in: self) {
-                    urls.append((url, fullRange))
-                }
-            }
-        }
-        
-        // Also check for plain URLs
+        // Check for plain URLs
         let types: NSTextCheckingResult.CheckingType = .link
         if let detector = try? NSDataDetector(types: types.rawValue) {
             let matches = detector.matches(in: self, range: NSRange(location: 0, length: self.utf16.count))
             for match in matches {
                 if let range = Range(match.range, in: self),
                    let url = match.url {
-                    // Don't add if this URL is already part of a markdown link
-                    let isPartOfMarkdown = urls.contains { $0.1.overlaps(range) }
-                    if !isPartOfMarkdown {
-                        urls.append((url, range))
-                    }
+                    urls.append((url, range))
                 }
             }
         }
         
         return urls
-    }
-    
-    func extractMarkdownLink() -> (title: String, url: URL)? {
-        let pattern = #"\[([^\]]+)\]\(([^)]+)\)"#
-        if let regex = try? NSRegularExpression(pattern: pattern),
-           let match = regex.firstMatch(in: self, range: NSRange(location: 0, length: self.utf16.count)) {
-            if let titleRange = Range(match.range(at: 1), in: self),
-               let urlRange = Range(match.range(at: 2), in: self),
-               let url = URL(string: String(self[urlRange])) {
-                return (String(self[titleRange]), url)
-            }
-        }
-        return nil
     }
 }
 

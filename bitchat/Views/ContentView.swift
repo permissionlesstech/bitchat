@@ -177,7 +177,7 @@ struct ContentView: View {
                 let windowedMessages = messages.suffix(100)
                 
                 ForEach(Array(windowedMessages), id: \.id) { message in
-                        VStack(alignment: .leading, spacing: 4) {
+                        VStack(alignment: .leading, spacing: 2) {
                             // Check if current user is mentioned
                             let _ = message.mentions?.contains(viewModel.nickname) ?? false
                             
@@ -189,7 +189,7 @@ struct ContentView: View {
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             } else {
                                 // Regular messages with natural text wrapping
-                                VStack(alignment: .leading, spacing: 2) {
+                                VStack(alignment: .leading, spacing: 0) {
                                     HStack(alignment: .top, spacing: 0) {
                                         // Single text view for natural wrapping
                                         Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme))
@@ -205,27 +205,14 @@ struct ContentView: View {
                                         }
                                     }
                                     
-                                    // Check for links and show preview
-                                    if let markdownLink = message.content.extractMarkdownLink() {
-                                        // Don't show link preview if the message is just the emoji
-                                        let cleanContent = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
-                                        if cleanContent.hasPrefix("👇") {
-                                            LazyLinkPreviewView(
-                                                url: markdownLink.url,
-                                                title: markdownLink.title,
-                                                id: "\(message.id)-\(markdownLink.url.absoluteString)"
-                                            )
-                                        }
-                                    } else {
-                                        // Check for plain URLs
-                                        let urls = message.content.extractURLs()
-                                        ForEach(Array(urls.prefix(3).enumerated()), id: \.offset) { index, urlInfo in
-                                            LazyLinkPreviewView(
-                                                url: urlInfo.url,
-                                                title: nil,
-                                                id: "\(message.id)-\(urlInfo.url.absoluteString)"
-                                            )
-                                        }
+                                    // Check for plain URLs
+                                    let urls = message.content.extractURLs()
+                                    ForEach(Array(urls.prefix(3).enumerated()), id: \.offset) { index, urlInfo in
+                                        LazyLinkPreviewView(
+                                            url: urlInfo.url,
+                                            title: nil,
+                                            id: "\(message.id)-\(urlInfo.url.absoluteString)"
+                                        )
                                     }
                                 }
                             }
@@ -240,7 +227,7 @@ struct ContentView: View {
                                 showMessageActions = true
                             }
                         }
-                        .listRowInsets(EdgeInsets(top: 2, leading: 12, bottom: 2, trailing: 12))
+                        .listRowInsets(EdgeInsets(top: 0, leading: 12, bottom: 0, trailing: 12))
                         .listRowSeparator(.hidden)
                         .listRowBackground(backgroundColor)
                     }
