@@ -98,14 +98,12 @@ struct BitchatApp: App {
                     // Try to parse as JSON first
                     if let data = sharedContent.data(using: .utf8),
                        let urlData = try? JSONSerialization.jsonObject(with: data) as? [String: String],
-                       let url = urlData["url"],
-                       let title = urlData["title"] {
-                        // Send just emoji with hidden markdown link
-                        let markdownLink = "👇 [\(title)](\(url))"
-                        self.chatViewModel.sendMessage(markdownLink)
+                       let url = urlData["url"] {
+                        // Send plain URL
+                        self.chatViewModel.sendMessage(url)
                     } else {
                         // Fallback to simple URL
-                        self.chatViewModel.sendMessage("Shared link: \(sharedContent)")
+                        self.chatViewModel.sendMessage(sharedContent)
                     }
                 } else {
                     self.chatViewModel.sendMessage(sharedContent)
