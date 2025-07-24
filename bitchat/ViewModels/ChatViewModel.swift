@@ -19,6 +19,12 @@ class ChatViewModel: ObservableObject {
     @Published var messages: [BitchatMessage] = []
     private let maxMessages = 1337 // Maximum messages before oldest are removed
     @Published var connectedPeers: [String] = []
+    
+    // Message batching for performance
+    private var pendingMessages: [BitchatMessage] = []
+    private var pendingPrivateMessages: [String: [BitchatMessage]] = [:] // peerID -> messages
+    private var messageBatchTimer: Timer?
+    private let messageBatchInterval: TimeInterval = 0.1 // 100ms batching window
     @Published var nickname: String = ""
     @Published var isConnected = false
     @Published var privateChats: [String: [BitchatMessage]] = [:] // peerID -> messages
@@ -148,6 +154,9 @@ class ChatViewModel: ObservableObject {
     }
     
     deinit {
+        // Clean up timer
+        messageBatchTimer?.invalidate()
+        
         // Force immediate save
         userDefaults.synchronize()
     }
@@ -378,9 +387,12 @@ class ChatViewModel: ObservableObject {
                 mentions: mentions.isEmpty ? nil : mentions,
             )
             
-            // Add to main messages
+            // Add to main messages immediately for user feedback
             messages.append(message)
             trimMessagesIfNeeded()
+            
+            // Force immediate UI update for user's own messages
+            objectWillChange.send()
             
             // Send via mesh with mentions
             meshService.sendMessage(content, mentions: mentions)
@@ -433,7 +445,7 @@ class ChatViewModel: ObservableObject {
         let isFavorite = isFavorite(peerID: peerID)
         DeliveryTracker.shared.trackMessage(message, recipientID: peerID, recipientNickname: recipientNickname, isFavorite: isFavorite)
         
-        // Trigger UI update
+        // Immediate UI update for user's own messages
         objectWillChange.send()
         
         // Send via mesh with the same message ID
@@ -583,16 +595,21 @@ class ChatViewModel: ObservableObject {
                 timestamp: Date(),
                 isRelay: false
             )
-            messages.append(localNotification)
-            trimMessagesIfNeeded()
+            // System messages can be batched
+            addMessageToBatch(localNotification)
         }
     }
     
     @objc private func appWillResignActive() {
+        // Flush any pending messages when app goes to background
+        flushMessageBatchImmediately()
+        
         userDefaults.synchronize()
     }
     
     @objc func applicationWillTerminate() {
+        // Flush any pending messages immediately
+        flushMessageBatchImmediately()
         
         // Verify identity key is still there
         _ = KeychainManager.shared.verifyIdentityKeyExists()
@@ -604,6 +621,9 @@ class ChatViewModel: ObservableObject {
     }
     
     @objc private func appWillTerminate() {
+        // Flush any pending messages immediately
+        flushMessageBatchImmediately()
+        
         userDefaults.synchronize()
     }
     
@@ -707,6 +727,9 @@ class ChatViewModel: ObservableObject {
     
     // PANIC: Emergency data clearing for activist safety
     func panicClearAllData() {
+        // Flush any pending messages immediately before clearing
+        flushMessageBatchImmediately()
+        
         // Clear all messages
         messages.removeAll()
         privateChats.removeAll()
@@ -1278,6 +1301,82 @@ class ChatViewModel: ObservableObject {
             let removeCount = count - maxMessages
             privateChats[peerID]?.removeFirst(removeCount)
         }
+    }
+    
+    // MARK: - Message Batching
+    
+    private func addMessageToBatch(_ message: BitchatMessage) {
+        pendingMessages.append(message)
+        scheduleBatchFlush()
+    }
+    
+    private func addPrivateMessageToBatch(_ message: BitchatMessage, for peerID: String) {
+        if pendingPrivateMessages[peerID] == nil {
+            pendingPrivateMessages[peerID] = []
+        }
+        pendingPrivateMessages[peerID]?.append(message)
+        scheduleBatchFlush()
+    }
+    
+    private func scheduleBatchFlush() {
+        // Cancel existing timer
+        messageBatchTimer?.invalidate()
+        
+        // Schedule new flush
+        messageBatchTimer = Timer.scheduledTimer(withTimeInterval: messageBatchInterval, repeats: false) { [weak self] _ in
+            self?.flushMessageBatch()
+        }
+    }
+    
+    private func flushMessageBatch() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            // Process pending public messages
+            if !self.pendingMessages.isEmpty {
+                let messagesToAdd = self.pendingMessages
+                self.pendingMessages.removeAll()
+                
+                // Add all messages at once
+                self.messages.append(contentsOf: messagesToAdd)
+                
+                // Sort once after batch addition
+                self.messages.sort { $0.timestamp < $1.timestamp }
+                
+                // Trim once if needed
+                self.trimMessagesIfNeeded()
+            }
+            
+            // Process pending private messages
+            if !self.pendingPrivateMessages.isEmpty {
+                let privateMessageBatches = self.pendingPrivateMessages
+                self.pendingPrivateMessages.removeAll()
+                
+                for (peerID, messagesToAdd) in privateMessageBatches {
+                    if self.privateChats[peerID] == nil {
+                        self.privateChats[peerID] = []
+                    }
+                    
+                    // Add all messages for this peer at once
+                    self.privateChats[peerID]?.append(contentsOf: messagesToAdd)
+                    
+                    // Sort once after batch addition
+                    self.privateChats[peerID]?.sort { $0.timestamp < $1.timestamp }
+                    
+                    // Trim once if needed
+                    self.trimPrivateChatMessagesIfNeeded(for: peerID)
+                }
+            }
+            
+            // Single UI update for all changes
+            self.objectWillChange.send()
+        }
+    }
+    
+    // Force immediate flush for high-priority messages
+    private func flushMessageBatchImmediately() {
+        messageBatchTimer?.invalidate()
+        flushMessageBatch()
     }
     
     // Update encryption status in appropriate places, not during view updates
@@ -1897,15 +1996,10 @@ extension ChatViewModel: BitchatDelegate {
                     )
                 }
                 
-                privateChats[peerID]?.append(messageToStore)
-                // Sort messages by timestamp to ensure proper ordering
-                privateChats[peerID]?.sort { $0.timestamp < $1.timestamp }
-                trimPrivateChatMessagesIfNeeded(for: peerID)
+                // Use batching for private messages
+                addPrivateMessageToBatch(messageToStore, for: peerID)
                 
                 // Debug logging
-                
-                // Trigger UI update for private chats
-                objectWillChange.send()
                 
                 // Check if we're in a private chat with this peer's fingerprint
                 // This handles reconnections with new peer IDs
@@ -1974,10 +2068,7 @@ extension ChatViewModel: BitchatDelegate {
             if finalMessage.sender != nickname && finalMessage.sender != "system" {
                 // Skip empty or whitespace-only messages
                 if !finalMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    messages.append(finalMessage)
-                    // Sort messages by timestamp to ensure proper ordering
-                    messages.sort { $0.timestamp < $1.timestamp }
-                    trimMessagesIfNeeded()
+                    addMessageToBatch(finalMessage)
                 }
             } else if finalMessage.sender != "system" {
                 // Our own message - check if we already have it (by ID and content)
@@ -1998,17 +2089,13 @@ extension ChatViewModel: BitchatDelegate {
                     // This is a message we sent from another device or it's missing locally
                     // Skip empty or whitespace-only messages
                     if !finalMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        messages.append(finalMessage)
-                        messages.sort { $0.timestamp < $1.timestamp }
-                        trimMessagesIfNeeded()
+                        addMessageToBatch(finalMessage)
                     }
                 }
             } else {
                 // System message - check for empty content before adding
                 if !finalMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    messages.append(finalMessage)
-                    messages.sort { $0.timestamp < $1.timestamp }
-                    trimMessagesIfNeeded()
+                    addMessageToBatch(finalMessage)
                 }
             }
         }
@@ -2134,11 +2221,8 @@ extension ChatViewModel: BitchatDelegate {
             isRelay: false,
             originalSender: nil
         )
-        messages.append(systemMessage)
-        trimMessagesIfNeeded()
-        
-        // Force UI update
-        objectWillChange.send()
+        // Batch system messages
+        addMessageToBatch(systemMessage)
     }
     
     func didDisconnectFromPeer(_ peerID: String) {
@@ -2169,11 +2253,8 @@ extension ChatViewModel: BitchatDelegate {
             isRelay: false,
             originalSender: nil
         )
-        messages.append(systemMessage)
-        trimMessagesIfNeeded()
-        
-        // Force UI update
-        objectWillChange.send()
+        // Batch system messages
+        addMessageToBatch(systemMessage)
     }
     
     func didUpdatePeerList(_ peers: [String]) {
