@@ -434,7 +434,7 @@ class NoiseHandshakeState {
             break // No pre-message keys
         case .IK, .NK:
             if role == .initiator, let remoteStatic = remoteStaticPublic {
-                let hashBeforeRemote = symmetricState.getHandshakeHash()
+                _ = symmetricState.getHandshakeHash()
                 symmetricState.mixHash(remoteStatic.rawRepresentation)
             }
         }

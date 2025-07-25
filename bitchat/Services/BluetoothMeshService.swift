@@ -1432,7 +1432,13 @@ class BluetoothMeshService: NSObject {
                         signature: nil,
                         ttl: 3                    )
                     
-                    self.broadcastPacket(outerPacket)
+                    // Try direct delivery first for delivery ACKs
+                    if !self.sendDirectToRecipient(outerPacket, recipientPeerID: recipientID) {
+                        // Recipient not directly connected, use selective relay
+                        SecureLogger.log("Recipient \(recipientID) not directly connected for delivery ACK, using relay", 
+                                       category: SecureLogger.session, level: .info)
+                        self.sendViaSelectiveRelay(outerPacket, recipientPeerID: recipientID)
+                    }
                 } catch {
                     SecureLogger.logError(error, context: "Failed to encrypt delivery ACK via Noise for \(recipientID)", category: SecureLogger.encryption)
                 }
@@ -1530,7 +1536,14 @@ class BluetoothMeshService: NSObject {
                             ttl: 3                        )
                         
                         SecureLogger.log("Sending encrypted read receipt for message \(receipt.originalMessageID) to \(recipientID)", category: SecureLogger.noise, level: .info)
-                        self.broadcastPacket(outerPacket)
+                        
+                        // Try direct delivery first for read receipts
+                        if !self.sendDirectToRecipient(outerPacket, recipientPeerID: recipientID) {
+                            // Recipient not directly connected, use selective relay
+                            SecureLogger.log("Recipient \(recipientID) not directly connected for read receipt, using relay", 
+                                           category: SecureLogger.session, level: .info)
+                            self.sendViaSelectiveRelay(outerPacket, recipientPeerID: recipientID)
+                        }
                     }
                 } catch {
                     SecureLogger.logError(error, context: "Failed to encrypt read receipt via Noise for \(recipientID)", category: SecureLogger.encryption)
@@ -2110,6 +2123,15 @@ class BluetoothMeshService: NSObject {
         
         // Send to connected peripherals (as central)
         var sentToPeripherals = 0
+        
+        // Log if this is a private message being broadcast
+        if packet.type == MessageType.noiseEncrypted.rawValue,
+           let recipientID = packet.recipientID?.hexEncodedString(),
+           !recipientID.isEmpty {
+            SecureLogger.log("WARNING: Broadcasting private message intended for \(recipientID) to all peers", 
+                           category: SecureLogger.session, level: .warning)
+        }
+        
         // Broadcasting to connected peripherals
         for (peerID, peripheral) in connectedPeripherals {
             if let characteristic = peripheralCharacteristics[peripheral] {
@@ -3273,20 +3295,51 @@ class BluetoothMeshService: NSObject {
         case .noiseEncrypted:
             // Handle Noise encrypted message
             let senderID = packet.senderID.hexEncodedString()
-            if let recipientIDData = packet.recipientID,
-               isPeerIDOurs(recipientIDData.hexEncodedString())
-               && !isPeerIDOurs(senderID) {
-                _ = packet.recipientID?.hexEncodedString()
-                handleNoiseEncryptedMessage(from: senderID, encryptedData: packet.payload, originalPacket: packet, peripheral: peripheral)
-                return
-            }
             if !isPeerIDOurs(senderID) {
-                if packet.ttl > 0 {
-                    var relayPacket = packet
-                    relayPacket.ttl -= 1
-                    broadcastPacket(relayPacket)
+                let recipientID = packet.recipientID?.hexEncodedString() ?? ""
+                
+                // Check if this message is for us
+                if isPeerIDOurs(recipientID) {
+                    // Message is for us, try to decrypt
+                    handleNoiseEncryptedMessage(from: senderID, encryptedData: packet.payload, originalPacket: packet, peripheral: peripheral)
+                } else if packet.ttl > 1 {
+                    // Message is not for us but has TTL > 1, consider relaying
+                    // Only relay if we think we might be able to reach the recipient
+                    
+                    // Check if recipient is directly connected to us
+                    let canReachDirectly = connectedPeripherals[recipientID] != nil
+                    
+                    // Check if we've seen this recipient recently (might be reachable via relay)
+                    let seenRecently = collectionsQueue.sync {
+                        if let lastSeen = self.peerLastSeenTimestamps.get(recipientID) {
+                            return Date().timeIntervalSince(lastSeen) < 180.0  // Seen in last 3 minutes
+                        }
+                        return false
+                    }
+                    
+                    if canReachDirectly || seenRecently {
+                        // Relay the message with reduced TTL
+                        var relayPacket = packet
+                        relayPacket.ttl = min(packet.ttl - 1, 2)  // Decrement TTL, max 2 for relayed private messages
+                        
+                        SecureLogger.log("Relaying private message from \(senderID) to \(recipientID) (TTL: \(relayPacket.ttl))", 
+                                       category: SecureLogger.session, level: .debug)
+                        
+                        if canReachDirectly {
+                            // Send directly to recipient
+                            _ = sendDirectToRecipient(relayPacket, recipientPeerID: recipientID)
+                        } else {
+                            // Use selective relay
+                            sendViaSelectiveRelay(relayPacket, recipientPeerID: recipientID)
+                        }
+                    } else {
+                        SecureLogger.log("Not relaying private message to \(recipientID) - recipient not reachable", 
+                                       category: SecureLogger.session, level: .debug)
+                    }
+                } else {
+                    // recipientID is empty or invalid, try to decrypt anyway (backwards compatibility)
+                    handleNoiseEncryptedMessage(from: senderID, encryptedData: packet.payload, originalPacket: packet, peripheral: peripheral)
                 }
-                return
             }
             
         case .versionHello:
@@ -4896,7 +4949,11 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                     signature: nil,
                     ttl: 1                )
                 
-                self.broadcastPacket(packet)
+                // System validation should go directly to the peer when possible
+                if !self.sendDirectToRecipient(packet, recipientPeerID: peerID) {
+                    // Fall back to selective relay if direct delivery fails
+                    self.sendViaSelectiveRelay(packet, recipientPeerID: peerID)
+                }
                 
                 SecureLogger.log("Sent session validation ping to \(peerID)", 
                                category: SecureLogger.session, level: .debug)
@@ -5019,8 +5076,13 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             // Track packet for ACK
             trackPacketForAck(packet)
             
-            // Use broadcastPacket instead of sendPacket to ensure it goes through the mesh
-            broadcastPacket(packet)
+            // Try direct delivery first for handshake init
+            if !sendDirectToRecipient(packet, recipientPeerID: peerID) {
+                // Handshakes are critical - use broadcast as fallback to ensure delivery
+                SecureLogger.log("Recipient \(peerID) not directly connected for handshake init, using broadcast", 
+                               category: SecureLogger.session, level: .info)
+                broadcastPacket(packet)
+            }
             
             // Schedule a retry check after 5 seconds
             DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak self] in
@@ -5092,8 +5154,13 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 // Track packet for ACK
                 trackPacketForAck(packet)
                 
-                // Use broadcastPacket instead of sendPacket to ensure it goes through the mesh
-                broadcastPacket(packet)
+                // Try direct delivery first for handshake response
+                if !sendDirectToRecipient(packet, recipientPeerID: peerID) {
+                    // Handshakes are critical - use broadcast as fallback to ensure delivery
+                    SecureLogger.log("Recipient \(peerID) not directly connected for handshake response, using broadcast", 
+                                   category: SecureLogger.session, level: .info)
+                    broadcastPacket(packet)
+                }
             } else {
                 SecureLogger.log("No response needed from processHandshakeMessage (isInitiation: \(isInitiation))", category: SecureLogger.noise, level: .debug)
             }
@@ -5501,7 +5568,11 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             ttl: 1  // Direct response, no relay
         )
         
-        broadcastPacket(packet)
+        // Version ACKs should go directly to the peer when possible
+        if !sendDirectToRecipient(packet, recipientPeerID: peerID) {
+            // Fall back to selective relay if direct delivery fails
+            sendViaSelectiveRelay(packet, recipientPeerID: peerID)
+        }
     }
     
     private func getPlatformString() -> String {
@@ -5649,7 +5720,11 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             ttl: 3  // ACKs don't need to travel far
         )
         
-        broadcastPacket(ackPacket)
+        // Protocol ACKs should go directly to the sender when possible
+        if !sendDirectToRecipient(ackPacket, recipientPeerID: peerID) {
+            // Fall back to selective relay if direct delivery fails
+            sendViaSelectiveRelay(ackPacket, recipientPeerID: peerID)
+        }
     }
     
     // Send protocol NACK for failed packets
@@ -5675,7 +5750,11 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             ttl: 3  // NACKs don't need to travel far
         )
         
-        broadcastPacket(nackPacket)
+        // Protocol NACKs should go directly to the sender when possible
+        if !sendDirectToRecipient(nackPacket, recipientPeerID: peerID) {
+            // Fall back to selective relay if direct delivery fails
+            sendViaSelectiveRelay(nackPacket, recipientPeerID: peerID)
+        }
     }
     
     // Generate unique packet ID from immutable packet fields
@@ -5962,12 +6041,19 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         if let targetPeer = specificPeerID {
             SecureLogger.log("Sending targeted identity announce to \(targetPeer)", 
                            category: SecureLogger.noise, level: .info)
+            
+            // Try direct delivery for targeted announces
+            if !sendDirectToRecipient(packet, recipientPeerID: targetPeer) {
+                // Fall back to selective relay if direct delivery fails
+                SecureLogger.log("Recipient \(targetPeer) not directly connected for identity announce, using relay", 
+                               category: SecureLogger.session, level: .info)
+                sendViaSelectiveRelay(packet, recipientPeerID: targetPeer)
+            }
         } else {
             SecureLogger.log("Broadcasting identity announce to all peers", 
                            category: SecureLogger.noise, level: .info)
+            broadcastPacket(packet)
         }
-        
-        broadcastPacket(packet)
     }
     
     // Removed sendPacket method - all packets should use broadcastPacket to ensure mesh delivery
@@ -6103,17 +6189,104 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 signature: nil,
                 ttl: adaptiveTTL            )
             
-            SecureLogger.log("Broadcasting encrypted private message \(msgID) to \(recipientPeerID)", category: SecureLogger.session, level: .info)
+            SecureLogger.log("Sending encrypted private message \(msgID) to \(recipientPeerID)", category: SecureLogger.session, level: .info)
             
             // Track packet for ACK
             trackPacketForAck(outerPacket)
             
-            broadcastPacket(outerPacket)
+            // Try direct delivery first
+            if !sendDirectToRecipient(outerPacket, recipientPeerID: recipientPeerID) {
+                // Recipient not directly connected, use selective relay
+                SecureLogger.log("Recipient \(recipientPeerID) not directly connected, using relay strategy", 
+                               category: SecureLogger.session, level: .info)
+                sendViaSelectiveRelay(outerPacket, recipientPeerID: recipientPeerID)
+            }
         } catch {
             // Failed to encrypt message
             SecureLogger.log("Failed to encrypt private message \(msgID) for \(recipientPeerID): \(error)", category: SecureLogger.encryption, level: .error)
         }
         } // End of encryptionQueue.async
+    }
+    
+    // MARK: - Targeted Message Delivery
+    
+    private func sendDirectToRecipient(_ packet: BitchatPacket, recipientPeerID: String) -> Bool {
+        // Try to send directly to the recipient if they're connected
+        if let peripheral = connectedPeripherals[recipientPeerID],
+           let characteristic = peripheralCharacteristics[peripheral],
+           peripheral.state == .connected {
+            
+            guard let data = packet.toBinaryData() else { return false }
+            
+            // Send only to the intended recipient
+            writeToPeripheral(data, peripheral: peripheral, characteristic: characteristic, peerID: recipientPeerID)
+            SecureLogger.log("Sent private message directly to \(recipientPeerID)", category: SecureLogger.session, level: .info)
+            return true
+        }
+        
+        // Check if recipient is connected as a central (we're peripheral)
+        if !subscribedCentrals.isEmpty {
+            // We can't target specific centrals, so return false to trigger relay
+            return false
+        }
+        
+        return false
+    }
+    
+    private func selectBestRelayPeers(excluding: String, maxPeers: Int = 3) -> [String] {
+        // Select peers with best RSSI for relay, excluding the target recipient
+        var candidates: [(peerID: String, rssi: Int)] = []
+        
+        for (peerID, _) in connectedPeripherals {
+            if peerID != excluding && peerID != myPeerID {
+                let rssiValue = peerRSSI[peerID]?.intValue ?? -80
+                candidates.append((peerID: peerID, rssi: rssiValue))
+            }
+        }
+        
+        // Sort by RSSI (strongest first) and take top N
+        candidates.sort { $0.rssi > $1.rssi }
+        return candidates.prefix(maxPeers).map { $0.peerID }
+    }
+    
+    private func sendViaSelectiveRelay(_ packet: BitchatPacket, recipientPeerID: String) {
+        // Select best relay candidates
+        let relayPeers = selectBestRelayPeers(excluding: recipientPeerID)
+        
+        if relayPeers.isEmpty {
+            // No relay candidates, fall back to broadcast
+            SecureLogger.log("No relay candidates for private message to \(recipientPeerID), using broadcast", 
+                           category: SecureLogger.session, level: .warning)
+            broadcastPacket(packet)
+            return
+        }
+        
+        // Limit TTL for relay
+        var relayPacket = packet
+        relayPacket.ttl = min(packet.ttl, 2)  // Max 2 hops for private message relay
+        
+        guard let data = relayPacket.toBinaryData() else { return }
+        
+        // Send to selected relay peers
+        var sentCount = 0
+        for relayPeerID in relayPeers {
+            if let peripheral = connectedPeripherals[relayPeerID],
+               let characteristic = peripheralCharacteristics[peripheral],
+               peripheral.state == .connected {
+                writeToPeripheral(data, peripheral: peripheral, characteristic: characteristic, peerID: relayPeerID)
+                sentCount += 1
+            }
+        }
+        
+        SecureLogger.log("Sent private message to \(sentCount) relay peers (targeting \(recipientPeerID))", 
+                       category: SecureLogger.session, level: .info)
+        
+        // If no relays worked, fall back to broadcast
+        if sentCount == 0 {
+            SecureLogger.log("Failed to send to relay peers, falling back to broadcast", 
+                           category: SecureLogger.session, level: .warning)
+            broadcastPacket(packet)
+        }
     }
     
     // MARK: - Connection Pool Management
