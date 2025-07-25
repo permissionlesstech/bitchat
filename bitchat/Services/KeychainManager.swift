@@ -95,62 +95,6 @@ class KeychainManager {
         #endif
     }
     
-    // MARK: - Channel Passwords
-    
-    func saveChannelPassword(_ password: String, for channel: String) -> Bool {
-        let key = "channel_\(channel)"
-        let result = save(password, forKey: key)
-        SecureLogger.logKeyOperation("save", keyType: "channel password for \(channel)", success: result)
-        return result
-    }
-    
-    func getChannelPassword(for channel: String) -> String? {
-        let key = "channel_\(channel)"
-        return retrieve(forKey: key)
-    }
-    
-    func deleteChannelPassword(for channel: String) -> Bool {
-        let key = "channel_\(channel)"
-        let result = delete(forKey: key)
-        SecureLogger.logKeyOperation("delete", keyType: "channel password for \(channel)", success: result)
-        return result
-    }
-    
-    func getAllChannelPasswords() -> [String: String] {
-        var passwords: [String: String] = [:]
-        
-        // Build query without kSecReturnData to avoid error -50
-        var query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecMatchLimit as String: kSecMatchLimitAll,
-            kSecReturnAttributes as String: true
-        ]
-        
-        // For sandboxed apps, use the app group
-        if isSandboxed() {
-            query[kSecAttrAccessGroup as String] = appGroup
-        }
-        
-        var result: AnyObject?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-        
-        if status == errSecSuccess, let items = result as? [[String: Any]] {
-            for item in items {
-                if let account = item[kSecAttrAccount as String] as? String,
-                   account.hasPrefix("channel_") {
-                    // Now retrieve the actual password data for this specific item
-                    let channel = String(account.dropFirst(8)) // Remove "channel_" prefix
-                    if let password = getChannelPassword(for: channel) {
-                        passwords[channel] = password
-                    }
-                }
-            }
-        }
-        
-        return passwords
-    }
-    
     // MARK: - Identity Keys
     
     func saveIdentityKey(_ keyData: Data, forKey key: String) -> Bool {
@@ -290,7 +234,7 @@ class KeychainManager {
     
     // Delete ALL keychain data for panic mode
     func deleteAllKeychainData() -> Bool {
-        SecureLogger.logSecurityEvent(.invalidKey(reason: "Panic mode - deleting all keychain data"), level: .warning)
+        SecureLogger.log("Panic mode - deleting all keychain data", category: SecureLogger.security, level: .warning)
         
         var totalDeleted = 0
         

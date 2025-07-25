@@ -22,6 +22,16 @@ class SecureLogger {
     static let keychain = OSLog(subsystem: subsystem, category: "keychain")
     static let session = OSLog(subsystem: subsystem, category: "session")
     static let security = OSLog(subsystem: subsystem, category: "security")
+    static let handshake = OSLog(subsystem: subsystem, category: "handshake")
+    
+    // MARK: - Timestamp Formatter
+    
+    private static let timestampFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss.SSS"
+        formatter.timeZone = TimeZone.current
+        return formatter
+    }()
     
     // MARK: - Cached Regex Patterns
     
@@ -66,9 +76,6 @@ class SecureLogger {
         case handshakeCompleted(peerID: String)
         case handshakeFailed(peerID: String, error: String)
         case sessionExpired(peerID: String)
-        case keyRotation(channel: String)
-        case invalidKey(reason: String)
-        case replayAttackDetected(channel: String)
         case authenticationFailed(peerID: String)
         
         var message: String {
@@ -81,12 +88,6 @@ class SecureLogger {
                 return "Handshake failed with peer: \(sanitize(peerID)), error: \(error)"
             case .sessionExpired(let peerID):
                 return "Session expired for peer: \(sanitize(peerID))"
-            case .keyRotation(let channel):
-                return "Key rotation performed for channel: \(sanitize(channel))"
-            case .invalidKey(let reason):
-                return "Invalid key detected: \(reason)"
-            case .replayAttackDetected(let channel):
-                return "Replay attack detected on channel: \(sanitize(channel))"
             case .authenticationFailed(let peerID):
                 return "Authentication failed for peer: \(sanitize(peerID))"
             }
@@ -144,7 +145,8 @@ class SecureLogger {
     /// Format location information for logging
     private static func formatLocation(file: String, line: Int, function: String) -> String {
         let fileName = (file as NSString).lastPathComponent
-        return "[\(fileName):\(line) \(function)]"
+        let timestamp = timestampFormatter.string(from: Date())
+        return "[\(timestamp)] [\(fileName):\(line) \(function)]"
     }
     
     /// Sanitize strings to remove potentially sensitive data

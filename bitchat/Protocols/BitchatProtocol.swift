@@ -82,7 +82,6 @@ enum MessageType: UInt8 {
     case fragmentStart = 0x05
     case fragmentContinue = 0x06
     case fragmentEnd = 0x07
-    case channelAnnounce = 0x08  // Announce password-protected channel status
     case deliveryAck = 0x0A  // Acknowledge message received
     case deliveryStatusRequest = 0x0B  // Request delivery status update
     case readReceipt = 0x0C  // Message has been read/viewed
@@ -92,14 +91,16 @@ enum MessageType: UInt8 {
     case noiseHandshakeResp = 0x11  // Noise handshake response
     case noiseEncrypted = 0x12      // Noise encrypted transport message
     case noiseIdentityAnnounce = 0x13  // Announce static public key for discovery
-    case channelKeyVerifyRequest = 0x14  // Request key verification for a channel
-    case channelKeyVerifyResponse = 0x15 // Response to key verification request
-    case channelPasswordUpdate = 0x16    // Distribute new password to channel members
-    case channelMetadata = 0x17         // Announce channel creator and metadata
     
     // Protocol version negotiation
     case versionHello = 0x20            // Initial version announcement
     case versionAck = 0x21              // Version acknowledgment
+    
+    // Protocol-level acknowledgments
+    case protocolAck = 0x22             // Generic protocol acknowledgment
+    case protocolNack = 0x23            // Negative acknowledgment (failure)
+    case systemValidation = 0x24        // Session validation ping
+    case handshakeRequest = 0x25        // Request handshake for pending messages
     
     var description: String {
         switch self {
@@ -109,7 +110,6 @@ enum MessageType: UInt8 {
         case .fragmentStart: return "fragmentStart"
         case .fragmentContinue: return "fragmentContinue"
         case .fragmentEnd: return "fragmentEnd"
-        case .channelAnnounce: return "channelAnnounce"
         case .deliveryAck: return "deliveryAck"
         case .deliveryStatusRequest: return "deliveryStatusRequest"
         case .readReceipt: return "readReceipt"
@@ -117,14 +117,23 @@ enum MessageType: UInt8 {
         case .noiseHandshakeResp: return "noiseHandshakeResp"
         case .noiseEncrypted: return "noiseEncrypted"
         case .noiseIdentityAnnounce: return "noiseIdentityAnnounce"
-        case .channelKeyVerifyRequest: return "channelKeyVerifyRequest"
-        case .channelKeyVerifyResponse: return "channelKeyVerifyResponse"
-        case .channelPasswordUpdate: return "channelPasswordUpdate"
-        case .channelMetadata: return "channelMetadata"
         case .versionHello: return "versionHello"
         case .versionAck: return "versionAck"
+        case .protocolAck: return "protocolAck"
+        case .protocolNack: return "protocolNack"
+        case .systemValidation: return "systemValidation"
+        case .handshakeRequest: return "handshakeRequest"
         }
     }
+}
+
+// Lazy handshake state tracking
+enum LazyHandshakeState {
+    case none                    // No session, no handshake attempted
+    case handshakeQueued        // User action requires handshake
+    case handshaking           // Currently in handshake process
+    case established           // Session ready for use
+    case failed(Error)         // Handshake failed
 }
 
 // Special recipient ID for broadcast messages
@@ -362,41 +371,40 @@ struct ReadReceipt: Codable {
     }
 }
 
-// Channel key verification request
-struct ChannelKeyVerifyRequest: Codable {
-    let channel: String
-    let requesterID: String
-    let keyCommitment: String  // SHA256 hash of the key they have
+// Handshake request for pending messages
+struct HandshakeRequest: Codable {
+    let requestID: String
+    let requesterID: String           // Who needs the handshake
+    let requesterNickname: String     // Nickname of requester
+    let targetID: String              // Who should initiate handshake
+    let pendingMessageCount: UInt8    // Number of messages queued
     let timestamp: Date
     
-    init(channel: String, requesterID: String, keyCommitment: String) {
-        self.channel = channel
+    init(requesterID: String, requesterNickname: String, targetID: String, pendingMessageCount: UInt8) {
+        self.requestID = UUID().uuidString
         self.requesterID = requesterID
-        self.keyCommitment = keyCommitment
+        self.requesterNickname = requesterNickname
+        self.targetID = targetID
+        self.pendingMessageCount = pendingMessageCount
         self.timestamp = Date()
     }
     
     // For binary decoding
-    private init(channel: String, requesterID: String, keyCommitment: String, timestamp: Date) {
-        self.channel = channel
+    private init(requestID: String, requesterID: String, requesterNickname: String, targetID: String, pendingMessageCount: UInt8, timestamp: Date) {
+        self.requestID = requestID
         self.requesterID = requesterID
-        self.keyCommitment = keyCommitment
+        self.requesterNickname = requesterNickname
+        self.targetID = targetID
+        self.pendingMessageCount = pendingMessageCount
         self.timestamp = timestamp
-    }
-    
-    func encode() -> Data? {
-        return try? JSONEncoder().encode(self)
-    }
-    
-    static func decode(from data: Data) -> ChannelKeyVerifyRequest? {
-        try? JSONDecoder().decode(ChannelKeyVerifyRequest.self, from: data)
     }
     
     // MARK: - Binary Encoding
     
     func toBinaryData() -> Data {
         var data = Data()
-        data.appendString(channel)
+        data.appendUUID(requestID)
+        
         // RequesterID as 8-byte hex string
         var requesterData = Data()
         var tempID = requesterID
@@ -411,299 +419,222 @@ struct ChannelKeyVerifyRequest: Codable {
             requesterData.append(0)
         }
         data.append(requesterData)
-        data.appendString(keyCommitment)
+        
+        // TargetID as 8-byte hex string
+        var targetData = Data()
+        tempID = targetID
+        while tempID.count >= 2 && targetData.count < 8 {
+            let hexByte = String(tempID.prefix(2))
+            if let byte = UInt8(hexByte, radix: 16) {
+                targetData.append(byte)
+            }
+            tempID = String(tempID.dropFirst(2))
+        }
+        while targetData.count < 8 {
+            targetData.append(0)
+        }
+        data.append(targetData)
+        
+        data.appendUInt8(pendingMessageCount)
         data.appendDate(timestamp)
+        data.appendString(requesterNickname)
         return data
     }
     
-    static func fromBinaryData(_ data: Data) -> ChannelKeyVerifyRequest? {
+    static func fromBinaryData(_ data: Data) -> HandshakeRequest? {
         // Create defensive copy
         let dataCopy = Data(data)
         
+        // Minimum size: UUID (16) + requesterID (8) + targetID (8) + count (1) + timestamp (8) + min nickname
+        guard dataCopy.count >= 42 else { return nil }
+        
         var offset = 0
         
-        guard let channel = dataCopy.readString(at: &offset) else { return nil }
+        guard let requestID = dataCopy.readUUID(at: &offset) else { return nil }
         
         guard let requesterIDData = dataCopy.readFixedBytes(at: &offset, count: 8) else { return nil }
         let requesterID = requesterIDData.hexEncodedString()
         
-        guard let keyCommitment = dataCopy.readString(at: &offset),
-              let timestamp = dataCopy.readDate(at: &offset) else { return nil }
+        guard let targetIDData = dataCopy.readFixedBytes(at: &offset, count: 8) else { return nil }
+        let targetID = targetIDData.hexEncodedString()
         
-        return ChannelKeyVerifyRequest(channel: channel,
-                                       requesterID: requesterID,
-                                       keyCommitment: keyCommitment,
-                                       timestamp: timestamp)
+        guard let pendingMessageCount = dataCopy.readUInt8(at: &offset),
+              let timestamp = dataCopy.readDate(at: &offset),
+              let requesterNickname = dataCopy.readString(at: &offset) else { return nil }
+        
+        return HandshakeRequest(requestID: requestID,
+                               requesterID: requesterID,
+                               requesterNickname: requesterNickname,
+                               targetID: targetID,
+                               pendingMessageCount: pendingMessageCount,
+                               timestamp: timestamp)
     }
 }
 
-// Channel key verification response
-struct ChannelKeyVerifyResponse: Codable {
-    let channel: String
-    let responderID: String
-    let verified: Bool  // Whether the key commitment matches
-    let timestamp: Date
+// MARK: - Protocol Acknowledgments
+
+// Protocol-level acknowledgment for reliable delivery
+struct ProtocolAck: Codable {
+    let originalPacketID: String    // ID of the packet being acknowledged
+    let ackID: String              // Unique ID for this ACK
+    let senderID: String           // Who sent the original packet
+    let receiverID: String         // Who received and is acknowledging
+    let packetType: UInt8          // Type of packet being acknowledged
+    let timestamp: Date            // When ACK was generated
+    let hopCount: UInt8            // Hops taken to reach receiver
     
-    init(channel: String, responderID: String, verified: Bool) {
-        self.channel = channel
-        self.responderID = responderID
-        self.verified = verified
+    init(originalPacketID: String, senderID: String, receiverID: String, packetType: UInt8, hopCount: UInt8) {
+        self.originalPacketID = originalPacketID
+        self.ackID = UUID().uuidString
+        self.senderID = senderID
+        self.receiverID = receiverID
+        self.packetType = packetType
         self.timestamp = Date()
+        self.hopCount = hopCount
     }
     
-    // For binary decoding
-    private init(channel: String, responderID: String, verified: Bool, timestamp: Date) {
-        self.channel = channel
-        self.responderID = responderID
-        self.verified = verified
+    // Private init for binary decoding
+    private init(originalPacketID: String, ackID: String, senderID: String, receiverID: String, 
+                 packetType: UInt8, timestamp: Date, hopCount: UInt8) {
+        self.originalPacketID = originalPacketID
+        self.ackID = ackID
+        self.senderID = senderID
+        self.receiverID = receiverID
+        self.packetType = packetType
         self.timestamp = timestamp
+        self.hopCount = hopCount
     }
-    
-    func encode() -> Data? {
-        return try? JSONEncoder().encode(self)
-    }
-    
-    static func decode(from data: Data) -> ChannelKeyVerifyResponse? {
-        try? JSONDecoder().decode(ChannelKeyVerifyResponse.self, from: data)
-    }
-    
-    // MARK: - Binary Encoding
     
     func toBinaryData() -> Data {
         var data = Data()
-        data.appendString(channel)
-        // ResponderID as 8-byte hex string
-        var responderData = Data()
-        var tempID = responderID
-        while tempID.count >= 2 && responderData.count < 8 {
-            let hexByte = String(tempID.prefix(2))
-            if let byte = UInt8(hexByte, radix: 16) {
-                responderData.append(byte)
-            }
-            tempID = String(tempID.dropFirst(2))
-        }
-        while responderData.count < 8 {
-            responderData.append(0)
-        }
-        data.append(responderData)
-        data.appendUInt8(verified ? 1 : 0)
+        data.appendUUID(originalPacketID)
+        data.appendUUID(ackID)
+        
+        // Sender and receiver IDs as 8-byte hex strings
+        data.append(Data(hexString: senderID) ?? Data(repeating: 0, count: 8))
+        data.append(Data(hexString: receiverID) ?? Data(repeating: 0, count: 8))
+        
+        data.appendUInt8(packetType)
+        data.appendUInt8(hopCount)
         data.appendDate(timestamp)
         return data
     }
     
-    static func fromBinaryData(_ data: Data) -> ChannelKeyVerifyResponse? {
-        // Create defensive copy
+    static func fromBinaryData(_ data: Data) -> ProtocolAck? {
         let dataCopy = Data(data)
+        guard dataCopy.count >= 50 else { return nil } // 2 UUIDs + 2 IDs + type + hop + timestamp
         
         var offset = 0
-        
-        guard let channel = dataCopy.readString(at: &offset) else { return nil }
-        
-        guard let responderIDData = dataCopy.readFixedBytes(at: &offset, count: 8) else { return nil }
-        let responderID = responderIDData.hexEncodedString()
-        
-        guard let verifiedByte = dataCopy.readUInt8(at: &offset),
+        guard let originalPacketID = dataCopy.readUUID(at: &offset),
+              let ackID = dataCopy.readUUID(at: &offset),
+              let senderIDData = dataCopy.readFixedBytes(at: &offset, count: 8),
+              let receiverIDData = dataCopy.readFixedBytes(at: &offset, count: 8),
+              let packetType = dataCopy.readUInt8(at: &offset),
+              let hopCount = dataCopy.readUInt8(at: &offset),
               let timestamp = dataCopy.readDate(at: &offset) else { return nil }
         
-        let verified = verifiedByte != 0
+        let senderID = senderIDData.hexEncodedString()
+        let receiverID = receiverIDData.hexEncodedString()
         
-        return ChannelKeyVerifyResponse(channel: channel,
-                                        responderID: responderID,
-                                        verified: verified,
-                                        timestamp: timestamp)
+        return ProtocolAck(originalPacketID: originalPacketID,
+                          ackID: ackID,
+                          senderID: senderID,
+                          receiverID: receiverID,
+                          packetType: packetType,
+                          timestamp: timestamp,
+                          hopCount: hopCount)
     }
 }
 
-// Channel password update (sent by owner to members)
-struct ChannelPasswordUpdate: Codable {
-    let channel: String
-    let ownerID: String  // Deprecated, kept for backward compatibility
-    let ownerFingerprint: String  // Noise protocol fingerprint of owner
-    let encryptedPassword: Data  // New password encrypted with recipient's Noise session
-    let newKeyCommitment: String  // SHA256 of new key for verification
-    let timestamp: Date
+// Protocol-level negative acknowledgment
+struct ProtocolNack: Codable {
+    let originalPacketID: String    // ID of the packet that failed
+    let nackID: String             // Unique ID for this NACK
+    let senderID: String           // Who sent the original packet
+    let receiverID: String         // Who is reporting the failure
+    let packetType: UInt8          // Type of packet that failed
+    let timestamp: Date            // When NACK was generated
+    let reason: String             // Reason for failure
+    let errorCode: UInt8           // Numeric error code
     
-    init(channel: String, ownerID: String, ownerFingerprint: String, encryptedPassword: Data, newKeyCommitment: String) {
-        self.channel = channel
-        self.ownerID = ownerID
-        self.ownerFingerprint = ownerFingerprint
-        self.encryptedPassword = encryptedPassword
-        self.newKeyCommitment = newKeyCommitment
+    // Error codes
+    enum ErrorCode: UInt8 {
+        case unknown = 0
+        case checksumFailed = 1
+        case decryptionFailed = 2
+        case malformedPacket = 3
+        case unsupportedVersion = 4
+        case resourceExhausted = 5
+        case routingFailed = 6
+        case sessionExpired = 7
+    }
+    
+    init(originalPacketID: String, senderID: String, receiverID: String, 
+         packetType: UInt8, reason: String, errorCode: ErrorCode = .unknown) {
+        self.originalPacketID = originalPacketID
+        self.nackID = UUID().uuidString
+        self.senderID = senderID
+        self.receiverID = receiverID
+        self.packetType = packetType
         self.timestamp = Date()
+        self.reason = reason
+        self.errorCode = errorCode.rawValue
     }
     
-    // For binary decoding
-    private init(channel: String, ownerID: String, ownerFingerprint: String, encryptedPassword: Data, newKeyCommitment: String, timestamp: Date) {
-        self.channel = channel
-        self.ownerID = ownerID
-        self.ownerFingerprint = ownerFingerprint
-        self.encryptedPassword = encryptedPassword
-        self.newKeyCommitment = newKeyCommitment
+    // Private init for binary decoding
+    private init(originalPacketID: String, nackID: String, senderID: String, receiverID: String,
+                 packetType: UInt8, timestamp: Date, reason: String, errorCode: UInt8) {
+        self.originalPacketID = originalPacketID
+        self.nackID = nackID
+        self.senderID = senderID
+        self.receiverID = receiverID
+        self.packetType = packetType
         self.timestamp = timestamp
+        self.reason = reason
+        self.errorCode = errorCode
     }
-    
-    func encode() -> Data? {
-        return try? JSONEncoder().encode(self)
-    }
-    
-    static func decode(from data: Data) -> ChannelPasswordUpdate? {
-        try? JSONDecoder().decode(ChannelPasswordUpdate.self, from: data)
-    }
-    
-    // MARK: - Binary Encoding
     
     func toBinaryData() -> Data {
         var data = Data()
-        data.appendString(channel)
-        // OwnerID as 8-byte hex string
-        var ownerData = Data()
-        var tempID = ownerID
-        while tempID.count >= 2 && ownerData.count < 8 {
-            let hexByte = String(tempID.prefix(2))
-            if let byte = UInt8(hexByte, radix: 16) {
-                ownerData.append(byte)
-            }
-            tempID = String(tempID.dropFirst(2))
-        }
-        while ownerData.count < 8 {
-            ownerData.append(0)
-        }
-        data.append(ownerData)
-        data.appendString(ownerFingerprint)
-        data.appendData(encryptedPassword)
-        data.appendString(newKeyCommitment)
+        data.appendUUID(originalPacketID)
+        data.appendUUID(nackID)
+        
+        // Sender and receiver IDs as 8-byte hex strings
+        data.append(Data(hexString: senderID) ?? Data(repeating: 0, count: 8))
+        data.append(Data(hexString: receiverID) ?? Data(repeating: 0, count: 8))
+        
+        data.appendUInt8(packetType)
+        data.appendUInt8(errorCode)
         data.appendDate(timestamp)
+        data.appendString(reason)
         return data
     }
     
-    static func fromBinaryData(_ data: Data) -> ChannelPasswordUpdate? {
-        // Create defensive copy
+    static func fromBinaryData(_ data: Data) -> ProtocolNack? {
         let dataCopy = Data(data)
+        guard dataCopy.count >= 52 else { return nil } // Minimum size
         
         var offset = 0
+        guard let originalPacketID = dataCopy.readUUID(at: &offset),
+              let nackID = dataCopy.readUUID(at: &offset),
+              let senderIDData = dataCopy.readFixedBytes(at: &offset, count: 8),
+              let receiverIDData = dataCopy.readFixedBytes(at: &offset, count: 8),
+              let packetType = dataCopy.readUInt8(at: &offset),
+              let errorCode = dataCopy.readUInt8(at: &offset),
+              let timestamp = dataCopy.readDate(at: &offset),
+              let reason = dataCopy.readString(at: &offset) else { return nil }
         
-        guard let channel = dataCopy.readString(at: &offset) else { return nil }
+        let senderID = senderIDData.hexEncodedString()
+        let receiverID = receiverIDData.hexEncodedString()
         
-        guard let ownerIDData = dataCopy.readFixedBytes(at: &offset, count: 8) else { return nil }
-        let ownerID = ownerIDData.hexEncodedString()
-        
-        guard let ownerFingerprint = dataCopy.readString(at: &offset),
-              let encryptedPassword = dataCopy.readData(at: &offset),
-              let newKeyCommitment = dataCopy.readString(at: &offset),
-              let timestamp = dataCopy.readDate(at: &offset) else { return nil }
-        
-        return ChannelPasswordUpdate(channel: channel,
-                                     ownerID: ownerID,
-                                     ownerFingerprint: ownerFingerprint,
-                                     encryptedPassword: encryptedPassword,
-                                     newKeyCommitment: newKeyCommitment,
-                                     timestamp: timestamp)
-    }
-}
-
-// Channel metadata announcement
-struct ChannelMetadata: Codable {
-    let channel: String
-    let creatorID: String
-    let creatorFingerprint: String  // Noise protocol fingerprint
-    let createdAt: Date
-    let isPasswordProtected: Bool
-    let keyCommitment: String?  // SHA256 of channel key if password-protected
-    
-    init(channel: String, creatorID: String, creatorFingerprint: String, isPasswordProtected: Bool, keyCommitment: String?) {
-        self.channel = channel
-        self.creatorID = creatorID
-        self.creatorFingerprint = creatorFingerprint
-        self.createdAt = Date()
-        self.isPasswordProtected = isPasswordProtected
-        self.keyCommitment = keyCommitment
-    }
-    
-    // For binary decoding
-    private init(channel: String, creatorID: String, creatorFingerprint: String, createdAt: Date, isPasswordProtected: Bool, keyCommitment: String?) {
-        self.channel = channel
-        self.creatorID = creatorID
-        self.creatorFingerprint = creatorFingerprint
-        self.createdAt = createdAt
-        self.isPasswordProtected = isPasswordProtected
-        self.keyCommitment = keyCommitment
-    }
-    
-    func encode() -> Data? {
-        return try? JSONEncoder().encode(self)
-    }
-    
-    static func decode(from data: Data) -> ChannelMetadata? {
-        try? JSONDecoder().decode(ChannelMetadata.self, from: data)
-    }
-    
-    // MARK: - Binary Encoding
-    
-    func toBinaryData() -> Data {
-        var data = Data()
-        
-        // Flags byte: bit 0 = hasKeyCommitment
-        var flags: UInt8 = 0
-        if keyCommitment != nil { flags |= 0x01 }
-        data.appendUInt8(flags)
-        
-        data.appendString(channel)
-        // CreatorID as 8-byte hex string
-        var creatorData = Data()
-        var tempID = creatorID
-        while tempID.count >= 2 && creatorData.count < 8 {
-            let hexByte = String(tempID.prefix(2))
-            if let byte = UInt8(hexByte, radix: 16) {
-                creatorData.append(byte)
-            }
-            tempID = String(tempID.dropFirst(2))
-        }
-        while creatorData.count < 8 {
-            creatorData.append(0)
-        }
-        data.append(creatorData)
-        data.appendString(creatorFingerprint)
-        data.appendDate(createdAt)
-        data.appendUInt8(isPasswordProtected ? 1 : 0)
-        
-        if let keyCommitment = keyCommitment {
-            data.appendString(keyCommitment)
-        }
-        
-        return data
-    }
-    
-    static func fromBinaryData(_ data: Data) -> ChannelMetadata? {
-        // Create defensive copy
-        let dataCopy = Data(data)
-        
-        var offset = 0
-        
-        guard let flags = dataCopy.readUInt8(at: &offset) else { return nil }
-        let hasKeyCommitment = (flags & 0x01) != 0
-        
-        guard let channel = dataCopy.readString(at: &offset) else { return nil }
-        
-        guard let creatorIDData = dataCopy.readFixedBytes(at: &offset, count: 8) else { return nil }
-        let creatorID = creatorIDData.hexEncodedString()
-        
-        guard let creatorFingerprint = dataCopy.readString(at: &offset),
-              let createdAt = dataCopy.readDate(at: &offset),
-              let isPasswordProtectedByte = dataCopy.readUInt8(at: &offset) else { return nil }
-        
-        let isPasswordProtected = isPasswordProtectedByte != 0
-        
-        var keyCommitment: String? = nil
-        if hasKeyCommitment {
-            keyCommitment = dataCopy.readString(at: &offset)
-        }
-        
-        return ChannelMetadata(channel: channel,
-                              creatorID: creatorID,
-                              creatorFingerprint: creatorFingerprint,
-                              createdAt: createdAt,
-                              isPasswordProtected: isPasswordProtected,
-                              keyCommitment: keyCommitment)
+        return ProtocolNack(originalPacketID: originalPacketID,
+                           nackID: nackID,
+                           senderID: senderID,
+                           receiverID: receiverID,
+                           packetType: packetType,
+                           timestamp: timestamp,
+                           reason: reason,
+                           errorCode: errorCode)
     }
 }
 
@@ -1109,7 +1040,7 @@ enum DeliveryStatus: Codable, Equatable {
     }
 }
 
-struct BitchatMessage: Codable, Equatable {
+class BitchatMessage: Codable {
     let id: String
     let sender: String
     let content: String
@@ -1120,12 +1051,26 @@ struct BitchatMessage: Codable, Equatable {
     let recipientNickname: String?
     let senderPeerID: String?
     let mentions: [String]?  // Array of mentioned nicknames
-    let channel: String?  // Channel hashtag (e.g., "#general")
-    let encryptedContent: Data?  // For password-protected rooms
-    let isEncrypted: Bool  // Flag to indicate if content is encrypted
     var deliveryStatus: DeliveryStatus? // Delivery tracking
     
-    init(id: String? = nil, sender: String, content: String, timestamp: Date, isRelay: Bool, originalSender: String? = nil, isPrivate: Bool = false, recipientNickname: String? = nil, senderPeerID: String? = nil, mentions: [String]? = nil, channel: String? = nil, encryptedContent: Data? = nil, isEncrypted: Bool = false, deliveryStatus: DeliveryStatus? = nil) {
+    // Cached formatted text (not included in Codable)
+    private var _cachedFormattedText: [String: AttributedString] = [:]
+    
+    func getCachedFormattedText(isDark: Bool) -> AttributedString? {
+        return _cachedFormattedText["\(isDark)"]
+    }
+    
+    func setCachedFormattedText(_ text: AttributedString, isDark: Bool) {
+        _cachedFormattedText["\(isDark)"] = text
+    }
+    
+    // Codable implementation
+    enum CodingKeys: String, CodingKey {
+        case id, sender, content, timestamp, isRelay, originalSender
+        case isPrivate, recipientNickname, senderPeerID, mentions, deliveryStatus
+    }
+    
+    init(id: String? = nil, sender: String, content: String, timestamp: Date, isRelay: Bool, originalSender: String? = nil, isPrivate: Bool = false, recipientNickname: String? = nil, senderPeerID: String? = nil, mentions: [String]? = nil, deliveryStatus: DeliveryStatus? = nil) {
         self.id = id ?? UUID().uuidString
         self.sender = sender
         self.content = content
@@ -1136,10 +1081,24 @@ struct BitchatMessage: Codable, Equatable {
         self.recipientNickname = recipientNickname
         self.senderPeerID = senderPeerID
         self.mentions = mentions
-        self.channel = channel
-        self.encryptedContent = encryptedContent
-        self.isEncrypted = isEncrypted
         self.deliveryStatus = deliveryStatus ?? (isPrivate ? .sending : nil)
+    }
+}
+
+// Equatable conformance for BitchatMessage
+extension BitchatMessage: Equatable {
+    static func == (lhs: BitchatMessage, rhs: BitchatMessage) -> Bool {
+        return lhs.id == rhs.id &&
+               lhs.sender == rhs.sender &&
+               lhs.content == rhs.content &&
+               lhs.timestamp == rhs.timestamp &&
+               lhs.isRelay == rhs.isRelay &&
+               lhs.originalSender == rhs.originalSender &&
+               lhs.isPrivate == rhs.isPrivate &&
+               lhs.recipientNickname == rhs.recipientNickname &&
+               lhs.senderPeerID == rhs.senderPeerID &&
+               lhs.mentions == rhs.mentions &&
+               lhs.deliveryStatus == rhs.deliveryStatus
     }
 }
 
@@ -1148,10 +1107,6 @@ protocol BitchatDelegate: AnyObject {
     func didConnectToPeer(_ peerID: String)
     func didDisconnectFromPeer(_ peerID: String)
     func didUpdatePeerList(_ peers: [String])
-    func didReceiveChannelLeave(_ channel: String, from peerID: String)
-    func didReceivePasswordProtectedChannelAnnouncement(_ channel: String, isProtected: Bool, creatorID: String?, keyCommitment: String?)
-    func didReceiveChannelRetentionAnnouncement(_ channel: String, enabled: Bool, creatorID: String?)
-    func decryptChannelMessage(_ encryptedContent: Data, channel: String) -> String?
     
     // Optional method to check if a fingerprint belongs to a favorite peer
     func isFavorite(fingerprint: String) -> Bool
@@ -1161,36 +1116,14 @@ protocol BitchatDelegate: AnyObject {
     func didReceiveReadReceipt(_ receipt: ReadReceipt)
     func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus)
     
-    // Channel key verification methods
-    func didReceiveChannelKeyVerifyRequest(_ request: ChannelKeyVerifyRequest, from peerID: String)
-    func didReceiveChannelKeyVerifyResponse(_ response: ChannelKeyVerifyResponse, from peerID: String)
-    func didReceiveChannelPasswordUpdate(_ update: ChannelPasswordUpdate, from peerID: String)
-    
-    // Channel metadata methods
-    func didReceiveChannelMetadata(_ metadata: ChannelMetadata, from peerID: String)
+    // Peer availability tracking
+    func peerAvailabilityChanged(_ peerID: String, available: Bool)
 }
 
 // Provide default implementation to make it effectively optional
 extension BitchatDelegate {
     func isFavorite(fingerprint: String) -> Bool {
         return false
-    }
-    
-    func didReceiveChannelLeave(_ channel: String, from peerID: String) {
-        // Default empty implementation
-    }
-    
-    func didReceivePasswordProtectedChannelAnnouncement(_ channel: String, isProtected: Bool, creatorID: String?, keyCommitment: String?) {
-        // Default empty implementation
-    }
-    
-    func didReceiveChannelRetentionAnnouncement(_ channel: String, enabled: Bool, creatorID: String?) {
-        // Default empty implementation
-    }
-    
-    func decryptChannelMessage(_ encryptedContent: Data, channel: String) -> String? {
-        // Default returns nil (unable to decrypt)
-        return nil
     }
     
     func didReceiveDeliveryAck(_ ack: DeliveryAck) {
@@ -1205,19 +1138,7 @@ extension BitchatDelegate {
         // Default empty implementation
     }
     
-    func didReceiveChannelKeyVerifyRequest(_ request: ChannelKeyVerifyRequest, from peerID: String) {
-        // Default empty implementation
-    }
-    
-    func didReceiveChannelKeyVerifyResponse(_ response: ChannelKeyVerifyResponse, from peerID: String) {
-        // Default empty implementation
-    }
-    
-    func didReceiveChannelPasswordUpdate(_ update: ChannelPasswordUpdate, from peerID: String) {
-        // Default empty implementation
-    }
-    
-    func didReceiveChannelMetadata(_ metadata: ChannelMetadata, from peerID: String) {
+    func peerAvailabilityChanged(_ peerID: String, available: Bool) {
         // Default empty implementation
     }
 }

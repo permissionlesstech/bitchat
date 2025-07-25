@@ -18,24 +18,22 @@ struct AppInfoView: View {
     
     // MARK: - Constants
     private enum Strings {
-        static let appName = "bitchat/"
+        static let appName = "bitchat"
         static let tagline = "mesh sidegroupchat"
         
         enum Features {
             static let title = "FEATURES"
-            static let offlineComm = ("wifi.slash", "offline communication", "works without internet using Bluetooth mesh networking")
+            static let offlineComm = ("wifi.slash", "offline communication", "works without internet using Bluetooth low energy")
             static let encryption = ("lock.shield", "end-to-end encryption", "private messages encrypted with noise protocol")
-            static let extendedRange = ("antenna.radiowaves.left.and.right", "extended range", "messages relay through peers, increasing the distance")
-            static let favorites = ("star.fill", "favorites", "store-and-forward messages for favorite people")
+            static let extendedRange = ("antenna.radiowaves.left.and.right", "extended range", "messages relay through peers, going the distance")
+            static let favorites = ("star.fill", "favorites", "get notified when your favorite people join")
             static let mentions = ("at", "mentions", "use @nickname to notify specific people")
-            static let channels = ("number", "channels", "create #channels for topic-based conversations")
-            static let privateChannels = ("lock.fill", "private channels", "secure channels with passwords and noise encryption")
         }
         
         enum Privacy {
             static let title = "PRIVACY"
             static let noTracking = ("eye.slash", "no tracking", "no servers, accounts, or data collection")
-            static let ephemeral = ("shuffle", "ephemeral identity", "new peer ID generated each session")
+            static let ephemeral = ("shuffle", "ephemeral identity", "new peer ID generated regularly")
             static let panic = ("hand.raised.fill", "panic mode", "triple-tap logo to instantly clear all data")
         }
         
@@ -46,26 +44,13 @@ struct AppInfoView: View {
                 "• swipe left for sidebar",
                 "• tap a peer to start a private chat",
                 "• use @nickname to mention someone",
-                "• use #channelname to create/join channels",
-                "• triple-tap \"bitchat\" for panic mode",
-                "• triple-tap chat messages to clear current chat"
+                "• triple-tap chat to clear"
             ]
         }
         
-        enum Commands {
-            static let title = "COMMANDS"
-            static let list = [
-                "/j #channel - join or create a channel",
-                "/m @name - send private message",
-                "/w - see who's online",
-                "/channels - show all discovered channels",
-                "/block @name - block a peer",
-                "/block - list blocked peers",
-                "/unblock @name - unblock a peer",
-                "/clear - clear current chat",
-                "/hug @name - send someone a hug",
-                "/slap @name - slap with a trout"
-            ]
+        enum Warning {
+            static let title = "WARNING"
+            static let message = "private message security has not yet been fully audited. do not use for critical situations until this warning disappears."
         }
     }
     
@@ -154,14 +139,6 @@ struct AppInfoView: View {
                 FeatureRow(icon: Strings.Features.mentions.0,
                           title: Strings.Features.mentions.1,
                           description: Strings.Features.mentions.2)
-                
-                FeatureRow(icon: Strings.Features.channels.0,
-                          title: Strings.Features.channels.1,
-                          description: Strings.Features.channels.2)
-                
-                FeatureRow(icon: Strings.Features.privateChannels.0,
-                          title: Strings.Features.privateChannels.1,
-                          description: Strings.Features.privateChannels.2)
             }
             
             // Privacy
@@ -194,18 +171,21 @@ struct AppInfoView: View {
                 .foregroundColor(textColor)
             }
             
-            // Commands
-            VStack(alignment: .leading, spacing: 16) {
-                SectionHeader(Strings.Commands.title)
+            // Warning
+            VStack(alignment: .leading, spacing: 6) {
+                SectionHeader(Strings.Warning.title)
+                    .foregroundColor(Color.red)
                 
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(Strings.Commands.list, id: \.self) { command in
-                        Text(command)
-                    }
-                }
-                .font(.system(size: 14, design: .monospaced))
-                .foregroundColor(textColor)
+                Text(Strings.Warning.message)
+                    .font(.system(size: 14, design: .monospaced))
+                    .foregroundColor(Color.red)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            .padding(.top, 6)
+            .padding(.bottom, 16)
+            .padding(.horizontal)
+            .background(Color.red.opacity(0.1))
+            .cornerRadius(8)
             
             .padding(.top)
         }

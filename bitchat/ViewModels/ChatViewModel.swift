@@ -15,24 +15,17 @@ import CommonCrypto
 import UIKit
 #endif
 
-enum ChannelVerificationStatus {
-    case unverified
-    case verifying
-    case verified
-    case failed
-}
-
 class ChatViewModel: ObservableObject {
     @Published var messages: [BitchatMessage] = []
+    private let maxMessages = 1337 // Maximum messages before oldest are removed
     @Published var connectedPeers: [String] = []
-    @Published var nickname: String = "" {
-        didSet {
-            nicknameSaveTimer?.invalidate()
-            nicknameSaveTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
-                self.saveNickname()
-            }
-        }
-    }
+    
+    // Message batching for performance
+    private var pendingMessages: [BitchatMessage] = []
+    private var pendingPrivateMessages: [String: [BitchatMessage]] = [:] // peerID -> messages
+    private var messageBatchTimer: Timer?
+    private let messageBatchInterval: TimeInterval = 0.1 // 100ms batching window
+    @Published var nickname: String = ""
     @Published var isConnected = false
     @Published var privateChats: [String: [BitchatMessage]] = [:] // peerID -> messages
     @Published var selectedPrivateChatPeer: String? = nil
@@ -43,31 +36,21 @@ class ChatViewModel: ObservableObject {
     @Published var autocompleteRange: NSRange? = nil
     @Published var selectedAutocompleteIndex: Int = 0
     
-    // Channel support
-    @Published var joinedChannels: Set<String> = []  // Set of channel hashtags
-    @Published var currentChannel: String? = nil  // Currently selected channel
-    @Published var channelMessages: [String: [BitchatMessage]] = [:]  // channel -> messages
-    @Published var unreadChannelMessages: [String: Int] = [:]  // channel -> unread count
-    @Published var channelMembers: [String: Set<String>] = [:]  // channel -> set of peer IDs who have sent messages
-    @Published var channelPasswords: [String: String] = [:]  // channel -> password (stored locally only)
-    @Published var channelKeys: [String: SymmetricKey] = [:]  // channel -> derived encryption key
-    @Published var passwordProtectedChannels: Set<String> = []  // Set of channels that require passwords
-    @Published var channelCreators: [String: String] = [:]  // channel -> creator peerID
-    @Published var channelKeyCommitments: [String: String] = [:]  // channel -> SHA256(derivedKey) for verification
-    @Published var channelMetadata: [String: ChannelMetadata] = [:]  // channel -> metadata from creator
-    @Published var showPasswordPrompt: Bool = false
-    @Published var passwordPromptChannel: String? = nil
-    @Published var channelVerificationStatus: [String: ChannelVerificationStatus] = [:]  // Track verification status
+    // Autocomplete optimization
+    private let mentionRegex = try? NSRegularExpression(pattern: "@([a-zA-Z0-9_]*)$", options: [])
+    private var cachedNicknames: [String] = []
+    private var lastNicknameUpdate: Date = .distantPast
+    
+    // Temporary property to fix compilation
+    @Published var showPasswordPrompt = false
     
     var meshService = BluetoothMeshService()
     private let userDefaults = UserDefaults.standard
     private let nicknameKey = "bitchat.nickname"
-    private let joinedChannelsKey = "bitchat.joinedChannels"
-    private let passwordProtectedChannelsKey = "bitchat.passwordProtectedChannels"
-    private let channelCreatorsKey = "bitchat.channelCreators"
-    // private let channelPasswordsKey = "bitchat.channelPasswords" // Now using Keychain
-    private let channelKeyCommitmentsKey = "bitchat.channelKeyCommitments"
-    private var nicknameSaveTimer: Timer?
+    
+    // Caches for expensive computations
+    private var rssiColorCache: [String: Color] = [:] // key: "\(rssi)_\(isDark)"
+    private var encryptionStatusCache: [String: EncryptionStatus] = [:] // key: peerID
     
     @Published var favoritePeers: Set<String> = []  // Now stores public key fingerprints instead of peer IDs
     private var peerIDToPublicKeyFingerprint: [String: String] = [:]  // Maps ephemeral peer IDs to persistent fingerprints
@@ -89,8 +72,6 @@ class ChatViewModel: ObservableObject {
     init() {
         loadNickname()
         loadFavorites()
-        loadJoinedChannels()
-        loadChannelData()
         loadBlockedUsers()
         loadVerifiedFingerprints()
         meshService.delegate = self
@@ -122,6 +103,14 @@ class ChatViewModel: ObservableObject {
             .sink { [weak self] (messageID, status) in
                 self?.updateMessageDeliveryStatus(messageID, status: status)
             }
+        
+        // Listen for retry notifications
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleRetryMessage),
+            name: Notification.Name("bitchat.retryMessage"),
+            object: nil
+        )
                 
         // When app becomes active, send read receipts for visible messages
         #if os(macOS)
@@ -178,8 +167,9 @@ class ChatViewModel: ObservableObject {
     }
     
     deinit {
-        // Ensure channel ownership data is saved
-        saveChannelData()
+        // Clean up timer
+        messageBatchTimer?.invalidate()
+        
         // Force immediate save
         userDefaults.synchronize()
     }
@@ -199,6 +189,14 @@ class ChatViewModel: ObservableObject {
         
         // Send announce with new nickname to all peers
         meshService.sendBroadcastAnnounce()
+    }
+    
+    func validateAndSaveNickname() {
+        // Check if nickname is empty or just whitespace
+        if nickname.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            nickname = "anon\(Int.random(in: 1000...9999))"
+        }
+        saveNickname()
     }
     
     private func loadFavorites() {
@@ -222,871 +220,6 @@ class ChatViewModel: ObservableObject {
         // This method is kept for compatibility
     }
     
-    private func loadJoinedChannels() {
-        if let savedChannelsList = userDefaults.stringArray(forKey: joinedChannelsKey) {
-            joinedChannels = Set(savedChannelsList)
-            // Initialize empty data structures for joined channels
-            for channel in joinedChannels {
-                if channelMessages[channel] == nil {
-                    channelMessages[channel] = []
-                }
-                if channelMembers[channel] == nil {
-                    channelMembers[channel] = Set()
-                }
-            }
-        }
-    }
-    
-    private func saveJoinedChannels() {
-        userDefaults.set(Array(joinedChannels), forKey: joinedChannelsKey)
-        userDefaults.synchronize()
-    }
-    
-    private func loadChannelData() {
-        // Load password protected channels
-        if let savedProtectedChannels = userDefaults.stringArray(forKey: passwordProtectedChannelsKey) {
-            passwordProtectedChannels = Set(savedProtectedChannels)
-        }
-        
-        // Load channel creators
-        if let savedCreators = userDefaults.dictionary(forKey: channelCreatorsKey) as? [String: String] {
-            channelCreators = savedCreators
-            
-            // Clean up any legacy ownership records
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-                self?.cleanupLegacyChannelOwnership()
-            }
-        } else {
-        }
-        
-        // Load channel key commitments
-        if let savedCommitments = userDefaults.dictionary(forKey: channelKeyCommitmentsKey) as? [String: String] {
-            channelKeyCommitments = savedCommitments
-        }
-        
-        // Load channel passwords from Keychain
-        let savedPasswords = KeychainManager.shared.getAllChannelPasswords()
-        channelPasswords = savedPasswords
-        // Derive keys for all saved passwords
-        for (channel, password) in savedPasswords {
-            channelKeys[channel] = deriveChannelKey(from: password, channelName: channel)
-            // Also load password into NoiseEncryptionService
-            _ = meshService.getNoiseService().loadChannelPassword(for: channel)
-        }
-        
-        // Also check if passwords were saved but not loaded for password-protected channels
-        for channel in passwordProtectedChannels {
-            if !channelPasswords.keys.contains(channel) {
-            }
-        }
-    }
-    
-    private func saveChannelData() {
-        
-        userDefaults.set(Array(passwordProtectedChannels), forKey: passwordProtectedChannelsKey)
-        userDefaults.set(channelCreators, forKey: channelCreatorsKey)
-        // Save passwords to Keychain instead of UserDefaults
-        for (channel, password) in channelPasswords {
-            _ = KeychainManager.shared.saveChannelPassword(password, for: channel)
-        }
-        userDefaults.set(channelKeyCommitments, forKey: channelKeyCommitmentsKey)
-        
-        // Force synchronize and add a small delay to ensure writes complete
-        _ = userDefaults.synchronize()
-        
-        // Verify save worked
-        _ = userDefaults.dictionary(forKey: channelCreatorsKey) as? [String: String] != nil
-    }
-    
-    func joinChannel(_ channel: String, password: String? = nil) -> Bool {
-        // Ensure channel starts with #
-        let channelTag = channel.hasPrefix("#") ? channel : "#\(channel)"
-        
-        
-        // Check if channel is already joined and we can access it
-        if joinedChannels.contains(channelTag) {
-            // Already joined, check if we need password verification
-            if passwordProtectedChannels.contains(channelTag) && channelKeys[channelTag] == nil {
-                if let password = password {
-                    // User provided password for already-joined channel - verify it
-                    
-                    // Derive key and try to verify
-                    let key = deriveChannelKey(from: password, channelName: channelTag)
-                    
-                    // First, check if we have a key commitment to verify against
-                    if let expectedCommitment = channelKeyCommitments[channelTag] {
-                        let actualCommitment = computeKeyCommitment(for: key)
-                        if actualCommitment != expectedCommitment {
-                            return false
-                        }
-                    }
-                    
-                    // Check if we have messages to verify against
-                    if let channelMsgs = channelMessages[channelTag], !channelMsgs.isEmpty {
-                        let encryptedMessages = channelMsgs.filter { $0.isEncrypted && $0.encryptedContent != nil }
-                        if let encryptedMsg = encryptedMessages.first,
-                           let encryptedData = encryptedMsg.encryptedContent {
-                            let testDecrypted = decryptChannelMessage(encryptedData, channel: channelTag, testKey: key)
-                            if testDecrypted == nil {
-                                return false
-                            }
-                        }
-                    }
-                    
-                    // Store the verified key
-                    channelKeys[channelTag] = key
-                    channelPasswords[channelTag] = password
-                    
-                    // Now switch to the channel
-                    switchToChannel(channelTag)
-                    return true
-                } else {
-                    // Need password to access
-                    passwordPromptChannel = channelTag
-                    showPasswordPrompt = true
-                    return false
-                }
-            }
-            // Switch to the channel (no password needed)
-            switchToChannel(channelTag)
-            return true
-        }
-        
-        // If channel is password protected and we don't have the key yet
-        if passwordProtectedChannels.contains(channelTag) && channelKeys[channelTag] == nil {
-            // Allow channel creator to bypass password check
-            let myFingerprint = getMyFingerprint()
-            if channelCreators[channelTag] == meshService.myPeerID || channelCreators[channelTag] == myFingerprint {
-                // Channel creator should already have the key set when they created the password
-                // This is a failsafe - just proceed without password
-            } else if let password = password {
-                // Derive key from password
-                let key = deriveChannelKey(from: password, channelName: channelTag)
-                
-                // First, check if we have a key commitment to verify against
-                if let expectedCommitment = channelKeyCommitments[channelTag] {
-                    let actualCommitment = computeKeyCommitment(for: key)
-                    if actualCommitment != expectedCommitment {
-                        return false
-                    }
-                }
-                
-                // Try to verify password if there are existing encrypted messages
-                var passwordVerified = false
-                var shouldProceed = true
-                
-                if let channelMsgs = channelMessages[channelTag], !channelMsgs.isEmpty {
-                    // Look for encrypted messages to verify against
-                    let encryptedMessages = channelMsgs.filter { $0.isEncrypted && $0.encryptedContent != nil }
-                    
-                    if let encryptedMsg = encryptedMessages.first,
-                       let encryptedData = encryptedMsg.encryptedContent {
-                        // Test decryption with the derived key
-                        let testDecrypted = decryptChannelMessage(encryptedData, channel: channelTag, testKey: key)
-                        if testDecrypted == nil {
-                            // Password is wrong, can't decrypt
-                            shouldProceed = false
-                        } else {
-                            passwordVerified = true
-                        }
-                    } else {
-                        // No encrypted messages yet - accept tentatively
-                        
-                        // Add warning message
-                        let warningMsg = BitchatMessage(
-                            sender: "system",
-                            content: "joined channel \(channelTag). password will be verified when encrypted messages arrive.",
-                            timestamp: Date(),
-                            isRelay: false
-                        )
-                        messages.append(warningMsg)
-                    }
-                } else {
-                    // Empty channel - accept tentatively
-                    
-                    // Add info message
-                    let infoMsg = BitchatMessage(
-                        sender: "system",
-                        content: "joined empty channel \(channelTag). waiting for encrypted messages to verify password.",
-                        timestamp: Date(),
-                        isRelay: false
-                    )
-                    messages.append(infoMsg)
-                }
-                
-                // Only proceed if password verification didn't fail
-                if !shouldProceed {
-                    return false
-                }
-                
-                // Store the key (tentatively if not verified)
-                channelKeys[channelTag] = key
-                channelPasswords[channelTag] = password
-                // Save password to Keychain
-                _ = KeychainManager.shared.saveChannelPassword(password, for: channelTag)
-                
-                if passwordVerified {
-                    // Password verified locally
-                    // Password verified locally
-                } else {
-                    // Send key verification request to channel members after a short delay
-                    // to allow channel member list to populate
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                        self?.sendChannelKeyVerificationRequest(for: channelTag)
-                    }
-                }
-            } else {
-                // Show password prompt and return early - don't join the channel yet
-                passwordPromptChannel = channelTag
-                showPasswordPrompt = true
-                return false
-            }
-        }
-        
-        // At this point, channel is either not password protected or we don't know yet
-        
-        joinedChannels.insert(channelTag)
-        saveJoinedChannels()
-        
-        // Only claim creator role if this is a brand new channel (no one has announced it as protected)
-        // If it's password protected, someone else already created it
-        // Also check if we have metadata from another creator
-        let hasExistingMetadata = channelMetadata[channelTag] != nil
-        let isNewChannel = channelCreators[channelTag] == nil && !passwordProtectedChannels.contains(channelTag) && !hasExistingMetadata
-        if isNewChannel {
-            // Use persistent fingerprint for ownership instead of ephemeral peer ID
-            let myFingerprint = getMyFingerprint()
-            // Creating new channel
-            
-            if myFingerprint != "Unknown" {
-                channelCreators[channelTag] = myFingerprint
-                // Set creator to fingerprint
-                saveChannelData()
-            } else {
-                // Fallback to peer ID if encryption service not ready yet
-                channelCreators[channelTag] = meshService.myPeerID
-                // Fingerprint not ready, using peer ID temporarily
-                saveChannelData()
-                // Try to update to fingerprint after a delay
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
-                    if let self = self {
-                        let updatedFingerprint = self.getMyFingerprint()
-                        if updatedFingerprint != "Unknown" && self.channelCreators[channelTag] == self.meshService.myPeerID {
-                            self.channelCreators[channelTag] = updatedFingerprint
-                            // Updated creator to fingerprint
-                            self.saveChannelData()
-                        }
-                    }
-                }
-            }
-            
-            // Broadcasting channel creation to public chat
-            
-            // Broadcast channel metadata to all peers
-            let metadata = ChannelMetadata(
-                channel: channelTag,
-                creatorID: meshService.myPeerID,
-                creatorFingerprint: myFingerprint,
-                isPasswordProtected: password != nil,
-                keyCommitment: password != nil ? computeKeyCommitment(for: deriveChannelKey(from: password!, channelName: channelTag)) : nil
-            )
-            meshService.sendChannelMetadata(metadata)
-            
-            // Add system message to show channel creation
-            let sysMsg = BitchatMessage(
-                sender: "system",
-                content: "you created channel \(channelTag). announcing to public chat...",
-                timestamp: Date(),
-                isRelay: false
-            )
-            messages.append(sysMsg)
-            
-            // Announce channel creation in public chat (delay to ensure proper context)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
-                guard let self = self else { return }
-                // Store current channel temporarily
-                let previousChannel = self.currentChannel
-                self.currentChannel = nil  // Ensure we're in public chat
-                
-                // Send announcement
-                let announcement = "created channel \(channelTag)"
-                self.sendMessage(announcement)
-                
-                // Restore channel context
-                self.currentChannel = previousChannel
-            }
-        }
-        
-        // Add ourselves as a member
-        if channelMembers[channelTag] == nil {
-            channelMembers[channelTag] = Set()
-        }
-        channelMembers[channelTag]?.insert(meshService.myPeerID)
-        
-        // If password protected, also add any connected peers who might be in the channel
-        // They'll be properly verified when they send messages
-        if passwordProtectedChannels.contains(channelTag) {
-            for peerID in connectedPeers {
-                channelMembers[channelTag]?.insert(peerID)
-            }
-        }
-        
-        // Switch to the channel
-        currentChannel = channelTag
-        selectedPrivateChatPeer = nil  // Exit private chat if in one
-        
-        // Clear unread count for this channel
-        unreadChannelMessages[channelTag] = 0
-        
-        // Initialize channel messages if needed
-        if channelMessages[channelTag] == nil {
-            channelMessages[channelTag] = []
-        }
-        
-        // Hide password prompt if it was showing
-        showPasswordPrompt = false
-        passwordPromptChannel = nil
-        
-        // If this is a password protected channel, trigger verification
-        if passwordProtectedChannels.contains(channelTag) && channelKeys[channelTag] != nil {
-            // Send verification request after a short delay to allow peers to see us join
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-                self?.sendChannelKeyVerificationRequest(for: channelTag)
-            }
-        }
-        
-        return true
-    }
-    
-    func leaveChannel(_ channel: String) {
-        joinedChannels.remove(channel)
-        saveJoinedChannels()
-        
-        // Send leave notification to other peers
-        meshService.sendChannelLeaveNotification(channel)
-        
-        // If we're currently in this channel, exit to main chat
-        if currentChannel == channel {
-            currentChannel = nil
-        }
-        
-        // Clean up channel data
-        unreadChannelMessages.removeValue(forKey: channel)
-        channelMessages.removeValue(forKey: channel)
-        channelMembers.removeValue(forKey: channel)
-        channelKeys.removeValue(forKey: channel)
-        channelPasswords.removeValue(forKey: channel)
-        // Delete password from Keychain
-        _ = KeychainManager.shared.deleteChannelPassword(for: channel)
-    }
-    
-    // Password management
-    func setChannelPassword(_ password: String, for channel: String) {
-        guard joinedChannels.contains(channel) else { return }
-        
-        // Check if channel already has a creator
-        let myFingerprint = getMyFingerprint()
-        if let existingCreator = channelCreators[channel], 
-           existingCreator != meshService.myPeerID && existingCreator != myFingerprint {
-            return
-        }
-        
-        // If channel is already password protected by someone else, we can't claim it
-        if passwordProtectedChannels.contains(channel) && 
-           channelCreators[channel] != meshService.myPeerID && channelCreators[channel] != myFingerprint {
-            return
-        }
-        
-        // Claim creator role if not set and channel is not already protected
-        if channelCreators[channel] == nil && !passwordProtectedChannels.contains(channel) {
-            if myFingerprint != "Unknown" {
-                channelCreators[channel] = myFingerprint
-                // Set creator to fingerprint
-            } else {
-                channelCreators[channel] = meshService.myPeerID
-                
-                // Try to update to fingerprint after a delay
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
-                    if let self = self {
-                        let updatedFingerprint = self.getMyFingerprint()
-                        if updatedFingerprint != "Unknown" && self.channelCreators[channel] == self.meshService.myPeerID {
-                            self.channelCreators[channel] = updatedFingerprint
-                            // Updated creator to fingerprint
-                            self.saveChannelData()
-                        }
-                    }
-                }
-            }
-            saveChannelData()
-        }
-        
-        // Derive encryption key from password
-        let key = deriveChannelKey(from: password, channelName: channel)
-        channelKeys[channel] = key
-        channelPasswords[channel] = password
-        passwordProtectedChannels.insert(channel)
-        // Save password to Keychain
-        _ = KeychainManager.shared.saveChannelPassword(password, for: channel)
-        
-        // Compute and store key commitment for verification
-        let commitment = computeKeyCommitment(for: key)
-        channelKeyCommitments[channel] = commitment
-        
-        // Save channel data
-        saveChannelData()
-        
-        // Announce that this channel is now password protected with commitment
-        // Use fingerprint if available, otherwise peer ID
-        let creatorID = myFingerprint != "Unknown" ? myFingerprint : meshService.myPeerID
-        meshService.announcePasswordProtectedChannel(channel, creatorID: creatorID, keyCommitment: commitment)
-        
-        // Send an encrypted initialization message with metadata
-        let timestamp = ISO8601DateFormatter().string(from: Date())
-        let metadata = [
-            "type": "channel_init",
-            "channel": channel,
-            "creator": nickname,
-            "creatorID": meshService.myPeerID,
-            "timestamp": timestamp,
-            "version": "1.0"
-        ]
-        let jsonData = try? JSONSerialization.data(withJSONObject: metadata)
-        let metadataStr = jsonData?.base64EncodedString() ?? ""
-        
-        let initMessage = "🔐 Channel \(channel) initialized | Protected channel created by \(nickname) | Metadata: \(metadataStr)"
-        meshService.sendEncryptedChannelMessage(initMessage, mentions: [], channel: channel, channelKey: key)
-        
-    }
-    
-    func removeChannelPassword(for channel: String) {
-        // Only channel creator can remove password
-        guard channelCreators[channel] == meshService.myPeerID else {
-            return
-        }
-        
-        channelKeys.removeValue(forKey: channel)
-        channelPasswords.removeValue(forKey: channel)
-        channelKeyCommitments.removeValue(forKey: channel)
-        passwordProtectedChannels.remove(channel)
-        // Delete password from Keychain
-        _ = KeychainManager.shared.deleteChannelPassword(for: channel)
-        
-        // Save channel data
-        saveChannelData()
-        
-        // Announce that this channel is no longer password protected
-        meshService.announcePasswordProtectedChannel(channel, isProtected: false, creatorID: meshService.myPeerID)
-        
-    }
-    
-    // Transfer channel ownership to another user
-    func transferChannelOwnership(to nickname: String) {
-        guard let currentChannel = currentChannel else {
-            let msg = BitchatMessage(
-                sender: "system",
-                content: "you must be in a channel to transfer ownership.",
-                timestamp: Date(),
-                isRelay: false
-            )
-            messages.append(msg)
-            return
-        }
-        
-        // Check if current user is the owner using fingerprint
-        guard isChannelOwner(currentChannel) else {
-            let msg = BitchatMessage(
-                sender: "system",
-                content: "only the channel owner can transfer ownership.",
-                timestamp: Date(),
-                isRelay: false
-            )
-            messages.append(msg)
-            return
-        }
-        
-        // Remove @ prefix if present
-        let targetNick = nickname.hasPrefix("@") ? String(nickname.dropFirst()) : nickname
-        
-        // Find peer ID for the nickname
-        guard let targetPeerID = getPeerIDForNickname(targetNick) else {
-            let msg = BitchatMessage(
-                sender: "system",
-                content: "user \(targetNick) not found. they must be online to receive ownership.",
-                timestamp: Date(),
-                isRelay: false
-            )
-            messages.append(msg)
-            return
-        }
-        
-        // Get the fingerprint of the target peer
-        guard let targetFingerprint = getFingerprint(for: targetPeerID), targetFingerprint != "Unknown" else {
-            let msg = BitchatMessage(
-                sender: "system",
-                content: "cannot transfer ownership: \(targetNick) does not have a verified identity.",
-                timestamp: Date(),
-                isRelay: false
-            )
-            messages.append(msg)
-            return
-        }
-        
-        // Update ownership to target's fingerprint
-        channelCreators[currentChannel] = targetFingerprint
-        saveChannelData()
-        
-        // Broadcast updated channel metadata with new owner
-        let metadata = ChannelMetadata(
-            channel: currentChannel,
-            creatorID: targetPeerID,
-            creatorFingerprint: targetFingerprint,
-            isPasswordProtected: passwordProtectedChannels.contains(currentChannel),
-            keyCommitment: channelKeyCommitments[currentChannel]
-        )
-        meshService.sendChannelMetadata(metadata)
-        
-        // Also announce if password protected
-        if passwordProtectedChannels.contains(currentChannel) {
-            let commitment = channelKeyCommitments[currentChannel]
-            meshService.announcePasswordProtectedChannel(currentChannel, creatorID: targetFingerprint, keyCommitment: commitment)
-        }
-        
-        // Send notification message
-        let transferMsg = BitchatMessage(
-            sender: "system",
-            content: "channel ownership transferred from \(self.nickname) to \(targetNick).",
-            timestamp: Date(),
-            isRelay: false,
-            channel: currentChannel
-        )
-        messages.append(transferMsg)
-        
-        // Send encrypted notification if channel is protected
-        if let channelKey = channelKeys[currentChannel] {
-            let notifyMsg = "🔑 Channel ownership transferred to \(targetNick) by \(self.nickname)"
-            meshService.sendEncryptedChannelMessage(notifyMsg, mentions: [targetNick], channel: currentChannel, channelKey: channelKey)
-        } else {
-            meshService.sendMessage(transferMsg.content, mentions: [targetNick])
-        }
-        
-    }
-    
-    // Change password for current channel
-    func changeChannelPassword(to newPassword: String) {
-        guard let currentChannel = currentChannel else {
-            let msg = BitchatMessage(
-                sender: "system",
-                content: "you must be in a channel to change its password.",
-                timestamp: Date(),
-                isRelay: false
-            )
-            messages.append(msg)
-            return
-        }
-        
-        // Check if current user is the owner using fingerprint
-        guard isChannelOwner(currentChannel) else {
-            let msg = BitchatMessage(
-                sender: "system",
-                content: "only the channel owner can change the password.",
-                timestamp: Date(),
-                isRelay: false
-            )
-            messages.append(msg)
-            return
-        }
-        
-        // Check if channel is currently password protected
-        guard passwordProtectedChannels.contains(currentChannel) else {
-            let msg = BitchatMessage(
-                sender: "system",
-                content: "channel is not password protected. use the lock button to set a password.",
-                timestamp: Date(),
-                isRelay: false
-            )
-            messages.append(msg)
-            return
-        }
-        
-        // Store old key for re-encryption
-        let oldKey = channelKeys[currentChannel]
-        
-        // Derive new encryption key from new password
-        let newKey = deriveChannelKey(from: newPassword, channelName: currentChannel)
-        channelKeys[currentChannel] = newKey
-        channelPasswords[currentChannel] = newPassword
-        // Update password in Keychain
-        _ = KeychainManager.shared.saveChannelPassword(newPassword, for: currentChannel)
-        
-        // Compute new key commitment
-        let newCommitment = computeKeyCommitment(for: newKey)
-        channelKeyCommitments[currentChannel] = newCommitment
-        
-        // Save channel data
-        saveChannelData()
-        
-        // Send password change notification with old key
-        if let oldKey = oldKey {
-            let changeNotice = "🔐 Password changed by channel owner. Please update your password."
-            meshService.sendEncryptedChannelMessage(changeNotice, mentions: [], channel: currentChannel, channelKey: oldKey)
-        }
-        
-        // Send new initialization message with new key
-        let timestamp = ISO8601DateFormatter().string(from: Date())
-        let changeMetadata = [
-            "type": "password_change",
-            "channel": currentChannel,
-            "changer": nickname,
-            "changerID": meshService.myPeerID,
-            "timestamp": timestamp,
-            "version": "1.0"
-        ]
-        let jsonData = try? JSONSerialization.data(withJSONObject: changeMetadata)
-        let metadataStr = jsonData?.base64EncodedString() ?? ""
-        
-        let initMessage = "🔑 Password changed | Channel \(currentChannel) password updated by \(nickname) | Metadata: \(metadataStr)"
-        meshService.sendEncryptedChannelMessage(initMessage, mentions: [], channel: currentChannel, channelKey: newKey)
-        
-        // Announce the new commitment with fingerprint
-        let myFingerprint = getMyFingerprint()
-        meshService.announcePasswordProtectedChannel(currentChannel, creatorID: myFingerprint, keyCommitment: newCommitment)
-        
-        // Broadcast updated channel metadata
-        let metadata = ChannelMetadata(
-            channel: currentChannel,
-            creatorID: meshService.myPeerID,
-            creatorFingerprint: myFingerprint,
-            isPasswordProtected: true,
-            keyCommitment: newCommitment
-        )
-        meshService.sendChannelMetadata(metadata)
-        
-        // Send new password to connected channel members via Noise
-        distributeChannelPasswordUpdate(channel: currentChannel, newPassword: newPassword, newCommitment: newCommitment)
-        
-        // Add local success message
-        let successMsg = BitchatMessage(
-            sender: "system",
-            content: "password changed successfully. other users will need to re-enter the new password.",
-            timestamp: Date(),
-            isRelay: false
-        )
-        messages.append(successMsg)
-        
-    }
-    
-    private func distributeChannelPasswordUpdate(channel: String, newPassword: String, newCommitment: String) {
-        // Get channel members
-        let members = getChannelMembers(channel)
-        
-        // Filter to only connected members with Noise sessions
-        let noiseService = meshService.getNoiseService()
-        let connectedMembersWithNoise = members.filter { peerID in
-            peerID != meshService.myPeerID &&
-            connectedPeers.contains(peerID) &&
-            noiseService.hasEstablishedSession(with: peerID)
-        }
-        
-        // Send password update to each connected member
-        for peerID in connectedMembersWithNoise {
-            meshService.sendChannelPasswordUpdate(newPassword, channel: channel, newCommitment: newCommitment, to: peerID)
-        }
-        
-        if !connectedMembersWithNoise.isEmpty {
-            // Sent password update to connected members with Noise sessions
-            
-            // Update the success message to indicate distribution
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                let distributeMsg = BitchatMessage(
-                    sender: "system",
-                    content: "password update sent to \(connectedMembersWithNoise.count) online members via secure channel.",
-                    timestamp: Date(),
-                    isRelay: false
-                )
-                self?.messages.append(distributeMsg)
-            }
-        }
-    }
-    
-    // Compute SHA256 hash of the derived key for public verification
-    internal func computeKeyCommitment(for key: SymmetricKey) -> String {
-        let keyData = key.withUnsafeBytes { Data($0) }
-        let hash = SHA256.hash(data: keyData)
-        return hash.compactMap { String(format: "%02x", $0) }.joined()
-    }
-    
-    internal func deriveChannelKey(from password: String, channelName: String) -> SymmetricKey {
-        // Get creator fingerprint for this channel
-        let creatorFingerprint = channelCreators[channelName]
-        
-        // Use PBKDF2 with channel name + creator fingerprint as salt
-        var saltComponents = "bitchat-channel-\(channelName)"
-        if let fingerprint = creatorFingerprint {
-            saltComponents += "-\(fingerprint)"
-        }
-        let salt = saltComponents.data(using: .utf8)!
-        
-        // Increased iterations for better security (OWASP recommends 210,000 for PBKDF2-SHA256)
-        let keyData = pbkdf2(password: password, salt: salt, iterations: 210000, keyLength: 32)
-        return SymmetricKey(data: keyData)
-    }
-    
-    private func pbkdf2(password: String, salt: Data, iterations: Int, keyLength: Int) -> Data {
-        var derivedKey = Data(count: keyLength)
-        let passwordData = password.data(using: .utf8)!
-        
-        _ = derivedKey.withUnsafeMutableBytes { derivedKeyBytes in
-            salt.withUnsafeBytes { saltBytes in
-                passwordData.withUnsafeBytes { passwordBytes in
-                    CCKeyDerivationPBKDF(
-                        CCPBKDFAlgorithm(kCCPBKDF2),
-                        passwordBytes.baseAddress, passwordData.count,
-                        saltBytes.baseAddress, salt.count,
-                        CCPseudoRandomAlgorithm(kCCPRFHmacAlgSHA256),
-                        UInt32(iterations),
-                        derivedKeyBytes.baseAddress, keyLength
-                    )
-                }
-            }
-        }
-        
-        return derivedKey
-    }
-    
-    func switchToChannel(_ channel: String?) {
-        // Check if channel needs password
-        if let channel = channel, passwordProtectedChannels.contains(channel) && channelKeys[channel] == nil {
-            // Need password, show prompt instead
-            passwordPromptChannel = channel
-            showPasswordPrompt = true
-            return
-        }
-        
-        currentChannel = channel
-        selectedPrivateChatPeer = nil  // Exit private chat
-        
-        // Clear unread count for this channel
-        if let channel = channel {
-            unreadChannelMessages[channel] = 0
-        }
-    }
-    
-    private func sendChannelKeyVerificationRequest(for channel: String) {
-        
-        // Get channel members who might have the key
-        let members = getChannelMembers(channel)
-        
-        // Filter to only connected members
-        let connectedMembers = members.filter { connectedPeers.contains($0) && $0 != meshService.myPeerID }
-        
-        guard !connectedMembers.isEmpty else {
-            channelVerificationStatus[channel] = .unverified
-            return
-        }
-        
-        // Compute our key commitment
-        guard let key = channelKeys[channel] else { return }
-        let commitment = computeKeyCommitment(for: key)
-        
-        // Create verification request
-        let request = ChannelKeyVerifyRequest(
-            channel: channel,
-            requesterID: meshService.myPeerID,
-            keyCommitment: commitment
-        )
-        
-        // Send to all connected channel members
-        meshService.sendChannelKeyVerifyRequest(request, to: connectedMembers)
-        
-        // Update verification status
-        channelVerificationStatus[channel] = .verifying
-        // Set verification status to verifying
-        
-        // Set timeout for verification
-        DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak self] in
-            guard let self = self else { return }
-            
-            // Check if still verifying
-            if self.channelVerificationStatus[channel] == .verifying {
-                // No response received, assume unverified
-                // Verification timeout
-                self.channelVerificationStatus[channel] = .unverified
-                
-                let timeoutMsg = BitchatMessage(
-                    sender: "system",
-                    content: "no response from channel members. password may be correct but cannot verify at this time.",
-                    timestamp: Date(),
-                    isRelay: false
-                )
-                self.messages.append(timeoutMsg)
-            }
-        }
-        
-    }
-    
-    private func getChannelMembers(_ channel: String) -> [String] {
-        // Return all peers who have sent messages to this channel
-        return Array(channelMembers[channel] ?? [])
-    }
-    
-    // Check if current user owns the channel (handles both legacy peer ID and new fingerprint)
-    func isChannelOwner(_ channel: String) -> Bool {
-        guard let creator = channelCreators[channel] else { 
-            return false 
-        }
-        
-        let myFingerprint = getMyFingerprint()
-        
-        
-        // Only check against persistent fingerprint
-        if myFingerprint != "Unknown" && creator == myFingerprint {
-            return true
-        }
-        
-        return false
-    }
-    
-    // Migrate channel ownership from ephemeral peer IDs to persistent fingerprints
-    private func cleanupLegacyChannelOwnership() {
-        // Simple cleanup: only keep channels with fingerprint ownership
-        let myFingerprint = getMyFingerprint()
-        guard myFingerprint != "Unknown" else { return }
-        
-        var cleaned = false
-        for (channel, creator) in channelCreators {
-            // Remove any channel with 8-char creator ID (legacy)
-            if creator.count == 8 {
-                // Removing legacy ownership
-                channelCreators.removeValue(forKey: channel)
-                cleaned = true
-            }
-        }
-        
-        if cleaned {
-            saveChannelData()
-        }
-    }
-    
-    
-    func getChannelMessages(_ channel: String) -> [BitchatMessage] {
-        return channelMessages[channel] ?? []
-    }
-    
-    func parseChannels(from content: String) -> Set<String> {
-        let pattern = "#([a-zA-Z0-9_]+)"
-        let regex = try? NSRegularExpression(pattern: pattern, options: [])
-        let matches = regex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
-        
-        var channels = Set<String>()
-        for match in matches {
-            if let range = Range(match.range(at: 0), in: content) {
-                let channel = String(content[range])
-                channels.insert(channel)
-            }
-        }
-        
-        return channels
-    }
     
     func toggleFavorite(peerID: String) {
         // First try to get fingerprint from mesh service (supports peer ID rotation)
@@ -1211,6 +344,7 @@ class ChatViewModel: ObservableObject {
                         privateChats[currentPeerID] = []
                     }
                     privateChats[currentPeerID]?.append(contentsOf: oldMessages)
+                    trimPrivateChatMessagesIfNeeded(for: currentPeerID)
                     privateChats.removeValue(forKey: oldPeerID)
                 }
                 
@@ -1250,19 +384,8 @@ class ChatViewModel: ObservableObject {
             } else {
             }
         } else {
-            // Parse mentions and channels from the content
+            // Parse mentions from the content
             let mentions = parseMentions(from: content)
-            let channels = parseChannels(from: content)
-            
-            // Auto-join any channels mentioned in the message
-            for channel in channels {
-                if !joinedChannels.contains(channel) {
-                    let _ = joinChannel(channel)
-                }
-            }
-            
-            // Determine which channel this message belongs to
-            let messageChannel = currentChannel  // Use current channel if we're in one
             
             // Add message to local display
             let message = BitchatMessage(
@@ -1274,42 +397,18 @@ class ChatViewModel: ObservableObject {
                 isPrivate: false,
                 recipientNickname: nil,
                 senderPeerID: meshService.myPeerID,
-                mentions: mentions.isEmpty ? nil : mentions,
-                channel: messageChannel
+                mentions: mentions.isEmpty ? nil : mentions
             )
             
-            if let channel = messageChannel {
-                // Add to channel messages
-                if channelMessages[channel] == nil {
-                    channelMessages[channel] = []
-                }
-                channelMessages[channel]?.append(message)
-                
-                // Track ourselves as a channel member
-                if channelMembers[channel] == nil {
-                    channelMembers[channel] = Set()
-                }
-                channelMembers[channel]?.insert(meshService.myPeerID)
-            } else {
-                // Add to main messages
-                messages.append(message)
-            }
+            // Add to main messages immediately for user feedback
+            messages.append(message)
+            trimMessagesIfNeeded()
             
-            // Only auto-join channels if we're sending TO that channel
-            if let messageChannel = messageChannel {
-                if !joinedChannels.contains(messageChannel) {
-                    let _ = joinChannel(messageChannel)
-                }
-            }
+            // Force immediate UI update for user's own messages
+            objectWillChange.send()
             
-            // Check if channel is password protected and encrypt if needed
-            if let channel = messageChannel, channelKeys[channel] != nil {
-                // Send encrypted channel message
-                meshService.sendEncryptedChannelMessage(content, mentions: mentions, channel: channel, channelKey: channelKeys[channel]!)
-            } else {
-                // Send via mesh with mentions and channel (unencrypted)
-                meshService.sendMessage(content, mentions: mentions, channel: messageChannel)
-            }
+            // Send via mesh with mentions
+            meshService.sendMessage(content, mentions: mentions)
         }
     }
     
@@ -1353,12 +452,13 @@ class ChatViewModel: ObservableObject {
             privateChats[peerID] = []
         }
         privateChats[peerID]?.append(message)
+        trimPrivateChatMessagesIfNeeded(for: peerID)
         
         // Track the message for delivery confirmation
         let isFavorite = isFavorite(peerID: peerID)
         DeliveryTracker.shared.trackMessage(message, recipientID: peerID, recipientNickname: recipientNickname, isFavorite: isFavorite)
         
-        // Trigger UI update
+        // Immediate UI update for user's own messages
         objectWillChange.send()
         
         // Send via mesh with the same message ID
@@ -1378,6 +478,16 @@ class ChatViewModel: ObservableObject {
             )
             messages.append(systemMessage)
             return
+        }
+        
+        // Trigger handshake if we don't have a session yet
+        let sessionState = meshService.getNoiseSessionState(for: peerID)
+        switch sessionState {
+        case .none, .failed:
+            // Initiate handshake when opening PM
+            meshService.triggerHandshake(with: peerID)
+        default:
+            break
         }
         
         selectedPrivateChatPeer = peerID
@@ -1434,6 +544,7 @@ class ChatViewModel: ObservableObject {
             // Initialize chat history with migrated messages if any
             if !migratedMessages.isEmpty {
                 privateChats[peerID] = migratedMessages.sorted { $0.timestamp < $1.timestamp }
+                trimPrivateChatMessagesIfNeeded(for: peerID)
             } else {
                 privateChats[peerID] = []
             }
@@ -1456,6 +567,30 @@ class ChatViewModel: ObservableObject {
         selectedPrivateChatFingerprint = nil
     }
     
+    @objc private func handleRetryMessage(_ notification: Notification) {
+        guard let messageID = notification.userInfo?["messageID"] as? String else { return }
+        
+        // Find the message to retry
+        if let message = messages.first(where: { $0.id == messageID }) {
+            SecureLogger.log("Retrying message \(messageID) to \(message.recipientNickname ?? "unknown")", 
+                           category: SecureLogger.session, level: .info)
+            
+            // Resend the message through mesh service
+            if message.isPrivate,
+               let peerID = getPeerIDForNickname(message.recipientNickname ?? "") {
+                // Update status to sending
+                updateMessageDeliveryStatus(messageID, status: .sending)
+                
+                // Resend via mesh service
+                meshService.sendMessage(message.content, 
+                                      mentions: message.mentions ?? [], 
+                                      to: peerID,
+                                      messageID: messageID,
+                                      timestamp: message.timestamp)
+            }
+        }
+    }
+    
     @objc private func appDidBecomeActive() {
         // When app becomes active, send read receipts for visible private chat
         if let peerID = selectedPrivateChatPeer {
@@ -1475,8 +610,17 @@ class ChatViewModel: ObservableObject {
         if let peerID = selectedPrivateChatPeer {
             // In private chat - send to the other person
             if let peerNickname = meshService.getPeerNicknames()[peerID] {
-                // Send the message directly without going through sendPrivateMessage to avoid local echo
-                meshService.sendPrivateMessage(screenshotMessage, to: peerID, recipientNickname: peerNickname)
+                // Only send screenshot notification if we have an established session
+                // This prevents triggering handshake requests for screenshot notifications
+                let sessionState = meshService.getNoiseSessionState(for: peerID)
+                switch sessionState {
+                case .established:
+                    // Send the message directly without going through sendPrivateMessage to avoid local echo
+                    meshService.sendPrivateMessage(screenshotMessage, to: peerID, recipientNickname: peerNickname)
+                default:
+                    // Don't send screenshot notification if no session exists
+                    SecureLogger.log("Skipping screenshot notification to \(peerID) - no established session", category: SecureLogger.security, level: .debug)
+                }
             }
             
             // Show local notification immediately as system message
@@ -1494,34 +638,11 @@ class ChatViewModel: ObservableObject {
                 privateChats[peerID] = []
             }
             privateChats[peerID]?.append(localNotification)
-            
-        } else if let channel = currentChannel {
-            // In a channel - send to channel
-            // Check if channel is password protected and encrypt if needed
-            if let channelKey = channelKeys[channel] {
-                meshService.sendEncryptedChannelMessage(screenshotMessage, mentions: [], channel: channel, channelKey: channelKey)
-            } else {
-                meshService.sendMessage(screenshotMessage, mentions: [], channel: channel)
-            }
-            
-            // Show local notification immediately as system message
-            let localNotification = BitchatMessage(
-                sender: "system",
-                content: "you took a screenshot",
-                timestamp: Date(),
-                isRelay: false,
-                originalSender: nil,
-                isPrivate: false,
-                channel: channel
-            )
-            if channelMessages[channel] == nil {
-                channelMessages[channel] = []
-            }
-            channelMessages[channel]?.append(localNotification)
+            trimPrivateChatMessagesIfNeeded(for: peerID)
             
         } else {
             // In public chat - send to everyone
-            meshService.sendMessage(screenshotMessage, mentions: [], channel: nil)
+            meshService.sendMessage(screenshotMessage, mentions: [])
             
             // Show local notification immediately as system message
             let localNotification = BitchatMessage(
@@ -1530,23 +651,28 @@ class ChatViewModel: ObservableObject {
                 timestamp: Date(),
                 isRelay: false
             )
-            messages.append(localNotification)
+            // System messages can be batched
+            addMessageToBatch(localNotification)
         }
     }
     
     @objc private func appWillResignActive() {
-        // Save all channel data
-        saveChannelData()
+        // Flush any pending messages when app goes to background
+        flushMessageBatchImmediately()
+        
         userDefaults.synchronize()
     }
     
     @objc func applicationWillTerminate() {
+        // Flush any pending messages immediately
+        flushMessageBatchImmediately()
+        
+        // Force save any pending identity changes (verifications, favorites, etc)
+        SecureIdentityStateManager.shared.forceSave()
         
         // Verify identity key is still there
         _ = KeychainManager.shared.verifyIdentityKeyExists()
         
-        // Save all channel data
-        saveChannelData()
         userDefaults.synchronize()
         
         // Verify identity key after save
@@ -1554,8 +680,9 @@ class ChatViewModel: ObservableObject {
     }
     
     @objc private func appWillTerminate() {
-        // Save all channel data
-        saveChannelData()
+        // Flush any pending messages immediately
+        flushMessageBatchImmediately()
+        
         userDefaults.synchronize()
     }
     
@@ -1659,24 +786,13 @@ class ChatViewModel: ObservableObject {
     
     // PANIC: Emergency data clearing for activist safety
     func panicClearAllData() {
+        // Flush any pending messages immediately before clearing
+        flushMessageBatchImmediately()
+        
         // Clear all messages
         messages.removeAll()
         privateChats.removeAll()
         unreadPrivateMessages.removeAll()
-        
-        // Clear all channel data
-        joinedChannels.removeAll()
-        currentChannel = nil
-        channelMessages.removeAll()
-        unreadChannelMessages.removeAll()
-        channelMembers.removeAll()
-        channelPasswords.removeAll()
-        channelKeys.removeAll()
-        passwordProtectedChannels.removeAll()
-        channelCreators.removeAll()
-        channelKeyCommitments.removeAll()
-        showPasswordPrompt = false
-        passwordPromptChannel = nil
         
         // First run aggressive cleanup to get rid of all legacy items
         _ = KeychainManager.shared.aggressiveCleanupLegacyItems()
@@ -1695,11 +811,6 @@ class ChatViewModel: ObservableObject {
         // Clear message retry queue
         MessageRetryService.shared.clearRetryQueue()
         
-        // Clear persisted channel data from UserDefaults
-        userDefaults.removeObject(forKey: joinedChannelsKey)
-        userDefaults.removeObject(forKey: passwordProtectedChannelsKey)
-        userDefaults.removeObject(forKey: channelCreatorsKey)
-        userDefaults.removeObject(forKey: channelKeyCommitmentsKey)
         
         // Reset nickname to anonymous
         nickname = "anon\(Int.random(in: 1000...9999))"
@@ -1725,6 +836,10 @@ class ChatViewModel: ObservableObject {
         // Clear read receipt tracking
         sentReadReceipts.removeAll()
         
+        // Clear all caches
+        invalidateEncryptionCache()
+        invalidateRSSIColorCache()
+        
         // Disconnect from all peers and clear persistent identity
         // This will force creation of a new identity (new fingerprint) on next launch
         meshService.emergencyDisconnectAll()
@@ -1747,71 +862,110 @@ class ChatViewModel: ObservableObject {
     
     func getRSSIColor(rssi: Int, colorScheme: ColorScheme) -> Color {
         let isDark = colorScheme == .dark
+        let cacheKey = "\(rssi)_\(isDark)"
+        
+        // Check cache first
+        if let cachedColor = rssiColorCache[cacheKey] {
+            return cachedColor
+        }
+        
         // RSSI typically ranges from -30 (excellent) to -90 (poor)
         // We'll map this to colors from green (strong) to red (weak)
         
+        let color: Color
         if rssi >= -50 {
             // Excellent signal: bright green
-            return isDark ? Color(red: 0.0, green: 1.0, blue: 0.0) : Color(red: 0.0, green: 0.7, blue: 0.0)
+            color = isDark ? Color(red: 0.0, green: 1.0, blue: 0.0) : Color(red: 0.0, green: 0.7, blue: 0.0)
         } else if rssi >= -60 {
             // Good signal: green-yellow
-            return isDark ? Color(red: 0.5, green: 1.0, blue: 0.0) : Color(red: 0.3, green: 0.7, blue: 0.0)
+            color = isDark ? Color(red: 0.5, green: 1.0, blue: 0.0) : Color(red: 0.3, green: 0.7, blue: 0.0)
         } else if rssi >= -70 {
             // Fair signal: yellow
-            return isDark ? Color(red: 1.0, green: 1.0, blue: 0.0) : Color(red: 0.7, green: 0.7, blue: 0.0)
+            color = isDark ? Color(red: 1.0, green: 1.0, blue: 0.0) : Color(red: 0.7, green: 0.7, blue: 0.0)
         } else if rssi >= -80 {
             // Weak signal: orange
-            return isDark ? Color(red: 1.0, green: 0.6, blue: 0.0) : Color(red: 0.8, green: 0.4, blue: 0.0)
+            color = isDark ? Color(red: 1.0, green: 0.6, blue: 0.0) : Color(red: 0.8, green: 0.4, blue: 0.0)
         } else {
             // Poor signal: red
-            return isDark ? Color(red: 1.0, green: 0.2, blue: 0.2) : Color(red: 0.8, green: 0.0, blue: 0.0)
+            color = isDark ? Color(red: 1.0, green: 0.2, blue: 0.2) : Color(red: 0.8, green: 0.0, blue: 0.0)
         }
+        
+        // Cache the result
+        rssiColorCache[cacheKey] = color
+        return color
     }
     
     func updateAutocomplete(for text: String, cursorPosition: Int) {
+        // Quick early exit for empty text
+        guard cursorPosition > 0 else {
+            if showAutocomplete {
+                showAutocomplete = false
+                autocompleteSuggestions = []
+                autocompleteRange = nil
+            }
+            return
+        }
+        
         // Find @ symbol before cursor
         let beforeCursor = String(text.prefix(cursorPosition))
         
-        // Look for @ pattern
-        let pattern = "@([a-zA-Z0-9_]*)$"
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: []),
+        // Use cached regex
+        guard let regex = mentionRegex,
               let match = regex.firstMatch(in: beforeCursor, options: [], range: NSRange(location: 0, length: beforeCursor.count)) else {
-            showAutocomplete = false
-            autocompleteSuggestions = []
-            autocompleteRange = nil
+            if showAutocomplete {
+                showAutocomplete = false
+                autocompleteSuggestions = []
+                autocompleteRange = nil
+            }
             return
         }
         
         // Extract the partial nickname
         let partialRange = match.range(at: 1)
         guard let range = Range(partialRange, in: beforeCursor) else {
-            showAutocomplete = false
-            autocompleteSuggestions = []
-            autocompleteRange = nil
+            if showAutocomplete {
+                showAutocomplete = false
+                autocompleteSuggestions = []
+                autocompleteRange = nil
+            }
             return
         }
         
         let partial = String(beforeCursor[range]).lowercased()
         
-        // Get all available nicknames (excluding self)
-        let peerNicknames = meshService.getPeerNicknames()
-        let allNicknames = Array(peerNicknames.values)
+        // Update cached nicknames only if peer list changed (check every 1 second max)
+        let now = Date()
+        if now.timeIntervalSince(lastNicknameUpdate) > 1.0 || cachedNicknames.isEmpty {
+            let peerNicknames = meshService.getPeerNicknames()
+            cachedNicknames = Array(peerNicknames.values).sorted()
+            lastNicknameUpdate = now
+        }
         
-        // Filter suggestions
-        let suggestions = allNicknames.filter { nick in
+        // Filter suggestions using cached nicknames
+        let suggestions = cachedNicknames.filter { nick in
             nick.lowercased().hasPrefix(partial)
-        }.sorted()
+        }
         
+        // Batch UI updates
         if !suggestions.isEmpty {
-            autocompleteSuggestions = suggestions
-            showAutocomplete = true
-            autocompleteRange = match.range(at: 0) // Store full @mention range
+            // Only update if suggestions changed
+            if autocompleteSuggestions != suggestions {
+                autocompleteSuggestions = suggestions
+            }
+            if !showAutocomplete {
+                showAutocomplete = true
+            }
+            if autocompleteRange != match.range(at: 0) {
+                autocompleteRange = match.range(at: 0)
+            }
             selectedAutocompleteIndex = 0
         } else {
-            showAutocomplete = false
-            autocompleteSuggestions = []
-            autocompleteRange = nil
-            selectedAutocompleteIndex = 0
+            if showAutocomplete {
+                showAutocomplete = false
+                autocompleteSuggestions = []
+                autocompleteRange = nil
+                selectedAutocompleteIndex = 0
+            }
         }
     }
     
@@ -1837,14 +991,8 @@ class ChatViewModel: ObservableObject {
         let isDark = colorScheme == .dark
         let primaryColor = isDark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
         
-        if message.sender == nickname {
-            return primaryColor
-        } else if let peerID = message.senderPeerID ?? getPeerIDForNickname(message.sender),
-                  let rssi = meshService.getPeerRSSI()[peerID] {
-            return getRSSIColor(rssi: rssi.intValue, colorScheme: colorScheme)
-        } else {
-            return primaryColor.opacity(0.9)
-        }
+        // Always use the same color for all senders - no RSSI-based coloring
+        return primaryColor
     }
     
     
@@ -1918,9 +1066,15 @@ class ChatViewModel: ObservableObject {
     }
     
     func formatMessageAsText(_ message: BitchatMessage, colorScheme: ColorScheme) -> AttributedString {
+        // Check cache first
+        let isDark = colorScheme == .dark
+        if let cachedText = message.getCachedFormattedText(isDark: isDark) {
+            return cachedText
+        }
+        
+        // Not cached, format the message
         var result = AttributedString()
         
-        let isDark = colorScheme == .dark
         let primaryColor = isDark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
         let secondaryColor = primaryColor.opacity(0.7)
         
@@ -1936,48 +1090,15 @@ class ChatViewModel: ObservableObject {
             let sender = AttributedString("<@\(message.sender)> ")
             var senderStyle = AttributeContainer()
             
-            // Get sender color
-            let senderColor: Color
-            if message.sender == nickname {
-                senderColor = primaryColor
-            } else if let peerID = message.senderPeerID ?? getPeerIDForNickname(message.sender),
-                      let rssi = meshService.getPeerRSSI()[peerID] {
-                senderColor = getRSSIColor(rssi: rssi.intValue, colorScheme: colorScheme)
-            } else {
-                senderColor = primaryColor.opacity(0.9)
-            }
-            
-            senderStyle.foregroundColor = senderColor
-            senderStyle.font = .system(size: 14, weight: .medium, design: .monospaced)
+            // Use consistent color for all senders
+            senderStyle.foregroundColor = primaryColor
+            // Bold the user's own nickname
+            let fontWeight: Font.Weight = message.sender == nickname ? .bold : .medium
+            senderStyle.font = .system(size: 14, weight: fontWeight, design: .monospaced)
             result.append(sender.mergingAttributes(senderStyle))
             
-            // Process content with hashtags, mentions, and markdown links
-            var content = message.content
-            
-            // First, check if content starts with 👇 followed by markdown link
-            if content.hasPrefix("👇 [") {
-                // This is a URL share - remove everything after the emoji
-                if let linkStart = content.firstIndex(of: "[") {
-                    let indexBeforeLink = content.index(before: linkStart)
-                    content = String(content[..<indexBeforeLink])
-                }
-            } else {
-                // Handle normal markdown links
-                let markdownLinkPattern = #"\[([^\]]+)\]\(([^)]+)\)"#
-                if let markdownRegex = try? NSRegularExpression(pattern: markdownLinkPattern, options: []) {
-                    let markdownMatches = markdownRegex.matches(in: content, options: [], range: NSRange(location: 0, length: content.count))
-                    
-                    // Process matches in reverse order to maintain string indices
-                    for match in markdownMatches.reversed() {
-                        if let fullRange = Range(match.range, in: content),
-                           let titleRange = Range(match.range(at: 1), in: content) {
-                            // Normal markdown link - replace with just the title
-                            let linkTitle = String(content[titleRange])
-                            content.replaceSubrange(fullRange, with: linkTitle)
-                        }
-                    }
-                }
-            }
+            // Process content with hashtags and mentions
+            let content = message.content
             
             let hashtagPattern = "#([a-zA-Z0-9_]+)"
             let mentionPattern = "@([a-zA-Z0-9_]+)"
@@ -1985,8 +1106,12 @@ class ChatViewModel: ObservableObject {
             let hashtagRegex = try? NSRegularExpression(pattern: hashtagPattern, options: [])
             let mentionRegex = try? NSRegularExpression(pattern: mentionPattern, options: [])
             
+            // Use NSDataDetector for URL detection
+            let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
+            
             let hashtagMatches = hashtagRegex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
             let mentionMatches = mentionRegex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
+            let urlMatches = detector?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
             
             // Combine and sort matches
             var allMatches: [(range: NSRange, type: String)] = []
@@ -1995,6 +1120,9 @@ class ChatViewModel: ObservableObject {
             }
             for match in mentionMatches {
                 allMatches.append((match.range(at: 0), "mention"))
+            }
+            for match in urlMatches {
+                allMatches.append((match.range, "url"))
             }
             allMatches.sort { $0.range.location < $1.range.location }
             
@@ -2026,6 +1154,9 @@ class ChatViewModel: ObservableObject {
                         matchStyle.underlineStyle = .single
                     } else if type == "mention" {
                         matchStyle.foregroundColor = Color.orange
+                    } else if type == "url" {
+                        matchStyle.foregroundColor = Color.blue
+                        matchStyle.underlineStyle = .single
                     }
                     
                     result.append(AttributedString(matchText).mergingAttributes(matchStyle))
@@ -2053,6 +1184,9 @@ class ChatViewModel: ObservableObject {
             result.append(content.mergingAttributes(contentStyle))
         }
         
+        // Cache the formatted text
+        message.setCachedFormattedText(result, isDark: isDark)
+        
         return result
     }
     
@@ -2079,19 +1213,11 @@ class ChatViewModel: ObservableObject {
             let sender = AttributedString("<\(message.sender)> ")
             var senderStyle = AttributeContainer()
             
-            // Get RSSI-based color
-            let senderColor: Color
-            if message.sender == nickname {
-                senderColor = primaryColor
-            } else if let peerID = message.senderPeerID ?? getPeerIDForNickname(message.sender),
-                      let rssi = meshService.getPeerRSSI()[peerID] {
-                senderColor = getRSSIColor(rssi: rssi.intValue, colorScheme: colorScheme)
-            } else {
-                senderColor = primaryColor.opacity(0.9)
-            }
-            
-            senderStyle.foregroundColor = senderColor
-            senderStyle.font = .system(size: 12, weight: .medium, design: .monospaced)
+            // Use consistent color for all senders
+            senderStyle.foregroundColor = primaryColor
+            // Bold the user's own nickname
+            let fontWeight: Font.Weight = message.sender == nickname ? .bold : .medium
+            senderStyle.font = .system(size: 12, weight: fontWeight, design: .monospaced)
             result.append(sender.mergingAttributes(senderStyle))
             
             
@@ -2154,53 +1280,221 @@ class ChatViewModel: ObservableObject {
     // MARK: - Noise Protocol Support
     
     func updateEncryptionStatusForPeers() {
+        for peerID in connectedPeers {
+            updateEncryptionStatusForPeer(peerID)
+        }
+    }
+    
+    func updateEncryptionStatusForPeer(_ peerID: String) {
         let noiseService = meshService.getNoiseService()
         
-        for peerID in connectedPeers {
-            if noiseService.hasEstablishedSession(with: peerID) {
-                // Check if fingerprint is verified using our persisted data
-                if let fingerprint = noiseService.getPeerFingerprint(peerID),
-                   verifiedFingerprints.contains(fingerprint) {
+        if noiseService.hasEstablishedSession(with: peerID) {
+            // Check if fingerprint is verified using our persisted data
+            if let fingerprint = getFingerprint(for: peerID),
+               verifiedFingerprints.contains(fingerprint) {
+                peerEncryptionStatus[peerID] = .noiseVerified
+            } else {
+                peerEncryptionStatus[peerID] = .noiseSecured
+            }
+        } else if noiseService.hasSession(with: peerID) {
+            // Session exists but not established - handshaking
+            peerEncryptionStatus[peerID] = .noiseHandshaking
+        } else {
+            // No session at all
+            peerEncryptionStatus[peerID] = Optional.none
+        }
+        
+        // Invalidate cache when encryption status changes
+        invalidateEncryptionCache(for: peerID)
+        
+        // Force UI update
+        DispatchQueue.main.async { [weak self] in
+            self?.objectWillChange.send()
+        }
+    }
+    
+    func getEncryptionStatus(for peerID: String) -> EncryptionStatus {
+        // Check cache first
+        if let cachedStatus = encryptionStatusCache[peerID] {
+            return cachedStatus
+        }
+        
+        // This must be a pure function - no state mutations allowed
+        // to avoid SwiftUI update loops
+        
+        let sessionState = meshService.getNoiseSessionState(for: peerID)
+        let storedStatus = peerEncryptionStatus[peerID]
+        
+        let status: EncryptionStatus
+        
+        // Determine status based on session state
+        switch sessionState {
+        case .established:
+            // We have encryption, now check if it's verified
+            if let fingerprint = getFingerprint(for: peerID) {
+                if verifiedFingerprints.contains(fingerprint) {
+                    status = .noiseVerified
+                } else {
+                    status = .noiseSecured
+                }
+            } else {
+                // We have a session but no fingerprint yet - still secured
+                status = .noiseSecured
+            }
+        case .handshaking, .handshakeQueued:
+            // Currently establishing encryption
+            status = .noiseHandshaking
+        case .none:
+            // No handshake attempted
+            status = .noHandshake
+        case .failed:
+            // Handshake failed - show broken lock
+            status = .none
+        }
+        
+        // Cache the result
+        encryptionStatusCache[peerID] = status
+        
+        // Only log occasionally to avoid spam
+        if Int.random(in: 0..<100) == 0 {
+            SecureLogger.log("getEncryptionStatus for \(peerID): sessionState=\(sessionState), stored=\(String(describing: storedStatus)), final=\(status)", category: SecureLogger.security, level: .debug)
+        }
+        
+        return status
+    }
+    
+    // Clear caches when data changes
+    private func invalidateEncryptionCache(for peerID: String? = nil) {
+        if let peerID = peerID {
+            encryptionStatusCache.removeValue(forKey: peerID)
+        } else {
+            encryptionStatusCache.removeAll()
+        }
+    }
+    
+    private func invalidateRSSIColorCache() {
+        rssiColorCache.removeAll()
+    }
+    
+    // Trim messages to keep only the most recent maxMessages
+    private func trimMessagesIfNeeded() {
+        if messages.count > maxMessages {
+            let removeCount = messages.count - maxMessages
+            messages.removeFirst(removeCount)
+        }
+    }
+    
+    // Trim private chat messages to keep only the most recent maxMessages
+    private func trimPrivateChatMessagesIfNeeded(for peerID: String) {
+        if let count = privateChats[peerID]?.count, count > maxMessages {
+            let removeCount = count - maxMessages
+            privateChats[peerID]?.removeFirst(removeCount)
+        }
+    }
+    
+    // MARK: - Message Batching
+    
+    private func addMessageToBatch(_ message: BitchatMessage) {
+        pendingMessages.append(message)
+        scheduleBatchFlush()
+    }
+    
+    private func addPrivateMessageToBatch(_ message: BitchatMessage, for peerID: String) {
+        if pendingPrivateMessages[peerID] == nil {
+            pendingPrivateMessages[peerID] = []
+        }
+        pendingPrivateMessages[peerID]?.append(message)
+        scheduleBatchFlush()
+    }
+    
+    private func scheduleBatchFlush() {
+        // Cancel existing timer
+        messageBatchTimer?.invalidate()
+        
+        // Schedule new flush
+        messageBatchTimer = Timer.scheduledTimer(withTimeInterval: messageBatchInterval, repeats: false) { [weak self] _ in
+            self?.flushMessageBatch()
+        }
+    }
+    
+    private func flushMessageBatch() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            // Process pending public messages
+            if !self.pendingMessages.isEmpty {
+                let messagesToAdd = self.pendingMessages
+                self.pendingMessages.removeAll()
+                
+                // Add all messages at once
+                self.messages.append(contentsOf: messagesToAdd)
+                
+                // Sort once after batch addition
+                self.messages.sort { $0.timestamp < $1.timestamp }
+                
+                // Trim once if needed
+                self.trimMessagesIfNeeded()
+            }
+            
+            // Process pending private messages
+            if !self.pendingPrivateMessages.isEmpty {
+                let privateMessageBatches = self.pendingPrivateMessages
+                self.pendingPrivateMessages.removeAll()
+                
+                for (peerID, messagesToAdd) in privateMessageBatches {
+                    if self.privateChats[peerID] == nil {
+                        self.privateChats[peerID] = []
+                    }
+                    
+                    // Add all messages for this peer at once
+                    self.privateChats[peerID]?.append(contentsOf: messagesToAdd)
+                    
+                    // Sort once after batch addition
+                    self.privateChats[peerID]?.sort { $0.timestamp < $1.timestamp }
+                    
+                    // Trim once if needed
+                    self.trimPrivateChatMessagesIfNeeded(for: peerID)
+                }
+            }
+            
+            // Single UI update for all changes
+            self.objectWillChange.send()
+        }
+    }
+    
+    // Force immediate flush for high-priority messages
+    private func flushMessageBatchImmediately() {
+        messageBatchTimer?.invalidate()
+        flushMessageBatch()
+    }
+    
+    // Update encryption status in appropriate places, not during view updates
+    private func updateEncryptionStatus(for peerID: String) {
+        let noiseService = meshService.getNoiseService()
+        
+        if noiseService.hasEstablishedSession(with: peerID) {
+            if let fingerprint = getFingerprint(for: peerID) {
+                if verifiedFingerprints.contains(fingerprint) {
                     peerEncryptionStatus[peerID] = .noiseVerified
                 } else {
                     peerEncryptionStatus[peerID] = .noiseSecured
                 }
             } else {
-                // Always use Noise - no legacy encryption
-                peerEncryptionStatus[peerID] = .noiseHandshaking
-            }
-        }
-    }
-    
-    func getEncryptionStatus(for peerID: String) -> EncryptionStatus {
-        // This must be a pure function - no state mutations allowed
-        // to avoid SwiftUI update loops
-        
-        // Check if we have a fingerprint for this peer
-        if let fingerprint = getFingerprint(for: peerID) {
-            // Check if this fingerprint is verified
-            if verifiedFingerprints.contains(fingerprint) {
-                // Return verified if we have a Noise session
-                if meshService.getNoiseService().hasEstablishedSession(with: peerID) {
-                    return .noiseVerified
-                }
-            } else if meshService.getNoiseService().hasEstablishedSession(with: peerID) {
-                return .noiseSecured
-            }
-        }
-        
-        // Fall back to stored status
-        return peerEncryptionStatus[peerID] ?? .none
-    }
-    
-    // Update encryption status in appropriate places, not during view updates
-    private func updateEncryptionStatus(for peerID: String) {
-        if let fingerprint = getFingerprint(for: peerID) {
-            if verifiedFingerprints.contains(fingerprint) && meshService.getNoiseService().hasEstablishedSession(with: peerID) {
-                peerEncryptionStatus[peerID] = .noiseVerified
-            } else if meshService.getNoiseService().hasEstablishedSession(with: peerID) {
+                // Session established but no fingerprint yet
                 peerEncryptionStatus[peerID] = .noiseSecured
             }
+        } else if noiseService.hasSession(with: peerID) {
+            peerEncryptionStatus[peerID] = .noiseHandshaking
+        } else {
+            peerEncryptionStatus[peerID] = Optional.none
+        }
+        
+        // Invalidate cache when encryption status changes
+        invalidateEncryptionCache(for: peerID)
+        
+        // Trigger UI update
+        DispatchQueue.main.async { [weak self] in
+            self?.objectWillChange.send()
         }
     }
     
@@ -2293,9 +1587,8 @@ class ChatViewModel: ObservableObject {
     }
     
     func loadVerifiedFingerprints() {
-        // Load verified fingerprints from secure storage
-        let allIdentities = SecureIdentityStateManager.shared.getAllSocialIdentities()
-        verifiedFingerprints = Set(allIdentities.filter { $0.trustLevel == .verified }.map { $0.fingerprint })
+        // Load verified fingerprints directly from secure storage
+        verifiedFingerprints = SecureIdentityStateManager.shared.getVerifiedFingerprints()
     }
     
     private func setupNoiseCallbacks() {
@@ -2304,192 +1597,88 @@ class ChatViewModel: ObservableObject {
         // Set up authentication callback
         noiseService.onPeerAuthenticated = { [weak self] peerID, fingerprint in
             DispatchQueue.main.async {
+                guard let self = self else { return }
+                
+                SecureLogger.log("ChatViewModel: Peer authenticated - \(peerID), fingerprint: \(fingerprint)", category: SecureLogger.security, level: .info)
+                
                 // Update encryption status
-                if self?.verifiedFingerprints.contains(fingerprint) == true {
-                    self?.peerEncryptionStatus[peerID] = .noiseVerified
+                if self.verifiedFingerprints.contains(fingerprint) {
+                    self.peerEncryptionStatus[peerID] = .noiseVerified
+                    SecureLogger.log("ChatViewModel: Setting encryption status to noiseVerified for \(peerID)", category: SecureLogger.security, level: .info)
                 } else {
-                    self?.peerEncryptionStatus[peerID] = .noiseSecured
+                    self.peerEncryptionStatus[peerID] = .noiseSecured
+                    SecureLogger.log("ChatViewModel: Setting encryption status to noiseSecured for \(peerID)", category: SecureLogger.security, level: .info)
                 }
                 
-                // Log for testing
-                #if DEBUG
-                NoiseTestingHelper.shared.logNoiseEvent("Peer authenticated", details: "PeerID: \(peerID), Fingerprint: \(fingerprint)")
-                #endif
+                // Invalidate cache when encryption status changes
+                self.invalidateEncryptionCache(for: peerID)
+                
+                // Force UI update
+                self.objectWillChange.send()
             }
         }
         
         // Set up handshake required callback
         noiseService.onHandshakeRequired = { [weak self] peerID in
             DispatchQueue.main.async {
-                self?.peerEncryptionStatus[peerID] = .noiseHandshaking
+                guard let self = self else { return }
+                self.peerEncryptionStatus[peerID] = .noiseHandshaking
                 
-                #if DEBUG
-                NoiseTestingHelper.shared.logNoiseEvent("Handshake required", details: "PeerID: \(peerID)")
-                #endif
+                // Invalidate cache when encryption status changes
+                self.invalidateEncryptionCache(for: peerID)
+                
+                // Force UI update
+                self.objectWillChange.send()
+            }
+        }
+    }
+    
+    func handleHandshakeRequest(from peerID: String, nickname: String, pendingCount: UInt8) {
+        // Create a notification message
+        let notificationMessage = BitchatMessage(
+            sender: "system",
+            content: "📨 \(nickname) wants to send you \(pendingCount) message\(pendingCount == 1 ? "" : "s"). Open the conversation to receive.",
+            timestamp: Date(),
+            isRelay: false,
+            originalSender: nil,
+            isPrivate: false,
+            recipientNickname: nil,
+            senderPeerID: "system",
+            mentions: nil
+        )
+        
+        // Add to messages
+        messages.append(notificationMessage)
+        trimMessagesIfNeeded()
+        
+        // Show system notification
+        if let fingerprint = getFingerprint(for: peerID) {
+            let isFavorite = favoritePeers.contains(fingerprint)
+            if isFavorite {
+                // Send favorite notification
+                NotificationService.shared.sendPrivateMessageNotification(
+                    from: nickname,
+                    message: "\(pendingCount) message\(pendingCount == 1 ? "" : "s") pending",
+                    peerID: peerID
+                )
+            } else {
+                // Send regular notification
+                NotificationService.shared.sendMentionNotification(
+                    from: nickname,
+                    message: "\(pendingCount) message\(pendingCount == 1 ? "" : "s") pending. Open conversation to receive."
+                )
             }
         }
     }
 }
 
 extension ChatViewModel: BitchatDelegate {
-    func didReceiveChannelLeave(_ channel: String, from peerID: String) {
-        // Remove peer from channel members
-        if channelMembers[channel] != nil {
-            channelMembers[channel]?.remove(peerID)
-            
-            // Force UI update
-            objectWillChange.send()
-        }
-    }
-    
-    func didReceivePasswordProtectedChannelAnnouncement(_ channel: String, isProtected: Bool, creatorID: String?, keyCommitment: String?) {
-        let wasAlreadyProtected = passwordProtectedChannels.contains(channel)
-        
-        if isProtected {
-            passwordProtectedChannels.insert(channel)
-            if let creator = creatorID {
-                // Don't overwrite our own ownership
-                let myFingerprint = getMyFingerprint()
-                if channelCreators[channel] == nil || 
-                   (channelCreators[channel] != meshService.myPeerID && channelCreators[channel] != myFingerprint) {
-                    channelCreators[channel] = creator
-                    // Received creator announcement
-                }
-            }
-            
-            // Store the key commitment if provided
-            if let commitment = keyCommitment {
-                channelKeyCommitments[channel] = commitment
-            }
-            
-            // If we just learned this channel is protected and we're in it without a key, prompt for password
-            if !wasAlreadyProtected && joinedChannels.contains(channel) && channelKeys[channel] == nil {
-                
-                // Add system message
-                let systemMessage = BitchatMessage(
-                    sender: "system",
-                    content: "channel \(channel) is password protected. you need the password to participate.",
-                    timestamp: Date(),
-                    isRelay: false
-                )
-                messages.append(systemMessage)
-                
-                // If currently viewing this channel, show password prompt
-                if currentChannel == channel {
-                    passwordPromptChannel = channel
-                    showPasswordPrompt = true
-                }
-            }
-        } else {
-            passwordProtectedChannels.remove(channel)
-            // If we're in this channel and it's no longer protected, clear the key
-            channelKeys.removeValue(forKey: channel)
-            channelPasswords.removeValue(forKey: channel)
-            channelKeyCommitments.removeValue(forKey: channel)
-        }
-        
-        // Save updated channel data
-        saveChannelData()
-        
-    }
-    
-    func decryptChannelMessage(_ encryptedContent: Data, channel: String, testKey: SymmetricKey? = nil) -> String? {
-        let key = testKey ?? channelKeys[channel]
-        guard let key = key else {
-            return nil
-        }
-        
-        // Debug logging removed
-        
-        do {
-            let sealedBox = try AES.GCM.SealedBox(combined: encryptedContent)
-            let decryptedData = try AES.GCM.open(sealedBox, using: key)
-            let decryptedString = String(data: decryptedData, encoding: .utf8)
-            return decryptedString
-        } catch {
-            return nil
-        }
-    }
-    
-    func didReceiveChannelRetentionAnnouncement(_ channel: String, enabled: Bool, creatorID: String?) {
-        // This feature has been removed
-    }
     
     private func handleCommand(_ command: String) {
         let parts = command.split(separator: " ")
         guard let cmd = parts.first else { return }
         
         switch cmd {
-        case "/j", "/join":
-            if parts.count > 1 {
-                let channelName = String(parts[1])
-                // Ensure channel name starts with #
-                let channel = channelName.hasPrefix("#") ? channelName : "#\(channelName)"
-                
-                // Validate channel name
-                let cleanedName = channel.dropFirst()
-                let isValidName = !cleanedName.isEmpty && cleanedName.allSatisfy { $0.isLetter || $0.isNumber || $0 == "_" }
-                
-                if !isValidName {
-                    let systemMessage = BitchatMessage(
-                        sender: "system",
-                        content: "invalid channel name. use only letters, numbers, and underscores.",
-                        timestamp: Date(),
-                        isRelay: false
-                    )
-                    messages.append(systemMessage)
-                } else {
-                    let wasAlreadyJoined = joinedChannels.contains(channel)
-                    let wasPasswordProtected = passwordProtectedChannels.contains(channel)
-                    let hadCreator = channelCreators[channel] != nil
-                    
-                    let success = joinChannel(channel)
-                    
-                    if success {
-                        if !wasAlreadyJoined {
-                            var message = "joined channel \(channel)"
-                            if !hadCreator && !wasPasswordProtected {
-                                message += " (created new channel - you are the owner)"
-                            }
-                            let systemMessage = BitchatMessage(
-                                sender: "system",
-                                content: message,
-                                timestamp: Date(),
-                                isRelay: false
-                            )
-                            messages.append(systemMessage)
-                        } else {
-                            // Already in channel, just switched to it
-                            let systemMessage = BitchatMessage(
-                                sender: "system",
-                                content: "switched to channel \(channel)",
-                                timestamp: Date(),
-                                isRelay: false
-                            )
-                            messages.append(systemMessage)
-                        }
-                    }
-                    // If not successful, password prompt will be shown
-                }
-            } else {
-                // Show usage hint
-                let systemMessage = BitchatMessage(
-                    sender: "system",
-                    content: "usage: /j #channelname",
-                    timestamp: Date(),
-                    isRelay: false
-                )
-                messages.append(systemMessage)
-            }
-        case "/create":
-            // /create is now just an alias for /join
-            let systemMessage = BitchatMessage(
-                sender: "system",
-                content: "use /join #channelname to join or create a channel",
-                timestamp: Date(),
-                isRelay: false
-            )
-            messages.append(systemMessage)
         case "/m", "/msg":
             if parts.count > 1 {
                 let targetName = String(parts[1])
@@ -2531,60 +1720,6 @@ extension ChatViewModel: BitchatDelegate {
                 )
                 messages.append(systemMessage)
             }
-        case "/channels":
-            // Discover all channels (both joined and not joined)
-            var allChannels: Set<String> = Set()
-            
-            // Add joined channels
-            allChannels.formUnion(joinedChannels)
-            
-            // Find channels from messages we've seen
-            for msg in messages {
-                if let channel = msg.channel {
-                    allChannels.insert(channel)
-                }
-            }
-            
-            // Also check channel messages we've cached
-            for (channel, _) in channelMessages {
-                allChannels.insert(channel)
-            }
-            
-            // Add password protected channels we know about
-            allChannels.formUnion(passwordProtectedChannels)
-            
-            if allChannels.isEmpty {
-                let systemMessage = BitchatMessage(
-                    sender: "system",
-                    content: "no channels discovered yet. channels appear as people use them.",
-                    timestamp: Date(),
-                    isRelay: false
-                )
-                messages.append(systemMessage)
-            } else {
-                let channelList = allChannels.sorted().map { channel in
-                    var status = ""
-                    if joinedChannels.contains(channel) {
-                        status += " ✓"
-                    }
-                    if passwordProtectedChannels.contains(channel) {
-                        status += " 🔒"
-                    }
-                    let myFingerprint = getMyFingerprint()
-                    if channelCreators[channel] == meshService.myPeerID || channelCreators[channel] == myFingerprint {
-                        status += " (owner)"
-                    }
-                    return "\(channel)\(status)"
-                }.joined(separator: "\n")
-                
-                let systemMessage = BitchatMessage(
-                    sender: "system",
-                    content: "discovered channels:\n\(channelList)\n\n✓ = joined, 🔒 = password protected, 📌 = retention enabled",
-                    timestamp: Date(),
-                    isRelay: false
-                )
-                messages.append(systemMessage)
-            }
         case "/w":
             let peerNicknames = meshService.getPeerNicknames()
             if connectedPeers.isEmpty {
@@ -2608,88 +1743,14 @@ extension ChatViewModel: BitchatDelegate {
                 )
                 messages.append(systemMessage)
             }
-        case "/transfer":
-            // Transfer channel ownership
-            let parts = command.split(separator: " ", maxSplits: 1).map(String.init)
-            if parts.count < 2 {
-                let systemMessage = BitchatMessage(
-                    sender: "system",
-                    content: "usage: /transfer @nickname",
-                    timestamp: Date(),
-                    isRelay: false
-                )
-                messages.append(systemMessage)
-            } else {
-                transferChannelOwnership(to: parts[1])
-            }
-        case "/pass":
-            // Change channel password (only available in channels)
-            guard currentChannel != nil else {
-                let systemMessage = BitchatMessage(
-                    sender: "system",
-                    content: "you must be in a channel to use /pass.",
-                    timestamp: Date(),
-                    isRelay: false
-                )
-                messages.append(systemMessage)
-                break
-            }
-            let parts = command.split(separator: " ", maxSplits: 1).map(String.init)
-            if parts.count < 2 {
-                let systemMessage = BitchatMessage(
-                    sender: "system",
-                    content: "usage: /pass <new password>",
-                    timestamp: Date(),
-                    isRelay: false
-                )
-                messages.append(systemMessage)
-            } else {
-                changeChannelPassword(to: parts[1])
-            }
         case "/clear":
             // Clear messages based on current context
-            if let channel = currentChannel {
-                // Clear channel messages
-                channelMessages[channel]?.removeAll()
-            } else if let peerID = selectedPrivateChatPeer {
+            if let peerID = selectedPrivateChatPeer {
                 // Clear private chat
                 privateChats[peerID]?.removeAll()
             } else {
                 // Clear main messages
                 messages.removeAll()
-            }
-        case "/debug":
-            // Debug command to check ownership info
-            if let channel = currentChannel {
-                let myPeerID = meshService.myPeerID
-                let myFingerprint = getMyFingerprint()
-                let creator = channelCreators[channel] ?? "unknown"
-                let isOwner = isChannelOwner(channel)
-                
-                let debugInfo = """
-                    🐛 Debug Info for \(channel):
-                    • Channel creator: \(creator)
-                    • My peer ID: \(myPeerID)
-                    • My fingerprint: \(myFingerprint)
-                    • Am I owner? \(isOwner ? "YES" : "NO")
-                    • All creators: \(channelCreators)
-                    """
-                
-                let debugMsg = BitchatMessage(
-                    sender: "system",
-                    content: debugInfo,
-                    timestamp: Date(),
-                    isRelay: false
-                )
-                messages.append(debugMsg)
-            } else {
-                let debugMsg = BitchatMessage(
-                    sender: "system",
-                    content: "use /debug in a channel to see ownership info",
-                    timestamp: Date(),
-                    isRelay: false
-                )
-                messages.append(debugMsg)
             }
         case "/hug":
             if parts.count > 1 {
@@ -2707,20 +1768,12 @@ extension ChatViewModel: BitchatDelegate {
                         isRelay: false,
                         isPrivate: false,
                         recipientNickname: nickname,
-                        senderPeerID: meshService.myPeerID,
-                        channel: currentChannel
+                        senderPeerID: meshService.myPeerID
                     )
                     
                     // Send as a regular message but it will be displayed as system message due to content
                     let hugContent = "* 🫂 \(self.nickname) hugs \(nickname) *"
-                    if let channel = currentChannel {
-                        meshService.sendMessage(hugContent, channel: channel)
-                        // Add to channel messages
-                        if channelMessages[channel] == nil {
-                            channelMessages[channel] = []
-                        }
-                        channelMessages[channel]?.append(hugMessage)
-                    } else if selectedPrivateChatPeer != nil {
+                    if selectedPrivateChatPeer != nil {
                         // In private chat, send as private message
                         if let peerNickname = meshService.getPeerNicknames()[targetPeerID] {
                             meshService.sendPrivateMessage("* 🫂 \(self.nickname) hugs you *", to: targetPeerID, recipientNickname: peerNickname)
@@ -2765,20 +1818,12 @@ extension ChatViewModel: BitchatDelegate {
                         isRelay: false,
                         isPrivate: false,
                         recipientNickname: nickname,
-                        senderPeerID: meshService.myPeerID,
-                        channel: currentChannel
+                        senderPeerID: meshService.myPeerID
                     )
                     
                     // Send as a regular message but it will be displayed as system message due to content
                     let slapContent = "* 🐟 \(self.nickname) slaps \(nickname) around a bit with a large trout *"
-                    if let channel = currentChannel {
-                        meshService.sendMessage(slapContent, channel: channel)
-                        // Add to channel messages
-                        if channelMessages[channel] == nil {
-                            channelMessages[channel] = []
-                        }
-                        channelMessages[channel]?.append(slapMessage)
-                    } else if selectedPrivateChatPeer != nil {
+                    if selectedPrivateChatPeer != nil {
                         // In private chat, send as private message
                         if let peerNickname = meshService.getPeerNicknames()[targetPeerID] {
                             meshService.sendPrivateMessage("* 🐟 \(self.nickname) slaps you around a bit with a large trout *", to: targetPeerID, recipientNickname: peerNickname)
@@ -2985,13 +2030,6 @@ extension ChatViewModel: BitchatDelegate {
     
     func didReceiveMessage(_ message: BitchatMessage) {
         
-        // Track sender as a channel member if this is a channel message
-        if let channel = message.channel, let senderPeerID = message.senderPeerID {
-            if channelMembers[channel] == nil {
-                channelMembers[channel] = Set()
-            }
-            channelMembers[channel]?.insert(senderPeerID)
-        }
         
         // Check if sender is blocked (for both private and public messages)
         if let senderPeerID = message.senderPeerID {
@@ -3045,6 +2083,7 @@ extension ChatViewModel: BitchatDelegate {
                     
                     // Initialize with migrated messages
                     privateChats[peerID] = migratedMessages
+                    trimPrivateChatMessagesIfNeeded(for: peerID)
                 }
                 
                 if privateChats[peerID] == nil {
@@ -3079,19 +2118,14 @@ extension ChatViewModel: BitchatDelegate {
                         recipientNickname: messageToStore.recipientNickname,
                         senderPeerID: messageToStore.senderPeerID,
                         mentions: messageToStore.mentions,
-                        channel: messageToStore.channel,
                         deliveryStatus: messageToStore.deliveryStatus
                     )
                 }
                 
-                privateChats[peerID]?.append(messageToStore)
-                // Sort messages by timestamp to ensure proper ordering
-                privateChats[peerID]?.sort { $0.timestamp < $1.timestamp }
+                // Use batching for private messages
+                addPrivateMessageToBatch(messageToStore, for: peerID)
                 
                 // Debug logging
-                
-                // Trigger UI update for private chats
-                objectWillChange.send()
                 
                 // Check if we're in a private chat with this peer's fingerprint
                 // This handles reconnections with new peer IDs
@@ -3130,216 +2164,6 @@ extension ChatViewModel: BitchatDelegate {
             } else if message.sender == nickname {
                 // Our own message that was echoed back - ignore it since we already added it locally
             }
-        } else if let channel = message.channel {
-            // Channel message
-            
-            // Only process channel messages if we've joined this channel
-            if joinedChannels.contains(channel) {
-                // Prepare the message to add (might be updated if decryption succeeds)
-                var messageToAdd = message
-                
-                // Check if this is an encrypted message and we don't have the key
-                if message.isEncrypted && channelKeys[channel] == nil {
-                    // Mark channel as password protected if not already
-                    let wasNewlyDiscovered = !passwordProtectedChannels.contains(channel)
-                    if wasNewlyDiscovered {
-                        passwordProtectedChannels.insert(channel)
-                        saveChannelData()
-                        
-                        // Add a system message to indicate the channel is password protected (only once)
-                        let systemMessage = BitchatMessage(
-                            sender: "system",
-                            content: "channel \(channel) is password protected. you need the password to read messages.",
-                            timestamp: Date(),
-                            isRelay: false
-                        )
-                        if channelMessages[channel] == nil {
-                            channelMessages[channel] = []
-                        }
-                        channelMessages[channel]?.append(systemMessage)
-                    }
-                    
-                    // If we're currently viewing this channel, prompt for password
-                    if currentChannel == channel {
-                        passwordPromptChannel = channel
-                        showPasswordPrompt = true
-                    }
-                } else if message.isEncrypted && channelKeys[channel] != nil && message.content == "[Encrypted message - password required]" {
-                    // We have a key but the message shows as encrypted - try to decrypt it again
-                    
-                    // Check if this is the first encrypted message in the channel (password verification opportunity)
-                    let isFirstEncryptedMessage = channelMessages[channel]?.filter { $0.isEncrypted }.isEmpty ?? true
-                    
-                    if let encryptedData = message.encryptedContent {
-                        if let decryptedContent = decryptChannelMessage(encryptedData, channel: channel) {
-                            // Successfully decrypted - update the message content
-                            
-                            if isFirstEncryptedMessage {
-                                
-                                // Add success message
-                                let verifiedMsg = BitchatMessage(
-                                    sender: "system",
-                                    content: "password verified successfully for channel \(channel).",
-                                    timestamp: Date(),
-                                    isRelay: false
-                                )
-                                messages.append(verifiedMsg)
-                            }
-                            
-                            // Create a new message with decrypted content
-                            let decryptedMessage = BitchatMessage(
-                                sender: message.sender,
-                                content: decryptedContent,
-                                timestamp: message.timestamp,
-                                isRelay: message.isRelay,
-                                originalSender: message.originalSender,
-                                isPrivate: message.isPrivate,
-                                recipientNickname: message.recipientNickname,
-                                senderPeerID: message.senderPeerID,
-                                mentions: message.mentions,
-                                channel: message.channel,
-                                encryptedContent: message.encryptedContent,
-                                isEncrypted: message.isEncrypted
-                            )
-                            
-                            // Update the message we'll add
-                            messageToAdd = decryptedMessage
-                        } else {
-                            // Decryption really failed - wrong password
-                            
-                            // Clear the wrong password
-                            channelKeys.removeValue(forKey: channel)
-                            channelPasswords.removeValue(forKey: channel)
-                            
-                            // If this was the first encrypted message, we need to kick the user out
-                            if isFirstEncryptedMessage {
-                                
-                                // Leave the channel
-                                joinedChannels.remove(channel)
-                                saveJoinedChannels()
-                                
-                                // Clear channel data
-                                channelMessages.removeValue(forKey: channel)
-                                channelMembers.removeValue(forKey: channel)
-                                unreadChannelMessages.removeValue(forKey: channel)
-                                
-                                // If we're currently in this channel, exit to main
-                                if currentChannel == channel {
-                                    currentChannel = nil
-                                }
-                                
-                                // Add error message
-                                let errorMsg = BitchatMessage(
-                                    sender: "system",
-                                    content: "wrong password for channel \(channel). you have been removed from the channel.",
-                                    timestamp: Date(),
-                                    isRelay: false
-                                )
-                                messages.append(errorMsg)
-                                
-                                // Don't show password prompt - user needs to rejoin
-                                return
-                            }
-                            
-                            // Add system message for subsequent failures
-                            let systemMessage = BitchatMessage(
-                                sender: "system",
-                                content: "wrong password for channel \(channel). please enter the correct password.",
-                                timestamp: Date(),
-                                isRelay: false
-                            )
-                            messages.append(systemMessage)
-                            
-                            // Show password prompt again
-                            if currentChannel == channel {
-                                passwordPromptChannel = channel
-                                showPasswordPrompt = true
-                            }
-                        }
-                    }
-                }
-                
-                // Check if this is an action that should be converted to system message
-                let isActionMessage = messageToAdd.content.hasPrefix("* ") && messageToAdd.content.hasSuffix(" *") &&
-                                      (messageToAdd.content.contains("🫂") || messageToAdd.content.contains("🐟") || 
-                                       messageToAdd.content.contains("took a screenshot"))
-                
-                let finalMessage: BitchatMessage
-                if isActionMessage {
-                    // Convert to system message
-                    finalMessage = BitchatMessage(
-                        sender: "system",
-                        content: String(messageToAdd.content.dropFirst(2).dropLast(2)), // Remove * * wrapper
-                        timestamp: messageToAdd.timestamp,
-                        isRelay: messageToAdd.isRelay,
-                        originalSender: messageToAdd.originalSender,
-                        isPrivate: false,
-                        recipientNickname: messageToAdd.recipientNickname,
-                        senderPeerID: messageToAdd.senderPeerID,
-                        mentions: messageToAdd.mentions,
-                        channel: messageToAdd.channel
-                    )
-                } else {
-                    finalMessage = messageToAdd
-                }
-                
-                // Add to channel messages (using potentially decrypted version)
-                if channelMessages[channel] == nil {
-                    channelMessages[channel] = []
-                }
-                
-                // Check if this is our own message being echoed back
-                if finalMessage.sender != nickname && finalMessage.sender != "system" {
-                    // Skip empty or whitespace-only messages
-                    if !finalMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        channelMessages[channel]?.append(finalMessage)
-                        channelMessages[channel]?.sort { $0.timestamp < $1.timestamp }
-                    }
-                } else if finalMessage.sender != "system" {
-                    // Our own message - check if we already have it (by ID and content)
-                    let messageExists = channelMessages[channel]?.contains { existingMsg in
-                        // Check by ID first
-                        if existingMsg.id == finalMessage.id {
-                            return true
-                        }
-                        // Check by content and sender with time window (within 1 second)
-                        if existingMsg.content == finalMessage.content && 
-                           existingMsg.sender == finalMessage.sender {
-                            let timeDiff = abs(existingMsg.timestamp.timeIntervalSince(finalMessage.timestamp))
-                            return timeDiff < 1.0
-                        }
-                        return false
-                    } ?? false
-                    if !messageExists {
-                        // This is a message we sent from another device or it's missing locally
-                        // Skip empty or whitespace-only messages
-                        if !finalMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            channelMessages[channel]?.append(finalMessage)
-                            channelMessages[channel]?.sort { $0.timestamp < $1.timestamp }
-                        }
-                    }
-                } else {
-                    // System message - always add
-                    channelMessages[channel]?.append(finalMessage)
-                    channelMessages[channel]?.sort { $0.timestamp < $1.timestamp }
-                }
-                
-                // Track channel members - only track the sender as a member
-                if channelMembers[channel] == nil {
-                    channelMembers[channel] = Set()
-                }
-                if let senderPeerID = message.senderPeerID {
-                    channelMembers[channel]?.insert(senderPeerID)
-                } else {
-                }
-                
-                // Update unread count if not currently viewing this channel and it's not our own message
-                if currentChannel != channel && finalMessage.sender != nickname {
-                    unreadChannelMessages[channel] = (unreadChannelMessages[channel] ?? 0) + 1
-                }
-            } else {
-                // We're not in this channel, ignore the message
-            }
         } else {
             // Regular public message (main chat)
             
@@ -3360,8 +2184,7 @@ extension ChatViewModel: BitchatDelegate {
                     isPrivate: false,
                     recipientNickname: message.recipientNickname,
                     senderPeerID: message.senderPeerID,
-                    mentions: message.mentions,
-                    channel: message.channel
+                    mentions: message.mentions
                 )
             } else {
                 finalMessage = message
@@ -3371,9 +2194,7 @@ extension ChatViewModel: BitchatDelegate {
             if finalMessage.sender != nickname && finalMessage.sender != "system" {
                 // Skip empty or whitespace-only messages
                 if !finalMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    messages.append(finalMessage)
-                    // Sort messages by timestamp to ensure proper ordering
-                    messages.sort { $0.timestamp < $1.timestamp }
+                    addMessageToBatch(finalMessage)
                 }
             } else if finalMessage.sender != "system" {
                 // Our own message - check if we already have it (by ID and content)
@@ -3394,14 +2215,14 @@ extension ChatViewModel: BitchatDelegate {
                     // This is a message we sent from another device or it's missing locally
                     // Skip empty or whitespace-only messages
                     if !finalMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        messages.append(finalMessage)
-                        messages.sort { $0.timestamp < $1.timestamp }
+                        addMessageToBatch(finalMessage)
                     }
                 }
             } else {
-                // System message - always add
-                messages.append(finalMessage)
-                messages.sort { $0.timestamp < $1.timestamp }
+                // System message - check for empty content before adding
+                if !finalMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    addMessageToBatch(finalMessage)
+                }
             }
         }
         
@@ -3412,7 +2233,10 @@ extension ChatViewModel: BitchatDelegate {
         if isMentioned && message.sender != nickname {
             NotificationService.shared.sendMentionNotification(from: message.sender, message: message.content)
         } else if message.isPrivate && message.sender != nickname {
-            NotificationService.shared.sendPrivateMessageNotification(from: message.sender, message: message.content)
+            // Only send notification if the private chat is not currently open
+            if selectedPrivateChatPeer != message.senderPeerID {
+                NotificationService.shared.sendPrivateMessageNotification(from: message.sender, message: message.content, peerID: message.senderPeerID ?? "")
+            }
         }
         
         #if os(iOS)
@@ -3513,37 +2337,50 @@ extension ChatViewModel: BitchatDelegate {
         // Resolve nickname using helper
         let displayName = resolveNickname(for: peerID)
         
+        // Ensure we have a valid display name
+        let finalDisplayName = displayName.isEmpty ? "peer" : displayName
+        
         let systemMessage = BitchatMessage(
             sender: "system",
-            content: "\(displayName) connected",
+            content: "\(finalDisplayName) connected",
             timestamp: Date(),
             isRelay: false,
             originalSender: nil
         )
-        messages.append(systemMessage)
-        
-        // Force UI update
-        objectWillChange.send()
+        // Batch system messages
+        addMessageToBatch(systemMessage)
     }
     
     func didDisconnectFromPeer(_ peerID: String) {
         // Remove ephemeral session from identity manager
         SecureIdentityStateManager.shared.removeEphemeralSession(peerID: peerID)
         
+        // Clear sent read receipts for this peer since they'll need to be resent after reconnection
+        // Only clear receipts for messages from this specific peer
+        if let messages = privateChats[peerID] {
+            for message in messages {
+                // Remove read receipts for messages FROM this peer (not TO this peer)
+                if message.senderPeerID == peerID {
+                    sentReadReceipts.remove(message.id)
+                }
+            }
+        }
+        
         // Resolve nickname using helper
         let displayName = resolveNickname(for: peerID)
         
+        // Ensure we have a valid display name
+        let finalDisplayName = displayName.isEmpty ? "peer" : displayName
+        
         let systemMessage = BitchatMessage(
             sender: "system",
-            content: "\(displayName) disconnected",
+            content: "\(finalDisplayName) disconnected",
             timestamp: Date(),
             isRelay: false,
             originalSender: nil
         )
-        messages.append(systemMessage)
-        
-        // Force UI update
-        objectWillChange.send()
+        // Batch system messages
+        addMessageToBatch(systemMessage)
     }
     
     func didUpdatePeerList(_ peers: [String]) {
@@ -3560,16 +2397,10 @@ extension ChatViewModel: BitchatDelegate {
             
             // Update encryption status for all peers
             self.updateEncryptionStatusForPeers()
+            
+            // Invalidate RSSI cache since peer data may have changed
+            self.invalidateRSSIColorCache()
 
-            // Clean up channel members who disconnected
-            for (channel, memberIDs) in self.channelMembers {
-                let activeMembers = memberIDs.filter { memberID in
-                    memberID == self.meshService.myPeerID || peers.contains(memberID)
-                }
-                if activeMembers != memberIDs {
-                    self.channelMembers[channel] = activeMembers
-                }
-            }
             // Explicitly notify SwiftUI that the object has changed.
             self.objectWillChange.send()
             
@@ -3656,21 +2487,17 @@ extension ChatViewModel: BitchatDelegate {
         if let index = messages.firstIndex(where: { $0.id == messageID }) {
             let currentStatus = messages[index].deliveryStatus
             if !shouldSkipUpdate(currentStatus: currentStatus, newStatus: status) {
-                var updatedMessage = messages[index]
-                updatedMessage.deliveryStatus = status
-                messages[index] = updatedMessage
+                messages[index].deliveryStatus = status
             }
         }
         
         // Update in private chats
         var updatedPrivateChats = privateChats
-        for (peerID, var chatMessages) in updatedPrivateChats {
+        for (peerID, chatMessages) in updatedPrivateChats {
             if let index = chatMessages.firstIndex(where: { $0.id == messageID }) {
                 let currentStatus = chatMessages[index].deliveryStatus
                 if !shouldSkipUpdate(currentStatus: currentStatus, newStatus: status) {
-                    var updatedMessage = chatMessages[index]
-                    updatedMessage.deliveryStatus = status
-                    chatMessages[index] = updatedMessage
+                    chatMessages[index].deliveryStatus = status
                     updatedPrivateChats[peerID] = chatMessages
                 }
             }
@@ -3683,170 +2510,7 @@ extension ChatViewModel: BitchatDelegate {
             self.objectWillChange.send()
         }
         
-        // Update in channel messages
-        for (channel, var channelMsgs) in channelMessages {
-            if let index = channelMsgs.firstIndex(where: { $0.id == messageID }) {
-                let currentStatus = channelMsgs[index].deliveryStatus
-                if !shouldSkipUpdate(currentStatus: currentStatus, newStatus: status) {
-                    var updatedMessage = channelMsgs[index]
-                    updatedMessage.deliveryStatus = status
-                    channelMsgs[index] = updatedMessage
-                    channelMessages[channel] = channelMsgs
-                    
-                    // Force UI update
-                    DispatchQueue.main.async { [weak self] in
-                        self?.objectWillChange.send()
-                    }
-                }
-            }
-        }
     }
     
-    // MARK: - Channel Key Verification
-    
-    func didReceiveChannelKeyVerifyRequest(_ request: ChannelKeyVerifyRequest, from peerID: String) {
-        
-        // Check if we have the key for this channel
-        guard let myKey = channelKeys[request.channel] else {
-            // We don't have the key, can't verify
-            return
-        }
-        
-        // Compute our key commitment
-        let myCommitment = computeKeyCommitment(for: myKey)
-        
-        // Check if their commitment matches ours
-        let verified = (myCommitment == request.keyCommitment)
-        
-        // Send response
-        let response = ChannelKeyVerifyResponse(
-            channel: request.channel,
-            responderID: meshService.myPeerID,
-            verified: verified
-        )
-        
-        meshService.sendChannelKeyVerifyResponse(response, to: peerID)
-        
-        // If they have the wrong key, they might need the new password
-        let myFingerprint = getMyFingerprint()
-        if !verified && (channelCreators[request.channel] == meshService.myPeerID || channelCreators[request.channel] == myFingerprint) {
-            // We're the owner and they have wrong key - could offer to send update
-        }
-    }
-    
-    func didReceiveChannelKeyVerifyResponse(_ response: ChannelKeyVerifyResponse, from peerID: String) {
-        
-        if response.verified {
-            // Our key was verified - we have the correct password
-            
-            // Update verification status
-            channelVerificationStatus[response.channel] = .verified
-            
-            // Mark channel as successfully joined
-            if joinedChannels.contains(response.channel) {
-                // Update UI to show successful verification
-                DispatchQueue.main.async { [weak self] in
-                    self?.objectWillChange.send()
-                }
-            }
-        } else {
-            // Our key was rejected - we have the wrong password
-            
-            // Update verification status
-            channelVerificationStatus[response.channel] = .failed
-            
-            // Show error to user
-            let errorMsg = BitchatMessage(
-                sender: "system",
-                content: "incorrect password for \(response.channel). please check with channel members for the correct password.",
-                timestamp: Date(),
-                isRelay: false
-            )
-            messages.append(errorMsg)
-        }
-    }
-    
-    func didReceiveChannelPasswordUpdate(_ update: ChannelPasswordUpdate, from peerID: String) {
-        // Use the fingerprint from the update message (more reliable than looking up by peer ID)
-        let senderFingerprint = update.ownerFingerprint
-        
-        // Verify sender is the channel owner by checking fingerprint
-        guard let channelOwnerFingerprint = channelCreators[update.channel],
-              channelOwnerFingerprint == senderFingerprint else {
-            // Security: Ignoring password update from non-owner
-            return
-        }
-        
-        // Extract the new password
-        let newPassword = String(data: update.encryptedPassword, encoding: .utf8) ?? ""
-        
-        // Verify the new key commitment matches
-        let newKey = deriveChannelKey(from: newPassword, channelName: update.channel)
-        let computedCommitment = computeKeyCommitment(for: newKey)
-        
-        guard computedCommitment == update.newKeyCommitment else {
-            return
-        }
-        
-        // Accept the new password
-        channelKeys[update.channel] = newKey
-        channelPasswords[update.channel] = newPassword
-        channelKeyCommitments[update.channel] = update.newKeyCommitment
-        
-        // Save to keychain
-        _ = KeychainManager.shared.saveChannelPassword(newPassword, for: update.channel)
-        
-        // Save channel data
-        saveChannelData()
-        
-        // Notify user
-        let notificationMsg = BitchatMessage(
-            sender: "system",
-            content: "password for \(update.channel) has been updated by the channel owner.",
-            timestamp: Date(),
-            isRelay: false
-        )
-        
-        // Add to appropriate message list
-        if currentChannel == update.channel {
-            messages.append(notificationMsg)
-        } else if channelMessages[update.channel] != nil {
-            channelMessages[update.channel]?.append(notificationMsg)
-        }
-        
-        // Force UI update
-        DispatchQueue.main.async { [weak self] in
-            self?.objectWillChange.send()
-        }
-    }
-    
-    func didReceiveChannelMetadata(_ metadata: ChannelMetadata, from peerID: String) {
-        
-        // Check if we already have metadata for this channel
-        if let existingMetadata = channelMetadata[metadata.channel] {
-            // Keep the older one (first creator wins)
-            if existingMetadata.createdAt < metadata.createdAt {
-                return
-            }
-        }
-        
-        // Store the metadata
-        channelMetadata[metadata.channel] = metadata
-        
-        // Update channel creator info
-        if channelCreators[metadata.channel] == nil {
-            channelCreators[metadata.channel] = metadata.creatorFingerprint
-            
-            if metadata.isPasswordProtected {
-                passwordProtectedChannels.insert(metadata.channel)
-                if let commitment = metadata.keyCommitment {
-                    channelKeyCommitments[metadata.channel] = commitment
-                }
-            }
-            
-            saveChannelData()
-            // Stored channel metadata
-        }
-    }
     
 }
