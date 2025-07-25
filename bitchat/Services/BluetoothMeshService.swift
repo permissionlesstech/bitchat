@@ -709,12 +709,10 @@ class BluetoothMeshService: NSObject {
                     self.peerNicknames.removeValue(forKey: existingPeerID)
                 }
                 
-                // Update active peers set
-                if self.activePeers.contains(existingPeerID) {
-                    self.activePeers.remove(existingPeerID)
-                    // Don't pre-insert the new peer ID - let the announce packet handle it
-                    // This ensures the connect message logic works properly
-                }
+                // Update active peers set - always remove old peer ID
+                self.activePeers.remove(existingPeerID)
+                // Don't pre-insert the new peer ID - let the announce packet handle it
+                // This ensures the connect message logic works properly
                 
                 // Transfer any connected peripherals
                 if let peripheral = self.connectedPeripherals[existingPeerID] {
@@ -733,6 +731,14 @@ class BluetoothMeshService: NSObject {
                     self.lastHeardFromPeer.removeValue(forKey: existingPeerID)
                     self.lastHeardFromPeer[newPeerID] = lastHeard
                 }
+                
+                // Clean up connection state for old peer ID
+                self.peerConnectionStates.removeValue(forKey: existingPeerID)
+                // Don't transfer connection state - let it be re-established naturally
+                
+                // Clean up any pending messages for old peer ID
+                self.pendingPrivateMessages.removeValue(forKey: existingPeerID)
+                // Don't transfer pending messages - they would be stale anyway
             }
             
             // Add new mapping
@@ -1161,8 +1167,13 @@ class BluetoothMeshService: NSObject {
         // Setup battery optimizer
         setupBatteryOptimizer()
         
-        // Start cover traffic for privacy
-        startCoverTraffic()
+        // Start cover traffic for privacy (disabled by default for now)
+        // TODO: Make this configurable in settings
+        let coverTrafficEnabled = true
+        if coverTrafficEnabled {
+            SecureLogger.log("Cover traffic enabled", category: SecureLogger.security, level: .info)
+            startCoverTraffic()
+        }
     }
     
     func sendBroadcastAnnounce() {
@@ -1624,14 +1635,9 @@ class BluetoothMeshService: NSObject {
             noiseSessionStates[peerID] = .handshakeQueued
         }
         
-        // Apply tie-breaker logic for handshake initiation
-        if myPeerID < peerID {
-            // We have lower ID, initiate handshake
-            initiateNoiseHandshake(with: peerID)
-        } else {
-            // We have higher ID, send targeted identity announce to prompt them to initiate
-            sendNoiseIdentityAnnounce(to: peerID)
-        }
+        // Always initiate handshake when triggered by UI
+        // This ensures immediate handshake when opening PM
+        initiateNoiseHandshake(with: peerID)
     }
     
     func getPeerRSSI() -> [String: NSNumber] {
@@ -4759,22 +4765,32 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
     }
     
     private func sendDummyMessage() {
-        // Only send dummy messages if we have connected peers
-        let peers = getAllConnectedPeerIDs()
-        guard !peers.isEmpty else { return }
+        // Only send dummy messages if we have connected peers with established sessions
+        let peersWithSessions = getAllConnectedPeerIDs().filter { peerID in
+            return noiseService.hasEstablishedSession(with: peerID)
+        }
+        
+        guard !peersWithSessions.isEmpty else { 
+            SecureLogger.log("Cover traffic: No peers with established sessions, skipping dummy message", 
+                           category: SecureLogger.security, level: .debug)
+            return 
+        }
         
         // Skip if battery is low
         if currentBatteryLevel < 0.2 {
+            SecureLogger.log("Cover traffic: Battery low, skipping dummy message", 
+                           category: SecureLogger.security, level: .debug)
             return
         }
         
-        // Pick a random peer to send to
-        guard let randomPeer = peers.randomElement() else { return }
+        // Pick a random peer with an established session to send to
+        guard let randomPeer = peersWithSessions.randomElement() else { return }
         
         // Generate random dummy content
         let dummyContent = generateDummyContent()
         
-        // Sending cover traffic
+        SecureLogger.log("Cover traffic: Sending dummy message to \(randomPeer)", 
+                       category: SecureLogger.security, level: .info)
         
         // Send as a private message so it's encrypted
         let recipientNickname = collectionsQueue.sync {
@@ -4892,18 +4908,42 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
     private func sendKeepAlivePings() {
         let connectedPeers = collectionsQueue.sync {
             return Array(activePeers).filter { peerID in
-                // Only send keepalive to authenticated peers
+                // Only send keepalive to authenticated peers that still exist
+                // Check if this peer ID is still current (not rotated)
+                guard let fingerprint = peerIDToFingerprint[peerID],
+                      let currentPeerID = fingerprintToPeerID[fingerprint],
+                      currentPeerID == peerID else {
+                    // This peer ID has rotated, skip it
+                    SecureLogger.log("Skipping keepalive for rotated peer ID: \(peerID)", 
+                                   category: SecureLogger.session, level: .debug)
+                    return false
+                }
+                
+                // Check if we actually have a Noise session with this peer
+                guard noiseService.hasEstablishedSession(with: peerID) else {
+                    SecureLogger.log("Skipping keepalive for \(peerID) - no established session", 
+                                   category: SecureLogger.session, level: .debug)
+                    return false
+                }
+                
                 return peerConnectionStates[peerID] == .authenticated
             }
         }
+        
+        SecureLogger.log("Keep-alive timer: checking \(connectedPeers.count) peers for pings", 
+                       category: SecureLogger.session, level: .debug)
         
         for peerID in connectedPeers {
             // Don't spam if we recently heard from them
             if let lastHeard = lastHeardFromPeer[peerID], 
                Date().timeIntervalSince(lastHeard) < keepAliveInterval / 2 {
+                SecureLogger.log("Skipping keepalive for \(peerID) - heard recently", 
+                               category: SecureLogger.session, level: .debug)
                 continue  // Skip if we heard from them in the last 10 seconds
             }
             
+            SecureLogger.log("Sending keepalive ping to \(peerID)", 
+                           category: SecureLogger.session, level: .debug)
             validateNoiseSession(with: peerID)
         }
     }
@@ -5706,7 +5746,9 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         SecureLogger.log("Received handshake request from \(request.requesterID) (\(request.requesterNickname)) with \(request.pendingMessageCount) pending messages", 
                        category: SecureLogger.noise, level: .info)
         
-        // Notify UI about pending messages
+        // Don't show handshake request notification in UI
+        // User requested to remove this notification
+        /*
         DispatchQueue.main.async { [weak self] in
             if let chatVM = self?.delegate as? ChatViewModel {
                 // Notify the UI that someone wants to send messages
@@ -5715,6 +5757,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                                             pendingCount: request.pendingMessageCount)
             }
         }
+        */
         
         // Check if we already have a session
         if noiseService.hasEstablishedSession(with: peerID) {
@@ -6103,6 +6146,9 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
     
     // Send private message using Noise Protocol
     private func sendPrivateMessageViaNoise(_ content: String, to recipientPeerID: String, recipientNickname: String, messageID: String? = nil) {
+        SecureLogger.log("sendPrivateMessageViaNoise called - content: '\(content.prefix(50))...', to: \(recipientPeerID), messageID: \(messageID ?? "nil")", 
+                       category: SecureLogger.noise, level: .info)
+        
         // Use per-peer encryption queue to prevent nonce desynchronization
         let encryptionQueue = getEncryptionQueue(for: recipientPeerID)
         
@@ -6117,16 +6163,16 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             // Check if session is stale (no successful communication for a while)
             var sessionIsStale = false
             if hasSession {
-            let lastSuccess = lastSuccessfulMessageTime[recipientPeerID] ?? Date.distantPast
-            let sessionAge = Date().timeIntervalSince(lastSuccess)
-            // Increase session validity to 24 hours - sessions should persist across temporary disconnects
-            if sessionAge > 86400.0 { // More than 24 hours since last successful message
-                sessionIsStale = true
-                SecureLogger.log("Session with \(recipientPeerID) is stale (last success: \(Int(sessionAge))s ago), will re-establish", category: SecureLogger.noise, level: .info)
+                let lastSuccess = lastSuccessfulMessageTime[recipientPeerID] ?? Date.distantPast
+                let sessionAge = Date().timeIntervalSince(lastSuccess)
+                // Increase session validity to 24 hours - sessions should persist across temporary disconnects
+                if sessionAge > 86400.0 { // More than 24 hours since last successful message
+                    sessionIsStale = true
+                    SecureLogger.log("Session with \(recipientPeerID) is stale (last success: \(Int(sessionAge))s ago), will re-establish", category: SecureLogger.noise, level: .info)
+                }
             }
-        }
-        
-        if !hasSession || sessionIsStale {
+            
+            if !hasSession || sessionIsStale {
             if sessionIsStale {
                 // Clear stale session first
                 cleanupPeerCryptoState(recipientPeerID)
