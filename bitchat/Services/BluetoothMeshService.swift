@@ -2714,7 +2714,6 @@ class BluetoothMeshService: NSObject {
                     if let tempID = tempIDToRemove {
                         // RSSI transfer is handled by updatePeripheralMapping
                         self.peripheralRSSI.removeValue(forKey: tempID)
-                    }
                         
                         // IMPORTANT: Remove old peer ID from activePeers to prevent duplicates
                         collectionsQueue.sync(flags: .barrier) {
@@ -2835,7 +2834,6 @@ class BluetoothMeshService: NSObject {
                         // Just update the peer list
                         self.notifyPeerListUpdate()
                     }
-                } else {
                 }
                 
                 // Relay announce if TTL > 0
@@ -2847,7 +2845,6 @@ class BluetoothMeshService: NSObject {
                     let delay = Double.random(in: 0.1...0.3)
                     self.scheduleRelay(relayPacket, messageID: messageID, delay: delay)
                 }
-            } else {
             }
             
         case .leave:
@@ -3552,8 +3549,6 @@ class BluetoothMeshService: NSObject {
             }
         }
     }
-}  // End of cleanupOldFragments
-
 }  // End of BluetoothMeshService class
 
 extension BluetoothMeshService: CBCentralManagerDelegate {
