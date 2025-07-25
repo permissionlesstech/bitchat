@@ -733,12 +733,36 @@ class BluetoothMeshService: NSObject {
     
     // Removed getPublicKeyFingerprint - no longer needed with Noise
     
+    // MARK: - Peer Identity Mapping
+    
     // Get peer's fingerprint (replaces getPeerPublicKey)
     func getPeerFingerprint(_ peerID: String) -> String? {
         return noiseService.getPeerFingerprint(peerID)
     }
     
-    // MARK: - Peer Identity Mapping
+    // Get fingerprint for a peer ID
+    func getFingerprint(for peerID: String) -> String? {
+        return collectionsQueue.sync {
+            peerIDToFingerprint[peerID]
+        }
+    }
+    
+    // Check if a peer ID belongs to us (current or previous)
+    func isPeerIDOurs(_ peerID: String) -> Bool {
+        if peerID == myPeerID {
+            return true
+        }
+        
+        // Check if it's our previous ID within grace period
+        if let previousID = previousPeerID,
+           peerID == previousID,
+           let rotationTime = rotationTimestamp,
+           Date().timeIntervalSince(rotationTime) < rotationGracePeriod {
+            return true
+        }
+        
+        return false
+    }
     
     // Update peer identity binding when receiving announcements
     func updatePeerBinding(_ newPeerID: String, fingerprint: String, binding: PeerIdentityBinding) {
@@ -833,36 +857,45 @@ class BluetoothMeshService: NSObject {
         }
     }
     
-    // Get current peer ID for a fingerprint
-    func getCurrentPeerID(for fingerprint: String) -> String? {
+    // Public method to get current peer ID for a fingerprint
+    func getCurrentPeerIDForFingerprint(_ fingerprint: String) -> String? {
         return collectionsQueue.sync {
-            fingerprintToPeerID[fingerprint]
+            return fingerprintToPeerID[fingerprint]
         }
     }
     
-    // Get fingerprint for a peer ID
-    func getFingerprint(for peerID: String) -> String? {
+    // Public method to get all current peer IDs for known fingerprints
+    func getCurrentPeerIDs() -> [String: String] {
         return collectionsQueue.sync {
-            peerIDToFingerprint[peerID]
+            return fingerprintToPeerID
         }
     }
     
-    // Check if a peer ID belongs to us (current or previous)
-    func isPeerIDOurs(_ peerID: String) -> Bool {
-        if peerID == myPeerID {
-            return true
+    // Notify delegate when peer ID changes
+    private func notifyPeerIDChange(oldPeerID: String, newPeerID: String, fingerprint: String) {
+        DispatchQueue.main.async { [weak self] in
+            // Remove old peer ID from active peers and announcedPeers
+            self?.collectionsQueue.sync(flags: .barrier) {
+                _ = self?.activePeers.remove(oldPeerID)
+                // Don't pre-insert the new peer ID - let the announce packet handle it
+                // This ensures the connect message logic works properly
+            }
+            
+            // Also remove from announcedPeers so the new ID can trigger a connect message
+            self?.announcedPeers.remove(oldPeerID)
+            
+            // Update peer list
+            self?.notifyPeerListUpdate(immediate: true)
+            
+            // Don't send disconnect/connect messages for peer ID rotation
+            // The peer didn't actually disconnect, they just rotated their ID
+            // This prevents confusing messages like "3a7e1c2c0d8943b9 disconnected"
+            
+            // Instead, notify the delegate about the peer ID change if needed
+            // (Could add a new delegate method for this in the future)
         }
-        
-        // Check if it's our previous ID within grace period
-        if let previousID = previousPeerID,
-           peerID == previousID,
-           let rotationTime = rotationTimestamp,
-           Date().timeIntervalSince(rotationTime) < rotationGracePeriod {
-            return true
-        }
-        
-        return false
     }
+    
     
     // Update peer connection state
     private func updatePeerConnectionState(_ peerID: String, state: PeerConnectionState) {
@@ -1437,46 +1470,6 @@ class BluetoothMeshService: NSObject {
             self.sendPrivateMessageViaNoise(content, to: targetPeerID, recipientNickname: recipientNickname, messageID: msgID)
         }
     }
-    
-    // Public method to get current peer ID for a fingerprint
-    func getCurrentPeerIDForFingerprint(_ fingerprint: String) -> String? {
-        return collectionsQueue.sync {
-            return fingerprintToPeerID[fingerprint]
-        }
-    }
-    
-    // Public method to get all current peer IDs for known fingerprints
-    func getCurrentPeerIDs() -> [String: String] {
-        return collectionsQueue.sync {
-            return fingerprintToPeerID
-        }
-    }
-    
-    // Notify delegate when peer ID changes
-    private func notifyPeerIDChange(oldPeerID: String, newPeerID: String, fingerprint: String) {
-        DispatchQueue.main.async { [weak self] in
-            // Remove old peer ID from active peers and announcedPeers
-            self?.collectionsQueue.sync(flags: .barrier) {
-                _ = self?.activePeers.remove(oldPeerID)
-                // Don't pre-insert the new peer ID - let the announce packet handle it
-                // This ensures the connect message logic works properly
-            }
-            
-            // Also remove from announcedPeers so the new ID can trigger a connect message
-            self?.announcedPeers.remove(oldPeerID)
-            
-            // Update peer list
-            self?.notifyPeerListUpdate(immediate: true)
-            
-            // Don't send disconnect/connect messages for peer ID rotation
-            // The peer didn't actually disconnect, they just rotated their ID
-            // This prevents confusing messages like "3a7e1c2c0d8943b9 disconnected"
-            
-            // Instead, notify the delegate about the peer ID change if needed
-            // (Could add a new delegate method for this in the future)
-        }
-    }
-    
     
     func sendDeliveryAck(_ ack: DeliveryAck, to recipientID: String) {
         // Use per-peer encryption queue to prevent nonce desynchronization
