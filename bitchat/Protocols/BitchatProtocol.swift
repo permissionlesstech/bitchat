@@ -9,6 +9,8 @@
 import Foundation
 import CryptoKit
 
+// MARK: - Message Padding
+
 // Privacy-preserving padding utilities
 struct MessagePadding {
     // Standard block sizes for padding
@@ -75,6 +77,8 @@ struct MessagePadding {
     }
 }
 
+// MARK: - Message Types
+
 enum MessageType: UInt8 {
     case announce = 0x01
     case leave = 0x03
@@ -127,6 +131,8 @@ enum MessageType: UInt8 {
     }
 }
 
+// MARK: - Handshake State
+
 // Lazy handshake state tracking
 enum LazyHandshakeState {
     case none                    // No session, no handshake attempted
@@ -136,10 +142,14 @@ enum LazyHandshakeState {
     case failed(Error)         // Handshake failed
 }
 
+// MARK: - Special Recipients
+
 // Special recipient ID for broadcast messages
 struct SpecialRecipients {
     static let broadcast = Data(repeating: 0xFF, count: 8)  // All 0xFF = broadcast
 }
+
+// MARK: - Core Protocol Structures
 
 struct BitchatPacket: Codable {
     let version: UInt8
@@ -196,6 +206,8 @@ struct BitchatPacket: Codable {
         BinaryProtocol.decode(data)
     }
 }
+
+// MARK: - Delivery Acknowledgments
 
 // Delivery acknowledgment structure
 struct DeliveryAck: Codable {
@@ -287,6 +299,8 @@ struct DeliveryAck: Codable {
     }
 }
 
+// MARK: - Read Receipts
+
 // Read receipt structure
 struct ReadReceipt: Codable {
     let originalMessageID: String
@@ -370,6 +384,8 @@ struct ReadReceipt: Codable {
                           timestamp: timestamp)
     }
 }
+
+// MARK: - Handshake Requests
 
 // Handshake request for pending messages
 struct HandshakeRequest: Codable {
@@ -1031,6 +1047,8 @@ struct VersionAck: Codable {
     }
 }
 
+// MARK: - Delivery Status
+
 // Delivery status for messages
 enum DeliveryStatus: Codable, Equatable {
     case sending
@@ -1057,6 +1075,8 @@ enum DeliveryStatus: Codable, Equatable {
         }
     }
 }
+
+// MARK: - Message Model
 
 class BitchatMessage: Codable {
     let id: String
@@ -1119,6 +1139,8 @@ extension BitchatMessage: Equatable {
                lhs.deliveryStatus == rhs.deliveryStatus
     }
 }
+
+// MARK: - Delegate Protocol
 
 protocol BitchatDelegate: AnyObject {
     func didReceiveMessage(_ message: BitchatMessage)
