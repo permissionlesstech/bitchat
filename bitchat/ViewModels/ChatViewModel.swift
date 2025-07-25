@@ -610,8 +610,17 @@ class ChatViewModel: ObservableObject {
         if let peerID = selectedPrivateChatPeer {
             // In private chat - send to the other person
             if let peerNickname = meshService.getPeerNicknames()[peerID] {
-                // Send the message directly without going through sendPrivateMessage to avoid local echo
-                meshService.sendPrivateMessage(screenshotMessage, to: peerID, recipientNickname: peerNickname)
+                // Only send screenshot notification if we have an established session
+                // This prevents triggering handshake requests for screenshot notifications
+                let sessionState = meshService.getNoiseSessionState(for: peerID)
+                switch sessionState {
+                case .established:
+                    // Send the message directly without going through sendPrivateMessage to avoid local echo
+                    meshService.sendPrivateMessage(screenshotMessage, to: peerID, recipientNickname: peerNickname)
+                default:
+                    // Don't send screenshot notification if no session exists
+                    SecureLogger.log("Skipping screenshot notification to \(peerID) - no established session", category: SecureLogger.security, level: .debug)
+                }
             }
             
             // Show local notification immediately as system message
