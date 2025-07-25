@@ -25,7 +25,15 @@ class ChatViewModel: ObservableObject {
     private var pendingPrivateMessages: [String: [BitchatMessage]] = [:] // peerID -> messages
     private var messageBatchTimer: Timer?
     private let messageBatchInterval: TimeInterval = 0.1 // 100ms batching window
-    @Published var nickname: String = ""
+    @Published var nickname: String = "" {
+        didSet {
+            // Trim whitespace whenever nickname is set
+            let trimmed = nickname.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed != nickname {
+                nickname = trimmed
+            }
+        }
+    }
     @Published var isConnected = false
     @Published var privateChats: [String: [BitchatMessage]] = [:] // peerID -> messages
     @Published var selectedPrivateChatPeer: String? = nil
@@ -176,7 +184,8 @@ class ChatViewModel: ObservableObject {
     
     private func loadNickname() {
         if let savedNickname = userDefaults.string(forKey: nicknameKey) {
-            nickname = savedNickname
+            // Trim whitespace when loading
+            nickname = savedNickname.trimmingCharacters(in: .whitespacesAndNewlines)
         } else {
             nickname = "anon\(Int.random(in: 1000...9999))"
             saveNickname()
@@ -192,9 +201,14 @@ class ChatViewModel: ObservableObject {
     }
     
     func validateAndSaveNickname() {
-        // Check if nickname is empty or just whitespace
-        if nickname.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        // Trim whitespace from nickname
+        let trimmed = nickname.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Check if nickname is empty after trimming
+        if trimmed.isEmpty {
             nickname = "anon\(Int.random(in: 1000...9999))"
+        } else {
+            nickname = trimmed
         }
         saveNickname()
     }
