@@ -1434,7 +1434,8 @@ class ChatViewModel: ObservableObject {
         rssiColorCache.removeAll()
     }
     
-    // Trim messages to keep only the most recent maxMessages
+    // MARK: - Message Batching
+    
     private func trimMessagesIfNeeded() {
         if messages.count > maxMessages {
             let removeCount = messages.count - maxMessages
@@ -1442,15 +1443,12 @@ class ChatViewModel: ObservableObject {
         }
     }
     
-    // Trim private chat messages to keep only the most recent maxMessages
     private func trimPrivateChatMessagesIfNeeded(for peerID: String) {
         if let count = privateChats[peerID]?.count, count > maxMessages {
             let removeCount = count - maxMessages
             privateChats[peerID]?.removeFirst(removeCount)
         }
     }
-    
-    // MARK: - Message Batching
     
     private func addMessageToBatch(_ message: BitchatMessage) {
         pendingMessages.append(message)
@@ -1689,44 +1687,6 @@ class ChatViewModel: ObservableObject {
                 
                 // Force UI update
                 self.objectWillChange.send()
-            }
-        }
-    }
-    
-    func handleHandshakeRequest(from peerID: String, nickname: String, pendingCount: UInt8) {
-        // Create a notification message
-        let notificationMessage = BitchatMessage(
-            sender: "system",
-            content: "📨 \(nickname) wants to send you \(pendingCount) message\(pendingCount == 1 ? "" : "s"). Open the conversation to receive.",
-            timestamp: Date(),
-            isRelay: false,
-            originalSender: nil,
-            isPrivate: false,
-            recipientNickname: nil,
-            senderPeerID: "system",
-            mentions: nil
-        )
-        
-        // Add to messages
-        messages.append(notificationMessage)
-        trimMessagesIfNeeded()
-        
-        // Show system notification
-        if let fingerprint = getFingerprint(for: peerID) {
-            let isFavorite = favoritePeers.contains(fingerprint)
-            if isFavorite {
-                // Send favorite notification
-                NotificationService.shared.sendPrivateMessageNotification(
-                    from: nickname,
-                    message: "\(pendingCount) message\(pendingCount == 1 ? "" : "s") pending",
-                    peerID: peerID
-                )
-            } else {
-                // Send regular notification
-                NotificationService.shared.sendMentionNotification(
-                    from: nickname,
-                    message: "\(pendingCount) message\(pendingCount == 1 ? "" : "s") pending. Open conversation to receive."
-                )
             }
         }
     }
@@ -2093,6 +2053,44 @@ extension ChatViewModel: BitchatDelegate {
     }
     
     // MARK: - Message Reception
+    
+    func handleHandshakeRequest(from peerID: String, nickname: String, pendingCount: UInt8) {
+        // Create a notification message
+        let notificationMessage = BitchatMessage(
+            sender: "system",
+            content: "📨 \(nickname) wants to send you \(pendingCount) message\(pendingCount == 1 ? "" : "s"). Open the conversation to receive.",
+            timestamp: Date(),
+            isRelay: false,
+            originalSender: nil,
+            isPrivate: false,
+            recipientNickname: nil,
+            senderPeerID: "system",
+            mentions: nil
+        )
+        
+        // Add to messages
+        messages.append(notificationMessage)
+        trimMessagesIfNeeded()
+        
+        // Show system notification
+        if let fingerprint = getFingerprint(for: peerID) {
+            let isFavorite = favoritePeers.contains(fingerprint)
+            if isFavorite {
+                // Send favorite notification
+                NotificationService.shared.sendPrivateMessageNotification(
+                    from: nickname,
+                    message: "\(pendingCount) message\(pendingCount == 1 ? "" : "s") pending",
+                    peerID: peerID
+                )
+            } else {
+                // Send regular notification
+                NotificationService.shared.sendMentionNotification(
+                    from: nickname,
+                    message: "\(pendingCount) message\(pendingCount == 1 ? "" : "s") pending. Open conversation to receive."
+                )
+            }
+        }
+    }
     
     func didReceiveMessage(_ message: BitchatMessage) {
         
