@@ -165,29 +165,6 @@ class BluetoothMeshService: NSObject {
         return noiseService
     }
     
-    // MARK: - Identity Cache Methods
-    
-    func getCachedPublicKey(for peerID: String) -> Data? {
-        return collectionsQueue.sync {
-            // Check if cache entry exists and is not expired
-            if let timestamp = identityCacheTimestamps[peerID],
-               Date().timeIntervalSince(timestamp) < identityCacheTTL {
-                return peerPublicKeyCache[peerID]
-            }
-            return nil
-        }
-    }
-    
-    func getCachedSigningKey(for peerID: String) -> Data? {
-        return collectionsQueue.sync {
-            // Check if cache entry exists and is not expired
-            if let timestamp = identityCacheTimestamps[peerID],
-               Date().timeIntervalSince(timestamp) < identityCacheTTL {
-                return peerSigningKeyCache[peerID]
-            }
-            return nil
-        }
-    }
     
     private func cleanExpiredIdentityCache() {
         collectionsQueue.async(flags: .barrier) { [weak self] in
@@ -896,8 +873,30 @@ class BluetoothMeshService: NSObject {
         }
     }
     
+    // MARK: - Peer Connection Management
     
-    // Update peer connection state
+    func getCachedPublicKey(for peerID: String) -> Data? {
+        return collectionsQueue.sync {
+            // Check if cache entry exists and is not expired
+            if let timestamp = identityCacheTimestamps[peerID],
+               Date().timeIntervalSince(timestamp) < identityCacheTTL {
+                return peerPublicKeyCache[peerID]
+            }
+            return nil
+        }
+    }
+    
+    func getCachedSigningKey(for peerID: String) -> Data? {
+        return collectionsQueue.sync {
+            // Check if cache entry exists and is not expired
+            if let timestamp = identityCacheTimestamps[peerID],
+               Date().timeIntervalSince(timestamp) < identityCacheTTL {
+                return peerSigningKeyCache[peerID]
+            }
+            return nil
+        }
+    }
+    
     private func updatePeerConnectionState(_ peerID: String, state: PeerConnectionState) {
         connectionStateQueue.async(flags: .barrier) { [weak self] in
             guard let self = self else { return }
@@ -1650,13 +1649,6 @@ class BluetoothMeshService: NSObject {
         broadcastPacket(packet)
     }
     
-    
-    func getPeerNicknames() -> [String: String] {
-        return collectionsQueue.sync {
-            return peerNicknames
-        }
-    }
-    
     // Get Noise session state for UI display
     func getNoiseSessionState(for peerID: String) -> LazyHandshakeState {
         return collectionsQueue.sync {
@@ -1693,6 +1685,12 @@ class BluetoothMeshService: NSObject {
         // Always initiate handshake when triggered by UI
         // This ensures immediate handshake when opening PM
         initiateNoiseHandshake(with: peerID)
+    }
+    
+    func getPeerNicknames() -> [String: String] {
+        return collectionsQueue.sync {
+            return peerNicknames
+        }
     }
     
     func getPeerRSSI() -> [String: NSNumber] {
