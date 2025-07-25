@@ -100,6 +100,7 @@ enum MessageType: UInt8 {
     case protocolAck = 0x22             // Generic protocol acknowledgment
     case protocolNack = 0x23            // Negative acknowledgment (failure)
     case systemValidation = 0x24        // Session validation ping
+    case handshakeRequest = 0x25        // Request handshake for pending messages
     
     var description: String {
         switch self {
@@ -121,8 +122,18 @@ enum MessageType: UInt8 {
         case .protocolAck: return "protocolAck"
         case .protocolNack: return "protocolNack"
         case .systemValidation: return "systemValidation"
+        case .handshakeRequest: return "handshakeRequest"
         }
     }
+}
+
+// Lazy handshake state tracking
+enum LazyHandshakeState {
+    case none                    // No session, no handshake attempted
+    case handshakeQueued        // User action requires handshake
+    case handshaking           // Currently in handshake process
+    case established           // Session ready for use
+    case failed(Error)         // Handshake failed
 }
 
 // Special recipient ID for broadcast messages
@@ -357,6 +368,106 @@ struct ReadReceipt: Codable {
                           readerID: readerID,
                           readerNickname: readerNickname,
                           timestamp: timestamp)
+    }
+}
+
+// Handshake request for pending messages
+struct HandshakeRequest: Codable {
+    let requestID: String
+    let requesterID: String           // Who needs the handshake
+    let requesterNickname: String     // Nickname of requester
+    let targetID: String              // Who should initiate handshake
+    let pendingMessageCount: UInt8    // Number of messages queued
+    let timestamp: Date
+    
+    init(requesterID: String, requesterNickname: String, targetID: String, pendingMessageCount: UInt8) {
+        self.requestID = UUID().uuidString
+        self.requesterID = requesterID
+        self.requesterNickname = requesterNickname
+        self.targetID = targetID
+        self.pendingMessageCount = pendingMessageCount
+        self.timestamp = Date()
+    }
+    
+    // For binary decoding
+    private init(requestID: String, requesterID: String, requesterNickname: String, targetID: String, pendingMessageCount: UInt8, timestamp: Date) {
+        self.requestID = requestID
+        self.requesterID = requesterID
+        self.requesterNickname = requesterNickname
+        self.targetID = targetID
+        self.pendingMessageCount = pendingMessageCount
+        self.timestamp = timestamp
+    }
+    
+    // MARK: - Binary Encoding
+    
+    func toBinaryData() -> Data {
+        var data = Data()
+        data.appendUUID(requestID)
+        
+        // RequesterID as 8-byte hex string
+        var requesterData = Data()
+        var tempID = requesterID
+        while tempID.count >= 2 && requesterData.count < 8 {
+            let hexByte = String(tempID.prefix(2))
+            if let byte = UInt8(hexByte, radix: 16) {
+                requesterData.append(byte)
+            }
+            tempID = String(tempID.dropFirst(2))
+        }
+        while requesterData.count < 8 {
+            requesterData.append(0)
+        }
+        data.append(requesterData)
+        
+        // TargetID as 8-byte hex string
+        var targetData = Data()
+        tempID = targetID
+        while tempID.count >= 2 && targetData.count < 8 {
+            let hexByte = String(tempID.prefix(2))
+            if let byte = UInt8(hexByte, radix: 16) {
+                targetData.append(byte)
+            }
+            tempID = String(tempID.dropFirst(2))
+        }
+        while targetData.count < 8 {
+            targetData.append(0)
+        }
+        data.append(targetData)
+        
+        data.appendUInt8(pendingMessageCount)
+        data.appendDate(timestamp)
+        data.appendString(requesterNickname)
+        return data
+    }
+    
+    static func fromBinaryData(_ data: Data) -> HandshakeRequest? {
+        // Create defensive copy
+        let dataCopy = Data(data)
+        
+        // Minimum size: UUID (16) + requesterID (8) + targetID (8) + count (1) + timestamp (8) + min nickname
+        guard dataCopy.count >= 42 else { return nil }
+        
+        var offset = 0
+        
+        guard let requestID = dataCopy.readUUID(at: &offset) else { return nil }
+        
+        guard let requesterIDData = dataCopy.readFixedBytes(at: &offset, count: 8) else { return nil }
+        let requesterID = requesterIDData.hexEncodedString()
+        
+        guard let targetIDData = dataCopy.readFixedBytes(at: &offset, count: 8) else { return nil }
+        let targetID = targetIDData.hexEncodedString()
+        
+        guard let pendingMessageCount = dataCopy.readUInt8(at: &offset),
+              let timestamp = dataCopy.readDate(at: &offset),
+              let requesterNickname = dataCopy.readString(at: &offset) else { return nil }
+        
+        return HandshakeRequest(requestID: requestID,
+                               requesterID: requesterID,
+                               requesterNickname: requesterNickname,
+                               targetID: targetID,
+                               pendingMessageCount: pendingMessageCount,
+                               timestamp: timestamp)
     }
 }
 
