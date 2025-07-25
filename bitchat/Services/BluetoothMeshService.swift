@@ -1502,41 +1502,35 @@ class BluetoothMeshService: NSObject {
             // Check if we have a Noise session with this peer
             // Use noiseService directly
             if self.noiseService.hasEstablishedSession(with: recipientID) {
-                // Use Noise encryption - send as Noise encrypted message
+                // Use Noise encryption - encrypt only the receipt payload directly
                 do {
-                    // Create inner read receipt packet
-                    let innerPacket = BitchatPacket(
-                        type: MessageType.readReceipt.rawValue,
+                    // Create a special payload that indicates this is a read receipt
+                    // Format: [1 byte type marker] + [receipt binary data]
+                    var receiptPayload = Data()
+                    receiptPayload.append(MessageType.readReceipt.rawValue) // Type marker
+                    receiptPayload.append(receiptData) // Receipt binary data
+                    
+                    // Encrypt only the payload (not a full packet)
+                    let encryptedPayload = try noiseService.encrypt(receiptPayload, for: recipientID)
+                    
+                    // Create outer Noise packet with the encrypted payload
+                    let outerPacket = BitchatPacket(
+                        type: MessageType.noiseEncrypted.rawValue,
                         senderID: Data(hexString: self.myPeerID) ?? Data(),
                         recipientID: Data(hexString: recipientID) ?? Data(),
                         timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-                        payload: receiptData,
+                        payload: encryptedPayload,
                         signature: nil,
                         ttl: 3                    )
                     
-                    // Encrypt the entire inner packet
-                    if let innerData = innerPacket.toBinaryData() {
-                        let encryptedInnerData = try noiseService.encrypt(innerData, for: recipientID)
-                        
-                        // Create outer Noise packet
-                        let outerPacket = BitchatPacket(
-                            type: MessageType.noiseEncrypted.rawValue,
-                            senderID: Data(hexString: self.myPeerID) ?? Data(),
-                            recipientID: Data(hexString: recipientID) ?? Data(),
-                            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-                            payload: encryptedInnerData,
-                            signature: nil,
-                            ttl: 3                        )
-                        
-                        SecureLogger.log("Sending encrypted read receipt for message \(receipt.originalMessageID) to \(recipientID)", category: SecureLogger.noise, level: .info)
-                        
-                        // Try direct delivery first for read receipts
-                        if !self.sendDirectToRecipient(outerPacket, recipientPeerID: recipientID) {
-                            // Recipient not directly connected, use selective relay
-                            SecureLogger.log("Recipient \(recipientID) not directly connected for read receipt, using relay", 
-                                           category: SecureLogger.session, level: .info)
-                            self.sendViaSelectiveRelay(outerPacket, recipientPeerID: recipientID)
-                        }
+                    SecureLogger.log("Sending encrypted read receipt for message \(receipt.originalMessageID) to \(recipientID)", category: SecureLogger.noise, level: .info)
+                    
+                    // Try direct delivery first for read receipts
+                    if !self.sendDirectToRecipient(outerPacket, recipientPeerID: recipientID) {
+                        // Recipient not directly connected, use selective relay
+                        SecureLogger.log("Recipient \(recipientID) not directly connected for read receipt, using relay", 
+                                       category: SecureLogger.session, level: .info)
+                        self.sendViaSelectiveRelay(outerPacket, recipientPeerID: recipientID)
                     }
                 } catch {
                     SecureLogger.logError(error, context: "Failed to encrypt read receipt via Noise for \(recipientID)", category: SecureLogger.encryption)
@@ -5356,6 +5350,25 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                         return
                     } else {
                         SecureLogger.log("Failed to decode delivery ACK via Noise - data size: \(ackData.count)", category: SecureLogger.session, level: .warning)
+                    }
+                }
+                
+                // Check if this is a read receipt with the new format
+                else if typeMarker == MessageType.readReceipt.rawValue {
+                    // Extract the receipt binary data (skip the type marker)
+                    let receiptData = decryptedData.dropFirst()
+                    
+                    // Decode the read receipt from binary
+                    if let receipt = ReadReceipt.fromBinaryData(receiptData) {
+                        SecureLogger.log("Received binary read receipt via Noise: \(receipt.originalMessageID) from \(receipt.readerNickname)", category: SecureLogger.session, level: .debug)
+                        
+                        // Process the read receipt
+                        DispatchQueue.main.async {
+                            self.delegate?.didReceiveReadReceipt(receipt)
+                        }
+                        return
+                    } else {
+                        SecureLogger.log("Failed to decode read receipt via Noise - data size: \(receiptData.count)", category: SecureLogger.session, level: .warning)
                     }
                 }
             }
