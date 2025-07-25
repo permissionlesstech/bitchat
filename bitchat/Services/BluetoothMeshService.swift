@@ -3366,7 +3366,9 @@ class BluetoothMeshService: NSObject {
         case .protocolNack:
             // Handle protocol-level negative acknowledgment
             let senderID = packet.senderID.hexEncodedString()
-            if !isPeerIDOurs(senderID) {
+            if let recipientIDData = packet.recipientID,
+               isPeerIDOurs(recipientIDData.hexEncodedString())
+               && !isPeerIDOurs(senderID) {
                 handleProtocolNack(from: senderID, data: packet.payload)
             }
             
@@ -5331,9 +5333,9 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             } else {
                 SecureLogger.log("Have session with \(peerID) but decryption failed", category: SecureLogger.encryption, level: .warning)
                 
-                // Send a NACK to inform peer their session is out of sync
-                sendProtocolNack(for: originalPacket, to: peerID, 
-                               reason: "Decryption failed - session out of sync", 
+                // Send a NACK to inform peer that decryption failed
+                sendProtocolNack(for: originalPacket, to: peerID,
+                               reason: "Decryption failed",
                                errorCode: .decryptionFailed)
                 
                 // The NACK handler will take care of clearing sessions and re-establishing

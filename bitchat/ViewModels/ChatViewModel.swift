@@ -397,7 +397,7 @@ class ChatViewModel: ObservableObject {
                 isPrivate: false,
                 recipientNickname: nil,
                 senderPeerID: meshService.myPeerID,
-                mentions: mentions.isEmpty ? nil : mentions,
+                mentions: mentions.isEmpty ? nil : mentions
             )
             
             // Add to main messages immediately for user feedback
