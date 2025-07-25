@@ -16,9 +16,13 @@ import UIKit
 #endif
 
 class ChatViewModel: ObservableObject {
+    // MARK: - Published Properties
+    
     @Published var messages: [BitchatMessage] = []
     private let maxMessages = 1337 // Maximum messages before oldest are removed
     @Published var connectedPeers: [String] = []
+    
+    // MARK: - Message Batching Properties
     
     // Message batching for performance
     private var pendingMessages: [BitchatMessage] = []
@@ -44,6 +48,8 @@ class ChatViewModel: ObservableObject {
     @Published var autocompleteRange: NSRange? = nil
     @Published var selectedAutocompleteIndex: Int = 0
     
+    // MARK: - Autocomplete Properties
+    
     // Autocomplete optimization
     private let mentionRegex = try? NSRegularExpression(pattern: "@([a-zA-Z0-9_]*)$", options: [])
     private var cachedNicknames: [String] = []
@@ -52,17 +58,25 @@ class ChatViewModel: ObservableObject {
     // Temporary property to fix compilation
     @Published var showPasswordPrompt = false
     
+    // MARK: - Services and Storage
+    
     var meshService = BluetoothMeshService()
     private let userDefaults = UserDefaults.standard
     private let nicknameKey = "bitchat.nickname"
+    
+    // MARK: - Caches
     
     // Caches for expensive computations
     private var rssiColorCache: [String: Color] = [:] // key: "\(rssi)_\(isDark)"
     private var encryptionStatusCache: [String: EncryptionStatus] = [:] // key: peerID
     
+    // MARK: - Social Features
+    
     @Published var favoritePeers: Set<String> = []  // Now stores public key fingerprints instead of peer IDs
     private var peerIDToPublicKeyFingerprint: [String: String] = [:]  // Maps ephemeral peer IDs to persistent fingerprints
     private var blockedUsers: Set<String> = []  // Stores public key fingerprints of blocked users
+    
+    // MARK: - Encryption and Security
     
     // Noise Protocol encryption status
     @Published var peerEncryptionStatus: [String: EncryptionStatus] = [:]  // peerID -> encryption status
@@ -71,11 +85,15 @@ class ChatViewModel: ObservableObject {
     
     // Messages are naturally ephemeral - no persistent storage
     
+    // MARK: - Message Delivery Tracking
+    
     // Delivery tracking
     private var deliveryTrackerCancellable: AnyCancellable?
     
     // Track sent read receipts to avoid duplicates
     private var sentReadReceipts: Set<String> = []  // messageID set
+    
+    // MARK: - Initialization
     
     init() {
         loadNickname()
@@ -174,6 +192,8 @@ class ChatViewModel: ObservableObject {
         #endif
     }
     
+    // MARK: - Deinitialization
+    
     deinit {
         // Clean up timer
         messageBatchTimer?.invalidate()
@@ -181,6 +201,8 @@ class ChatViewModel: ObservableObject {
         // Force immediate save
         userDefaults.synchronize()
     }
+    
+    // MARK: - Nickname Management
     
     private func loadNickname() {
         if let savedNickname = userDefaults.string(forKey: nicknameKey) {
@@ -213,6 +235,8 @@ class ChatViewModel: ObservableObject {
         saveNickname()
     }
     
+    // MARK: - Favorites Management
+    
     private func loadFavorites() {
         // Load favorites from secure storage
         favoritePeers = SecureIdentityStateManager.shared.getFavorites()
@@ -222,6 +246,8 @@ class ChatViewModel: ObservableObject {
         // Favorites are now saved automatically in SecureIdentityStateManager
         // This method is kept for compatibility
     }
+    
+    // MARK: - Blocked Users Management
     
     private func loadBlockedUsers() {
         // Load blocked users from secure storage
@@ -274,6 +300,8 @@ class ChatViewModel: ObservableObject {
         
         return SecureIdentityStateManager.shared.isFavorite(fingerprint: fp)
     }
+    
+    // MARK: - Public Key and Identity Management
     
     // Called when we receive a peer's public key
     func registerPeerPublicKey(peerID: String, publicKeyData: Data) {
@@ -379,6 +407,8 @@ class ChatViewModel: ObservableObject {
         }
     }
     
+    // MARK: - Message Sending
+    
     func sendMessage(_ content: String) {
         guard !content.isEmpty else { return }
         
@@ -478,6 +508,8 @@ class ChatViewModel: ObservableObject {
         // Send via mesh with the same message ID
         meshService.sendPrivateMessage(content, to: peerID, recipientNickname: recipientNickname, messageID: message.id)
     }
+    
+    // MARK: - Private Chat Management
     
     func startPrivateChat(with peerID: String) {
         let peerNickname = meshService.getPeerNicknames()[peerID] ?? "unknown"
@@ -581,6 +613,8 @@ class ChatViewModel: ObservableObject {
         selectedPrivateChatFingerprint = nil
     }
     
+    // MARK: - Message Retry Handling
+    
     @objc private func handleRetryMessage(_ notification: Notification) {
         guard let messageID = notification.userInfo?["messageID"] as? String else { return }
         
@@ -604,6 +638,8 @@ class ChatViewModel: ObservableObject {
             }
         }
     }
+    
+    // MARK: - App Lifecycle
     
     @objc private func appDidBecomeActive() {
         // When app becomes active, send read receipts for visible private chat
@@ -798,6 +834,8 @@ class ChatViewModel: ObservableObject {
     }
     
     
+    // MARK: - Emergency Functions
+    
     // PANIC: Emergency data clearing for activist safety
     func panicClearAllData() {
         // Flush any pending messages immediately before clearing
@@ -868,6 +906,8 @@ class ChatViewModel: ObservableObject {
     
     
     
+    // MARK: - Formatting Helpers
+    
     func formatTimestamp(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm:ss"
@@ -908,6 +948,8 @@ class ChatViewModel: ObservableObject {
         rssiColorCache[cacheKey] = color
         return color
     }
+    
+    // MARK: - Autocomplete
     
     func updateAutocomplete(for text: String, cursorPosition: Int) {
         // Quick early exit for empty text
@@ -1000,6 +1042,8 @@ class ChatViewModel: ObservableObject {
         // Return new cursor position (after the space)
         return range.location + nickname.count + 2
     }
+    
+    // MARK: - Message Formatting
     
     func getSenderColor(for message: BitchatMessage, colorScheme: ColorScheme) -> Color {
         let isDark = colorScheme == .dark
@@ -1390,7 +1434,8 @@ class ChatViewModel: ObservableObject {
         rssiColorCache.removeAll()
     }
     
-    // Trim messages to keep only the most recent maxMessages
+    // MARK: - Message Batching
+    
     private func trimMessagesIfNeeded() {
         if messages.count > maxMessages {
             let removeCount = messages.count - maxMessages
@@ -1398,15 +1443,12 @@ class ChatViewModel: ObservableObject {
         }
     }
     
-    // Trim private chat messages to keep only the most recent maxMessages
     private func trimPrivateChatMessagesIfNeeded(for peerID: String) {
         if let count = privateChats[peerID]?.count, count > maxMessages {
             let removeCount = count - maxMessages
             privateChats[peerID]?.removeFirst(removeCount)
         }
     }
-    
-    // MARK: - Message Batching
     
     private func addMessageToBatch(_ message: BitchatMessage) {
         pendingMessages.append(message)
@@ -1511,6 +1553,8 @@ class ChatViewModel: ObservableObject {
             self?.objectWillChange.send()
         }
     }
+    
+    // MARK: - Fingerprint Management
     
     func showFingerprint(for peerID: String) {
         showingFingerprintFor = peerID
@@ -1646,47 +1690,13 @@ class ChatViewModel: ObservableObject {
             }
         }
     }
-    
-    func handleHandshakeRequest(from peerID: String, nickname: String, pendingCount: UInt8) {
-        // Create a notification message
-        let notificationMessage = BitchatMessage(
-            sender: "system",
-            content: "📨 \(nickname) wants to send you \(pendingCount) message\(pendingCount == 1 ? "" : "s"). Open the conversation to receive.",
-            timestamp: Date(),
-            isRelay: false,
-            originalSender: nil,
-            isPrivate: false,
-            recipientNickname: nil,
-            senderPeerID: "system",
-            mentions: nil
-        )
-        
-        // Add to messages
-        messages.append(notificationMessage)
-        trimMessagesIfNeeded()
-        
-        // Show system notification
-        if let fingerprint = getFingerprint(for: peerID) {
-            let isFavorite = favoritePeers.contains(fingerprint)
-            if isFavorite {
-                // Send favorite notification
-                NotificationService.shared.sendPrivateMessageNotification(
-                    from: nickname,
-                    message: "\(pendingCount) message\(pendingCount == 1 ? "" : "s") pending",
-                    peerID: peerID
-                )
-            } else {
-                // Send regular notification
-                NotificationService.shared.sendMentionNotification(
-                    from: nickname,
-                    message: "\(pendingCount) message\(pendingCount == 1 ? "" : "s") pending. Open conversation to receive."
-                )
-            }
-        }
-    }
 }
 
+// MARK: - BitchatDelegate
+
 extension ChatViewModel: BitchatDelegate {
+    
+    // MARK: - Command Handling
     
     private func handleCommand(_ command: String) {
         let parts = command.split(separator: " ")
@@ -2042,6 +2052,46 @@ extension ChatViewModel: BitchatDelegate {
         }
     }
     
+    // MARK: - Message Reception
+    
+    func handleHandshakeRequest(from peerID: String, nickname: String, pendingCount: UInt8) {
+        // Create a notification message
+        let notificationMessage = BitchatMessage(
+            sender: "system",
+            content: "📨 \(nickname) wants to send you \(pendingCount) message\(pendingCount == 1 ? "" : "s"). Open the conversation to receive.",
+            timestamp: Date(),
+            isRelay: false,
+            originalSender: nil,
+            isPrivate: false,
+            recipientNickname: nil,
+            senderPeerID: "system",
+            mentions: nil
+        )
+        
+        // Add to messages
+        messages.append(notificationMessage)
+        trimMessagesIfNeeded()
+        
+        // Show system notification
+        if let fingerprint = getFingerprint(for: peerID) {
+            let isFavorite = favoritePeers.contains(fingerprint)
+            if isFavorite {
+                // Send favorite notification
+                NotificationService.shared.sendPrivateMessageNotification(
+                    from: nickname,
+                    message: "\(pendingCount) message\(pendingCount == 1 ? "" : "s") pending",
+                    peerID: peerID
+                )
+            } else {
+                // Send regular notification
+                NotificationService.shared.sendMentionNotification(
+                    from: nickname,
+                    message: "\(pendingCount) message\(pendingCount == 1 ? "" : "s") pending. Open conversation to receive."
+                )
+            }
+        }
+    }
+    
     func didReceiveMessage(_ message: BitchatMessage) {
         
         
@@ -2342,6 +2392,8 @@ extension ChatViewModel: BitchatDelegate {
         #endif
     }
     
+    // MARK: - Peer Connection Events
+    
     func didConnectToPeer(_ peerID: String) {
         isConnected = true
         
@@ -2435,6 +2487,8 @@ extension ChatViewModel: BitchatDelegate {
         }
     }
     
+    // MARK: - Helper Methods
+    
     private func parseMentions(from content: String) -> [String] {
         let pattern = "@([a-zA-Z0-9_]+)"
         let regex = try? NSRegularExpression(pattern: pattern, options: [])
@@ -2460,6 +2514,8 @@ extension ChatViewModel: BitchatDelegate {
     func isFavorite(fingerprint: String) -> Bool {
         return SecureIdentityStateManager.shared.isFavorite(fingerprint: fingerprint)
     }
+    
+    // MARK: - Delivery Tracking
     
     func didReceiveDeliveryAck(_ ack: DeliveryAck) {
         // Find the message and update its delivery status
