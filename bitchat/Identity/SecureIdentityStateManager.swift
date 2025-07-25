@@ -371,4 +371,10 @@ class SecureIdentityStateManager {
             return cache.verifiedFingerprints.contains(fingerprint)
         }
     }
+    
+    func getVerifiedFingerprints() -> Set<String> {
+        queue.sync {
+            return cache.verifiedFingerprints
+        }
+    }
 }

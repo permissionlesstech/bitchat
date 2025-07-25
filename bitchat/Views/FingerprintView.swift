@@ -45,9 +45,11 @@ struct FingerprintView: View {
                 let encryptionStatus = viewModel.getEncryptionStatus(for: peerID)
                 
                 HStack {
-                    Image(systemName: encryptionStatus.icon)
-                        .font(.system(size: 20))
-                        .foregroundColor(encryptionStatus == .noiseVerified ? Color.green : textColor)
+                    if let icon = encryptionStatus.icon {
+                        Image(systemName: icon)
+                            .font(.system(size: 20))
+                            .foregroundColor(encryptionStatus == .noiseVerified ? Color.green : textColor)
+                    }
                     
                     VStack(alignment: .leading, spacing: 4) {
                         Text(peerNickname)
