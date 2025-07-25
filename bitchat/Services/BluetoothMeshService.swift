@@ -2592,7 +2592,9 @@ class BluetoothMeshService: NSObject {
         // Note: 0x02 was legacy keyExchange - removed
             
         case .announce:
-            if let nickname = String(data: packet.payload, encoding: .utf8) {
+            if let rawNickname = String(data: packet.payload, encoding: .utf8) {
+                // Trim whitespace from received nickname
+                let nickname = rawNickname.trimmingCharacters(in: .whitespacesAndNewlines)
                 let senderID = packet.senderID.hexEncodedString()
                 
                 SecureLogger.log("handleReceivedPacket: Received announce from \(senderID), peripheral is \(peripheral != nil ? "present" : "nil")", category: SecureLogger.session, level: .debug)

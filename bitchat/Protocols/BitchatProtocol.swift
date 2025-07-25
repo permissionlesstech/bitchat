@@ -654,10 +654,25 @@ struct NoiseIdentityAnnouncement: Codable {
         self.peerID = peerID
         self.publicKey = publicKey
         self.signingPublicKey = signingPublicKey
-        self.nickname = nickname
+        // Trim whitespace from nickname
+        self.nickname = nickname.trimmingCharacters(in: .whitespacesAndNewlines)
         self.timestamp = timestamp
         self.previousPeerID = previousPeerID
         self.signature = signature
+    }
+    
+    // Custom decoder to ensure nickname is trimmed
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.peerID = try container.decode(String.self, forKey: .peerID)
+        self.publicKey = try container.decode(Data.self, forKey: .publicKey)
+        self.signingPublicKey = try container.decode(Data.self, forKey: .signingPublicKey)
+        // Trim whitespace from decoded nickname
+        let rawNickname = try container.decode(String.self, forKey: .nickname)
+        self.nickname = rawNickname.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.timestamp = try container.decode(Date.self, forKey: .timestamp)
+        self.previousPeerID = try container.decodeIfPresent(String.self, forKey: .previousPeerID)
+        self.signature = try container.decode(Data.self, forKey: .signature)
     }
     
     func encode() -> Data? {
@@ -738,8 +753,11 @@ struct NoiseIdentityAnnouncement: Codable {
         
         guard let publicKey = dataCopy.readData(at: &offset),
               let signingPublicKey = dataCopy.readData(at: &offset),
-              let nickname = dataCopy.readString(at: &offset),
+              let rawNickname = dataCopy.readString(at: &offset),
               let timestamp = dataCopy.readDate(at: &offset) else { return nil }
+        
+        // Trim whitespace from nickname
+        let nickname = rawNickname.trimmingCharacters(in: .whitespacesAndNewlines)
         
         var previousPeerID: String? = nil
         if hasPreviousPeerID {
