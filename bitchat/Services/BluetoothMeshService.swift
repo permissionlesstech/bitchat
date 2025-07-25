@@ -1169,12 +1169,10 @@ class BluetoothMeshService: NSObject {
         
         // Start cover traffic for privacy (disabled by default for now)
         // TODO: Make this configurable in settings
-        let coverTrafficEnabled = false
+        let coverTrafficEnabled = true
         if coverTrafficEnabled {
             SecureLogger.log("Cover traffic enabled", category: SecureLogger.security, level: .info)
             startCoverTraffic()
-        } else {
-            SecureLogger.log("Cover traffic disabled", category: SecureLogger.security, level: .info)
         }
     }
     
@@ -1637,14 +1635,9 @@ class BluetoothMeshService: NSObject {
             noiseSessionStates[peerID] = .handshakeQueued
         }
         
-        // Apply tie-breaker logic for handshake initiation
-        if myPeerID < peerID {
-            // We have lower ID, initiate handshake
-            initiateNoiseHandshake(with: peerID)
-        } else {
-            // We have higher ID, send targeted identity announce to prompt them to initiate
-            sendNoiseIdentityAnnounce(to: peerID)
-        }
+        // Always initiate handshake when triggered by UI
+        // This ensures immediate handshake when opening PM
+        initiateNoiseHandshake(with: peerID)
     }
     
     func getPeerRSSI() -> [String: NSNumber] {
@@ -5753,7 +5746,9 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         SecureLogger.log("Received handshake request from \(request.requesterID) (\(request.requesterNickname)) with \(request.pendingMessageCount) pending messages", 
                        category: SecureLogger.noise, level: .info)
         
-        // Notify UI about pending messages
+        // Don't show handshake request notification in UI
+        // User requested to remove this notification
+        /*
         DispatchQueue.main.async { [weak self] in
             if let chatVM = self?.delegate as? ChatViewModel {
                 // Notify the UI that someone wants to send messages
@@ -5762,6 +5757,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                                             pendingCount: request.pendingMessageCount)
             }
         }
+        */
         
         // Check if we already have a session
         if noiseService.hasEstablishedSession(with: peerID) {
