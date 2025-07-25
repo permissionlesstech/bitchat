@@ -480,6 +480,16 @@ class ChatViewModel: ObservableObject {
             return
         }
         
+        // Trigger handshake if we don't have a session yet
+        let sessionState = meshService.getNoiseSessionState(for: peerID)
+        switch sessionState {
+        case .none, .failed:
+            // Initiate handshake when opening PM
+            meshService.triggerHandshake(with: peerID)
+        default:
+            break
+        }
+        
         selectedPrivateChatPeer = peerID
         // Also track by fingerprint for persistence across reconnections
         selectedPrivateChatFingerprint = peerIDToPublicKeyFingerprint[peerID]
@@ -647,6 +657,9 @@ class ChatViewModel: ObservableObject {
     @objc func applicationWillTerminate() {
         // Flush any pending messages immediately
         flushMessageBatchImmediately()
+        
+        // Force save any pending identity changes (verifications, favorites, etc)
+        SecureIdentityStateManager.shared.forceSave()
         
         // Verify identity key is still there
         _ = KeychainManager.shared.verifyIdentityKeyExists()
@@ -1300,14 +1313,14 @@ class ChatViewModel: ObservableObject {
         // This must be a pure function - no state mutations allowed
         // to avoid SwiftUI update loops
         
-        let hasEstablished = meshService.getNoiseService().hasEstablishedSession(with: peerID)
-        let hasSession = meshService.getNoiseService().hasSession(with: peerID)
+        let sessionState = meshService.getNoiseSessionState(for: peerID)
         let storedStatus = peerEncryptionStatus[peerID]
         
         let status: EncryptionStatus
         
-        // First check if we have an established session
-        if hasEstablished {
+        // Determine status based on session state
+        switch sessionState {
+        case .established:
             // We have encryption, now check if it's verified
             if let fingerprint = getFingerprint(for: peerID) {
                 if verifiedFingerprints.contains(fingerprint) {
@@ -1319,12 +1332,15 @@ class ChatViewModel: ObservableObject {
                 // We have a session but no fingerprint yet - still secured
                 status = .noiseSecured
             }
-        } else if hasSession {
-            // Check if handshaking
+        case .handshaking, .handshakeQueued:
+            // Currently establishing encryption
             status = .noiseHandshaking
-        } else {
-            // Fall back to stored status
-            status = storedStatus ?? .none
+        case .none:
+            // No handshake attempted
+            status = .noHandshake
+        case .failed:
+            // Handshake failed - show broken lock
+            status = .none
         }
         
         // Cache the result
@@ -1332,7 +1348,7 @@ class ChatViewModel: ObservableObject {
         
         // Only log occasionally to avoid spam
         if Int.random(in: 0..<100) == 0 {
-            SecureLogger.log("getEncryptionStatus for \(peerID): hasEstablished=\(hasEstablished), hasSession=\(hasSession), stored=\(String(describing: storedStatus)), final=\(status)", category: SecureLogger.security, level: .debug)
+            SecureLogger.log("getEncryptionStatus for \(peerID): sessionState=\(sessionState), stored=\(String(describing: storedStatus)), final=\(status)", category: SecureLogger.security, level: .debug)
         }
         
         return status
@@ -1562,9 +1578,8 @@ class ChatViewModel: ObservableObject {
     }
     
     func loadVerifiedFingerprints() {
-        // Load verified fingerprints from secure storage
-        let allIdentities = SecureIdentityStateManager.shared.getAllSocialIdentities()
-        verifiedFingerprints = Set(allIdentities.filter { $0.trustLevel == .verified }.map { $0.fingerprint })
+        // Load verified fingerprints directly from secure storage
+        verifiedFingerprints = SecureIdentityStateManager.shared.getVerifiedFingerprints()
     }
     
     private func setupNoiseCallbacks() {
@@ -1605,6 +1620,44 @@ class ChatViewModel: ObservableObject {
                 
                 // Force UI update
                 self.objectWillChange.send()
+            }
+        }
+    }
+    
+    func handleHandshakeRequest(from peerID: String, nickname: String, pendingCount: UInt8) {
+        // Create a notification message
+        let notificationMessage = BitchatMessage(
+            sender: "system",
+            content: "📨 \(nickname) wants to send you \(pendingCount) message\(pendingCount == 1 ? "" : "s"). Open the conversation to receive.",
+            timestamp: Date(),
+            isRelay: false,
+            originalSender: nil,
+            isPrivate: false,
+            recipientNickname: nil,
+            senderPeerID: "system",
+            mentions: nil
+        )
+        
+        // Add to messages
+        messages.append(notificationMessage)
+        trimMessagesIfNeeded()
+        
+        // Show system notification
+        if let fingerprint = getFingerprint(for: peerID) {
+            let isFavorite = favoritePeers.contains(fingerprint)
+            if isFavorite {
+                // Send favorite notification
+                NotificationService.shared.sendPrivateMessageNotification(
+                    from: nickname,
+                    message: "\(pendingCount) message\(pendingCount == 1 ? "" : "s") pending",
+                    peerID: peerID
+                )
+            } else {
+                // Send regular notification
+                NotificationService.shared.sendMentionNotification(
+                    from: nickname,
+                    message: "\(pendingCount) message\(pendingCount == 1 ? "" : "s") pending. Open conversation to receive."
+                )
             }
         }
     }

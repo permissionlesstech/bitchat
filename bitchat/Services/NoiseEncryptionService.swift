@@ -13,15 +13,18 @@ import os.log
 // MARK: - Encryption Status
 
 enum EncryptionStatus: Equatable {
-    case none
-    case noiseHandshaking
-    case noiseSecured
-    case noiseVerified
+    case none                // Failed or incompatible
+    case noHandshake        // No handshake attempted yet
+    case noiseHandshaking   // Currently establishing
+    case noiseSecured       // Established but not verified
+    case noiseVerified      // Established and verified
     
-    var icon: String {
+    var icon: String? {  // Made optional to hide icon when no handshake
         switch self {
         case .none:
-            return "lock.slash"
+            return "lock.slash"  // Failed handshake
+        case .noHandshake:
+            return nil  // No icon when no handshake attempted
         case .noiseHandshaking:
             return "lock.rotation"
         case .noiseSecured:
@@ -34,6 +37,8 @@ enum EncryptionStatus: Equatable {
     var description: String {
         switch self {
         case .none:
+            return "Encryption failed"
+        case .noHandshake:
             return "Not encrypted"
         case .noiseHandshaking:
             return "Establishing encryption..."
