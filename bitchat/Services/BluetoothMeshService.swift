@@ -3552,7 +3552,9 @@ class BluetoothMeshService: NSObject {
             }
         }
     }
-}
+}  // End of cleanupOldFragments
+
+}  // End of BluetoothMeshService class
 
 extension BluetoothMeshService: CBCentralManagerDelegate {
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
@@ -4090,12 +4092,10 @@ extension BluetoothMeshService: CBPeripheralDelegate {
             }
         }
             
-            // Periodically update RSSI
-            DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak peripheral] in
-                guard let peripheral = peripheral, peripheral.state == .connected else { return }
-                peripheral.readRSSI()
-            }
-        } else {
+        // Periodically update RSSI
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak peripheral] in
+            guard let peripheral = peripheral, peripheral.state == .connected else { return }
+            peripheral.readRSSI()
         }
     }
 }
