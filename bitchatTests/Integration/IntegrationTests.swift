@@ -197,7 +197,8 @@ final class IntegrationTests: XCTestCase {
                         timestamp: packet.timestamp,
                         payload: encrypted,
                         signature: packet.signature,
-                        ttl: packet.ttl
+                        ttl: packet.ttl,
+                        sequenceNumber: 1
                     )
                     self.nodes["Bob"]!.simulateIncomingPacket(encPacket)
                 }
@@ -698,7 +699,8 @@ final class IntegrationTests: XCTestCase {
                         timestamp: packet.timestamp,
                         payload: encrypted,
                         signature: packet.signature,
-                        ttl: packet.ttl
+                        ttl: packet.ttl,
+                        sequenceNumber: 1
                     )
                     self.nodes["Bob"]!.simulateIncomingPacket(encPacket)
                 }
@@ -805,7 +807,8 @@ final class IntegrationTests: XCTestCase {
                         timestamp: packet.timestamp,
                         payload: relayPayload,
                         signature: packet.signature,
-                        ttl: packet.ttl - 1
+                        ttl: packet.ttl - 1,
+                        sequenceNumber: 1
                     )
                     
                     for hop in nextHops {

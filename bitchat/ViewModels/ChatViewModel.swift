@@ -103,6 +103,14 @@ class ChatViewModel: ObservableObject {
             .sink { [weak self] (messageID, status) in
                 self?.updateMessageDeliveryStatus(messageID, status: status)
             }
+        
+        // Listen for retry notifications
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleRetryMessage),
+            name: Notification.Name("bitchat.retryMessage"),
+            object: nil
+        )
                 
         // When app becomes active, send read receipts for visible messages
         #if os(macOS)
@@ -547,6 +555,30 @@ class ChatViewModel: ObservableObject {
     func endPrivateChat() {
         selectedPrivateChatPeer = nil
         selectedPrivateChatFingerprint = nil
+    }
+    
+    @objc private func handleRetryMessage(_ notification: Notification) {
+        guard let messageID = notification.userInfo?["messageID"] as? String else { return }
+        
+        // Find the message to retry
+        if let message = messages.first(where: { $0.id == messageID }) {
+            SecureLogger.log("Retrying message \(messageID) to \(message.recipientNickname ?? "unknown")", 
+                           category: SecureLogger.session, level: .info)
+            
+            // Resend the message through mesh service
+            if message.isPrivate,
+               let peerID = getPeerIDForNickname(message.recipientNickname ?? "") {
+                // Update status to sending
+                updateMessageDeliveryStatus(messageID, status: .sending)
+                
+                // Resend via mesh service
+                meshService.sendMessage(message.content, 
+                                      mentions: message.mentions ?? [], 
+                                      to: peerID,
+                                      messageID: messageID,
+                                      timestamp: message.timestamp)
+            }
+        }
     }
     
     @objc private func appDidBecomeActive() {

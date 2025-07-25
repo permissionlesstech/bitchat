@@ -27,6 +27,11 @@ class SecureIdentityStateManager {
     // Thread safety
     private let queue = DispatchQueue(label: "bitchat.identity.state", attributes: .concurrent)
     
+    // Debouncing for keychain saves
+    private var saveTimer: Timer?
+    private let saveDebounceInterval: TimeInterval = 2.0  // Save at most once every 2 seconds
+    private var pendingSave = false
+    
     // Encryption key
     private let encryptionKey: SymmetricKey
     
@@ -72,13 +77,45 @@ class SecureIdentityStateManager {
         }
     }
     
+    deinit {
+        // Force save any pending changes
+        forceSave()
+    }
+    
     func saveIdentityCache() {
+        // Mark that we need to save
+        pendingSave = true
+        
+        // Cancel any existing timer
+        saveTimer?.invalidate()
+        
+        // Schedule a new save after the debounce interval
+        saveTimer = Timer.scheduledTimer(withTimeInterval: saveDebounceInterval, repeats: false) { [weak self] _ in
+            self?.performSave()
+        }
+    }
+    
+    private func performSave() {
+        guard pendingSave else { return }
+        pendingSave = false
+        
         do {
             let data = try JSONEncoder().encode(cache)
             let sealedBox = try AES.GCM.seal(data, using: encryptionKey)
-            _ = keychain.saveIdentityKey(sealedBox.combined!, forKey: cacheKey)
+            let saved = keychain.saveIdentityKey(sealedBox.combined!, forKey: cacheKey)
+            if saved {
+                SecureLogger.log("Identity cache saved to keychain", category: SecureLogger.security, level: .debug)
+            }
         } catch {
             SecureLogger.logError(error, context: "Failed to save identity cache", category: SecureLogger.security)
+        }
+    }
+    
+    // Force immediate save (for app termination)
+    func forceSave() {
+        saveTimer?.invalidate()
+        if pendingSave {
+            performSave()
         }
     }
     

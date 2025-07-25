@@ -365,7 +365,8 @@ final class PrivateChatE2ETests: XCTestCase {
                         timestamp: packet.timestamp,
                         payload: encrypted,
                         signature: packet.signature,
-                        ttl: packet.ttl
+                        ttl: packet.ttl,
+                        sequenceNumber: 1
                     )
                     self.bob.simulateIncomingPacket(encryptedPacket)
                 } catch {

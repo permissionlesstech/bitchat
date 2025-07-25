@@ -18,22 +18,22 @@ struct AppInfoView: View {
     
     // MARK: - Constants
     private enum Strings {
-        static let appName = "bitchat/"
+        static let appName = "bitchat"
         static let tagline = "mesh sidegroupchat"
         
         enum Features {
             static let title = "FEATURES"
-            static let offlineComm = ("wifi.slash", "offline communication", "works without internet using Bluetooth mesh networking")
+            static let offlineComm = ("wifi.slash", "offline communication", "works without internet using Bluetooth low energy")
             static let encryption = ("lock.shield", "end-to-end encryption", "private messages encrypted with noise protocol")
-            static let extendedRange = ("antenna.radiowaves.left.and.right", "extended range", "messages relay through peers, increasing the distance")
-            static let favorites = ("star.fill", "favorites", "store-and-forward messages for favorite people")
+            static let extendedRange = ("antenna.radiowaves.left.and.right", "extended range", "messages relay through peers, going the distance")
+            static let favorites = ("star.fill", "favorites", "get notified when your favorite people join")
             static let mentions = ("at", "mentions", "use @nickname to notify specific people")
         }
         
         enum Privacy {
             static let title = "PRIVACY"
             static let noTracking = ("eye.slash", "no tracking", "no servers, accounts, or data collection")
-            static let ephemeral = ("shuffle", "ephemeral identity", "new peer ID generated each session")
+            static let ephemeral = ("shuffle", "ephemeral identity", "new peer ID generated regularly")
             static let panic = ("hand.raised.fill", "panic mode", "triple-tap logo to instantly clear all data")
         }
         
@@ -44,23 +44,13 @@ struct AppInfoView: View {
                 "• swipe left for sidebar",
                 "• tap a peer to start a private chat",
                 "• use @nickname to mention someone",
-                "• triple-tap \"bitchat\" for panic mode",
-                "• triple-tap chat messages to clear current chat"
+                "• triple-tap chat to clear"
             ]
         }
         
-        enum Commands {
-            static let title = "COMMANDS"
-            static let list = [
-                "/m @name - send private message",
-                "/w - see who's online",
-                "/block @name - block a peer",
-                "/block - list blocked peers",
-                "/unblock @name - unblock a peer",
-                "/clear - clear current chat",
-                "/hug @name - send someone a hug",
-                "/slap @name - slap with a trout"
-            ]
+        enum Warning {
+            static let title = "WARNING"
+            static let message = "private message security has not yet been fully audited. do not use for critical situations until this warning disappears."
         }
     }
     
@@ -175,18 +165,21 @@ struct AppInfoView: View {
                 .foregroundColor(textColor)
             }
             
-            // Commands
-            VStack(alignment: .leading, spacing: 16) {
-                SectionHeader(Strings.Commands.title)
+            // Warning
+            VStack(alignment: .leading, spacing: 6) {
+                SectionHeader(Strings.Warning.title)
+                    .foregroundColor(Color.red)
                 
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(Strings.Commands.list, id: \.self) { command in
-                        Text(command)
-                    }
-                }
-                .font(.system(size: 14, design: .monospaced))
-                .foregroundColor(textColor)
+                Text(Strings.Warning.message)
+                    .font(.system(size: 14, design: .monospaced))
+                    .foregroundColor(Color.red)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            .padding(.top, 6)
+            .padding(.bottom, 16)
+            .padding(.horizontal)
+            .background(Color.red.opacity(0.1))
+            .cornerRadius(8)
             
             .padding(.top)
         }

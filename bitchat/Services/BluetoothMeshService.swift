@@ -91,6 +91,7 @@ class BluetoothMeshService: NSObject {
     private var activePeers: Set<String> = []  // Track all active peers
     private var peerRSSI: [String: NSNumber] = [:] // Track RSSI values for peers
     private var peripheralRSSI: [String: NSNumber] = [:] // Track RSSI by peripheral ID during discovery
+    private var rssiRetryCount: [String: Int] = [:] // Track RSSI retry attempts per peripheral
     
     // Per-peer encryption queues to prevent nonce desynchronization
     private var peerEncryptionQueues: [String: DispatchQueue] = [:]
@@ -314,7 +315,29 @@ class BluetoothMeshService: NSObject {
         }
     }
     private let messageQueue = DispatchQueue(label: "bitchat.messageQueue", attributes: .concurrent) // Concurrent queue with barriers
-    private let processedMessages = BoundedSet<String>(maxSize: 1000)  // Bounded to prevent memory growth
+    
+    // Message state tracking for better duplicate detection
+    private struct MessageState {
+        let firstSeen: Date
+        var lastSeen: Date
+        var seenCount: Int
+        var relayed: Bool
+        var acknowledged: Bool
+        
+        mutating func updateSeen() {
+            lastSeen = Date()
+            seenCount += 1
+        }
+    }
+    
+    private var processedMessages = [String: MessageState]()  // Track full message state
+    private let processedMessagesLock = NSLock()
+    private let maxProcessedMessages = 10000
+    
+    // Special handling for identity announces to prevent duplicates
+    private var recentIdentityAnnounces = [String: Date]()  // peerID -> last seen time
+    private let identityAnnounceDuplicateWindow: TimeInterval = 30.0  // 30 second window
+    
     private let maxTTL: UInt8 = 7  // Maximum hops for long-distance delivery
     private var announcedToPeers = Set<String>()  // Track which peers we've announced to
     private var announcedPeers = Set<String>()  // Track peers who have already been announced
@@ -325,6 +348,8 @@ class BluetoothMeshService: NSObject {
     private let networkEmptyResetDelay: TimeInterval = 60  // 1 minute before resetting notification flag
     private var intentionalDisconnects = Set<String>()  // Track peripherals we're disconnecting intentionally
     private var gracefullyLeftPeers = Set<String>()  // Track peers that sent leave messages
+    private var gracefulLeaveTimestamps: [String: Date] = [:]  // Track when peers left
+    private let gracefulLeaveExpirationTime: TimeInterval = 300.0  // 5 minutes
     private var peerLastSeenTimestamps = LRUCache<String, Date>(maxSize: 100)  // Bounded cache for peer timestamps
     private var cleanupTimer: Timer?  // Timer to clean up stale peers
     
@@ -366,7 +391,7 @@ class BluetoothMeshService: NSObject {
     
     // Track when we last sent identity announcements to prevent flooding
     private var lastIdentityAnnounceTimes: [String: Date] = [:]
-    private let identityAnnounceMinInterval: TimeInterval = 2.0  // Minimum 2 seconds between announcements per peer
+    private let identityAnnounceMinInterval: TimeInterval = 10.0  // Minimum 10 seconds between announcements per peer
     
     // Track handshake attempts to handle timeouts
     private var handshakeAttemptTimes: [String: Date] = [:]
@@ -390,10 +415,24 @@ class BluetoothMeshService: NSObject {
     private let maxAckRetries = 3
     private var ackTimer: Timer?
     private var advertisingTimer: Timer?  // Timer for interval-based advertising
+    private var connectionKeepAliveTimer: Timer?  // Timer to send keepalive pings
+    private let keepAliveInterval: TimeInterval = 20.0  // Send keepalive every 20 seconds
     
-    // Timing randomization for privacy
+    // Timing randomization for privacy (now with exponential distribution)
     private let minMessageDelay: TimeInterval = 0.01  // 10ms minimum for faster sync
     private let maxMessageDelay: TimeInterval = 0.1   // 100ms maximum for faster sync
+    
+    // Dynamic RSSI threshold based on network size (smart compromise)
+    private var dynamicRSSIThreshold: Int {
+        let peerCount = activePeers.count
+        if peerCount < 5 {
+            return -95  // Maximum range when network is small
+        } else if peerCount < 10 {
+            return -92  // Slightly reduced range
+        } else {
+            return -90  // Conservative for larger networks
+        }
+    }
     
     // Fragment handling with security limits
     private var incomingFragments: [String: [Int: Data]] = [:]  // fragmentID -> [index: data]
@@ -414,6 +453,72 @@ class BluetoothMeshService: NSObject {
     private var peerIDByPeripheralID: [String: String] = [:]  // Map peripheral ID to peer ID
     private let maxConnectionAttempts = 3
     private let baseBackoffInterval: TimeInterval = 1.0
+    
+    // Simplified peripheral mapping system
+    private struct PeripheralMapping {
+        let peripheral: CBPeripheral
+        var peerID: String?  // nil until we receive announce
+        var rssi: NSNumber?
+        var lastActivity: Date
+        
+        var isIdentified: Bool { peerID != nil }
+    }
+    private var peripheralMappings: [String: PeripheralMapping] = [:]  // peripheralID -> mapping
+    
+    // Helper methods for peripheral mapping
+    private func registerPeripheral(_ peripheral: CBPeripheral) {
+        let peripheralID = peripheral.identifier.uuidString
+        peripheralMappings[peripheralID] = PeripheralMapping(
+            peripheral: peripheral,
+            peerID: nil,
+            rssi: nil,
+            lastActivity: Date()
+        )
+    }
+    
+    private func updatePeripheralMapping(peripheralID: String, peerID: String) {
+        guard var mapping = peripheralMappings[peripheralID] else { return }
+        
+        // Remove old temp mapping if it exists
+        let tempID = peripheralID
+        if connectedPeripherals[tempID] != nil {
+            connectedPeripherals.removeValue(forKey: tempID)
+        }
+        
+        mapping.peerID = peerID
+        mapping.lastActivity = Date()
+        peripheralMappings[peripheralID] = mapping
+        
+        // Update legacy mappings
+        peerIDByPeripheralID[peripheralID] = peerID
+        connectedPeripherals[peerID] = mapping.peripheral
+        
+        // Transfer RSSI
+        if let rssi = mapping.rssi {
+            peerRSSI[peerID] = rssi
+        }
+    }
+    
+    private func updatePeripheralRSSI(peripheralID: String, rssi: NSNumber) {
+        guard var mapping = peripheralMappings[peripheralID] else { return }
+        mapping.rssi = rssi
+        mapping.lastActivity = Date()
+        peripheralMappings[peripheralID] = mapping
+        
+        // Update peer RSSI if we have the peer ID
+        if let peerID = mapping.peerID {
+            peerRSSI[peerID] = rssi
+        }
+    }
+    
+    private func findPeripheralForPeerID(_ peerID: String) -> CBPeripheral? {
+        for (_, mapping) in peripheralMappings {
+            if mapping.peerID == peerID {
+                return mapping.peripheral
+            }
+        }
+        return nil
+    }
     
     // Probabilistic flooding
     private var relayProbability: Double = 1.0  // Start at 100%, decrease with peer count
@@ -450,20 +555,50 @@ class BluetoothMeshService: NSObject {
     }
     
     private var adaptiveRelayProbability: Double {
-        // Keep relay probability high enough to ensure delivery
+        // Adjust relay probability based on network size
+        // Small networks don't need 100% relay - RSSI will handle edge nodes
         let networkSize = estimatedNetworkSize
-        if networkSize <= 10 {
-            return 1.0  // 100% for small networks
+        if networkSize <= 2 {
+            return 0.0   // 0% for 2 nodes - no relay needed with only 2 peers
+        } else if networkSize <= 5 {
+            return 0.5   // 50% for very small networks
+        } else if networkSize <= 10 {
+            return 0.6   // 60% for small networks
         } else if networkSize <= 30 {
-            return 0.85 // 85% - most nodes relay
+            return 0.7   // 70% for medium networks
         } else if networkSize <= 50 {
-            return 0.7  // 70% - still high probability
+            return 0.6   // 60% for larger networks
         } else if networkSize <= 100 {
-            return 0.55 // 55% - over half relay
+            return 0.5   // 50% for big networks
         } else {
-            return 0.4  // 40% minimum - never go below this
+            return 0.4   // 40% minimum for very large networks
         }
     }
+    
+    // Relay cancellation mechanism to prevent duplicate relays
+    private var pendingRelays: [String: DispatchWorkItem] = [:]  // messageID -> relay task
+    private let pendingRelaysLock = NSLock()
+    private let relayCancellationWindow: TimeInterval = 0.05  // 50ms window to detect other relays
+    
+    // Global memory limits to prevent unbounded growth
+    private let maxPendingPrivateMessages = 100
+    private let maxCachedMessagesSentToPeer = 1000
+    private let maxMemoryUsageBytes = 50 * 1024 * 1024  // 50MB limit
+    private var memoryCleanupTimer: Timer?
+    
+    // Track acknowledged packets to prevent unnecessary retries
+    private var acknowledgedPackets = Set<String>()
+    private let acknowledgedPacketsLock = NSLock()
+    
+    // Rate limiting for flood control with separate limits for different message types
+    private var messageRateLimiter: [String: [Date]] = [:]  // peerID -> recent message timestamps
+    private var protocolMessageRateLimiter: [String: [Date]] = [:]  // peerID -> protocol msg timestamps
+    private let rateLimiterLock = NSLock()
+    private let rateLimitWindow: TimeInterval = 60.0  // 1 minute window
+    private let maxChatMessagesPerPeerPerMinute = 300  // Allow fast typing (5 msgs/sec)
+    private let maxProtocolMessagesPerPeerPerMinute = 100  // Protocol messages
+    private let maxTotalMessagesPerMinute = 2000  // Increased for legitimate use
+    private var totalMessageTimestamps: [Date] = []
     
     // BLE advertisement for lightweight presence
     private var advertisementData: [String: Any] = [:]
@@ -554,6 +689,14 @@ class BluetoothMeshService: NSObject {
             if let existingPeerID = self.fingerprintToPeerID[fingerprint], existingPeerID != newPeerID {
                 oldPeerID = existingPeerID
                 SecureLogger.log("Peer ID rotation detected: \(existingPeerID) -> \(newPeerID) for fingerprint \(fingerprint)", category: SecureLogger.security, level: .info)
+                
+                // Transfer gracefullyLeftPeers state from old to new peer ID
+                if self.gracefullyLeftPeers.contains(existingPeerID) {
+                    self.gracefullyLeftPeers.remove(existingPeerID)
+                    self.gracefullyLeftPeers.insert(newPeerID)
+                    SecureLogger.log("Transferred gracefullyLeft state from \(existingPeerID) to \(newPeerID)", 
+                                   category: SecureLogger.session, level: .debug)
+                }
                 
                 self.peerIDToFingerprint.removeValue(forKey: existingPeerID)
                 
@@ -825,7 +968,9 @@ class BluetoothMeshService: NSObject {
                 self.messageBloomFilter = OptimizedBloomFilter.adaptive(for: networkSize)
                 
                 // Clear other duplicate detection sets
+                self.processedMessagesLock.lock()
                 self.processedMessages.removeAll()
+                self.processedMessagesLock.unlock()
                 
             }
         }
@@ -840,9 +985,14 @@ class BluetoothMeshService: NSObject {
             self?.checkAckTimeouts()
         }
         
-        // Start peer availability checking timer (every 5 seconds)
-        availabilityCheckTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+        // Start peer availability checking timer (every 15 seconds)
+        availabilityCheckTimer = Timer.scheduledTimer(withTimeInterval: 15.0, repeats: true) { [weak self] _ in
             self?.checkPeerAvailability()
+        }
+        
+        // Start RSSI update timer (every 10 seconds)
+        Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
+            self?.updateAllPeripheralRSSI()
         }
         
         // Start write queue cleanup timer (every 30 seconds)
@@ -853,6 +1003,14 @@ class BluetoothMeshService: NSObject {
         // Start identity cache cleanup timer (every hour)
         Timer.scheduledTimer(withTimeInterval: 3600.0, repeats: true) { [weak self] _ in
             self?.cleanExpiredIdentityCache()
+        }
+        
+        // Start memory cleanup timer (every minute)
+        startMemoryCleanupTimer()
+        
+        // Start connection keep-alive timer to prevent iOS BLE timeouts
+        connectionKeepAliveTimer = Timer.scheduledTimer(withTimeInterval: keepAliveInterval, repeats: true) { [weak self] _ in
+            self?.sendKeepAlivePings()
         }
         
         // Log handshake states periodically for debugging and clean up stale states
@@ -924,6 +1082,9 @@ class BluetoothMeshService: NSObject {
         aggregationTimer?.invalidate()
         cleanupTimer?.invalidate()
         rotationTimer?.invalidate()
+        memoryCleanupTimer?.invalidate()
+        connectionKeepAliveTimer?.invalidate()
+        availabilityCheckTimer?.invalidate()
     }
     
     @objc private func appWillTerminate() {
@@ -1011,26 +1172,16 @@ class BluetoothMeshService: NSObject {
             type: MessageType.announce.rawValue,
             ttl: 3,  // Increase TTL so announce reaches all peers
             senderID: myPeerID,
-            payload: Data(vm.nickname.utf8)
-        )
+            payload: Data(vm.nickname.utf8)        )
         
         
-        // Initial send with random delay
-        let initialDelay = self.randomDelay()
+        // Single send with smart collision avoidance
+        let initialDelay = self.smartCollisionAvoidanceDelay(baseDelay: self.randomDelay())
         DispatchQueue.main.asyncAfter(deadline: .now() + initialDelay) { [weak self] in
             self?.broadcastPacket(announcePacket)
             
-            // Also send Noise identity announcement
-            self?.sendNoiseIdentityAnnounce()
-        }
-        
-        // Send multiple times for reliability with jittered delays
-        for baseDelay in [0.2, 0.5, 1.0] {
-            let jitteredDelay = baseDelay + self.randomDelay()
-            DispatchQueue.main.asyncAfter(deadline: .now() + jitteredDelay) { [weak self] in
-                guard let self = self else { return }
-                self.broadcastPacket(announcePacket)
-            }
+            // Don't automatically send identity announcement on startup
+            // Let it happen naturally when peers connect
         }
     }
     
@@ -1152,8 +1303,7 @@ class BluetoothMeshService: NSObject {
                     timestamp: UInt64(Date().timeIntervalSince1970 * 1000), // milliseconds
                     payload: messageData,
                     signature: nil,
-                    ttl: self.adaptiveTTL
-                )
+                    ttl: self.adaptiveTTL                )
                 
                 // Track this message to prevent duplicate sends
                 let msgID = "\(packet.timestamp)-\(self.myPeerID)-\(packet.payload.prefix(32).hashValue)"
@@ -1170,17 +1320,10 @@ class BluetoothMeshService: NSObject {
                         self.recentlySentMessages.remove(msgID)
                     }
                     
-                    // Add random delay before initial send
-                    let initialDelay = self.randomDelay()
+                    // Single send with smart collision avoidance
+                    let initialDelay = self.smartCollisionAvoidanceDelay(baseDelay: self.randomDelay())
                     DispatchQueue.main.asyncAfter(deadline: .now() + initialDelay) { [weak self] in
                         self?.broadcastPacket(packet)
-                    }
-                    
-                    // Single retry for reliability
-                    let retryDelay = 0.3 + self.randomDelay()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + retryDelay) { [weak self] in
-                        self?.broadcastPacket(packet)
-                        // Re-sending message
                     }
                 }
             }
@@ -1287,8 +1430,7 @@ class BluetoothMeshService: NSObject {
                         timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                         payload: encryptedPayload,
                         signature: nil,
-                        ttl: 3
-                    )
+                        ttl: 3                    )
                     
                     self.broadcastPacket(outerPacket)
                 } catch {
@@ -1371,8 +1513,7 @@ class BluetoothMeshService: NSObject {
                         timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                         payload: receiptData,
                         signature: nil,
-                        ttl: 3
-                    )
+                        ttl: 3                    )
                     
                     // Encrypt the entire inner packet
                     if let innerData = innerPacket.toBinaryData() {
@@ -1386,8 +1527,7 @@ class BluetoothMeshService: NSObject {
                             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                             payload: encryptedInnerData,
                             signature: nil,
-                            ttl: 3
-                        )
+                            ttl: 3                        )
                         
                         SecureLogger.log("Sending encrypted read receipt for message \(receipt.originalMessageID) to \(recipientID)", category: SecureLogger.noise, level: .info)
                         self.broadcastPacket(outerPacket)
@@ -1440,8 +1580,7 @@ class BluetoothMeshService: NSObject {
             type: MessageType.announce.rawValue,
             ttl: 3,  // Allow relay for better reach
             senderID: myPeerID,
-            payload: Data(vm.nickname.utf8)
-        )
+            payload: Data(vm.nickname.utf8)        )
         
         if let data = packet.toBinaryData() {
             // Try both broadcast and targeted send
@@ -1467,8 +1606,7 @@ class BluetoothMeshService: NSObject {
             type: MessageType.leave.rawValue,
             ttl: 1,  // Don't relay leave messages
             senderID: myPeerID,
-            payload: Data(vm.nickname.utf8)
-        )
+            payload: Data(vm.nickname.utf8)        )
         
         broadcastPacket(packet)
     }
@@ -1481,9 +1619,53 @@ class BluetoothMeshService: NSObject {
     }
     
     func getPeerRSSI() -> [String: NSNumber] {
-        // Return actual RSSI values only - no fake defaults
-        // UI should handle missing values gracefully
-        return peerRSSI
+        var rssiValues = peerRSSI
+        
+        
+        // Log connectedPeripherals state
+        SecureLogger.log("connectedPeripherals has \(connectedPeripherals.count) entries:", category: SecureLogger.session, level: .debug)
+        for (peerID, peripheral) in connectedPeripherals {
+            SecureLogger.log("  connectedPeripherals[\(peerID)] = \(peripheral.identifier.uuidString)", category: SecureLogger.session, level: .debug)
+        }
+        
+        
+        // Also check peripheralRSSI for any connected peripherals
+        // This handles cases where RSSI is stored under temp IDs
+        for (peerID, peripheral) in connectedPeripherals {
+            // Skip temp IDs when iterating
+            if peerID.count != 16 {
+                continue
+            }
+            
+            // If we don't have RSSI for this peer ID
+            if rssiValues[peerID] == nil {
+                
+                // Check if we have RSSI stored by peripheral ID
+                let peripheralID = peripheral.identifier.uuidString
+                if let rssi = peripheralRSSI[peripheralID] {
+                    rssiValues[peerID] = rssi
+                }
+                // Also check if RSSI is stored under the peer ID as a temp ID
+                else if let rssi = peripheralRSSI[peerID] {
+                    rssiValues[peerID] = rssi
+                }
+            }
+        }
+        
+        // Also check for any known peers that might have RSSI in peerRSSI but not in connectedPeripherals
+        for (peerID, _) in peerNicknames {
+            if rssiValues[peerID] == nil && peerID.count == 16 {
+                // Check if we have RSSI stored directly
+                if let rssi = peerRSSI[peerID] {
+                    rssiValues[peerID] = rssi
+                } else if let rssi = peripheralRSSI[peerID] {
+                    rssiValues[peerID] = rssi
+                }
+            }
+        }
+        
+        
+        return rssiValues
     }
     
     // Emergency disconnect for panic situations
@@ -1515,13 +1697,16 @@ class BluetoothMeshService: NSObject {
         activePeers.removeAll()
         peerRSSI.removeAll()
         peripheralRSSI.removeAll()
+        rssiRetryCount.removeAll()
         announcedToPeers.removeAll()
         announcedPeers.removeAll()
         // For emergency/panic, reset immediately
         hasNotifiedNetworkAvailable = false
         networkBecameEmptyTime = nil
         lastNetworkNotificationTime = nil
+        processedMessagesLock.lock()
         processedMessages.removeAll()
+        processedMessagesLock.unlock()
         incomingFragments.removeAll()
         
         // Clear all encryption queues
@@ -1529,6 +1714,14 @@ class BluetoothMeshService: NSObject {
         peerEncryptionQueues.removeAll()
         encryptionQueuesLock.unlock()
         fragmentMetadata.removeAll()
+        
+        // Cancel all pending relays
+        pendingRelaysLock.lock()
+        for (_, relay) in pendingRelays {
+            relay.cancel()
+        }
+        pendingRelays.removeAll()
+        pendingRelaysLock.unlock()
         
         // Clear peer tracking
         lastHeardFromPeer.removeAll()
@@ -1601,6 +1794,18 @@ class BluetoothMeshService: NSObject {
     private func cleanupStalePeers() {
         let staleThreshold: TimeInterval = 180.0 // 3 minutes - increased for better stability
         let now = Date()
+        
+        // Clean up expired gracefully left peers
+        let expiredGracefulPeers = gracefulLeaveTimestamps.filter { (_, timestamp) in
+            now.timeIntervalSince(timestamp) > gracefulLeaveExpirationTime
+        }.map { $0.key }
+        
+        for peerID in expiredGracefulPeers {
+            gracefullyLeftPeers.remove(peerID)
+            gracefulLeaveTimestamps.removeValue(forKey: peerID)
+            SecureLogger.log("Cleaned up expired gracefullyLeft entry for \(peerID)", 
+                           category: SecureLogger.session, level: .debug)
+        }
         
         let peersToRemove = collectionsQueue.sync(flags: .barrier) {
             let toRemove = activePeers.filter { peerID in
@@ -1900,8 +2105,12 @@ class BluetoothMeshService: NSObject {
             return
         }
         
+        // Track which peers we've sent to (to avoid duplicates)
+        var sentToPeers = Set<String>()
+        
         // Send to connected peripherals (as central)
         var sentToPeripherals = 0
+        // Broadcasting to connected peripherals
         for (peerID, peripheral) in connectedPeripherals {
             if let characteristic = peripheralCharacteristics[peripheral] {
                 // Check if peripheral is connected before writing
@@ -1909,8 +2118,10 @@ class BluetoothMeshService: NSObject {
                     // Additional safety check for characteristic properties
                     if characteristic.properties.contains(.write) || 
                        characteristic.properties.contains(.writeWithoutResponse) {
+                        // Writing packet to peripheral
                         writeToPeripheral(data, peripheral: peripheral, characteristic: characteristic, peerID: peerID)
                         sentToPeripherals += 1
+                        sentToPeers.insert(peerID)
                     }
                 } else {
                     if let peerID = connectedPeripherals.first(where: { $0.value == peripheral })?.key {
@@ -1921,15 +2132,18 @@ class BluetoothMeshService: NSObject {
             }
         }
         
-        // Send to subscribed centrals (as peripheral)
+        // Send to subscribed centrals (as peripheral) - but only if we didn't already send via peripheral connections
         var sentToCentrals = 0
-        if let char = characteristic, !subscribedCentrals.isEmpty {
-            // Send to all subscribed centrals
-            // Note: Large packets should already be fragmented by the check at the beginning of broadcastPacket
+        if let char = characteristic, !subscribedCentrals.isEmpty && sentToPeripherals == 0 {
+            // Only send to centrals if we haven't sent via peripheral connections
+            // This prevents duplicate sends in 2-peer networks where peers connect both ways
+            // Broadcasting to subscribed centrals
             let success = peripheralManager?.updateValue(data, for: char, onSubscribedCentrals: nil) ?? false
             if success {
                 sentToCentrals = subscribedCentrals.count
             }
+        } else if sentToPeripherals > 0 && !subscribedCentrals.isEmpty {
+            // Skip central broadcast - already sent via peripherals
         }
         
         // If no peers received the message, add to retry queue ONLY if it's our own message
@@ -2031,33 +2245,117 @@ class BluetoothMeshService: NSObject {
                 SecureLogger.log("Dropped message with stale timestamp. Age: \(timeDiff/1000)s from \(senderID)", category: SecureLogger.security, level: .warning)
                 return
             }
+            
+            // Log message type for debugging
+            let messageTypeName: String
+            switch MessageType(rawValue: packet.type) {
+            case .message:
+                messageTypeName = "MESSAGE"
+            case .protocolAck:
+                messageTypeName = "PROTOCOL_ACK"
+            case .protocolNack:
+                messageTypeName = "PROTOCOL_NACK"
+            case .noiseHandshakeInit:
+                messageTypeName = "NOISE_HANDSHAKE_INIT"
+            case .noiseHandshakeResp:
+                messageTypeName = "NOISE_HANDSHAKE_RESP"
+            case .noiseIdentityAnnounce:
+                messageTypeName = "NOISE_IDENTITY_ANNOUNCE"
+            case .noiseEncrypted:
+                messageTypeName = "NOISE_ENCRYPTED"
+            case .leave:
+                messageTypeName = "LEAVE"
+            case .readReceipt:
+                messageTypeName = "READ_RECEIPT"
+            case .versionHello:
+                messageTypeName = "VERSION_HELLO"
+            case .versionAck:
+                messageTypeName = "VERSION_ACK"
+            case .systemValidation:
+                messageTypeName = "SYSTEM_VALIDATION"
+            default:
+                messageTypeName = "UNKNOWN(\(packet.type))"
+            }
+            
+            // Processing packet
+            
+            // Rate limiting check with message type awareness
+            let isHighPriority = [MessageType.protocolAck.rawValue,
+                                MessageType.protocolNack.rawValue,
+                                MessageType.noiseHandshakeInit.rawValue,
+                                MessageType.noiseHandshakeResp.rawValue,
+                                MessageType.noiseIdentityAnnounce.rawValue,
+                                MessageType.leave.rawValue].contains(packet.type)
+            
+            
+            if senderID != self.myPeerID && isRateLimited(peerID: senderID, messageType: packet.type) {
+                if !isHighPriority {
+                    SecureLogger.log("RATE_LIMITED: Dropped \(messageTypeName) from \(senderID)", 
+                                   category: SecureLogger.security, level: .warning)
+                    return
+                } else {
+                    SecureLogger.log("RATE_LIMITED: Allowing high-priority \(messageTypeName) from \(senderID)", 
+                                   category: SecureLogger.security, level: .info)
+                }
+            }
+            
+            // Record message for rate limiting based on type
+            if senderID != self.myPeerID && !isHighPriority {
+                recordMessage(from: senderID, messageType: packet.type)
+            }
         
-        // For fragments, include packet type in messageID to avoid dropping CONTINUE/END fragments
-        let messageID: String
-        if packet.type == MessageType.fragmentStart.rawValue || 
-           packet.type == MessageType.fragmentContinue.rawValue || 
-           packet.type == MessageType.fragmentEnd.rawValue {
-            // Include both type and payload hash for fragments to ensure uniqueness
-            messageID = "\(packet.timestamp)-\(packet.senderID.hexEncodedString())-\(packet.type)-\(packet.payload.hashValue)"
-        } else {
-            // Include payload hash for absolute uniqueness (handles same-second messages)
-            messageID = "\(packet.timestamp)-\(packet.senderID.hexEncodedString())-\(packet.payload.prefix(64).hashValue)"
+        // Content-based duplicate detection using packet ID
+        let messageID = generatePacketID(for: packet)
+        
+        // Check if we've seen this exact message before
+        processedMessagesLock.lock()
+        if let existingState = processedMessages[messageID] {
+            // Update the state
+            var updatedState = existingState
+            updatedState.updateSeen()
+            processedMessages[messageID] = updatedState
+            processedMessagesLock.unlock()
+            
+            SecureLogger.log("Dropped duplicate message from \(senderID) (seen \(updatedState.seenCount) times)", category: SecureLogger.security, level: .debug)
+            // Cancel any pending relay for this message
+            cancelPendingRelay(messageID: messageID)
+            return
         }
+        processedMessagesLock.unlock()
         
         // Use bloom filter for efficient duplicate detection
         if messageBloomFilter.contains(messageID) {
-            // Also check exact set for accuracy (bloom filter can have false positives)
-            if processedMessages.contains(messageID) {
-                SecureLogger.log("Dropped duplicate message: \(messageID.prefix(20))... from \(senderID)", category: SecureLogger.security, level: .debug)
-                return
-            } else {
-                // False positive from Bloom filter
-                SecureLogger.log("Bloom filter false positive for message: \(messageID.prefix(20))...", category: SecureLogger.security, level: .debug)
+            // Double check with exact set (bloom filter can have false positives)
+            processedMessagesLock.lock()
+            let isProcessed = processedMessages[messageID] != nil
+            processedMessagesLock.unlock()
+            if !isProcessed {
+                SecureLogger.log("Bloom filter false positive for message: \(messageID)", category: SecureLogger.security, level: .debug)
             }
         }
         
+        // Record this message as processed
         messageBloomFilter.insert(messageID)
-        processedMessages.insert(messageID)
+        processedMessagesLock.lock()
+        processedMessages[messageID] = MessageState(
+            firstSeen: Date(),
+            lastSeen: Date(),
+            seenCount: 1,
+            relayed: false,
+            acknowledged: false
+        )
+        
+        // Prune old entries if needed
+        if processedMessages.count > maxProcessedMessages {
+            // Remove oldest entries
+            let sortedByFirstSeen = processedMessages.sorted { $0.value.firstSeen < $1.value.firstSeen }
+            let toRemove = sortedByFirstSeen.prefix(processedMessages.count - maxProcessedMessages + 1000)
+            for (key, _) in toRemove {
+                processedMessages.removeValue(forKey: key)
+            }
+        }
+        processedMessagesLock.unlock()
+        
         
         // Log statistics periodically
         if messageBloomFilter.insertCount % 100 == 0 {
@@ -2130,24 +2428,25 @@ class BluetoothMeshService: NSObject {
                     var relayPacket = packet
                     relayPacket.ttl -= 1
                     if relayPacket.ttl > 0 {
-                        // Probabilistic flooding with smart relay decisions
-                        let relayProb = self.adaptiveRelayProbability
+                        // RSSI-based relay probability
+                        let rssiValue = peerRSSI[senderID]?.intValue ?? -70
+                        let relayProb = self.calculateRelayProbability(baseProb: self.adaptiveRelayProbability, rssi: rssiValue)
                         
-                        // Always relay if TTL is high (fresh messages need to spread)
-                        // or if we have few peers (ensure coverage in sparse networks)
-                        let shouldRelay = relayPacket.ttl >= 4 || 
-                                         self.activePeers.count <= 3 ||
-                                         Double.random(in: 0...1) < relayProb
+                        // Relay based on probability only - no TTL boost if base probability is 0
+                        let effectiveProb = relayProb > 0 ? relayProb : 0.0
+                        let shouldRelay = effectiveProb > 0 && Double.random(in: 0...1) < effectiveProb
                         
                         if shouldRelay {
-                            SecureLogger.log("Relaying broadcast from \(senderID), TTL: \(relayPacket.ttl), peers: \(self.activePeers.count)", category: SecureLogger.noise, level: .debug)
-                            // Add random delay to prevent collision storms
-                            let delay = Double.random(in: minMessageDelay...maxMessageDelay)
-                            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-                                self?.broadcastPacket(relayPacket)
+                            // Relaying broadcast
+                            // High priority messages relay immediately, others use exponential delay
+                            if self.isHighPriorityMessage(type: relayPacket.type) {
+                                self.broadcastPacket(relayPacket)
+                            } else {
+                                let delay = self.exponentialRelayDelay()
+                                self.scheduleRelay(relayPacket, messageID: messageID, delay: delay)
                             }
                         } else {
-                            SecureLogger.log("Dropped broadcast relay from \(senderID), TTL: \(relayPacket.ttl), prob: \(relayProb)", category: SecureLogger.noise, level: .debug)
+                            // Dropped broadcast relay
                         }
                     }
                     
@@ -2237,19 +2536,21 @@ class BluetoothMeshService: NSObject {
                         }
                     }
                     
-                    // Private messages are important - use higher relay probability
-                    let relayProb = min(self.adaptiveRelayProbability + 0.15, 1.0)  // Boost by 15%
+                    // Private messages are important - use RSSI-based relay with boost
+                    let rssiValue = peerRSSI[senderID]?.intValue ?? -70
+                    let baseProb = min(self.adaptiveRelayProbability + 0.15, 1.0)  // Boost by 15%
+                    let relayProb = self.calculateRelayProbability(baseProb: baseProb, rssi: rssiValue)
                     
-                    // Always relay if TTL is high or we have few peers
-                    let shouldRelay = relayPacket.ttl >= 4 || 
-                                     self.activePeers.count <= 3 ||
-                                     Double.random(in: 0...1) < relayProb
+                    // Relay based on probability only - no forced relay for small networks
+                    let shouldRelay = Double.random(in: 0...1) < relayProb
                     
                     if shouldRelay {
-                        // Add random delay to prevent collision storms
-                        let delay = Double.random(in: minMessageDelay...maxMessageDelay)
-                        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-                            self?.broadcastPacket(relayPacket)
+                        // High priority messages relay immediately, others use exponential delay
+                        if self.isHighPriorityMessage(type: relayPacket.type) {
+                            self.broadcastPacket(relayPacket)
+                        } else {
+                            let delay = self.exponentialRelayDelay()
+                            self.scheduleRelay(relayPacket, messageID: messageID, delay: delay)
                         }
                     }
                 } else {
@@ -2266,6 +2567,8 @@ class BluetoothMeshService: NSObject {
         case .announce:
             if let nickname = String(data: packet.payload, encoding: .utf8) {
                 let senderID = packet.senderID.hexEncodedString()
+                
+                SecureLogger.log("handleReceivedPacket: Received announce from \(senderID), peripheral is \(peripheral != nil ? "present" : "nil")", category: SecureLogger.session, level: .debug)
                 
                 // Ignore if it's from ourselves (including previous peer IDs)
                 if isPeerIDOurs(senderID) {
@@ -2339,23 +2642,78 @@ class BluetoothMeshService: NSObject {
                 }
                 
                 // Update peripheral mapping if we have it
-                if let peripheral = peripheral {
+                // If peripheral is nil (e.g., from relay), try to find it
+                var peripheralToUpdate = peripheral
+                if peripheralToUpdate == nil {
+                    // Look for any peripheral that might be this peer
+                    // First check if we already have a mapping for this peer ID
+                    peripheralToUpdate = self.connectedPeripherals[senderID]
+                    
+                    if peripheralToUpdate == nil {
+                        SecureLogger.log("handleReceivedPacket: No peripheral passed and no existing mapping for \(senderID)", category: SecureLogger.session, level: .debug)
+                        
+                        // Try to find an unidentified peripheral that might be this peer
+                        // This handles case where announce is relayed and we need to update RSSI mapping
+                        var unmappedPeripherals: [(String, CBPeripheral)] = []
+                        for (tempID, peripheral) in self.connectedPeripherals {
+                            // Check if this is a temp ID (UUID format, not a peer ID)
+                            if tempID.count == 36 && tempID.contains("-") { // UUID length with dashes
+                                unmappedPeripherals.append((tempID, peripheral))
+                                SecureLogger.log("handleReceivedPacket: Found unmapped peripheral with temp ID \(tempID)", category: SecureLogger.session, level: .debug)
+                            }
+                        }
+                        
+                        // If we have exactly one unmapped peripheral, it's likely this one
+                        if unmappedPeripherals.count == 1 {
+                            let (tempID, peripheral) = unmappedPeripherals[0]
+                            SecureLogger.log("handleReceivedPacket: Single unmapped peripheral \(tempID), mapping to \(senderID)", category: SecureLogger.session, level: .info)
+                            peripheralToUpdate = peripheral
+                            
+                            // Remove temp mapping and add real mapping
+                            self.connectedPeripherals.removeValue(forKey: tempID)
+                            self.connectedPeripherals[senderID] = peripheral
+                            
+                            // Transfer RSSI if available
+                            if let rssi = self.peripheralRSSI[tempID] {
+                                self.peripheralRSSI.removeValue(forKey: tempID)
+                                self.peripheralRSSI[senderID] = rssi
+                                self.peerRSSI[senderID] = rssi
+                            }
+                            
+                            // Also check the peripheral's UUID-based RSSI
+                            let peripheralUUID = peripheral.identifier.uuidString
+                            if peripheralUUID == tempID && peripheralRSSI[peripheralUUID] != nil {
+                                // Already handled above
+                            } else if let rssi = self.peripheralRSSI[peripheralUUID] {
+                                self.peerRSSI[senderID] = rssi
+                            }
+                        } else if unmappedPeripherals.count > 1 {
+                            SecureLogger.log("handleReceivedPacket: Multiple unmapped peripherals (\(unmappedPeripherals.count)), cannot determine which is \(senderID)", category: SecureLogger.session, level: .debug)
+                            // TODO: Could use timing heuristics or other methods to match
+                        }
+                    }
+                }
+                
+                if let peripheral = peripheralToUpdate {
+                    let peripheralID = peripheral.identifier.uuidString
+                    SecureLogger.log("Updating peripheral \(peripheralID) mapping to peer ID \(senderID)", 
+                                   category: SecureLogger.session, level: .info)
+                    
+                    // Update simplified mapping
+                    updatePeripheralMapping(peripheralID: peripheralID, peerID: senderID)
+                    
                     // Find and remove any temp ID mapping for this peripheral
                     var tempIDToRemove: String? = nil
                     for (id, per) in self.connectedPeripherals {
-                        if per == peripheral && id != senderID {
+                        if per == peripheral && id != senderID && id == peripheralID {
                             tempIDToRemove = id
                             break
                         }
                     }
                     
                     if let tempID = tempIDToRemove {
-                        // Remove temp mapping
-                        self.connectedPeripherals.removeValue(forKey: tempID)
-                        // Add real peer ID mapping
-                        self.connectedPeripherals[senderID] = peripheral
-                        // Update peripheral ID to peer ID mapping
-                        self.peerIDByPeripheralID[peripheral.identifier.uuidString] = senderID
+                        // RSSI transfer is handled by updatePeripheralMapping
+                        self.peripheralRSSI.removeValue(forKey: tempID)
                         
                         // IMPORTANT: Remove old peer ID from activePeers to prevent duplicates
                         collectionsQueue.sync(flags: .barrier) {
@@ -2365,6 +2723,17 @@ class BluetoothMeshService: NSObject {
                         }
                         
                         // Don't notify about disconnect - this is just cleanup of temporary ID
+                    } else {
+                        SecureLogger.log("handleReceivedPacket: No temp ID found for peripheral, directly mapping \(senderID)", category: SecureLogger.session, level: .debug)
+                        // No temp ID found, just add the mapping
+                        self.connectedPeripherals[senderID] = peripheral
+                        self.peerIDByPeripheralID[peripheral.identifier.uuidString] = senderID
+                        
+                        // Check if RSSI is stored under peripheral UUID and transfer it
+                        let peripheralUUID = peripheral.identifier.uuidString
+                        if let peripheralStoredRSSI = self.peripheralRSSI[peripheralUUID] {
+                            self.peerRSSI[senderID] = peripheralStoredRSSI
+                        }
                     }
                 }
                 
@@ -2465,7 +2834,6 @@ class BluetoothMeshService: NSObject {
                         // Just update the peer list
                         self.notifyPeerListUpdate()
                     }
-                } else {
                 }
                 
                 // Relay announce if TTL > 0
@@ -2475,11 +2843,8 @@ class BluetoothMeshService: NSObject {
                     
                     // Add small delay to prevent collision
                     let delay = Double.random(in: 0.1...0.3)
-                    DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-                        self?.broadcastPacket(relayPacket)
-                    }
+                    self.scheduleRelay(relayPacket, messageID: messageID, delay: delay)
                 }
-            } else {
             }
             
         case .leave:
@@ -2494,6 +2859,7 @@ class BluetoothMeshService: NSObject {
                     if wasRemoved {
                         // Mark as gracefully left to prevent duplicate disconnect message
                         self.gracefullyLeftPeers.insert(senderID)
+                        self.gracefulLeaveTimestamps[senderID] = Date()
                         
                         SecureLogger.log("📴 Peer left network: \(senderID) (\(nickname)) - marked as gracefully left", category: SecureLogger.session, level: .info)
                     }
@@ -2523,7 +2889,8 @@ class BluetoothMeshService: NSObject {
             var relayPacket = packet
             relayPacket.ttl -= 1
             if relayPacket.ttl > 0 {
-                self.broadcastPacket(relayPacket)
+                let delay = self.exponentialRelayDelay()
+                self.scheduleRelay(relayPacket, messageID: messageID, delay: delay)
             }
             
             
@@ -2588,7 +2955,8 @@ class BluetoothMeshService: NSObject {
                 
                 var relayPacket = packet
                 relayPacket.ttl -= 1
-                self.broadcastPacket(relayPacket)
+                let delay = self.exponentialRelayDelay()
+                self.scheduleRelay(relayPacket, messageID: messageID, delay: delay)
             }
             
         case .readReceipt:
@@ -2597,17 +2965,17 @@ class BluetoothMeshService: NSObject {
                isPeerIDOurs(recipientIDData.hexEncodedString()) {
                 // This read receipt is for us
                 let senderID = packet.senderID.hexEncodedString()
-                SecureLogger.log("Received read receipt from \(senderID)", category: SecureLogger.session, level: .info)
+                // Received read receipt
                 // Check if payload is already decrypted (came through Noise)
                     if let receipt = ReadReceipt.fromBinaryData(packet.payload) {
                         // Already decrypted - process directly
-                        SecureLogger.log("Processing read receipt for message \(receipt.originalMessageID) from \(receipt.readerID)", category: SecureLogger.session, level: .info)
+                        // Processing read receipt
                         DispatchQueue.main.async {
                             self.delegate?.didReceiveReadReceipt(receipt)
                         }
                     } else if let receipt = ReadReceipt.decode(from: packet.payload) {
                         // Fallback to JSON for backward compatibility
-                        SecureLogger.log("Processing read receipt (JSON) for message \(receipt.originalMessageID) from \(receipt.readerID)", category: SecureLogger.session, level: .info)
+                        // Processing read receipt (JSON)
                         DispatchQueue.main.async {
                             self.delegate?.didReceiveReadReceipt(receipt)
                         }
@@ -2634,7 +3002,8 @@ class BluetoothMeshService: NSObject {
                 // Relay the read receipt if not for us
                 var relayPacket = packet
                 relayPacket.ttl -= 1
-                self.broadcastPacket(relayPacket)
+                let delay = self.exponentialRelayDelay()
+                self.scheduleRelay(relayPacket, messageID: messageID, delay: delay)
             }
             
         case .noiseIdentityAnnounce:
@@ -2646,14 +3015,28 @@ class BluetoothMeshService: NSObject {
                !isPeerIDOurs(recipientID.hexEncodedString()) {
                 // Not for us, relay if TTL > 0
                 if packet.ttl > 0 {
-                    SecureLogger.log("Relaying identity announce packet to \(recipientID.hexEncodedString()), TTL: \(packet.ttl)", 
-                                   category: SecureLogger.session, level: .debug)
+                    // Relay identity announce
                     var relayPacket = packet
                     relayPacket.ttl -= 1
-                    broadcastPacket(relayPacket)
+                    let delay = self.exponentialRelayDelay()
+                    self.scheduleRelay(relayPacket, messageID: messageID, delay: delay)
                 }
                 return
             }
+            
+            // Special duplicate detection for identity announces
+            processedMessagesLock.lock()
+            if let lastSeenTime = recentIdentityAnnounces[senderID] {
+                let timeSince = Date().timeIntervalSince(lastSeenTime)
+                if timeSince < identityAnnounceDuplicateWindow {
+                    processedMessagesLock.unlock()
+                    SecureLogger.log("Dropped duplicate identity announce from \(senderID) (last seen \(timeSince)s ago)", 
+                                   category: SecureLogger.security, level: .debug)
+                    return
+                }
+            }
+            recentIdentityAnnounces[senderID] = Date()
+            processedMessagesLock.unlock()
             
             if senderID != myPeerID && !isPeerIDOurs(senderID) {
                 // Create defensive copy and validate
@@ -2705,6 +3088,27 @@ class BluetoothMeshService: NSObject {
                 )
                 
                 SecureLogger.log("Creating identity binding for \(announcement.peerID) -> \(fingerprint)", category: SecureLogger.security, level: .info)
+                
+                // Handle peer ID rotation if previousPeerID is provided
+                if let previousID = announcement.previousPeerID, previousID != announcement.peerID {
+                    SecureLogger.log("Peer announced rotation from \(previousID) to \(announcement.peerID)", 
+                                   category: SecureLogger.security, level: .info)
+                    
+                    // Transfer states from previous ID
+                    collectionsQueue.sync(flags: .barrier) {
+                        // Transfer gracefullyLeft state
+                        if self.gracefullyLeftPeers.contains(previousID) {
+                            self.gracefullyLeftPeers.remove(previousID)
+                            self.gracefullyLeftPeers.insert(announcement.peerID)
+                        }
+                        
+                        // Clean up the old peer ID from active peers
+                        if self.activePeers.contains(previousID) {
+                            self.activePeers.remove(previousID)
+                            // Don't add new ID yet - let normal flow handle it
+                        }
+                    }
+                }
                 
                 // Update our mappings
                 updatePeerBinding(announcement.peerID, fingerprint: fingerprint, binding: binding)
@@ -2778,7 +3182,7 @@ class BluetoothMeshService: NSObject {
                !isPeerIDOurs(recipientID.hexEncodedString()) {
                 // Not for us, relay if TTL > 0
                 if packet.ttl > 0 {
-                    SecureLogger.log("Relaying handshake init packet, TTL: \(packet.ttl)", category: SecureLogger.session, level: .debug)
+                    // Relay handshake init
                     var relayPacket = packet
                     relayPacket.ttl -= 1
                     broadcastPacket(relayPacket)
@@ -2845,7 +3249,7 @@ class BluetoothMeshService: NSObject {
                 if !isPeerIDOurs(recipientIDStr) {
                     // Not for us, relay if TTL > 0
                     if packet.ttl > 0 {
-                        SecureLogger.log("Relaying handshake response packet, TTL: \(packet.ttl)", category: SecureLogger.session, level: .debug)
+                        // Relay handshake response
                         var relayPacket = packet
                         relayPacket.ttl -= 1
                         broadcastPacket(relayPacket)
@@ -2873,7 +3277,7 @@ class BluetoothMeshService: NSObject {
                isPeerIDOurs(recipientIDData.hexEncodedString())
                && !isPeerIDOurs(senderID) {
                 _ = packet.recipientID?.hexEncodedString()
-                handleNoiseEncryptedMessage(from: senderID, encryptedData: packet.payload, originalPacket: packet)
+                handleNoiseEncryptedMessage(from: senderID, encryptedData: packet.payload, originalPacket: packet, peripheral: peripheral)
                 return
             }
             if !isPeerIDOurs(senderID) {
@@ -2992,8 +3396,7 @@ class BluetoothMeshService: NSObject {
                 timestamp: packet.timestamp,  // Use original timestamp
                 payload: fragmentPayload,
                 signature: nil,  // Fragments don't need signatures
-                ttl: packet.ttl
-            )
+                ttl: packet.ttl            )
             
             // Send fragments with linear delay
             let totalDelay = Double(index) * delayBetweenFragments
@@ -3159,7 +3562,7 @@ class BluetoothMeshService: NSObject {
             }
         }
     }
-}
+}  // End of BluetoothMeshService class
 
 extension BluetoothMeshService: CBCentralManagerDelegate {
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
@@ -3191,9 +3594,10 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
         // Optimize for 300m range - only connect to strong enough signals
         let rssiValue = RSSI.intValue
         
-        // Filter out very weak signals (below -90 dBm) to save battery
-        guard rssiValue > -90 else { 
-            // Ignoring peripheral due to very weak signal
+        // Dynamic RSSI threshold based on peer count (smart compromise)
+        let rssiThreshold = dynamicRSSIThreshold
+        guard rssiValue > rssiThreshold else { 
+            // Ignoring peripheral due to weak signal (threshold: \(rssiThreshold) dBm)
             return 
         }
         
@@ -3213,9 +3617,11 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
         if let name = peripheral.name, name.count == 16 {
             // Assume 16-character hex names are peer IDs
             let peerID = name
+            SecureLogger.log("Discovery: Found peer ID \(peerID) from peripheral name", category: SecureLogger.session, level: .debug)
             
             // Don't process our own advertisements (including previous peer IDs)
             if isPeerIDOurs(peerID) {
+                SecureLogger.log("Discovery: Ignoring our own peer ID \(peerID)", category: SecureLogger.session, level: .debug)
                 return
             }
             
@@ -3242,12 +3648,17 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
         if let pooledPeripheral = connectionPool[peripheralID] {
             // Reuse existing peripheral from pool
             if pooledPeripheral.state == CBPeripheralState.disconnected {
-                // Reconnect if disconnected
-                central.connect(pooledPeripheral, options: [
+                // Reconnect if disconnected with optimized parameters
+                let connectionOptions: [String: Any] = [
                     CBConnectPeripheralOptionNotifyOnConnectionKey: true,
                     CBConnectPeripheralOptionNotifyOnDisconnectionKey: true,
                     CBConnectPeripheralOptionNotifyOnNotificationKey: true
-                ])
+                ]
+                
+                // Smart compromise: would set low latency for small networks if API supported it
+                // iOS/macOS don't expose connection interval control in public API
+                
+                central.connect(pooledPeripheral, options: connectionOptions)
             }
             return
         }
@@ -3278,12 +3689,15 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
             
             // Only attempt if under max attempts
             if attempts < maxConnectionAttempts {
-                // Use optimized connection parameters for better range
+                // Use optimized connection parameters based on peer count
                 let connectionOptions: [String: Any] = [
                     CBConnectPeripheralOptionNotifyOnConnectionKey: true,
                     CBConnectPeripheralOptionNotifyOnDisconnectionKey: true,
                     CBConnectPeripheralOptionNotifyOnNotificationKey: true
                 ]
+                
+                // Smart compromise: would set low latency for small networks if API supported it
+                // iOS/macOS don't expose connection interval control in public API
                 
                 central.connect(peripheral, options: connectionOptions)
             }
@@ -3291,18 +3705,19 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
     }
     
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
-        let tempID = peripheral.identifier.uuidString
-        SecureLogger.log("Peripheral connected: \(tempID)", category: SecureLogger.session, level: .info)
-        
-        // Log current mapping state for debugging
-        SecureLogger.log("Current peerIDByPeripheralID mappings: \(peerIDByPeripheralID.keys.joined(separator: ", "))", 
-                       category: SecureLogger.session, level: .debug)
+        let peripheralID = peripheral.identifier.uuidString
         
         peripheral.delegate = self
         peripheral.discoverServices([BluetoothMeshService.serviceUUID])
         
-        // Store peripheral by its system ID temporarily until we get the real peer ID
-        connectedPeripherals[tempID] = peripheral
+        // Register peripheral in simplified mapping system
+        registerPeripheral(peripheral)
+        
+        // Store peripheral temporarily until we get the real peer ID
+        connectedPeripherals[peripheralID] = peripheral
+        
+        SecureLogger.log("Connected to peripheral \(peripheralID) - awaiting peer ID", 
+                       category: SecureLogger.session, level: .debug)
         
         // Update connection state to connected (but not authenticated yet)
         // We don't know the real peer ID yet, so we can't update the state
@@ -3323,6 +3738,9 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
         let peripheralID = peripheral.identifier.uuidString
         
+        // Clean up RSSI retry count
+        rssiRetryCount.removeValue(forKey: peripheralID)
+        
         // Check if this was an intentional disconnect
         if intentionalDisconnects.contains(peripheralID) {
             intentionalDisconnects.remove(peripheralID)
@@ -3338,16 +3756,20 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
             SecureLogger.log("Peripheral disconnected normally: \(peripheralID)", category: SecureLogger.session, level: .info)
         }
         
-        // Find the real peer ID for this peripheral
+        // Find the real peer ID using simplified mapping
         var realPeerID: String? = nil
         
-        // First check our peripheral ID to peer ID mapping
-        if let peerID = peerIDByPeripheralID[peripheralID] {
+        if let mapping = peripheralMappings[peripheralID], let peerID = mapping.peerID {
             realPeerID = peerID
-            SecureLogger.log("Found peer ID \(peerID) from peerIDByPeripheralID for peripheral \(peripheralID)", 
+            SecureLogger.log("Found peer ID \(peerID) for peripheral \(peripheralID)", 
+                           category: SecureLogger.session, level: .debug)
+        } else if let peerID = peerIDByPeripheralID[peripheralID] {
+            // Fallback to legacy mapping
+            realPeerID = peerID
+            SecureLogger.log("Found peer ID \(peerID) from legacy mapping for peripheral \(peripheralID)", 
                            category: SecureLogger.session, level: .debug)
         } else {
-            SecureLogger.log("No mapping in peerIDByPeripheralID for peripheral \(peripheralID), checking connectedPeripherals", 
+            SecureLogger.log("No peer ID mapping found for peripheral \(peripheralID)", 
                            category: SecureLogger.session, level: .debug)
             
             // Fallback: check if we have a direct mapping from peripheral to peer ID
@@ -3417,6 +3839,7 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
         }
         
         // Clean up peripheral tracking
+        peripheralMappings.removeValue(forKey: peripheralID)
         peerIDByPeripheralID.removeValue(forKey: peripheralID)
         lastActivityByPeripheralID.removeValue(forKey: peripheralID)
         
@@ -3460,6 +3883,7 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
                         } else {
                             // Peer gracefully left, just clean up the tracking
                             self.gracefullyLeftPeers.remove(peerID)
+                            self.gracefulLeaveTimestamps.removeValue(forKey: peerID)
                             SecureLogger.log("Cleaning up gracefullyLeftPeers for \(peerID)", category: SecureLogger.session, level: .debug)
                         }
                     }
@@ -3545,20 +3969,16 @@ extension BluetoothMeshService: CBPeripheralDelegate {
                 self.sendVersionHello(to: peripheral)
                 
                 // Send announce packet after version negotiation completes
-                // Send multiple times for reliability
                 if let vm = self.delegate as? ChatViewModel {
-                    // Send announces multiple times with delays
-                    for delay in [0.3, 0.8, 1.5] {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-                            guard let self = self else { return }
-                            let announcePacket = BitchatPacket(
-                                type: MessageType.announce.rawValue,
-                                ttl: 3,
-                                senderID: self.myPeerID,
-                                payload: Data(vm.nickname.utf8)
-                            )
-                            self.broadcastPacket(announcePacket)
-                        }
+                    // Send single announce with slight delay
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                        guard let self = self else { return }
+                        let announcePacket = BitchatPacket(
+                            type: MessageType.announce.rawValue,
+                            ttl: 3,
+                            senderID: self.myPeerID,
+                            payload: Data(vm.nickname.utf8)                        )
+                        self.broadcastPacket(announcePacket)
                     }
                     
                     // Also send targeted announce to this specific peripheral
@@ -3572,8 +3992,7 @@ extension BluetoothMeshService: CBPeripheralDelegate {
                             type: MessageType.announce.rawValue,
                             ttl: 3,
                             senderID: self.myPeerID,
-                            payload: Data(vm.nickname.utf8)
-                        )
+                            payload: Data(vm.nickname.utf8)                        )
                         if let data = announcePacket.toBinaryData() {
                             self.writeToPeripheral(data, peripheral: peripheral, characteristic: characteristic, peerID: nil)
                         }
@@ -3625,50 +4044,66 @@ extension BluetoothMeshService: CBPeripheralDelegate {
     }
     
     func peripheral(_ peripheral: CBPeripheral, didReadRSSI RSSI: NSNumber, error: Error?) {
-        guard error == nil else { return }
+        let peripheralID = peripheral.identifier.uuidString
+        
+        if error != nil {
+            return
+        }
         
         // Validate RSSI value - 127 means no RSSI available
         let rssiValue = RSSI.intValue
         
         // Only store valid RSSI values
         if rssiValue == 127 || rssiValue < -100 || rssiValue > 0 {
-            SecureLogger.log("Invalid RSSI value \(rssiValue) from peripheral, will retry", category: SecureLogger.session, level: .debug)
+            // Track retry count
+            let retryCount = rssiRetryCount[peripheralID] ?? 0
+            rssiRetryCount[peripheralID] = retryCount + 1
             
-            // Retry sooner if we got an invalid value
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak peripheral] in
-                guard let peripheral = peripheral, peripheral.state == .connected else { return }
-                peripheral.readRSSI()
+            
+            // Retry up to 5 times with exponential backoff
+            if retryCount < 5 {
+                let delay = min(0.2 * pow(2.0, Double(retryCount)), 2.0) // 0.2s, 0.4s, 0.8s, 1.6s, 2.0s max
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self, weak peripheral] in
+                    guard let peripheral = peripheral, peripheral.state == .connected else { 
+                        self?.rssiRetryCount.removeValue(forKey: peripheralID)
+                        return 
+                    }
+                    peripheral.readRSSI()
+                }
+            } else {
+                // Give up after 5 retries, reset counter
+                rssiRetryCount.removeValue(forKey: peripheralID)
             }
             return
         }
         
-        // Find the peer ID for this peripheral
-        if let peerID = connectedPeripherals.first(where: { $0.value == peripheral })?.key {
-            // Handle both temp IDs and real peer IDs
+        // Valid RSSI received, reset retry count
+        rssiRetryCount.removeValue(forKey: peripheralID)
+        
+        // Update RSSI in simplified mapping
+        updatePeripheralRSSI(peripheralID: peripheralID, rssi: RSSI)
+        
+        // Also store in legacy mapping for compatibility
+        peripheralRSSI[peripheralID] = RSSI
+        
+        // If we have a peer ID, update peer RSSI (handled in updatePeripheralRSSI)
+        if let mapping = peripheralMappings[peripheralID], mapping.isIdentified {
+            // Force UI update when we have a real peer ID
             DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-                
-                if peerID.count != 16 {
-                    // It's a temp ID, store RSSI temporarily
-                    self.peripheralRSSI[peerID] = RSSI
-                    // Keep trying to read RSSI until we get real peer ID
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak peripheral] in
-                        guard let peripheral = peripheral, peripheral.state == .connected else { return }
-                        peripheral.readRSSI()
-                    }
-                } else {
-                    // It's a real peer ID, store it
-                    self.peerRSSI[peerID] = RSSI
-                    // Force UI update when we have a real peer ID
-                    self.notifyPeerListUpdate()
-                }
+                self?.notifyPeerListUpdate()
             }
-            
-            // Periodically update RSSI
-            DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak peripheral] in
+        } else {
+            // Keep trying to read RSSI until we get real peer ID
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak peripheral] in
                 guard let peripheral = peripheral, peripheral.state == .connected else { return }
                 peripheral.readRSSI()
             }
+        }
+            
+        // Periodically update RSSI
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak peripheral] in
+            guard let peripheral = peripheral, peripheral.state == .connected else { return }
+            peripheral.readRSSI()
         }
     }
 }
@@ -3769,8 +4204,9 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         if !subscribedCentrals.contains(central) {
             subscribedCentrals.append(central)
             
-            // Send Noise identity announcement to newly connected central
-            sendNoiseIdentityAnnounce()
+            // Only send identity announcement if we haven't recently
+            // This reduces spam when multiple centrals connect quickly
+            // sendNoiseIdentityAnnounce() will check rate limits internally
             
             // Update peer list to show we're connected (even without peer ID yet)
             self.notifyPeerListUpdate()
@@ -3907,6 +4343,365 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
     private func randomDelay() -> TimeInterval {
         // Generate random delay between min and max for timing obfuscation
         return TimeInterval.random(in: minMessageDelay...maxMessageDelay)
+    }
+    
+    // MARK: - Range Optimization Methods
+    
+    // Calculate relay probability based on RSSI (edge nodes relay more)
+    private func calculateRelayProbability(baseProb: Double, rssi: Int) -> Double {
+        // RSSI typically ranges from -30 (very close) to -90 (far)
+        // We want edge nodes (weak RSSI) to relay more aggressively
+        let rssiFactor = Double(100 + rssi) / 100.0  // -90 = 0.1, -70 = 0.3, -50 = 0.5
+        
+        // Invert the factor so weak signals relay more
+        let edgeFactor = max(0.5, 2.0 - rssiFactor)
+        
+        return min(1.0, baseProb * edgeFactor)
+    }
+    
+    // Exponential delay distribution to prevent synchronized collision storms
+    private func exponentialRelayDelay() -> TimeInterval {
+        // Use exponential distribution with mean of (min + max) / 2
+        let meanDelay = (minMessageDelay + maxMessageDelay) / 2.0
+        let lambda = 1.0 / meanDelay
+        
+        // Generate exponential random value
+        let u = Double.random(in: 0..<1)
+        let exponentialDelay = -log(1.0 - u) / lambda
+        
+        // Clamp to our bounds
+        return min(maxMessageDelay, max(minMessageDelay, exponentialDelay))
+    }
+    
+    // Check if message type is high priority (should bypass aggregation)
+    private func isHighPriorityMessage(type: UInt8) -> Bool {
+        switch MessageType(rawValue: type) {
+        case .noiseHandshakeInit, .noiseHandshakeResp, .protocolAck,
+             .versionHello, .versionAck, .deliveryAck, .systemValidation:
+            return true
+        case .message, .announce, .leave, .readReceipt, .deliveryStatusRequest,
+             .fragmentStart, .fragmentContinue, .fragmentEnd,
+             .noiseIdentityAnnounce, .noiseEncrypted, .protocolNack, .none:
+            return false
+        }
+    }
+    
+    // Calculate exponential backoff for retries
+    private func calculateExponentialBackoff(retry: Int) -> TimeInterval {
+        // Start with 1s, double each time: 1s, 2s, 4s, 8s, 16s, max 30s
+        let baseDelay = 1.0
+        let maxDelay = 30.0
+        let delay = min(maxDelay, baseDelay * pow(2.0, Double(retry - 1)))
+        
+        // Add 10% jitter to prevent synchronized retries
+        let jitter = delay * 0.1 * (Double.random(in: -1...1))
+        return delay + jitter
+    }
+    
+    // MARK: - Collision Avoidance
+    
+    // Calculate jitter based on node ID to spread transmissions
+    private func calculateNodeIDJitter() -> TimeInterval {
+        // Use hash of peer ID to generate consistent jitter for this node
+        let hashValue = myPeerID.hash
+        let normalizedHash = Double(abs(hashValue % 1000)) / 1000.0  // 0.0 to 0.999
+        
+        // Jitter range: 0-20ms based on node ID
+        let jitterRange: TimeInterval = 0.02  // 20ms max jitter
+        return normalizedHash * jitterRange
+    }
+    
+    // Add smart delay to avoid collisions
+    private func smartCollisionAvoidanceDelay(baseDelay: TimeInterval) -> TimeInterval {
+        // Add node-specific jitter to base delay
+        let nodeJitter = calculateNodeIDJitter()
+        
+        // Add small random component to avoid perfect synchronization
+        let randomJitter = TimeInterval.random(in: 0...0.005)  // 0-5ms additional random
+        
+        return baseDelay + nodeJitter + randomJitter
+    }
+    
+    // MARK: - Relay Cancellation
+    
+    private func scheduleRelay(_ packet: BitchatPacket, messageID: String, delay: TimeInterval) {
+        pendingRelaysLock.lock()
+        defer { pendingRelaysLock.unlock() }
+        
+        // Cancel any existing relay for this message
+        if let existingRelay = pendingRelays[messageID] {
+            existingRelay.cancel()
+        }
+        
+        // Apply smart collision avoidance to delay
+        let adjustedDelay = smartCollisionAvoidanceDelay(baseDelay: delay)
+        
+        // Create new relay task
+        let relayTask = DispatchWorkItem { [weak self] in
+            guard let self = self else { return }
+            
+            // Remove from pending when executed
+            self.pendingRelaysLock.lock()
+            self.pendingRelays.removeValue(forKey: messageID)
+            self.pendingRelaysLock.unlock()
+            
+            // Mark this message as relayed
+            self.processedMessagesLock.lock()
+            if var state = self.processedMessages[messageID] {
+                state.relayed = true
+                self.processedMessages[messageID] = state
+            }
+            self.processedMessagesLock.unlock()
+            
+            // Actually relay the packet
+            self.broadcastPacket(packet)
+        }
+        
+        // Store the task
+        pendingRelays[messageID] = relayTask
+        
+        // Schedule it with adjusted delay
+        DispatchQueue.global(qos: .default).asyncAfter(deadline: .now() + adjustedDelay, execute: relayTask)
+    }
+    
+    private func cancelPendingRelay(messageID: String) {
+        pendingRelaysLock.lock()
+        defer { pendingRelaysLock.unlock() }
+        
+        if let pendingRelay = pendingRelays[messageID] {
+            pendingRelay.cancel()
+            pendingRelays.removeValue(forKey: messageID)
+            // Cancelled pending relay - another node handled it
+        }
+    }
+    
+    // MARK: - Memory Management
+    
+    private func startMemoryCleanupTimer() {
+        memoryCleanupTimer?.invalidate()
+        memoryCleanupTimer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { [weak self] _ in
+            self?.performMemoryCleanup()
+        }
+    }
+    
+    private func performMemoryCleanup() {
+        messageQueue.async(flags: .barrier) { [weak self] in
+            guard let self = self else { return }
+            
+            let startTime = Date()
+            
+            // Clean up old fragments
+            let fragmentTimeout = Date().addingTimeInterval(-self.fragmentTimeout)
+            var expiredFragments = [String]()
+            for (fragmentID, metadata) in self.fragmentMetadata {
+                if metadata.timestamp < fragmentTimeout {
+                    expiredFragments.append(fragmentID)
+                }
+            }
+            for fragmentID in expiredFragments {
+                self.incomingFragments.removeValue(forKey: fragmentID)
+                self.fragmentMetadata.removeValue(forKey: fragmentID)
+            }
+            
+            // Limit pending private messages
+            if self.pendingPrivateMessages.count > self.maxPendingPrivateMessages {
+                let excess = self.pendingPrivateMessages.count - self.maxPendingPrivateMessages
+                let keysToRemove = Array(self.pendingPrivateMessages.keys.prefix(excess))
+                for key in keysToRemove {
+                    self.pendingPrivateMessages.removeValue(forKey: key)
+                }
+                SecureLogger.log("Removed \(excess) oldest pending private message queues", 
+                               category: SecureLogger.session, level: .info)
+            }
+            
+            // Limit cached messages sent to peer
+            if self.cachedMessagesSentToPeer.count > self.maxCachedMessagesSentToPeer {
+                let excess = self.cachedMessagesSentToPeer.count - self.maxCachedMessagesSentToPeer
+                let toRemove = self.cachedMessagesSentToPeer.prefix(excess)
+                self.cachedMessagesSentToPeer.subtract(toRemove)
+                SecureLogger.log("Removed \(excess) oldest cached message tracking entries", 
+                               category: SecureLogger.session, level: .debug)
+            }
+            
+            // Clean up pending relays
+            self.pendingRelaysLock.lock()
+            _ = self.pendingRelays.count
+            self.pendingRelaysLock.unlock()
+            
+            // Clean up rate limiters
+            self.cleanupRateLimiters()
+            
+            // Log memory status
+            _ = Date().timeIntervalSince(startTime)
+            // Memory cleanup completed
+            
+            // Estimate current memory usage and log if high
+            let estimatedMemory = self.estimateMemoryUsage()
+            if estimatedMemory > self.maxMemoryUsageBytes {
+                SecureLogger.log("Warning: Estimated memory usage \(estimatedMemory / 1024 / 1024)MB exceeds limit", 
+                               category: SecureLogger.session, level: .warning)
+            }
+        }
+    }
+    
+    private func estimateMemoryUsage() -> Int {
+        // Rough estimates based on typical sizes
+        let messageSize = 512  // Average message size
+        let fragmentSize = 512  // Average fragment size
+        
+        var totalBytes = 0
+        
+        // Processed messages (string storage + MessageState)
+        processedMessagesLock.lock()
+        totalBytes += processedMessages.count * 150  // messageID strings + MessageState struct
+        processedMessagesLock.unlock()
+        
+        // Fragments
+        for (_, fragments) in incomingFragments {
+            totalBytes += fragments.count * fragmentSize
+        }
+        
+        // Pending private messages
+        for (_, messages) in pendingPrivateMessages {
+            totalBytes += messages.count * messageSize
+        }
+        
+        // Other caches
+        totalBytes += cachedMessagesSentToPeer.count * 50  // peerID strings
+        totalBytes += deliveredMessages.count * 100  // messageID strings
+        totalBytes += recentlySentMessages.count * 100  // messageID strings
+        
+        return totalBytes
+    }
+    
+    // MARK: - Rate Limiting
+    
+    private func isRateLimited(peerID: String, messageType: UInt8) -> Bool {
+        rateLimiterLock.lock()
+        defer { rateLimiterLock.unlock() }
+        
+        let now = Date()
+        let cutoff = now.addingTimeInterval(-rateLimitWindow)
+        
+        // Clean old timestamps from total counter
+        totalMessageTimestamps.removeAll { $0 < cutoff }
+        
+        // Check global rate limit with progressive throttling
+        if totalMessageTimestamps.count >= maxTotalMessagesPerMinute {
+            // Apply progressive throttling for global limit
+            let overageRatio = Double(totalMessageTimestamps.count - maxTotalMessagesPerMinute) / Double(maxTotalMessagesPerMinute)
+            let dropProbability = min(0.95, 0.5 + overageRatio * 0.5) // 50% to 95% drop rate
+            
+            if Double.random(in: 0...1) < dropProbability {
+                SecureLogger.log("Global rate limit throttling: \(totalMessageTimestamps.count) messages, drop prob: \(Int(dropProbability * 100))%", 
+                               category: SecureLogger.security, level: .warning)
+                return true
+            }
+        }
+        
+        // Determine which rate limiter to use based on message type
+        let isChatMessage = messageType == MessageType.message.rawValue
+        
+        let limiter = isChatMessage ? messageRateLimiter : protocolMessageRateLimiter
+        let maxPerMinute = isChatMessage ? maxChatMessagesPerPeerPerMinute : maxProtocolMessagesPerPeerPerMinute
+        
+        // Clean old timestamps for this peer
+        if var timestamps = limiter[peerID] {
+            timestamps.removeAll { $0 < cutoff }
+            
+            // Update the appropriate limiter
+            if isChatMessage {
+                messageRateLimiter[peerID] = timestamps
+            } else {
+                protocolMessageRateLimiter[peerID] = timestamps
+            }
+            
+            // Progressive throttling for per-peer limit
+            if timestamps.count >= maxPerMinute {
+                // Calculate how much over the limit we are
+                let overageRatio = Double(timestamps.count - maxPerMinute) / Double(maxPerMinute)
+                
+                // Progressive drop probability: starts at 30% when just over limit, increases to 90%
+                let dropProbability = min(0.9, 0.3 + overageRatio * 0.6)
+                
+                if Double.random(in: 0...1) < dropProbability {
+                    let messageTypeStr = isChatMessage ? "chat" : "protocol"
+                    SecureLogger.log("Peer \(peerID) \(messageTypeStr) rate throttling: \(timestamps.count) msgs/min, drop prob: \(Int(dropProbability * 100))%", 
+                                   category: SecureLogger.security, level: .info)
+                    return true
+                } else {
+                    SecureLogger.log("Peer \(peerID) rate throttling: allowing message (\(timestamps.count) msgs/min)", 
+                                   category: SecureLogger.security, level: .debug)
+                }
+            }
+        }
+        
+        return false
+    }
+    
+    private func recordMessage(from peerID: String, messageType: UInt8) {
+        rateLimiterLock.lock()
+        defer { rateLimiterLock.unlock() }
+        
+        let now = Date()
+        
+        // Record in global counter
+        totalMessageTimestamps.append(now)
+        
+        // Determine which rate limiter to use based on message type
+        let isChatMessage = messageType == MessageType.message.rawValue
+        
+        // Record for specific peer in the appropriate limiter
+        if isChatMessage {
+            if messageRateLimiter[peerID] == nil {
+                messageRateLimiter[peerID] = []
+            }
+            messageRateLimiter[peerID]?.append(now)
+        } else {
+            if protocolMessageRateLimiter[peerID] == nil {
+                protocolMessageRateLimiter[peerID] = []
+            }
+            protocolMessageRateLimiter[peerID]?.append(now)
+        }
+    }
+    
+    private func cleanupRateLimiters() {
+        rateLimiterLock.lock()
+        defer { rateLimiterLock.unlock() }
+        
+        let cutoff = Date().addingTimeInterval(-rateLimitWindow)
+        
+        // Clean global timestamps
+        totalMessageTimestamps.removeAll { $0 < cutoff }
+        
+        // Clean up old identity announce tracking
+        processedMessagesLock.lock()
+        let identityCutoff = Date().addingTimeInterval(-identityAnnounceDuplicateWindow * 2)
+        recentIdentityAnnounces = recentIdentityAnnounces.filter { $0.value > identityCutoff }
+        processedMessagesLock.unlock()
+        
+        // Clean per-peer chat message timestamps
+        for (peerID, timestamps) in messageRateLimiter {
+            let filtered = timestamps.filter { $0 >= cutoff }
+            if filtered.isEmpty {
+                messageRateLimiter.removeValue(forKey: peerID)
+            } else {
+                messageRateLimiter[peerID] = filtered
+            }
+        }
+        
+        // Clean per-peer protocol message timestamps
+        for (peerID, timestamps) in protocolMessageRateLimiter {
+            let filtered = timestamps.filter { $0 >= cutoff }
+            if filtered.isEmpty {
+                protocolMessageRateLimiter.removeValue(forKey: peerID)
+            } else {
+                protocolMessageRateLimiter[peerID] = filtered
+            }
+        }
+        
+        SecureLogger.log("Rate limiter cleanup: tracking \(messageRateLimiter.count) chat peers, \(protocolMessageRateLimiter.count) protocol peers, \(totalMessageTimestamps.count) total messages", 
+                       category: SecureLogger.session, level: .debug)
     }
     
     // MARK: - Cover Traffic
@@ -4057,6 +4852,26 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         initiateNoiseHandshake(with: peerID)
     }
     
+    // Send keep-alive pings to all connected peers to prevent iOS BLE timeouts
+    private func sendKeepAlivePings() {
+        let connectedPeers = collectionsQueue.sync {
+            return Array(activePeers).filter { peerID in
+                // Only send keepalive to authenticated peers
+                return peerConnectionStates[peerID] == .authenticated
+            }
+        }
+        
+        for peerID in connectedPeers {
+            // Don't spam if we recently heard from them
+            if let lastHeard = lastHeardFromPeer[peerID], 
+               Date().timeIntervalSince(lastHeard) < keepAliveInterval / 2 {
+                continue  // Skip if we heard from them in the last 10 seconds
+            }
+            
+            validateNoiseSession(with: peerID)
+        }
+    }
+    
     // Validate an existing Noise session by sending an encrypted ping
     private func validateNoiseSession(with peerID: String) {
         let encryptionQueue = getEncryptionQueue(for: peerID)
@@ -4079,8 +4894,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                     timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                     payload: encrypted,
                     signature: nil,
-                    ttl: 1
-                )
+                    ttl: 1                )
                 
                 self.broadcastPacket(packet)
                 
@@ -4262,7 +5076,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         do {
             // Process handshake message
             if let response = try noiseService.processHandshakeMessage(from: peerID, message: message) {
-                SecureLogger.log("Handshake processing returned response of size \(response.count), sending back to \(peerID)", category: SecureLogger.noise, level: .info)
+                // Handshake response ready to send
                 
                 // Always send responses as handshake response type
                 let packet = BitchatPacket(
@@ -4286,8 +5100,8 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             
             // Check if handshake is complete
             let sessionEstablished = noiseService.hasEstablishedSession(with: peerID)
-            let newState = handshakeCoordinator.getHandshakeState(for: peerID)
-            SecureLogger.log("After processing handshake message - sessionEstablished: \(sessionEstablished), newState: \(newState)", category: SecureLogger.noise, level: .info)
+            _ = handshakeCoordinator.getHandshakeState(for: peerID)
+            // Handshake state updated
             
             if sessionEstablished {
                 SecureLogger.logSecurityEvent(.handshakeCompleted(peerID: peerID))
@@ -4344,7 +5158,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         }
     }
     
-    private func handleNoiseEncryptedMessage(from peerID: String, encryptedData: Data, originalPacket: BitchatPacket) {
+    private func handleNoiseEncryptedMessage(from peerID: String, encryptedData: Data, originalPacket: BitchatPacket, peripheral: CBPeripheral? = nil) {
         // Use noiseService directly
         
         // For Noise encrypted messages, we need to decrypt first to check the inner packet
@@ -4369,14 +5183,14 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         
         do {
             // Decrypt the message
-            SecureLogger.log("Attempting to decrypt Noise message from \(peerID), encrypted size: \(encryptedData.count)", category: SecureLogger.encryption, level: .debug)
+            // Attempting to decrypt
             let decryptedData = try noiseService.decrypt(encryptedData, from: peerID)
-            SecureLogger.log("Successfully decrypted message from \(peerID), decrypted size: \(decryptedData.count)", category: SecureLogger.encryption, level: .debug)
+            // Successfully decrypted message
             
             // Update last successful message time
             lastSuccessfulMessageTime[peerID] = Date()
             
-            // Send protocol ACK after successful decryption
+            // Send protocol ACK after successful decryption (only once per encrypted packet)
             sendProtocolAck(for: originalPacket, to: peerID)
             
             // If we can decrypt messages from this peer, they should be in activePeers
@@ -4438,7 +5252,8 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 // Process the decrypted inner packet
                 // The packet will be handled according to its recipient ID
                 // If it's for us, it won't be relayed
-                handleReceivedPacket(innerPacket, from: peerID)
+                // Pass the peripheral context for proper ACK routing
+                handleReceivedPacket(innerPacket, from: peerID, peripheral: peripheral)
             } else {
                 SecureLogger.log("Failed to parse inner packet from decrypted data", category: SecureLogger.encryption, level: .warning)
             }
@@ -4500,6 +5315,17 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         
         // Update last connection time
         lastConnectionTime[peerID] = Date()
+        
+        // Check if we've already negotiated version with this peer
+        if let existingVersion = negotiatedVersions[peerID] {
+            SecureLogger.log("Already negotiated version \(existingVersion) with \(peerID), skipping re-negotiation", 
+                           category: SecureLogger.session, level: .debug)
+            // If we have a session, validate it
+            if noiseService.hasEstablishedSession(with: peerID) {
+                validateNoiseSession(with: peerID)
+            }
+            return
+        }
         
         // Try JSON first if it looks like JSON
         let hello: VersionHello?
@@ -4623,8 +5449,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 self?.delegate?.didDisconnectFromPeer(peerID)
             }
         } else {
-            SecureLogger.log("Version negotiation successful with \(peerID): agreed on v\(ack.agreedVersion) (server: \(ack.serverVersion), platform: \(ack.platform))", 
-                              category: SecureLogger.session, level: .info)
+            // Version negotiation successful
             negotiatedVersions[peerID] = ack.agreedVersion
             versionNegotiationState[peerID] = .ackReceived(version: ack.agreedVersion)
             
@@ -4646,8 +5471,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             type: MessageType.versionHello.rawValue,
             ttl: 1,  // Version negotiation is direct, no relay
             senderID: myPeerID,
-            payload: helloData
-        )
+            payload: helloData        )
         
         // Mark that we initiated version negotiation
         // We don't know the peer ID yet from peripheral, so we'll track it when we get the response
@@ -4698,23 +5522,34 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             return
         }
         
-        SecureLogger.log("Received protocol ACK from \(peerID) for packet \(ack.originalPacketID), type: \(ack.packetType)", 
+        SecureLogger.log("Received protocol ACK from \(peerID) for packet \(ack.originalPacketID), type: \(ack.packetType), ackID: \(ack.ackID)", 
                        category: SecureLogger.session, level: .debug)
         
-        // Remove from pending ACKs
+        // Remove from pending ACKs and mark as acknowledged
+        // Note: readUUID returns uppercase, but we track with lowercase
+        let normalizedPacketID = ack.originalPacketID.lowercased()
         _ = collectionsQueue.sync(flags: .barrier) {
-            pendingAcks.removeValue(forKey: ack.originalPacketID)
+            pendingAcks.removeValue(forKey: normalizedPacketID)
         }
+        
+        // Track this packet as acknowledged to prevent future retries
+        acknowledgedPacketsLock.lock()
+        acknowledgedPackets.insert(ack.originalPacketID)
+        // Keep only recent acknowledged packets (last 1000)
+        if acknowledgedPackets.count > 1000 {
+            // Remove oldest entries (this is approximate since Set doesn't maintain order)
+            acknowledgedPackets = Set(Array(acknowledgedPackets).suffix(1000))
+        }
+        acknowledgedPacketsLock.unlock()
         
         // Handle specific packet types that need ACK confirmation
         if let messageType = MessageType(rawValue: ack.packetType) {
             switch messageType {
             case .noiseHandshakeInit, .noiseHandshakeResp:
-                SecureLogger.log("Handshake packet \(ack.originalPacketID) confirmed by \(peerID)", 
-                               category: SecureLogger.handshake, level: .info)
+                SecureLogger.log("Handshake confirmed by \(peerID)", category: SecureLogger.handshake, level: .info)
             case .noiseEncrypted:
-                SecureLogger.log("Encrypted message \(ack.originalPacketID) confirmed by \(peerID)", 
-                               category: SecureLogger.encryption, level: .debug)
+                // Encrypted message confirmed
+                break
             default:
                 break
             }
@@ -4791,6 +5626,11 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         // Generate packet ID from packet content hash
         let packetID = generatePacketID(for: packet)
         
+        // Debug: log packet details
+        _ = packet.senderID.prefix(4).hexEncodedString()
+        _ = packet.recipientID?.prefix(4).hexEncodedString() ?? "nil"
+        // Send protocol ACK
+        
         let ack = ProtocolAck(
             originalPacketID: packetID,
             senderID: packet.senderID.hexEncodedString(),
@@ -4838,35 +5678,93 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         broadcastPacket(nackPacket)
     }
     
-    // Generate unique packet ID from packet content
+    // Generate unique packet ID from immutable packet fields
     private func generatePacketID(for packet: BitchatPacket) -> String {
-        // Use hash of packet data for unique ID
-        if let data = packet.toBinaryData() {
-            let hash = SHA256.hash(data: data)
-            return hash.map { String(format: "%02x", $0) }.prefix(16).joined()
-        }
-        return UUID().uuidString
+        // Use only immutable fields for ID generation to ensure consistency
+        // across network hops (TTL changes, so can't use full packet data)
+        
+        // Create a deterministic ID using SHA256 of immutable fields
+        var data = Data()
+        data.append(packet.senderID)
+        data.append(contentsOf: withUnsafeBytes(of: packet.timestamp) { Array($0) })
+        data.append(packet.type)
+        // Add first 32 bytes of payload for uniqueness
+        data.append(packet.payload.prefix(32))
+        
+        let hash = SHA256.hash(data: data)
+        let hashData = Data(hash)
+        
+        // Take first 16 bytes for UUID format
+        let bytes = Array(hashData.prefix(16))
+        
+        // Format as UUID
+        let p1 = String(format: "%02x%02x%02x%02x", bytes[0], bytes[1], bytes[2], bytes[3])
+        let p2 = String(format: "%02x%02x", bytes[4], bytes[5])
+        let p3 = String(format: "%02x%02x", bytes[6], bytes[7])
+        let p4 = String(format: "%02x%02x", bytes[8], bytes[9])
+        let p5 = String(format: "%02x%02x%02x%02x%02x%02x", bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15])
+        
+        let result = "\(p1)-\(p2)-\(p3)-\(p4)-\(p5)"
+        
+        // Generated packet ID for tracking
+        
+        return result
     }
     
     // Track packets that need ACKs
     private func trackPacketForAck(_ packet: BitchatPacket) {
         let packetID = generatePacketID(for: packet)
         
+        // Debug: log packet details
+        _ = packet.senderID.prefix(4).hexEncodedString()
+        _ = packet.recipientID?.prefix(4).hexEncodedString() ?? "nil"
+        // Track packet for ACK
+        
         collectionsQueue.sync(flags: .barrier) {
             pendingAcks[packetID] = (packet: packet, timestamp: Date(), retries: 0)
         }
         
-        // Schedule timeout check
-        DispatchQueue.main.asyncAfter(deadline: .now() + ackTimeout) { [weak self] in
+        // Schedule timeout check with initial delay (using exponential backoff starting at 1s)
+        let initialDelay = calculateExponentialBackoff(retry: 1) // 1 second initial delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + initialDelay) { [weak self] in
             self?.checkAckTimeout(for: packetID)
         }
     }
     
     // Check for ACK timeout and retry if needed
     private func checkAckTimeout(for packetID: String) {
+        // Check if already acknowledged
+        acknowledgedPacketsLock.lock()
+        let isAcknowledged = acknowledgedPackets.contains(packetID)
+        acknowledgedPacketsLock.unlock()
+        
+        if isAcknowledged {
+            // Already acknowledged, remove from pending and don't retry
+            _ = collectionsQueue.sync(flags: .barrier) {
+                pendingAcks.removeValue(forKey: packetID)
+            }
+            SecureLogger.log("Packet \(packetID) already acknowledged, cancelling retries", 
+                           category: SecureLogger.session, level: .debug)
+            return
+        }
+        
         collectionsQueue.sync(flags: .barrier) { [weak self] in
             guard let self = self,
                   let pending = self.pendingAcks[packetID] else { return }
+            
+            // Check if this is a handshake packet and we already have an established session
+            if pending.packet.type == MessageType.noiseHandshakeInit.rawValue ||
+               pending.packet.type == MessageType.noiseHandshakeResp.rawValue {
+                // Extract peer ID from packet
+                let peerID = pending.packet.recipientID?.hexEncodedString() ?? ""
+                if !peerID.isEmpty && self.noiseService.hasEstablishedSession(with: peerID) {
+                    // We have an established session, don't retry handshake packets
+                    SecureLogger.log("Not retrying handshake packet \(packetID) - session already established with \(peerID)", 
+                                   category: SecureLogger.handshake, level: .info)
+                    self.pendingAcks.removeValue(forKey: packetID)
+                    return
+                }
+            }
             
             if pending.retries < self.maxAckRetries {
                 // Retry sending the packet
@@ -4878,12 +5776,15 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                                               retries: pending.retries + 1)
                 
                 // Resend the packet
+                SecureLogger.log("Resending packet due to ACK timeout (retry \(pending.retries + 1))", 
+                               category: SecureLogger.session, level: .debug)
                 DispatchQueue.main.async {
                     self.broadcastPacket(pending.packet)
                 }
                 
-                // Schedule next timeout check
-                DispatchQueue.main.asyncAfter(deadline: .now() + self.ackTimeout) {
+                // Schedule next timeout check with exponential backoff
+                let backoffDelay = self.calculateExponentialBackoff(retry: pending.retries + 1)
+                DispatchQueue.main.asyncAfter(deadline: .now() + backoffDelay) {
                     self.checkAckTimeout(for: packetID)
                 }
             } else {
@@ -4916,6 +5817,17 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         }
     }
     
+    // Update RSSI for all connected peripherals
+    private func updateAllPeripheralRSSI() {
+        
+        // Read RSSI for all connected peripherals
+        for (_, peripheral) in connectedPeripherals {
+            if peripheral.state == .connected {
+                peripheral.readRSSI()
+            }
+        }
+    }
+    
     // Check peer availability based on last heard time
     private func checkPeerAvailability() {
         let now = Date()
@@ -4933,9 +5845,9 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 let hasConnection = connectionState == .connected || connectionState == .authenticating || connectionState == .authenticated
                 
                 // Peer is available if:
-                // 1. We have an active connection AND heard from them recently, OR
+                // 1. We have an active connection (regardless of last heard time), OR
                 // 2. We're authenticated and heard from them within timeout period
-                let isAvailable = (hasConnection && timeSinceLastHeard < 60.0) || 
+                let isAvailable = hasConnection || 
                                 (connectionState == .authenticated && timeSinceLastHeard < peerAvailabilityTimeout)
                 
                 if wasAvailable != isAvailable {
@@ -5045,8 +5957,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
             payload: announcementData,
             signature: nil,
-            ttl: adaptiveTTL
-        )
+            ttl: adaptiveTTL        )
         
         if let targetPeer = specificPeerID {
             SecureLogger.log("Sending targeted identity announce to \(targetPeer)", 
@@ -5190,8 +6101,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                 payload: encryptedData,
                 signature: nil,
-                ttl: adaptiveTTL
-            )
+                ttl: adaptiveTTL            )
             
             SecureLogger.log("Broadcasting encrypted private message \(msgID) to \(recipientPeerID)", category: SecureLogger.session, level: .info)
             
