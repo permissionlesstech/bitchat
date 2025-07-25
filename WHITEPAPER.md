@@ -1,6 +1,6 @@
 # BitChat Protocol Whitepaper
 
-**Version 1.0**
+**Version 1.1**
 
 **Date: July 25, 2025**
 
