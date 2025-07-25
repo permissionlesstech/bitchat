@@ -239,6 +239,7 @@ struct ContentView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
+                    // Extract messages based on context (private or public chat)
                     let messages: [BitchatMessage] = {
                         if let privatePeer = privatePeer {
                             let msgs = viewModel.getPrivateChatMessages(for: privatePeer)
@@ -614,6 +615,7 @@ struct ContentView: View {
                                 .foregroundColor(secondaryTextColor)
                                 .padding(.horizontal)
                         } else {
+                            // Extract peer data for display
                             let peerNicknames = viewModel.meshService.getPeerNicknames()
                             let peerRSSI = viewModel.meshService.getPeerRSSI()
                             let myPeerID = viewModel.meshService.myPeerID
