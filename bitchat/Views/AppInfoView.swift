@@ -23,17 +23,17 @@ struct AppInfoView: View {
         
         enum Features {
             static let title = "FEATURES"
-            static let offlineComm = ("wifi.slash", "offline communication", "works without internet using Bluetooth mesh networking")
+            static let offlineComm = ("wifi.slash", "offline communication", "works without internet using Bluetooth low energy")
             static let encryption = ("lock.shield", "end-to-end encryption", "private messages encrypted with noise protocol")
-            static let extendedRange = ("antenna.radiowaves.left.and.right", "extended range", "messages relay through peers, increasing the distance")
-            static let favorites = ("star.fill", "favorites", "store-and-forward messages for favorite people")
+            static let extendedRange = ("antenna.radiowaves.left.and.right", "extended range", "messages relay through peers, going the distance")
+            static let favorites = ("star.fill", "favorites", "get notified when your favorite people join")
             static let mentions = ("at", "mentions", "use @nickname to notify specific people")
         }
         
         enum Privacy {
             static let title = "PRIVACY"
             static let noTracking = ("eye.slash", "no tracking", "no servers, accounts, or data collection")
-            static let ephemeral = ("shuffle", "ephemeral identity", "new peer ID generated each session")
+            static let ephemeral = ("shuffle", "ephemeral identity", "new peer ID generated regularly")
             static let panic = ("hand.raised.fill", "panic mode", "triple-tap logo to instantly clear all data")
         }
         
@@ -44,8 +44,7 @@ struct AppInfoView: View {
                 "• swipe left for sidebar",
                 "• tap a peer to start a private chat",
                 "• use @nickname to mention someone",
-                "• triple-tap \"bitchat\" for panic mode",
-                "• triple-tap chat messages to clear current chat"
+                "• triple-tap chat to clear"
             ]
         }
         
