@@ -400,6 +400,9 @@ class BluetoothMeshService: NSObject {
     // Pending private messages waiting for handshake
     private var pendingPrivateMessages: [String: [(content: String, recipientNickname: String, messageID: String)]] = [:]
     
+    // Noise session state tracking for lazy handshakes
+    private var noiseSessionStates: [String: LazyHandshakeState] = [:]
+    
     // Cover traffic for privacy
     private var coverTrafficTimer: Timer?
     private let coverTrafficPrefix = "☂DUMMY☂"  // Prefix to identify dummy messages after decryption
@@ -758,10 +761,8 @@ class BluetoothMeshService: NSObject {
                 
                 self.notifyPeerIDChange(oldPeerID: oldID, newPeerID: newPeerID, fingerprint: fingerprint)
                 
-                // Trigger handshake after a short delay to allow the peer to settle
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                    self?.initiateNoiseHandshake(with: newPeerID)
-                }
+                // Lazy handshake: No longer initiate handshake on peer ID rotation
+                // Handshake will be initiated when first private message is sent
             }
         }
     }
@@ -1443,28 +1444,9 @@ class BluetoothMeshService: NSObject {
                     SecureLogger.logError(error, context: "Failed to encrypt delivery ACK via Noise for \(recipientID)", category: SecureLogger.encryption)
                 }
             } else {
-                // Fall back to legacy encryption
-                let encryptedPayload: Data
-                do {
-                    encryptedPayload = try self.noiseService.encrypt(ackData, for: recipientID)
-                } catch {
-                    SecureLogger.logError(error, context: "Failed to encrypt delivery ACK for \(recipientID)", category: SecureLogger.encryption)
-                    return
-                }
-                
-                // Create ACK packet with direct routing to original sender
-                let packet = BitchatPacket(
-                    type: MessageType.deliveryAck.rawValue,
-                    senderID: Data(hexString: self.myPeerID) ?? Data(),
-                    recipientID: Data(hexString: recipientID) ?? Data(),
-                    timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-                    payload: encryptedPayload,
-                    signature: nil,  // ACKs don't need signatures
-                    ttl: 3  // Limited TTL for ACKs
-                )
-                
-                // Send immediately without delay (ACKs should be fast)
-                self.broadcastPacket(packet)
+                // Lazy handshake: No session available, drop the ACK
+                SecureLogger.log("No Noise session with \(recipientID) for delivery ACK - dropping (lazy handshake mode)", 
+                               category: SecureLogger.noise, level: .info)
             }
         }
     }
@@ -1549,31 +1531,9 @@ class BluetoothMeshService: NSObject {
                     SecureLogger.logError(error, context: "Failed to encrypt read receipt via Noise for \(recipientID)", category: SecureLogger.encryption)
                 }
             } else {
-                // No session - initiate handshake and queue the read receipt
-                SecureLogger.log("No Noise session with \(recipientID) for read receipt, initiating handshake", category: SecureLogger.noise, level: .info)
-                
-                // Initiate handshake regardless of our role if we need to send data
-                self.initiateNoiseHandshake(with: recipientID)
-                
-                // Queue the read receipt as a pending message
-                // Create a synthetic message ID for the read receipt
-                let readReceiptMessageID = "READ_RECEIPT_\(receipt.originalMessageID)"
-                
-                collectionsQueue.sync(flags: .barrier) {
-                    if self.pendingPrivateMessages[recipientID] == nil {
-                        self.pendingPrivateMessages[recipientID] = []
-                    }
-                    
-                    // Store the read receipt data as a pending "message"
-                    self.pendingPrivateMessages[recipientID]?.append((
-                        content: "READ_RECEIPT:\(receipt.originalMessageID)",
-                        recipientNickname: receipt.readerNickname,
-                        messageID: readReceiptMessageID
-                    ))
-                    
-                    let count = self.pendingPrivateMessages[recipientID]?.count ?? 0
-                    SecureLogger.log("Queued read receipt for \(recipientID), pending messages: \(count)", category: SecureLogger.noise, level: .info)
-                }
+                // Lazy handshake: No session available, drop the read receipt
+                SecureLogger.log("No Noise session with \(recipientID) for read receipt - dropping (lazy handshake mode)", 
+                               category: SecureLogger.noise, level: .info)
             }
         }
     }
@@ -1628,6 +1588,49 @@ class BluetoothMeshService: NSObject {
     func getPeerNicknames() -> [String: String] {
         return collectionsQueue.sync {
             return peerNicknames
+        }
+    }
+    
+    // Get Noise session state for UI display
+    func getNoiseSessionState(for peerID: String) -> LazyHandshakeState {
+        return collectionsQueue.sync {
+            // First check our tracked state
+            if let state = noiseSessionStates[peerID] {
+                return state
+            }
+            
+            // If no tracked state, check if we have an established session
+            if noiseService.hasEstablishedSession(with: peerID) {
+                return .established
+            }
+            
+            // Default to none
+            return .none
+        }
+    }
+    
+    // Trigger handshake with a peer (for UI)
+    func triggerHandshake(with peerID: String) {
+        SecureLogger.log("UI triggered handshake with \(peerID)", category: SecureLogger.noise, level: .info)
+        
+        // Check if we already have a session
+        if noiseService.hasEstablishedSession(with: peerID) {
+            SecureLogger.log("Already have session with \(peerID), skipping handshake", category: SecureLogger.noise, level: .debug)
+            return
+        }
+        
+        // Update state to handshakeQueued
+        collectionsQueue.sync(flags: .barrier) {
+            noiseSessionStates[peerID] = .handshakeQueued
+        }
+        
+        // Apply tie-breaker logic for handshake initiation
+        if myPeerID < peerID {
+            // We have lower ID, initiate handshake
+            initiateNoiseHandshake(with: peerID)
+        } else {
+            // We have higher ID, send targeted identity announce to prompt them to initiate
+            sendNoiseIdentityAnnounce(to: peerID)
         }
     }
     
@@ -2295,6 +2298,8 @@ class BluetoothMeshService: NSObject {
                 messageTypeName = "VERSION_ACK"
             case .systemValidation:
                 messageTypeName = "SYSTEM_VALIDATION"
+            case .handshakeRequest:
+                messageTypeName = "HANDSHAKE_REQUEST"
             default:
                 messageTypeName = "UNKNOWN(\(packet.type))"
             }
@@ -3146,45 +3151,15 @@ class BluetoothMeshService: NSObject {
                     (self?.delegate as? ChatViewModel)?.registerPeerPublicKey(peerID: announcement.peerID, publicKeyData: announcement.publicKey)
                 }
                 
-                // If we don't have a session yet, check if we should initiate
+                // Lazy handshake: No longer initiate handshake on identity announcement
+                // Just respond with our own identity announcement
                 if !noiseService.hasEstablishedSession(with: announcement.peerID) {
-                    // Lock rotation during handshake
-                    lockRotation()
-                    
-                    // Use lexicographic comparison as tie-breaker to prevent simultaneous handshakes
-                    // Only the peer with the "lower" ID initiates
-                    // Use coordinator to determine if we should initiate
-                    let shouldInitiate = handshakeCoordinator.determineHandshakeRole(
-                        myPeerID: myPeerID,
-                        remotePeerID: announcement.peerID
-                    ) == .initiator
-                    
-                    if shouldInitiate {
-                        // Add small delay on fresh startup to let connections stabilize
-                        let lastConnection = lastConnectionTime[announcement.peerID] ?? Date.distantPast
-                        let timeSinceConnection = Date().timeIntervalSince(lastConnection)
-                        
-                        if timeSinceConnection > 60.0 { // Fresh connection
-                            // Delay handshake initiation slightly for connection stability
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                                SecureLogger.log("Initiating handshake after identity announce from \(announcement.peerID)", 
-                                               category: SecureLogger.noise, level: .info)
-                                self?.attemptHandshakeIfNeeded(with: announcement.peerID, forceIfStale: true)
-                            }
-                        } else {
-                            // Quick reconnection, initiate immediately
-                            SecureLogger.log("Quick reconnection - initiating handshake with \(announcement.peerID)", 
-                                           category: SecureLogger.noise, level: .info)
-                            attemptHandshakeIfNeeded(with: announcement.peerID, forceIfStale: true)
-                        }
-                    } else {
-                        // Send our identity back so they know we're ready
-                        SecureLogger.log("Responding to identity announce from \(announcement.peerID) with our own", 
-                                       category: SecureLogger.noise, level: .info)
-                        sendNoiseIdentityAnnounce(to: announcement.peerID)
-                    }
+                    // Send our identity back so they know we're here
+                    SecureLogger.log("Responding to identity announce from \(announcement.peerID) with our own (lazy handshake mode)", 
+                                   category: SecureLogger.noise, level: .info)
+                    sendNoiseIdentityAnnounce(to: announcement.peerID)
                 } else {
-                    // We already have a session, but ensure ChatViewModel knows about the fingerprint
+                    // We already have a session, ensure ChatViewModel knows about the fingerprint
                     // This handles the case where handshake completed before identity announcement
                     DispatchQueue.main.async { [weak self] in
                         if let publicKeyData = self?.noiseService.getPeerPublicKeyData(announcement.peerID) {
@@ -3394,6 +3369,13 @@ class BluetoothMeshService: NSObject {
                                    reason: "Session validation failed", 
                                    errorCode: .decryptionFailed)
                 }
+            }
+            
+        case .handshakeRequest:
+            // Handle handshake request for pending messages
+            let senderID = packet.senderID.hexEncodedString()
+            if !isPeerIDOurs(senderID) {
+                handleHandshakeRequest(from: senderID, data: packet.payload)
             }
             
         default:
@@ -4430,7 +4412,8 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
     private func isHighPriorityMessage(type: UInt8) -> Bool {
         switch MessageType(rawValue: type) {
         case .noiseHandshakeInit, .noiseHandshakeResp, .protocolAck,
-             .versionHello, .versionAck, .deliveryAck, .systemValidation:
+             .versionHello, .versionAck, .deliveryAck, .systemValidation,
+             .handshakeRequest:
             return true
         case .message, .announce, .leave, .readReceipt, .deliveryStatusRequest,
              .fragmentStart, .fragmentContinue, .fragmentEnd,
@@ -4985,6 +4968,11 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             handshakeAttemptTimes.removeValue(forKey: peerID)
             handshakeCoordinator.recordHandshakeSuccess(peerID: peerID)
             
+            // Update session state to established
+            collectionsQueue.sync(flags: .barrier) {
+                self.noiseSessionStates[peerID] = .established
+            }
+            
             // Update connection state to authenticated
             updatePeerConnectionState(peerID, state: .authenticated)
             
@@ -4994,6 +4982,11 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             }
             
             return
+        }
+        
+        // Update state to handshaking
+        collectionsQueue.sync(flags: .barrier) {
+            self.noiseSessionStates[peerID] = .handshaking
         }
         
         // Check if we have pending messages
@@ -5178,6 +5171,11 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 // Session established successfully
                 handshakeCoordinator.recordHandshakeSuccess(peerID: peerID)
                 
+                // Update session state to established
+                collectionsQueue.sync(flags: .barrier) {
+                    self.noiseSessionStates[peerID] = .established
+                }
+                
                 // Update connection state to authenticated
                 updatePeerConnectionState(peerID, state: .authenticated)
                 
@@ -5211,11 +5209,21 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             // Session already established, ignore handshake
             SecureLogger.log("Handshake already established with \(peerID)", category: SecureLogger.noise, level: .info)
             handshakeCoordinator.recordHandshakeSuccess(peerID: peerID)
+            
+            // Update session state to established
+            collectionsQueue.sync(flags: .barrier) {
+                self.noiseSessionStates[peerID] = .established
+            }
         } catch {
             // Handshake failed
             handshakeCoordinator.recordHandshakeFailure(peerID: peerID, reason: error.localizedDescription)
             SecureLogger.logSecurityEvent(.handshakeFailed(peerID: peerID, error: error.localizedDescription))
             SecureLogger.log("Handshake failed with \(peerID): \(error)", category: SecureLogger.noise, level: .error)
+            
+            // Update session state to failed
+            collectionsQueue.sync(flags: .barrier) {
+                self.noiseSessionStates[peerID] = .failed(error)
+            }
             
             // If handshake failed due to authentication error, clear the session to allow retry
             if case NoiseError.authenticationFailure = error {
@@ -5428,25 +5436,16 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             
             sendVersionAck(ack, to: peerID)
             
-            // Proceed with Noise handshake after successful version negotiation
+            // Lazy handshake: No longer initiate handshake after version negotiation
+            // Just announce our identity
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
                 guard let self = self else { return }
                 
-                // First announce our identity
+                // Just announce our identity
                 self.sendNoiseIdentityAnnounce()
                 
-                // Then check if we should initiate handshake
-                // If we already have a valid session, skip handshake
-                if self.noiseService.hasEstablishedSession(with: peerID) {
-                    SecureLogger.log("Already have session with \(peerID) after version negotiation, skipping handshake", 
-                                   category: SecureLogger.handshake, level: .info)
-                    
-                    // Force a session validation by sending a small encrypted ping
-                    self.validateNoiseSession(with: peerID)
-                } else {
-                    // Use attemptHandshakeIfNeeded to coordinate properly
-                    self.attemptHandshakeIfNeeded(with: peerID)
-                }
+                SecureLogger.log("Version negotiation complete with \(peerID) - lazy handshake mode", 
+                               category: SecureLogger.handshake, level: .info)
             }
         } else {
             // No compatible version
@@ -5689,6 +5688,50 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             default:
                 break
             }
+        }
+    }
+    
+    private func handleHandshakeRequest(from peerID: String, data: Data) {
+        guard let request = HandshakeRequest.fromBinaryData(data) else {
+            SecureLogger.log("Failed to decode handshake request from \(peerID)", category: SecureLogger.noise, level: .error)
+            return
+        }
+        
+        // Verify this request is for us
+        guard request.targetID == myPeerID else {
+            // This request is not for us, might need to relay
+            return
+        }
+        
+        SecureLogger.log("Received handshake request from \(request.requesterID) (\(request.requesterNickname)) with \(request.pendingMessageCount) pending messages", 
+                       category: SecureLogger.noise, level: .info)
+        
+        // Notify UI about pending messages
+        DispatchQueue.main.async { [weak self] in
+            if let chatVM = self?.delegate as? ChatViewModel {
+                // Notify the UI that someone wants to send messages
+                chatVM.handleHandshakeRequest(from: request.requesterID, 
+                                            nickname: request.requesterNickname,
+                                            pendingCount: request.pendingMessageCount)
+            }
+        }
+        
+        // Check if we already have a session
+        if noiseService.hasEstablishedSession(with: peerID) {
+            // We already have a session, no action needed
+            SecureLogger.log("Already have session with \(peerID), ignoring handshake request", category: SecureLogger.noise, level: .debug)
+            return
+        }
+        
+        // Apply tie-breaker logic for handshake initiation
+        if myPeerID < peerID {
+            // We have lower ID, initiate handshake
+            SecureLogger.log("Initiating handshake with \(peerID) in response to handshake request", category: SecureLogger.noise, level: .info)
+            initiateNoiseHandshake(with: peerID)
+        } else {
+            // We have higher ID, send identity announce to prompt them
+            SecureLogger.log("Sending identity announce to \(peerID) in response to handshake request", category: SecureLogger.noise, level: .info)
+            sendNoiseIdentityAnnounce(to: peerID)
         }
     }
     
@@ -6088,7 +6131,35 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 // Clear stale session first
                 cleanupPeerCryptoState(recipientPeerID)
             }
-            SecureLogger.log("No valid Noise session with \(recipientPeerID), initiating handshake", category: SecureLogger.noise, level: .info)
+            
+            // Update state to handshakeQueued
+            collectionsQueue.sync(flags: .barrier) {
+                self.noiseSessionStates[recipientPeerID] = .handshakeQueued
+            }
+            
+            SecureLogger.log("No valid Noise session with \(recipientPeerID), initiating handshake (lazy mode)", category: SecureLogger.noise, level: .info)
+            
+            // Notify UI that we're establishing encryption
+            DispatchQueue.main.async { [weak self] in
+                if let chatVM = self?.delegate as? ChatViewModel {
+                    // This will update the UI to show "establishing encryption" state
+                    chatVM.updateEncryptionStatusForPeer(recipientPeerID)
+                }
+            }
+            
+            // Queue message for sending after handshake completes
+            collectionsQueue.sync(flags: .barrier) { [weak self] in
+                guard let self = self else { return }
+                if self.pendingPrivateMessages[recipientPeerID] == nil {
+                    self.pendingPrivateMessages[recipientPeerID] = []
+                }
+                self.pendingPrivateMessages[recipientPeerID]?.append((content, recipientNickname, messageID ?? UUID().uuidString))
+                let count = self.pendingPrivateMessages[recipientPeerID]?.count ?? 0
+                SecureLogger.log("Queued private message for \(recipientPeerID), \(count) messages pending", category: SecureLogger.noise, level: .info)
+            }
+            
+            // Send handshake request to notify recipient of pending messages
+            sendHandshakeRequest(to: recipientPeerID, pendingCount: UInt8(pendingPrivateMessages[recipientPeerID]?.count ?? 1))
             
             // Apply tie-breaker logic for handshake initiation
             if myPeerID < recipientPeerID {
@@ -6099,16 +6170,6 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 sendNoiseIdentityAnnounce(to: recipientPeerID)
             }
             
-            // Queue message for sending after handshake completes
-            messageQueue.async(flags: .barrier) { [weak self] in
-                guard let self = self else { return }
-                if self.pendingPrivateMessages[recipientPeerID] == nil {
-                    self.pendingPrivateMessages[recipientPeerID] = []
-                }
-                self.pendingPrivateMessages[recipientPeerID]?.append((content, recipientNickname, messageID ?? UUID().uuidString))
-                let count = self.pendingPrivateMessages[recipientPeerID]?.count ?? 0
-                SecureLogger.log("Queued private message for \(recipientPeerID), \(count) messages pending", category: SecureLogger.noise, level: .info)
-            }
             return
         }
         
@@ -6231,6 +6292,31 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         }
         
         return false
+    }
+    
+    private func sendHandshakeRequest(to targetPeerID: String, pendingCount: UInt8) {
+        // Create handshake request
+        let request = HandshakeRequest(requesterID: myPeerID,
+                                      requesterNickname: (delegate as? ChatViewModel)?.nickname ?? myPeerID,
+                                      targetID: targetPeerID,
+                                      pendingMessageCount: pendingCount)
+        
+        let requestData = request.toBinaryData()
+        
+        // Create packet for handshake request
+        let packet = BitchatPacket(type: MessageType.handshakeRequest.rawValue,
+                                  ttl: 6,
+                                  senderID: myPeerID,
+                                  payload: requestData)
+        
+        // Try direct delivery first
+        if sendDirectToRecipient(packet, recipientPeerID: targetPeerID) {
+            SecureLogger.log("Sent handshake request directly to \(targetPeerID)", category: SecureLogger.noise, level: .info)
+        } else {
+            // Use selective relay if direct delivery fails
+            sendViaSelectiveRelay(packet, recipientPeerID: targetPeerID)
+            SecureLogger.log("Sent handshake request via relay to \(targetPeerID)", category: SecureLogger.noise, level: .info)
+        }
     }
     
     private func selectBestRelayPeers(excluding: String, maxPeers: Int = 3) -> [String] {

@@ -669,13 +669,15 @@ struct ContentView: View {
                                         .foregroundColor(peerNicknames[peer.id] != nil ? textColor : secondaryTextColor)
                                     
                                     // Encryption status icon (after peer name)
-                                    Image(systemName: peer.encryptionStatus.icon)
-                                        .font(.system(size: 10))
-                                        .foregroundColor(peer.encryptionStatus == .noiseVerified ? Color.green : 
-                                                       peer.encryptionStatus == .noiseSecured ? textColor :
-                                                       peer.encryptionStatus == .noiseHandshaking ? Color.orange :
-                                                       Color.red)
-                                        .accessibilityLabel("Encryption: \(peer.encryptionStatus == .noiseVerified ? "verified" : peer.encryptionStatus == .noiseSecured ? "secured" : peer.encryptionStatus == .noiseHandshaking ? "establishing" : "none")")
+                                    if let icon = peer.encryptionStatus.icon {
+                                        Image(systemName: icon)
+                                            .font(.system(size: 10))
+                                            .foregroundColor(peer.encryptionStatus == .noiseVerified ? Color.green : 
+                                                           peer.encryptionStatus == .noiseSecured ? textColor :
+                                                           peer.encryptionStatus == .noiseHandshaking ? Color.orange :
+                                                           Color.red)
+                                            .accessibilityLabel("Encryption: \(peer.encryptionStatus == .noiseVerified ? "verified" : peer.encryptionStatus == .noiseSecured ? "secured" : peer.encryptionStatus == .noiseHandshaking ? "establishing" : "none")")
+                                    }
                                     
                                     Spacer()
                                     
@@ -897,12 +899,14 @@ struct ContentView: View {
                                 .foregroundColor(Color.orange)
                             // Dynamic encryption status icon
                             let encryptionStatus = viewModel.getEncryptionStatus(for: privatePeerID)
-                            Image(systemName: encryptionStatus.icon)
-                                .font(.system(size: 14))
-                                .foregroundColor(encryptionStatus == .noiseVerified ? Color.green : 
-                                               encryptionStatus == .noiseSecured ? Color.orange :
-                                               Color.red)
-                                .accessibilityLabel("Encryption status: \(encryptionStatus == .noiseVerified ? "verified" : encryptionStatus == .noiseSecured ? "secured" : "not encrypted")")
+                            if let icon = encryptionStatus.icon {
+                                Image(systemName: icon)
+                                    .font(.system(size: 14))
+                                    .foregroundColor(encryptionStatus == .noiseVerified ? Color.green : 
+                                                   encryptionStatus == .noiseSecured ? Color.orange :
+                                                   Color.red)
+                                    .accessibilityLabel("Encryption status: \(encryptionStatus == .noiseVerified ? "verified" : encryptionStatus == .noiseSecured ? "secured" : "not encrypted")")
+                            }
                         }
                         .frame(maxWidth: .infinity)
                         .accessibilityLabel("Private chat with \(privatePeerNick)")
