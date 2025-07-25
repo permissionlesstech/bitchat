@@ -334,6 +334,10 @@ class BluetoothMeshService: NSObject {
     private let processedMessagesLock = NSLock()
     private let maxProcessedMessages = 10000
     
+    // Special handling for identity announces to prevent duplicates
+    private var recentIdentityAnnounces = [String: Date]()  // peerID -> last seen time
+    private let identityAnnounceDuplicateWindow: TimeInterval = 30.0  // 30 second window
+    
     private let maxTTL: UInt8 = 7  // Maximum hops for long-distance delivery
     private var announcedToPeers = Set<String>()  // Track which peers we've announced to
     private var announcedPeers = Set<String>()  // Track peers who have already been announced
@@ -344,6 +348,8 @@ class BluetoothMeshService: NSObject {
     private let networkEmptyResetDelay: TimeInterval = 60  // 1 minute before resetting notification flag
     private var intentionalDisconnects = Set<String>()  // Track peripherals we're disconnecting intentionally
     private var gracefullyLeftPeers = Set<String>()  // Track peers that sent leave messages
+    private var gracefulLeaveTimestamps: [String: Date] = [:]  // Track when peers left
+    private let gracefulLeaveExpirationTime: TimeInterval = 300.0  // 5 minutes
     private var peerLastSeenTimestamps = LRUCache<String, Date>(maxSize: 100)  // Bounded cache for peer timestamps
     private var cleanupTimer: Timer?  // Timer to clean up stale peers
     
@@ -447,6 +453,72 @@ class BluetoothMeshService: NSObject {
     private var peerIDByPeripheralID: [String: String] = [:]  // Map peripheral ID to peer ID
     private let maxConnectionAttempts = 3
     private let baseBackoffInterval: TimeInterval = 1.0
+    
+    // Simplified peripheral mapping system
+    private struct PeripheralMapping {
+        let peripheral: CBPeripheral
+        var peerID: String?  // nil until we receive announce
+        var rssi: NSNumber?
+        var lastActivity: Date
+        
+        var isIdentified: Bool { peerID != nil }
+    }
+    private var peripheralMappings: [String: PeripheralMapping] = [:]  // peripheralID -> mapping
+    
+    // Helper methods for peripheral mapping
+    private func registerPeripheral(_ peripheral: CBPeripheral) {
+        let peripheralID = peripheral.identifier.uuidString
+        peripheralMappings[peripheralID] = PeripheralMapping(
+            peripheral: peripheral,
+            peerID: nil,
+            rssi: nil,
+            lastActivity: Date()
+        )
+    }
+    
+    private func updatePeripheralMapping(peripheralID: String, peerID: String) {
+        guard var mapping = peripheralMappings[peripheralID] else { return }
+        
+        // Remove old temp mapping if it exists
+        let tempID = peripheralID
+        if connectedPeripherals[tempID] != nil {
+            connectedPeripherals.removeValue(forKey: tempID)
+        }
+        
+        mapping.peerID = peerID
+        mapping.lastActivity = Date()
+        peripheralMappings[peripheralID] = mapping
+        
+        // Update legacy mappings
+        peerIDByPeripheralID[peripheralID] = peerID
+        connectedPeripherals[peerID] = mapping.peripheral
+        
+        // Transfer RSSI
+        if let rssi = mapping.rssi {
+            peerRSSI[peerID] = rssi
+        }
+    }
+    
+    private func updatePeripheralRSSI(peripheralID: String, rssi: NSNumber) {
+        guard var mapping = peripheralMappings[peripheralID] else { return }
+        mapping.rssi = rssi
+        mapping.lastActivity = Date()
+        peripheralMappings[peripheralID] = mapping
+        
+        // Update peer RSSI if we have the peer ID
+        if let peerID = mapping.peerID {
+            peerRSSI[peerID] = rssi
+        }
+    }
+    
+    private func findPeripheralForPeerID(_ peerID: String) -> CBPeripheral? {
+        for (_, mapping) in peripheralMappings {
+            if mapping.peerID == peerID {
+                return mapping.peripheral
+            }
+        }
+        return nil
+    }
     
     // Probabilistic flooding
     private var relayProbability: Double = 1.0  // Start at 100%, decrease with peer count
@@ -617,6 +689,14 @@ class BluetoothMeshService: NSObject {
             if let existingPeerID = self.fingerprintToPeerID[fingerprint], existingPeerID != newPeerID {
                 oldPeerID = existingPeerID
                 SecureLogger.log("Peer ID rotation detected: \(existingPeerID) -> \(newPeerID) for fingerprint \(fingerprint)", category: SecureLogger.security, level: .info)
+                
+                // Transfer gracefullyLeftPeers state from old to new peer ID
+                if self.gracefullyLeftPeers.contains(existingPeerID) {
+                    self.gracefullyLeftPeers.remove(existingPeerID)
+                    self.gracefullyLeftPeers.insert(newPeerID)
+                    SecureLogger.log("Transferred gracefullyLeft state from \(existingPeerID) to \(newPeerID)", 
+                                   category: SecureLogger.session, level: .debug)
+                }
                 
                 self.peerIDToFingerprint.removeValue(forKey: existingPeerID)
                 
@@ -1715,6 +1795,18 @@ class BluetoothMeshService: NSObject {
         let staleThreshold: TimeInterval = 180.0 // 3 minutes - increased for better stability
         let now = Date()
         
+        // Clean up expired gracefully left peers
+        let expiredGracefulPeers = gracefulLeaveTimestamps.filter { (_, timestamp) in
+            now.timeIntervalSince(timestamp) > gracefulLeaveExpirationTime
+        }.map { $0.key }
+        
+        for peerID in expiredGracefulPeers {
+            gracefullyLeftPeers.remove(peerID)
+            gracefulLeaveTimestamps.removeValue(forKey: peerID)
+            SecureLogger.log("Cleaned up expired gracefullyLeft entry for \(peerID)", 
+                           category: SecureLogger.session, level: .debug)
+        }
+        
         let peersToRemove = collectionsQueue.sync(flags: .barrier) {
             let toRemove = activePeers.filter { peerID in
                 if let lastSeen = peerLastSeenTimestamps.get(peerID) {
@@ -2603,39 +2695,26 @@ class BluetoothMeshService: NSObject {
                 }
                 
                 if let peripheral = peripheralToUpdate {
-                    SecureLogger.log("handleReceivedPacket: Updating peripheral mapping for announce from \(senderID)", category: SecureLogger.session, level: .debug)
-                    SecureLogger.log("handleReceivedPacket: Current connectedPeripherals: \(self.connectedPeripherals.keys.joined(separator: ", "))", category: SecureLogger.session, level: .debug)
+                    let peripheralID = peripheral.identifier.uuidString
+                    SecureLogger.log("Updating peripheral \(peripheralID) mapping to peer ID \(senderID)", 
+                                   category: SecureLogger.session, level: .info)
+                    
+                    // Update simplified mapping
+                    updatePeripheralMapping(peripheralID: peripheralID, peerID: senderID)
                     
                     // Find and remove any temp ID mapping for this peripheral
                     var tempIDToRemove: String? = nil
                     for (id, per) in self.connectedPeripherals {
-                        if per == peripheral && id != senderID {
-                            SecureLogger.log("handleReceivedPacket: Found temp ID \(id) for peripheral that announced as \(senderID)", category: SecureLogger.session, level: .debug)
+                        if per == peripheral && id != senderID && id == peripheralID {
                             tempIDToRemove = id
                             break
                         }
                     }
                     
                     if let tempID = tempIDToRemove {
-                        SecureLogger.log("handleReceivedPacket: Transferring from temp ID \(tempID) to real peer ID \(senderID)", category: SecureLogger.session, level: .debug)
-                        
-                        // Remove temp mapping
-                        self.connectedPeripherals.removeValue(forKey: tempID)
-                        // Add real peer ID mapping
-                        self.connectedPeripherals[senderID] = peripheral
-                        // Update peripheral ID to peer ID mapping
-                        self.peerIDByPeripheralID[peripheral.identifier.uuidString] = senderID
-                        
-                        // Transfer RSSI from temp ID to real peer ID
-                        if let tempRSSI = self.peripheralRSSI[tempID] {
-                            self.peerRSSI[senderID] = tempRSSI
-                            self.peripheralRSSI.removeValue(forKey: tempID)
-                        }
-                        // Also check if RSSI is stored by peripheral UUID
-                        let peripheralUUID = peripheral.identifier.uuidString
-                        if let peripheralStoredRSSI = self.peripheralRSSI[peripheralUUID] {
-                            self.peerRSSI[senderID] = peripheralStoredRSSI
-                        }
+                        // RSSI transfer is handled by updatePeripheralMapping
+                        self.peripheralRSSI.removeValue(forKey: tempID)
+                    }
                         
                         // IMPORTANT: Remove old peer ID from activePeers to prevent duplicates
                         collectionsQueue.sync(flags: .barrier) {
@@ -2783,6 +2862,7 @@ class BluetoothMeshService: NSObject {
                     if wasRemoved {
                         // Mark as gracefully left to prevent duplicate disconnect message
                         self.gracefullyLeftPeers.insert(senderID)
+                        self.gracefulLeaveTimestamps[senderID] = Date()
                         
                         SecureLogger.log("📴 Peer left network: \(senderID) (\(nickname)) - marked as gracefully left", category: SecureLogger.session, level: .info)
                     }
@@ -2947,6 +3027,20 @@ class BluetoothMeshService: NSObject {
                 return
             }
             
+            // Special duplicate detection for identity announces
+            processedMessagesLock.lock()
+            if let lastSeenTime = recentIdentityAnnounces[senderID] {
+                let timeSince = Date().timeIntervalSince(lastSeenTime)
+                if timeSince < identityAnnounceDuplicateWindow {
+                    processedMessagesLock.unlock()
+                    SecureLogger.log("Dropped duplicate identity announce from \(senderID) (last seen \(timeSince)s ago)", 
+                                   category: SecureLogger.security, level: .debug)
+                    return
+                }
+            }
+            recentIdentityAnnounces[senderID] = Date()
+            processedMessagesLock.unlock()
+            
             if senderID != myPeerID && !isPeerIDOurs(senderID) {
                 // Create defensive copy and validate
                 let payloadCopy = Data(packet.payload)
@@ -2997,6 +3091,27 @@ class BluetoothMeshService: NSObject {
                 )
                 
                 SecureLogger.log("Creating identity binding for \(announcement.peerID) -> \(fingerprint)", category: SecureLogger.security, level: .info)
+                
+                // Handle peer ID rotation if previousPeerID is provided
+                if let previousID = announcement.previousPeerID, previousID != announcement.peerID {
+                    SecureLogger.log("Peer announced rotation from \(previousID) to \(announcement.peerID)", 
+                                   category: SecureLogger.security, level: .info)
+                    
+                    // Transfer states from previous ID
+                    collectionsQueue.sync(flags: .barrier) {
+                        // Transfer gracefullyLeft state
+                        if self.gracefullyLeftPeers.contains(previousID) {
+                            self.gracefullyLeftPeers.remove(previousID)
+                            self.gracefullyLeftPeers.insert(announcement.peerID)
+                        }
+                        
+                        // Clean up the old peer ID from active peers
+                        if self.activePeers.contains(previousID) {
+                            self.activePeers.remove(previousID)
+                            // Don't add new ID yet - let normal flow handle it
+                        }
+                    }
+                }
                 
                 // Update our mappings
                 updatePeerBinding(announcement.peerID, fingerprint: fingerprint, binding: binding)
@@ -3580,19 +3695,19 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
     }
     
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
-        let tempID = peripheral.identifier.uuidString
-        // Peripheral connected
-        
-        // Current mapping state for debugging
-        SecureLogger.log("Current peerIDByPeripheralID mappings:", 
-                       category: SecureLogger.session, level: .debug)
+        let peripheralID = peripheral.identifier.uuidString
         
         peripheral.delegate = self
         peripheral.discoverServices([BluetoothMeshService.serviceUUID])
         
-        // Store peripheral by its system ID temporarily until we get the real peer ID
-        connectedPeripherals[tempID] = peripheral
-        SecureLogger.log("didConnect: Stored peripheral with temp ID \(tempID)", category: SecureLogger.session, level: .debug)
+        // Register peripheral in simplified mapping system
+        registerPeripheral(peripheral)
+        
+        // Store peripheral temporarily until we get the real peer ID
+        connectedPeripherals[peripheralID] = peripheral
+        
+        SecureLogger.log("Connected to peripheral \(peripheralID) - awaiting peer ID", 
+                       category: SecureLogger.session, level: .debug)
         
         // Update connection state to connected (but not authenticated yet)
         // We don't know the real peer ID yet, so we can't update the state
@@ -3631,16 +3746,20 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
             SecureLogger.log("Peripheral disconnected normally: \(peripheralID)", category: SecureLogger.session, level: .info)
         }
         
-        // Find the real peer ID for this peripheral
+        // Find the real peer ID using simplified mapping
         var realPeerID: String? = nil
         
-        // First check our peripheral ID to peer ID mapping
-        if let peerID = peerIDByPeripheralID[peripheralID] {
+        if let mapping = peripheralMappings[peripheralID], let peerID = mapping.peerID {
             realPeerID = peerID
-            SecureLogger.log("Found peer ID \(peerID) from peerIDByPeripheralID for peripheral \(peripheralID)", 
+            SecureLogger.log("Found peer ID \(peerID) for peripheral \(peripheralID)", 
+                           category: SecureLogger.session, level: .debug)
+        } else if let peerID = peerIDByPeripheralID[peripheralID] {
+            // Fallback to legacy mapping
+            realPeerID = peerID
+            SecureLogger.log("Found peer ID \(peerID) from legacy mapping for peripheral \(peripheralID)", 
                            category: SecureLogger.session, level: .debug)
         } else {
-            SecureLogger.log("No mapping in peerIDByPeripheralID for peripheral \(peripheralID), checking connectedPeripherals", 
+            SecureLogger.log("No peer ID mapping found for peripheral \(peripheralID)", 
                            category: SecureLogger.session, level: .debug)
             
             // Fallback: check if we have a direct mapping from peripheral to peer ID
@@ -3710,6 +3829,7 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
         }
         
         // Clean up peripheral tracking
+        peripheralMappings.removeValue(forKey: peripheralID)
         peerIDByPeripheralID.removeValue(forKey: peripheralID)
         lastActivityByPeripheralID.removeValue(forKey: peripheralID)
         
@@ -3753,6 +3873,7 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
                         } else {
                             // Peer gracefully left, just clean up the tracking
                             self.gracefullyLeftPeers.remove(peerID)
+                            self.gracefulLeaveTimestamps.removeValue(forKey: peerID)
                             SecureLogger.log("Cleaning up gracefullyLeftPeers for \(peerID)", category: SecureLogger.session, level: .debug)
                         }
                     }
@@ -3949,30 +4070,25 @@ extension BluetoothMeshService: CBPeripheralDelegate {
         // Valid RSSI received, reset retry count
         rssiRetryCount.removeValue(forKey: peripheralID)
         
-        // Store RSSI by peripheral ID for fallback lookup
+        // Update RSSI in simplified mapping
+        updatePeripheralRSSI(peripheralID: peripheralID, rssi: RSSI)
+        
+        // Also store in legacy mapping for compatibility
         peripheralRSSI[peripheralID] = RSSI
         
-        // Find the peer ID for this peripheral
-        if let peerID = connectedPeripherals.first(where: { $0.value == peripheral })?.key {
-            // Handle both temp IDs and real peer IDs
+        // If we have a peer ID, update peer RSSI (handled in updatePeripheralRSSI)
+        if let mapping = peripheralMappings[peripheralID], mapping.isIdentified {
+            // Force UI update when we have a real peer ID
             DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-                
-                if peerID.count != 16 {
-                    // It's a temp ID, store RSSI temporarily
-                    self.peripheralRSSI[peerID] = RSSI
-                    // Keep trying to read RSSI until we get real peer ID
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak peripheral] in
-                        guard let peripheral = peripheral, peripheral.state == .connected else { return }
-                        peripheral.readRSSI()
-                    }
-                } else {
-                    // It's a real peer ID, store it
-                    self.peerRSSI[peerID] = RSSI
-                    // Force UI update when we have a real peer ID
-                    self.notifyPeerListUpdate()
-                }
+                self?.notifyPeerListUpdate()
             }
+        } else {
+            // Keep trying to read RSSI until we get real peer ID
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak peripheral] in
+                guard let peripheral = peripheral, peripheral.state == .connected else { return }
+                peripheral.readRSSI()
+            }
+        }
             
             // Periodically update RSSI
             DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak peripheral] in
@@ -4549,6 +4665,12 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         
         // Clean global timestamps
         totalMessageTimestamps.removeAll { $0 < cutoff }
+        
+        // Clean up old identity announce tracking
+        processedMessagesLock.lock()
+        let identityCutoff = Date().addingTimeInterval(-identityAnnounceDuplicateWindow * 2)
+        recentIdentityAnnounces = recentIdentityAnnounces.filter { $0.value > identityCutoff }
+        processedMessagesLock.unlock()
         
         // Clean per-peer chat message timestamps
         for (peerID, timestamps) in messageRateLimiter {
