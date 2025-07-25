@@ -8,6 +8,8 @@
 
 import SwiftUI
 
+// MARK: - Supporting Types
+
 // Pre-computed peer data for performance
 struct PeerDisplayData: Identifiable {
     let id: String
@@ -18,6 +20,8 @@ struct PeerDisplayData: Identifiable {
     let hasUnreadMessages: Bool
     let encryptionStatus: EncryptionStatus
 }
+
+// MARK: - Lazy Link Preview
 
 // Lazy loading wrapper for link previews
 struct LazyLinkPreviewView: View {
@@ -44,7 +48,11 @@ struct LazyLinkPreviewView: View {
     }
 }
 
+// MARK: - Main Content View
+
 struct ContentView: View {
+    // MARK: - Properties
+    
     @EnvironmentObject var viewModel: ChatViewModel
     @State private var messageText = ""
     @State private var textFieldSelection: NSRange? = nil
@@ -66,6 +74,8 @@ struct ContentView: View {
     @State private var scrollThrottleTimer: Timer?
     @State private var autocompleteDebounceTimer: Timer?
     
+    // MARK: - Computed Properties
+    
     private var backgroundColor: Color {
         colorScheme == .dark ? Color.black : Color.white
     }
@@ -77,6 +87,8 @@ struct ContentView: View {
     private var secondaryTextColor: Color {
         colorScheme == .dark ? Color.green.opacity(0.8) : Color(red: 0, green: 0.5, blue: 0).opacity(0.8)
     }
+    
+    // MARK: - Body
     
     var body: some View {
         GeometryReader { geometry in
@@ -221,10 +233,13 @@ struct ContentView: View {
         }
     }
     
+    // MARK: - Message List View
+    
     private func messagesView(privatePeer: String?) -> some View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
+                    // Extract messages based on context (private or public chat)
                     let messages: [BitchatMessage] = {
                         if let privatePeer = privatePeer {
                             let msgs = viewModel.getPrivateChatMessages(for: privatePeer)
@@ -354,6 +369,8 @@ struct ContentView: View {
             }
         }
     }
+    
+    // MARK: - Input View
     
     private var inputView: some View {
         VStack(spacing: 0) {
@@ -544,10 +561,14 @@ struct ContentView: View {
         }
     }
     
+    // MARK: - Actions
+    
     private func sendMessage() {
         viewModel.sendMessage(messageText)
         messageText = ""
     }
+    
+    // MARK: - Sidebar View
     
     private var sidebarView: some View {
         HStack(spacing: 0) {
@@ -594,6 +615,7 @@ struct ContentView: View {
                                 .foregroundColor(secondaryTextColor)
                                 .padding(.horizontal)
                         } else {
+                            // Extract peer data for display
                             let peerNicknames = viewModel.meshService.getPeerNicknames()
                             let peerRSSI = viewModel.meshService.getPeerRSSI()
                             let myPeerID = viewModel.meshService.myPeerID
@@ -939,6 +961,8 @@ struct ContentView: View {
     
 }
 
+// MARK: - Helper Views
+
 // Helper view for rendering message content with clickable hashtags
 struct MessageContentView: View {
     let message: BitchatMessage
@@ -992,6 +1016,8 @@ struct MessageContentView: View {
         return result
             .textSelection(.enabled)
     }
+    
+    // MARK: - Helper Methods
     
     private func buildTextSegments() -> [(text: String, type: String)] {
         var segments: [(text: String, type: String)] = []
@@ -1052,6 +1078,8 @@ struct DeliveryStatusView: View {
     let status: DeliveryStatus
     let colorScheme: ColorScheme
     
+    // MARK: - Computed Properties
+    
     private var textColor: Color {
         colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
     }
@@ -1059,6 +1087,8 @@ struct DeliveryStatusView: View {
     private var secondaryTextColor: Color {
         colorScheme == .dark ? Color.green.opacity(0.8) : Color(red: 0, green: 0.5, blue: 0).opacity(0.8)
     }
+    
+    // MARK: - Body
     
     var body: some View {
         switch status {

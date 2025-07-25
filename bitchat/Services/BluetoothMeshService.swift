@@ -65,33 +65,47 @@ enum PeerConnectionState: CustomStringConvertible {
 }
 
 class BluetoothMeshService: NSObject {
+    // MARK: - Constants
+    
     static let serviceUUID = CBUUID(string: "F47B5E2D-4A9E-4C5A-9B3F-8E1D2C3A4B5C")
     static let characteristicUUID = CBUUID(string: "A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D")
     
+    // MARK: - Core Bluetooth Properties
     
     private var centralManager: CBCentralManager?
     private var peripheralManager: CBPeripheralManager?
     private var discoveredPeripherals: [CBPeripheral] = []
     private var connectedPeripherals: [String: CBPeripheral] = [:]
     private var peripheralCharacteristics: [CBPeripheral: CBCharacteristic] = [:]
+    
+    // MARK: - Connection Tracking
+    
     private var lastConnectionTime: [String: Date] = [:] // Track when peers last connected
     private var lastSuccessfulMessageTime: [String: Date] = [:] // Track last successful message exchange
     private var lastHeardFromPeer: [String: Date] = [:] // Track last time we received ANY packet from peer
+    
+    // MARK: - Peer Availability
     
     // Peer availability tracking
     private var peerAvailabilityState: [String: Bool] = [:]  // true = available, false = unavailable
     private let peerAvailabilityTimeout: TimeInterval = 30.0  // Mark unavailable after 30s of no response
     private var availabilityCheckTimer: Timer?
     
+    // MARK: - Peripheral Management
+    
     private var characteristic: CBMutableCharacteristic?
     private var subscribedCentrals: [CBCentral] = []
-    // Thread-safe collections using concurrent queues
+    
+    // MARK: - Thread-Safe Collections
+    
     private let collectionsQueue = DispatchQueue(label: "bitchat.collections", attributes: .concurrent)
     private var peerNicknames: [String: String] = [:]
     private var activePeers: Set<String> = []  // Track all active peers
     private var peerRSSI: [String: NSNumber] = [:] // Track RSSI values for peers
     private var peripheralRSSI: [String: NSNumber] = [:] // Track RSSI by peripheral ID during discovery
     private var rssiRetryCount: [String: Int] = [:] // Track RSSI retry attempts per peripheral
+    
+    // MARK: - Encryption Queues
     
     // Per-peer encryption queues to prevent nonce desynchronization
     private var peerEncryptionQueues: [String: DispatchQueue] = [:]
@@ -115,9 +129,13 @@ class BluetoothMeshService: NSObject {
     private let identityCacheTTL: TimeInterval = 3600.0  // 1 hour TTL
     private var identityCacheTimestamps: [String: Date] = [:]  // Track when entries were cached
     
+    // MARK: - Delegates and Services
+    
     weak var delegate: BitchatDelegate?
     private let noiseService = NoiseEncryptionService()
     private let handshakeCoordinator = NoiseHandshakeCoordinator()
+    
+    // MARK: - Protocol Version Negotiation
     
     // Protocol version negotiation state
     private var versionNegotiationState: [String: VersionNegotiationState] = [:]
@@ -147,29 +165,6 @@ class BluetoothMeshService: NSObject {
         return noiseService
     }
     
-    // MARK: - Identity Cache Methods
-    
-    func getCachedPublicKey(for peerID: String) -> Data? {
-        return collectionsQueue.sync {
-            // Check if cache entry exists and is not expired
-            if let timestamp = identityCacheTimestamps[peerID],
-               Date().timeIntervalSince(timestamp) < identityCacheTTL {
-                return peerPublicKeyCache[peerID]
-            }
-            return nil
-        }
-    }
-    
-    func getCachedSigningKey(for peerID: String) -> Data? {
-        return collectionsQueue.sync {
-            // Check if cache entry exists and is not expired
-            if let timestamp = identityCacheTimestamps[peerID],
-               Date().timeIntervalSince(timestamp) < identityCacheTTL {
-                return peerSigningKeyCache[peerID]
-            }
-            return nil
-        }
-    }
     
     private func cleanExpiredIdentityCache() {
         collectionsQueue.async(flags: .barrier) { [weak self] in
@@ -314,6 +309,8 @@ class BluetoothMeshService: NSObject {
                            category: SecureLogger.session, level: .debug)
         }
     }
+    // MARK: - Message Processing
+    
     private let messageQueue = DispatchQueue(label: "bitchat.messageQueue", attributes: .concurrent) // Concurrent queue with barriers
     
     // Message state tracking for better duplicate detection
@@ -338,6 +335,8 @@ class BluetoothMeshService: NSObject {
     private var recentIdentityAnnounces = [String: Date]()  // peerID -> last seen time
     private let identityAnnounceDuplicateWindow: TimeInterval = 30.0  // 30 second window
     
+    // MARK: - Network State Management
+    
     private let maxTTL: UInt8 = 7  // Maximum hops for long-distance delivery
     private var announcedToPeers = Set<String>()  // Track which peers we've announced to
     private var announcedPeers = Set<String>()  // Track peers who have already been announced
@@ -352,6 +351,8 @@ class BluetoothMeshService: NSObject {
     private let gracefulLeaveExpirationTime: TimeInterval = 300.0  // 5 minutes
     private var peerLastSeenTimestamps = LRUCache<String, Date>(maxSize: 100)  // Bounded cache for peer timestamps
     private var cleanupTimer: Timer?  // Timer to clean up stale peers
+    
+    // MARK: - Store-and-Forward Cache
     
     // Store-and-forward message cache
     private struct StoredMessage {
@@ -371,6 +372,8 @@ class BluetoothMeshService: NSObject {
     private let recentlySentMessages = BoundedSet<String>(maxSize: 500)  // Short-term bounded cache
     private let lastMessageFromPeer = LRUCache<String, Date>(maxSize: 100)  // Bounded cache
     private let processedNoiseMessages = BoundedSet<String>(maxSize: 1000)  // Bounded cache
+    
+    // MARK: - Battery and Performance Optimization
     
     // Battery and range optimizations
     private var scanDutyCycleTimer: Timer?
@@ -400,17 +403,25 @@ class BluetoothMeshService: NSObject {
     // Pending private messages waiting for handshake
     private var pendingPrivateMessages: [String: [(content: String, recipientNickname: String, messageID: String)]] = [:]
     
+    // MARK: - Noise Protocol State
+    
     // Noise session state tracking for lazy handshakes
     private var noiseSessionStates: [String: LazyHandshakeState] = [:]
+    
+    // MARK: - Cover Traffic
     
     // Cover traffic for privacy
     private var coverTrafficTimer: Timer?
     private let coverTrafficPrefix = "☂DUMMY☂"  // Prefix to identify dummy messages after decryption
     private var lastCoverTrafficTime = Date()
     
+    // MARK: - Connection State
+    
     // Connection state tracking
     private var peerConnectionStates: [String: PeerConnectionState] = [:]
     private let connectionStateQueue = DispatchQueue(label: "chat.bitchat.connectionState", attributes: .concurrent)
+    
+    // MARK: - Protocol ACK Tracking
     
     // Protocol-level ACK tracking
     private var pendingAcks: [String: (packet: BitchatPacket, timestamp: Date, retries: Int)] = [:]
@@ -421,9 +432,13 @@ class BluetoothMeshService: NSObject {
     private var connectionKeepAliveTimer: Timer?  // Timer to send keepalive pings
     private let keepAliveInterval: TimeInterval = 20.0  // Send keepalive every 20 seconds
     
+    // MARK: - Timing and Delays
+    
     // Timing randomization for privacy (now with exponential distribution)
     private let minMessageDelay: TimeInterval = 0.01  // 10ms minimum for faster sync
     private let maxMessageDelay: TimeInterval = 0.1   // 100ms maximum for faster sync
+    
+    // MARK: - RSSI Management
     
     // Dynamic RSSI threshold based on network size (smart compromise)
     private var dynamicRSSIThreshold: Int {
@@ -437,6 +452,8 @@ class BluetoothMeshService: NSObject {
         }
     }
     
+    // MARK: - Fragment Handling
+    
     // Fragment handling with security limits
     private var incomingFragments: [String: [Int: Data]] = [:]  // fragmentID -> [index: data]
     private var fragmentMetadata: [String: (originalType: UInt8, totalFragments: Int, timestamp: Date)] = [:]
@@ -444,9 +461,11 @@ class BluetoothMeshService: NSObject {
     private let maxConcurrentFragmentSessions = 20  // Limit concurrent fragment sessions to prevent DoS
     private let fragmentTimeout: TimeInterval = 30  // 30 seconds timeout for incomplete fragments
     
+    // MARK: - Peer Identity
+    
     var myPeerID: String
     
-    // ===== SCALING OPTIMIZATIONS =====
+    // MARK: - Scaling Optimizations
     
     // Connection pooling
     private var connectionPool: [String: CBPeripheral] = [:]
@@ -456,6 +475,8 @@ class BluetoothMeshService: NSObject {
     private var peerIDByPeripheralID: [String: String] = [:]  // Map peripheral ID to peer ID
     private let maxConnectionAttempts = 3
     private let baseBackoffInterval: TimeInterval = 1.0
+    
+    // MARK: - Peripheral Mapping
     
     // Simplified peripheral mapping system
     private struct PeripheralMapping {
@@ -523,9 +544,13 @@ class BluetoothMeshService: NSObject {
         return nil
     }
     
+    // MARK: - Probabilistic Flooding
+    
     // Probabilistic flooding
     private var relayProbability: Double = 1.0  // Start at 100%, decrease with peer count
     private let minRelayProbability: Double = 0.4  // Minimum 40% relay chance - ensures coverage
+    
+    // MARK: - Message Aggregation
     
     // Message aggregation
     private var pendingMessages: [(message: BitchatPacket, destination: String?)] = []
@@ -533,9 +558,13 @@ class BluetoothMeshService: NSObject {
     private var aggregationWindow: TimeInterval = 0.1  // 100ms window
     private let maxAggregatedMessages = 5
     
+    // MARK: - Bloom Filter
+    
     // Optimized Bloom filter for efficient duplicate detection
     private var messageBloomFilter = OptimizedBloomFilter(expectedItems: 2000, falsePositiveRate: 0.01)
     private var bloomFilterResetTimer: Timer?
+    
+    // MARK: - Network Size Estimation
     
     // Network size estimation
     private var estimatedNetworkSize: Int {
@@ -578,10 +607,14 @@ class BluetoothMeshService: NSObject {
         }
     }
     
+    // MARK: - Relay Cancellation
+    
     // Relay cancellation mechanism to prevent duplicate relays
     private var pendingRelays: [String: DispatchWorkItem] = [:]  // messageID -> relay task
     private let pendingRelaysLock = NSLock()
     private let relayCancellationWindow: TimeInterval = 0.05  // 50ms window to detect other relays
+    
+    // MARK: - Memory Management
     
     // Global memory limits to prevent unbounded growth
     private let maxPendingPrivateMessages = 100
@@ -593,6 +626,8 @@ class BluetoothMeshService: NSObject {
     private var acknowledgedPackets = Set<String>()
     private let acknowledgedPacketsLock = NSLock()
     
+    // MARK: - Rate Limiting
+    
     // Rate limiting for flood control with separate limits for different message types
     private var messageRateLimiter: [String: [Date]] = [:]  // peerID -> recent message timestamps
     private var protocolMessageRateLimiter: [String: [Date]] = [:]  // peerID -> protocol msg timestamps
@@ -603,11 +638,13 @@ class BluetoothMeshService: NSObject {
     private let maxTotalMessagesPerMinute = 2000  // Increased for legitimate use
     private var totalMessageTimestamps: [Date] = []
     
+    // MARK: - BLE Advertisement
+    
     // BLE advertisement for lightweight presence
     private var advertisementData: [String: Any] = [:]
     private var isAdvertising = false
     
-    // ===== MESSAGE AGGREGATION =====
+    // MARK: - Message Aggregation Implementation
     
     private func startAggregationTimer() {
         aggregationTimer?.invalidate()
@@ -673,12 +710,36 @@ class BluetoothMeshService: NSObject {
     
     // Removed getPublicKeyFingerprint - no longer needed with Noise
     
+    // MARK: - Peer Identity Mapping
+    
     // Get peer's fingerprint (replaces getPeerPublicKey)
     func getPeerFingerprint(_ peerID: String) -> String? {
         return noiseService.getPeerFingerprint(peerID)
     }
     
-    // MARK: - Peer Identity Mapping
+    // Get fingerprint for a peer ID
+    func getFingerprint(for peerID: String) -> String? {
+        return collectionsQueue.sync {
+            peerIDToFingerprint[peerID]
+        }
+    }
+    
+    // Check if a peer ID belongs to us (current or previous)
+    func isPeerIDOurs(_ peerID: String) -> Bool {
+        if peerID == myPeerID {
+            return true
+        }
+        
+        // Check if it's our previous ID within grace period
+        if let previousID = previousPeerID,
+           peerID == previousID,
+           let rotationTime = rotationTimestamp,
+           Date().timeIntervalSince(rotationTime) < rotationGracePeriod {
+            return true
+        }
+        
+        return false
+    }
     
     // Update peer identity binding when receiving announcements
     func updatePeerBinding(_ newPeerID: String, fingerprint: String, binding: PeerIdentityBinding) {
@@ -773,38 +834,69 @@ class BluetoothMeshService: NSObject {
         }
     }
     
-    // Get current peer ID for a fingerprint
-    func getCurrentPeerID(for fingerprint: String) -> String? {
+    // Public method to get current peer ID for a fingerprint
+    func getCurrentPeerIDForFingerprint(_ fingerprint: String) -> String? {
         return collectionsQueue.sync {
-            fingerprintToPeerID[fingerprint]
+            return fingerprintToPeerID[fingerprint]
         }
     }
     
-    // Get fingerprint for a peer ID
-    func getFingerprint(for peerID: String) -> String? {
+    // Public method to get all current peer IDs for known fingerprints
+    func getCurrentPeerIDs() -> [String: String] {
         return collectionsQueue.sync {
-            peerIDToFingerprint[peerID]
+            return fingerprintToPeerID
         }
     }
     
-    // Check if a peer ID belongs to us (current or previous)
-    func isPeerIDOurs(_ peerID: String) -> Bool {
-        if peerID == myPeerID {
-            return true
+    // Notify delegate when peer ID changes
+    private func notifyPeerIDChange(oldPeerID: String, newPeerID: String, fingerprint: String) {
+        DispatchQueue.main.async { [weak self] in
+            // Remove old peer ID from active peers and announcedPeers
+            self?.collectionsQueue.sync(flags: .barrier) {
+                _ = self?.activePeers.remove(oldPeerID)
+                // Don't pre-insert the new peer ID - let the announce packet handle it
+                // This ensures the connect message logic works properly
+            }
+            
+            // Also remove from announcedPeers so the new ID can trigger a connect message
+            self?.announcedPeers.remove(oldPeerID)
+            
+            // Update peer list
+            self?.notifyPeerListUpdate(immediate: true)
+            
+            // Don't send disconnect/connect messages for peer ID rotation
+            // The peer didn't actually disconnect, they just rotated their ID
+            // This prevents confusing messages like "3a7e1c2c0d8943b9 disconnected"
+            
+            // Instead, notify the delegate about the peer ID change if needed
+            // (Could add a new delegate method for this in the future)
         }
-        
-        // Check if it's our previous ID within grace period
-        if let previousID = previousPeerID,
-           peerID == previousID,
-           let rotationTime = rotationTimestamp,
-           Date().timeIntervalSince(rotationTime) < rotationGracePeriod {
-            return true
-        }
-        
-        return false
     }
     
-    // Update peer connection state
+    // MARK: - Peer Connection Management
+    
+    func getCachedPublicKey(for peerID: String) -> Data? {
+        return collectionsQueue.sync {
+            // Check if cache entry exists and is not expired
+            if let timestamp = identityCacheTimestamps[peerID],
+               Date().timeIntervalSince(timestamp) < identityCacheTTL {
+                return peerPublicKeyCache[peerID]
+            }
+            return nil
+        }
+    }
+    
+    func getCachedSigningKey(for peerID: String) -> Data? {
+        return collectionsQueue.sync {
+            // Check if cache entry exists and is not expired
+            if let timestamp = identityCacheTimestamps[peerID],
+               Date().timeIntervalSince(timestamp) < identityCacheTTL {
+                return peerSigningKeyCache[peerID]
+            }
+            return nil
+        }
+    }
+    
     private func updatePeerConnectionState(_ peerID: String, state: PeerConnectionState) {
         connectionStateQueue.async(flags: .barrier) { [weak self] in
             guard let self = self else { return }
@@ -956,6 +1048,8 @@ class BluetoothMeshService: NSObject {
         rotationLocked = false
     }
     
+    // MARK: - Initialization
+    
     override init() {
         // Generate ephemeral peer ID for each session to prevent tracking
         self.myPeerID = ""
@@ -1080,6 +1174,8 @@ class BluetoothMeshService: NSObject {
         #endif
     }
     
+    // MARK: - Deinitialization and Cleanup
+    
     deinit {
         cleanup()
         scanDutyCycleTimer?.invalidate()
@@ -1148,6 +1244,8 @@ class BluetoothMeshService: NSObject {
         lastHeardFromPeer.removeAll()
     }
     
+    // MARK: - Service Management
+    
     func startServices() {
         // Starting services
         // Start both central and peripheral services
@@ -1175,6 +1273,8 @@ class BluetoothMeshService: NSObject {
             startCoverTraffic()
         }
     }
+    
+    // MARK: - Message Sending
     
     func sendBroadcastAnnounce() {
         guard let vm = delegate as? ChatViewModel else { return }
@@ -1370,46 +1470,6 @@ class BluetoothMeshService: NSObject {
         }
     }
     
-    // Public method to get current peer ID for a fingerprint
-    func getCurrentPeerIDForFingerprint(_ fingerprint: String) -> String? {
-        return collectionsQueue.sync {
-            return fingerprintToPeerID[fingerprint]
-        }
-    }
-    
-    // Public method to get all current peer IDs for known fingerprints
-    func getCurrentPeerIDs() -> [String: String] {
-        return collectionsQueue.sync {
-            return fingerprintToPeerID
-        }
-    }
-    
-    // Notify delegate when peer ID changes
-    private func notifyPeerIDChange(oldPeerID: String, newPeerID: String, fingerprint: String) {
-        DispatchQueue.main.async { [weak self] in
-            // Remove old peer ID from active peers and announcedPeers
-            self?.collectionsQueue.sync(flags: .barrier) {
-                _ = self?.activePeers.remove(oldPeerID)
-                // Don't pre-insert the new peer ID - let the announce packet handle it
-                // This ensures the connect message logic works properly
-            }
-            
-            // Also remove from announcedPeers so the new ID can trigger a connect message
-            self?.announcedPeers.remove(oldPeerID)
-            
-            // Update peer list
-            self?.notifyPeerListUpdate(immediate: true)
-            
-            // Don't send disconnect/connect messages for peer ID rotation
-            // The peer didn't actually disconnect, they just rotated their ID
-            // This prevents confusing messages like "3a7e1c2c0d8943b9 disconnected"
-            
-            // Instead, notify the delegate about the peer ID change if needed
-            // (Could add a new delegate method for this in the future)
-        }
-    }
-    
-    
     func sendDeliveryAck(_ ack: DeliveryAck, to recipientID: String) {
         // Use per-peer encryption queue to prevent nonce desynchronization
         let encryptionQueue = getEncryptionQueue(for: recipientID)
@@ -1589,13 +1649,6 @@ class BluetoothMeshService: NSObject {
         broadcastPacket(packet)
     }
     
-    
-    func getPeerNicknames() -> [String: String] {
-        return collectionsQueue.sync {
-            return peerNicknames
-        }
-    }
-    
     // Get Noise session state for UI display
     func getNoiseSessionState(for peerID: String) -> LazyHandshakeState {
         return collectionsQueue.sync {
@@ -1632,6 +1685,12 @@ class BluetoothMeshService: NSObject {
         // Always initiate handshake when triggered by UI
         // This ensures immediate handshake when opening PM
         initiateNoiseHandshake(with: peerID)
+    }
+    
+    func getPeerNicknames() -> [String: String] {
+        return collectionsQueue.sync {
+            return peerNicknames
+        }
     }
     
     func getPeerRSSI() -> [String: NSNumber] {
@@ -3602,6 +3661,8 @@ class BluetoothMeshService: NSObject {
 }  // End of BluetoothMeshService class
 
 extension BluetoothMeshService: CBCentralManagerDelegate {
+    // MARK: - CBCentralManagerDelegate
+    
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         // Central manager state updated
         switch central.state {
@@ -3968,6 +4029,8 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
 }
 
 extension BluetoothMeshService: CBPeripheralDelegate {
+    // MARK: - CBPeripheralDelegate
+    
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         if let error = error {
             SecureLogger.log("Error discovering services: \(error)", 
@@ -4146,6 +4209,8 @@ extension BluetoothMeshService: CBPeripheralDelegate {
 }
 
 extension BluetoothMeshService: CBPeripheralManagerDelegate {
+    // MARK: - CBPeripheralManagerDelegate
+    
     func peripheralManagerDidUpdateState(_ peripheral: CBPeripheralManager) {
         // Peripheral manager state updated
         switch peripheral.state {
