@@ -22,7 +22,7 @@ This project is released into the public domain. See the [LICENSE](LICENSE) file
 - **Cover Traffic**: Timing obfuscation and dummy messages for enhanced privacy
 - **Private Message End-to-End Encryption**: [Noise Protocol](http://noiseprotocol.org)
 - **Store & Forward**: Messages cached for offline peers and delivered when they reconnect
-- **IRC-Style Commands**: Familiar `/join`, `/msg`, `/who` style interface
+- **IRC-Style Commands**: Familiar `/slap`, `/msg`, `/who` style interface
 - **Universal App**: Native support for iOS and macOS
 - **Emergency Wipe**: Triple-tap to instantly clear all data
 - **Performance Optimizations**: LZ4 message compression, adaptive battery modes, and optimized networking
