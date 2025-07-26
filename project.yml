@@ -42,6 +42,8 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLSchemes:
               - bitchat
+        # xcodegen quirk: include some macOS properties in iOS target
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: chat.bitchat
       PRODUCT_NAME: bitchat
@@ -80,6 +82,14 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLSchemes:
               - bitchat
+        # xcodegen quirk: include some iOS properties in macOS target
+        UIBackgroundModes:
+          - bluetooth-central
+          - bluetooth-peripheral
+        UILaunchStoryboardName: LaunchScreen
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UIRequiresFullScreen: true
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: chat.bitchat
       PRODUCT_NAME: bitchat
