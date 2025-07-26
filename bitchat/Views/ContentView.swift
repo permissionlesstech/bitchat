@@ -73,6 +73,7 @@ struct ContentView: View {
     @State private var lastScrollTime: Date = .distantPast
     @State private var scrollThrottleTimer: Timer?
     @State private var autocompleteDebounceTimer: Timer?
+    @State private var selectedCommandIndex = 0
     
     // MARK: - Computed Properties
     
@@ -422,14 +423,13 @@ struct ContentView: View {
                     let allCommands = commandInfo
                     
                     // Show matching commands
-                    ForEach(commandSuggestions, id: \.self) { command in
+                    ForEach(Array(commandSuggestions.enumerated()), id: \.element) { index, command in
                         // Find the command info for this suggestion
                         if let info = allCommands.first(where: { $0.commands.contains(command) }) {
                             Button(action: {
                                 // Replace current text with selected command
                                 messageText = command + " "
-                                showCommandSuggestions = false
-                                commandSuggestions = []
+                                clearCommandSuggestions()
                             }) {
                                 HStack {
                                     // Show all aliases together
@@ -457,7 +457,7 @@ struct ContentView: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                             }
                             .buttonStyle(.plain)
-                            .background(Color.gray.opacity(0.1))
+                            .background(index == selectedCommandIndex ? Color.blue.opacity(0.2) : Color.gray.opacity(0.1))
                         }
                     }
                 }
@@ -529,15 +529,21 @@ struct ContentView: View {
                         // Remove duplicates and sort
                         commandSuggestions = Array(Set(commandSuggestions)).sorted()
                         showCommandSuggestions = !commandSuggestions.isEmpty
+                        selectedCommandIndex = 0
                     } else {
-                        showCommandSuggestions = false
-                        commandSuggestions = []
+                        clearCommandSuggestions()
                     }
                 }
                 .onSubmit {
-                    sendMessage()
+                    if showCommandSuggestions && !commandSuggestions.isEmpty {
+                        selectCommand(commandSuggestions[selectedCommandIndex])
+                    } else {
+                        sendMessage()
+                    }
                 }
-            
+                #if os(macOS)
+                .commandNavigation(isShowing: showCommandSuggestions, suggestions: commandSuggestions, selectedIndex: $selectedCommandIndex, onSelect: { selectCommand($0) }, onCancel: { clearCommandSuggestions() })
+                #endif
             Button(action: sendMessage) {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 20))
@@ -1138,5 +1144,57 @@ struct DeliveryStatusView: View {
             .foregroundColor(secondaryTextColor.opacity(0.6))
             .help("Delivered to \(reached) of \(total) members")
         }
+    }
+}
+
+// MARK: macOS Command Navigation
+#if os(macOS)
+private extension View {
+    func commandNavigation(
+        isShowing: Bool,
+        suggestions: [String],
+        selectedIndex: Binding<Int>,
+        onSelect: @escaping (String) -> Void,
+        onCancel: @escaping () -> Void
+    ) -> some View {
+        if #available(macOS 14.0, *) {
+            return self
+                .onKeyPress(.upArrow) {
+                    guard isShowing && !suggestions.isEmpty else { return .ignored }
+                    selectedIndex.wrappedValue = max(0, selectedIndex.wrappedValue - 1)
+                    return .handled
+                }
+                .onKeyPress(.downArrow) {
+                    guard isShowing && !suggestions.isEmpty else { return .ignored }
+                    selectedIndex.wrappedValue = min(suggestions.count - 1, selectedIndex.wrappedValue + 1)
+                    return .handled
+                }
+                .onKeyPress(.return) {
+                    guard isShowing && !suggestions.isEmpty else { return .ignored }
+                    onSelect(suggestions[selectedIndex.wrappedValue])
+                    return .handled
+                }
+                .onKeyPress(.escape) {
+                    guard isShowing else { return .ignored }
+                    onCancel()
+                    return .handled
+                }
+        } else {
+            return self
+        }
+    }
+}
+#endif
+
+private extension ContentView {
+    func clearCommandSuggestions() {
+        showCommandSuggestions = false
+        commandSuggestions = []
+        selectedCommandIndex = 0
+    }
+
+    func selectCommand(_ command: String) {
+        messageText = command + " "
+        clearCommandSuggestions()
     }
 }
