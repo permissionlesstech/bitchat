@@ -6,12 +6,91 @@
 // For more information, see <https://unlicense.org>
 //
 
+///
+/// # NoiseEncryptionService
+///
+/// High-level encryption service that manages Noise Protocol sessions for secure
+/// peer-to-peer communication in BitChat. Acts as the bridge between the transport
+/// layer (BluetoothMeshService) and the cryptographic layer (NoiseProtocol).
+///
+/// ## Overview
+/// This service provides a simplified API for establishing and managing encrypted
+/// channels between peers. It handles:
+/// - Static identity key management
+/// - Session lifecycle (creation, maintenance, teardown)
+/// - Message encryption/decryption
+/// - Peer authentication and fingerprint tracking
+/// - Automatic rekeying for forward secrecy
+///
+/// ## Architecture
+/// The service operates at multiple levels:
+/// 1. **Identity Management**: Persistent Curve25519 keys stored in Keychain
+/// 2. **Session Management**: Per-peer Noise sessions with state tracking
+/// 3. **Message Processing**: Encryption/decryption with proper framing
+/// 4. **Security Features**: Rate limiting, fingerprint verification
+///
+/// ## Key Features
+///
+/// ### Identity Keys
+/// - Static Curve25519 key pair for Noise XX pattern
+/// - Ed25519 signing key pair for additional authentication
+/// - Keys persisted securely in iOS/macOS Keychain
+/// - Fingerprints derived from SHA256 of public keys
+///
+/// ### Session Management
+/// - Lazy session creation (on-demand when sending messages)
+/// - Automatic session recovery after disconnections
+/// - Configurable rekey intervals for forward secrecy
+/// - Graceful handling of simultaneous handshakes
+///
+/// ### Security Properties
+/// - Forward secrecy via ephemeral keys in handshakes
+/// - Mutual authentication via static key exchange
+/// - Protection against replay attacks
+/// - Rate limiting to prevent DoS attacks
+///
+/// ## Encryption Flow
+/// ```
+/// 1. Message arrives for encryption
+/// 2. Check if session exists for peer
+/// 3. If not, initiate Noise handshake
+/// 4. Once established, encrypt message
+/// 5. Add message type header for protocol handling
+/// 6. Return encrypted payload for transmission
+/// ```
+///
+/// ## Integration Points
+/// - **BluetoothMeshService**: Calls this service for all private messages
+/// - **ChatViewModel**: Monitors encryption status for UI indicators
+/// - **NoiseHandshakeCoordinator**: Prevents handshake race conditions
+/// - **KeychainManager**: Secure storage for identity keys
+///
+/// ## Thread Safety
+/// - Concurrent read access via reader-writer queue
+/// - Session operations protected by per-peer queues
+/// - Atomic updates for critical state changes
+///
+/// ## Error Handling
+/// - Graceful fallback for encryption failures
+/// - Clear error messages for debugging
+/// - Automatic retry with exponential backoff
+/// - User notification for critical failures
+///
+/// ## Performance Considerations
+/// - Sessions cached in memory for fast access
+/// - Minimal allocations in hot paths
+/// - Efficient binary message format
+/// - Background queue for CPU-intensive operations
+///
+
 import Foundation
 import CryptoKit
 import os.log
 
 // MARK: - Encryption Status
 
+/// Represents the current encryption status of a peer connection.
+/// Used for UI indicators and decision-making about message handling.
 enum EncryptionStatus: Equatable {
     case none                // Failed or incompatible
     case noHandshake        // No handshake attempted yet
@@ -52,6 +131,10 @@ enum EncryptionStatus: Equatable {
 
 // MARK: - Noise Encryption Service
 
+/// Manages end-to-end encryption for BitChat using the Noise Protocol Framework.
+/// Provides a high-level API for establishing secure channels between peers,
+/// handling all cryptographic operations transparently.
+/// - Important: This service maintains the device's cryptographic identity
 class NoiseEncryptionService {
     // Static identity key (persistent across sessions)
     private let staticIdentityKey: Curve25519.KeyAgreement.PrivateKey
@@ -416,6 +499,8 @@ class NoiseEncryptionService {
 
 // MARK: - Protocol Message Types for Noise
 
+/// Message types for the Noise encryption protocol layer.
+/// These types wrap the underlying BitChat protocol messages with encryption metadata.
 enum NoiseMessageType: UInt8 {
     case handshakeInitiation = 0x10
     case handshakeResponse = 0x11
@@ -426,6 +511,9 @@ enum NoiseMessageType: UInt8 {
 
 // MARK: - Noise Message Wrapper
 
+/// Container for encrypted messages in the Noise protocol.
+/// Provides versioning and type information for proper message handling.
+/// The actual message content is encrypted in the payload field.
 struct NoiseMessage: Codable {
     let type: UInt8
     let sessionID: String  // Random ID for this handshake session

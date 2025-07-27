@@ -6,9 +6,96 @@
 // For more information, see <https://unlicense.org>
 //
 
+///
+/// # SecureIdentityStateManager
+///
+/// Manages the persistent storage and retrieval of identity mappings with
+/// encryption at rest. This singleton service maintains the relationship between
+/// ephemeral peer IDs, cryptographic fingerprints, and social identities.
+///
+/// ## Overview
+/// The SecureIdentityStateManager provides a secure, privacy-preserving way to
+/// maintain identity relationships across app launches. It implements:
+/// - Encrypted storage of identity mappings
+/// - In-memory caching for performance
+/// - Thread-safe access patterns
+/// - Automatic debounced persistence
+///
+/// ## Architecture
+/// The manager operates at three levels:
+/// 1. **In-Memory State**: Fast access to active identities
+/// 2. **Encrypted Cache**: Persistent storage in Keychain
+/// 3. **Privacy Controls**: User-configurable persistence settings
+///
+/// ## Security Features
+///
+/// ### Encryption at Rest
+/// - Identity cache encrypted with AES-GCM
+/// - Unique 256-bit encryption key per device
+/// - Key stored separately in Keychain
+/// - No plaintext identity data on disk
+///
+/// ### Privacy by Design
+/// - Persistence is optional (user-controlled)
+/// - Minimal data retention
+/// - No cloud sync or backup
+/// - Automatic cleanup of stale entries
+///
+/// ### Thread Safety
+/// - Concurrent read access via GCD barriers
+/// - Write operations serialized
+/// - Atomic state updates
+/// - No data races or corruption
+///
+/// ## Data Model
+/// Manages three types of identity data:
+/// 1. **Ephemeral Sessions**: Current peer connections
+/// 2. **Cryptographic Identities**: Public keys and fingerprints
+/// 3. **Social Identities**: User-assigned names and trust
+///
+/// ## Persistence Strategy
+/// - Changes batched and debounced (2-second window)
+/// - Automatic save on app termination
+/// - Crash-resistant with atomic writes
+/// - Migration support for schema changes
+///
+/// ## Usage Patterns
+/// ```swift
+/// // Register a new peer identity
+/// manager.registerPeerIdentity(peerID, publicKey, fingerprint)
+/// 
+/// // Update social identity
+/// manager.updateSocialIdentity(fingerprint, nickname, trustLevel)
+/// 
+/// // Query identity
+/// let identity = manager.resolvePeerIdentity(peerID)
+/// ```
+///
+/// ## Performance Optimizations
+/// - In-memory cache eliminates Keychain roundtrips
+/// - Debounced saves reduce I/O operations
+/// - Efficient data structures for lookups
+/// - Background queue for expensive operations
+///
+/// ## Privacy Considerations
+/// - Users can disable all persistence
+/// - Identity cache can be wiped instantly
+/// - No analytics or telemetry
+/// - Ephemeral mode for high-risk users
+///
+/// ## Future Enhancements
+/// - Selective identity export
+/// - Cross-device identity sync (optional)
+/// - Identity attestation support
+/// - Advanced conflict resolution
+///
+
 import Foundation
 import CryptoKit
 
+/// Singleton manager for secure identity state persistence and retrieval.
+/// Provides thread-safe access to identity mappings with encryption at rest.
+/// All identity data is stored encrypted in the device Keychain for security.
 class SecureIdentityStateManager {
     static let shared = SecureIdentityStateManager()
     
