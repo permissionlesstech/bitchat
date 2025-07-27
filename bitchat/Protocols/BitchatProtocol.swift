@@ -6,12 +6,65 @@
 // For more information, see <https://unlicense.org>
 //
 
+///
+/// # BitchatProtocol
+///
+/// Defines the application-layer protocol for BitChat mesh networking, including
+/// message types, packet structures, and encoding/decoding logic.
+///
+/// ## Overview
+/// BitchatProtocol implements a binary protocol optimized for Bluetooth LE's
+/// constrained bandwidth and MTU limitations. It provides:
+/// - Efficient binary message encoding
+/// - Message fragmentation for large payloads
+/// - TTL-based routing for mesh networks
+/// - Privacy features like padding and timing obfuscation
+/// - Integration points for end-to-end encryption
+///
+/// ## Protocol Design
+/// The protocol uses a compact binary format to minimize overhead:
+/// - 1-byte message type identifier
+/// - Variable-length fields with length prefixes
+/// - Network byte order (big-endian) for multi-byte values
+/// - PKCS#7-style padding for privacy
+///
+/// ## Message Flow
+/// 1. **Creation**: Messages are created with type, content, and metadata
+/// 2. **Encoding**: Converted to binary format with proper field ordering
+/// 3. **Fragmentation**: Split if larger than BLE MTU (512 bytes)
+/// 4. **Transmission**: Sent via BluetoothMeshService
+/// 5. **Routing**: Relayed by intermediate nodes (TTL decrements)
+/// 6. **Reassembly**: Fragments collected and reassembled
+/// 7. **Decoding**: Binary data parsed back to message objects
+///
+/// ## Security Considerations
+/// - Message padding obscures actual content length
+/// - Timing obfuscation prevents traffic analysis
+/// - Integration with Noise Protocol for E2E encryption
+/// - No persistent identifiers in protocol headers
+///
+/// ## Message Types
+/// - **Announce/Leave**: Peer presence notifications
+/// - **Message**: User chat messages (broadcast or directed)
+/// - **Fragment**: Multi-part message handling
+/// - **Delivery/Read**: Message acknowledgments
+/// - **Noise**: Encrypted channel establishment
+/// - **Version**: Protocol compatibility negotiation
+///
+/// ## Future Extensions
+/// The protocol is designed to be extensible:
+/// - Reserved message type ranges for future use
+/// - Version negotiation for backward compatibility
+/// - Optional fields for new features
+///
+
 import Foundation
 import CryptoKit
 
 // MARK: - Message Padding
 
-// Privacy-preserving padding utilities
+/// Provides privacy-preserving message padding to obscure actual content length.
+/// Uses PKCS#7-style padding with random bytes to prevent traffic analysis.
 struct MessagePadding {
     // Standard block sizes for padding
     static let blockSizes = [256, 512, 1024, 2048]
@@ -79,6 +132,9 @@ struct MessagePadding {
 
 // MARK: - Message Types
 
+/// Defines all message types in the BitChat protocol.
+/// Each type has a unique identifier for efficient binary encoding.
+/// Types are grouped by function: user messages, protocol control, encryption, etc.
 enum MessageType: UInt8 {
     case announce = 0x01
     case leave = 0x03
@@ -144,13 +200,19 @@ enum LazyHandshakeState {
 
 // MARK: - Special Recipients
 
-// Special recipient ID for broadcast messages
+/// Defines special recipient identifiers used in the protocol.
+/// These magic values indicate broadcast or system-level recipients
+/// rather than specific peer IDs.
 struct SpecialRecipients {
     static let broadcast = Data(repeating: 0xFF, count: 8)  // All 0xFF = broadcast
 }
 
 // MARK: - Core Protocol Structures
 
+/// The core packet structure for all BitChat protocol messages.
+/// Encapsulates all data needed for routing through the mesh network,
+/// including TTL for hop limiting and optional encryption.
+/// - Note: Packets larger than BLE MTU (512 bytes) are automatically fragmented
 struct BitchatPacket: Codable {
     let version: UInt8
     let type: UInt8
@@ -209,7 +271,9 @@ struct BitchatPacket: Codable {
 
 // MARK: - Delivery Acknowledgments
 
-// Delivery acknowledgment structure
+/// Acknowledgment sent when a message is successfully delivered to a recipient.
+/// Provides delivery confirmation for reliable messaging and UI feedback.
+/// - Note: Only sent for direct messages, not broadcasts
 struct DeliveryAck: Codable {
     let originalMessageID: String
     let ackID: String
@@ -656,7 +720,10 @@ struct ProtocolNack: Codable {
 
 // MARK: - Peer Identity Rotation
 
-// Enhanced identity announcement with rotation support
+/// Announces a peer's cryptographic identity to enable secure communication.
+/// Contains the peer's Noise static public key and supports identity rotation
+/// by binding ephemeral peer IDs to stable cryptographic fingerprints.
+/// - Note: Critical for establishing end-to-end encrypted channels
 struct NoiseIdentityAnnouncement: Codable {
     let peerID: String               // Current ephemeral peer ID
     let publicKey: Data              // Noise static public key
@@ -1078,6 +1145,10 @@ enum DeliveryStatus: Codable, Equatable {
 
 // MARK: - Message Model
 
+/// Represents a user-visible message in the BitChat system.
+/// Handles both broadcast messages and private encrypted messages,
+/// with support for mentions, replies, and delivery tracking.
+/// - Note: This is the primary data model for chat messages
 class BitchatMessage: Codable {
     let id: String
     let sender: String

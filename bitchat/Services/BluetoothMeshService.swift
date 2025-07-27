@@ -6,6 +6,76 @@
 // For more information, see <https://unlicense.org>
 //
 
+///
+/// # BluetoothMeshService
+///
+/// The core networking component that manages peer-to-peer Bluetooth LE connections
+/// and implements the BitChat mesh networking protocol.
+///
+/// ## Overview
+/// This service is the heart of BitChat's decentralized architecture. It manages all
+/// Bluetooth LE communications, enabling devices to form an ad-hoc mesh network without
+/// any infrastructure. The service handles:
+/// - Peer discovery and connection management
+/// - Message routing and relay functionality
+/// - Protocol version negotiation
+/// - Connection state tracking and recovery
+/// - Integration with the Noise encryption layer
+///
+/// ## Architecture
+/// The service operates in a dual mode:
+/// - **Central Mode**: Scans for and connects to other BitChat devices
+/// - **Peripheral Mode**: Advertises its presence and accepts connections
+///
+/// This dual-mode operation enables true peer-to-peer connectivity where any device
+/// can initiate or accept connections, forming a resilient mesh topology.
+///
+/// ## Mesh Networking
+/// Messages are relayed through the mesh using a TTL (Time To Live) mechanism:
+/// - Each message has a TTL that decrements at each hop
+/// - Messages are cached to prevent loops (via Bloom filters)
+/// - Store-and-forward ensures delivery to temporarily offline peers
+///
+/// ## Connection Lifecycle
+/// 1. **Discovery**: Devices scan and advertise simultaneously
+/// 2. **Connection**: BLE connection established
+/// 3. **Version Negotiation**: Ensure protocol compatibility
+/// 4. **Authentication**: Noise handshake for encrypted channels
+/// 5. **Message Exchange**: Bidirectional communication
+/// 6. **Disconnection**: Graceful cleanup and state preservation
+///
+/// ## Security Integration
+/// - Coordinates with NoiseEncryptionService for private messages
+/// - Maintains peer identity mappings
+/// - Handles lazy handshake initiation
+/// - Ensures message authenticity
+///
+/// ## Performance Optimizations
+/// - Connection pooling and reuse
+/// - Adaptive scanning based on battery level
+/// - Message batching for efficiency
+/// - Smart retry logic with exponential backoff
+///
+/// ## Thread Safety
+/// All public methods are thread-safe. The service uses:
+/// - Serial queues for Core Bluetooth operations
+/// - Thread-safe collections for peer management
+/// - Atomic operations for state updates
+///
+/// ## Error Handling
+/// - Automatic reconnection for lost connections
+/// - Graceful degradation when Bluetooth is unavailable
+/// - Clear error reporting through BitchatDelegate
+///
+/// ## Usage Example
+/// ```swift
+/// let meshService = BluetoothMeshService()
+/// meshService.delegate = self
+/// meshService.localUserID = "user123"
+/// meshService.startMeshService()
+/// ```
+///
+
 import Foundation
 import CoreBluetooth
 import Combine
@@ -64,6 +134,10 @@ enum PeerConnectionState: CustomStringConvertible {
     }
 }
 
+/// Manages all Bluetooth LE networking operations for the BitChat mesh network.
+/// This class handles peer discovery, connection management, message routing,
+/// and protocol negotiation. It acts as both a BLE central (scanner) and
+/// peripheral (advertiser) simultaneously to enable true peer-to-peer connectivity.
 class BluetoothMeshService: NSObject {
     // MARK: - Constants
     
@@ -712,7 +786,10 @@ class BluetoothMeshService: NSObject {
     
     // MARK: - Peer Identity Mapping
     
-    // Get peer's fingerprint (replaces getPeerPublicKey)
+    /// Retrieves the cryptographic fingerprint for a given peer.
+    /// - Parameter peerID: The ephemeral peer ID
+    /// - Returns: The peer's Noise static key fingerprint if known, nil otherwise
+    /// - Note: This fingerprint remains stable across peer ID rotations
     func getPeerFingerprint(_ peerID: String) -> String? {
         return noiseService.getPeerFingerprint(peerID)
     }
@@ -724,7 +801,10 @@ class BluetoothMeshService: NSObject {
         }
     }
     
-    // Check if a peer ID belongs to us (current or previous)
+    /// Checks if a given peer ID belongs to the local device.
+    /// - Parameter peerID: The peer ID to check
+    /// - Returns: true if this is our current or recent peer ID, false otherwise
+    /// - Note: Accounts for grace period during peer ID rotation
     func isPeerIDOurs(_ peerID: String) -> Bool {
         if peerID == myPeerID {
             return true
@@ -741,7 +821,12 @@ class BluetoothMeshService: NSObject {
         return false
     }
     
-    // Update peer identity binding when receiving announcements
+    /// Updates the identity binding for a peer when they rotate their ephemeral ID.
+    /// - Parameters:
+    ///   - newPeerID: The peer's new ephemeral ID
+    ///   - fingerprint: The peer's stable cryptographic fingerprint
+    ///   - binding: The complete identity binding information
+    /// - Note: This maintains continuity of identity across peer ID rotations
     func updatePeerBinding(_ newPeerID: String, fingerprint: String, binding: PeerIdentityBinding) {
         // Use async to ensure we're not blocking during view updates
         collectionsQueue.async(flags: .barrier) { [weak self] in
@@ -1246,6 +1331,10 @@ class BluetoothMeshService: NSObject {
     
     // MARK: - Service Management
     
+    /// Starts the Bluetooth mesh networking services.
+    /// This initializes both central (scanning) and peripheral (advertising) modes,
+    /// enabling the device to both discover peers and be discovered.
+    /// Call this method after setting the delegate and localUserID.
     func startServices() {
         // Starting services
         // Start both central and peripheral services
@@ -1382,6 +1471,14 @@ class BluetoothMeshService: NSObject {
         self.characteristic = characteristic
     }
     
+    /// Sends a message through the mesh network.
+    /// - Parameters:
+    ///   - content: The message content to send
+    ///   - mentions: Array of user IDs being mentioned in the message
+    ///   - recipientID: Optional recipient ID for directed messages (nil for broadcast)
+    ///   - messageID: Optional custom message ID (auto-generated if nil)
+    ///   - timestamp: Optional custom timestamp (current time if nil)
+    /// - Note: Messages are automatically routed through the mesh using TTL-based forwarding
     func sendMessage(_ content: String, mentions: [String] = [], to recipientID: String? = nil, messageID: String? = nil, timestamp: Date? = nil) {
         // Defensive check for empty content
         guard !content.isEmpty else { return }
@@ -1443,6 +1540,13 @@ class BluetoothMeshService: NSObject {
     }
     
     
+    /// Sends an end-to-end encrypted private message to a specific peer.
+    /// - Parameters:
+    ///   - content: The message content to encrypt and send
+    ///   - recipientPeerID: The peer ID of the recipient
+    ///   - recipientNickname: The nickname of the recipient (for UI display)
+    ///   - messageID: Optional custom message ID (auto-generated if nil)
+    /// - Note: This method automatically handles Noise handshake if not already established
     func sendPrivateMessage(_ content: String, to recipientPeerID: String, recipientNickname: String, messageID: String? = nil) {
         // Defensive checks
         guard !content.isEmpty, !recipientPeerID.isEmpty, !recipientNickname.isEmpty else { 

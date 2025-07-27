@@ -6,6 +6,77 @@
 // For more information, see <https://unlicense.org>
 //
 
+///
+/// # NoiseProtocol
+///
+/// A complete implementation of the Noise Protocol Framework for end-to-end
+/// encryption in BitChat. This file contains the core cryptographic primitives
+/// and handshake logic that enable secure communication between peers.
+///
+/// ## Overview
+/// The Noise Protocol Framework is a modern cryptographic framework designed
+/// for building secure protocols. BitChat uses Noise to provide:
+/// - Mutual authentication between peers
+/// - Forward secrecy for all messages
+/// - Protection against replay attacks
+/// - Minimal round trips for connection establishment
+///
+/// ## Implementation Details
+/// This implementation follows the Noise specification exactly, using:
+/// - **Pattern**: XX (most versatile, provides mutual authentication)
+/// - **DH**: Curve25519 (X25519 key exchange)
+/// - **Cipher**: ChaCha20-Poly1305 (AEAD encryption)
+/// - **Hash**: SHA-256 (for key derivation and authentication)
+///
+/// ## Security Properties
+/// The XX handshake pattern provides:
+/// 1. **Identity Hiding**: Both parties' identities are encrypted
+/// 2. **Forward Secrecy**: Past sessions remain secure if keys are compromised
+/// 3. **Key Compromise Impersonation Resistance**: Compromised static key doesn't allow impersonation to that party
+/// 4. **Mutual Authentication**: Both parties verify each other's identity
+///
+/// ## Handshake Flow (XX Pattern)
+/// ```
+/// Initiator                              Responder
+/// ---------                              ---------
+/// -> e                                   (ephemeral key)
+/// <- e, ee, s, es                       (ephemeral, DH, static encrypted, DH)
+/// -> s, se                              (static encrypted, DH)
+/// ```
+///
+/// ## Key Components
+/// - **NoiseCipherState**: Manages symmetric encryption with nonce tracking
+/// - **NoiseSymmetricState**: Handles key derivation and handshake hashing
+/// - **NoiseHandshakeState**: Orchestrates the complete handshake process
+///
+/// ## Replay Protection
+/// Implements sliding window replay protection to prevent message replay attacks:
+/// - Tracks nonces within a 1024-message window
+/// - Rejects duplicate or too-old nonces
+/// - Handles out-of-order message delivery
+///
+/// ## Usage Example
+/// ```swift
+/// let handshake = NoiseHandshakeState(
+///     pattern: .XX,
+///     role: .initiator,
+///     localStatic: staticKeyPair
+/// )
+/// let messageBuffer = handshake.writeMessage(payload: Data())
+/// // Send messageBuffer to peer...
+/// ```
+///
+/// ## Security Considerations
+/// - Static keys must be generated using secure random sources
+/// - Keys should be stored securely (e.g., in Keychain)
+/// - Handshake state must not be reused after completion
+/// - Transport messages have a nonce limit (2^64-1)
+///
+/// ## References
+/// - Noise Protocol Framework: http://www.noiseprotocol.org/
+/// - Noise Specification: http://www.noiseprotocol.org/noise.html
+///
+
 import Foundation
 import CryptoKit
 import os.log
@@ -15,6 +86,8 @@ import os.log
 
 // MARK: - Constants and Types
 
+/// Supported Noise handshake patterns.
+/// Each pattern provides different security properties and authentication guarantees.
 enum NoisePattern {
     case XX  // Most versatile, mutual authentication
     case IK  // Initiator knows responder's static key
@@ -50,6 +123,10 @@ struct NoiseProtocolName {
 
 // MARK: - Cipher State
 
+/// Manages symmetric encryption state for Noise protocol sessions.
+/// Handles ChaCha20-Poly1305 AEAD encryption with automatic nonce management
+/// and replay protection using a sliding window algorithm.
+/// - Warning: Nonce reuse would be catastrophic for security
 class NoiseCipherState {
     // Constants for replay protection
     private static let NONCE_SIZE_BYTES = 4
@@ -284,6 +361,10 @@ class NoiseCipherState {
 
 // MARK: - Symmetric State
 
+/// Manages the symmetric cryptographic state during Noise handshakes.
+/// Responsible for key derivation, protocol name hashing, and maintaining
+/// the chaining key that provides key separation between handshake messages.
+/// - Note: This class implements the SymmetricState object from the Noise spec
 class NoiseSymmetricState {
     private var cipherState: NoiseCipherState
     private var chainingKey: Data
@@ -384,6 +465,10 @@ class NoiseSymmetricState {
 
 // MARK: - Handshake State
 
+/// Orchestrates the complete Noise handshake process.
+/// This is the main interface for establishing encrypted sessions between peers.
+/// Manages the handshake state machine, message patterns, and key derivation.
+/// - Important: Each handshake instance should only be used once
 class NoiseHandshakeState {
     private let role: NoiseRole
     private let pattern: NoisePattern
