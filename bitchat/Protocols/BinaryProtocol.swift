@@ -6,6 +6,88 @@
 // For more information, see <https://unlicense.org>
 //
 
+///
+/// # BinaryProtocol
+///
+/// Low-level binary encoding and decoding for BitChat protocol messages.
+/// Optimized for Bluetooth LE's limited bandwidth and MTU constraints.
+///
+/// ## Overview
+/// BinaryProtocol implements an efficient binary wire format that minimizes
+/// overhead while maintaining extensibility. It handles:
+/// - Compact binary encoding with fixed headers
+/// - Optional field support via flags
+/// - Automatic compression for large payloads
+/// - Endianness handling for cross-platform compatibility
+///
+/// ## Wire Format
+/// ```
+/// Header (Fixed 13 bytes):
+/// +--------+------+-----+-----------+-------+----------------+
+/// |Version | Type | TTL | Timestamp | Flags | PayloadLength  |
+/// |1 byte  |1 byte|1byte| 8 bytes   | 1 byte| 2 bytes        |
+/// +--------+------+-----+-----------+-------+----------------+
+///
+/// Variable sections:
+/// +----------+-------------+---------+------------+
+/// | SenderID | RecipientID | Payload | Signature  |
+/// | 8 bytes  | 8 bytes*    | Variable| 64 bytes*  |
+/// +----------+-------------+---------+------------+
+/// * Optional fields based on flags
+/// ```
+///
+/// ## Design Rationale
+/// The protocol is designed for:
+/// - **Efficiency**: Minimal overhead for small messages
+/// - **Flexibility**: Optional fields via flag bits
+/// - **Compatibility**: Network byte order (big-endian)
+/// - **Performance**: Zero-copy where possible
+///
+/// ## Compression Strategy
+/// - Automatic compression for payloads > 256 bytes
+/// - LZ4 algorithm for speed over ratio
+/// - Original size stored for decompression
+/// - Flag bit indicates compressed payload
+///
+/// ## Flag Bits
+/// - Bit 0: Has recipient ID (directed message)
+/// - Bit 1: Has signature (authenticated message)
+/// - Bit 2: Is compressed (LZ4 compression applied)
+/// - Bits 3-7: Reserved for future use
+///
+/// ## Size Constraints
+/// - Maximum packet size: 65,535 bytes (16-bit length field)
+/// - Typical packet size: < 512 bytes (BLE MTU)
+/// - Minimum packet size: 21 bytes (header + sender ID)
+///
+/// ## Encoding Process
+/// 1. Construct header with fixed fields
+/// 2. Set appropriate flags
+/// 3. Compress payload if beneficial
+/// 4. Append variable-length fields
+/// 5. Calculate and append signature if needed
+///
+/// ## Decoding Process
+/// 1. Validate minimum packet size
+/// 2. Parse fixed header
+/// 3. Extract flags and determine field presence
+/// 4. Parse variable fields based on flags
+/// 5. Decompress payload if compressed
+/// 6. Verify signature if present
+///
+/// ## Error Handling
+/// - Graceful handling of malformed packets
+/// - Clear error messages for debugging
+/// - No crashes on invalid input
+/// - Logging of protocol violations
+///
+/// ## Performance Notes
+/// - Allocation-free for small messages
+/// - Streaming support for large payloads
+/// - Efficient bit manipulation
+/// - Platform-optimized byte swapping
+///
+
 import Foundation
 
 extension Data {
@@ -18,21 +100,10 @@ extension Data {
     }
 }
 
-// Binary Protocol Format:
-// Header (Fixed 13 bytes):
-// - Version: 1 byte
-// - Type: 1 byte  
-// - TTL: 1 byte
-// - Timestamp: 8 bytes (UInt64)
-// - Flags: 1 byte (bit 0: hasRecipient, bit 1: hasSignature)
-// - PayloadLength: 2 bytes (UInt16)
-//
-// Variable sections:
-// - SenderID: 8 bytes (fixed)
-// - RecipientID: 8 bytes (if hasRecipient flag set)
-// - Payload: Variable length
-// - Signature: 64 bytes (if hasSignature flag set)
-
+/// Implements binary encoding and decoding for BitChat protocol messages.
+/// Provides static methods for converting between BitchatPacket objects and
+/// their binary wire format representation.
+/// - Note: All multi-byte values use network byte order (big-endian)
 struct BinaryProtocol {
     static let headerSize = 13
     static let senderIDSize = 8
