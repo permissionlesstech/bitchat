@@ -6,6 +6,77 @@
 // For more information, see <https://unlicense.org>
 //
 
+///
+/// # ChatViewModel
+///
+/// The central business logic and state management component for BitChat.
+/// Coordinates between the UI layer and the networking/encryption services.
+///
+/// ## Overview
+/// ChatViewModel implements the MVVM pattern, serving as the binding layer between
+/// SwiftUI views and the underlying BitChat services. It manages:
+/// - Message state and delivery
+/// - Peer connections and presence
+/// - Private chat sessions
+/// - Command processing
+/// - UI state like autocomplete and notifications
+///
+/// ## Architecture
+/// The ViewModel acts as:
+/// - **BitchatDelegate**: Receives messages and events from BluetoothMeshService
+/// - **State Manager**: Maintains all UI-relevant state with @Published properties
+/// - **Command Processor**: Handles IRC-style commands (/msg, /who, etc.)
+/// - **Message Router**: Directs messages to appropriate chats (public/private)
+///
+/// ## Key Features
+///
+/// ### Message Management
+/// - Batches incoming messages for performance (100ms window)
+/// - Maintains separate public and private message queues
+/// - Limits message history to prevent memory issues (1337 messages)
+/// - Tracks delivery and read receipts
+///
+/// ### Privacy Features
+/// - Ephemeral by design - no persistent message storage
+/// - Supports verified fingerprints for secure communication
+/// - Blocks messages from blocked users
+/// - Emergency wipe capability (triple-tap)
+///
+/// ### User Experience
+/// - Smart autocomplete for mentions and commands
+/// - Unread message indicators
+/// - Connection status tracking
+/// - Favorite peers management
+///
+/// ## Command System
+/// Supports IRC-style commands:
+/// - `/nick <name>`: Change nickname
+/// - `/msg <user> <message>`: Send private message
+/// - `/who`: List connected peers
+/// - `/slap <user>`: Fun interaction
+/// - `/clear`: Clear message history
+/// - `/help`: Show available commands
+///
+/// ## Performance Optimizations
+/// - Message batching reduces UI updates
+/// - Caches expensive computations (RSSI colors, encryption status)
+/// - Debounces autocomplete suggestions
+/// - Efficient peer list management
+///
+/// ## Thread Safety
+/// - All @Published properties trigger UI updates on main thread
+/// - Background operations use proper queue management
+/// - Atomic operations for critical state updates
+///
+/// ## Usage Example
+/// ```swift
+/// let viewModel = ChatViewModel()
+/// viewModel.nickname = "Alice"
+/// viewModel.startServices()
+/// viewModel.sendMessage("Hello, mesh network!")
+/// ```
+///
+
 import Foundation
 import SwiftUI
 import Combine
@@ -15,6 +86,9 @@ import CommonCrypto
 import UIKit
 #endif
 
+/// Manages the application state and business logic for BitChat.
+/// Acts as the primary coordinator between UI components and backend services,
+/// implementing the BitchatDelegate protocol to handle network events.
 class ChatViewModel: ObservableObject {
     // MARK: - Published Properties
     
@@ -409,6 +483,10 @@ class ChatViewModel: ObservableObject {
     
     // MARK: - Message Sending
     
+    /// Sends a message through the BitChat network.
+    /// - Parameter content: The message content to send
+    /// - Note: Automatically handles command processing if content starts with '/'
+    ///         Routes to private chat if one is selected, otherwise broadcasts
     func sendMessage(_ content: String) {
         guard !content.isEmpty else { return }
         
@@ -456,6 +534,11 @@ class ChatViewModel: ObservableObject {
         }
     }
     
+    /// Sends an encrypted private message to a specific peer.
+    /// - Parameters:
+    ///   - content: The message content to encrypt and send
+    ///   - peerID: The recipient's peer ID
+    /// - Note: Automatically establishes Noise encryption if not already active
     func sendPrivateMessage(_ content: String, to peerID: String) {
         guard !content.isEmpty else { return }
         guard let recipientNickname = meshService.getPeerNicknames()[peerID] else { 
@@ -511,6 +594,9 @@ class ChatViewModel: ObservableObject {
     
     // MARK: - Private Chat Management
     
+    /// Initiates a private chat session with a peer.
+    /// - Parameter peerID: The peer's ID to start chatting with
+    /// - Note: Switches the UI to private chat mode and loads message history
     func startPrivateChat(with peerID: String) {
         let peerNickname = meshService.getPeerNicknames()[peerID] ?? "unknown"
         
@@ -1698,6 +1784,9 @@ extension ChatViewModel: BitchatDelegate {
     
     // MARK: - Command Handling
     
+    /// Processes IRC-style commands starting with '/'.
+    /// - Parameter command: The full command string including the leading slash
+    /// - Note: Supports commands like /nick, /msg, /who, /slap, /clear, /help
     private func handleCommand(_ command: String) {
         let parts = command.split(separator: " ")
         guard let cmd = parts.first else { return }
