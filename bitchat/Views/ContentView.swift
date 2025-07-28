@@ -551,7 +551,13 @@ struct ContentView: View {
             .accessibilityHint(messageText.isEmpty ? "Enter a message to send" : "Double tap to send")
             }
             .padding(.vertical, 8)
-            .background(backgroundColor.opacity(0.95))
+            .background {
+                #if os(macOS)
+                backgroundColor
+                #else
+                backgroundColor.opacity(0.95)
+                #endif
+            }
         }
         .onAppear {
             // Delay keyboard focus to avoid iOS constraint warnings
