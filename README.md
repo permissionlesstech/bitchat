@@ -87,3 +87,9 @@ For detailed protocol documentation, see the [Technical Whitepaper](WHITEPAPER.m
 
 Want to try this on macos: `just run` will set it up and run from source. 
 Run `just clean` afterwards to restore things to original state for mobile app building and development.
+
+### Option 5: AppStore
+
+Download and Install the app from The [AppStore](https://apps.apple.com/us/app/bitchat-mesh/id6748219622)
+
+
