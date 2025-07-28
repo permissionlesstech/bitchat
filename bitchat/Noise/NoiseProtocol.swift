@@ -806,21 +806,26 @@ enum NoiseError: Error {
 extension NoiseHandshakeState {
     /// Validate a Curve25519 public key
     /// Checks for weak/invalid keys that could compromise security
+    /// Uses constant-time operations to prevent timing attacks
     static func validatePublicKey(_ keyData: Data) throws -> Curve25519.KeyAgreement.PublicKey {
         // Check key length
         guard keyData.count == 32 else {
             throw NoiseError.invalidPublicKey
         }
         
-        // Check for all-zero key (point at infinity)
-        if keyData.allSatisfy({ $0 == 0 }) {
+        // Check for all-zero key (point at infinity) using constant-time comparison
+        var isAllZero: UInt8 = 0
+        for byte in keyData {
+            isAllZero |= byte
+        }
+        if isAllZero == 0 {
             throw NoiseError.invalidPublicKey
         }
         
         // Check for low-order points that could enable small subgroup attacks
         // These are the known bad points for Curve25519
         let lowOrderPoints: [Data] = [
-            Data(repeating: 0x00, count: 32), // Already checked above
+            Data(repeating: 0x00, count: 32), // All zeros (already checked but kept for completeness)
             Data([0x01] + Data(repeating: 0x00, count: 31)), // Point of order 1
             Data([0x00] + Data(repeating: 0x00, count: 30) + [0x01]), // Another low-order point
             Data([0xe0, 0xeb, 0x7a, 0x7c, 0x3b, 0x41, 0xb8, 0xae, 0x16, 0x56, 0xe3,
@@ -838,8 +843,14 @@ extension NoiseHandshakeState {
                   0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff])  // Another bad point
         ]
         
-        // Check against known bad points
-        if lowOrderPoints.contains(keyData) {
+        // Constant-time check against known bad points
+        // This prevents timing attacks that could leak information about the key
+        var isLowOrderPoint = false
+        for badPoint in lowOrderPoints {
+            isLowOrderPoint = isLowOrderPoint || constantTimeCompare(keyData, badPoint)
+        }
+        
+        if isLowOrderPoint {
             SecureLogger.log("Low-order point detected", category: SecureLogger.security, level: .warning)
             throw NoiseError.invalidPublicKey
         }
@@ -853,5 +864,22 @@ extension NoiseHandshakeState {
             SecureLogger.log("CryptoKit validation failed", category: SecureLogger.security, level: .warning)
             throw NoiseError.invalidPublicKey
         }
+    }
+    
+    /// Constant-time comparison to prevent timing attacks
+    /// Returns true if the two Data objects are equal, false otherwise
+    /// The execution time is independent of the position of the first differing byte
+    private static func constantTimeCompare(_ a: Data, _ b: Data) -> Bool {
+        guard a.count == b.count else {
+            return false
+        }
+        
+        var result: UInt8 = 0
+        for i in 0..<a.count {
+            result |= a[i] ^ b[i]
+        }
+        
+        // result is 0 if and only if all bytes are equal
+        return result == 0
     }
 }
