@@ -122,7 +122,7 @@ final class BinaryProtocolTests: XCTestCase {
         let payloads = [
             "Short",
             "This is a medium length message for testing",
-            TestConstants.testLongMessage
+            TestConstants.testLongMessage(times: 1000)
         ]
         
         var encodedSizes = Set<Int>()
