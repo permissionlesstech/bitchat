@@ -122,8 +122,7 @@ final class PublicChatE2ETests: XCTestCase {
                         timestamp: packet.timestamp,
                         payload: relayPayload,
                         signature: packet.signature,
-                        ttl: packet.ttl - 1,
-                        sequenceNumber: 1
+                        ttl: packet.ttl - 1
                     )
                     
                     // Simulate relay to Charlie
@@ -451,8 +450,7 @@ final class PublicChatE2ETests: XCTestCase {
                         timestamp: packet.timestamp,
                         payload: relayPayload,
                         signature: packet.signature,
-                        ttl: packet.ttl - 1,
-                        sequenceNumber: 1
+                        ttl: packet.ttl - 1
                     )
                     
                     // Relay to next hops
