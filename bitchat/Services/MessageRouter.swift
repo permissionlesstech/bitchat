@@ -363,6 +363,19 @@ class MessageRouter: ObservableObject {
             return
         }
         
+        // Handle read receipts
+        if content.hasPrefix("READ:") {
+            let parts = content.split(separator: ":", maxSplits: 1)
+            if parts.count > 1 {
+                let receiptDataString = String(parts[1])
+                if let receiptData = Data(base64Encoded: receiptDataString),
+                   let receipt = ReadReceipt.fromBinaryData(receiptData) {
+                    handleReadReceipt(receipt, from: senderPubkey)
+                }
+            }
+            return
+        }
+        
         // Find the sender's Noise public key
         guard let senderNoiseKey = findNoisePublicKey(for: senderPubkey) else { return }
         
@@ -458,6 +471,94 @@ class MessageRouter: ObservableObject {
         )
     }
     
+    private func handleReadReceipt(_ receipt: ReadReceipt, from senderPubkey: String) {
+        SecureLogger.log("📖 Received read receipt for message \(receipt.originalMessageID) from \(senderPubkey)", 
+                        category: SecureLogger.session, level: .info)
+        
+        // Find the sender's Noise public key
+        guard let senderNoiseKey = findNoisePublicKey(for: senderPubkey) else { return }
+        let senderHexID = senderNoiseKey.hexEncodedString()
+        
+        // Update the receipt with the correct sender ID
+        var updatedReceipt = receipt
+        updatedReceipt.readerID = senderHexID
+        
+        // Post notification for ChatViewModel to process
+        NotificationCenter.default.post(
+            name: .readReceiptReceived,
+            object: nil,
+            userInfo: ["receipt": updatedReceipt]
+        )
+    }
+    
+    func sendReadReceipt(
+        for originalMessageID: String,
+        to recipientNoisePublicKey: Data,
+        preferredTransport: Transport? = nil
+    ) async throws {
+        SecureLogger.log("📖 Sending read receipt for message \(originalMessageID)", 
+                        category: SecureLogger.session, level: .info)
+        
+        // Get nickname from delegate or use default
+        let nickname = (meshService.delegate as? ChatViewModel)?.nickname ?? "Anonymous"
+        
+        // Create read receipt
+        let receipt = ReadReceipt(
+            originalMessageID: originalMessageID,
+            receiptID: UUID().uuidString,
+            readerID: meshService.myPeerID,
+            readerNickname: nickname,
+            timestamp: Date()
+        )
+        
+        // Encode receipt
+        let receiptData = receipt.toBinaryData()
+        let content = "READ:\(receiptData.base64EncodedString())"
+        
+        // Check if peer is connected via mesh (mesh takes precedence)
+        let recipientHexID = recipientNoisePublicKey.hexEncodedString()
+        let isConnectedOnMesh = meshService.getPeerNicknames()[recipientHexID] != nil
+        
+        if isConnectedOnMesh && preferredTransport != .nostr {
+            // Send via mesh
+            SecureLogger.log("📡 Sending read receipt via mesh to \(recipientHexID)", 
+                            category: SecureLogger.session, level: .debug)
+            meshService.sendReadReceipt(receipt, to: recipientHexID)
+        } else {
+            // Send via Nostr
+            SecureLogger.log("🌐 Sending read receipt via Nostr to \(recipientHexID)", 
+                            category: SecureLogger.session, level: .debug)
+            
+            // Get recipient's Nostr public key
+            let favoriteStatus = favoritesService.getFavoriteStatus(for: recipientNoisePublicKey)
+            guard let recipientNostrPubkey = favoriteStatus?.peerNostrPublicKey else {
+                SecureLogger.log("❌ Cannot send read receipt - no Nostr key for recipient", 
+                                category: SecureLogger.session, level: .error)
+                throw MessageRouterError.noNostrKey
+            }
+            
+            guard let senderIdentity = try? NostrIdentityBridge.getCurrentNostrIdentity() else {
+                SecureLogger.log("⚠️ No Nostr identity available for read receipt", 
+                                category: SecureLogger.session, level: .warning)
+                throw MessageRouterError.noIdentity
+            }
+            
+            // Create read receipt message
+            guard let event = try? NostrProtocol.createPrivateMessage(
+                content: content,
+                recipientPubkey: recipientNostrPubkey,
+                senderIdentity: senderIdentity
+            ) else {
+                SecureLogger.log("❌ Failed to create read receipt", 
+                                category: SecureLogger.session, level: .error)
+                throw MessageRouterError.encryptionFailed
+            }
+            
+            // Send via relay
+            nostrRelay.sendEvent(event)
+        }
+    }
+    
     private func sendDeliveryAcknowledgment(for messageId: String, to recipientNostrPubkey: String) {
         SecureLogger.log("📤 Sending delivery acknowledgment for message \(messageId)", 
                         category: SecureLogger.session, level: .debug)
@@ -497,6 +598,9 @@ enum MessageRouterError: LocalizedError {
     case noNostrPublicKey
     case noNostrIdentity
     case transportFailed
+    case noNostrKey
+    case noIdentity
+    case encryptionFailed
     
     var errorDescription: String? {
         switch self {
@@ -508,6 +612,12 @@ enum MessageRouterError: LocalizedError {
             return "No Nostr identity available"
         case .transportFailed:
             return "Failed to send message"
+        case .noNostrKey:
+            return "No Nostr key available for recipient"
+        case .noIdentity:
+            return "No identity available"
+        case .encryptionFailed:
+            return "Failed to encrypt message"
         }
     }
 }
@@ -517,6 +627,7 @@ enum MessageRouterError: LocalizedError {
 extension Notification.Name {
     static let nostrMessageReceived = Notification.Name("NostrMessageReceived")
     static let messageDeliveryAcknowledged = Notification.Name("MessageDeliveryAcknowledged")
+    static let readReceiptReceived = Notification.Name("ReadReceiptReceived")
     static let appDidBecomeActive = Notification.Name("AppDidBecomeActive")
 }
 

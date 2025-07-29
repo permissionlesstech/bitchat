@@ -375,7 +375,7 @@ struct DeliveryAck: Codable {
 struct ReadReceipt: Codable {
     let originalMessageID: String
     let receiptID: String
-    let readerID: String  // Who read it
+    var readerID: String  // Who read it
     let readerNickname: String
     let timestamp: Date
     
