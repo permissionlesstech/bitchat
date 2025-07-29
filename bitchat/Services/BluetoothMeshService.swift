@@ -1733,9 +1733,32 @@ class BluetoothMeshService: NSObject {
         }
     }
     
-    
-    
-    
+    /// Send a favorite/unfavorite notification to a specific peer
+    func sendFavoriteNotification(to peerID: String, isFavorite: Bool) {
+        // Create notification payload with Nostr public key
+        var content = isFavorite ? "SYSTEM:FAVORITED" : "SYSTEM:UNFAVORITED"
+        
+        // Add our Nostr public key if we have one
+        if let myNostrIdentity = try? NostrIdentityBridge.getCurrentNostrIdentity() {
+            // Include our Nostr npub in the message
+            content += ":" + myNostrIdentity.npub
+            SecureLogger.log("📝 Including our Nostr npub in favorite notification: \(myNostrIdentity.npub)", 
+                            category: SecureLogger.session, level: .info)
+        }
+        
+        SecureLogger.log("📤 Sending \(isFavorite ? "favorite" : "unfavorite") notification to \(peerID) via mesh", 
+                        category: SecureLogger.session, level: .info)
+        
+        // Use existing message infrastructure
+        if let recipientNickname = getPeerNicknames()[peerID] {
+            sendPrivateMessage(content, to: peerID, recipientNickname: recipientNickname)
+            SecureLogger.log("✅ Sent favorite notification as private message", 
+                            category: SecureLogger.session, level: .info)
+        } else {
+            SecureLogger.log("❌ Failed to send favorite notification - peer not found", 
+                            category: SecureLogger.session, level: .error)
+        }
+    }
     
     private func sendAnnouncementToPeer(_ peerID: String) {
         guard let vm = delegate as? ChatViewModel else { return }
@@ -2898,6 +2921,13 @@ class BluetoothMeshService: NSObject {
                     
                     // Now add the new peer ID with the nickname
                     self.peerNicknames[senderID] = nickname
+                    
+                    // Check if this peer's noise public key has an existing favorite with a different nickname
+                    if let noisePublicKey = Data(hexString: senderID) {
+                        DispatchQueue.main.async {
+                            FavoritesPersistenceService.shared.updateNickname(for: noisePublicKey, newNickname: nickname)
+                        }
+                    }
                 }
                 
                 // Update peripheral mapping if we have it

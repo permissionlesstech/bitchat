@@ -198,6 +198,37 @@ class FavoritesPersistenceService: ObservableObject {
         saveFavorites()
     }
     
+    /// Update nickname for an existing favorite
+    func updateNickname(for peerNoisePublicKey: Data, newNickname: String) {
+        guard let existing = favorites[peerNoisePublicKey] else { return }
+        
+        // Skip if nickname hasn't changed
+        if existing.peerNickname == newNickname { return }
+        
+        SecureLogger.log("📝 Updating nickname for favorite: '\(existing.peerNickname)' → '\(newNickname)'", 
+                        category: SecureLogger.session, level: .info)
+        
+        let updated = FavoriteRelationship(
+            peerNoisePublicKey: existing.peerNoisePublicKey,
+            peerNostrPublicKey: existing.peerNostrPublicKey,
+            peerNickname: newNickname,
+            isFavorite: existing.isFavorite,
+            theyFavoritedUs: existing.theyFavoritedUs,
+            favoritedAt: existing.favoritedAt,
+            lastUpdated: Date()
+        )
+        
+        favorites[peerNoisePublicKey] = updated
+        saveFavorites()
+        
+        // Notify observers
+        NotificationCenter.default.post(
+            name: .favoriteStatusChanged,
+            object: nil,
+            userInfo: ["peerPublicKey": peerNoisePublicKey]
+        )
+    }
+    
     /// Update noise public key when peer reconnects with new ID
     func updateNoisePublicKey(from oldKey: Data, to newKey: Data, peerNickname: String) {
         guard let existing = favorites[oldKey] else { 

@@ -687,7 +687,7 @@ struct ContentView: View {
                                                 .foregroundColor(Color.secondary.opacity(0.5))
                                                 .accessibilityLabel("Favorite - Offline")
                                         } else {
-                                            // Offline indicator for non-favorites
+                                            // Offline indicator for non-favorites (shouldn't happen since we only show favorites when offline)
                                             Image(systemName: "circle")
                                                 .font(.system(size: 8))
                                                 .foregroundColor(Color.secondary.opacity(0.3))

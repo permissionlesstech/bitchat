@@ -172,7 +172,7 @@ class PeerManager: ObservableObject {
             allPeers.append(peer)
         }
         
-        // Add offline favorites (only those not currently connected)
+        // Add offline favorites (only those not currently connected AND that we actively favorite)
         SecureLogger.log("📋 Processing \(favoritesService.favorites.count) favorite relationships (connected nicknames: \(connectedNicknames))", 
                         category: SecureLogger.session, level: .info)
         
@@ -182,6 +182,13 @@ class PeerManager: ObservableObject {
             // Skip if this peer is already connected (by nickname)
             if connectedNicknames.contains(favorite.peerNickname) {
                 SecureLogger.log("  - Skipping '\(favorite.peerNickname)' (key: \(favoriteKey.hexEncodedString())) - already connected", 
+                                category: SecureLogger.session, level: .debug)
+                continue
+            }
+            
+            // Only add peers that WE favorite (not just ones who favorite us)
+            if !favorite.isFavorite {
+                SecureLogger.log("  - Skipping '\(favorite.peerNickname)' - we don't favorite them (they favorite us: \(favorite.theyFavoritedUs))", 
                                 category: SecureLogger.session, level: .debug)
                 continue
             }

@@ -48,8 +48,6 @@
 		04B6BA572E203D6C0090FE39 /* FingerprintView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04B6BA532E203D6C0090FE39 /* FingerprintView.swift */; };
 		04E363362E3800310048E624 /* P256K in Frameworks */ = {isa = PBXBuildFile; productRef = 04F127E72E37EBCD00FFBA8D /* P256K */; };
 		04E363372E3800310048E624 /* P256K in Frameworks */ = {isa = PBXBuildFile; productRef = 04F127E82E37EBDB00FFBA8D /* P256K */; };
-		04E363392E381C190048E624 /* BluetoothMeshService+PublicAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04E363382E381C190048E624 /* BluetoothMeshService+PublicAPI.swift */; };
-		04E3633A2E381C190048E624 /* BluetoothMeshService+PublicAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04E363382E381C190048E624 /* BluetoothMeshService+PublicAPI.swift */; };
 		04F127E42E37EBAA00FFBA8D /* NostrIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F127E22E37EBAA00FFBA8D /* NostrIdentity.swift */; };
 		04F127E52E37EBAA00FFBA8D /* NostrIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F127E22E37EBAA00FFBA8D /* NostrIdentity.swift */; };
 		04F127F22E37EEB800FFBA8D /* NostrProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F127F02E37EEB800FFBA8D /* NostrProtocol.swift */; };
@@ -162,7 +160,6 @@
 		04B6BA432E2035530090FE39 /* NoiseSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoiseSession.swift; sourceTree = "<group>"; };
 		04B6BA4D2E2038A70090FE39 /* NoiseEncryptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoiseEncryptionService.swift; sourceTree = "<group>"; };
 		04B6BA532E203D6C0090FE39 /* FingerprintView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FingerprintView.swift; sourceTree = "<group>"; };
-		04E363382E381C190048E624 /* BluetoothMeshService+PublicAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "BluetoothMeshService+PublicAPI.swift"; sourceTree = "<group>"; };
 		04F127E22E37EBAA00FFBA8D /* NostrIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NostrIdentity.swift; sourceTree = "<group>"; };
 		04F127F02E37EEB800FFBA8D /* NostrProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NostrProtocol.swift; sourceTree = "<group>"; };
 		04F127F12E37EEB800FFBA8D /* NostrRelayManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NostrRelayManager.swift; sourceTree = "<group>"; };
@@ -433,7 +430,6 @@
 		D98A3186D7E4C72E35BDF7FE /* Services */ = {
 			isa = PBXGroup;
 			children = (
-				04E363382E381C190048E624 /* BluetoothMeshService+PublicAPI.swift */,
 				04F127F62E37EEEE00FFBA8D /* FavoritesPersistenceService.swift */,
 				04F127F72E37EEEE00FFBA8D /* MessageRouter.swift */,
 				04F127FF2E37F00000FFBA8D /* ProcessedMessagesService.swift */,
@@ -638,7 +634,6 @@
 			files = (
 				AD11E46940D742AEAF547EB2 /* AppInfoView.swift in Sources */,
 				C0A80BA73EC1A372B9338E3C /* BatteryOptimizer.swift in Sources */,
-				04E363392E381C190048E624 /* BluetoothMeshService+PublicAPI.swift in Sources */,
 				4B747085D07A1BCE0F5BA612 /* BinaryProtocol.swift in Sources */,
 				6E7761E21C99F28AE2F9BE5F /* BitchatApp.swift in Sources */,
 				04891CAA2E22971E0064A111 /* LRUCache.swift in Sources */,
@@ -679,7 +674,6 @@
 			files = (
 				ABAF130D88561F4A646F0430 /* AppInfoView.swift in Sources */,
 				5D95F2BFBE257A1225998389 /* BatteryOptimizer.swift in Sources */,
-				04E3633A2E381C190048E624 /* BluetoothMeshService+PublicAPI.swift in Sources */,
 				F455F011B3B648ADA233F998 /* BinaryProtocol.swift in Sources */,
 				10E68BB889356219189E38EC /* BitchatApp.swift in Sources */,
 				04891CA92E22971E0064A111 /* LRUCache.swift in Sources */,
