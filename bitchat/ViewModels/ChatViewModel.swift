@@ -1173,7 +1173,7 @@ class ChatViewModel: ObservableObject {
                 let beforeText = String(contentText[lastEndIndex..<range.lowerBound])
                 if !beforeText.isEmpty {
                     var normalStyle = AttributeContainer()
-                    normalStyle.font = .system(size: 14, design: .monospaced)
+                    normalStyle.font = .scalableMonospaced(size: 14)
                     normalStyle.foregroundColor = isDark ? Color.white : Color.black
                     processedContent.append(AttributedString(beforeText).mergingAttributes(normalStyle))
                 }
@@ -1181,7 +1181,7 @@ class ChatViewModel: ObservableObject {
                 // Add the match with appropriate styling
                 let matchText = String(contentText[range])
                 var matchStyle = AttributeContainer()
-                matchStyle.font = .system(size: 14, weight: .semibold, design: .monospaced)
+                matchStyle.font = .scalableMonospaced(size: 14, weight: .semibold)
                 
                 if matchType == "mention" {
                     matchStyle.foregroundColor = Color.orange
@@ -1201,7 +1201,7 @@ class ChatViewModel: ObservableObject {
         if lastEndIndex < contentText.endIndex {
             let remainingText = String(contentText[lastEndIndex...])
             var normalStyle = AttributeContainer()
-            normalStyle.font = .system(size: 14, design: .monospaced)
+            normalStyle.font = .scalableMonospaced(size: 14)
             normalStyle.foregroundColor = isDark ? Color.white : Color.black
             processedContent.append(AttributedString(remainingText).mergingAttributes(normalStyle))
         }
@@ -1226,7 +1226,7 @@ class ChatViewModel: ObservableObject {
         let timestamp = AttributedString("[\(formatTimestamp(message.timestamp))] ")
         var timestampStyle = AttributeContainer()
         timestampStyle.foregroundColor = message.sender == "system" ? Color.gray : secondaryColor
-        timestampStyle.font = .system(size: 12, design: .monospaced)
+        timestampStyle.font = .scalableMonospaced(size: 12)
         result.append(timestamp.mergingAttributes(timestampStyle))
         
         if message.sender != "system" {
@@ -1238,7 +1238,7 @@ class ChatViewModel: ObservableObject {
             senderStyle.foregroundColor = primaryColor
             // Bold the user's own nickname
             let fontWeight: Font.Weight = message.sender == nickname ? .bold : .medium
-            senderStyle.font = .system(size: 14, weight: fontWeight, design: .monospaced)
+            senderStyle.font = .scalableMonospaced(size: 14, weight: fontWeight)
             result.append(sender.mergingAttributes(senderStyle))
             
             // Process content with hashtags and mentions
@@ -1281,7 +1281,7 @@ class ChatViewModel: ObservableObject {
                     if !beforeText.isEmpty {
                         var beforeStyle = AttributeContainer()
                         beforeStyle.foregroundColor = primaryColor
-                        beforeStyle.font = .system(size: 14, design: .monospaced)
+                        beforeStyle.font = .scalableMonospaced(size: 14)
                         if isMentioned {
                             beforeStyle.font = beforeStyle.font?.bold()
                         }
@@ -1291,7 +1291,7 @@ class ChatViewModel: ObservableObject {
                     // Add styled match
                     let matchText = String(content[nsRange])
                     var matchStyle = AttributeContainer()
-                    matchStyle.font = .system(size: 14, weight: .semibold, design: .monospaced)
+                    matchStyle.font = .scalableMonospaced(size: 14, weight: .semibold)
                     
                     if type == "hashtag" {
                         matchStyle.foregroundColor = Color.blue
@@ -1313,7 +1313,7 @@ class ChatViewModel: ObservableObject {
                 let remainingText = String(content[lastEnd...])
                 var remainingStyle = AttributeContainer()
                 remainingStyle.foregroundColor = primaryColor
-                remainingStyle.font = .system(size: 14, design: .monospaced)
+                remainingStyle.font = .scalableMonospaced(size: 14)
                 if isMentioned {
                     remainingStyle.font = remainingStyle.font?.bold()
                 }
@@ -1324,7 +1324,7 @@ class ChatViewModel: ObservableObject {
             var contentStyle = AttributeContainer()
             contentStyle.foregroundColor = Color.gray
             let content = AttributedString("* \(message.content) *")
-            contentStyle.font = .system(size: 12, design: .monospaced).italic()
+            contentStyle.font = .scalableMonospaced(size: 12).italic()
             result.append(content.mergingAttributes(contentStyle))
         }
         
@@ -1344,14 +1344,14 @@ class ChatViewModel: ObservableObject {
         let timestamp = AttributedString("[\(formatTimestamp(message.timestamp))] ")
         var timestampStyle = AttributeContainer()
         timestampStyle.foregroundColor = message.sender == "system" ? Color.gray : secondaryColor
-        timestampStyle.font = .system(size: 12, design: .monospaced)
+        timestampStyle.font = .scalableMonospaced(size: 12)
         result.append(timestamp.mergingAttributes(timestampStyle))
         
         if message.sender == "system" {
             let content = AttributedString("* \(message.content) *")
             var contentStyle = AttributeContainer()
             contentStyle.foregroundColor = Color.gray
-            contentStyle.font = .system(size: 12, design: .monospaced).italic()
+            contentStyle.font = .scalableMonospaced(size: 12).italic()
             result.append(content.mergingAttributes(contentStyle))
         } else {
             let sender = AttributedString("<\(message.sender)> ")
@@ -1361,7 +1361,7 @@ class ChatViewModel: ObservableObject {
             senderStyle.foregroundColor = primaryColor
             // Bold the user's own nickname
             let fontWeight: Font.Weight = message.sender == nickname ? .bold : .medium
-            senderStyle.font = .system(size: 12, weight: fontWeight, design: .monospaced)
+            senderStyle.font = .scalableMonospaced(size: 12, weight: fontWeight)
             result.append(sender.mergingAttributes(senderStyle))
             
             
@@ -1382,7 +1382,7 @@ class ChatViewModel: ObservableObject {
                     let beforeText = String(contentText[lastEndIndex..<range.lowerBound])
                     if !beforeText.isEmpty {
                         var normalStyle = AttributeContainer()
-                        normalStyle.font = .system(size: 14, design: .monospaced)
+                        normalStyle.font = .scalableMonospaced(size: 14)
                         normalStyle.foregroundColor = isDark ? Color.white : Color.black
                         processedContent.append(AttributedString(beforeText).mergingAttributes(normalStyle))
                     }
@@ -1390,7 +1390,7 @@ class ChatViewModel: ObservableObject {
                     // Add the mention with highlight
                     let mentionText = String(contentText[range])
                     var mentionStyle = AttributeContainer()
-                    mentionStyle.font = .system(size: 14, weight: .semibold, design: .monospaced)
+                    mentionStyle.font = .scalableMonospaced(size: 14, weight: .semibold)
                     mentionStyle.foregroundColor = Color.orange
                     processedContent.append(AttributedString(mentionText).mergingAttributes(mentionStyle))
                     
@@ -1402,7 +1402,7 @@ class ChatViewModel: ObservableObject {
             if lastEndIndex < contentText.endIndex {
                 let remainingText = String(contentText[lastEndIndex...])
                 var normalStyle = AttributeContainer()
-                normalStyle.font = .system(size: 14, design: .monospaced)
+                normalStyle.font = .scalableMonospaced(size: 14)
                 normalStyle.foregroundColor = isDark ? Color.white : Color.black
                 processedContent.append(AttributedString(remainingText).mergingAttributes(normalStyle))
             }
@@ -1413,7 +1413,7 @@ class ChatViewModel: ObservableObject {
                 let relay = AttributedString(" (via \(originalSender))")
                 var relayStyle = AttributeContainer()
                 relayStyle.foregroundColor = secondaryColor
-                relayStyle.font = .system(size: 11, design: .monospaced)
+                relayStyle.font = .scalableMonospaced(size: 11)
                 result.append(relay.mergingAttributes(relayStyle))
             }
         }

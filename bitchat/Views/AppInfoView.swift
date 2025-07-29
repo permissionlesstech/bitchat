@@ -100,11 +100,11 @@ struct AppInfoView: View {
             // Header
             VStack(alignment: .center, spacing: 8) {
                 Text(Strings.appName)
-                    .font(.system(size: 32, weight: .bold, design: .monospaced))
+                    .font(.scalableMonospaced(size: 32, weight: .bold))
                     .foregroundColor(textColor)
                 
                 Text(Strings.tagline)
-                    .font(.system(size: 16, design: .monospaced))
+                    .font(.scalableMonospaced(size: 16))
                     .foregroundColor(secondaryTextColor)
             }
             .frame(maxWidth: .infinity)
@@ -161,7 +161,7 @@ struct AppInfoView: View {
                         Text(instruction)
                     }
                 }
-                .font(.system(size: 14, design: .monospaced))
+                .font(.scalableMonospaced(size: 14))
                 .foregroundColor(textColor)
             }
             
@@ -171,7 +171,7 @@ struct AppInfoView: View {
                     .foregroundColor(Color.red)
                 
                 Text(Strings.Warning.message)
-                    .font(.system(size: 14, design: .monospaced))
+                    .font(.scalableMonospaced(size: 14))
                     .foregroundColor(Color.red)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -201,7 +201,7 @@ struct SectionHeader: View {
     
     var body: some View {
         Text(title)
-            .font(.system(size: 16, weight: .bold, design: .monospaced))
+            .font(.scalableMonospaced(size: 16, weight: .bold))
             .foregroundColor(textColor)
             .padding(.top, 8)
     }
@@ -230,11 +230,11 @@ struct FeatureRow: View {
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                    .font(.scalableMonospaced(size: 14, weight: .semibold))
                     .foregroundColor(textColor)
                 
                 Text(description)
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(.scalableMonospaced(size: 12))
                     .foregroundColor(secondaryTextColor)
                     .fixedSize(horizontal: false, vertical: true)
             }
