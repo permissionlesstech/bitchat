@@ -176,6 +176,7 @@ class BluetoothMeshService: NSObject {
     private var peerNicknames: [String: String] = [:]
     private var activePeers: Set<String> = []  // Track all active peers
     private var peerRSSI: [String: NSNumber] = [:] // Track RSSI values for peers
+    private var previousPeerRSSI: [String: NSNumber] = [:] // Track previous RSSI values for change detection
     private var peripheralRSSI: [String: NSNumber] = [:] // Track RSSI by peripheral ID during discovery
     private var rssiRetryCount: [String: Int] = [:] // Track RSSI retry attempts per peripheral
     
@@ -870,6 +871,11 @@ class BluetoothMeshService: NSObject {
                 if let rssi = self.peerRSSI[existingPeerID] {
                     self.peerRSSI.removeValue(forKey: existingPeerID)
                     self.peerRSSI[newPeerID] = rssi
+                    // Also transfer previous RSSI for change detection
+                    if let prevRSSI = self.previousPeerRSSI[existingPeerID] {
+                        self.previousPeerRSSI.removeValue(forKey: existingPeerID)
+                        self.previousPeerRSSI[newPeerID] = prevRSSI
+                    }
                 }
                 
                 // Transfer lastHeardFromPeer tracking
@@ -1000,6 +1006,11 @@ class BluetoothMeshService: NSObject {
                         self.activePeers.insert(peerID)
                         SecureLogger.log("Added \(peerID) to activePeers (authenticated)", 
                                        category: SecureLogger.session, level: .info)
+                        
+                        // Trigger RSSI read for newly authenticated peer
+                        if let peripheral = self.findPeripheralForPeerID(peerID), peripheral.state == .connected {
+                            peripheral.readRSSI()
+                        }
                     }
                 case .disconnected:
                     if self.activePeers.contains(peerID) {
@@ -1013,6 +1024,9 @@ class BluetoothMeshService: NSObject {
                         SecureLogger.log("Removed \(peerID) (\(nickname)) from peerNicknames (disconnected)", 
                                        category: SecureLogger.session, level: .info)
                     }
+                    // Clean up RSSI tracking
+                    self.peerRSSI.removeValue(forKey: peerID)
+                    self.previousPeerRSSI.removeValue(forKey: peerID)
                 default:
                     break
                 }
@@ -1182,8 +1196,8 @@ class BluetoothMeshService: NSObject {
             self?.checkPeerAvailability()
         }
         
-        // Start RSSI update timer (every 10 seconds)
-        Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
+        // Start RSSI update timer (every 5 seconds)
+        Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
             self?.updateAllPeripheralRSSI()
         }
         
@@ -1333,6 +1347,12 @@ class BluetoothMeshService: NSObject {
         
         // Clear peer tracking
         lastHeardFromPeer.removeAll()
+        
+        // Clear RSSI tracking
+        peerRSSI.removeAll()
+        previousPeerRSSI.removeAll()
+        peripheralRSSI.removeAll()
+        rssiRetryCount.removeAll()
     }
     
     // MARK: - Service Management
@@ -1882,6 +1902,7 @@ class BluetoothMeshService: NSObject {
         peerNicknames.removeAll()
         activePeers.removeAll()
         peerRSSI.removeAll()
+        previousPeerRSSI.removeAll()
         peripheralRSSI.removeAll()
         rssiRetryCount.removeAll()
         announcedToPeers.removeAll()
@@ -2020,6 +2041,7 @@ class BluetoothMeshService: NSObject {
                 // Clean up all associated data
                 connectedPeripherals.removeValue(forKey: peerID)
                 peerRSSI.removeValue(forKey: peerID)
+                previousPeerRSSI.removeValue(forKey: peerID)
                 announcedPeers.remove(peerID)
                 announcedToPeers.remove(peerID)
                 peerNicknames.removeValue(forKey: peerID)
@@ -2856,6 +2878,7 @@ class BluetoothMeshService: NSObject {
                         
                         // Remove RSSI data
                         self.peerRSSI.removeValue(forKey: stalePeerID)
+                        self.previousPeerRSSI.removeValue(forKey: stalePeerID)
                         
                         // Clear cached messages tracking
                         self.cachedMessagesSentToPeer.remove(stalePeerID)
@@ -4345,9 +4368,24 @@ extension BluetoothMeshService: CBPeripheralDelegate {
         peripheralRSSI[peripheralID] = RSSI
         
         // If we have a peer ID, update peer RSSI (handled in updatePeripheralRSSI)
-        if let mapping = peripheralMappings[peripheralID], mapping.isIdentified {
-            // RSSI update is handled silently - no need to notify peer list update
-            // The UI will get RSSI updates through the existing peer RSSI dictionary
+        if let mapping = peripheralMappings[peripheralID], mapping.isIdentified, let peerID = mapping.peerID {
+            // Check if RSSI changed (more than 2 dBm)
+            let previousRSSI = previousPeerRSSI[peerID]?.intValue ?? rssiValue
+            let rssiChange = abs(rssiValue - previousRSSI)
+            
+            // Always update previous RSSI value
+            collectionsQueue.async(flags: .barrier) { [weak self] in
+                self?.previousPeerRSSI[peerID] = RSSI
+            }
+            
+            // Trigger UI update if RSSI changed noticeably
+            if rssiChange > 2 {
+                SecureLogger.log("RSSI change for \(peerID): \(previousRSSI) → \(rssiValue) (Δ\(rssiChange)dBm)", 
+                               category: SecureLogger.session, level: .debug)
+                
+                // Trigger immediate UI update for RSSI changes
+                notifyPeerListUpdate(immediate: true)
+            }
         } else {
             // Keep trying to read RSSI until we get real peer ID
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak peripheral] in
@@ -4357,7 +4395,7 @@ extension BluetoothMeshService: CBPeripheralDelegate {
         }
             
         // Periodically update RSSI
-        DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak peripheral] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak peripheral] in
             guard let peripheral = peripheral, peripheral.state == .connected else { return }
             peripheral.readRSSI()
         }
