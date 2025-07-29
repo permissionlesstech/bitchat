@@ -595,9 +595,9 @@ struct ContentView: View {
             
             // Rooms and People list
             ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 6) {
                     // People section
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 4) {
                         // Show appropriate header based on context
                         if !viewModel.allPeers.isEmpty {
                             HStack(spacing: 4) {
@@ -609,6 +609,7 @@ struct ContentView: View {
                             }
                             .foregroundColor(secondaryTextColor)
                             .padding(.horizontal, 12)
+                            .padding(.top, 12)
                         }
                         
                         if viewModel.allPeers.isEmpty {
@@ -644,7 +645,7 @@ struct ContentView: View {
                             }
                         
                         ForEach(peerData) { peer in
-                            HStack(spacing: 8) {
+                            HStack(spacing: 4) {
                                 // Signal strength indicator or unread message icon
                                 if peer.isMe {
                                     Image(systemName: "person.fill")
@@ -734,7 +735,7 @@ struct ContentView: View {
                                 }
                             }
                             .padding(.horizontal)
-                            .padding(.vertical, 8)
+                            .padding(.vertical, 4)
                             .contentShape(Rectangle())
                             .onTapGesture {
                                 if !peer.isMe {
@@ -756,7 +757,6 @@ struct ContentView: View {
                         }
                     }
                 }
-                .padding(.vertical, 8)
             }
             
             Spacer()
@@ -910,10 +910,47 @@ struct ContentView: View {
     private var privateHeaderView: some View {
         Group {
             if let privatePeerID = viewModel.selectedPrivateChatPeer {
-                let privatePeerNick = viewModel.meshService.getPeerNicknames()[privatePeerID] ?? 
-                                     viewModel.allPeers.first(where: { $0.id == privatePeerID })?.displayName ?? 
-                                     "Unknown"
-                HStack {
+                privateHeaderContent(for: privatePeerID)
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func privateHeaderContent(for privatePeerID: String) -> some View {
+        // Try to resolve to current peer ID if this is an old one
+        let currentPeerID: String = {
+            if let oldKey = Data(hexString: privatePeerID),
+               let currentKey = FavoritesPersistenceService.shared.resolveCurrentPeerID(for: oldKey) {
+                return currentKey.hexEncodedString()
+            }
+            return privatePeerID
+        }()
+        
+        let peer = viewModel.allPeers.first(where: { $0.id == currentPeerID })
+        let privatePeerNick = peer?.displayName ?? 
+                              viewModel.meshService.getPeerNicknames()[currentPeerID] ?? 
+                              FavoritesPersistenceService.shared.getFavoriteStatus(for: Data(hexString: privatePeerID) ?? Data())?.peerNickname ?? 
+                              FavoritesPersistenceService.shared.getFavoriteStatusByNostrKey(privatePeerID)?.peerNickname ?? 
+                              "Unknown"
+        let isNostrAvailable: Bool = {
+            guard let connectionState = peer?.connectionState else { 
+                // Check if we can reach this peer via Nostr even if not in allPeers
+                if let noiseKey = Data(hexString: privatePeerID),
+                   let favoriteStatus = FavoritesPersistenceService.shared.getFavoriteStatus(for: noiseKey),
+                   favoriteStatus.isMutual {
+                    return true
+                }
+                return false 
+            }
+            switch connectionState {
+            case .nostrAvailable:
+                return true
+            default:
+                return false
+            }
+        }()
+        
+        HStack {
                     Button(action: {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             showPrivateChat = false
@@ -940,6 +977,14 @@ struct ContentView: View {
                             Text("\(privatePeerNick)")
                                 .font(.system(size: 16, weight: .medium, design: .monospaced))
                                 .foregroundColor(Color.orange)
+                            
+                            // Show purple globe for Nostr transport
+                            if isNostrAvailable {
+                                Text("🌐")
+                                    .font(.system(size: 14))
+                                    .accessibilityLabel("Connected via Nostr")
+                            }
+                            
                             // Dynamic encryption status icon
                             let encryptionStatus = viewModel.getEncryptionStatus(for: privatePeerID)
                             if let icon = encryptionStatus.icon {
@@ -974,10 +1019,6 @@ struct ContentView: View {
                 .frame(height: 44)
                 .padding(.horizontal, 12)
                 .background(backgroundColor.opacity(0.95))
-            } else {
-                EmptyView()
-            }
-        }
     }
     
 }
