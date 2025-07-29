@@ -505,10 +505,8 @@ class MessageRouter: ObservableObject {
         // Create read receipt
         let receipt = ReadReceipt(
             originalMessageID: originalMessageID,
-            receiptID: UUID().uuidString,
             readerID: meshService.myPeerID,
-            readerNickname: nickname,
-            timestamp: Date()
+            readerNickname: nickname
         )
         
         // Encode receipt
