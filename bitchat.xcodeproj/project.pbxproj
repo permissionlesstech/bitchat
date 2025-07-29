@@ -53,6 +53,16 @@
 		1D9674FA5F998503831DC281 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A08E03AA0C63E97C91749AEC /* ContentView.swift */; };
 		1F48A8CEEE9399D1EBD08F0C /* OptimizedBloomFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB043CA5EEB9AC8B07D61E97 /* OptimizedBloomFilter.swift */; };
 		31D147471B9F4E2815352DDA /* LinkPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AC141774F6671FCDC347DC7 /* LinkPreviewView.swift */; };
+		434DBFE52E3913820001965C /* FontManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 434DBFE42E3913820001965C /* FontManager.swift */; };
+		434DBFE62E3913820001965C /* FontManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 434DBFE42E3913820001965C /* FontManager.swift */; };
+		434DBFEC2E3915480001965C /* KodeMono-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 434DBFE72E3915480001965C /* KodeMono-Bold.ttf */; };
+		434DBFED2E3915480001965C /* KodeMono-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 434DBFE92E3915480001965C /* KodeMono-Regular.ttf */; };
+		434DBFEE2E3915480001965C /* KodeMono-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 434DBFE82E3915480001965C /* KodeMono-Medium.ttf */; };
+		434DBFEF2E3915480001965C /* KodeMono-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 434DBFEA2E3915480001965C /* KodeMono-SemiBold.ttf */; };
+		434DBFF02E3915480001965C /* KodeMono-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 434DBFE72E3915480001965C /* KodeMono-Bold.ttf */; };
+		434DBFF12E3915480001965C /* KodeMono-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 434DBFE92E3915480001965C /* KodeMono-Regular.ttf */; };
+		434DBFF22E3915480001965C /* KodeMono-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 434DBFE82E3915480001965C /* KodeMono-Medium.ttf */; };
+		434DBFF32E3915480001965C /* KodeMono-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 434DBFEA2E3915480001965C /* KodeMono-SemiBold.ttf */; };
 		4B747085D07A1BCE0F5BA612 /* BinaryProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2136C3E22D02D4A8DBE7EAB /* BinaryProtocol.swift */; };
 		5D95F2BFBE257A1225998389 /* BatteryOptimizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED176FF3B274E35C2D827894 /* BatteryOptimizer.swift */; };
 		61C81ED5F679D5E973EE0C07 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3448F84BF86A42A3CC4A9379 /* NotificationService.swift */; };
@@ -151,6 +161,11 @@
 		3668EEBB42FD4A24D5D83B7B /* bitchatShareExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = bitchatShareExtension.entitlements; sourceTree = "<group>"; };
 		3A556661F74B7D5AE2F0521B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		3A69677D382F1C3D5ED03F7D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		434DBFE42E3913820001965C /* FontManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FontManager.swift; sourceTree = "<group>"; };
+		434DBFE72E3915480001965C /* KodeMono-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "KodeMono-Bold.ttf"; sourceTree = "<group>"; };
+		434DBFE82E3915480001965C /* KodeMono-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "KodeMono-Medium.ttf"; sourceTree = "<group>"; };
+		434DBFE92E3915480001965C /* KodeMono-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "KodeMono-Regular.ttf"; sourceTree = "<group>"; };
+		434DBFEA2E3915480001965C /* KodeMono-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "KodeMono-SemiBold.ttf"; sourceTree = "<group>"; };
 		527EB217EFDFAD4CF1C91F07 /* bitchat.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = bitchat.entitlements; sourceTree = "<group>"; };
 		61F92EBA29C47C0FCC482F1F /* bitchatShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = bitchatShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		6E2446380E7A44E49A35B664 /* IdentityModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdentityModels.swift; sourceTree = "<group>"; };
@@ -263,8 +278,20 @@
 				9A78348821A7D3374607D4E3 /* Utils */,
 				45BB7D87CAE42A8C0447D909 /* ViewModels */,
 				A55126E93155456CAA8D6656 /* Views */,
+				434DBFEB2E3915480001965C /* Fonts */,
 			);
 			path = bitchat;
+			sourceTree = "<group>";
+		};
+		434DBFEB2E3915480001965C /* Fonts */ = {
+			isa = PBXGroup;
+			children = (
+				434DBFE72E3915480001965C /* KodeMono-Bold.ttf */,
+				434DBFE82E3915480001965C /* KodeMono-Medium.ttf */,
+				434DBFE92E3915480001965C /* KodeMono-Regular.ttf */,
+				434DBFEA2E3915480001965C /* KodeMono-SemiBold.ttf */,
+			);
+			path = Fonts;
 			sourceTree = "<group>";
 		};
 		45BB7D87CAE42A8C0447D909 /* ViewModels */ = {
@@ -287,6 +314,7 @@
 		9A78348821A7D3374607D4E3 /* Utils */ = {
 			isa = PBXGroup;
 			children = (
+				434DBFE42E3913820001965C /* FontManager.swift */,
 				04636BBE2E2FCA8A00FBCFA8 /* SecureLogger.swift */,
 				04891CA82E22971E0064A111 /* LRUCache.swift */,
 				ED176FF3B274E35C2D827894 /* BatteryOptimizer.swift */,
@@ -518,6 +546,10 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				434DBFF02E3915480001965C /* KodeMono-Bold.ttf in Resources */,
+				434DBFF12E3915480001965C /* KodeMono-Regular.ttf in Resources */,
+				434DBFF22E3915480001965C /* KodeMono-Medium.ttf in Resources */,
+				434DBFF32E3915480001965C /* KodeMono-SemiBold.ttf in Resources */,
 				7DD72D928FF9DD3CA81B46B0 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -526,6 +558,10 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				434DBFEC2E3915480001965C /* KodeMono-Bold.ttf in Resources */,
+				434DBFED2E3915480001965C /* KodeMono-Regular.ttf in Resources */,
+				434DBFEE2E3915480001965C /* KodeMono-Medium.ttf in Resources */,
+				434DBFEF2E3915480001965C /* KodeMono-SemiBold.ttf in Resources */,
 				BCCFEDC1EBE59323C3C470BF /* Assets.xcassets in Resources */,
 				E65BBB6544FE0159F3C6C3A8 /* LaunchScreen.storyboard in Resources */,
 			);
@@ -568,6 +604,7 @@
 				31D147471B9F4E2815352DDA /* LinkPreviewView.swift in Sources */,
 				04B6BA572E203D6C0090FE39 /* FingerprintView.swift in Sources */,
 				04636BED2E30CD4A00FBCFA8 /* NoiseHandshakeCoordinator.swift in Sources */,
+				434DBFE52E3913820001965C /* FontManager.swift in Sources */,
 				C99763A4761567F587D21688 /* MessageRetryService.swift in Sources */,
 				749D8CF8A362B6CD0786782D /* NotificationService.swift in Sources */,
 				04636BBF2E2FCA8A00FBCFA8 /* SecureLogger.swift in Sources */,
@@ -601,6 +638,7 @@
 				7A5B1AB5642FEC168E917949 /* LinkPreviewView.swift in Sources */,
 				04B6BA552E203D6C0090FE39 /* FingerprintView.swift in Sources */,
 				04636BEE2E30CD4A00FBCFA8 /* NoiseHandshakeCoordinator.swift in Sources */,
+				434DBFE62E3913820001965C /* FontManager.swift in Sources */,
 				CEAE115C9C3EB3C4ED82F128 /* MessageRetryService.swift in Sources */,
 				61C81ED5F679D5E973EE0C07 /* NotificationService.swift in Sources */,
 				04636BC02E2FCA8A00FBCFA8 /* SecureLogger.swift in Sources */,

@@ -27,7 +27,7 @@ struct FingerprintView: View {
             // Header
             HStack {
                 Text("SECURITY VERIFICATION")
-                    .font(.system(size: 16, weight: .bold, design: .monospaced))
+                    .monospaceFont(size: 16, weight: .bold)
                     .foregroundColor(textColor)
                 
                 Spacer()
@@ -53,11 +53,11 @@ struct FingerprintView: View {
                     
                     VStack(alignment: .leading, spacing: 4) {
                         Text(peerNickname)
-                            .font(.system(size: 18, weight: .semibold, design: .monospaced))
+                            .monospaceFont(size: 18, weight: .semiBold)
                             .foregroundColor(textColor)
                         
                         Text(encryptionStatus.description)
-                            .font(.system(size: 12, design: .monospaced))
+                            .monospaceFont(size: 12)
                             .foregroundColor(textColor.opacity(0.7))
                     }
                     
@@ -70,12 +70,12 @@ struct FingerprintView: View {
                 // Their fingerprint
                 VStack(alignment: .leading, spacing: 8) {
                     Text("THEIR FINGERPRINT:")
-                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        .monospaceFont(size: 12, weight: .bold)
                         .foregroundColor(textColor.opacity(0.7))
                     
                     if let fingerprint = viewModel.getFingerprint(for: peerID) {
                         Text(formatFingerprint(fingerprint))
-                            .font(.system(size: 14, design: .monospaced))
+                            .monospaceFont(size: 14)
                             .foregroundColor(textColor)
                             .multilineTextAlignment(.leading)
                             .lineLimit(nil)
@@ -96,7 +96,7 @@ struct FingerprintView: View {
                             }
                     } else {
                         Text("not available - handshake in progress")
-                            .font(.system(size: 14, design: .monospaced))
+                            .monospaceFont(size: 14)
                             .foregroundColor(Color.orange)
                             .padding()
                     }
@@ -105,12 +105,12 @@ struct FingerprintView: View {
                 // My fingerprint
                 VStack(alignment: .leading, spacing: 8) {
                     Text("YOUR FINGERPRINT:")
-                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        .monospaceFont(size: 12, weight: .bold)
                         .foregroundColor(textColor.opacity(0.7))
                     
                     let myFingerprint = viewModel.getMyFingerprint()
                     Text(formatFingerprint(myFingerprint))
-                        .font(.system(size: 14, design: .monospaced))
+                        .monospaceFont(size: 14)
                         .foregroundColor(textColor)
                         .multilineTextAlignment(.leading)
                         .lineLimit(nil)
@@ -137,14 +137,14 @@ struct FingerprintView: View {
                     
                     VStack(spacing: 12) {
                         Text(isVerified ? "✓ VERIFIED" : "⚠️ NOT VERIFIED")
-                            .font(.system(size: 14, weight: .bold, design: .monospaced))
+                            .monospaceFont(size: 14, weight: .bold)
                             .foregroundColor(isVerified ? Color.green : Color.orange)
                             .frame(maxWidth: .infinity)
                         
                         Text(isVerified ? 
                              "you have verified this person's identity." :
                              "compare these fingerprints with \(peerNickname) using a secure channel.")
-                            .font(.system(size: 12, design: .monospaced))
+                            .monospaceFont(size: 12)
                             .foregroundColor(textColor.opacity(0.7))
                             .multilineTextAlignment(.center)
                             .lineLimit(nil)
@@ -157,7 +157,7 @@ struct FingerprintView: View {
                                 dismiss()
                             }) {
                                 Text("MARK AS VERIFIED")
-                                    .font(.system(size: 14, weight: .bold, design: .monospaced))
+                                    .monospaceFont(size: 14, weight: .bold)
                                     .foregroundColor(.white)
                                     .padding(.horizontal, 20)
                                     .padding(.vertical, 10)

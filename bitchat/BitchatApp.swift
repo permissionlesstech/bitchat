@@ -20,6 +20,7 @@ struct BitchatApp: App {
     
     init() {
         UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
+        FontManager.registerFonts()
     }
     
     var body: some Scene {

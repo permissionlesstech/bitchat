@@ -383,7 +383,7 @@ struct ContentView: View {
                         }) {
                             HStack {
                                 Text("@\(suggestion)")
-                                    .font(.system(size: 11, design: .monospaced))
+                                    .monospaceFont(size: 11)
                                     .foregroundColor(textColor)
                                     .fontWeight(.medium)
                                 Spacer()
@@ -434,14 +434,14 @@ struct ContentView: View {
                                 HStack {
                                     // Show all aliases together
                                     Text(info.commands.joined(separator: ", "))
-                                        .font(.system(size: 11, design: .monospaced))
+                                        .monospaceFont(size: 11)
                                         .foregroundColor(textColor)
                                         .fontWeight(.medium)
                                     
                                     // Show syntax if any
                                     if let syntax = info.syntax {
                                         Text(syntax)
-                                            .font(.system(size: 10, design: .monospaced))
+                                            .monospaceFont(size: 10)
                                             .foregroundColor(secondaryTextColor.opacity(0.8))
                                     }
                                     
@@ -449,7 +449,7 @@ struct ContentView: View {
                                     
                                     // Show description
                                     Text(info.description)
-                                        .font(.system(size: 10, design: .monospaced))
+                                        .monospaceFont(size: 10)
                                         .foregroundColor(secondaryTextColor)
                                 }
                                 .padding(.horizontal, 12)
@@ -472,7 +472,7 @@ struct ContentView: View {
             HStack(alignment: .center, spacing: 4) {
             TextField("type a message...", text: $messageText)
                 .textFieldStyle(.plain)
-                .font(.system(size: 14, design: .monospaced))
+                .monospaceFont(size: 14)
                 .foregroundColor(textColor)
                 .focused($isTextFieldFocused)
                 .padding(.leading, 12)
@@ -581,7 +581,7 @@ struct ContentView: View {
                 // Header - match main toolbar height
                 HStack {
                     Text("NETWORK")
-                        .font(.system(size: 16, weight: .bold, design: .monospaced))
+                        .monospaceFont(size: 16, weight: .bold)
                         .foregroundColor(textColor)
                     Spacer()
                 }
@@ -603,7 +603,7 @@ struct ContentView: View {
                                     .font(.system(size: 10))
                                     .accessibilityHidden(true)
                                 Text("PEOPLE")
-                                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                    .monospaceFont(size: 11, weight: .bold)
                             }
                             .foregroundColor(secondaryTextColor)
                             .padding(.horizontal, 12)
@@ -611,7 +611,7 @@ struct ContentView: View {
                         
                         if viewModel.connectedPeers.isEmpty {
                             Text("nobody around...")
-                                .font(.system(size: 14, design: .monospaced))
+                                .monospaceFont(size: 14)
                                 .foregroundColor(secondaryTextColor)
                                 .padding(.horizontal)
                         } else {
@@ -680,14 +680,14 @@ struct ContentView: View {
                                 if peer.isMe {
                                     HStack {
                                         Text(peer.displayName + " (you)")
-                                            .font(.system(size: 14, design: .monospaced))
+                                            .monospaceFont(size: 14)
                                             .foregroundColor(textColor)
                                         
                                         Spacer()
                                     }
                                 } else {
                                     Text(peer.displayName)
-                                        .font(.system(size: 14, design: .monospaced))
+                                        .monospaceFont(size: 14)
                                         .foregroundColor(peerNicknames[peer.id] != nil ? textColor : secondaryTextColor)
                                     
                                     // Encryption status icon (after peer name)
@@ -815,7 +815,7 @@ struct ContentView: View {
     private var mainHeaderView: some View {
         HStack(spacing: 0) {
             Text("bitchat/")
-                .font(.system(size: 18, weight: .medium, design: .monospaced))
+                .monospaceFont(size: 18, weight: .medium)
                 .foregroundColor(textColor)
                 .onTapGesture(count: 3) {
                     // PANIC: Triple-tap to clear all data
@@ -828,12 +828,12 @@ struct ContentView: View {
             
             HStack(spacing: 0) {
                 Text("@")
-                    .font(.system(size: 14, design: .monospaced))
+                    .monospaceFont(size: 14)
                     .foregroundColor(secondaryTextColor)
                 
                 TextField("nickname", text: $viewModel.nickname)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 14, design: .monospaced))
+                    .monospaceFont(size: 14)
                     .frame(maxWidth: 100)
                     .foregroundColor(textColor)
                     .focused($isNicknameFieldFocused)
@@ -871,7 +871,7 @@ struct ContentView: View {
                         .font(.system(size: 11))
                         .accessibilityLabel("\(otherPeersCount) connected \(otherPeersCount == 1 ? "person" : "people")")
                     Text("\(otherPeersCount)")
-                        .font(.system(size: 12, design: .monospaced))
+                        .monospaceFont(size: 12)
                         .accessibilityHidden(true)
                 }
                 .foregroundColor(viewModel.isConnected ? textColor : Color.red)
@@ -903,7 +903,7 @@ struct ContentView: View {
                             Image(systemName: "chevron.left")
                                 .font(.system(size: 12))
                             Text("back")
-                                .font(.system(size: 14, design: .monospaced))
+                                .monospaceFont(size: 14)
                         }
                         .foregroundColor(textColor)
                     }
@@ -917,7 +917,7 @@ struct ContentView: View {
                     }) {
                         HStack(spacing: 6) {
                             Text("\(privatePeerNick)")
-                                .font(.system(size: 16, weight: .medium, design: .monospaced))
+                                .monospaceFont(size: 16, weight: .medium)
                                 .foregroundColor(Color.orange)
                             // Dynamic encryption status icon
                             let encryptionStatus = viewModel.getEncryptionStatus(for: privatePeerID)
@@ -999,16 +999,16 @@ struct MessageContentView: View {
             if segment.type == "hashtag" {
                 // Note: We can't have clickable links in concatenated Text, so hashtags won't be clickable
                 result = result + Text(segment.text)
-                    .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                    .font(FontManager.kodeMono(size: 12, weight: .semiBold))
                     .foregroundColor(Color.blue)
                     .underline()
             } else if segment.type == "mention" {
                 result = result + Text(segment.text)
-                    .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                    .font(FontManager.kodeMono(size: 14, weight: .semiBold))
                     .foregroundColor(Color.orange)
             } else {
                 result = result + Text(segment.text)
-                    .font(.system(size: 14, design: .monospaced))
+                    .font(FontManager.kodeMono(size: 14))
                     .fontWeight(isMentioned ? .bold : .regular)
             }
         }
@@ -1133,7 +1133,7 @@ struct DeliveryStatusView: View {
                 Image(systemName: "checkmark")
                     .font(.system(size: 10))
                 Text("\(reached)/\(total)")
-                    .font(.system(size: 10, design: .monospaced))
+                    .monospaceFont(size: 10)
             }
             .foregroundColor(secondaryTextColor.opacity(0.6))
             .help("Delivered to \(reached) of \(total) members")

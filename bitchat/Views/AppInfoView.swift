@@ -100,7 +100,7 @@ struct AppInfoView: View {
             // Header
             VStack(alignment: .center, spacing: 8) {
                 Text(Strings.appName)
-                    .font(.system(size: 32, weight: .bold, design: .monospaced))
+                    .monospaceFont(size: 32, weight: .bold)
                     .foregroundColor(textColor)
                 
                 Text(Strings.tagline)
@@ -167,8 +167,7 @@ struct AppInfoView: View {
             
             // Warning
             VStack(alignment: .leading, spacing: 6) {
-                SectionHeader(Strings.Warning.title)
-                    .foregroundColor(Color.red)
+                SectionHeader(Strings.Warning.title, Color.red)
                 
                 Text(Strings.Warning.message)
                     .font(.system(size: 14, design: .monospaced))
@@ -189,20 +188,22 @@ struct AppInfoView: View {
 
 struct SectionHeader: View {
     let title: String
+    private var color: Color
     @Environment(\.colorScheme) var colorScheme
     
     private var textColor: Color {
         colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
     }
     
-    init(_ title: String) {
+    init(_ title: String, _ color: Color = Color.green) {
         self.title = title
+        self.color = color
     }
     
     var body: some View {
         Text(title)
-            .font(.system(size: 16, weight: .bold, design: .monospaced))
-            .foregroundColor(textColor)
+            .monospaceFont(size: 16, weight: .bold)
+            .foregroundColor(color == Color.green ? textColor : color)
             .padding(.top, 8)
     }
 }
@@ -218,7 +219,7 @@ struct FeatureRow: View {
     }
     
     private var secondaryTextColor: Color {
-        colorScheme == .dark ? Color.green.opacity(0.8) : Color(red: 0, green: 0.5, blue: 0).opacity(0.8)
+        colorScheme == .dark ? Color.black.opacity(0.8) : Color(red: 0, green: 0, blue: 0).opacity(0.8)
     }
     
     var body: some View {
@@ -230,7 +231,7 @@ struct FeatureRow: View {
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                    .monospaceFont(size: 14, weight: .semiBold)
                     .foregroundColor(textColor)
                 
                 Text(description)

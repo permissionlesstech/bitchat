@@ -54,5 +54,12 @@
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 	</array>
+	<key>UIAppFonts</key>
+	<array>
+		<string>KodeMono-Regular.ttf</string>
+		<string>KodeMono-Medium.ttf</string>
+		<string>KodeMono-SemiBold.ttf</string>
+		<string>KodeMono-Bold.ttf</string>
+	</array>
 </dict>
 </plist>

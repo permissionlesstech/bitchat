@@ -177,13 +177,13 @@ struct LinkPreviewView: View {
                     // Title
                     #if os(iOS)
                     Text(cachedTitle ?? metadata?.title ?? title ?? url.host ?? "Link")
-                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                        .monospaceFont(size: 14, weight: .semiBold)
                         .foregroundColor(textColor)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                     #else
                     Text(title ?? url.host ?? "Link")
-                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                        .monospaceFont(size: 14, weight: .semiBold)
                         .foregroundColor(textColor)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
@@ -192,12 +192,12 @@ struct LinkPreviewView: View {
                     // Host
                     #if os(iOS)
                     Text(cachedHost ?? url.host ?? url.absoluteString)
-                        .font(.system(size: 11, design: .monospaced))
+                        .monospaceFont(size: 11)
                         .foregroundColor(textColor.opacity(0.6))
                         .lineLimit(1)
                     #else
                     Text(url.host ?? url.absoluteString)
-                        .font(.system(size: 11, design: .monospaced))
+                        .monospaceFont(size: 11)
                         .foregroundColor(textColor.opacity(0.6))
                         .lineLimit(1)
                     #endif
@@ -237,14 +237,14 @@ struct LinkPreviewView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     // Title
                     Text(title ?? url.host ?? "Link")
-                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                        .monospaceFont(size: 14, weight: .semiBold)
                         .foregroundColor(textColor)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                     
                     // URL
                     Text(url.absoluteString)
-                        .font(.system(size: 11, design: .monospaced))
+                        .monospaceFont(size: 11)
                         .foregroundColor(Color.blue)
                         .lineLimit(1)
                         .truncationMode(.middle)
