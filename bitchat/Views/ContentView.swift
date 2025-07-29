@@ -758,6 +758,7 @@ struct ContentView: View {
                         }
                     }
                 }
+                .id(viewModel.allPeers.map { "\($0.id)-\($0.isConnected)" }.joined())
             }
             
             Spacer()

@@ -1007,6 +1007,12 @@ class BluetoothMeshService: NSObject {
                         SecureLogger.log("Removed \(peerID) from activePeers (disconnected)", 
                                        category: SecureLogger.session, level: .info)
                     }
+                    // Also remove from peerNicknames to ensure UI updates properly
+                    if let nickname = self.peerNicknames[peerID] {
+                        self.peerNicknames.removeValue(forKey: peerID)
+                        SecureLogger.log("Removed \(peerID) (\(nickname)) from peerNicknames (disconnected)", 
+                                       category: SecureLogger.session, level: .info)
+                    }
                 default:
                     break
                 }

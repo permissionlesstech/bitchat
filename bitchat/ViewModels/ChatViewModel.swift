@@ -223,7 +223,11 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                         SecureLogger.log("  - \(peer.displayName): connected=\(peer.isConnected), state=\(peer.connectionState)", 
                                         category: SecureLogger.session, level: .debug)
                     }
-                    self?.allPeers = peers
+                    // Force UI update by clearing and re-setting
+                    self?.allPeers = []
+                    DispatchQueue.main.async {
+                        self?.allPeers = peers
+                    }
                     
                     // Update private chat peer ID if needed when peers change
                     if self?.selectedPrivateChatFingerprint != nil {
