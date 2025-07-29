@@ -162,6 +162,10 @@ enum MessageType: UInt8 {
     case systemValidation = 0x24        // Session validation ping
     case handshakeRequest = 0x25        // Request handshake for pending messages
     
+    // Favorite system messages
+    case favorited = 0x30               // Peer favorited us
+    case unfavorited = 0x31             // Peer unfavorited us
+    
     var description: String {
         switch self {
         case .announce: return "announce"
@@ -183,6 +187,8 @@ enum MessageType: UInt8 {
         case .protocolNack: return "protocolNack"
         case .systemValidation: return "systemValidation"
         case .handshakeRequest: return "handshakeRequest"
+        case .favorited: return "favorited"
+        case .unfavorited: return "unfavorited"
         }
     }
 }

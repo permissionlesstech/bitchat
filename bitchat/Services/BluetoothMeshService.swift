@@ -1801,11 +1801,12 @@ class BluetoothMeshService: NSObject {
         var rssiValues = peerRSSI
         
         
-        // Log connectedPeripherals state
-        SecureLogger.log("connectedPeripherals has \(connectedPeripherals.count) entries:", category: SecureLogger.session, level: .debug)
-        for (peerID, peripheral) in connectedPeripherals {
-            SecureLogger.log("  connectedPeripherals[\(peerID)] = \(peripheral.identifier.uuidString)", category: SecureLogger.session, level: .debug)
-        }
+        // Log connectedPeripherals state only if verbose debugging needed
+        // Commented out to reduce log noise - uncomment for debugging
+        // SecureLogger.log("connectedPeripherals has \(connectedPeripherals.count) entries:", category: SecureLogger.session, level: .debug)
+        // for (peerID, peripheral) in connectedPeripherals {
+        //     SecureLogger.log("  connectedPeripherals[\(peerID)] = \(peripheral.identifier.uuidString)", category: SecureLogger.session, level: .debug)
+        // }
         
         
         // Also check peripheralRSSI for any connected peripherals
@@ -2656,6 +2657,43 @@ class BluetoothMeshService: NSObject {
                         // Check if this is a dummy message for cover traffic
                         if message.content.hasPrefix(self.coverTrafficPrefix) {
                                 return  // Silently discard dummy messages
+                        }
+                        
+                        // Check if this is a favorite/unfavorite notification
+                        if message.content.hasPrefix("SYSTEM:FAVORITED") || message.content.hasPrefix("SYSTEM:UNFAVORITED") {
+                            let parts = message.content.split(separator: ":")
+                            let isFavorite = parts.count >= 2 && parts[0] == "SYSTEM" && parts[1] == "FAVORITED"
+                            let action = isFavorite ? "favorited" : "unfavorited"
+                            let nostrNpub = parts.count > 2 ? String(parts[2]) : nil
+                            
+                            SecureLogger.log("📨 Received \(action) notification from \(senderID)", category: SecureLogger.session, level: .info)
+                            if let npub = nostrNpub {
+                                SecureLogger.log("📝 Peer's Nostr npub: \(npub)", category: SecureLogger.session, level: .info)
+                            }
+                            
+                            // Handle favorite notification
+                            DispatchQueue.main.async {
+                                Task { @MainActor in
+                                    let vm = self.delegate as? ChatViewModel
+                                    let nickname = message.sender
+                                    
+                                    if isFavorite {
+                                        vm?.handlePeerFavoritedUs(peerID: senderID, favorited: true, nickname: nickname, nostrNpub: nostrNpub)
+                                    } else {
+                                        vm?.handlePeerFavoritedUs(peerID: senderID, favorited: false, nickname: nickname, nostrNpub: nostrNpub)
+                                    }
+                                    
+                                    // Send system message to user
+                                    let systemMessage = BitchatMessage(
+                                        sender: "system",
+                                        content: "\(nickname) \(action) you.",
+                                        timestamp: Date(),
+                                        isRelay: false
+                                    )
+                                    self.delegate?.didReceiveMessage(systemMessage)
+                                }
+                            }
+                            return
                         }
                         
                         // Check if we've seen this exact message recently (within 5 seconds)
@@ -3543,6 +3581,16 @@ class BluetoothMeshService: NSObject {
                 handleHandshakeRequest(from: senderID, data: packet.payload)
             }
             
+        case .favorited:
+            // Now handled as private messages with "SYSTEM:FAVORITED" content
+            // See handleReceivedPacket for MESSAGE type handling
+            break
+            
+        case .unfavorited:
+            // Now handled as private messages with "SYSTEM:UNFAVORITED" content
+            // See handleReceivedPacket for MESSAGE type handling
+            break
+            
         default:
             break
         }
@@ -4292,10 +4340,8 @@ extension BluetoothMeshService: CBPeripheralDelegate {
         
         // If we have a peer ID, update peer RSSI (handled in updatePeripheralRSSI)
         if let mapping = peripheralMappings[peripheralID], mapping.isIdentified {
-            // Force UI update when we have a real peer ID
-            DispatchQueue.main.async { [weak self] in
-                self?.notifyPeerListUpdate()
-            }
+            // RSSI update is handled silently - no need to notify peer list update
+            // The UI will get RSSI updates through the existing peer RSSI dictionary
         } else {
             // Keep trying to read RSSI until we get real peer ID
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak peripheral] in
@@ -4588,7 +4634,8 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             return true
         case .message, .announce, .leave, .readReceipt, .deliveryStatusRequest,
              .fragmentStart, .fragmentContinue, .fragmentEnd,
-             .noiseIdentityAnnounce, .noiseEncrypted, .protocolNack, .none:
+             .noiseIdentityAnnounce, .noiseEncrypted, .protocolNack, 
+             .favorited, .unfavorited, .none:
             return false
         }
     }

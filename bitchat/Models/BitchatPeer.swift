@@ -1,0 +1,251 @@
+import Foundation
+import CoreBluetooth
+
+/// Represents a peer in the BitChat network with all associated metadata
+struct BitchatPeer: Identifiable, Equatable {
+    let id: String // Hex-encoded peer ID
+    let noisePublicKey: Data
+    let nickname: String
+    let lastSeen: Date
+    let isConnected: Bool
+    let rssi: Int?
+    
+    // Favorite-related properties
+    var favoriteStatus: FavoritesPersistenceService.FavoriteRelationship?
+    
+    // Nostr identity (if known)
+    var nostrPublicKey: String?
+    
+    // Connection state
+    enum ConnectionState {
+        case bluetoothConnected(rssi: Int?)
+        case nostrAvailable  // Mutual favorite, reachable via Nostr
+        case offline         // Not connected via any transport
+    }
+    
+    var connectionState: ConnectionState {
+        if isConnected {
+            return .bluetoothConnected(rssi: rssi)
+        } else if favoriteStatus?.isMutual == true {
+            // Mutual favorites can communicate via Nostr when offline
+            return .nostrAvailable
+        } else {
+            return .offline
+        }
+    }
+    
+    var isFavorite: Bool {
+        favoriteStatus?.isFavorite ?? false
+    }
+    
+    var isMutualFavorite: Bool {
+        favoriteStatus?.isMutual ?? false
+    }
+    
+    var theyFavoritedUs: Bool {
+        favoriteStatus?.theyFavoritedUs ?? false
+    }
+    
+    // Display helpers
+    var displayName: String {
+        nickname.isEmpty ? String(id.prefix(8)) : nickname
+    }
+    
+    var statusIcon: String {
+        switch connectionState {
+        case .bluetoothConnected:
+            return "📶" // Signal bars or dot based on RSSI
+        case .nostrAvailable:
+            return "🌐" // Purple globe for Nostr
+        case .offline:
+            if theyFavoritedUs && !isFavorite {
+                return "🌙" // Crescent moon - they favorited us but we didn't reciprocate
+            } else {
+                return ""
+            }
+        }
+    }
+    
+    // Initialize from mesh service data
+    init(
+        id: String,
+        noisePublicKey: Data,
+        nickname: String,
+        lastSeen: Date = Date(),
+        isConnected: Bool = false,
+        rssi: Int? = nil
+    ) {
+        self.id = id
+        self.noisePublicKey = noisePublicKey
+        self.nickname = nickname
+        self.lastSeen = lastSeen
+        self.isConnected = isConnected
+        self.rssi = rssi
+        
+        // Load favorite status - will be set later by the manager
+        self.favoriteStatus = nil
+        self.nostrPublicKey = nil
+    }
+    
+    static func == (lhs: BitchatPeer, rhs: BitchatPeer) -> Bool {
+        lhs.id == rhs.id
+    }
+}
+
+// MARK: - Peer Manager
+
+/// Manages the collection of peers and their states
+@MainActor
+class PeerManager: ObservableObject {
+    @Published var peers: [BitchatPeer] = []
+    @Published var favorites: [BitchatPeer] = []
+    @Published var mutualFavorites: [BitchatPeer] = []
+    
+    private let meshService: BluetoothMeshService
+    private let favoritesService = FavoritesPersistenceService.shared
+    
+    init(meshService: BluetoothMeshService) {
+        self.meshService = meshService
+        updatePeers()
+        
+        // Listen for updates
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleFavoriteChanged),
+            name: .favoriteStatusChanged,
+            object: nil
+        )
+    }
+    
+    @objc private func handleFavoriteChanged() {
+        SecureLogger.log("⭐ Favorite status changed notification received, updating peers", 
+                        category: SecureLogger.session, level: .debug)
+        updatePeers()
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+    
+    func updatePeers() {
+        // Reduce log verbosity - only log when count changes
+        let previousCount = peers.count
+        
+        // Get current mesh peers
+        let meshPeers = meshService.getPeerNicknames()
+        let peerRSSI = meshService.getPeerRSSI()
+        
+        // Build peer list
+        var allPeers: [BitchatPeer] = []
+        var connectedNicknames: Set<String> = []
+        
+        // Add connected mesh peers
+        for (peerID, nickname) in meshPeers {
+            guard let noiseKey = Data(hexString: peerID) else { continue }
+            
+            connectedNicknames.insert(nickname)
+            
+            var peer = BitchatPeer(
+                id: peerID,
+                noisePublicKey: noiseKey,
+                nickname: nickname,
+                isConnected: true,
+                rssi: peerRSSI[peerID]?.intValue
+            )
+            // Set favorite status - check both by current noise key and by nickname
+            if let favoriteStatus = favoritesService.getFavoriteStatus(for: noiseKey) {
+                peer.favoriteStatus = favoriteStatus
+                peer.nostrPublicKey = favoriteStatus.peerNostrPublicKey
+            } else {
+                // Check if we have a favorite for this nickname (peer may have reconnected with new ID)
+                let favoriteByNickname = favoritesService.favorites.values.first { $0.peerNickname == nickname }
+                if let favorite = favoriteByNickname {
+                    SecureLogger.log("🔄 Found favorite for '\(nickname)' by nickname, updating noise key", 
+                                    category: SecureLogger.session, level: .info)
+                    // Update the favorite's noise key to match the current connection
+                    favoritesService.updateNoisePublicKey(from: favorite.peerNoisePublicKey, to: noiseKey, peerNickname: nickname)
+                    // Get the updated favorite with the new key
+                    peer.favoriteStatus = favoritesService.getFavoriteStatus(for: noiseKey)
+                    peer.nostrPublicKey = peer.favoriteStatus?.peerNostrPublicKey ?? favorite.peerNostrPublicKey
+                }
+            }
+            allPeers.append(peer)
+        }
+        
+        // Add offline favorites (only those not currently connected)
+        SecureLogger.log("📋 Processing \(favoritesService.favorites.count) favorite relationships (connected nicknames: \(connectedNicknames))", 
+                        category: SecureLogger.session, level: .info)
+        
+        for (favoriteKey, favorite) in favoritesService.favorites {
+            let favoriteID = favorite.peerNoisePublicKey.hexEncodedString()
+            
+            // Skip if this peer is already connected (by nickname)
+            if connectedNicknames.contains(favorite.peerNickname) {
+                SecureLogger.log("  - Skipping '\(favorite.peerNickname)' (key: \(favoriteKey.hexEncodedString())) - already connected", 
+                                category: SecureLogger.session, level: .debug)
+                continue
+            }
+            
+            // Add this favorite as an offline peer
+            SecureLogger.log("  - Adding offline favorite '\(favorite.peerNickname)' (key: \(favoriteKey.hexEncodedString()), ID: \(favoriteID), mutual: \(favorite.isMutual))", 
+                            category: SecureLogger.session, level: .info)
+            
+            var peer = BitchatPeer(
+                id: favoriteID,
+                noisePublicKey: favorite.peerNoisePublicKey,
+                nickname: favorite.peerNickname,
+                isConnected: false
+            )
+            // Set favorite status
+            peer.favoriteStatus = favorite
+            peer.nostrPublicKey = favorite.peerNostrPublicKey
+            allPeers.append(peer)
+        }
+        
+        // Sort: Connected first, then favorites, then alphabetical
+        allPeers.sort { lhs, rhs in
+            if lhs.isConnected != rhs.isConnected {
+                return lhs.isConnected
+            }
+            if lhs.isFavorite != rhs.isFavorite {
+                return lhs.isFavorite
+            }
+            return lhs.displayName < rhs.displayName
+        }
+        
+        self.peers = allPeers
+        self.favorites = allPeers.filter { $0.isFavorite }
+        self.mutualFavorites = allPeers.filter { $0.isMutualFavorite }
+        
+        // Always log favorites debug info when there are favorites
+        if favoritesService.favorites.count > 0 {
+            SecureLogger.log("📊 Peer list update: \(allPeers.count) total (\(allPeers.filter { $0.isConnected }.count) connected, \(allPeers.filter { !$0.isConnected }.count) offline), \(favorites.count) favorites, \(mutualFavorites.count) mutual", 
+                            category: SecureLogger.session, level: .info)
+            
+            // Log each peer's status
+            for peer in allPeers {
+                let statusIcon = peer.isConnected ? "🟢" : "🔴"
+                let favoriteIcon = peer.isMutualFavorite ? "💕" : (peer.isFavorite ? "⭐" : (peer.theyFavoritedUs ? "🌙" : ""))
+                SecureLogger.log("  \(statusIcon) \(peer.displayName) (ID: \(peer.id.prefix(8))...) \(favoriteIcon)", 
+                                category: SecureLogger.session, level: .debug)
+            }
+        } else if previousCount != allPeers.count {
+            // Only log non-favorite updates if count changed
+            SecureLogger.log("✅ Updated peer list: \(allPeers.count) total peers", 
+                            category: SecureLogger.session, level: .info)
+        }
+    }
+    
+    func toggleFavorite(_ peer: BitchatPeer) {
+        if peer.isFavorite {
+            favoritesService.removeFavorite(peerNoisePublicKey: peer.noisePublicKey)
+        } else {
+            favoritesService.addFavorite(
+                peerNoisePublicKey: peer.noisePublicKey,
+                peerNostrPublicKey: peer.nostrPublicKey,
+                peerNickname: peer.nickname
+            )
+        }
+        updatePeers()
+    }
+}

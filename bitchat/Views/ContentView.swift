@@ -19,6 +19,8 @@ struct PeerDisplayData: Identifiable {
     let isMe: Bool
     let hasUnreadMessages: Bool
     let encryptionStatus: EncryptionStatus
+    let connectionState: BitchatPeer.ConnectionState
+    let isMutualFavorite: Bool
 }
 
 // MARK: - Lazy Link Preview
@@ -597,7 +599,7 @@ struct ContentView: View {
                     // People section
                     VStack(alignment: .leading, spacing: 8) {
                         // Show appropriate header based on context
-                        if !viewModel.connectedPeers.isEmpty {
+                        if !viewModel.allPeers.isEmpty {
                             HStack(spacing: 4) {
                                 Image(systemName: "person.2.fill")
                                     .font(.system(size: 10))
@@ -609,7 +611,7 @@ struct ContentView: View {
                             .padding(.horizontal, 12)
                         }
                         
-                        if viewModel.connectedPeers.isEmpty {
+                        if viewModel.allPeers.isEmpty {
                             Text("nobody around...")
                                 .font(.system(size: 14, design: .monospaced))
                                 .foregroundColor(secondaryTextColor)
@@ -617,30 +619,21 @@ struct ContentView: View {
                         } else {
                             // Extract peer data for display
                             let peerNicknames = viewModel.meshService.getPeerNicknames()
-                            let peerRSSI = viewModel.meshService.getPeerRSSI()
                             let myPeerID = viewModel.meshService.myPeerID
                             
-                            // Show all connected peers
-                            let peersToShow: [String] = viewModel.connectedPeers
-                            let _ = print("ContentView: Showing \(peersToShow.count) peers: \(peersToShow.joined(separator: ", "))")
-                            
+                            // Show all peers (connected and favorites)
                             // Pre-compute peer data outside ForEach to reduce overhead
-                            let peerData = peersToShow.map { peerID in
-                                let rssiValue = peerRSSI[peerID]?.intValue
-                                if rssiValue == nil {
-                                    print("ContentView: No RSSI for peer \(peerID) in dictionary with \(peerRSSI.count) entries")
-                                    print("ContentView: peerRSSI keys: \(peerRSSI.keys.joined(separator: ", "))")
-                                } else {
-                                    print("ContentView: RSSI for peer \(peerID) is \(rssiValue!)")
-                                }
+                            let peerData = viewModel.allPeers.map { peer in
                                 return PeerDisplayData(
-                                    id: peerID,
-                                    displayName: peerID == myPeerID ? viewModel.nickname : (peerNicknames[peerID] ?? "anon\(peerID.prefix(4))"),
-                                    rssi: rssiValue,
-                                    isFavorite: viewModel.isFavorite(peerID: peerID),
-                                    isMe: peerID == myPeerID,
-                                    hasUnreadMessages: viewModel.unreadPrivateMessages.contains(peerID),
-                                    encryptionStatus: viewModel.getEncryptionStatus(for: peerID)
+                                    id: peer.id,
+                                    displayName: peer.id == myPeerID ? viewModel.nickname : peer.nickname,
+                                    rssi: peer.rssi,
+                                    isFavorite: peer.favoriteStatus?.isFavorite ?? false,
+                                    isMe: peer.id == myPeerID,
+                                    hasUnreadMessages: viewModel.unreadPrivateMessages.contains(peer.id),
+                                    encryptionStatus: viewModel.getEncryptionStatus(for: peer.id),
+                                    connectionState: peer.connectionState,
+                                    isMutualFavorite: peer.favoriteStatus?.isMutual ?? false
                                 )
                             }.sorted { (peer1: PeerDisplayData, peer2: PeerDisplayData) in
                                 // Sort: favorites first, then alphabetically by nickname
@@ -663,17 +656,42 @@ struct ContentView: View {
                                         .font(.system(size: 12))
                                         .foregroundColor(Color.orange)
                                         .accessibilityLabel("Unread message from \(peer.displayName)")
-                                } else if let rssi = peer.rssi {
-                                    Image(systemName: "circle.fill")
-                                        .font(.system(size: 8))
-                                        .foregroundColor(viewModel.getRSSIColor(rssi: rssi, colorScheme: colorScheme))
-                                        .accessibilityLabel("Signal strength: \(rssi > -60 ? "excellent" : rssi > -70 ? "good" : rssi > -80 ? "fair" : "poor")")
                                 } else {
-                                    // No RSSI data available
-                                    Image(systemName: "circle")
-                                        .font(.system(size: 8))
-                                        .foregroundColor(Color.secondary.opacity(0.5))
-                                        .accessibilityLabel("Signal strength: unknown")
+                                    // Connection state indicator
+                                    switch peer.connectionState {
+                                    case .bluetoothConnected(let rssi):
+                                        if let rssiValue = rssi {
+                                            Image(systemName: "circle.fill")
+                                                .font(.system(size: 8))
+                                                .foregroundColor(viewModel.getRSSIColor(rssi: rssiValue, colorScheme: colorScheme))
+                                                .accessibilityLabel("Signal strength: \(rssiValue > -60 ? "excellent" : rssiValue > -70 ? "good" : rssiValue > -80 ? "fair" : "poor")")
+                                        } else {
+                                            Image(systemName: "circle")
+                                                .font(.system(size: 8))
+                                                .foregroundColor(Color.secondary.opacity(0.5))
+                                                .accessibilityLabel("Signal strength: unknown")
+                                        }
+                                    case .nostrAvailable:
+                                        // Purple globe for mutual favorites reachable via Nostr
+                                        Image(systemName: "globe")
+                                            .font(.system(size: 10))
+                                            .foregroundColor(.purple)
+                                            .accessibilityLabel("Available via Nostr")
+                                    case .offline:
+                                        if peer.isFavorite {
+                                            // Crescent moon for non-mutual favorites
+                                            Image(systemName: "moon.fill")
+                                                .font(.system(size: 10))
+                                                .foregroundColor(Color.secondary.opacity(0.5))
+                                                .accessibilityLabel("Favorite - Offline")
+                                        } else {
+                                            // Offline indicator for non-favorites
+                                            Image(systemName: "circle")
+                                                .font(.system(size: 8))
+                                                .foregroundColor(Color.secondary.opacity(0.3))
+                                                .accessibilityLabel("Offline")
+                                        }
+                                    }
                                 }
                                 
                                 // Peer name
@@ -688,7 +706,7 @@ struct ContentView: View {
                                 } else {
                                     Text(peer.displayName)
                                         .font(.system(size: 14, design: .monospaced))
-                                        .foregroundColor(peerNicknames[peer.id] != nil ? textColor : secondaryTextColor)
+                                        .foregroundColor(peer.isFavorite || peerNicknames[peer.id] != nil ? textColor : secondaryTextColor)
                                     
                                     // Encryption status icon (after peer name)
                                     if let icon = peer.encryptionStatus.icon {
@@ -719,7 +737,8 @@ struct ContentView: View {
                             .padding(.vertical, 8)
                             .contentShape(Rectangle())
                             .onTapGesture {
-                                if !peer.isMe && peerNicknames[peer.id] != nil {
+                                if !peer.isMe {
+                                    // Allow tapping on any peer (connected or offline favorite)
                                     viewModel.startPrivateChat(with: peer.id)
                                     withAnimation(.easeInOut(duration: 0.2)) {
                                         showSidebar = false
@@ -890,8 +909,10 @@ struct ContentView: View {
     
     private var privateHeaderView: some View {
         Group {
-            if let privatePeerID = viewModel.selectedPrivateChatPeer,
-               let privatePeerNick = viewModel.meshService.getPeerNicknames()[privatePeerID] {
+            if let privatePeerID = viewModel.selectedPrivateChatPeer {
+                let privatePeerNick = viewModel.meshService.getPeerNicknames()[privatePeerID] ?? 
+                                     viewModel.allPeers.first(where: { $0.id == privatePeerID })?.displayName ?? 
+                                     "Unknown"
                 HStack {
                     Button(action: {
                         withAnimation(.easeInOut(duration: 0.2)) {
