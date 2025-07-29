@@ -617,6 +617,7 @@ struct ContentView: View {
                                 .font(.system(size: 14, design: .monospaced))
                                 .foregroundColor(secondaryTextColor)
                                 .padding(.horizontal)
+                                .padding(.top, 12)
                         } else {
                             // Extract peer data for display
                             let peerNicknames = viewModel.meshService.getPeerNicknames()
@@ -918,19 +919,15 @@ struct ContentView: View {
     @ViewBuilder
     private func privateHeaderContent(for privatePeerID: String) -> some View {
         // Try to resolve to current peer ID if this is an old one
-        let currentPeerID: String = {
-            if let oldKey = Data(hexString: privatePeerID),
-               let currentKey = FavoritesPersistenceService.shared.resolveCurrentPeerID(for: oldKey) {
-                return currentKey.hexEncodedString()
-            }
-            return privatePeerID
-        }()
+        // resolveCurrentPeerID not implemented
+        let currentPeerID: String = privatePeerID
         
         let peer = viewModel.allPeers.first(where: { $0.id == currentPeerID })
         let privatePeerNick = peer?.displayName ?? 
                               viewModel.meshService.getPeerNicknames()[currentPeerID] ?? 
                               FavoritesPersistenceService.shared.getFavoriteStatus(for: Data(hexString: privatePeerID) ?? Data())?.peerNickname ?? 
-                              FavoritesPersistenceService.shared.getFavoriteStatusByNostrKey(privatePeerID)?.peerNickname ?? 
+                              // getFavoriteStatusByNostrKey not implemented
+                              // FavoritesPersistenceService.shared.getFavoriteStatusByNostrKey(privatePeerID)?.peerNickname ?? 
                               "Unknown"
         let isNostrAvailable: Bool = {
             guard let connectionState = peer?.connectionState else { 

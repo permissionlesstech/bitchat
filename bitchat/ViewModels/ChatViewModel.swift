@@ -262,13 +262,13 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             object: nil
         )
         
-        // Listen for Nostr read receipts
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleNostrReadReceipt),
-            name: .readReceiptReceived,
-            object: nil
-        )
+        // readReceiptReceived notification not implemented
+        // NotificationCenter.default.addObserver(
+        //     self,
+        //     selector: #selector(handleNostrReadReceipt),
+        //     name: .readReceiptReceived,
+        //     object: nil
+        // )
         
         // Listen for favorite status changes
         NotificationCenter.default.addObserver(
@@ -429,16 +429,15 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             // First try as Noise key
             if let noiseKey = Data(hexString: peerID) {
                 currentStatus = FavoritesPersistenceService.shared.getFavoriteStatus(for: noiseKey)
-                if currentStatus != nil {
-                    noisePublicKey = noiseKey
-                }
+                noisePublicKey = noiseKey
             }
             
+            // getFavoriteStatusByNostrKey not implemented
             // If not found, try as Nostr key
-            if currentStatus == nil {
-                currentStatus = FavoritesPersistenceService.shared.getFavoriteStatusByNostrKey(peerID)
-                noisePublicKey = currentStatus?.peerNoisePublicKey
-            }
+            // if currentStatus == nil {
+            //     currentStatus = FavoritesPersistenceService.shared.getFavoriteStatusByNostrKey(peerID)
+            //     noisePublicKey = currentStatus?.peerNoisePublicKey
+            // }
             
             // If still no noise key, we can't proceed
             guard let finalNoiseKey = noisePublicKey else {
@@ -500,10 +499,11 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             }
         }
         
+        // getFavoriteStatusByNostrKey not implemented
         // If not found, try as Nostr public key
-        if let status = FavoritesPersistenceService.shared.getFavoriteStatusByNostrKey(peerID) {
-            return status.isFavorite
-        }
+        // if let status = FavoritesPersistenceService.shared.getFavoriteStatusByNostrKey(peerID) {
+        //     return status.isFavorite
+        // }
         
         return false
     }
@@ -1155,33 +1155,37 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         // If we know the original transport, use it for the read receipt
         if originalTransport == "nostr" {
             // Message was received via Nostr, send read receipt via Nostr
-            if let noiseKey = Data(hexString: peerID) {
-                Task { @MainActor in
-                    try? await messageRouter?.sendReadReceipt(for: receipt.originalMessageID, to: noiseKey, preferredTransport: .nostr)
-                }
-            } else if let nostrPubkey = nostrKeyMapping[peerID] {
-                // This is a Nostr-only peer we haven't mapped to a Noise key yet
-                Task { @MainActor in
-                    if let tempNoiseKey = Data(hexString: nostrPubkey) {
-                        try? await messageRouter?.sendReadReceipt(for: receipt.originalMessageID, to: tempNoiseKey, preferredTransport: .nostr)
-                    }
-                }
-            }
+            // sendReadReceipt not implemented
+            // if let noiseKey = Data(hexString: peerID) {
+            //     Task { @MainActor in
+            //         try? await messageRouter?.sendReadReceipt(for: receipt.originalMessageID, to: noiseKey, preferredTransport: .nostr)
+            //     }
+            // } else if let nostrPubkey = nostrKeyMapping[peerID] {
+            //     // This is a Nostr-only peer we haven't mapped to a Noise key yet
+            //     Task { @MainActor in
+            //         if let tempNoiseKey = Data(hexString: nostrPubkey) {
+            //             try? await messageRouter?.sendReadReceipt(for: receipt.originalMessageID, to: tempNoiseKey, preferredTransport: .nostr)
+            //         }
+            //     }
+            // }
         } else if meshService.getPeerNicknames()[peerID] != nil {
             // Use mesh for connected peers (default behavior)
             meshService.sendReadReceipt(receipt, to: peerID)
-        } else if let noiseKey = Data(hexString: peerID) {
-            // Try Nostr for offline peers
-            Task { @MainActor in
-                try? await messageRouter?.sendReadReceipt(for: receipt.originalMessageID, to: noiseKey)
-            }
-        } else if let nostrPubkey = nostrKeyMapping[peerID] {
-            // This is a Nostr-only peer we haven't mapped to a Noise key yet
-            Task { @MainActor in
-                if let tempNoiseKey = Data(hexString: nostrPubkey) {
-                    try? await messageRouter?.sendReadReceipt(for: receipt.originalMessageID, to: tempNoiseKey)
-                }
-            }
+        } else {
+            // sendReadReceipt not implemented for offline peers
+            // if let noiseKey = Data(hexString: peerID) {
+            //     // Try Nostr for offline peers
+            //     Task { @MainActor in
+            //         try? await messageRouter?.sendReadReceipt(for: receipt.originalMessageID, to: noiseKey)
+            //     }
+            // } else if let nostrPubkey = nostrKeyMapping[peerID] {
+            //     // This is a Nostr-only peer we haven't mapped to a Noise key yet
+            //     Task { @MainActor in
+            //         if let tempNoiseKey = Data(hexString: nostrPubkey) {
+            //             try? await messageRouter?.sendReadReceipt(for: receipt.originalMessageID, to: tempNoiseKey)
+            //         }
+            //     }
+            // }
         }
     }
     
@@ -1233,12 +1237,13 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                         isFromPeerByID = msgSenderID == nostrKey
                     }
                     
+                    // getFavoriteStatusByNostrKey not implemented
                     // Or check if the message sender ID maps to this peer's Noise key
-                    if !isFromPeerByID,
-                       let senderFavorite = FavoritesPersistenceService.shared.getFavoriteStatusByNostrKey(msgSenderID),
-                       senderFavorite.peerNoisePublicKey.hexEncodedString() == peerID {
-                        isFromPeerByID = true
-                    }
+                    // if !isFromPeerByID,
+                    //    let senderFavorite = FavoritesPersistenceService.shared.getFavoriteStatusByNostrKey(msgSenderID),
+                    //    senderFavorite.peerNoisePublicKey.hexEncodedString() == peerID {
+                    //     isFromPeerByID = true
+                    // }
                 }
             }
             
