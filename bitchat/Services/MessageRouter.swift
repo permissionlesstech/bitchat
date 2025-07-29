@@ -31,6 +31,7 @@ class MessageRouter: ObservableObject {
     private let meshService: BluetoothMeshService
     private let nostrRelay: NostrRelayManager
     private let favoritesService: FavoritesPersistenceService
+    private let processedMessagesService = ProcessedMessagesService.shared
     
     private var cancellables = Set<AnyCancellable>()
     private let messageDeduplication = LRUCache<String, Date>(maxSize: 1000)
@@ -284,10 +285,14 @@ class MessageRouter: ObservableObject {
         nostrRelay.unsubscribe(id: "router-messages")
         
         // Create a new subscription for recent messages
+        let sinceDate = processedMessagesService.getSubscriptionSinceDate()
         let filter = NostrFilter.giftWrapsFor(
             pubkey: currentIdentity.publicKeyHex,
-            since: Date().addingTimeInterval(-86400 * 7) // Look back 7 days
+            since: sinceDate
         )
+        
+        SecureLogger.log("📅 Subscribing to messages since: \(sinceDate)", 
+                        category: SecureLogger.session, level: .info)
         
         SecureLogger.log("📬 Subscribing to gift wraps for our pubkey with filter: kinds=\(filter.kinds ?? []), #p tag=\(currentIdentity.publicKeyHex)", 
                         category: SecureLogger.session, level: .info)
@@ -300,6 +305,13 @@ class MessageRouter: ObservableObject {
     }
     
     private func handleNostrMessage(_ giftWrap: NostrEvent) {
+        // Check if we've already processed this event
+        if processedMessagesService.isMessageProcessed(giftWrap.id) {
+            SecureLogger.log("⏭️ Skipping already processed event: \(giftWrap.id.prefix(8))...", 
+                            category: SecureLogger.session, level: .debug)
+            return
+        }
+        
         SecureLogger.log("🎁 Attempting to decrypt gift wrap from \(giftWrap.pubkey.prefix(8))..., id: \(giftWrap.id.prefix(8))...", 
                         category: SecureLogger.session, level: .info)
         SecureLogger.log("🎁 Full event ID: \(giftWrap.id)", 
@@ -337,10 +349,14 @@ class MessageRouter: ObservableObject {
             SecureLogger.log("✅ Successfully decrypted message from \(senderPubkey.prefix(8))...: \(content)", 
                             category: SecureLogger.session, level: .info)
         
-            // Check for deduplication
+            // Mark this event as processed to avoid duplicates on app restart
+            let eventTimestamp = Date(timeIntervalSince1970: TimeInterval(giftWrap.created_at))
+            processedMessagesService.markMessageAsProcessed(giftWrap.id, timestamp: eventTimestamp)
+        
+            // Check for deduplication within current session
             let messageHash = "\(senderPubkey)-\(content)-\(giftWrap.created_at)"
             if messageDeduplication.get(messageHash) != nil {
-                return // Already processed
+                return // Already processed in this session
             }
             messageDeduplication.set(messageHash, value: Date())
         
@@ -415,6 +431,7 @@ class MessageRouter: ObservableObject {
             
             // Send delivery acknowledgment back to sender
             sendDeliveryAcknowledgment(for: chatMessage.id, to: senderPubkey)
+            
         } catch {
             SecureLogger.log("❌ Failed to decrypt gift wrap: \(error)", 
                             category: SecureLogger.session, level: .error)
