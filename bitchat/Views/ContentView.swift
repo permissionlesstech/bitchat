@@ -884,18 +884,21 @@ struct ContentView: View {
                         .accessibilityLabel("Unread private messages")
                 }
                 
-                let otherPeersCount = viewModel.connectedPeers.filter { $0 != viewModel.meshService.myPeerID }.count
+                // Count all peers (including Nostr-only peers)
+                let otherPeersCount = viewModel.allPeers.filter { $0.id != viewModel.meshService.myPeerID }.count
+                let connectedCount = viewModel.connectedPeers.filter { $0 != viewModel.meshService.myPeerID }.count
+                let isNostrOnly = otherPeersCount > 0 && connectedCount == 0
                 
                 HStack(spacing: 4) {
                     // People icon with count
                     Image(systemName: "person.2.fill")
                         .font(.system(size: 11))
-                        .accessibilityLabel("\(otherPeersCount) connected \(otherPeersCount == 1 ? "person" : "people")")
+                        .accessibilityLabel("\(otherPeersCount) \(otherPeersCount == 1 ? "person" : "people")")
                     Text("\(otherPeersCount)")
                         .font(.system(size: 12, design: .monospaced))
                         .accessibilityHidden(true)
                 }
-                .foregroundColor(viewModel.isConnected ? textColor : Color.red)
+                .foregroundColor(isNostrOnly ? Color.purple : (viewModel.isConnected ? textColor : Color.red))
             }
             .onTapGesture {
                 withAnimation(.easeInOut(duration: 0.2)) {
@@ -972,16 +975,17 @@ struct ContentView: View {
                         viewModel.showFingerprint(for: privatePeerID)
                     }) {
                         HStack(spacing: 6) {
+                            // Show purple globe for Nostr transport first
+                            if isNostrAvailable {
+                                Image(systemName: "globe")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.purple)
+                                    .accessibilityLabel("Connected via Nostr")
+                            }
+                            
                             Text("\(privatePeerNick)")
                                 .font(.system(size: 16, weight: .medium, design: .monospaced))
                                 .foregroundColor(Color.orange)
-                            
-                            // Show purple globe for Nostr transport
-                            if isNostrAvailable {
-                                Text("🌐")
-                                    .font(.system(size: 14))
-                                    .accessibilityLabel("Connected via Nostr")
-                            }
                             
                             // Dynamic encryption status icon
                             let encryptionStatus = viewModel.getEncryptionStatus(for: privatePeerID)
