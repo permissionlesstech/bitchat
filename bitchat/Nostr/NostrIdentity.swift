@@ -59,13 +59,14 @@ struct NostrIdentity: Codable {
     
     /// Generate a new Nostr identity
     static func generate() throws -> NostrIdentity {
-        let privateKey = try P256K.Signing.PrivateKey()
-        let publicKey = privateKey.publicKey.dataRepresentation
-        let npub = try Bech32.encode(hrp: "npub", data: publicKey)
+        // Generate Schnorr key for Nostr
+        let schnorrKey = try P256K.Schnorr.PrivateKey()
+        let xOnlyPubkey = Data(schnorrKey.xonly.bytes)
+        let npub = try Bech32.encode(hrp: "npub", data: xOnlyPubkey)
         
         return NostrIdentity(
-            privateKey: privateKey.dataRepresentation,
-            publicKey: publicKey,
+            privateKey: schnorrKey.dataRepresentation,
+            publicKey: xOnlyPubkey, // Store x-only public key
             npub: npub,
             createdAt: Date()
         )
@@ -73,10 +74,12 @@ struct NostrIdentity: Codable {
     
     /// Initialize from existing private key data
     init(privateKeyData: Data) throws {
-        let privateKey = try P256K.Signing.PrivateKey(dataRepresentation: privateKeyData)
+        let schnorrKey = try P256K.Schnorr.PrivateKey(dataRepresentation: privateKeyData)
+        let xOnlyPubkey = Data(schnorrKey.xonly.bytes)
+        
         self.privateKey = privateKeyData
-        self.publicKey = privateKey.publicKey.dataRepresentation
-        self.npub = try Bech32.encode(hrp: "npub", data: self.publicKey)
+        self.publicKey = xOnlyPubkey
+        self.npub = try Bech32.encode(hrp: "npub", data: xOnlyPubkey)
         self.createdAt = Date()
     }
     
@@ -85,9 +88,15 @@ struct NostrIdentity: Codable {
         try P256K.Signing.PrivateKey(dataRepresentation: privateKey)
     }
     
+    /// Get Schnorr signing key for Nostr event signatures
+    func schnorrSigningKey() throws -> P256K.Schnorr.PrivateKey {
+        try P256K.Schnorr.PrivateKey(dataRepresentation: privateKey)
+    }
+    
     /// Get hex-encoded public key (for Nostr events)
     var publicKeyHex: String {
-        publicKey.hexEncodedString()
+        // Public key is already stored as x-only (32 bytes)
+        return publicKey.hexEncodedString()
     }
 }
 

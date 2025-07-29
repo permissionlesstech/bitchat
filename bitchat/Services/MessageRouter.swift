@@ -50,10 +50,11 @@ class MessageRouter: ObservableObject {
     func sendMessage(
         _ content: String,
         to recipientNoisePublicKey: Data,
-        preferredTransport: Transport? = nil
+        preferredTransport: Transport? = nil,
+        messageId: String? = nil
     ) async throws {
         
-        let messageId = UUID().uuidString
+        let finalMessageId = messageId ?? UUID().uuidString
         
         // Check if peer is available on mesh
         let recipientHexID = recipientNoisePublicKey.hexEncodedString()
@@ -78,7 +79,7 @@ class MessageRouter: ObservableObject {
         
         // Create routed message
         let routedMessage = RoutedMessage(
-            id: messageId,
+            id: finalMessageId,
             content: content,
             recipientNoisePublicKey: recipientNoisePublicKey,
             transport: transport,
@@ -86,7 +87,7 @@ class MessageRouter: ObservableObject {
             status: .pending
         )
         
-        pendingMessages[messageId] = routedMessage
+        pendingMessages[finalMessageId] = routedMessage
         
         // Route based on transport
         switch transport {
@@ -184,12 +185,16 @@ class MessageRouter: ObservableObject {
             throw MessageRouterError.noNostrIdentity
         }
         
-        // Create NIP-17 encrypted message
+        // Create NIP-17 encrypted message with structured content
+        let structuredContent = "MSG:\(message.id):\(message.content)"
         let event = try NostrProtocol.createPrivateMessage(
-            content: message.content,
+            content: structuredContent,
             recipientPubkey: recipientNostrPubkey,
             senderIdentity: senderIdentity
         )
+        
+        SecureLogger.log("📤 Created gift wrap event ID: \(event.id), tagged for: \(event.tags)", 
+                        category: SecureLogger.session, level: .info)
         
         // Send via relay
         nostrRelay.sendEvent(event)
@@ -209,36 +214,135 @@ class MessageRouter: ObservableObject {
                 self?.cleanupOldMessages()
             }
             .store(in: &cancellables)
+        
+        // Listen for app becoming active to check for messages
+        NotificationCenter.default.publisher(for: .appDidBecomeActive)
+            .sink { [weak self] _ in
+                self?.checkForNostrMessages()
+            }
+            .store(in: &cancellables)
     }
     
     private func setupNostrMessageHandling() {
+        guard let currentIdentity = try? NostrIdentityBridge.getCurrentNostrIdentity() else { 
+            SecureLogger.log("⚠️ No Nostr identity available for initial setup", category: SecureLogger.session, level: .warning)
+            return 
+        }
+        
+        SecureLogger.log("🚀 Setting up Nostr message handling for \(currentIdentity.npub)", 
+                        category: SecureLogger.session, level: .info)
+        
+        // Connect to relays if not already connected
+        if !nostrRelay.isConnected {
+            nostrRelay.connect()
+            
+            // Wait for connections to establish before subscribing
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+                self?.subscribeToNostrMessages()
+            }
+        } else {
+            // Already connected, subscribe immediately
+            subscribeToNostrMessages()
+        }
+    }
+    
+    /// Check for Nostr messages when app becomes active
+    func checkForNostrMessages() {
+        SecureLogger.log("📥 Checking for Nostr messages", category: SecureLogger.session, level: .info)
+        
+        guard (try? NostrIdentityBridge.getCurrentNostrIdentity()) != nil else { 
+            SecureLogger.log("⚠️ No Nostr identity available for message check", category: SecureLogger.session, level: .warning)
+            return 
+        }
+        
+        // Ensure we're connected to relays first
+        if !nostrRelay.isConnected {
+            SecureLogger.log("🔌 Connecting to Nostr relays", category: SecureLogger.session, level: .info)
+            nostrRelay.connect()
+            
+            // Wait a bit for connections to establish before subscribing
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                self?.subscribeToNostrMessages()
+            }
+        } else {
+            // Already connected, subscribe immediately
+            subscribeToNostrMessages()
+        }
+    }
+    
+    private func subscribeToNostrMessages() {
         guard let currentIdentity = try? NostrIdentityBridge.getCurrentNostrIdentity() else { return }
         
-        // Subscribe to gift wraps for our pubkey
+        SecureLogger.log("📬 Subscribing to Nostr messages for pubkey: \(currentIdentity.publicKeyHex.prefix(8))...\(currentIdentity.publicKeyHex.suffix(8))", 
+                        category: SecureLogger.session, level: .info)
+        SecureLogger.log("📏 Full pubkey: \(currentIdentity.publicKeyHex)", 
+                        category: SecureLogger.session, level: .info)
+        SecureLogger.log("📏 Pubkey length: \(currentIdentity.publicKeyHex.count) chars (\(currentIdentity.publicKey.count) bytes)", 
+                        category: SecureLogger.session, level: .info)
+        
+        // Unsubscribe existing subscription to refresh
+        nostrRelay.unsubscribe(id: "router-messages")
+        
+        // Create a new subscription for recent messages
         let filter = NostrFilter.giftWrapsFor(
             pubkey: currentIdentity.publicKeyHex,
-            since: Date().addingTimeInterval(-86400) // Last 24 hours
+            since: Date().addingTimeInterval(-86400 * 7) // Look back 7 days
         )
         
+        SecureLogger.log("📬 Subscribing to gift wraps for our pubkey with filter: kinds=\(filter.kinds ?? []), #p tag=\(currentIdentity.publicKeyHex)", 
+                        category: SecureLogger.session, level: .info)
+        
         nostrRelay.subscribe(filter: filter, id: "router-messages") { [weak self] event in
+            SecureLogger.log("📨 Received Nostr event: kind=\(event.kind), from=\(event.pubkey.prefix(8))...", 
+                            category: SecureLogger.session, level: .info)
             self?.handleNostrMessage(event)
         }
     }
     
     private func handleNostrMessage(_ giftWrap: NostrEvent) {
+        SecureLogger.log("🎁 Attempting to decrypt gift wrap from \(giftWrap.pubkey.prefix(8))..., id: \(giftWrap.id.prefix(8))...", 
+                        category: SecureLogger.session, level: .info)
+        SecureLogger.log("🎁 Full event ID: \(giftWrap.id)", 
+                        category: SecureLogger.session, level: .info)
+        SecureLogger.log("🎁 Event timestamp: \(Date(timeIntervalSince1970: TimeInterval(giftWrap.created_at)))", 
+                        category: SecureLogger.session, level: .info)
+        SecureLogger.log("🎁 Event tags: \(giftWrap.tags)", 
+                        category: SecureLogger.session, level: .info)
+        
         // Decrypt the message
-        guard let currentIdentity = try? NostrIdentityBridge.getCurrentNostrIdentity(),
-              let (content, senderPubkey) = try? NostrProtocol.decryptPrivateMessage(
+        guard let currentIdentity = try? NostrIdentityBridge.getCurrentNostrIdentity() else {
+            SecureLogger.log("❌ No current Nostr identity available", 
+                            category: SecureLogger.session, level: .error)
+            return
+        }
+        
+        // Check if this event is actually tagged for us
+        let ourPubkey = currentIdentity.publicKeyHex
+        let isTaggedForUs = giftWrap.tags.contains { tag in
+            tag.count >= 2 && tag[0] == "p" && tag[1] == ourPubkey
+        }
+        
+        if !isTaggedForUs {
+            SecureLogger.log("⚠️ Gift wrap not tagged for us! Our pubkey: \(ourPubkey.prefix(8))..., Event tags: \(giftWrap.tags)", 
+                            category: SecureLogger.session, level: .warning)
+            return
+        }
+        
+        do {
+            let (content, senderPubkey) = try NostrProtocol.decryptPrivateMessage(
                 giftWrap: giftWrap,
                 recipientIdentity: currentIdentity
-              ) else { return }
+            )
+            
+            SecureLogger.log("✅ Successfully decrypted message from \(senderPubkey.prefix(8))...: \(content)", 
+                            category: SecureLogger.session, level: .info)
         
-        // Check for deduplication
-        let messageHash = "\(senderPubkey)-\(content)-\(giftWrap.created_at)"
-        if messageDeduplication.get(messageHash) != nil {
-            return // Already processed
-        }
-        messageDeduplication.set(messageHash, value: Date())
+            // Check for deduplication
+            let messageHash = "\(senderPubkey)-\(content)-\(giftWrap.created_at)"
+            if messageDeduplication.get(messageHash) != nil {
+                return // Already processed
+            }
+            messageDeduplication.set(messageHash, value: Date())
         
         // Handle special messages
         if content.hasPrefix("FAVORITED") || content.hasPrefix("UNFAVORITED") {
@@ -249,14 +353,36 @@ class MessageRouter: ObservableObject {
             return
         }
         
+        // Handle delivery acknowledgments
+        if content.hasPrefix("DELIVERED:") {
+            let parts = content.split(separator: ":")
+            if parts.count > 1 {
+                let messageId = String(parts[1])
+                handleDeliveryAcknowledgment(messageId: messageId, from: senderPubkey)
+            }
+            return
+        }
+        
         // Find the sender's Noise public key
         guard let senderNoiseKey = findNoisePublicKey(for: senderPubkey) else { return }
         
+        // Parse structured message content
+        var messageId = UUID().uuidString
+        var messageContent = content
+        
+        if content.hasPrefix("MSG:") {
+            let parts = content.split(separator: ":", maxSplits: 2)
+            if parts.count >= 3 {
+                messageId = String(parts[1])
+                messageContent = String(parts[2])
+            }
+        }
+        
         // Create a BitchatMessage and inject into the stream
         let chatMessage = BitchatMessage(
-            id: UUID().uuidString,
+            id: messageId,
             sender: favoritesService.getFavoriteStatus(for: senderNoiseKey)?.peerNickname ?? "Unknown",
-            content: content,
+            content: messageContent,
             timestamp: Date(timeIntervalSince1970: TimeInterval(giftWrap.created_at)),
             isRelay: false,
             originalSender: nil,
@@ -267,12 +393,19 @@ class MessageRouter: ObservableObject {
             deliveryStatus: .delivered(to: "nostr", at: Date())
         )
         
-        // Post notification for ChatViewModel to handle
-        NotificationCenter.default.post(
-            name: .nostrMessageReceived,
-            object: nil,
-            userInfo: ["message": chatMessage]
-        )
+            // Post notification for ChatViewModel to handle
+            NotificationCenter.default.post(
+                name: .nostrMessageReceived,
+                object: nil,
+                userInfo: ["message": chatMessage]
+            )
+            
+            // Send delivery acknowledgment back to sender
+            sendDeliveryAcknowledgment(for: chatMessage.id, to: senderPubkey)
+        } catch {
+            SecureLogger.log("❌ Failed to decrypt gift wrap: \(error)", 
+                            category: SecureLogger.session, level: .error)
+        }
     }
     
     private func handleFavoriteNotification(from nostrPubkey: String, isFavorite: Bool, nostrNpub: String? = nil) {
@@ -307,6 +440,50 @@ class MessageRouter: ObservableObject {
         return nil
     }
     
+    private func handleDeliveryAcknowledgment(messageId: String, from senderPubkey: String) {
+        SecureLogger.log("✅ Received delivery acknowledgment for message \(messageId) from \(senderPubkey)", 
+                        category: SecureLogger.session, level: .info)
+        
+        // Find the sender's Noise public key
+        guard let senderNoiseKey = findNoisePublicKey(for: senderPubkey) else { return }
+        
+        // Post notification for ChatViewModel to update delivery status
+        NotificationCenter.default.post(
+            name: .messageDeliveryAcknowledged,
+            object: nil,
+            userInfo: [
+                "messageId": messageId,
+                "senderNoiseKey": senderNoiseKey
+            ]
+        )
+    }
+    
+    private func sendDeliveryAcknowledgment(for messageId: String, to recipientNostrPubkey: String) {
+        SecureLogger.log("📤 Sending delivery acknowledgment for message \(messageId)", 
+                        category: SecureLogger.session, level: .debug)
+        
+        guard let senderIdentity = try? NostrIdentityBridge.getCurrentNostrIdentity() else {
+            SecureLogger.log("⚠️ No Nostr identity available for acknowledgment", 
+                            category: SecureLogger.session, level: .warning)
+            return
+        }
+        
+        // Create acknowledgment message
+        let content = "DELIVERED:\(messageId)"
+        guard let event = try? NostrProtocol.createPrivateMessage(
+            content: content,
+            recipientPubkey: recipientNostrPubkey,
+            senderIdentity: senderIdentity
+        ) else {
+            SecureLogger.log("❌ Failed to create delivery acknowledgment", 
+                            category: SecureLogger.session, level: .error)
+            return
+        }
+        
+        // Send via relay
+        nostrRelay.sendEvent(event)
+    }
+    
     private func cleanupOldMessages() {
         let cutoff = Date().addingTimeInterval(-300) // 5 minutes
         pendingMessages = pendingMessages.filter { $0.value.timestamp > cutoff }
@@ -339,5 +516,7 @@ enum MessageRouterError: LocalizedError {
 
 extension Notification.Name {
     static let nostrMessageReceived = Notification.Name("NostrMessageReceived")
+    static let messageDeliveryAcknowledged = Notification.Name("MessageDeliveryAcknowledged")
+    static let appDidBecomeActive = Notification.Name("AppDidBecomeActive")
 }
 

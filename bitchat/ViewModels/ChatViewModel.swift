@@ -221,6 +221,11 @@ class ChatViewModel: ObservableObject {
                                         category: SecureLogger.session, level: .debug)
                     }
                     self?.allPeers = peers
+                    
+                    // Update private chat peer ID if needed when peers change
+                    if self?.selectedPrivateChatFingerprint != nil {
+                        self?.updatePrivateChatPeerIfNeeded()
+                    }
                 }
                 .store(in: &cancellables)
         }
@@ -259,6 +264,14 @@ class ChatViewModel: ObservableObject {
             self,
             selector: #selector(handleFavoriteStatusChanged),
             name: .favoriteStatusChanged,
+            object: nil
+        )
+        
+        // Listen for delivery acknowledgments
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleDeliveryAcknowledgment),
+            name: .messageDeliveryAcknowledged,
             object: nil
         )
                 
@@ -502,6 +515,16 @@ class ChatViewModel: ObservableObject {
         
         // Check if this peer is the one we're in a private chat with
         updatePrivateChatPeerIfNeeded()
+        
+        // If we're in a private chat with this peer (by fingerprint), send pending read receipts
+        if let chatFingerprint = selectedPrivateChatFingerprint,
+           chatFingerprint == fingerprintStr {
+            // Send read receipts for any unread messages from this peer
+            // Use a small delay to ensure the connection is fully established
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.markPrivateMessagesAsRead(from: peerID)
+            }
+        }
     }
     
     private func isPeerBlocked(_ peerID: String) -> Bool {
@@ -703,7 +726,7 @@ class ChatViewModel: ObservableObject {
             
             Task {
                 do {
-                    try await messageRouter?.sendMessage(content, to: noiseKey)
+                    try await messageRouter?.sendMessage(content, to: noiseKey, messageId: message.id)
                 } catch {
                     SecureLogger.log("Failed to send message via Nostr: \(error)", 
                                     category: SecureLogger.session, level: .error)
@@ -869,6 +892,34 @@ class ChatViewModel: ObservableObject {
         
         // Process the Nostr message through the same flow as Bluetooth messages
         didReceiveMessage(message)
+    }
+    
+    @objc private func handleDeliveryAcknowledgment(_ notification: Notification) {
+        guard let messageId = notification.userInfo?["messageId"] as? String,
+              let senderNoiseKey = notification.userInfo?["senderNoiseKey"] as? Data else { return }
+        
+        let senderHexId = senderNoiseKey.hexEncodedString()
+        
+        SecureLogger.log("✅ Handling delivery acknowledgment for message \(messageId) from \(senderHexId)", 
+                        category: SecureLogger.session, level: .info)
+        
+        // Update the delivery status for the message
+        if let index = messages.firstIndex(where: { $0.id == messageId }) {
+            // Update delivery status to delivered
+            messages[index].deliveryStatus = DeliveryStatus.delivered(to: "nostr", at: Date())
+            
+            // Notify UI to update
+            objectWillChange.send()
+        }
+        
+        // Also update in private chats if it's a private message
+        for (peerID, chatMessages) in privateChats {
+            if let index = chatMessages.firstIndex(where: { $0.id == messageId }) {
+                privateChats[peerID]?[index].deliveryStatus = DeliveryStatus.delivered(to: "nostr", at: Date())
+                objectWillChange.send()
+                break
+            }
+        }
     }
     
     @objc private func handleFavoriteStatusChanged(_ notification: Notification) {
@@ -2902,15 +2953,8 @@ extension ChatViewModel: BitchatDelegate {
                 self.updatePrivateChatPeerIfNeeded()
             }
             
-            // Only end private chat if we can't find the peer by fingerprint
-            if let currentChatPeer = self.selectedPrivateChatPeer,
-               !peers.contains(currentChatPeer),
-               self.selectedPrivateChatFingerprint != nil {
-                // Try one more time to find by fingerprint
-                if self.getCurrentPeerIDForFingerprint(self.selectedPrivateChatFingerprint!) == nil {
-                    self.endPrivateChat()
-                }
-            }
+            // Don't end private chat when peer temporarily disconnects
+            // The fingerprint tracking will allow us to reconnect when they come back
         }
     }
     

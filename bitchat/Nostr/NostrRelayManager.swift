@@ -84,22 +84,48 @@ class NostrRelayManager: ObservableObject {
         messageHandlers[id] = handler
         
         let req = NostrRequest.subscribe(id: id, filters: [filter])
-        let message = try? JSONEncoder().encode(req)
         
-        guard let messageData = message,
-              let messageString = String(data: messageData, encoding: .utf8) else { return }
-        
-        // Send subscription to all connected relays
-        for (relayUrl, connection) in connections {
-            connection.send(.string(messageString)) { error in
-                if error == nil {
-                    Task { @MainActor in
-                        var subs = self.subscriptions[relayUrl] ?? Set<String>()
-                        subs.insert(id)
-                        self.subscriptions[relayUrl] = subs
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .sortedKeys // For consistent output
+            let message = try encoder.encode(req)
+            guard let messageString = String(data: message, encoding: .utf8) else { 
+                SecureLogger.log("❌ Failed to encode subscription request", category: SecureLogger.session, level: .error)
+                return 
+            }
+            
+            SecureLogger.log("📤 Sending subscription \(id) to \(connections.count) relays", 
+                            category: SecureLogger.session, level: .info)
+            SecureLogger.log("📋 Filter JSON length: \(messageString.count) chars", 
+                            category: SecureLogger.session, level: .info)
+            SecureLogger.log("📋 Full filter JSON: \(messageString)", 
+                            category: SecureLogger.session, level: .debug)
+            
+            // Send subscription to all connected relays
+            for (relayUrl, connection) in connections {
+                connection.send(.string(messageString)) { error in
+                    if let error = error {
+                        SecureLogger.log("❌ Failed to send subscription to \(relayUrl): \(error)", 
+                                        category: SecureLogger.session, level: .error)
+                    } else {
+                        SecureLogger.log("✅ Sent subscription \(id) to \(relayUrl)", 
+                                        category: SecureLogger.session, level: .debug)
+                        Task { @MainActor in
+                            var subs = self.subscriptions[relayUrl] ?? Set<String>()
+                            subs.insert(id)
+                            self.subscriptions[relayUrl] = subs
+                        }
                     }
                 }
             }
+            
+            if connections.isEmpty {
+                SecureLogger.log("⚠️ No relay connections available for subscription", 
+                                category: SecureLogger.session, level: .warning)
+            }
+        } catch {
+            SecureLogger.log("❌ Failed to encode subscription request: \(error)", 
+                            category: SecureLogger.session, level: .error)
         }
     }
     
@@ -196,26 +222,67 @@ class NostrRelayManager: ObservableObject {
         guard let data = message.data(using: .utf8) else { return }
         
         do {
-            // Try to decode as an event first
+            // Try to decode as an array first
             if let array = try JSONSerialization.jsonObject(with: data) as? [Any],
-               array.count >= 3,
-               let type = array[0] as? String,
-               type == "EVENT",
-               let subId = array[1] as? String,
-               let eventDict = array[2] as? [String: Any] {
+               array.count >= 2,
+               let type = array[0] as? String {
                 
-                let event = try NostrEvent(from: eventDict)
+                SecureLogger.log("📩 Received \(type) message from \(relayUrl)", 
+                                category: SecureLogger.session, level: .debug)
                 
-                DispatchQueue.main.async {
-                    // Update relay stats
-                    if let index = self.relays.firstIndex(where: { $0.url == relayUrl }) {
-                        self.relays[index].messagesReceived += 1
+                switch type {
+                case "EVENT":
+                    if array.count >= 3,
+                       let subId = array[1] as? String,
+                       let eventDict = array[2] as? [String: Any] {
+                        
+                        let event = try NostrEvent(from: eventDict)
+                        
+                        SecureLogger.log("📬 Processing event kind=\(event.kind) for subscription \(subId)", 
+                                        category: SecureLogger.session, level: .info)
+                        
+                        DispatchQueue.main.async {
+                            // Update relay stats
+                            if let index = self.relays.firstIndex(where: { $0.url == relayUrl }) {
+                                self.relays[index].messagesReceived += 1
+                            }
+                            
+                            // Call handler
+                            if let handler = self.messageHandlers[subId] {
+                                handler(event)
+                            } else {
+                                SecureLogger.log("⚠️ No handler for subscription \(subId)", 
+                                                category: SecureLogger.session, level: .warning)
+                            }
+                        }
                     }
                     
-                    // Call handler
-                    if let handler = self.messageHandlers[subId] {
-                        handler(event)
+                case "EOSE":
+                    if array.count >= 2,
+                       let subId = array[1] as? String {
+                        SecureLogger.log("📭 End of stored events for subscription \(subId)", 
+                                        category: SecureLogger.session, level: .debug)
                     }
+                    
+                case "OK":
+                    if array.count >= 3,
+                       let eventId = array[1] as? String,
+                       let success = array[2] as? Bool {
+                        let reason = array.count >= 4 ? (array[3] as? String ?? "no reason given") : "no reason given"
+                        SecureLogger.log("📮 Event \(eventId) \(success ? "accepted" : "rejected") by relay: \(reason)", 
+                                        category: SecureLogger.session, level: success ? .debug : .error)
+                    }
+                    
+                case "NOTICE":
+                    if array.count >= 2,
+                       let notice = array[1] as? String {
+                        SecureLogger.log("📢 Relay notice: \(notice)", 
+                                        category: SecureLogger.session, level: .info)
+                    }
+                    
+                default:
+                    SecureLogger.log("🔍 Unknown message type: \(type)", 
+                                    category: SecureLogger.session, level: .debug)
                 }
             }
         } catch {
@@ -227,12 +294,22 @@ class NostrRelayManager: ObservableObject {
         let req = NostrRequest.event(event)
         
         do {
-            let data = try JSONEncoder().encode(req)
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .sortedKeys
+            let data = try encoder.encode(req)
             let message = String(data: data, encoding: .utf8) ?? ""
+            
+            SecureLogger.log("📤 Sending event \(event.id) to \(relayUrl)", 
+                            category: SecureLogger.session, level: .info)
+            SecureLogger.log("📝 Event JSON: \(message.prefix(500))...", 
+                            category: SecureLogger.session, level: .debug)
             
             connection.send(.string(message)) { [weak self] error in
                 DispatchQueue.main.async {
-                    if error == nil {
+                    if let error = error {
+                        SecureLogger.log("❌ Failed to send event to \(relayUrl): \(error)", 
+                                        category: SecureLogger.session, level: .error)
+                    } else {
                         // Update relay stats
                         if let index = self?.relays.firstIndex(where: { $0.url == relayUrl }) {
                             self?.relays[index].messagesSent += 1
@@ -323,15 +400,60 @@ struct NostrFilter: Encodable {
     var since: Int?
     var until: Int?
     var limit: Int?
-    var tags: [String: [String]]?
+    
+    // Tag filters - stored internally but encoded specially
+    fileprivate var tagFilters: [String: [String]]?
+    
+    init() {
+        // Default initializer
+    }
+    
+    // Custom encoding to handle tag filters properly
+    enum CodingKeys: String, CodingKey {
+        case ids, authors, kinds, since, until, limit
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: DynamicCodingKey.self)
+        
+        // Encode standard fields
+        if let ids = ids { try container.encode(ids, forKey: DynamicCodingKey(stringValue: "ids")) }
+        if let authors = authors { try container.encode(authors, forKey: DynamicCodingKey(stringValue: "authors")) }
+        if let kinds = kinds { try container.encode(kinds, forKey: DynamicCodingKey(stringValue: "kinds")) }
+        if let since = since { try container.encode(since, forKey: DynamicCodingKey(stringValue: "since")) }
+        if let until = until { try container.encode(until, forKey: DynamicCodingKey(stringValue: "until")) }
+        if let limit = limit { try container.encode(limit, forKey: DynamicCodingKey(stringValue: "limit")) }
+        
+        // Encode tag filters with # prefix
+        if let tagFilters = tagFilters {
+            for (tag, values) in tagFilters {
+                try container.encode(values, forKey: DynamicCodingKey(stringValue: "#\(tag)"))
+            }
+        }
+    }
     
     // For NIP-17 gift wraps
     static func giftWrapsFor(pubkey: String, since: Date? = nil) -> NostrFilter {
-        return NostrFilter(
-            kinds: [1059], // Gift wrap kind
-            since: since?.timeIntervalSince1970.toInt(),
-            tags: ["p": [pubkey]]
-        )
+        var filter = NostrFilter()
+        filter.kinds = [1059] // Gift wrap kind
+        filter.since = since?.timeIntervalSince1970.toInt()
+        filter.tagFilters = ["p": [pubkey]]
+        filter.limit = 100 // Add a reasonable limit
+        return filter
+    }
+}
+
+// Dynamic coding key for tag filters
+private struct DynamicCodingKey: CodingKey {
+    var stringValue: String
+    var intValue: Int? { nil }
+    
+    init(stringValue: String) {
+        self.stringValue = stringValue
+    }
+    
+    init?(intValue: Int) {
+        return nil
     }
 }
 

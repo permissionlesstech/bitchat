@@ -24,6 +24,9 @@ struct NostrProtocol {
         senderIdentity: NostrIdentity
     ) throws -> NostrEvent {
         
+        SecureLogger.log("🔒 Creating private message to \(recipientPubkey.prefix(8))...", 
+                        category: SecureLogger.session, level: .info)
+        
         // 1. Create the rumor (unsigned event)
         let rumor = NostrEvent(
             pubkey: senderIdentity.publicKeyHex,
@@ -34,7 +37,10 @@ struct NostrProtocol {
         )
         
         // 2. Create ephemeral key for this message
-        let ephemeralKey = try P256K.Signing.PrivateKey()
+        let ephemeralKey = try P256K.Schnorr.PrivateKey()
+        let ephemeralPubkey = Data(ephemeralKey.xonly.bytes).hexEncodedString()
+        SecureLogger.log("🔑 Created ephemeral key for seal: \(ephemeralPubkey)", 
+                        category: SecureLogger.session, level: .debug)
         
         // 3. Seal the rumor (encrypt to recipient)
         let sealedEvent = try createSeal(
@@ -50,6 +56,9 @@ struct NostrProtocol {
             senderKey: ephemeralKey
         )
         
+        SecureLogger.log("✅ Created gift wrap with ID: \(giftWrap.id), pubkey: \(giftWrap.pubkey)", 
+                        category: SecureLogger.session, level: .info)
+        
         return giftWrap
     }
     
@@ -59,17 +68,38 @@ struct NostrProtocol {
         recipientIdentity: NostrIdentity
     ) throws -> (content: String, senderPubkey: String) {
         
+        SecureLogger.log("🔐 Starting decryption - gift wrap from: \(giftWrap.pubkey), our key: \(recipientIdentity.publicKeyHex)", 
+                        category: SecureLogger.session, level: .debug)
+        
         // 1. Unwrap the gift wrap
-        let seal = try unwrapGiftWrap(
-            giftWrap: giftWrap,
-            recipientKey: recipientIdentity.signingKey()
-        )
+        let seal: NostrEvent
+        do {
+            seal = try unwrapGiftWrap(
+                giftWrap: giftWrap,
+                recipientKey: recipientIdentity.schnorrSigningKey()
+            )
+            SecureLogger.log("✅ Successfully unwrapped gift wrap", 
+                            category: SecureLogger.session, level: .debug)
+        } catch {
+            SecureLogger.log("❌ Failed to unwrap gift wrap: \(error)", 
+                            category: SecureLogger.session, level: .error)
+            throw error
+        }
         
         // 2. Open the seal
-        let rumor = try openSeal(
-            seal: seal,
-            recipientKey: recipientIdentity.signingKey()
-        )
+        let rumor: NostrEvent
+        do {
+            rumor = try openSeal(
+                seal: seal,
+                recipientKey: recipientIdentity.schnorrSigningKey()
+            )
+            SecureLogger.log("✅ Successfully opened seal", 
+                            category: SecureLogger.session, level: .debug)
+        } catch {
+            SecureLogger.log("❌ Failed to open seal: \(error)", 
+                            category: SecureLogger.session, level: .error)
+            throw error
+        }
         
         return (content: rumor.content, senderPubkey: rumor.pubkey)
     }
@@ -79,7 +109,7 @@ struct NostrProtocol {
     private static func createSeal(
         rumor: NostrEvent,
         recipientPubkey: String,
-        senderKey: P256K.Signing.PrivateKey
+        senderKey: P256K.Schnorr.PrivateKey
     ) throws -> NostrEvent {
         
         let rumorJSON = try rumor.jsonString()
@@ -90,48 +120,58 @@ struct NostrProtocol {
         )
         
         let seal = NostrEvent(
-            pubkey: senderKey.publicKey.dataRepresentation.hexEncodedString(),
+            pubkey: Data(senderKey.xonly.bytes).hexEncodedString(),
             createdAt: randomizedTimestamp(),
             kind: .seal,
             tags: [],
             content: encrypted
         )
         
-        return try seal.sign(with: senderKey)
+        // Convert to P256K.Signing.PrivateKey for signing (temporary until we update sign method)
+        let signingKey = try P256K.Signing.PrivateKey(dataRepresentation: senderKey.dataRepresentation)
+        return try seal.sign(with: signingKey)
     }
     
     private static func createGiftWrap(
         seal: NostrEvent,
         recipientPubkey: String,
-        senderKey: P256K.Signing.PrivateKey
+        senderKey: P256K.Schnorr.PrivateKey  // This is the ephemeral key used for the seal
     ) throws -> NostrEvent {
         
         let sealJSON = try seal.jsonString()
+        
+        // Create new ephemeral key for gift wrap
+        let wrapKey = try P256K.Schnorr.PrivateKey()
+        SecureLogger.log("🎁 Creating gift wrap with ephemeral key: \(Data(wrapKey.xonly.bytes).hexEncodedString())", 
+                        category: SecureLogger.session, level: .debug)
+        
+        // Encrypt the seal with the new ephemeral key (not the seal's key)
         let encrypted = try encrypt(
             plaintext: sealJSON,
             recipientPubkey: recipientPubkey,
-            senderKey: senderKey
+            senderKey: wrapKey  // Use the gift wrap ephemeral key
         )
         
-        // Create new ephemeral key for gift wrap
-        let wrapKey = try P256K.Signing.PrivateKey()
-        
         let giftWrap = NostrEvent(
-            pubkey: wrapKey.publicKey.dataRepresentation.hexEncodedString(),
+            pubkey: Data(wrapKey.xonly.bytes).hexEncodedString(),
             createdAt: randomizedTimestamp(),
             kind: .giftWrap,
             tags: [["p", recipientPubkey]], // Tag recipient
-            content: encrypted,
-            expiration: Date().addingTimeInterval(86400 * 30) // 30 days
+            content: encrypted
         )
         
-        return try giftWrap.sign(with: wrapKey)
+        // Convert to P256K.Signing.PrivateKey for signing (temporary until we update sign method)
+        let signingKey = try P256K.Signing.PrivateKey(dataRepresentation: wrapKey.dataRepresentation)
+        return try giftWrap.sign(with: signingKey)
     }
     
     private static func unwrapGiftWrap(
         giftWrap: NostrEvent,
-        recipientKey: P256K.Signing.PrivateKey
+        recipientKey: P256K.Schnorr.PrivateKey
     ) throws -> NostrEvent {
+        
+        SecureLogger.log("🎁 Unwrapping gift wrap with pubkey: \(giftWrap.pubkey), our key: \(Data(recipientKey.xonly.bytes).hexEncodedString())", 
+                        category: SecureLogger.session, level: .debug)
         
         let decrypted = try decrypt(
             ciphertext: giftWrap.content,
@@ -144,12 +184,16 @@ struct NostrProtocol {
             throw NostrError.invalidEvent
         }
         
-        return try NostrEvent(from: sealDict)
+        let seal = try NostrEvent(from: sealDict)
+        SecureLogger.log("📦 Unwrapped seal with pubkey: \(seal.pubkey)", 
+                        category: SecureLogger.session, level: .debug)
+        
+        return seal
     }
     
     private static func openSeal(
         seal: NostrEvent,
-        recipientKey: P256K.Signing.PrivateKey
+        recipientKey: P256K.Schnorr.PrivateKey
     ) throws -> NostrEvent {
         
         let decrypted = try decrypt(
@@ -171,18 +215,25 @@ struct NostrProtocol {
     private static func encrypt(
         plaintext: String,
         recipientPubkey: String,
-        senderKey: P256K.Signing.PrivateKey
+        senderKey: P256K.Schnorr.PrivateKey
     ) throws -> String {
         
         guard let recipientPubkeyData = Data(hexString: recipientPubkey) else {
             throw NostrError.invalidPublicKey
         }
         
+        let senderPubkey = Data(senderKey.xonly.bytes).hexEncodedString()
+        SecureLogger.log("🔐 Encrypting - sender: \(senderPubkey), recipient: \(recipientPubkey)", 
+                        category: SecureLogger.session, level: .debug)
+        
         // Derive shared secret
         let sharedSecret = try deriveSharedSecret(
             privateKey: senderKey,
             publicKey: recipientPubkeyData
         )
+        
+        SecureLogger.log("🤝 Derived shared secret for encryption: \(sharedSecret.hexEncodedString().prefix(16))...", 
+                        category: SecureLogger.session, level: .debug)
         
         // Generate nonce
         let nonce = AES.GCM.Nonce()
@@ -206,64 +257,210 @@ struct NostrProtocol {
     private static func decrypt(
         ciphertext: String,
         senderPubkey: String,
-        recipientKey: P256K.Signing.PrivateKey
+        recipientKey: P256K.Schnorr.PrivateKey
     ) throws -> String {
+        
+        SecureLogger.log("🔐 Decrypt: sender pubkey: \(senderPubkey), ciphertext length: \(ciphertext.count)", 
+                        category: SecureLogger.session, level: .debug)
         
         guard let data = Data(base64Encoded: ciphertext),
               let senderPubkeyData = Data(hexString: senderPubkey) else {
+            SecureLogger.log("❌ Invalid ciphertext or sender pubkey format", 
+                            category: SecureLogger.session, level: .error)
             throw NostrError.invalidCiphertext
         }
+        
+        SecureLogger.log("📦 Ciphertext data length: \(data.count) bytes", 
+                        category: SecureLogger.session, level: .debug)
         
         // Extract components
         let nonceData = data.prefix(12)
         let ciphertextData = data.dropFirst(12).dropLast(16)
         let tagData = data.suffix(16)
         
-        // Derive shared secret
-        let sharedSecret = try deriveSharedSecret(
-            privateKey: recipientKey,
-            publicKey: senderPubkeyData
-        )
+        SecureLogger.log("📊 Components - nonce: \(nonceData.count)B, cipher: \(ciphertextData.count)B, tag: \(tagData.count)B", 
+                        category: SecureLogger.session, level: .debug)
         
-        // Decrypt
-        let sealedBox = try AES.GCM.SealedBox(
-            nonce: AES.GCM.Nonce(data: nonceData),
-            ciphertext: ciphertextData,
-            tag: tagData
-        )
+        // Derive shared secret - try with default Y coordinate first
+        var sharedSecret: Data
+        var decrypted: Data? = nil
         
-        let decrypted = try AES.GCM.open(
-            sealedBox,
-            using: SymmetricKey(data: sharedSecret)
-        )
+        do {
+            sharedSecret = try deriveSharedSecret(
+                privateKey: recipientKey,
+                publicKey: senderPubkeyData
+            )
+            SecureLogger.log("✅ Derived shared secret with first Y coordinate", 
+                            category: SecureLogger.session, level: .debug)
+            
+            // Try to decrypt
+            let sealedBox = try AES.GCM.SealedBox(
+                nonce: AES.GCM.Nonce(data: nonceData),
+                ciphertext: ciphertextData,
+                tag: tagData
+            )
+            
+            do {
+                decrypted = try AES.GCM.open(
+                    sealedBox,
+                    using: SymmetricKey(data: sharedSecret)
+                )
+                SecureLogger.log("✅ AES-GCM decryption successful with first Y coordinate", 
+                                category: SecureLogger.session, level: .debug)
+            } catch {
+                SecureLogger.log("⚠️ AES-GCM decryption failed with first Y coordinate: \(error)", 
+                                category: SecureLogger.session, level: .debug)
+                
+                // If the sender pubkey is x-only (32 bytes), try the other Y coordinate
+                if senderPubkeyData.count == 32 {
+                    SecureLogger.log("🔄 Trying alternate Y coordinate for x-only key", 
+                                    category: SecureLogger.session, level: .debug)
+                    
+                    // Force deriveSharedSecret to use odd Y by manipulating the data
+                    var altPubkey = Data()
+                    altPubkey.append(0x03) // Force odd Y
+                    altPubkey.append(senderPubkeyData)
+                    
+                    sharedSecret = try deriveSharedSecretDirect(
+                        privateKey: recipientKey,
+                        publicKey: altPubkey
+                    )
+                    
+                    decrypted = try AES.GCM.open(
+                        sealedBox,
+                        using: SymmetricKey(data: sharedSecret)
+                    )
+                    SecureLogger.log("✅ AES-GCM decryption successful with alternate Y coordinate", 
+                                    category: SecureLogger.session, level: .debug)
+                } else {
+                    throw error
+                }
+            }
+        } catch {
+            SecureLogger.log("❌ Failed to derive shared secret or decrypt: \(error)", 
+                            category: SecureLogger.session, level: .error)
+            throw error
+        }
         
-        return String(data: decrypted, encoding: .utf8) ?? ""
+        guard let finalDecrypted = decrypted else {
+            throw NostrError.encryptionFailed
+        }
+        
+        return String(data: finalDecrypted, encoding: .utf8) ?? ""
     }
     
     private static func deriveSharedSecret(
-        privateKey: P256K.Signing.PrivateKey,
+        privateKey: P256K.Schnorr.PrivateKey,
         publicKey: Data
     ) throws -> Data {
-        // ECDH key agreement
-        // Note: This is a placeholder implementation
-        // The actual P256K library should provide proper ECDH methods
-        // For now, we'll use a hash of both keys as a temporary shared secret
+        SecureLogger.log("🔑 Deriving shared secret - pubkey length: \(publicKey.count), hex: \(publicKey.hexEncodedString().prefix(16))...", 
+                        category: SecureLogger.session, level: .debug)
         
-        var combinedData = Data()
-        combinedData.append(privateKey.publicKey.dataRepresentation)
-        combinedData.append(publicKey)
+        // Convert Schnorr private key to KeyAgreement private key
+        let keyAgreementPrivateKey = try P256K.KeyAgreement.PrivateKey(
+            dataRepresentation: privateKey.dataRepresentation
+        )
         
-        let hash = CryptoKit.SHA256.hash(data: combinedData)
+        // Create KeyAgreement public key from the public key data
+        // For ECDH, we need the full 33-byte compressed public key (with 0x02 or 0x03 prefix)
+        var fullPublicKey = Data()
+        if publicKey.count == 32 { // X-only key, need to add prefix
+            // For x-only keys in Nostr/Bitcoin, we need to try both possible Y coordinates
+            // First try with even Y (0x02 prefix)
+            fullPublicKey.append(0x02)
+            fullPublicKey.append(publicKey)
+            SecureLogger.log("📏 Trying with 0x02 prefix (even Y) for x-only key", 
+                            category: SecureLogger.session, level: .debug)
+        } else {
+            fullPublicKey = publicKey
+        }
         
-        // Derive key using HKDF
-        let sharedSecret = HKDF<CryptoKit.SHA256>.deriveKey(
-            inputKeyMaterial: SymmetricKey(data: Data(hash)),
+        // Try to create public key, if it fails with even Y, try odd Y
+        let keyAgreementPublicKey: P256K.KeyAgreement.PublicKey
+        do {
+            keyAgreementPublicKey = try P256K.KeyAgreement.PublicKey(
+                dataRepresentation: fullPublicKey,
+                format: .compressed
+            )
+        } catch {
+            if publicKey.count == 32 {
+                // Try with odd Y (0x03 prefix)
+                SecureLogger.log("⚠️ Even Y failed, trying with 0x03 prefix (odd Y)", 
+                                category: SecureLogger.session, level: .debug)
+                fullPublicKey = Data()
+                fullPublicKey.append(0x03)
+                fullPublicKey.append(publicKey)
+                keyAgreementPublicKey = try P256K.KeyAgreement.PublicKey(
+                    dataRepresentation: fullPublicKey,
+                    format: .compressed
+                )
+            } else {
+                throw error
+            }
+        }
+        
+        // Perform ECDH
+        let sharedSecret = try keyAgreementPrivateKey.sharedSecretFromKeyAgreement(
+            with: keyAgreementPublicKey,
+            format: .compressed
+        )
+        
+        // Convert SharedSecret to Data
+        let sharedSecretData = sharedSecret.withUnsafeBytes { Data($0) }
+        SecureLogger.log("🤝 ECDH shared secret length: \(sharedSecretData.count)", 
+                        category: SecureLogger.session, level: .debug)
+        
+        // Derive key using HKDF for NIP-44 v2
+        let derivedKey = HKDF<CryptoKit.SHA256>.deriveKey(
+            inputKeyMaterial: SymmetricKey(data: sharedSecretData),
             salt: "nip44-v2".data(using: .utf8)!,
             info: Data(),
             outputByteCount: 32
         )
         
-        return sharedSecret.withUnsafeBytes { Data(Array($0)) }
+        let result = derivedKey.withUnsafeBytes { Data($0) }
+        SecureLogger.log("🔐 Final derived key length: \(result.count)", 
+                        category: SecureLogger.session, level: .debug)
+        return result
+    }
+    
+    // Direct version that doesn't try to add prefixes
+    private static func deriveSharedSecretDirect(
+        privateKey: P256K.Schnorr.PrivateKey,
+        publicKey: Data
+    ) throws -> Data {
+        SecureLogger.log("🔑 Direct shared secret - pubkey length: \(publicKey.count)", 
+                        category: SecureLogger.session, level: .debug)
+        
+        // Convert Schnorr private key to KeyAgreement private key
+        let keyAgreementPrivateKey = try P256K.KeyAgreement.PrivateKey(
+            dataRepresentation: privateKey.dataRepresentation
+        )
+        
+        // Use the public key as-is (should already have prefix)
+        let keyAgreementPublicKey = try P256K.KeyAgreement.PublicKey(
+            dataRepresentation: publicKey,
+            format: .compressed
+        )
+        
+        // Perform ECDH
+        let sharedSecret = try keyAgreementPrivateKey.sharedSecretFromKeyAgreement(
+            with: keyAgreementPublicKey,
+            format: .compressed
+        )
+        
+        // Convert SharedSecret to Data
+        let sharedSecretData = sharedSecret.withUnsafeBytes { Data($0) }
+        
+        // Derive key using HKDF for NIP-44 v2
+        let derivedKey = HKDF<CryptoKit.SHA256>.deriveKey(
+            inputKeyMaterial: SymmetricKey(data: sharedSecretData),
+            salt: "nip44-v2".data(using: .utf8)!,
+            info: Data(),
+            outputByteCount: 32
+        )
+        
+        return derivedKey.withUnsafeBytes { Data($0) }
     }
     
     private static func randomizedTimestamp() -> Date {
@@ -288,8 +485,7 @@ struct NostrEvent: Codable {
         createdAt: Date,
         kind: NostrProtocol.EventKind,
         tags: [[String]],
-        content: String,
-        expiration: Date? = nil
+        content: String
     ) {
         self.pubkey = pubkey
         self.created_at = Int(createdAt.timeIntervalSince1970)
@@ -298,12 +494,6 @@ struct NostrEvent: Codable {
         self.content = content
         self.sig = nil
         self.id = "" // Will be set during signing
-        
-        // Add expiration tag if provided
-        if let exp = expiration {
-            var mutableTags = tags
-            mutableTags.append(["expiration", String(Int(exp.timeIntervalSince1970))])
-        }
     }
     
     init(from dict: [String: Any]) throws {
@@ -325,11 +515,17 @@ struct NostrEvent: Codable {
     }
     
     func sign(with key: P256K.Signing.PrivateKey) throws -> NostrEvent {
-        let eventId = try calculateEventId()
-        // Sign the event ID with the private key
-        let eventIdData = Data(eventId.utf8)
-        let signature = try key.signature(for: eventIdData)
-        let signatureHex = try signature.derRepresentation.hexEncodedString()
+        let (eventId, eventIdHash) = try calculateEventId()
+        
+        // Convert to Schnorr key for Nostr signing
+        let schnorrKey = try P256K.Schnorr.PrivateKey(dataRepresentation: key.dataRepresentation)
+        
+        // Sign with Schnorr
+        var messageBytes = [UInt8](eventIdHash)
+        var auxRand = [UInt8](repeating: 0, count: 32) // Zero auxiliary randomness for deterministic signing
+        let schnorrSignature = try schnorrKey.signature(message: &messageBytes, auxiliaryRand: &auxRand)
+        
+        let signatureHex = schnorrSignature.dataRepresentation.hexEncodedString()
         
         var signed = self
         signed.id = eventId
@@ -337,7 +533,7 @@ struct NostrEvent: Codable {
         return signed
     }
     
-    private func calculateEventId() throws -> String {
+    private func calculateEventId() throws -> (String, Data) {
         let serialized = [
             0,
             pubkey,
@@ -349,7 +545,9 @@ struct NostrEvent: Codable {
         
         let data = try JSONSerialization.data(withJSONObject: serialized, options: [.withoutEscapingSlashes])
         let hash = CryptoKit.SHA256.hash(data: data)
-        return hash.compactMap { String(format: "%02x", $0) }.joined()
+        let hashData = Data(hash)
+        let hashHex = hash.compactMap { String(format: "%02x", $0) }.joined()
+        return (hashHex, hashData)
     }
     
     func jsonString() throws -> String {
