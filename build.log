@@ -80,18 +80,10 @@ EmitSwiftModule normal arm64 (in target 'bitchat_macOS' from project 'bitchat')
     cd /Users/jack/vibe/bitchat
     
 
-SwiftCompile normal arm64 Compiling\ BluetoothMeshService.swift /Users/jack/vibe/bitchat/bitchat/Services/BluetoothMeshService.swift (in target 'bitchat_macOS' from project 'bitchat')
-SwiftCompile normal arm64 /Users/jack/vibe/bitchat/bitchat/Services/BluetoothMeshService.swift (in target 'bitchat_macOS' from project 'bitchat')
+SwiftCompile normal arm64 Compiling\ ContentView.swift /Users/jack/vibe/bitchat/bitchat/Views/ContentView.swift (in target 'bitchat_macOS' from project 'bitchat')
+SwiftCompile normal arm64 /Users/jack/vibe/bitchat/bitchat/Views/ContentView.swift (in target 'bitchat_macOS' from project 'bitchat')
     cd /Users/jack/vibe/bitchat
     
-
-SwiftCompile normal arm64 Compiling\ BitchatPeer.swift /Users/jack/vibe/bitchat/bitchat/Models/BitchatPeer.swift (in target 'bitchat_macOS' from project 'bitchat')
-
-SwiftCompile normal arm64 /Users/jack/vibe/bitchat/bitchat/Models/BitchatPeer.swift (in target 'bitchat_macOS' from project 'bitchat')
-    cd /Users/jack/vibe/bitchat
-    
-
-SwiftDriverJobDiscovery normal arm64 Compiling BitchatPeer.swift (in target 'bitchat_macOS' from project 'bitchat')
 
 SwiftDriverJobDiscovery normal arm64 Emitting module for bitchat (in target 'bitchat_macOS' from project 'bitchat')
 
@@ -103,60 +95,9 @@ Copy /Users/jack/Library/Developer/Xcode/DerivedData/bitchat-fccgrhrjilfihpcztbc
     cd /Users/jack/vibe/bitchat
     builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/jack/Library/Developer/Xcode/DerivedData/bitchat-fccgrhrjilfihpcztbckqyghwohi/Build/Intermediates.noindex/bitchat.build/Debug/bitchat_macOS.build/Objects-normal/arm64/bitchat.abi.json /Users/jack/Library/Developer/Xcode/DerivedData/bitchat-fccgrhrjilfihpcztbckqyghwohi/Build/Products/Debug/bitchat.swiftmodule/arm64-apple-macos.abi.json
 
-Copy /Users/jack/Library/Developer/Xcode/DerivedData/bitchat-fccgrhrjilfihpcztbckqyghwohi/Build/Products/Debug/bitchat.swiftmodule/arm64-apple-macos.swiftmodule /Users/jack/Library/Developer/Xcode/DerivedData/bitchat-fccgrhrjilfihpcztbckqyghwohi/Build/Intermediates.noindex/bitchat.build/Debug/bitchat_macOS.build/Objects-normal/arm64/bitchat.swiftmodule (in target 'bitchat_macOS' from project 'bitchat')
-    cd /Users/jack/vibe/bitchat
-    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/jack/Library/Developer/Xcode/DerivedData/bitchat-fccgrhrjilfihpcztbckqyghwohi/Build/Intermediates.noindex/bitchat.build/Debug/bitchat_macOS.build/Objects-normal/arm64/bitchat.swiftmodule /Users/jack/Library/Developer/Xcode/DerivedData/bitchat-fccgrhrjilfihpcztbckqyghwohi/Build/Products/Debug/bitchat.swiftmodule/arm64-apple-macos.swiftmodule
-
 Copy /Users/jack/Library/Developer/Xcode/DerivedData/bitchat-fccgrhrjilfihpcztbckqyghwohi/Build/Products/Debug/bitchat.swiftmodule/Project/arm64-apple-macos.swiftsourceinfo /Users/jack/Library/Developer/Xcode/DerivedData/bitchat-fccgrhrjilfihpcztbckqyghwohi/Build/Intermediates.noindex/bitchat.build/Debug/bitchat_macOS.build/Objects-normal/arm64/bitchat.swiftsourceinfo (in target 'bitchat_macOS' from project 'bitchat')
     cd /Users/jack/vibe/bitchat
     builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/jack/Library/Developer/Xcode/DerivedData/bitchat-fccgrhrjilfihpcztbckqyghwohi/Build/Intermediates.noindex/bitchat.build/Debug/bitchat_macOS.build/Objects-normal/arm64/bitchat.swiftsourceinfo /Users/jack/Library/Developer/Xcode/DerivedData/bitchat-fccgrhrjilfihpcztbckqyghwohi/Build/Products/Debug/bitchat.swiftmodule/Project/arm64-apple-macos.swiftsourceinfo
-
-SwiftDriverJobDiscovery normal arm64 Compiling BluetoothMeshService.swift (in target 'bitchat_macOS' from project 'bitchat')
-
-SwiftCompile normal arm64 Compiling\ ChatViewModel.swift /Users/jack/vibe/bitchat/bitchat/ViewModels/ChatViewModel.swift (in target 'bitchat_macOS' from project 'bitchat')
-
-SwiftCompile normal arm64 /Users/jack/vibe/bitchat/bitchat/ViewModels/ChatViewModel.swift (in target 'bitchat_macOS' from project 'bitchat')
-    cd /Users/jack/vibe/bitchat
-    
-
-SwiftCompile normal arm64 Compiling\ ContentView.swift /Users/jack/vibe/bitchat/bitchat/Views/ContentView.swift (in target 'bitchat_macOS' from project 'bitchat')
-SwiftCompile normal arm64 /Users/jack/vibe/bitchat/bitchat/Views/ContentView.swift (in target 'bitchat_macOS' from project 'bitchat')
-    cd /Users/jack/vibe/bitchat
-    
-
-SwiftCompile normal arm64 Compiling\ BitchatApp.swift /Users/jack/vibe/bitchat/bitchat/BitchatApp.swift (in target 'bitchat_macOS' from project 'bitchat')
-
-SwiftCompile normal arm64 /Users/jack/vibe/bitchat/bitchat/BitchatApp.swift (in target 'bitchat_macOS' from project 'bitchat')
-    cd /Users/jack/vibe/bitchat
-    
-
-SwiftCompile normal arm64 Compiling\ MessageRetryService.swift /Users/jack/vibe/bitchat/bitchat/Services/MessageRetryService.swift (in target 'bitchat_macOS' from project 'bitchat')
-
-SwiftCompile normal arm64 /Users/jack/vibe/bitchat/bitchat/Services/MessageRetryService.swift (in target 'bitchat_macOS' from project 'bitchat')
-    cd /Users/jack/vibe/bitchat
-    
-
-SwiftCompile normal arm64 Compiling\ MessageRouter.swift /Users/jack/vibe/bitchat/bitchat/Services/MessageRouter.swift (in target 'bitchat_macOS' from project 'bitchat')
-
-SwiftCompile normal arm64 /Users/jack/vibe/bitchat/bitchat/Services/MessageRouter.swift (in target 'bitchat_macOS' from project 'bitchat')
-    cd /Users/jack/vibe/bitchat
-    
-
-SwiftCompile normal arm64 Compiling\ FingerprintView.swift /Users/jack/vibe/bitchat/bitchat/Views/FingerprintView.swift (in target 'bitchat_macOS' from project 'bitchat')
-
-SwiftCompile normal arm64 /Users/jack/vibe/bitchat/bitchat/Views/FingerprintView.swift (in target 'bitchat_macOS' from project 'bitchat')
-    cd /Users/jack/vibe/bitchat
-    
-
-SwiftDriverJobDiscovery normal arm64 Compiling MessageRetryService.swift (in target 'bitchat_macOS' from project 'bitchat')
-
-SwiftDriverJobDiscovery normal arm64 Compiling BitchatApp.swift (in target 'bitchat_macOS' from project 'bitchat')
-
-SwiftDriverJobDiscovery normal arm64 Compiling MessageRouter.swift (in target 'bitchat_macOS' from project 'bitchat')
-
-SwiftDriverJobDiscovery normal arm64 Compiling FingerprintView.swift (in target 'bitchat_macOS' from project 'bitchat')
-
-SwiftDriverJobDiscovery normal arm64 Compiling ChatViewModel.swift (in target 'bitchat_macOS' from project 'bitchat')
 
 SwiftDriverJobDiscovery normal arm64 Compiling ContentView.swift (in target 'bitchat_macOS' from project 'bitchat')
 
@@ -184,8 +125,8 @@ CopySwiftLibs /Users/jack/Library/Developer/Xcode/DerivedData/bitchat-fccgrhrjil
 ExtractAppIntentsMetadata (in target 'bitchat_macOS' from project 'bitchat')
     cd /Users/jack/vibe/bitchat
     /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/appintentsmetadataprocessor --toolchain-dir /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --module-name bitchat --sdk-root /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.5.sdk --xcode-version 16F6 --platform-family macOS --deployment-target 13.0 --bundle-identifier chat.bitchat --output /Users/jack/Library/Developer/Xcode/DerivedData/bitchat-fccgrhrjilfihpcztbckqyghwohi/Build/Products/Debug/bitchat.app/Contents/Resources --target-triple arm64-apple-macos13.0 --binary-file /Users/jack/Library/Developer/Xcode/DerivedData/bitchat-fccgrhrjilfihpcztbckqyghwohi/Build/Products/Debug/bitchat.app/Contents/MacOS/bitchat --dependency-file /Users/jack/Library/Developer/Xcode/DerivedData/bitchat-fccgrhrjilfihpcztbckqyghwohi/Build/Intermediates.noindex/bitchat.build/Debug/bitchat_macOS.build/Objects-normal/arm64/bitchat_dependency_info.dat --stringsdata-file /Users/jack/Library/Developer/Xcode/DerivedData/bitchat-fccgrhrjilfihpcztbckqyghwohi/Build/Intermediates.noindex/bitchat.build/Debug/bitchat_macOS.build/Objects-normal/arm64/ExtractedAppShortcutsMetadata.stringsdata --source-file-list /Users/jack/Library/Developer/Xcode/DerivedData/bitchat-fccgrhrjilfihpcztbckqyghwohi/Build/Intermediates.noindex/bitchat.build/Debug/bitchat_macOS.build/Objects-normal/arm64/bitchat.SwiftFileList --metadata-file-list /Users/jack/Library/Developer/Xcode/DerivedData/bitchat-fccgrhrjilfihpcztbckqyghwohi/Build/Intermediates.noindex/bitchat.build/Debug/bitchat_macOS.build/bitchat.DependencyMetadataFileList --static-metadata-file-list /Users/jack/Library/Developer/Xcode/DerivedData/bitchat-fccgrhrjilfihpcztbckqyghwohi/Build/Intermediates.noindex/bitchat.build/Debug/bitchat_macOS.build/bitchat.DependencyStaticMetadataFileList --swift-const-vals-list /Users/jack/Library/Developer/Xcode/DerivedData/bitchat-fccgrhrjilfihpcztbckqyghwohi/Build/Intermediates.noindex/bitchat.build/Debug/bitchat_macOS.build/Objects-normal/arm64/bitchat.SwiftConstValuesFileList --compile-time-extraction --deployment-aware-processing --validate-assistant-intents --no-app-shortcuts-localization
-2025-07-30 12:07:37.101 appintentsmetadataprocessor[19028:10313701] Starting appintentsmetadataprocessor export
-2025-07-30 12:07:37.102 appintentsmetadataprocessor[19028:10313701] warning: Metadata extraction skipped. No AppIntents.framework dependency found.
+2025-07-30 12:11:47.294 appintentsmetadataprocessor[19428:10321095] Starting appintentsmetadataprocessor export
+2025-07-30 12:11:47.295 appintentsmetadataprocessor[19428:10321095] warning: Metadata extraction skipped. No AppIntents.framework dependency found.
 
 CodeSign /Users/jack/Library/Developer/Xcode/DerivedData/bitchat-fccgrhrjilfihpcztbckqyghwohi/Build/Products/Debug/bitchat.app/Contents/MacOS/bitchat.debug.dylib (in target 'bitchat_macOS' from project 'bitchat')
     cd /Users/jack/vibe/bitchat
