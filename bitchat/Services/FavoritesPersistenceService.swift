@@ -360,26 +360,26 @@ class FavoritesPersistenceService: ObservableObject {
                 }
             }
             
-            // Convert to dictionary, cleaning up duplicates
-            var seenNicknames: [String: FavoriteRelationship] = [:]
+            // Convert to dictionary, cleaning up duplicates by public key (not nickname)
+            var seenPublicKeys: [Data: FavoriteRelationship] = [:]
             var cleanedRelationships: [FavoriteRelationship] = []
             
             for relationship in relationships {
-                // Check for duplicates by nickname
-                if let existing = seenNicknames[relationship.peerNickname] {
-                    SecureLogger.log("⚠️ Duplicate favorite found for '\(relationship.peerNickname)' (\(relationship.peerNoisePublicKey.hexEncodedString()))", 
+                // Check for duplicates by public key (the actual unique identifier)
+                if let existing = seenPublicKeys[relationship.peerNoisePublicKey] {
+                    SecureLogger.log("⚠️ Duplicate favorite found for public key \(relationship.peerNoisePublicKey.hexEncodedString()) - nicknames: '\(existing.peerNickname)' vs '\(relationship.peerNickname)'", 
                                     category: SecureLogger.session, level: .warning)
                     
                     // Keep the most recent or most complete relationship
                     if relationship.lastUpdated > existing.lastUpdated ||
                        (relationship.peerNostrPublicKey != nil && existing.peerNostrPublicKey == nil) {
                         // Replace with newer/more complete entry
-                        seenNicknames[relationship.peerNickname] = relationship
-                        cleanedRelationships.removeAll { $0.peerNickname == relationship.peerNickname }
+                        seenPublicKeys[relationship.peerNoisePublicKey] = relationship
+                        cleanedRelationships.removeAll { $0.peerNoisePublicKey == relationship.peerNoisePublicKey }
                         cleanedRelationships.append(relationship)
                     }
                 } else {
-                    seenNicknames[relationship.peerNickname] = relationship
+                    seenPublicKeys[relationship.peerNoisePublicKey] = relationship
                     cleanedRelationships.append(relationship)
                 }
             }

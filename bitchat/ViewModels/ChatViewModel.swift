@@ -879,37 +879,56 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         // This happens when peer IDs change between sessions
         if privateChats[peerID] == nil || privateChats[peerID]?.isEmpty == true {
             
-            // Look for messages from this nickname under other peer IDs
+            // Get the fingerprint for this peer
+            let currentFingerprint = getFingerprint(for: peerID)
+            
+            // Look for messages under other peer IDs with the same fingerprint
             var migratedMessages: [BitchatMessage] = []
             var oldPeerIDsToRemove: [String] = []
             
             for (oldPeerID, messages) in privateChats {
                 if oldPeerID != peerID {
-                    // Check if any messages in this chat are from the peer's nickname
-                    // Check if this chat contains messages with this peer
-                    let messagesWithPeer = messages.filter { msg in
-                        // Message is FROM the peer to us
-                        (msg.sender == peerNickname && msg.sender != nickname) ||
-                        // OR message is FROM us TO the peer
-                        (msg.sender == nickname && (msg.recipientNickname == peerNickname || 
-                         // Also check if this was a private message in a chat that only has us and one other person
-                         (msg.isPrivate && messages.allSatisfy { m in 
-                             m.sender == nickname || m.sender == peerNickname 
-                         })))
-                    }
+                    // Check if this old peer ID has the same fingerprint (same actual peer)
+                    let oldFingerprint = peerIDToPublicKeyFingerprint[oldPeerID]
                     
-                    if !messagesWithPeer.isEmpty {
+                    if let currentFp = currentFingerprint,
+                       let oldFp = oldFingerprint,
+                       currentFp == oldFp {
+                        // Same peer with different ID - migrate all messages
+                        migratedMessages.append(contentsOf: messages)
+                        oldPeerIDsToRemove.append(oldPeerID)
                         
-                        // Check if ALL messages in this chat are between us and this peer
-                        let allMessagesAreWithPeer = messages.allSatisfy { msg in
-                            (msg.sender == peerNickname || msg.sender == nickname) &&
-                            (msg.recipientNickname == nil || msg.recipientNickname == peerNickname || msg.recipientNickname == nickname)
+                        SecureLogger.log("📦 Migrating \(messages.count) messages from old peer ID \(oldPeerID) to \(peerID) based on fingerprint match", 
+                                        category: SecureLogger.session, level: .info)
+                    } else if currentFingerprint == nil || oldFingerprint == nil {
+                        // Fallback: use nickname matching only if we don't have fingerprints
+                        // This is less reliable but handles legacy data
+                        let messagesWithPeer = messages.filter { msg in
+                            // Message is FROM the peer to us
+                            (msg.sender == peerNickname && msg.sender != nickname) ||
+                            // OR message is FROM us TO the peer
+                            (msg.sender == nickname && (msg.recipientNickname == peerNickname || 
+                             // Also check if this was a private message in a chat that only has us and one other person
+                             (msg.isPrivate && messages.allSatisfy { m in 
+                                 m.sender == nickname || m.sender == peerNickname 
+                             })))
                         }
                         
-                        if allMessagesAreWithPeer {
-                            // This entire chat history belongs to this peer, migrate it all
-                            migratedMessages.append(contentsOf: messages)
-                            oldPeerIDsToRemove.append(oldPeerID)
+                        if !messagesWithPeer.isEmpty {
+                            // Check if ALL messages in this chat are between us and this peer
+                            let allMessagesAreWithPeer = messages.allSatisfy { msg in
+                                (msg.sender == peerNickname || msg.sender == nickname) &&
+                                (msg.recipientNickname == nil || msg.recipientNickname == peerNickname || msg.recipientNickname == nickname)
+                            }
+                            
+                            if allMessagesAreWithPeer {
+                                // This entire chat history likely belongs to this peer, migrate it all
+                                migratedMessages.append(contentsOf: messages)
+                                oldPeerIDsToRemove.append(oldPeerID)
+                                
+                                SecureLogger.log("📦 Migrating \(messages.count) messages from old peer ID \(oldPeerID) to \(peerID) based on nickname match (no fingerprints available)", 
+                                                category: SecureLogger.session, level: .warning)
+                            }
                         }
                     }
                 }
@@ -2880,22 +2899,41 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 
                 // First check if we need to migrate existing messages from this sender
                 let senderNickname = message.sender
+                let currentFingerprint = getFingerprint(for: peerID)
+                
                 if privateChats[peerID] == nil || privateChats[peerID]?.isEmpty == true {
-                    // Check if we have messages from this nickname under a different peer ID
+                    // Check if we have messages under a different peer ID with same fingerprint
                     var migratedMessages: [BitchatMessage] = []
                     var oldPeerIDsToRemove: [String] = []
                     
                     for (oldPeerID, messages) in privateChats {
                         if oldPeerID != peerID {
-                            // Check if this chat contains messages with this sender
-                            let isRelevantChat = messages.contains { msg in
-                                (msg.sender == senderNickname && msg.sender != nickname) ||
-                                (msg.sender == nickname && msg.recipientNickname == senderNickname)
-                            }
+                            // Check fingerprint match first (most reliable)
+                            let oldFingerprint = peerIDToPublicKeyFingerprint[oldPeerID]
                             
-                            if isRelevantChat {
+                            if let currentFp = currentFingerprint,
+                               let oldFp = oldFingerprint,
+                               currentFp == oldFp {
+                                // Same peer with different ID - migrate all messages
                                 migratedMessages.append(contentsOf: messages)
                                 oldPeerIDsToRemove.append(oldPeerID)
+                                
+                                SecureLogger.log("📦 Migrating \(messages.count) messages from old peer ID \(oldPeerID) to \(peerID) for incoming message (fingerprint match)", 
+                                                category: SecureLogger.session, level: .info)
+                            } else if currentFingerprint == nil || oldFingerprint == nil {
+                                // Fallback: Check if this chat contains messages with this sender by nickname
+                                let isRelevantChat = messages.contains { msg in
+                                    (msg.sender == senderNickname && msg.sender != nickname) ||
+                                    (msg.sender == nickname && msg.recipientNickname == senderNickname)
+                                }
+                                
+                                if isRelevantChat {
+                                    migratedMessages.append(contentsOf: messages)
+                                    oldPeerIDsToRemove.append(oldPeerID)
+                                    
+                                    SecureLogger.log("📦 Migrating \(messages.count) messages from old peer ID \(oldPeerID) to \(peerID) for incoming message (nickname match)", 
+                                                    category: SecureLogger.session, level: .warning)
+                                }
                             }
                         }
                     }

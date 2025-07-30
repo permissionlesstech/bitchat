@@ -1419,11 +1419,20 @@ class BluetoothMeshService: NSObject {
                 let networkSize = self.estimatedNetworkSize
                 self.messageBloomFilter = OptimizedBloomFilter.adaptive(for: networkSize)
                 
-                // Clear other duplicate detection sets
+                // Clean up old processed messages (keep last 10 minutes of messages)
                 self.processedMessagesLock.lock()
-                self.processedMessages.removeAll()
+                let cutoffTime = Date().addingTimeInterval(-600) // 10 minutes ago
+                let originalCount = self.processedMessages.count
+                self.processedMessages = self.processedMessages.filter { _, state in
+                    state.firstSeen > cutoffTime
+                }
+                let removedCount = originalCount - self.processedMessages.count
                 self.processedMessagesLock.unlock()
                 
+                if removedCount > 0 {
+                    SecureLogger.log("🧹 Cleaned up \(removedCount) old processed messages (kept \(self.processedMessages.count) from last 10 minutes)", 
+                                    category: SecureLogger.session, level: .debug)
+                }
             }
         }
         
