@@ -43,6 +43,13 @@ struct BitchatApp: App {
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
                     // Check for shared content when app becomes active
                     checkForSharedContent()
+                    // Notify MessageRouter to check for Nostr messages
+                    NotificationCenter.default.post(name: .appDidBecomeActive, object: nil)
+                }
+                #elseif os(macOS)
+                .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+                    // Notify MessageRouter to check for Nostr messages
+                    NotificationCenter.default.post(name: .appDidBecomeActive, object: nil)
                 }
                 #endif
         }

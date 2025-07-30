@@ -42,6 +42,8 @@ class NoiseHandshakeCoordinator {
     private let handshakeTimeout: TimeInterval = 10.0
     private let retryDelay: TimeInterval = 2.0
     private let minTimeBetweenHandshakes: TimeInterval = 1.0 // Reduced from 5.0 for faster recovery
+    private let establishedSessionTTL: TimeInterval = 300.0 // 5 minutes - sessions older than this can be cleaned up
+    private let maxEstablishedSessions = 50 // Limit total established sessions
     
     // Track handshake messages to detect duplicates
     private var processedHandshakeMessages: Set<Data> = []
@@ -220,11 +222,12 @@ class NoiseHandshakeCoordinator {
         }
     }
     
-    /// Clean up stale handshake states
+    /// Clean up stale handshake states and old established sessions
     func cleanupStaleHandshakes(staleTimeout: TimeInterval = 30.0) -> [String] {
         return handshakeQueue.sync {
             let now = Date()
             var stalePeerIDs: [String] = []
+            var establishedSessions: [(peerID: String, since: Date)] = []
             
             for (peerID, state) in handshakeStates {
                 var isStale = false
@@ -242,6 +245,13 @@ class NoiseHandshakeCoordinator {
                     if now > timeout {
                         isStale = true
                     }
+                case .established(let since):
+                    // Track established sessions for potential cleanup
+                    establishedSessions.append((peerID, since))
+                    // Clean up very old established sessions
+                    if now.timeIntervalSince(since) > establishedSessionTTL {
+                        isStale = true
+                    }
                 default:
                     break
                 }
@@ -253,9 +263,28 @@ class NoiseHandshakeCoordinator {
                 }
             }
             
+            // If we have too many established sessions, clean up the oldest ones
+            if establishedSessions.count > maxEstablishedSessions {
+                // Sort by age (oldest first)
+                let sortedSessions = establishedSessions.sorted { $0.since < $1.since }
+                let sessionsToRemove = sortedSessions.count - maxEstablishedSessions
+                
+                for i in 0..<sessionsToRemove {
+                    let peerID = sortedSessions[i].peerID
+                    stalePeerIDs.append(peerID)
+                    SecureLogger.log("Removing old established session for \(peerID) to maintain session limit", 
+                                   category: SecureLogger.handshake, level: .info)
+                }
+            }
+            
             // Clean up stale states
             for peerID in stalePeerIDs {
                 handshakeStates.removeValue(forKey: peerID)
+            }
+            
+            if !stalePeerIDs.isEmpty {
+                SecureLogger.log("Cleaned up \(stalePeerIDs.count) stale handshake states", 
+                               category: SecureLogger.handshake, level: .info)
             }
             
             return stalePeerIDs

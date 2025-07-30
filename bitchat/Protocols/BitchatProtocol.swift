@@ -162,6 +162,10 @@ enum MessageType: UInt8 {
     case systemValidation = 0x24        // Session validation ping
     case handshakeRequest = 0x25        // Request handshake for pending messages
     
+    // Favorite system messages
+    case favorited = 0x30               // Peer favorited us
+    case unfavorited = 0x31             // Peer unfavorited us
+    
     var description: String {
         switch self {
         case .announce: return "announce"
@@ -183,6 +187,8 @@ enum MessageType: UInt8 {
         case .protocolNack: return "protocolNack"
         case .systemValidation: return "systemValidation"
         case .handshakeRequest: return "handshakeRequest"
+        case .favorited: return "favorited"
+        case .unfavorited: return "unfavorited"
         }
     }
 }
@@ -369,7 +375,7 @@ struct DeliveryAck: Codable {
 struct ReadReceipt: Codable {
     let originalMessageID: String
     let receiptID: String
-    let readerID: String  // Who read it
+    var readerID: String  // Who read it
     let readerNickname: String
     let timestamp: Date
     
