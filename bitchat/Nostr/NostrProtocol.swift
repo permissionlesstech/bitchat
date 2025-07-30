@@ -466,7 +466,13 @@ struct NostrProtocol {
     private static func randomizedTimestamp() -> Date {
         // Add random offset to current time for privacy
         let offset = TimeInterval.random(in: -900...900) // +/- 15 minutes
-        return Date().addingTimeInterval(offset)
+        let now = Date()
+        let randomized = now.addingTimeInterval(offset)
+        
+        SecureLogger.log("⏰ Randomized timestamp: now=\(now), offset=\(offset)s (\(offset/60)min), result=\(randomized)", 
+                        category: SecureLogger.session, level: .debug)
+        
+        return randomized
     }
 }
 
