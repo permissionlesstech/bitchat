@@ -1001,38 +1001,7 @@ class ChatViewModel: ObservableObject {
     }
     
     func getRSSIColor(rssi: Int, colorScheme: ColorScheme) -> Color {
-        let isDark = colorScheme == .dark
-        let cacheKey = "\(rssi)_\(isDark)"
-        
-        // Check cache first
-        if let cachedColor = rssiColorCache[cacheKey] {
-            return cachedColor
-        }
-        
-        // RSSI typically ranges from -30 (excellent) to -90 (poor)
-        // We'll map this to colors from green (strong) to red (weak)
-        
-        let color: Color
-        if rssi >= -50 {
-            // Excellent signal: bright green
-            color = isDark ? Color(red: 0.0, green: 1.0, blue: 0.0) : Color(red: 0.0, green: 0.7, blue: 0.0)
-        } else if rssi >= -60 {
-            // Good signal: green-yellow
-            color = isDark ? Color(red: 0.5, green: 1.0, blue: 0.0) : Color(red: 0.3, green: 0.7, blue: 0.0)
-        } else if rssi >= -70 {
-            // Fair signal: yellow
-            color = isDark ? Color(red: 1.0, green: 1.0, blue: 0.0) : Color(red: 0.7, green: 0.7, blue: 0.0)
-        } else if rssi >= -80 {
-            // Weak signal: orange
-            color = isDark ? Color(red: 1.0, green: 0.6, blue: 0.0) : Color(red: 0.8, green: 0.4, blue: 0.0)
-        } else {
-            // Poor signal: red
-            color = isDark ? Color(red: 1.0, green: 0.2, blue: 0.2) : Color(red: 0.8, green: 0.0, blue: 0.0)
-        }
-        
-        // Cache the result
-        rssiColorCache[cacheKey] = color
-        return color
+        return themeManager.getRSSIColor(rssi: rssi, colorScheme: colorScheme)
     }
     
     // MARK: - Autocomplete
@@ -1132,16 +1101,10 @@ class ChatViewModel: ObservableObject {
     // MARK: - Message Formatting
     
     func getSenderColor(for message: BitchatMessage, colorScheme: ColorScheme) -> Color {
-        let isDark = colorScheme == .dark
-        let primaryColor = isDark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
-        
-        // Always use the same color for all senders - no RSSI-based coloring
-        return primaryColor
+        return themeManager.primaryTextColor(for: colorScheme)
     }
     
-    
-    func formatMessageContent(_ message: BitchatMessage, colorScheme: ColorScheme) -> AttributedString {
-        let isDark = colorScheme == .dark
+    func formatMessageContent(_ message: BitchatMessage, colorScheme: ColorScheme, themeManager: ThemeManager) -> AttributedString {
         let contentText = message.content
         var processedContent = AttributedString()
         
@@ -1174,7 +1137,7 @@ class ChatViewModel: ObservableObject {
                 if !beforeText.isEmpty {
                     var normalStyle = AttributeContainer()
                     normalStyle.font = .system(size: 14, design: .monospaced)
-                    normalStyle.foregroundColor = isDark ? Color.white : Color.black
+                    normalStyle.foregroundColor = themeManager.primaryTextColor(for: colorScheme)
                     processedContent.append(AttributedString(beforeText).mergingAttributes(normalStyle))
                 }
                 
@@ -1184,10 +1147,10 @@ class ChatViewModel: ObservableObject {
                 matchStyle.font = .system(size: 14, weight: .semibold, design: .monospaced)
                 
                 if matchType == "mention" {
-                    matchStyle.foregroundColor = Color.orange
+                    matchStyle.foregroundColor = themeManager.mentionColor(for: colorScheme)
                 } else {
                     // Hashtag
-                    matchStyle.foregroundColor = Color.blue
+                    matchStyle.foregroundColor = themeManager.hashtagColor(for: colorScheme)
                     matchStyle.underlineStyle = .single
                 }
                 
@@ -1202,14 +1165,14 @@ class ChatViewModel: ObservableObject {
             let remainingText = String(contentText[lastEndIndex...])
             var normalStyle = AttributeContainer()
             normalStyle.font = .system(size: 14, design: .monospaced)
-            normalStyle.foregroundColor = isDark ? Color.white : Color.black
+            normalStyle.foregroundColor = themeManager.primaryTextColor(for: colorScheme)
             processedContent.append(AttributedString(remainingText).mergingAttributes(normalStyle))
         }
         
         return processedContent
     }
     
-    func formatMessageAsText(_ message: BitchatMessage, colorScheme: ColorScheme) -> AttributedString {
+    func formatMessageAsText(_ message: BitchatMessage, colorScheme: ColorScheme, themeManager: ThemeManager) -> AttributedString {
         // Check cache first
         let isDark = colorScheme == .dark
         if let cachedText = message.getCachedFormattedText(isDark: isDark) {
@@ -1219,13 +1182,13 @@ class ChatViewModel: ObservableObject {
         // Not cached, format the message
         var result = AttributedString()
         
-        let primaryColor = isDark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
-        let secondaryColor = primaryColor.opacity(0.7)
+        let primaryColor = themeManager.primaryTextColor(for: colorScheme)
+        let secondaryColor = themeManager.secondaryTextColor(for: colorScheme)
         
         // Timestamp
         let timestamp = AttributedString("[\(formatTimestamp(message.timestamp))] ")
         var timestampStyle = AttributeContainer()
-        timestampStyle.foregroundColor = message.sender == "system" ? Color.gray : secondaryColor
+        timestampStyle.foregroundColor = message.sender == "system" ? themeManager.systemTextColor(for: colorScheme) : secondaryColor
         timestampStyle.font = .system(size: 12, design: .monospaced)
         result.append(timestamp.mergingAttributes(timestampStyle))
         
@@ -1294,12 +1257,12 @@ class ChatViewModel: ObservableObject {
                     matchStyle.font = .system(size: 14, weight: .semibold, design: .monospaced)
                     
                     if type == "hashtag" {
-                        matchStyle.foregroundColor = Color.blue
+                        matchStyle.foregroundColor = themeManager.hashtagColor(for: colorScheme)
                         matchStyle.underlineStyle = .single
                     } else if type == "mention" {
-                        matchStyle.foregroundColor = Color.orange
+                        matchStyle.foregroundColor = themeManager.mentionColor(for: colorScheme)
                     } else if type == "url" {
-                        matchStyle.foregroundColor = Color.blue
+                        matchStyle.foregroundColor = themeManager.linkColor(for: colorScheme)
                         matchStyle.underlineStyle = .single
                     }
                     
@@ -1322,7 +1285,12 @@ class ChatViewModel: ObservableObject {
         } else {
             // System message
             var contentStyle = AttributeContainer()
-            contentStyle.foregroundColor = Color.gray
+            // Check for welcome message
+            if message.content.contains("get people around you to download bitchat") {
+                contentStyle.foregroundColor = themeManager.hashtagColor(for: colorScheme)
+            } else {
+                contentStyle.foregroundColor = themeManager.systemTextColor(for: colorScheme)
+            }
             let content = AttributedString("* \(message.content) *")
             contentStyle.font = .system(size: 12, design: .monospaced).italic()
             result.append(content.mergingAttributes(contentStyle))
@@ -1334,34 +1302,45 @@ class ChatViewModel: ObservableObject {
         return result
     }
     
-    func formatMessage(_ message: BitchatMessage, colorScheme: ColorScheme) -> AttributedString {
+    func formatMessage(_ message: BitchatMessage, colorScheme: ColorScheme, themeManager: ThemeManager) -> AttributedString {
         var result = AttributedString()
         
-        let isDark = colorScheme == .dark
-        let primaryColor = isDark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
-        let secondaryColor = primaryColor.opacity(0.7)
+        let primaryColor = themeManager.primaryTextColor(for: colorScheme)
+        let secondaryColor = themeManager.secondaryTextColor(for: colorScheme)
         
         let timestamp = AttributedString("[\(formatTimestamp(message.timestamp))] ")
         var timestampStyle = AttributeContainer()
-        timestampStyle.foregroundColor = message.sender == "system" ? Color.gray : secondaryColor
+        timestampStyle.foregroundColor = message.sender == "system" ? themeManager.systemTextColor(for: colorScheme) : secondaryColor
         timestampStyle.font = .system(size: 12, design: .monospaced)
         result.append(timestamp.mergingAttributes(timestampStyle))
         
-        if message.sender == "system" {
-            let content = AttributedString("* \(message.content) *")
-            var contentStyle = AttributeContainer()
-            contentStyle.foregroundColor = Color.gray
-            contentStyle.font = .system(size: 12, design: .monospaced).italic()
-            result.append(content.mergingAttributes(contentStyle))
-        } else {
-            let sender = AttributedString("<\(message.sender)> ")
+        if message.sender != "system" {
+            // Sender
+            let sender = AttributedString("<@\(message.sender)> ")
             var senderStyle = AttributeContainer()
             
+<<<<<<< HEAD
+            // Get sender color
+            let senderColor: Color
+            if message.sender == nickname {
+                senderColor = primaryColor
+            } else if let peerID = message.senderPeerID ?? getPeerIDForNickname(message.sender),
+                      let rssi = meshService.getPeerRSSI()[peerID] {
+                senderColor = themeManager.getRSSIColor(rssi: rssi.intValue, colorScheme: colorScheme)
+            } else {
+                // No RSSI data available - use a neutral color
+                senderColor = primaryColor.opacity(0.7)
+            }
+            
+            senderStyle.foregroundColor = senderColor
+            senderStyle.font = .system(size: 12, weight: .medium, design: .monospaced)
+=======
             // Use consistent color for all senders
             senderStyle.foregroundColor = primaryColor
             // Bold the user's own nickname
             let fontWeight: Font.Weight = message.sender == nickname ? .bold : .medium
             senderStyle.font = .system(size: 12, weight: fontWeight, design: .monospaced)
+>>>>>>> origin/main
             result.append(sender.mergingAttributes(senderStyle))
             
             
@@ -1383,7 +1362,7 @@ class ChatViewModel: ObservableObject {
                     if !beforeText.isEmpty {
                         var normalStyle = AttributeContainer()
                         normalStyle.font = .system(size: 14, design: .monospaced)
-                        normalStyle.foregroundColor = isDark ? Color.white : Color.black
+                        normalStyle.foregroundColor = themeManager.primaryTextColor(for: colorScheme)
                         processedContent.append(AttributedString(beforeText).mergingAttributes(normalStyle))
                     }
                     
@@ -1391,7 +1370,7 @@ class ChatViewModel: ObservableObject {
                     let mentionText = String(contentText[range])
                     var mentionStyle = AttributeContainer()
                     mentionStyle.font = .system(size: 14, weight: .semibold, design: .monospaced)
-                    mentionStyle.foregroundColor = Color.orange
+                    mentionStyle.foregroundColor = themeManager.mentionColor(for: colorScheme)
                     processedContent.append(AttributedString(mentionText).mergingAttributes(mentionStyle))
                     
                     lastEndIndex = range.upperBound
@@ -1403,7 +1382,7 @@ class ChatViewModel: ObservableObject {
                 let remainingText = String(contentText[lastEndIndex...])
                 var normalStyle = AttributeContainer()
                 normalStyle.font = .system(size: 14, design: .monospaced)
-                normalStyle.foregroundColor = isDark ? Color.white : Color.black
+                normalStyle.foregroundColor = themeManager.primaryTextColor(for: colorScheme)
                 processedContent.append(AttributedString(remainingText).mergingAttributes(normalStyle))
             }
             
@@ -1416,6 +1395,13 @@ class ChatViewModel: ObservableObject {
                 relayStyle.font = .system(size: 11, design: .monospaced)
                 result.append(relay.mergingAttributes(relayStyle))
             }
+        } else {
+            // System message
+            var contentStyle = AttributeContainer()
+            contentStyle.foregroundColor = Color.gray
+            let content = AttributedString("* \(message.content) *")
+            contentStyle.font = .system(size: 12, design: .monospaced).italic()
+            result.append(content.mergingAttributes(contentStyle))
         }
         
         return result

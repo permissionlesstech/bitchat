@@ -8,6 +8,10 @@
 	<array>
 		<string>group.chat.bitchat</string>
 	</array>
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+	<key>com.apple.security.files.downloads.read-write</key>
+	<true/>
 	<key>com.apple.security.device.bluetooth</key>
 	<true/>
 </dict>

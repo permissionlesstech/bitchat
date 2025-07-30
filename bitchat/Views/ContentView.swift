@@ -54,6 +54,7 @@ struct ContentView: View {
     // MARK: - Properties
     
     @EnvironmentObject var viewModel: ChatViewModel
+    @EnvironmentObject var themeManager: ThemeManager
     @State private var messageText = ""
     @State private var textFieldSelection: NSRange? = nil
     @FocusState private var isTextFieldFocused: Bool
@@ -77,15 +78,15 @@ struct ContentView: View {
     // MARK: - Computed Properties
     
     private var backgroundColor: Color {
-        colorScheme == .dark ? Color.black : Color.white
+        themeManager.backgroundColor(for: colorScheme)
     }
     
     private var textColor: Color {
-        colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
+        themeManager.primaryTextColor(for: colorScheme)
     }
     
     private var secondaryTextColor: Color {
-        colorScheme == .dark ? Color.green.opacity(0.8) : Color(red: 0, green: 0.5, blue: 0).opacity(0.8)
+        themeManager.secondaryTextColor(for: colorScheme)
     }
     
     // MARK: - Body
@@ -180,6 +181,12 @@ struct ContentView: View {
                 showPrivateChat = newValue != nil
             }
         }
+        .onChange(of: showSidebar) { isOpen in
+            if isOpen {
+                // Auto-dismiss keyboard when sidebar opens
+                isTextFieldFocused = false
+            }
+        }
         .sheet(isPresented: $showAppInfo) {
             AppInfoView()
         }
@@ -259,7 +266,7 @@ struct ContentView: View {
                             
                             if message.sender == "system" {
                                 // System messages
-                                Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme))
+                                Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme, themeManager: themeManager))
                                     .textSelection(.enabled)
                                     .fixedSize(horizontal: false, vertical: true)
                                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -268,7 +275,7 @@ struct ContentView: View {
                                 VStack(alignment: .leading, spacing: 0) {
                                     HStack(alignment: .top, spacing: 0) {
                                         // Single text view for natural wrapping
-                                        Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme))
+                                        Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme, themeManager: themeManager))
                                             .textSelection(.enabled)
                                             .fixedSize(horizontal: false, vertical: true)
                                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -276,7 +283,7 @@ struct ContentView: View {
                                         // Delivery status indicator for private messages
                                         if message.isPrivate && message.sender == viewModel.nickname,
                                            let status = message.deliveryStatus {
-                                            DeliveryStatusView(status: status, colorScheme: colorScheme)
+                                            DeliveryStatusView(status: status)
                                                 .padding(.leading, 4)
                                         }
                                     }
@@ -393,7 +400,7 @@ struct ContentView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .buttonStyle(.plain)
-                        .background(Color.gray.opacity(0.1))
+                        .background(themeManager.secondaryBackgroundColor(for: colorScheme).opacity(0.1))
                     }
                 }
                 .background(backgroundColor)
@@ -457,7 +464,7 @@ struct ContentView: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                             }
                             .buttonStyle(.plain)
-                            .background(Color.gray.opacity(0.1))
+                            .background(themeManager.secondaryBackgroundColor(for: colorScheme).opacity(0.1))
                         }
                     }
                 }
@@ -541,9 +548,9 @@ struct ContentView: View {
             Button(action: sendMessage) {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 20))
-                    .foregroundColor(messageText.isEmpty ? Color.gray :
+                    .foregroundColor(messageText.isEmpty ? themeManager.secondaryTextColor(for: colorScheme) :
                                             viewModel.selectedPrivateChatPeer != nil
-                                             ? Color.orange : textColor)
+                                             ? themeManager.accentColor(for: colorScheme) : textColor)
             }
             .buttonStyle(.plain)
             .padding(.trailing, 12)
@@ -574,7 +581,7 @@ struct ContentView: View {
         HStack(spacing: 0) {
             // Grey vertical bar for visual continuity
             Rectangle()
-                .fill(Color.gray.opacity(0.3))
+                .fill(themeManager.secondaryTextColor(for: colorScheme).opacity(0.3))
                 .frame(width: 1)
             
             VStack(alignment: .leading, spacing: 0) {
@@ -661,12 +668,21 @@ struct ContentView: View {
                                 } else if peer.hasUnreadMessages {
                                     Image(systemName: "envelope.fill")
                                         .font(.system(size: 12))
+<<<<<<< HEAD
+                                        .foregroundColor(themeManager.unreadMessageColor(for: colorScheme))
+                                        .accessibilityLabel("Unread message from \(displayName)")
+                                } else if let rssi = rssi {
+                                    Circle()
+                                        .fill(themeManager.getRSSIColor(rssi: rssi, colorScheme: colorScheme))
+                                        .frame(width: 8, height: 8)
+=======
                                         .foregroundColor(Color.orange)
                                         .accessibilityLabel("Unread message from \(peer.displayName)")
                                 } else if let rssi = peer.rssi {
                                     Image(systemName: "circle.fill")
                                         .font(.system(size: 8))
                                         .foregroundColor(viewModel.getRSSIColor(rssi: rssi, colorScheme: colorScheme))
+>>>>>>> origin/main
                                         .accessibilityLabel("Signal strength: \(rssi > -60 ? "excellent" : rssi > -70 ? "good" : rssi > -80 ? "fair" : "poor")")
                                 } else {
                                     // No RSSI data available
@@ -691,6 +707,16 @@ struct ContentView: View {
                                         .foregroundColor(peerNicknames[peer.id] != nil ? textColor : secondaryTextColor)
                                     
                                     // Encryption status icon (after peer name)
+<<<<<<< HEAD
+                                    let encryptionStatus = viewModel.getEncryptionStatus(for: peerID)
+                                    Image(systemName: encryptionStatus.icon)
+                                        .font(.system(size: 10))
+                                        .foregroundColor(encryptionStatus == .noiseVerified ? themeManager.successColor(for: colorScheme) :
+                                                       encryptionStatus == .noiseSecured ? textColor :
+                                                       encryptionStatus == .noiseHandshaking ? themeManager.warningColor(for: colorScheme) :
+                                                       themeManager.errorColor(for: colorScheme))
+                                        .accessibilityLabel("Encryption: \(encryptionStatus == .noiseVerified ? "verified" : encryptionStatus == .noiseSecured ? "secured" : encryptionStatus == .noiseHandshaking ? "establishing" : "none")")
+=======
                                     if let icon = peer.encryptionStatus.icon {
                                         Image(systemName: icon)
                                             .font(.system(size: 10))
@@ -700,6 +726,7 @@ struct ContentView: View {
                                                            Color.red)
                                             .accessibilityLabel("Encryption: \(peer.encryptionStatus == .noiseVerified ? "verified" : peer.encryptionStatus == .noiseSecured ? "secured" : peer.encryptionStatus == .noiseHandshaking ? "establishing" : "none")")
                                     }
+>>>>>>> origin/main
                                     
                                     Spacer()
                                     
@@ -709,7 +736,11 @@ struct ContentView: View {
                                     }) {
                                         Image(systemName: peer.isFavorite ? "star.fill" : "star")
                                             .font(.system(size: 12))
+<<<<<<< HEAD
+                                            .foregroundColor(isFavorite ? themeManager.favoriteColor(for: colorScheme) : secondaryTextColor)
+=======
                                             .foregroundColor(peer.isFavorite ? Color.yellow : secondaryTextColor)
+>>>>>>> origin/main
                                     }
                                     .buttonStyle(.plain)
                                     .accessibilityLabel(peer.isFavorite ? "Remove \(peer.displayName) from favorites" : "Add \(peer.displayName) to favorites")
@@ -736,6 +767,15 @@ struct ContentView: View {
                         }
                         }
                     }
+                    
+                    // Add divider before themes section if there are people
+                    if !viewModel.connectedPeers.isEmpty {
+                        Divider()
+                            .padding(.vertical, 4)
+                    }
+                    
+                    // Theme selector section
+                    ThemeSelectorView()
                 }
                 .padding(.vertical, 8)
             }
@@ -859,7 +899,7 @@ struct ContentView: View {
                 if !viewModel.unreadPrivateMessages.isEmpty {
                     Image(systemName: "envelope.fill")
                         .font(.system(size: 12))
-                        .foregroundColor(Color.orange)
+                        .foregroundColor(themeManager.warningColor(for: colorScheme))
                         .accessibilityLabel("Unread private messages")
                 }
                 
@@ -874,7 +914,7 @@ struct ContentView: View {
                         .font(.system(size: 12, design: .monospaced))
                         .accessibilityHidden(true)
                 }
-                .foregroundColor(viewModel.isConnected ? textColor : Color.red)
+                .foregroundColor(viewModel.isConnected ? textColor : themeManager.errorColor(for: colorScheme))
             }
             .onTapGesture {
                 withAnimation(.easeInOut(duration: 0.2)) {
@@ -918,9 +958,17 @@ struct ContentView: View {
                         HStack(spacing: 6) {
                             Text("\(privatePeerNick)")
                                 .font(.system(size: 16, weight: .medium, design: .monospaced))
-                                .foregroundColor(Color.orange)
+                                .foregroundColor(themeManager.accentColor(for: colorScheme))
                             // Dynamic encryption status icon
                             let encryptionStatus = viewModel.getEncryptionStatus(for: privatePeerID)
+<<<<<<< HEAD
+                            Image(systemName: encryptionStatus.icon)
+                                .font(.system(size: 14))
+                                .foregroundColor(encryptionStatus == .noiseVerified ? themeManager.successColor(for: colorScheme) :
+                                               encryptionStatus == .noiseSecured ? themeManager.warningColor(for: colorScheme) :
+                                               themeManager.errorColor(for: colorScheme))
+                                .accessibilityLabel("Encryption status: \(encryptionStatus == .noiseVerified ? "verified" : encryptionStatus == .noiseSecured ? "secured" : "not encrypted")")
+=======
                             if let icon = encryptionStatus.icon {
                                 Image(systemName: icon)
                                     .font(.system(size: 14))
@@ -929,6 +977,7 @@ struct ContentView: View {
                                                    Color.red)
                                     .accessibilityLabel("Encryption status: \(encryptionStatus == .noiseVerified ? "verified" : encryptionStatus == .noiseSecured ? "secured" : "not encrypted")")
                             }
+>>>>>>> origin/main
                         }
                         .frame(maxWidth: .infinity)
                         .accessibilityLabel("Private chat with \(privatePeerNick)")
@@ -944,7 +993,7 @@ struct ContentView: View {
                     }) {
                         Image(systemName: viewModel.isFavorite(peerID: privatePeerID) ? "star.fill" : "star")
                             .font(.system(size: 16))
-                            .foregroundColor(viewModel.isFavorite(peerID: privatePeerID) ? Color.yellow : textColor)
+                            .foregroundColor(viewModel.isFavorite(peerID: privatePeerID) ? themeManager.favoriteColor(for: colorScheme) : textColor)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(viewModel.isFavorite(peerID: privatePeerID) ? "Remove from favorites" : "Add to favorites")
@@ -969,6 +1018,7 @@ struct MessageContentView: View {
     let viewModel: ChatViewModel
     let colorScheme: ColorScheme
     let isMentioned: Bool
+    @EnvironmentObject var themeManager: ThemeManager
     
     var body: some View {
         let content = message.content
@@ -1000,12 +1050,12 @@ struct MessageContentView: View {
                 // Note: We can't have clickable links in concatenated Text, so hashtags won't be clickable
                 result = result + Text(segment.text)
                     .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                    .foregroundColor(Color.blue)
-                    .underline()
-            } else if segment.type == "mention" {
-                result = result + Text(segment.text)
-                    .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                    .foregroundColor(Color.orange)
+                    .foregroundColor(themeManager.accentColor(for: colorScheme))
+                                                .underline()
+                    } else if segment.type == "mention" {
+                        result = result + Text(segment.text)
+                            .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                            .foregroundColor(themeManager.accentColor(for: colorScheme))
             } else {
                 result = result + Text(segment.text)
                     .font(.system(size: 14, design: .monospaced))
@@ -1076,16 +1126,17 @@ struct MessageContentView: View {
 // Delivery status indicator view
 struct DeliveryStatusView: View {
     let status: DeliveryStatus
-    let colorScheme: ColorScheme
+    @Environment(\.colorScheme) var colorScheme
+    @EnvironmentObject var themeManager: ThemeManager
     
     // MARK: - Computed Properties
     
     private var textColor: Color {
-        colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
+        themeManager.primaryTextColor(for: colorScheme)
     }
     
     private var secondaryTextColor: Color {
-        colorScheme == .dark ? Color.green.opacity(0.8) : Color(red: 0, green: 0.5, blue: 0).opacity(0.8)
+        themeManager.secondaryTextColor(for: colorScheme)
     }
     
     // MARK: - Body
@@ -1119,13 +1170,13 @@ struct DeliveryStatusView: View {
                 Image(systemName: "checkmark")
                     .font(.system(size: 10, weight: .bold))
             }
-            .foregroundColor(Color(red: 0.0, green: 0.478, blue: 1.0))  // Bright blue
+            .foregroundColor(themeManager.accentColor(for: colorScheme))
             .help("Read by \(nickname)")
             
         case .failed(let reason):
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 10))
-                .foregroundColor(Color.red.opacity(0.8))
+                .foregroundColor(themeManager.errorColor(for: colorScheme).opacity(0.8))
                 .help("Failed: \(reason)")
             
         case .partiallyDelivered(let reached, let total):
