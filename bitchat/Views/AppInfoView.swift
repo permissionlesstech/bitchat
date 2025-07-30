@@ -287,4 +287,5 @@ struct IRCToggle: View {
 
 #Preview {
     AppInfoView()
+        .environmentObject(ChatViewModel())
 }
