@@ -465,12 +465,24 @@ struct NostrProtocol {
     
     private static func randomizedTimestamp() -> Date {
         // Add random offset to current time for privacy
-        let offset = TimeInterval.random(in: -900...900) // +/- 15 minutes
+        // TEMPORARY: Reduced range to debug timestamp issue
+        let offset = TimeInterval.random(in: -60...60) // +/- 1 minute (was +/- 15 minutes)
         let now = Date()
         let randomized = now.addingTimeInterval(offset)
         
-        SecureLogger.log("⏰ Randomized timestamp: now=\(now), offset=\(offset)s (\(offset/60)min), result=\(randomized)", 
-                        category: SecureLogger.session, level: .debug)
+        // Log with explicit UTC and local time for debugging
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        formatter.timeZone = TimeZone(abbreviation: "UTC")
+        let nowUTC = formatter.string(from: now)
+        let randomizedUTC = formatter.string(from: randomized)
+        
+        formatter.timeZone = TimeZone.current
+        let nowLocal = formatter.string(from: now)
+        let randomizedLocal = formatter.string(from: randomized)
+        
+        SecureLogger.log("⏰ Timestamp: now=\(nowUTC) UTC (\(nowLocal) local), offset=\(Int(offset))s (\(Int(offset/60))min), result=\(randomizedUTC) UTC (\(randomizedLocal) local)", 
+                        category: SecureLogger.session, level: .info)
         
         return randomized
     }
