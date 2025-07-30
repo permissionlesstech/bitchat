@@ -719,9 +719,9 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     func sendPrivateMessage(_ content: String, to peerID: String) {
         guard !content.isEmpty else { return }
         
-        // Check if peer is available on mesh
+        // Check if peer is available on mesh (actually connected, not just known)
         let meshPeers = meshService.getPeerNicknames()
-        let peerAvailableOnMesh = meshPeers[peerID] != nil
+        let peerAvailableOnMesh = meshService.isPeerConnected(peerID)
         let recipientNickname: String
         
         if let meshNickname = meshPeers[peerID] {
@@ -822,6 +822,13 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     /// - Note: Switches the UI to private chat mode and loads message history
     @MainActor
     func startPrivateChat(with peerID: String) {
+        // Safety check: Don't allow starting chat with ourselves
+        if peerID == meshService.myPeerID {
+            SecureLogger.log("⚠️ Attempted to start private chat with self, ignoring", 
+                            category: SecureLogger.session, level: .warning)
+            return
+        }
+        
         // Try to get nickname from mesh first, then from peer list
         let peerNickname = meshService.getPeerNicknames()[peerID] ?? 
                           allPeers.first(where: { $0.id == peerID })?.displayName ?? 

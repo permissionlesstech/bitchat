@@ -57,9 +57,9 @@ class MessageRouter: ObservableObject {
         
         let finalMessageId = messageId ?? UUID().uuidString
         
-        // Check if peer is available on mesh
+        // Check if peer is available on mesh (actually connected, not just known)
         let recipientHexID = recipientNoisePublicKey.hexEncodedString()
-        let peerAvailableOnMesh = meshService.getPeerNicknames()[recipientHexID] != nil
+        let peerAvailableOnMesh = meshService.isPeerConnected(recipientHexID)
         
         // Check if this is a mutual favorite
         let isMutualFavorite = favoritesService.isMutualFavorite(recipientNoisePublicKey)
@@ -569,7 +569,7 @@ class MessageRouter: ObservableObject {
             }
         }
         
-        let isConnectedOnMesh = meshService.getPeerNicknames()[actualRecipientHexID] != nil
+        let isConnectedOnMesh = meshService.isPeerConnected(actualRecipientHexID)
         
         if isConnectedOnMesh && preferredTransport != .nostr {
             // Send via mesh
