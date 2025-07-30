@@ -30,7 +30,7 @@ This project is released into the public domain. See the [LICENSE](LICENSE) file
 - **Performance Optimizations**: LZ4 message compression, adaptive battery modes, and optimized networking
 
 
-## Technical Architecture
+## [Technical Architecture](https://deepwiki.com/permissionlesstech/bitchat)
 
 ### Binary Protocol
 bitchat uses an efficient binary protocol optimized for Bluetooth LE:
