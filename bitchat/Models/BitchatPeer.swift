@@ -155,7 +155,12 @@ class PeerManager: ObservableObject {
             // Check if this peer is actually connected (not just known via relay)
             let isConnected = meshService.isPeerConnected(peerID)
             let isKnown = meshService.isPeerKnown(peerID)
-            let isRelayConnected = !isConnected && isKnown
+            // In a mesh network, a peer can only be relay-connected if:
+            // 1. We know about them (have received announce)
+            // 2. We're not directly connected
+            // 3. There are other peers that could relay (mesh peer count > 2)
+            // For now, disable relay detection until we have proper relay tracking
+            let isRelayConnected = false
             
             // Debug logging for relay connection detection
             if isKnown && !isConnected {

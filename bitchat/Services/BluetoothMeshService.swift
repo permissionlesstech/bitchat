@@ -3560,6 +3560,20 @@ class BluetoothMeshService: NSObject {
                         if let peripheralStoredRSSI = self.peripheralRSSI[peripheralUUID] {
                             self.updatePeerRSSI(senderID, rssi: peripheralStoredRSSI)
                         }
+                        
+                        // If peer was previously relay-connected, update to direct connection
+                        if let session = self.peerSessions[senderID], !session.isConnected && session.hasReceivedAnnounce {
+                            SecureLogger.log("Upgrading peer \(senderID) from relay to direct connection", 
+                                           category: SecureLogger.session, level: .info)
+                            session.isConnected = true
+                            session.updateBluetoothConnection(peripheral: peripheral, characteristic: nil)
+                            
+                            // Trigger immediate RSSI read for upgraded connection
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak peripheral] in
+                                guard let peripheral = peripheral, peripheral.state == .connected else { return }
+                                peripheral.readRSSI()
+                            }
+                        }
                     }
                 }
                 
@@ -4681,8 +4695,13 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
         // Don't show connected message yet - wait for key exchange
         // This prevents the connect/disconnect/connect pattern
         
-        // Request RSSI reading
-        peripheral.readRSSI()
+        // Delay RSSI reading to get more accurate value after connection stabilizes
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak peripheral] in
+            guard let peripheral = peripheral, peripheral.state == .connected else { return }
+            SecureLogger.log("Reading initial RSSI for peripheral \(peripheralID)", 
+                           category: SecureLogger.session, level: .debug)
+            peripheral.readRSSI()
+        }
         
         // iOS 11+ BLE 5.0: Request 2M PHY for better range and speed
         if #available(iOS 11.0, macOS 10.14, *) {
@@ -4781,6 +4800,14 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
                     let timeSinceLastNotification = now.timeIntervalSince(lastNotification)
                     if timeSinceLastNotification < self.disconnectNotificationDedupeWindow {
                         SecureLogger.log("Physical disconnect for \(peerID) - duplicate disconnect within \(timeSinceLastNotification)s, NOT notifying delegate", category: SecureLogger.session, level: .info)
+                        return false
+                    }
+                }
+                
+                // Check if this is an Unknown peer that never properly connected
+                if let session = self.peerSessions[peerID] {
+                    if session.nickname == "Unknown" && !session.hasReceivedAnnounce {
+                        SecureLogger.log("Physical disconnect for \(peerID) - Unknown peer that never announced, NOT notifying delegate", category: SecureLogger.session, level: .info)
                         return false
                     }
                 }
@@ -6998,11 +7025,28 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
     
     // Update RSSI for all connected peripherals
     private func updateAllPeripheralRSSI() {
+        // Use peripheral mappings to ensure we catch all connected peripherals
+        for (_, mapping) in peripheralMappings {
+            if let peripheral = mapping.peripheral, peripheral.state == .connected {
+                // Only read RSSI if we have a real peer ID (not temp ID)
+                if let peerID = mapping.peerID, peerID.count == 16 {
+                    SecureLogger.log("Reading RSSI for peer \(peerID) via peripheral \(peripheral.identifier.uuidString)", 
+                                   category: SecureLogger.session, level: .debug)
+                    peripheral.readRSSI()
+                }
+            }
+        }
         
-        // Read RSSI for all connected peripherals
-        for (_, peripheral) in connectedPeripherals {
-            if peripheral.state == .connected {
-                peripheral.readRSSI()
+        // Also check legacy connectedPeripherals for any we might have missed
+        for (peerID, peripheral) in connectedPeripherals {
+            if peripheral.state == .connected && peerID.count == 16 {
+                // Only read if not already covered by peripheralMappings
+                let peripheralID = peripheral.identifier.uuidString
+                if peripheralMappings[peripheralID] == nil {
+                    SecureLogger.log("Reading RSSI for legacy mapping peer \(peerID)", 
+                                   category: SecureLogger.session, level: .debug)
+                    peripheral.readRSSI()
+                }
             }
         }
     }
