@@ -488,6 +488,7 @@ class BluetoothMeshService: NSObject {
     private var coverTrafficTimer: Timer?
     private let coverTrafficPrefix = "☂DUMMY☂"  // Prefix to identify dummy messages after decryption
     private var lastCoverTrafficTime = Date()
+    private var isCoverTrafficEnabled = false
     
     // MARK: - Connection State
     
@@ -1354,10 +1355,7 @@ class BluetoothMeshService: NSObject {
         // Setup battery optimizer
         setupBatteryOptimizer()
         
-        // Start cover traffic for privacy (disabled by default for now)
-        // TODO: Make this configurable in settings
-        let coverTrafficEnabled = true
-        if coverTrafficEnabled {
+        if isCoverTrafficEnabled {
             SecureLogger.log("Cover traffic enabled", category: SecureLogger.security, level: .info)
             startCoverTraffic()
         }
@@ -4912,7 +4910,22 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
     }
     
     // MARK: - Cover Traffic
-    
+
+    func setCoverTrafficEnabled(_ enabled: Bool) {
+        if enabled {
+            guard !isCoverTrafficEnabled else { return }
+            isCoverTrafficEnabled = true
+            SecureLogger.log("Cover traffic enabled", category: SecureLogger.security, level: .info)
+            startCoverTraffic()
+        } else {
+            guard isCoverTrafficEnabled else { return }
+            isCoverTrafficEnabled = false
+            SecureLogger.log("Cover traffic disabled", category: SecureLogger.security, level: .info)
+            coverTrafficTimer?.invalidate()
+            coverTrafficTimer = nil
+        }
+    }
+
     private func startCoverTraffic() {
         // Start cover traffic with random interval
         scheduleCoverTraffic()

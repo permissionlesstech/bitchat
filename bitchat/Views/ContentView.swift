@@ -182,6 +182,7 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showAppInfo) {
             AppInfoView()
+                .environmentObject(viewModel)
         }
         .sheet(isPresented: Binding(
             get: { viewModel.showingFingerprintFor != nil },

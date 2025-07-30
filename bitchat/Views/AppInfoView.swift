@@ -3,6 +3,7 @@ import SwiftUI
 struct AppInfoView: View {
     @Environment(\.dismiss) var dismiss
     @Environment(\.colorScheme) var colorScheme
+    @EnvironmentObject var viewModel: ChatViewModel
     
     private var backgroundColor: Color {
         colorScheme == .dark ? Color.black : Color.white
@@ -51,6 +52,11 @@ struct AppInfoView: View {
         enum Warning {
             static let title = "WARNING"
             static let message = "private message security has not yet been fully audited. do not use for critical situations until this warning disappears."
+        }
+
+        enum Settings {
+            static let title = "SETTINGS"
+            static let coverTraffic = "cover traffic"
         }
     }
     
@@ -164,6 +170,14 @@ struct AppInfoView: View {
                 .font(.system(size: 14, design: .monospaced))
                 .foregroundColor(textColor)
             }
+
+            // Settings
+            VStack(alignment: .leading, spacing: 16) {
+                SectionHeader(Strings.Settings.title)
+
+                IRCToggle(title: Strings.Settings.coverTraffic, isOn: $viewModel.coverTrafficEnabled)
+
+            }
             
             // Warning
             VStack(alignment: .leading, spacing: 6) {
@@ -241,6 +255,33 @@ struct FeatureRow: View {
             
             Spacer()
         }
+    }
+}
+
+struct IRCToggle: View {
+    let title: String
+    @Binding var isOn: Bool
+    @Environment(\.colorScheme) var colorScheme
+    
+    private var textColor: Color {
+        colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
+    }
+    
+    var body: some View {
+        Button(action: { isOn.toggle() }) {
+            HStack(spacing: 8) {
+                Text(isOn ? "[X]" : "[ ]")
+                    .font(.system(size: 14, weight: .bold, design: .monospaced))
+                    .foregroundColor(textColor)
+                
+                Text(title)
+                    .font(.system(size: 14, design: .monospaced))
+                    .foregroundColor(textColor)
+                
+                Spacer()
+            }
+        }
+        .buttonStyle(.plain)
     }
 }
 
