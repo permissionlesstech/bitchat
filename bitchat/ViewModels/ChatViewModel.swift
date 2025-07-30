@@ -1029,6 +1029,65 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         guard let peerPublicKey = notification.userInfo?["peerPublicKey"] as? Data else { return }
         
         Task { @MainActor in
+            // Handle noise key updates
+            if let isKeyUpdate = notification.userInfo?["isKeyUpdate"] as? Bool,
+               isKeyUpdate,
+               let oldKey = notification.userInfo?["oldPeerPublicKey"] as? Data {
+                let oldPeerID = oldKey.hexEncodedString()
+                let newPeerID = peerPublicKey.hexEncodedString()
+                
+                // If we have a private chat open with the old peer ID, update it to the new one
+                if selectedPrivateChatPeer == oldPeerID {
+                    SecureLogger.log("📱 Updating private chat peer ID due to key change: \(oldPeerID) -> \(newPeerID)", 
+                                    category: SecureLogger.session, level: .info)
+                    
+                    // Transfer private chat messages to new peer ID
+                    if let messages = privateChats[oldPeerID] {
+                        privateChats[newPeerID] = messages
+                        privateChats.removeValue(forKey: oldPeerID)
+                    }
+                    
+                    // Transfer unread status
+                    if unreadPrivateMessages.contains(oldPeerID) {
+                        unreadPrivateMessages.remove(oldPeerID)
+                        unreadPrivateMessages.insert(newPeerID)
+                    }
+                    
+                    // Update selected peer
+                    selectedPrivateChatPeer = newPeerID
+                    
+                    // Update fingerprint tracking if needed
+                    if let fingerprint = peerIDToPublicKeyFingerprint[oldPeerID] {
+                        peerIDToPublicKeyFingerprint.removeValue(forKey: oldPeerID)
+                        peerIDToPublicKeyFingerprint[newPeerID] = fingerprint
+                        selectedPrivateChatFingerprint = fingerprint
+                    }
+                    
+                    // Force UI refresh
+                    objectWillChange.send()
+                } else {
+                    // Even if the chat isn't open, migrate any existing private chat data
+                    if let messages = privateChats[oldPeerID] {
+                        SecureLogger.log("📱 Migrating private chat messages from \(oldPeerID) to \(newPeerID)", 
+                                        category: SecureLogger.session, level: .debug)
+                        privateChats[newPeerID] = messages
+                        privateChats.removeValue(forKey: oldPeerID)
+                    }
+                    
+                    // Transfer unread status
+                    if unreadPrivateMessages.contains(oldPeerID) {
+                        unreadPrivateMessages.remove(oldPeerID)
+                        unreadPrivateMessages.insert(newPeerID)
+                    }
+                    
+                    // Update fingerprint mapping
+                    if let fingerprint = peerIDToPublicKeyFingerprint[oldPeerID] {
+                        peerIDToPublicKeyFingerprint.removeValue(forKey: oldPeerID)
+                        peerIDToPublicKeyFingerprint[newPeerID] = fingerprint
+                    }
+                }
+            }
+            
             // First check if this is a peer ID update for our current chat
             updatePrivateChatPeerIfNeeded()
             

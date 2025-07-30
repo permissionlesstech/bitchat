@@ -266,11 +266,15 @@ class FavoritesPersistenceService: ObservableObject {
         favorites[newKey] = updated
         saveFavorites()
         
-        // Notify observers
+        // Notify observers with both old and new keys
         NotificationCenter.default.post(
             name: .favoriteStatusChanged,
             object: nil,
-            userInfo: ["peerPublicKey": newKey]
+            userInfo: [
+                "peerPublicKey": newKey,
+                "oldPeerPublicKey": oldKey,
+                "isKeyUpdate": true
+            ]
         )
     }
     
