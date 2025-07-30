@@ -555,6 +555,8 @@ class BluetoothMeshService: NSObject {
     private var gracefullyLeftPeers = Set<String>()  // Track peers that sent leave messages
     private var gracefulLeaveTimestamps: [String: Date] = [:]  // Track when peers left
     private let gracefulLeaveExpirationTime: TimeInterval = 300.0  // 5 minutes
+    private var recentDisconnectNotifications: [String: Date] = [:]  // Track recent disconnect notifications to prevent duplicates
+    private let disconnectNotificationDedupeWindow: TimeInterval = 2.0  // 2 seconds window for deduplication
     private var peerLastSeenTimestamps = LRUCache<String, Date>(maxSize: 100)  // Bounded cache for peer timestamps
     private var cleanupTimer: Timer?  // Timer to clean up stale peers
     
@@ -2497,6 +2499,15 @@ class BluetoothMeshService: NSObject {
             gracefulLeaveTimestamps.removeValue(forKey: peerID)
             SecureLogger.log("Cleaned up expired gracefullyLeft entry for \(peerID)", 
                            category: SecureLogger.session, level: .debug)
+        }
+        
+        // Clean up old disconnect notifications
+        let oldDisconnectNotifications = recentDisconnectNotifications.filter { (_, timestamp) in
+            now.timeIntervalSince(timestamp) > 60.0  // Clean up after 1 minute
+        }.map { $0.key }
+        
+        for peerID in oldDisconnectNotifications {
+            recentDisconnectNotifications.removeValue(forKey: peerID)
         }
         
         let peersToRemove = collectionsQueue.sync(flags: .barrier) {
@@ -4735,12 +4746,26 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
             // Check if peer gracefully left and notify delegate
             let shouldNotifyDisconnect = collectionsQueue.sync {
                 let isGracefullyLeft = self.gracefullyLeftPeers.contains(peerID)
+                
+                // Check if we recently sent a disconnect notification for this peer
+                let now = Date()
+                if let lastNotification = self.recentDisconnectNotifications[peerID] {
+                    let timeSinceLastNotification = now.timeIntervalSince(lastNotification)
+                    if timeSinceLastNotification < self.disconnectNotificationDedupeWindow {
+                        SecureLogger.log("Physical disconnect for \(peerID) - duplicate disconnect within \(timeSinceLastNotification)s, NOT notifying delegate", category: SecureLogger.session, level: .info)
+                        return false
+                    }
+                }
+                
                 if isGracefullyLeft {
                     SecureLogger.log("Physical disconnect for \(peerID) - was gracefully left, NOT notifying delegate", category: SecureLogger.session, level: .info)
+                    return false
                 } else {
                     SecureLogger.log("Physical disconnect for \(peerID) - was NOT gracefully left, will notify delegate", category: SecureLogger.session, level: .info)
+                    // Track this notification
+                    self.recentDisconnectNotifications[peerID] = now
+                    return true
                 }
-                return !isGracefullyLeft
             }
             
             if shouldNotifyDisconnect {

@@ -161,7 +161,7 @@ class PeerManager: ObservableObject {
                 continue
             }
             
-            if isConnected {
+            if isConnected || isRelayConnected {
                 connectedNicknames.insert(nickname)
             }
             
@@ -193,16 +193,16 @@ class PeerManager: ObservableObject {
             allPeers.append(peer)
         }
         
-        // Add offline favorites (only those not currently connected AND that we actively favorite)
-        SecureLogger.log("📋 Processing \(favoritesService.favorites.count) favorite relationships (connected nicknames: \(connectedNicknames))", 
+        // Add offline favorites (only those not currently connected/relay-connected AND that we actively favorite)
+        SecureLogger.log("📋 Processing \(favoritesService.favorites.count) favorite relationships (connected/relay nicknames: \(connectedNicknames))", 
                         category: SecureLogger.session, level: .info)
         
         for (favoriteKey, favorite) in favoritesService.favorites {
             let favoriteID = favorite.peerNoisePublicKey.hexEncodedString()
             
-            // Skip if this peer is already connected (by nickname)
+            // Skip if this peer is already connected or relay-connected (by nickname)
             if connectedNicknames.contains(favorite.peerNickname) {
-                SecureLogger.log("  - Skipping '\(favorite.peerNickname)' (key: \(favoriteKey.hexEncodedString())) - already connected", 
+                SecureLogger.log("  - Skipping '\(favorite.peerNickname)' (key: \(favoriteKey.hexEncodedString())) - already connected/relay-connected", 
                                 category: SecureLogger.session, level: .debug)
                 continue
             }
