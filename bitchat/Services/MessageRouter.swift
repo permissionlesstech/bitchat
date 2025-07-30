@@ -532,20 +532,57 @@ class MessageRouter: ObservableObject {
         
         // Check if peer is connected via mesh (mesh takes precedence)
         let recipientHexID = recipientNoisePublicKey.hexEncodedString()
-        let isConnectedOnMesh = meshService.getPeerNicknames()[recipientHexID] != nil
+        
+        // First check if the peer is currently connected with the given ID
+        var actualRecipientHexID = recipientHexID
+        var actualRecipientNoiseKey = recipientNoisePublicKey
+        
+        // Always check if they reconnected with a new ID, even if preferredTransport is specified
+        if let favoriteStatus = favoritesService.getFavoriteStatus(for: recipientNoisePublicKey) {
+            let peerNickname = favoriteStatus.peerNickname
+            
+            // Search through all current peers to find one with the same nickname
+            for (currentPeerID, currentNickname) in meshService.getPeerNicknames() {
+                if currentNickname == peerNickname,
+                   currentPeerID != recipientHexID,
+                   let currentNoiseKey = Data(hexString: currentPeerID) {
+                    SecureLogger.log("🔄 Found updated peer ID for \(peerNickname): \(recipientHexID) -> \(currentPeerID)", 
+                                    category: SecureLogger.session, level: .info)
+                    actualRecipientHexID = currentPeerID
+                    actualRecipientNoiseKey = currentNoiseKey
+                    break
+                }
+            }
+            
+            // If still not found in connected peers, check all favorites for the current key
+            if meshService.getPeerNicknames()[actualRecipientHexID] == nil {
+                // Search through all favorites to find the current noise key for this nickname
+                for (noiseKey, relationship) in favoritesService.favorites {
+                    if relationship.peerNickname == peerNickname && relationship.peerNostrPublicKey != nil {
+                        SecureLogger.log("🔄 Using current favorite key for \(peerNickname): \(recipientHexID) -> \(noiseKey.hexEncodedString())", 
+                                        category: SecureLogger.session, level: .info)
+                        actualRecipientHexID = noiseKey.hexEncodedString()
+                        actualRecipientNoiseKey = noiseKey
+                        break
+                    }
+                }
+            }
+        }
+        
+        let isConnectedOnMesh = meshService.getPeerNicknames()[actualRecipientHexID] != nil
         
         if isConnectedOnMesh && preferredTransport != .nostr {
             // Send via mesh
-            SecureLogger.log("📡 Sending read receipt via mesh to \(recipientHexID)", 
+            SecureLogger.log("📡 Sending read receipt via mesh to \(actualRecipientHexID)", 
                             category: SecureLogger.session, level: .debug)
-            meshService.sendReadReceipt(receipt, to: recipientHexID)
+            meshService.sendReadReceipt(receipt, to: actualRecipientHexID)
         } else {
             // Send via Nostr
-            SecureLogger.log("🌐 Sending read receipt via Nostr to \(recipientHexID)", 
+            SecureLogger.log("🌐 Sending read receipt via Nostr to \(actualRecipientHexID)", 
                             category: SecureLogger.session, level: .debug)
             
-            // Get recipient's Nostr public key
-            let favoriteStatus = favoritesService.getFavoriteStatus(for: recipientNoisePublicKey)
+            // Get recipient's Nostr public key using the actual current noise key
+            let favoriteStatus = favoritesService.getFavoriteStatus(for: actualRecipientNoiseKey)
             guard let recipientNostrPubkey = favoriteStatus?.peerNostrPublicKey else {
                 SecureLogger.log("❌ Cannot send read receipt - no Nostr key for recipient", 
                                 category: SecureLogger.session, level: .error)

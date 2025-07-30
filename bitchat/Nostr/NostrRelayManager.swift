@@ -20,7 +20,7 @@ class NostrRelayManager: ObservableObject {
     // Default relay list (can be customized)
     private static let defaultRelays = [
         "wss://relay.damus.io",
-        "wss://nos.lol",
+        "wss://relay.snort.social",
         "wss://relay.primal.net",
         // For local testing, you can add: "ws://localhost:8080"
     ]

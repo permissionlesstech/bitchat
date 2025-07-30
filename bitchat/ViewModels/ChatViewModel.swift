@@ -1227,15 +1227,38 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         userDefaults.synchronize()
     }
     
+    @MainActor
     private func sendReadReceipt(_ receipt: ReadReceipt, to peerID: String, originalTransport: String? = nil) {
+        // First, try to resolve the current peer ID in case they reconnected with a new ID
+        var actualPeerID = peerID
+        
+        // Check if this peer ID exists in current nicknames
+        if meshService.getPeerNicknames()[peerID] == nil {
+            // Peer not found with this ID, try to find by fingerprint or nickname
+            if let oldNoiseKey = Data(hexString: peerID),
+               let favoriteStatus = FavoritesPersistenceService.shared.getFavoriteStatus(for: oldNoiseKey) {
+                let peerNickname = favoriteStatus.peerNickname
+                
+                // Search for the current peer ID with the same nickname
+                for (currentPeerID, currentNickname) in meshService.getPeerNicknames() {
+                    if currentNickname == peerNickname {
+                        SecureLogger.log("📖 Resolved updated peer ID for read receipt: \(peerID) -> \(currentPeerID)", 
+                                        category: SecureLogger.session, level: .info)
+                        actualPeerID = currentPeerID
+                        break
+                    }
+                }
+            }
+        }
+        
         // If we know the original transport, use it for the read receipt
         if originalTransport == "nostr" {
             // Message was received via Nostr, send read receipt via Nostr
-            if let noiseKey = Data(hexString: peerID) {
+            if let noiseKey = Data(hexString: actualPeerID) {
                 Task { @MainActor in
                     try? await messageRouter?.sendReadReceipt(for: receipt.originalMessageID, to: noiseKey, preferredTransport: .nostr)
                 }
-            } else if let nostrPubkey = nostrKeyMapping[peerID] {
+            } else if let nostrPubkey = nostrKeyMapping[actualPeerID] {
                 // This is a Nostr-only peer we haven't mapped to a Noise key yet
                 Task { @MainActor in
                     if let tempNoiseKey = Data(hexString: nostrPubkey) {
@@ -1243,16 +1266,16 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     }
                 }
             }
-        } else if meshService.getPeerNicknames()[peerID] != nil {
+        } else if meshService.getPeerNicknames()[actualPeerID] != nil {
             // Use mesh for connected peers (default behavior)
-            meshService.sendReadReceipt(receipt, to: peerID)
+            meshService.sendReadReceipt(receipt, to: actualPeerID)
         } else {
             // Try Nostr for offline peers
-            if let noiseKey = Data(hexString: peerID) {
+            if let noiseKey = Data(hexString: actualPeerID) {
                 Task { @MainActor in
                     try? await messageRouter?.sendReadReceipt(for: receipt.originalMessageID, to: noiseKey)
                 }
-            } else if let nostrPubkey = nostrKeyMapping[peerID] {
+            } else if let nostrPubkey = nostrKeyMapping[actualPeerID] {
                 // This is a Nostr-only peer we haven't mapped to a Noise key yet
                 Task { @MainActor in
                     if let tempNoiseKey = Data(hexString: nostrPubkey) {
