@@ -96,6 +96,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     private let maxMessages = 1337 // Maximum messages before oldest are removed
     @Published var connectedPeers: [String] = []
     @Published var allPeers: [BitchatPeer] = []  // Unified peer list including favorites
+    private var peerIndex: [String: BitchatPeer] = [:] // Quick lookup by peer ID
     
     // MARK: - Message Batching Properties
     
@@ -104,6 +105,11 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     private var pendingPrivateMessages: [String: [BitchatMessage]] = [:] // peerID -> messages
     private var messageBatchTimer: Timer?
     private let messageBatchInterval: TimeInterval = 0.1 // 100ms batching window
+    
+    // UI update debouncing for performance
+    private var uiUpdateTimer: Timer?
+    private let uiUpdateInterval: TimeInterval = 0.05 // 50ms debounce window
+    private var pendingUIUpdate = false
     @Published var nickname: String = "" {
         didSet {
             // Trim whitespace whenever nickname is set
@@ -224,9 +230,11 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     }
                     // Update peers directly
                     self?.allPeers = peers
-                    // Force SwiftUI to refresh by triggering objectWillChange if needed
+                    // Update peer index for O(1) lookups
+                    self?.peerIndex = Dictionary(uniqueKeysWithValues: peers.map { ($0.id, $0) })
+                    // Schedule UI update if peers changed
                     if peers.count > 0 || self?.allPeers.count ?? 0 > 0 {
-                        self?.objectWillChange.send()
+                        self?.scheduleUIUpdate()
                     }
                     
                     // Update private chat peer ID if needed when peers change
@@ -354,8 +362,9 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     // MARK: - Deinitialization
     
     deinit {
-        // Clean up timer
+        // Clean up timers
         messageBatchTimer?.invalidate()
+        uiUpdateTimer?.invalidate()
         
         // Force immediate save
         userDefaults.synchronize()
@@ -632,9 +641,9 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 
                 selectedPrivateChatPeer = currentPeerID
                 
-                // Force a UI refresh by triggering objectWillChange
+                // Schedule UI update for encryption status change
                 DispatchQueue.main.async { [weak self] in
-                    self?.objectWillChange.send()
+                    self?.scheduleUIUpdate()
                 }
                 
                 // Also refresh the peer list to update encryption status
@@ -645,7 +654,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 // Just set the peer ID if we don't have one
                 selectedPrivateChatPeer = currentPeerID
                 DispatchQueue.main.async { [weak self] in
-                    self?.objectWillChange.send()
+                    self?.scheduleUIUpdate()
                 }
             }
             
@@ -831,7 +840,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         
         // Try to get nickname from mesh first, then from peer list
         let peerNickname = meshService.getPeerNicknames()[peerID] ?? 
-                          allPeers.first(where: { $0.id == peerID })?.displayName ?? 
+                          peerIndex[peerID]?.displayName ?? 
                           "unknown"
         
         // Check if the peer is blocked
@@ -848,7 +857,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         
         // Check if this is a moon peer (we favorite them but they don't favorite us) AND they're offline
         // Only require mutual favorites for offline Nostr messaging
-        if let peer = allPeers.first(where: { $0.id == peerID }),
+        if let peer = peerIndex[peerID],
            peer.isFavorite && !peer.theyFavoritedUs && !peer.isConnected && !peer.isRelayConnected {
             let systemMessage = BitchatMessage(
                 sender: "system",
@@ -1022,15 +1031,15 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             // Update delivery status to delivered
             messages[index].deliveryStatus = DeliveryStatus.delivered(to: "nostr", at: Date())
             
-            // Notify UI to update
-            objectWillChange.send()
+            // Schedule UI update for delivery status
+            scheduleUIUpdate()
         }
         
         // Also update in private chats if it's a private message
         for (peerID, chatMessages) in privateChats {
             if let index = chatMessages.firstIndex(where: { $0.id == messageId }) {
                 privateChats[peerID]?[index].deliveryStatus = DeliveryStatus.delivered(to: "nostr", at: Date())
-                objectWillChange.send()
+                scheduleUIUpdate()
                 break
             }
         }
@@ -1089,8 +1098,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                         selectedPrivateChatFingerprint = fingerprint
                     }
                     
-                    // Force UI refresh
-                    objectWillChange.send()
+                    // Schedule UI refresh
+                    scheduleUIUpdate()
                 } else {
                     // Even if the chat isn't open, migrate any existing private chat data
                     if let messages = privateChats[oldPeerID] {
@@ -1227,6 +1236,9 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         // Flush any pending messages when app goes to background
         flushMessageBatchImmediately()
         
+        // Flush any pending UI updates
+        flushUIUpdateImmediately()
+        
         userDefaults.synchronize()
     }
     
@@ -1249,6 +1261,9 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     @objc private func appWillTerminate() {
         // Flush any pending messages immediately
         flushMessageBatchImmediately()
+        
+        // Flush any pending UI updates
+        flushUIUpdateImmediately()
         
         userDefaults.synchronize()
     }
@@ -1539,8 +1554,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         // Force immediate UserDefaults synchronization
         userDefaults.synchronize()
         
-        // Force UI update
-        objectWillChange.send()
+        // Force immediate UI update for panic mode
+        flushUIUpdateImmediately()
         
     }
     
@@ -1970,9 +1985,9 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         // Invalidate cache when encryption status changes
         invalidateEncryptionCache(for: peerID)
         
-        // Force UI update
+        // Schedule UI update
         DispatchQueue.main.async { [weak self] in
-            self?.objectWillChange.send()
+            self?.scheduleUIUpdate()
         }
     }
     
@@ -2151,8 +2166,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 }
             }
             
-            // Single UI update for all changes
-            self.objectWillChange.send()
+            // Single scheduled UI update for all changes
+            self.scheduleUIUpdate()
         }
     }
     
@@ -2160,6 +2175,40 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     private func flushMessageBatchImmediately() {
         messageBatchTimer?.invalidate()
         flushMessageBatch()
+    }
+    
+    // MARK: - UI Update Debouncing
+    
+    // Schedule a debounced UI update
+    private func scheduleUIUpdate() {
+        guard !pendingUIUpdate else { return } // Already scheduled
+        
+        pendingUIUpdate = true
+        
+        // Cancel existing timer
+        uiUpdateTimer?.invalidate()
+        
+        // Schedule new update
+        uiUpdateTimer = Timer.scheduledTimer(withTimeInterval: uiUpdateInterval, repeats: false) { [weak self] _ in
+            self?.flushUIUpdate()
+        }
+    }
+    
+    // Execute the pending UI update
+    private func flushUIUpdate() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            self.pendingUIUpdate = false
+            self.objectWillChange.send()
+        }
+    }
+    
+    // Force immediate UI update for critical user actions
+    private func flushUIUpdateImmediately() {
+        uiUpdateTimer?.invalidate()
+        pendingUIUpdate = false
+        objectWillChange.send()
     }
     
     // Update encryption status in appropriate places, not during view updates
@@ -2186,9 +2235,9 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         // Invalidate cache when encryption status changes
         invalidateEncryptionCache(for: peerID)
         
-        // Trigger UI update
+        // Schedule UI update
         DispatchQueue.main.async { [weak self] in
-            self?.objectWillChange.send()
+            self?.scheduleUIUpdate()
         }
     }
     
@@ -2196,6 +2245,12 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     
     func showFingerprint(for peerID: String) {
         showingFingerprintFor = peerID
+    }
+    
+    // MARK: - Peer Lookup Helpers
+    
+    func getPeer(byID peerID: String) -> BitchatPeer? {
+        return peerIndex[peerID]
     }
     
     func getFingerprint(for peerID: String) -> String? {
@@ -2309,8 +2364,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 // Invalidate cache when encryption status changes
                 self.invalidateEncryptionCache(for: peerID)
                 
-                // Force UI update
-                self.objectWillChange.send()
+                // Schedule UI update
+                self.scheduleUIUpdate()
             }
         }
         
@@ -2323,8 +2378,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 // Invalidate cache when encryption status changes
                 self.invalidateEncryptionCache(for: peerID)
                 
-                // Force UI update
-                self.objectWillChange.send()
+                // Schedule UI update
+                self.scheduleUIUpdate()
             }
         }
     }
@@ -2997,8 +3052,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                    chatFingerprint == senderFingerprint && selectedPrivateChatPeer != peerID {
                     // Update our private chat peer to the new ID
                     selectedPrivateChatPeer = peerID
-                    // Force UI update when peer ID changes
-                    objectWillChange.send()
+                    // Schedule UI update when peer ID changes
+                    scheduleUIUpdate()
                 }
                 
                 // Also check if we need to update the private chat peer for any reason
@@ -3034,8 +3089,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                             // Trim if needed
                             self.trimPrivateChatMessagesIfNeeded(for: peerID)
                             
-                            // Force UI update
-                            self.objectWillChange.send()
+                            // Schedule UI update
+                            self.scheduleUIUpdate()
                         }
                     }
                 }
@@ -3320,14 +3375,14 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 SecureIdentityStateManager.shared.registerEphemeralSession(peerID: peerID)
             }
             
-            // Force UI refresh to ensure offline favorites are shown
-            self.objectWillChange.send()
+            // Schedule UI refresh to ensure offline favorites are shown
+            self.scheduleUIUpdate()
             
             // Update encryption status for all peers
             self.updateEncryptionStatusForPeers()
 
-            // Explicitly notify SwiftUI that the object has changed.
-            self.objectWillChange.send()
+            // Schedule UI update for peer list change
+            self.scheduleUIUpdate()
             
             // Check if we need to update private chat peer after reconnection
             if self.selectedPrivateChatFingerprint != nil {
@@ -3458,7 +3513,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             self.privateChats = updatedPrivateChats
-            self.objectWillChange.send()
+            self.scheduleUIUpdate()
         }
         
     }

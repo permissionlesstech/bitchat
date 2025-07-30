@@ -1426,6 +1426,15 @@ class BluetoothMeshService: NSObject {
                 self.processedMessages = self.processedMessages.filter { _, state in
                     state.firstSeen > cutoffTime
                 }
+                
+                // Also enforce max size limit during cleanup
+                if self.processedMessages.count > self.maxProcessedMessages {
+                    let targetSize = Int(Double(self.maxProcessedMessages) * 0.8)
+                    let sortedByFirstSeen = self.processedMessages.sorted { $0.value.firstSeen < $1.value.firstSeen }
+                    let toKeep = Array(sortedByFirstSeen.suffix(targetSize))
+                    self.processedMessages = Dictionary(uniqueKeysWithValues: toKeep)
+                }
+                
                 let removedCount = originalCount - self.processedMessages.count
                 self.processedMessagesLock.unlock()
                 
@@ -2390,6 +2399,18 @@ class BluetoothMeshService: NSObject {
             }
         }
         
+        // Clean up encryption queues for disconnected peers
+        encryptionQueuesLock.lock()
+        let disconnectedPeerQueues = peerEncryptionQueues.filter { peerID, _ in
+            // Remove queue if peer is not connected
+            let isConnected = connectedPeripherals[peerID]?.state == .connected
+            return !isConnected
+        }
+        for (peerID, _) in disconnectedPeerQueues {
+            peerEncryptionQueues.removeValue(forKey: peerID)
+        }
+        encryptionQueuesLock.unlock()
+        
         let peersToRemove = collectionsQueue.sync(flags: .barrier) {
             let toRemove = self.peerSessions.compactMap { (peerID, session) -> String? in
                 guard session.isActivePeer else { return nil }
@@ -2951,13 +2972,22 @@ class BluetoothMeshService: NSObject {
             acknowledged: false
         )
         
-        // Prune old entries if needed
+        // Prune old entries if needed (more efficient approach)
         if processedMessages.count > maxProcessedMessages {
-            // Remove oldest entries
-            let sortedByFirstSeen = processedMessages.sorted { $0.value.firstSeen < $1.value.firstSeen }
-            let toRemove = sortedByFirstSeen.prefix(processedMessages.count - maxProcessedMessages + 1000)
-            for (key, _) in toRemove {
-                processedMessages.removeValue(forKey: key)
+            // Remove oldest 20% to avoid frequent pruning
+            let targetSize = Int(Double(maxProcessedMessages) * 0.8)
+            let cutoffTime = Date().addingTimeInterval(-3600) // 1 hour ago
+            
+            // First try removing old messages
+            processedMessages = processedMessages.filter { _, state in
+                state.firstSeen > cutoffTime
+            }
+            
+            // If still too many, remove oldest entries
+            if processedMessages.count > targetSize {
+                let sortedByFirstSeen = processedMessages.sorted { $0.value.firstSeen < $1.value.firstSeen }
+                let toKeep = Array(sortedByFirstSeen.suffix(targetSize))
+                processedMessages = Dictionary(uniqueKeysWithValues: toKeep)
             }
         }
         processedMessagesLock.unlock()
@@ -3087,7 +3117,7 @@ class BluetoothMeshService: NSObject {
                             let nostrNpub = parts.count > 2 ? String(parts[2]) : nil
                             
                             SecureLogger.log("📨 Received \(action) notification from \(senderID)", category: SecureLogger.session, level: .info)
-                            if let npub = nostrNpub {
+                            if nostrNpub != nil {
                                 // Peer's Nostr npub recorded
                             }
                             
@@ -4029,7 +4059,7 @@ class BluetoothMeshService: NSObject {
             
             if !isPeerIDOurs(senderID) {
                 // Check our current handshake state
-                let currentState = handshakeCoordinator.getHandshakeState(for: senderID)
+                let _ = handshakeCoordinator.getHandshakeState(for: senderID)
                 // Processing handshake response
                 
                 // Process the response - this could be message 2 or message 3 in the XX pattern
@@ -4702,7 +4732,7 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
                 // Time tracking removed - now in PeerSession
                 // Keep lastSuccessfulMessageTime to validate session on reconnect
                 let lastSuccess = self.peerSessions[peerID]?.lastSuccessfulMessageTime ?? Date.distantPast
-                let sessionAge = Date().timeIntervalSince(lastSuccess)
+                let _ = Date().timeIntervalSince(lastSuccess)
                 // Keeping Noise session on disconnect
             }
             
@@ -5892,8 +5922,8 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         SecureLogger.logHandshake("processing \(isInitiation ? "init" : "response")", peerID: peerID, success: true)
         
         // Get current handshake state before processing
-        let currentState = handshakeCoordinator.getHandshakeState(for: peerID)
-        let hasEstablishedSession = noiseService.hasEstablishedSession(with: peerID)
+        let _ = handshakeCoordinator.getHandshakeState(for: peerID)
+        let _ = noiseService.hasEstablishedSession(with: peerID)
         // Current handshake state check
         
         // Check for duplicate handshake messages
@@ -6464,6 +6494,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             switch messageType {
             case .noiseHandshakeInit, .noiseHandshakeResp:
                 // Handshake confirmed
+                break
             case .noiseEncrypted:
                 // Encrypted message confirmed
                 break
@@ -7031,7 +7062,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                     self.pendingPrivateMessages[recipientPeerID] = []
                 }
                 self.pendingPrivateMessages[recipientPeerID]?.append((content, recipientNickname, messageID ?? UUID().uuidString))
-                let count = self.pendingPrivateMessages[recipientPeerID]?.count ?? 0
+                let _ = self.pendingPrivateMessages[recipientPeerID]?.count ?? 0
                 // Queued private message
             }
             

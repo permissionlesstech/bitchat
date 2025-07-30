@@ -254,7 +254,7 @@ class NostrRelayManager: ObservableObject {
                     
                 case "EOSE":
                     if array.count >= 2,
-                       let subId = array[1] as? String {
+                       let _ = array[1] as? String {
                         // End of stored events
                     }
                     
@@ -277,7 +277,7 @@ class NostrRelayManager: ObservableObject {
                     }
                     
                 default:
-                    // Unknown message type
+                    break // Unknown message type
                 }
             }
         } catch {

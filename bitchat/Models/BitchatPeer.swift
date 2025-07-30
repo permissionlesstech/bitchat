@@ -267,13 +267,33 @@ class PeerManager: ObservableObject {
             return lhs.displayName < rhs.displayName
         }
         
+        // Single pass to compute all subsets and counts
+        var favorites: [BitchatPeer] = []
+        var mutualFavorites: [BitchatPeer] = []
+        var connectedCount = 0
+        var offlineCount = 0
+        
+        for peer in allPeers {
+            if peer.isFavorite {
+                favorites.append(peer)
+            }
+            if peer.isMutualFavorite {
+                mutualFavorites.append(peer)
+            }
+            if peer.isConnected {
+                connectedCount += 1
+            } else {
+                offlineCount += 1
+            }
+        }
+        
         self.peers = allPeers
-        self.favorites = allPeers.filter { $0.isFavorite }
-        self.mutualFavorites = allPeers.filter { $0.isMutualFavorite }
+        self.favorites = favorites
+        self.mutualFavorites = mutualFavorites
         
         // Always log favorites debug info when there are favorites
         if favoritesService.favorites.count > 0 {
-            SecureLogger.log("📊 Peer list update: \(allPeers.count) total (\(allPeers.filter { $0.isConnected }.count) connected, \(allPeers.filter { !$0.isConnected }.count) offline), \(favorites.count) favorites, \(mutualFavorites.count) mutual", 
+            SecureLogger.log("📊 Peer list update: \(allPeers.count) total (\(connectedCount) connected, \(offlineCount) offline), \(favorites.count) favorites, \(mutualFavorites.count) mutual", 
                             category: SecureLogger.session, level: .info)
             
             // Log each peer's status

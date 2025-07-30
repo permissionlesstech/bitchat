@@ -883,17 +883,21 @@ struct ContentView: View {
                         .accessibilityLabel("Unread private messages")
                 }
                 
-                // Count only connected peers (direct or relay) or mutual favorites (exclude offline non-mutual favorites)
-                let otherPeersCount = viewModel.allPeers.filter { peer in 
-                    peer.id != viewModel.meshService.myPeerID &&
-                    (peer.isConnected || peer.isRelayConnected || peer.isMutualFavorite)
-                }.count
+                // Single pass to count both metrics
+                let peerCounts = viewModel.allPeers.reduce(into: (others: 0, mesh: 0)) { counts, peer in
+                    guard peer.id != viewModel.meshService.myPeerID else { return }
+                    
+                    let isMeshConnected = peer.isConnected || peer.isRelayConnected
+                    if isMeshConnected {
+                        counts.mesh += 1
+                        counts.others += 1
+                    } else if peer.isMutualFavorite {
+                        counts.others += 1
+                    }
+                }
                 
-                // Count mesh peers (both direct Bluetooth and relay connections)
-                let meshPeerCount = viewModel.allPeers.filter { peer in
-                    peer.id != viewModel.meshService.myPeerID &&
-                    (peer.isConnected || peer.isRelayConnected)
-                }.count
+                let otherPeersCount = peerCounts.others
+                let meshPeerCount = peerCounts.mesh
                 
                 // Purple only if we have peers but none are reachable via mesh (only via Nostr)
                 let isNostrOnly = otherPeersCount > 0 && meshPeerCount == 0
@@ -935,7 +939,7 @@ struct ContentView: View {
         // resolveCurrentPeerID not implemented
         let currentPeerID: String = privatePeerID
         
-        let peer = viewModel.allPeers.first(where: { $0.id == currentPeerID })
+        let peer = viewModel.getPeer(byID: currentPeerID)
         let privatePeerNick = peer?.displayName ?? 
                               viewModel.meshService.getPeerNicknames()[currentPeerID] ?? 
                               FavoritesPersistenceService.shared.getFavoriteStatus(for: Data(hexString: privatePeerID) ?? Data())?.peerNickname ?? 

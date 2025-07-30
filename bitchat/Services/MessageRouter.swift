@@ -167,7 +167,7 @@ class MessageRouter: ObservableObject {
         
         // Looking up Nostr key for recipient
         
-        if let status = favoriteStatus {
+        if favoriteStatus != nil {
             // Found favorite relationship
         } else {
             SecureLogger.log("❌ No favorite relationship found", 
