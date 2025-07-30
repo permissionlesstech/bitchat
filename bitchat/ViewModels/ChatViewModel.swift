@@ -145,7 +145,6 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     // MARK: - Caches
     
     // Caches for expensive computations
-    private var rssiColorCache: [String: Color] = [:] // key: "\(rssi)_\(isDark)"
     private var encryptionStatusCache: [String: EncryptionStatus] = [:] // key: peerID
     
     // MARK: - Social Features
@@ -1424,7 +1423,6 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         
         // Clear all caches
         invalidateEncryptionCache()
-        invalidateRSSIColorCache()
         
         // Disconnect from all peers and clear persistent identity
         // This will force creation of a new identity (new fingerprint) on next launch
@@ -1448,40 +1446,6 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         return formatter.string(from: date)
     }
     
-    func getRSSIColor(rssi: Int, colorScheme: ColorScheme) -> Color {
-        let isDark = colorScheme == .dark
-        let cacheKey = "\(rssi)_\(isDark)"
-        
-        // Check cache first
-        if let cachedColor = rssiColorCache[cacheKey] {
-            return cachedColor
-        }
-        
-        // RSSI typically ranges from -30 (excellent) to -90 (poor)
-        // We'll map this to colors from green (strong) to red (weak)
-        
-        let color: Color
-        if rssi >= -50 {
-            // Excellent signal: bright green
-            color = isDark ? Color(red: 0.0, green: 1.0, blue: 0.0) : Color(red: 0.0, green: 0.7, blue: 0.0)
-        } else if rssi >= -60 {
-            // Good signal: green-yellow
-            color = isDark ? Color(red: 0.5, green: 1.0, blue: 0.0) : Color(red: 0.3, green: 0.7, blue: 0.0)
-        } else if rssi >= -70 {
-            // Fair signal: yellow
-            color = isDark ? Color(red: 1.0, green: 1.0, blue: 0.0) : Color(red: 0.7, green: 0.7, blue: 0.0)
-        } else if rssi >= -80 {
-            // Weak signal: orange
-            color = isDark ? Color(red: 1.0, green: 0.6, blue: 0.0) : Color(red: 0.8, green: 0.4, blue: 0.0)
-        } else {
-            // Poor signal: red
-            color = isDark ? Color(red: 1.0, green: 0.2, blue: 0.2) : Color(red: 0.8, green: 0.0, blue: 0.0)
-        }
-        
-        // Cache the result
-        rssiColorCache[cacheKey] = color
-        return color
-    }
     
     // MARK: - Autocomplete
     
@@ -1964,9 +1928,6 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         }
     }
     
-    private func invalidateRSSIColorCache() {
-        rssiColorCache.removeAll()
-    }
     
     // MARK: - Message Batching
     
@@ -3203,9 +3164,6 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             
             // Update encryption status for all peers
             self.updateEncryptionStatusForPeers()
-            
-            // Invalidate RSSI cache since peer data may have changed
-            self.invalidateRSSIColorCache()
 
             // Explicitly notify SwiftUI that the object has changed.
             self.objectWillChange.send()

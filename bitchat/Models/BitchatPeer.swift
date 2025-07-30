@@ -8,7 +8,6 @@ struct BitchatPeer: Identifiable, Equatable {
     let nickname: String
     let lastSeen: Date
     let isConnected: Bool
-    let rssi: Int?
     
     // Favorite-related properties
     var favoriteStatus: FavoritesPersistenceService.FavoriteRelationship?
@@ -18,7 +17,7 @@ struct BitchatPeer: Identifiable, Equatable {
     
     // Connection state
     enum ConnectionState {
-        case bluetoothConnected(rssi: Int?)
+        case bluetoothConnected
         case relayConnected     // Connected via mesh relay (another peer)
         case nostrAvailable     // Mutual favorite, reachable via Nostr
         case offline            // Not connected via any transport
@@ -26,7 +25,7 @@ struct BitchatPeer: Identifiable, Equatable {
     
     var connectionState: ConnectionState {
         if isConnected {
-            return .bluetoothConnected(rssi: rssi)
+            return .bluetoothConnected
         } else if isRelayConnected {
             return .relayConnected
         } else if favoriteStatus?.isMutual == true {
@@ -59,7 +58,7 @@ struct BitchatPeer: Identifiable, Equatable {
     var statusIcon: String {
         switch connectionState {
         case .bluetoothConnected:
-            return "📶" // Signal bars or dot based on RSSI
+            return "📻" // Radio icon for mesh connection
         case .relayConnected:
             return "🔗" // Chain link for relay connection
         case .nostrAvailable:
@@ -80,8 +79,7 @@ struct BitchatPeer: Identifiable, Equatable {
         nickname: String,
         lastSeen: Date = Date(),
         isConnected: Bool = false,
-        isRelayConnected: Bool = false,
-        rssi: Int? = nil
+        isRelayConnected: Bool = false
     ) {
         self.id = id
         self.noisePublicKey = noisePublicKey
@@ -89,7 +87,6 @@ struct BitchatPeer: Identifiable, Equatable {
         self.lastSeen = lastSeen
         self.isConnected = isConnected
         self.isRelayConnected = isRelayConnected
-        self.rssi = rssi
         
         // Load favorite status - will be set later by the manager
         self.favoriteStatus = nil
@@ -142,7 +139,6 @@ class PeerManager: ObservableObject {
         
         // Get current mesh peers
         let meshPeers = meshService.getPeerNicknames()
-        let peerRSSI = meshService.getPeerRSSI()
         
         // Build peer list
         var allPeers: [BitchatPeer] = []
@@ -182,8 +178,7 @@ class PeerManager: ObservableObject {
                 noisePublicKey: noiseKey,
                 nickname: nickname,
                 isConnected: isConnected,
-                isRelayConnected: isRelayConnected,
-                rssi: peerRSSI[peerID]?.intValue
+                isRelayConnected: isRelayConnected
             )
             // Set favorite status - check both by current noise key and by nickname
             if let favoriteStatus = favoritesService.getFavoriteStatus(for: noiseKey) {

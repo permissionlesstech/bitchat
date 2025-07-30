@@ -14,7 +14,6 @@ import SwiftUI
 struct PeerDisplayData: Identifiable {
     let id: String
     let displayName: String
-    let rssi: Int?
     let isFavorite: Bool
     let isMe: Bool
     let hasUnreadMessages: Bool
@@ -637,7 +636,6 @@ struct ContentView: View {
                                 return PeerDisplayData(
                                     id: peer.id,
                                     displayName: peer.id == myPeerID ? viewModel.nickname : peer.nickname,
-                                    rssi: peer.rssi,
                                     isFavorite: peer.favoriteStatus?.isFavorite ?? false,
                                     isMe: peer.id == myPeerID,
                                     hasUnreadMessages: viewModel.unreadPrivateMessages.contains(peer.id),
@@ -669,18 +667,12 @@ struct ContentView: View {
                                 } else {
                                     // Connection state indicator
                                     switch peer.connectionState {
-                                    case .bluetoothConnected(let rssi):
-                                        if let rssiValue = rssi {
-                                            Image(systemName: "circle.fill")
-                                                .font(.system(size: 8))
-                                                .foregroundColor(viewModel.getRSSIColor(rssi: rssiValue, colorScheme: colorScheme))
-                                                .accessibilityLabel("Signal strength: \(rssiValue > -60 ? "excellent" : rssiValue > -70 ? "good" : rssiValue > -80 ? "fair" : "poor")")
-                                        } else {
-                                            Image(systemName: "circle")
-                                                .font(.system(size: 8))
-                                                .foregroundColor(Color.secondary.opacity(0.5))
-                                                .accessibilityLabel("Signal strength: unknown")
-                                        }
+                                    case .bluetoothConnected:
+                                        // Radio icon for mesh connection
+                                        Image(systemName: "dot.radiowaves.left.and.right")
+                                            .font(.system(size: 10))
+                                            .foregroundColor(textColor)
+                                            .accessibilityLabel("Connected via mesh")
                                     case .relayConnected:
                                         // Chain link for relay connection
                                         Image(systemName: "link")

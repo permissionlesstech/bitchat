@@ -21,7 +21,6 @@ class PeerSession {
     // Connection state
     var isConnected: Bool = false
     var lastSeen: Date
-    var rssi: NSNumber?
     
     // Protocol state
     var hasAnnounced: Bool = false
@@ -70,13 +69,6 @@ class PeerSession {
         }
     }
     
-    /// Update RSSI signal strength
-    func updateRSSI(_ rssi: NSNumber?) {
-        self.rssi = rssi
-        if rssi != nil {
-            self.lastSeen = Date()
-        }
-    }
     
     /// Check if session is stale
     var isStale: Bool {
