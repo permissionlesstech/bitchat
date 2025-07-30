@@ -673,6 +673,12 @@ struct ContentView: View {
                                                 .foregroundColor(Color.secondary.opacity(0.5))
                                                 .accessibilityLabel("Signal strength: unknown")
                                         }
+                                    case .relayConnected:
+                                        // Chain link for relay connection
+                                        Image(systemName: "link")
+                                            .font(.system(size: 10))
+                                            .foregroundColor(Color.blue)
+                                            .accessibilityLabel("Connected via relay")
                                     case .nostrAvailable:
                                         // Purple globe for mutual favorites reachable via Nostr
                                         Image(systemName: "globe")
@@ -884,10 +890,20 @@ struct ContentView: View {
                         .accessibilityLabel("Unread private messages")
                 }
                 
-                // Count all peers (including Nostr-only peers)
-                let otherPeersCount = viewModel.allPeers.filter { $0.id != viewModel.meshService.myPeerID }.count
-                let connectedCount = viewModel.connectedPeers.filter { $0 != viewModel.meshService.myPeerID }.count
-                let isNostrOnly = otherPeersCount > 0 && connectedCount == 0
+                // Count only connected peers (direct or relay) or mutual favorites (exclude offline non-mutual favorites)
+                let otherPeersCount = viewModel.allPeers.filter { peer in 
+                    peer.id != viewModel.meshService.myPeerID &&
+                    (peer.isConnected || peer.isRelayConnected || peer.isMutualFavorite)
+                }.count
+                
+                // Count mesh peers (both direct Bluetooth and relay connections)
+                let meshPeerCount = viewModel.allPeers.filter { peer in
+                    peer.id != viewModel.meshService.myPeerID &&
+                    (peer.isConnected || peer.isRelayConnected)
+                }.count
+                
+                // Purple only if we have peers but none are reachable via mesh (only via Nostr)
+                let isNostrOnly = otherPeersCount > 0 && meshPeerCount == 0
                 
                 HStack(spacing: 4) {
                     // People icon with count

@@ -840,6 +840,20 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             return
         }
         
+        // Check if this is a moon peer (we favorite them but they don't favorite us) AND they're offline
+        // Only require mutual favorites for offline Nostr messaging
+        if let peer = allPeers.first(where: { $0.id == peerID }),
+           peer.isFavorite && !peer.theyFavoritedUs && !peer.isConnected && !peer.isRelayConnected {
+            let systemMessage = BitchatMessage(
+                sender: "system",
+                content: "cannot start chat with \(peerNickname): mutual favorite required for offline messaging.",
+                timestamp: Date(),
+                isRelay: false
+            )
+            messages.append(systemMessage)
+            return
+        }
+        
         // Trigger handshake if we don't have a session yet
         let sessionState = meshService.getNoiseSessionState(for: peerID)
         switch sessionState {

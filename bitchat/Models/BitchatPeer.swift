@@ -19,13 +19,16 @@ struct BitchatPeer: Identifiable, Equatable {
     // Connection state
     enum ConnectionState {
         case bluetoothConnected(rssi: Int?)
-        case nostrAvailable  // Mutual favorite, reachable via Nostr
-        case offline         // Not connected via any transport
+        case relayConnected     // Connected via mesh relay (another peer)
+        case nostrAvailable     // Mutual favorite, reachable via Nostr
+        case offline            // Not connected via any transport
     }
     
     var connectionState: ConnectionState {
         if isConnected {
             return .bluetoothConnected(rssi: rssi)
+        } else if isRelayConnected {
+            return .relayConnected
         } else if favoriteStatus?.isMutual == true {
             // Mutual favorites can communicate via Nostr when offline
             return .nostrAvailable
@@ -33,6 +36,8 @@ struct BitchatPeer: Identifiable, Equatable {
             return .offline
         }
     }
+    
+    var isRelayConnected: Bool = false  // Set by PeerManager based on session state
     
     var isFavorite: Bool {
         favoriteStatus?.isFavorite ?? false
@@ -55,6 +60,8 @@ struct BitchatPeer: Identifiable, Equatable {
         switch connectionState {
         case .bluetoothConnected:
             return "📶" // Signal bars or dot based on RSSI
+        case .relayConnected:
+            return "🔗" // Chain link for relay connection
         case .nostrAvailable:
             return "🌐" // Purple globe for Nostr
         case .offline:
@@ -73,6 +80,7 @@ struct BitchatPeer: Identifiable, Equatable {
         nickname: String,
         lastSeen: Date = Date(),
         isConnected: Bool = false,
+        isRelayConnected: Bool = false,
         rssi: Int? = nil
     ) {
         self.id = id
@@ -80,6 +88,7 @@ struct BitchatPeer: Identifiable, Equatable {
         self.nickname = nickname
         self.lastSeen = lastSeen
         self.isConnected = isConnected
+        self.isRelayConnected = isRelayConnected
         self.rssi = rssi
         
         // Load favorite status - will be set later by the manager
@@ -139,17 +148,29 @@ class PeerManager: ObservableObject {
         var allPeers: [BitchatPeer] = []
         var connectedNicknames: Set<String> = []
         
-        // Add connected mesh peers
+        // Add connected mesh peers (only if actually connected or relay connected)
         for (peerID, nickname) in meshPeers {
             guard let noiseKey = Data(hexString: peerID) else { continue }
             
-            connectedNicknames.insert(nickname)
+            // Check if this peer is actually connected (not just known via relay)
+            let isConnected = meshService.isPeerConnected(peerID)
+            let isRelayConnected = !isConnected && meshService.isPeerKnown(peerID)
+            
+            // Skip disconnected peers unless they're favorites (handled later)
+            if !isConnected && !isRelayConnected {
+                continue
+            }
+            
+            if isConnected {
+                connectedNicknames.insert(nickname)
+            }
             
             var peer = BitchatPeer(
                 id: peerID,
                 noisePublicKey: noiseKey,
                 nickname: nickname,
-                isConnected: true,
+                isConnected: isConnected,
+                isRelayConnected: isRelayConnected,
                 rssi: peerRSSI[peerID]?.intValue
             )
             // Set favorite status - check both by current noise key and by nickname
@@ -209,14 +230,26 @@ class PeerManager: ObservableObject {
             allPeers.append(peer)
         }
         
-        // Sort: Connected first, then favorites, then alphabetical
+        // Filter out "Unknown" peers unless they are favorites or have a favorite relationship
+        allPeers = allPeers.filter { peer in
+            !(peer.displayName == "Unknown" && peer.favoriteStatus == nil)
+        }
+        
+        // Sort: Connected first (direct then relay), then favorites, then alphabetical
         allPeers.sort { lhs, rhs in
+            // Direct connections first
             if lhs.isConnected != rhs.isConnected {
                 return lhs.isConnected
             }
+            // Then relay connections
+            if lhs.isRelayConnected != rhs.isRelayConnected {
+                return lhs.isRelayConnected
+            }
+            // Then favorites
             if lhs.isFavorite != rhs.isFavorite {
                 return lhs.isFavorite
             }
+            // Finally alphabetical
             return lhs.displayName < rhs.displayName
         }
         

@@ -33,6 +33,14 @@ class PeerSession {
     var lastMessageReceived: Date?
     var pendingMessages: [String] = []
     
+    // Connection timing
+    var lastConnectionTime: Date?
+    var lastSuccessfulMessageTime: Date?
+    var lastHeardFromPeer: Date?
+    
+    // Availability tracking
+    var isAvailable: Bool = false
+    
     // Identity binding
     var identityBinding: PeerIdentityBinding?
     
