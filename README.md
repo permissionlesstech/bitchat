@@ -5,6 +5,7 @@
 A decentralized peer-to-peer messaging app that works over Bluetooth mesh networks. No internet required, no servers, no phone numbers. It's the side-groupchat. 
 
 [bitchat.free](http://bitchat.free)
+
 📲 [App Store](https://apps.apple.com/us/app/bitchat-mesh/id6748219622)
 
 > [!WARNING]
