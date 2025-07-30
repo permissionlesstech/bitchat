@@ -8,7 +8,7 @@ A decentralized peer-to-peer messaging app that works over Bluetooth mesh networ
 📲 [App Store](https://apps.apple.com/us/app/bitchat-mesh/id6748219622)
 
 > [!WARNING]
-> Private message and channel features have not received external security review and may contain vulnerabilities. Do not use for sensitive use cases, and do not rely on its security until it has been reviewed. Now uses the [Noise Protocol](http://www.noiseprotocol.org) for identity and encryption. Public local chat (the main feature) has no security concerns. 
+> Private messages have not received external security review and may contain vulnerabilities. Do not use for sensitive use cases, and do not rely on its security until it has been reviewed. Now uses the [Noise Protocol](http://www.noiseprotocol.org) for identity and encryption. Public local chat (the main feature) has no security concerns. 
 
 
 ## License
