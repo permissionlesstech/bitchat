@@ -713,7 +713,7 @@ struct ContentView: View {
                                     if let icon = peer.encryptionStatus.icon {
                                         Image(systemName: icon)
                                             .font(.system(size: 10))
-                                            .foregroundColor(peer.encryptionStatus == .noiseVerified ? Color.green : 
+                                            .foregroundColor(peer.encryptionStatus == .noiseVerified ? textColor : 
                                                            peer.encryptionStatus == .noiseSecured ? textColor :
                                                            peer.encryptionStatus == .noiseHandshaking ? Color.orange :
                                                            Color.red)
@@ -966,25 +966,50 @@ struct ContentView: View {
                         viewModel.showFingerprint(for: privatePeerID)
                     }) {
                         HStack(spacing: 6) {
-                            // Show purple globe for Nostr transport first
-                            if isNostrAvailable {
+                            // Show transport icon based on connection state (like peer list)
+                            if let connectionState = peer?.connectionState {
+                                switch connectionState {
+                                case .bluetoothConnected:
+                                    // Radio icon for mesh connection
+                                    Image(systemName: "dot.radiowaves.left.and.right")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(textColor)
+                                        .accessibilityLabel("Connected via mesh")
+                                case .relayConnected:
+                                    // Chain link for relay connection
+                                    Image(systemName: "link")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(Color.blue)
+                                        .accessibilityLabel("Connected via relay")
+                                case .nostrAvailable:
+                                    // Purple globe for Nostr
+                                    Image(systemName: "globe")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(.purple)
+                                        .accessibilityLabel("Available via Nostr")
+                                case .offline:
+                                    // Should not happen for PM header, but handle gracefully
+                                    EmptyView()
+                                }
+                            } else if isNostrAvailable {
+                                // Fallback to Nostr if peer not in list but is mutual favorite
                                 Image(systemName: "globe")
                                     .font(.system(size: 14))
                                     .foregroundColor(.purple)
-                                    .accessibilityLabel("Connected via Nostr")
+                                    .accessibilityLabel("Available via Nostr")
                             }
                             
                             Text("\(privatePeerNick)")
                                 .font(.system(size: 16, weight: .medium, design: .monospaced))
-                                .foregroundColor(Color.orange)
+                                .foregroundColor(textColor)
                             
                             // Dynamic encryption status icon
                             let encryptionStatus = viewModel.getEncryptionStatus(for: privatePeerID)
                             if let icon = encryptionStatus.icon {
                                 Image(systemName: icon)
                                     .font(.system(size: 14))
-                                    .foregroundColor(encryptionStatus == .noiseVerified ? Color.green : 
-                                                   encryptionStatus == .noiseSecured ? Color.orange :
+                                    .foregroundColor(encryptionStatus == .noiseVerified ? textColor : 
+                                                   encryptionStatus == .noiseSecured ? textColor :
                                                    Color.red)
                                     .accessibilityLabel("Encryption status: \(encryptionStatus == .noiseVerified ? "verified" : encryptionStatus == .noiseSecured ? "secured" : "not encrypted")")
                             }

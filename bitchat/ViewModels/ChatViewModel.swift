@@ -59,7 +59,7 @@
 ///
 /// ## Performance Optimizations
 /// - Message batching reduces UI updates
-/// - Caches expensive computations (RSSI colors, encryption status)
+/// - Caches expensive computations (encryption status)
 /// - Debounces autocomplete suggestions
 /// - Efficient peer list management
 ///
@@ -1636,7 +1636,6 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         let isDark = colorScheme == .dark
         let primaryColor = isDark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
         
-        // Always use the same color for all senders - no RSSI-based coloring
         return primaryColor
     }
     
@@ -1967,6 +1966,9 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         // This must be a pure function - no state mutations allowed
         // to avoid SwiftUI update loops
         
+        // Check if we've ever established a session by looking for a fingerprint
+        let hasEverEstablishedSession = getFingerprint(for: peerID) != nil
+        
         let sessionState = meshService.getNoiseSessionState(for: peerID)
         let storedStatus = peerEncryptionStatus[peerID]
         
@@ -1987,14 +1989,47 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 status = .noiseSecured
             }
         case .handshaking, .handshakeQueued:
-            // Currently establishing encryption
-            status = .noiseHandshaking
+            // If we've ever established a session, show secured instead of handshaking
+            if hasEverEstablishedSession {
+                // Check if it was verified before
+                if let fingerprint = getFingerprint(for: peerID),
+                   verifiedFingerprints.contains(fingerprint) {
+                    status = .noiseVerified
+                } else {
+                    status = .noiseSecured
+                }
+            } else {
+                // First time establishing - show handshaking
+                status = .noiseHandshaking
+            }
         case .none:
-            // No handshake attempted
-            status = .noHandshake
+            // If we've ever established a session, show secured instead of no handshake
+            if hasEverEstablishedSession {
+                // Check if it was verified before
+                if let fingerprint = getFingerprint(for: peerID),
+                   verifiedFingerprints.contains(fingerprint) {
+                    status = .noiseVerified
+                } else {
+                    status = .noiseSecured
+                }
+            } else {
+                // Never established - show no handshake
+                status = .noHandshake
+            }
         case .failed:
-            // Handshake failed - show broken lock
-            status = .none
+            // If we've ever established a session, show secured instead of failed
+            if hasEverEstablishedSession {
+                // Check if it was verified before
+                if let fingerprint = getFingerprint(for: peerID),
+                   verifiedFingerprints.contains(fingerprint) {
+                    status = .noiseVerified
+                } else {
+                    status = .noiseSecured
+                }
+            } else {
+                // Never established - show failed
+                status = .none
+            }
         }
         
         // Cache the result
@@ -2002,7 +2037,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         
         // Only log occasionally to avoid spam
         if Int.random(in: 0..<100) == 0 {
-            SecureLogger.log("getEncryptionStatus for \(peerID): sessionState=\(sessionState), stored=\(String(describing: storedStatus)), final=\(status)", category: SecureLogger.security, level: .debug)
+            SecureLogger.log("getEncryptionStatus for \(peerID): sessionState=\(sessionState), stored=\(String(describing: storedStatus)), hasEverEstablished=\(hasEverEstablishedSession), final=\(status)", category: SecureLogger.security, level: .debug)
         }
         
         return status
@@ -3240,7 +3275,6 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             self.connectedPeers = peers
             self.isConnected = !peers.isEmpty
             
-            // Update peer manager to refresh peer objects with latest RSSI
             self.peerManager?.updatePeers()
             
             // Register ephemeral sessions for all connected peers

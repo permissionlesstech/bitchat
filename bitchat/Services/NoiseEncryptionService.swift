@@ -109,7 +109,7 @@ enum EncryptionStatus: Equatable {
         case .noiseSecured:
             return "lock.fill"  // Changed from "lock" to "lock.fill" for filled lock
         case .noiseVerified:
-            return "lock.shield.fill"  // Changed to filled version for consistency
+            return "checkmark.seal.fill"  // Verified badge
         }
     }
     
