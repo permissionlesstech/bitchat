@@ -15,6 +15,9 @@ class NostrRelayManager: ObservableObject {
         var lastConnectedAt: Date?
         var messagesSent: Int = 0
         var messagesReceived: Int = 0
+        var reconnectAttempts: Int = 0
+        var lastDisconnectedAt: Date?
+        var nextReconnectTime: Date?
     }
     
     // Default relay list (can be customized)
@@ -37,6 +40,15 @@ class NostrRelayManager: ObservableObject {
     // Message queue for reliability
     private var messageQueue: [(event: NostrEvent, relayUrls: [String])] = []
     private let messageQueueLock = NSLock()
+    
+    // Exponential backoff configuration
+    private let initialBackoffInterval: TimeInterval = 1.0  // Start with 1 second
+    private let maxBackoffInterval: TimeInterval = 300.0    // Max 5 minutes
+    private let backoffMultiplier: Double = 2.0            // Double each time
+    private let maxReconnectAttempts = 10                  // Stop after 10 attempts
+    
+    // Reconnection timer
+    private var reconnectionTimer: Timer?
     
     init() {
         // Initialize with default relays
@@ -173,9 +185,14 @@ class NostrRelayManager: ObservableObject {
                 if error == nil {
                     // Successfully connected to Nostr relay
                     self?.updateRelayStatus(urlString, isConnected: true)
+                    SecureLogger.log("Successfully connected to Nostr relay \(urlString)", 
+                                   category: SecureLogger.session, level: .info)
                 } else {
-                    SecureLogger.log("Failed to connect to Nostr relay \(urlString): \(error?.localizedDescription ?? "Unknown error")", category: SecureLogger.session, level: .error)
+                    SecureLogger.log("Failed to connect to Nostr relay \(urlString): \(error?.localizedDescription ?? "Unknown error")", 
+                                   category: SecureLogger.session, level: .error)
                     self?.updateRelayStatus(urlString, isConnected: false, error: error)
+                    // Trigger disconnection handler for proper backoff
+                    self?.handleDisconnection(relayUrl: urlString, error: error ?? NSError(domain: "NostrRelay", code: -1, userInfo: nil))
                 }
             }
         }
@@ -321,6 +338,10 @@ class NostrRelayManager: ObservableObject {
             relays[index].lastError = error
             if isConnected {
                 relays[index].lastConnectedAt = Date()
+                relays[index].reconnectAttempts = 0  // Reset on successful connection
+                relays[index].nextReconnectTime = nil
+            } else {
+                relays[index].lastDisconnectedAt = Date()
             }
         }
         updateConnectionStatus()
@@ -350,10 +371,84 @@ class NostrRelayManager: ObservableObject {
             return
         }
         
-        // Attempt reconnection after delay for non-DNS errors
-        DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak self] in
-            self?.connectToRelay(relayUrl)
+        // Implement exponential backoff for non-DNS errors
+        guard let index = relays.firstIndex(where: { $0.url == relayUrl }) else { return }
+        
+        relays[index].reconnectAttempts += 1
+        
+        // Stop attempting after max attempts
+        if relays[index].reconnectAttempts >= maxReconnectAttempts {
+            SecureLogger.log("Max reconnection attempts (\(maxReconnectAttempts)) reached for \(relayUrl)", 
+                           category: SecureLogger.session, level: .warning)
+            return
         }
+        
+        // Calculate backoff interval
+        let backoffInterval = min(
+            initialBackoffInterval * pow(backoffMultiplier, Double(relays[index].reconnectAttempts - 1)),
+            maxBackoffInterval
+        )
+        
+        let nextReconnectTime = Date().addingTimeInterval(backoffInterval)
+        relays[index].nextReconnectTime = nextReconnectTime
+        
+        SecureLogger.log("Scheduling reconnection to \(relayUrl) in \(Int(backoffInterval))s (attempt \(relays[index].reconnectAttempts))", 
+                       category: SecureLogger.session, level: .info)
+        
+        // Schedule reconnection with exponential backoff
+        DispatchQueue.main.asyncAfter(deadline: .now() + backoffInterval) { [weak self] in
+            guard let self = self else { return }
+            
+            // Check if we should still reconnect (relay might have been removed)
+            if self.relays.contains(where: { $0.url == relayUrl }) {
+                self.connectToRelay(relayUrl)
+            }
+        }
+    }
+    
+    // MARK: - Public Utility Methods
+    
+    /// Manually retry connection to a specific relay
+    func retryConnection(to relayUrl: String) {
+        guard let index = relays.firstIndex(where: { $0.url == relayUrl }) else { return }
+        
+        // Reset reconnection attempts
+        relays[index].reconnectAttempts = 0
+        relays[index].nextReconnectTime = nil
+        
+        // Disconnect if connected
+        if let connection = connections[relayUrl] {
+            connection.cancel(with: .goingAway, reason: nil)
+            connections.removeValue(forKey: relayUrl)
+        }
+        
+        // Attempt immediate reconnection
+        connectToRelay(relayUrl)
+    }
+    
+    /// Get detailed status for all relays
+    func getRelayStatuses() -> [(url: String, isConnected: Bool, reconnectAttempts: Int, nextReconnectTime: Date?)] {
+        return relays.map { relay in
+            (url: relay.url, 
+             isConnected: relay.isConnected, 
+             reconnectAttempts: relay.reconnectAttempts,
+             nextReconnectTime: relay.nextReconnectTime)
+        }
+    }
+    
+    /// Reset all relay connections
+    func resetAllConnections() {
+        disconnect()
+        
+        // Reset all relay states
+        for index in relays.indices {
+            relays[index].reconnectAttempts = 0
+            relays[index].nextReconnectTime = nil
+            relays[index].lastError = nil
+        }
+        
+        // Reconnect
+        connect()
     }
 }
 
