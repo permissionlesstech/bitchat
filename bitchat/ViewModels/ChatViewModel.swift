@@ -59,7 +59,7 @@
 ///
 /// ## Performance Optimizations
 /// - Message batching reduces UI updates
-/// - Caches expensive computations (RSSI colors, encryption status)
+/// - Caches expensive computations (encryption status)
 /// - Debounces autocomplete suggestions
 /// - Efficient peer list management
 ///
@@ -89,12 +89,14 @@ import UIKit
 /// Manages the application state and business logic for BitChat.
 /// Acts as the primary coordinator between UI components and backend services,
 /// implementing the BitchatDelegate protocol to handle network events.
-class ChatViewModel: ObservableObject {
+class ChatViewModel: ObservableObject, BitchatDelegate {
     // MARK: - Published Properties
     
     @Published var messages: [BitchatMessage] = []
     private let maxMessages = 1337 // Maximum messages before oldest are removed
     @Published var connectedPeers: [String] = []
+    @Published var allPeers: [BitchatPeer] = []  // Unified peer list including favorites
+    private var peerIndex: [String: BitchatPeer] = [:] // Quick lookup by peer ID
     
     // MARK: - Message Batching Properties
     
@@ -103,6 +105,11 @@ class ChatViewModel: ObservableObject {
     private var pendingPrivateMessages: [String: [BitchatMessage]] = [:] // peerID -> messages
     private var messageBatchTimer: Timer?
     private let messageBatchInterval: TimeInterval = 0.1 // 100ms batching window
+    
+    // UI update debouncing for performance
+    private var uiUpdateTimer: Timer?
+    private let uiUpdateInterval: TimeInterval = 0.05 // 50ms debounce window
+    private var pendingUIUpdate = false
     @Published var nickname: String = "" {
         didSet {
             // Trim whitespace whenever nickname is set
@@ -135,13 +142,15 @@ class ChatViewModel: ObservableObject {
     // MARK: - Services and Storage
     
     var meshService = BluetoothMeshService()
+    private var nostrRelayManager: NostrRelayManager?
+    private var messageRouter: MessageRouter?
+    private var peerManager: PeerManager?
     private let userDefaults = UserDefaults.standard
     private let nicknameKey = "bitchat.nickname"
     
     // MARK: - Caches
     
     // Caches for expensive computations
-    private var rssiColorCache: [String: Color] = [:] // key: "\(rssi)_\(isDark)"
     private var encryptionStatusCache: [String: EncryptionStatus] = [:] // key: peerID
     
     // MARK: - Social Features
@@ -163,9 +172,13 @@ class ChatViewModel: ObservableObject {
     
     // Delivery tracking
     private var deliveryTrackerCancellable: AnyCancellable?
+    private var cancellables = Set<AnyCancellable>()
     
     // Track sent read receipts to avoid duplicates
     private var sentReadReceipts: Set<String> = []  // messageID set
+    
+    // Track Nostr pubkey mappings for unknown senders
+    private var nostrKeyMapping: [String: String] = [:]  // senderPeerID -> nostrPubkey
     
     // MARK: - Initialization
     
@@ -191,6 +204,47 @@ class ChatViewModel: ObservableObject {
         // Set up message retry service
         MessageRetryService.shared.meshService = meshService
         
+        // Initialize Nostr services
+        Task { @MainActor in
+            nostrRelayManager = NostrRelayManager.shared
+            nostrRelayManager?.connect()
+            
+            messageRouter = MessageRouter(
+                meshService: meshService,
+                nostrRelay: nostrRelayManager!
+            )
+            
+            // Initialize peer manager
+            peerManager = PeerManager(meshService: meshService)
+            peerManager?.updatePeers()
+            
+            // Bind peer manager's peer list to our published property
+            peerManager?.$peers
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] peers in
+                    SecureLogger.log("📱 UI: Received \(peers.count) peers from PeerManager", 
+                                    category: SecureLogger.session, level: .info)
+                    for peer in peers {
+                        SecureLogger.log("  - \(peer.displayName): connected=\(peer.isConnected), state=\(peer.connectionState)", 
+                                        category: SecureLogger.session, level: .debug)
+                    }
+                    // Update peers directly
+                    self?.allPeers = peers
+                    // Update peer index for O(1) lookups
+                    self?.peerIndex = Dictionary(uniqueKeysWithValues: peers.map { ($0.id, $0) })
+                    // Schedule UI update if peers changed
+                    if peers.count > 0 || self?.allPeers.count ?? 0 > 0 {
+                        self?.scheduleUIUpdate()
+                    }
+                    
+                    // Update private chat peer ID if needed when peers change
+                    if self?.selectedPrivateChatFingerprint != nil {
+                        self?.updatePrivateChatPeerIfNeeded()
+                    }
+                }
+                .store(in: &cancellables)
+        }
+        
         // Set up Noise encryption callbacks
         setupNoiseCallbacks()
         
@@ -209,6 +263,45 @@ class ChatViewModel: ObservableObject {
             self,
             selector: #selector(handleRetryMessage),
             name: Notification.Name("bitchat.retryMessage"),
+            object: nil
+        )
+        
+        // Listen for Nostr messages
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleNostrMessage),
+            name: .nostrMessageReceived,
+            object: nil
+        )
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleNostrReadReceipt),
+            name: .readReceiptReceived,
+            object: nil
+        )
+        
+        // Listen for favorite status changes
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleFavoriteStatusChanged),
+            name: .favoriteStatusChanged,
+            object: nil
+        )
+        
+        // Listen for peer status updates to refresh UI
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handlePeerStatusUpdate),
+            name: Notification.Name("peerStatusUpdated"),
+            object: nil
+        )
+        
+        // Listen for delivery acknowledgments
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleDeliveryAcknowledgment),
+            name: .messageDeliveryAcknowledged,
             object: nil
         )
                 
@@ -269,8 +362,9 @@ class ChatViewModel: ObservableObject {
     // MARK: - Deinitialization
     
     deinit {
-        // Clean up timer
+        // Clean up timers
         messageBatchTimer?.invalidate()
+        uiUpdateTimer?.invalidate()
         
         // Force immediate save
         userDefaults.synchronize()
@@ -336,43 +430,94 @@ class ChatViewModel: ObservableObject {
     
     
     func toggleFavorite(peerID: String) {
-        // First try to get fingerprint from mesh service (supports peer ID rotation)
-        var fingerprint: String? = meshService.getFingerprint(for: peerID)
         
-        // Fallback to local mapping if not found in mesh service
-        if fingerprint == nil {
-            fingerprint = peerIDToPublicKeyFingerprint[peerID]
-        }
-        
-        guard let fp = fingerprint else {
-            return
-        }
-        
-        let isFavorite = SecureIdentityStateManager.shared.isFavorite(fingerprint: fp)
-        SecureIdentityStateManager.shared.setFavorite(fp, isFavorite: !isFavorite)
-        
-        // Update local set for UI
-        if isFavorite {
-            favoritePeers.remove(fp)
-        } else {
-            favoritePeers.insert(fp)
+        Task { @MainActor [weak self] in
+            guard let self = self else { return }
+            
+            // Try to find the favorite relationship first by Noise key, then by Nostr key
+            var noisePublicKey: Data?
+            var currentStatus: FavoritesPersistenceService.FavoriteRelationship?
+            
+            // First try as Noise key
+            if let noiseKey = Data(hexString: peerID) {
+                currentStatus = FavoritesPersistenceService.shared.getFavoriteStatus(for: noiseKey)
+                noisePublicKey = noiseKey
+            }
+            
+            // getFavoriteStatusByNostrKey not implemented
+            // If not found, try as Nostr key
+            // if currentStatus == nil {
+            //     currentStatus = FavoritesPersistenceService.shared.getFavoriteStatusByNostrKey(peerID)
+            //     noisePublicKey = currentStatus?.peerNoisePublicKey
+            // }
+            
+            // If still no noise key, we can't proceed
+            guard let finalNoiseKey = noisePublicKey else {
+                SecureLogger.log("❌ Could not find noise key for peer: \(peerID)", category: SecureLogger.session, level: .error)
+                return
+            }
+            
+            let isFavorite = currentStatus?.isFavorite ?? false
+            
+            SecureLogger.log("📊 Current favorite status for \(peerID): isFavorite=\(isFavorite), isMutual=\(currentStatus?.isMutual ?? false)", 
+                            category: SecureLogger.session, level: .info)
+            
+            if isFavorite {
+                // Remove from favorites
+                FavoritesPersistenceService.shared.removeFavorite(peerNoisePublicKey: finalNoiseKey)
+                
+                // Send unfavorite notification via mesh or Nostr
+                Task {
+                    try? await self.messageRouter?.sendFavoriteNotification(to: finalNoiseKey, isFavorite: false)
+                }
+            } else {
+                // Add to favorites
+                let peers = self.allPeers
+                let nickname = self.meshService.getPeerNicknames()[peerID] ?? peers.first(where: { $0.id == peerID })?.displayName ?? "Unknown"
+                let nostrPublicKey = peers.first(where: { $0.id == peerID })?.nostrPublicKey
+                
+                // Ensure we have a Nostr identity created
+                if (try? NostrIdentityBridge.getCurrentNostrIdentity()) != nil {
+                }
+                
+                FavoritesPersistenceService.shared.addFavorite(
+                    peerNoisePublicKey: finalNoiseKey,
+                    peerNostrPublicKey: nostrPublicKey ?? currentStatus?.peerNostrPublicKey,
+                    peerNickname: nickname
+                )
+                
+                // Send favorite notification via mesh or Nostr
+                Task {
+                    try? await self.messageRouter?.sendFavoriteNotification(to: finalNoiseKey, isFavorite: true)
+                }
+            }
+            
+            // Update the peer list to reflect the change
+            self.peerManager?.updatePeers()
+            
+            // Check if we now have a mutual favorite relationship
+            if let updatedStatus = FavoritesPersistenceService.shared.getFavoriteStatus(for: finalNoiseKey),
+               updatedStatus.isMutual {
+            }
         }
     }
     
+    @MainActor
     func isFavorite(peerID: String) -> Bool {
-        // First try to get fingerprint from mesh service (supports peer ID rotation)
-        var fingerprint: String? = meshService.getFingerprint(for: peerID)
-        
-        // Fallback to local mapping if not found in mesh service
-        if fingerprint == nil {
-            fingerprint = peerIDToPublicKeyFingerprint[peerID]
+        // First try as Noise public key
+        if let noisePublicKey = Data(hexString: peerID) {
+            if let status = FavoritesPersistenceService.shared.getFavoriteStatus(for: noisePublicKey) {
+                return status.isFavorite
+            }
         }
         
-        guard let fp = fingerprint else {
-            return false
-        }
+        // getFavoriteStatusByNostrKey not implemented
+        // If not found, try as Nostr public key
+        // if let status = FavoritesPersistenceService.shared.getFavoriteStatusByNostrKey(peerID) {
+        //     return status.isFavorite
+        // }
         
-        return SecureIdentityStateManager.shared.isFavorite(fingerprint: fp)
+        return false
     }
     
     // MARK: - Public Key and Identity Management
@@ -418,6 +563,16 @@ class ChatViewModel: ObservableObject {
         
         // Check if this peer is the one we're in a private chat with
         updatePrivateChatPeerIfNeeded()
+        
+        // If we're in a private chat with this peer (by fingerprint), send pending read receipts
+        if let chatFingerprint = selectedPrivateChatFingerprint,
+           chatFingerprint == fingerprintStr {
+            // Send read receipts for any unread messages from this peer
+            // Use a small delay to ensure the connection is fully established
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.markPrivateMessagesAsRead(from: peerID)
+            }
+        }
     }
     
     private func isPeerBlocked(_ peerID: String) -> Bool {
@@ -454,12 +609,26 @@ class ChatViewModel: ObservableObject {
         if let currentPeerID = getCurrentPeerIDForFingerprint(chatFingerprint) {
             // Update the selected peer if it's different
             if let oldPeerID = selectedPrivateChatPeer, oldPeerID != currentPeerID {
+                SecureLogger.log("📱 Updating private chat peer from \(oldPeerID) to \(currentPeerID)", 
+                                category: SecureLogger.session, level: .debug)
+                
                 // Migrate messages from old peer ID to new peer ID
                 if let oldMessages = privateChats[oldPeerID] {
                     if privateChats[currentPeerID] == nil {
                         privateChats[currentPeerID] = []
                     }
                     privateChats[currentPeerID]?.append(contentsOf: oldMessages)
+                    // Sort by timestamp
+                    privateChats[currentPeerID]?.sort { $0.timestamp < $1.timestamp }
+                    // Remove duplicates
+                    var seen = Set<String>()
+                    privateChats[currentPeerID] = privateChats[currentPeerID]?.filter { msg in
+                        if seen.contains(msg.id) {
+                            return false
+                        }
+                        seen.insert(msg.id)
+                        return true
+                    }
                     trimPrivateChatMessagesIfNeeded(for: currentPeerID)
                     privateChats.removeValue(forKey: oldPeerID)
                 }
@@ -471,9 +640,22 @@ class ChatViewModel: ObservableObject {
                 }
                 
                 selectedPrivateChatPeer = currentPeerID
+                
+                // Schedule UI update for encryption status change
+                DispatchQueue.main.async { [weak self] in
+                    self?.scheduleUIUpdate()
+                }
+                
+                // Also refresh the peer list to update encryption status
+                Task { @MainActor in
+                    peerManager?.updatePeers()
+                }
             } else if selectedPrivateChatPeer == nil {
                 // Just set the peer ID if we don't have one
                 selectedPrivateChatPeer = currentPeerID
+                DispatchQueue.main.async { [weak self] in
+                    self?.scheduleUIUpdate()
+                }
             }
             
             // Clear unread messages for the current peer ID
@@ -487,12 +669,15 @@ class ChatViewModel: ObservableObject {
     /// - Parameter content: The message content to send
     /// - Note: Automatically handles command processing if content starts with '/'
     ///         Routes to private chat if one is selected, otherwise broadcasts
+    @MainActor
     func sendMessage(_ content: String) {
         guard !content.isEmpty else { return }
         
         // Check for commands
         if content.hasPrefix("/") {
-            handleCommand(content)
+            Task { @MainActor in
+                handleCommand(content)
+            }
             return
         }
         
@@ -539,10 +724,24 @@ class ChatViewModel: ObservableObject {
     ///   - content: The message content to encrypt and send
     ///   - peerID: The recipient's peer ID
     /// - Note: Automatically establishes Noise encryption if not already active
+    @MainActor
     func sendPrivateMessage(_ content: String, to peerID: String) {
         guard !content.isEmpty else { return }
-        guard let recipientNickname = meshService.getPeerNicknames()[peerID] else { 
-            return 
+        
+        // Check if peer is available on mesh (actually connected, not just known)
+        let meshPeers = meshService.getPeerNicknames()
+        let peerAvailableOnMesh = meshService.isPeerConnected(peerID)
+        let recipientNickname: String
+        
+        if let meshNickname = meshPeers[peerID] {
+            recipientNickname = meshNickname
+        } else {
+            // Try to get from favorites
+            guard let noiseKey = Data(hexString: peerID),
+                  let favoriteStatus = FavoritesPersistenceService.shared.getFavoriteStatus(for: noiseKey) else {
+                return
+            }
+            recipientNickname = favoriteStatus.peerNickname
         }
         
         // Check if the recipient is blocked
@@ -588,8 +787,41 @@ class ChatViewModel: ObservableObject {
         // Immediate UI update for user's own messages
         objectWillChange.send()
         
-        // Send via mesh with the same message ID
-        meshService.sendPrivateMessage(content, to: peerID, recipientNickname: recipientNickname, messageID: message.id)
+        // Determine how to send the message
+        guard let noiseKey = Data(hexString: peerID) else { return }
+        
+        if peerAvailableOnMesh {
+            // Send via mesh with the same message ID
+            meshService.sendPrivateMessage(content, to: peerID, recipientNickname: recipientNickname, messageID: message.id)
+        } else if let favoriteStatus = FavoritesPersistenceService.shared.getFavoriteStatus(for: noiseKey),
+                  favoriteStatus.isMutual {
+            // Mutual favorite offline - send via Nostr
+            SecureLogger.log("🌐 Sending private message to offline mutual favorite \(recipientNickname) via Nostr", 
+                            category: SecureLogger.session, level: .info)
+            
+            Task {
+                do {
+                    try await messageRouter?.sendMessage(content, to: noiseKey, messageId: message.id)
+                } catch {
+                    SecureLogger.log("Failed to send message via Nostr: \(error)", 
+                                    category: SecureLogger.session, level: .error)
+                    // DeliveryTracker will handle timeout automatically
+                }
+            }
+        } else {
+            // Not reachable - show error to user
+            SecureLogger.log("⚠️ Cannot send message to \(recipientNickname) - not available on mesh or Nostr", 
+                            category: SecureLogger.session, level: .warning)
+            
+            // Add system message to inform user
+            let systemMessage = BitchatMessage(
+                sender: "system",
+                content: "Cannot send message to \(recipientNickname) - peer is not reachable via mesh or Nostr.",
+                timestamp: Date(),
+                isRelay: false
+            )
+            addMessageToBatch(systemMessage)
+        }
     }
     
     // MARK: - Private Chat Management
@@ -597,14 +829,39 @@ class ChatViewModel: ObservableObject {
     /// Initiates a private chat session with a peer.
     /// - Parameter peerID: The peer's ID to start chatting with
     /// - Note: Switches the UI to private chat mode and loads message history
+    @MainActor
     func startPrivateChat(with peerID: String) {
-        let peerNickname = meshService.getPeerNicknames()[peerID] ?? "unknown"
+        // Safety check: Don't allow starting chat with ourselves
+        if peerID == meshService.myPeerID {
+            SecureLogger.log("⚠️ Attempted to start private chat with self, ignoring", 
+                            category: SecureLogger.session, level: .warning)
+            return
+        }
+        
+        // Try to get nickname from mesh first, then from peer list
+        let peerNickname = meshService.getPeerNicknames()[peerID] ?? 
+                          peerIndex[peerID]?.displayName ?? 
+                          "unknown"
         
         // Check if the peer is blocked
         if isPeerBlocked(peerID) {
             let systemMessage = BitchatMessage(
                 sender: "system",
                 content: "cannot start chat with \(peerNickname): user is blocked.",
+                timestamp: Date(),
+                isRelay: false
+            )
+            messages.append(systemMessage)
+            return
+        }
+        
+        // Check if this is a moon peer (we favorite them but they don't favorite us) AND they're offline
+        // Only require mutual favorites for offline Nostr messaging
+        if let peer = peerIndex[peerID],
+           peer.isFavorite && !peer.theyFavoritedUs && !peer.isConnected && !peer.isRelayConnected {
+            let systemMessage = BitchatMessage(
+                sender: "system",
+                content: "cannot start chat with \(peerNickname): mutual favorite required for offline messaging.",
                 timestamp: Date(),
                 isRelay: false
             )
@@ -631,37 +888,56 @@ class ChatViewModel: ObservableObject {
         // This happens when peer IDs change between sessions
         if privateChats[peerID] == nil || privateChats[peerID]?.isEmpty == true {
             
-            // Look for messages from this nickname under other peer IDs
+            // Get the fingerprint for this peer
+            let currentFingerprint = getFingerprint(for: peerID)
+            
+            // Look for messages under other peer IDs with the same fingerprint
             var migratedMessages: [BitchatMessage] = []
             var oldPeerIDsToRemove: [String] = []
             
             for (oldPeerID, messages) in privateChats {
                 if oldPeerID != peerID {
-                    // Check if any messages in this chat are from the peer's nickname
-                    // Check if this chat contains messages with this peer
-                    let messagesWithPeer = messages.filter { msg in
-                        // Message is FROM the peer to us
-                        (msg.sender == peerNickname && msg.sender != nickname) ||
-                        // OR message is FROM us TO the peer
-                        (msg.sender == nickname && (msg.recipientNickname == peerNickname || 
-                         // Also check if this was a private message in a chat that only has us and one other person
-                         (msg.isPrivate && messages.allSatisfy { m in 
-                             m.sender == nickname || m.sender == peerNickname 
-                         })))
-                    }
+                    // Check if this old peer ID has the same fingerprint (same actual peer)
+                    let oldFingerprint = peerIDToPublicKeyFingerprint[oldPeerID]
                     
-                    if !messagesWithPeer.isEmpty {
+                    if let currentFp = currentFingerprint,
+                       let oldFp = oldFingerprint,
+                       currentFp == oldFp {
+                        // Same peer with different ID - migrate all messages
+                        migratedMessages.append(contentsOf: messages)
+                        oldPeerIDsToRemove.append(oldPeerID)
                         
-                        // Check if ALL messages in this chat are between us and this peer
-                        let allMessagesAreWithPeer = messages.allSatisfy { msg in
-                            (msg.sender == peerNickname || msg.sender == nickname) &&
-                            (msg.recipientNickname == nil || msg.recipientNickname == peerNickname || msg.recipientNickname == nickname)
+                        SecureLogger.log("📦 Migrating \(messages.count) messages from old peer ID \(oldPeerID) to \(peerID) based on fingerprint match", 
+                                        category: SecureLogger.session, level: .info)
+                    } else if currentFingerprint == nil || oldFingerprint == nil {
+                        // Fallback: use nickname matching only if we don't have fingerprints
+                        // This is less reliable but handles legacy data
+                        let messagesWithPeer = messages.filter { msg in
+                            // Message is FROM the peer to us
+                            (msg.sender == peerNickname && msg.sender != nickname) ||
+                            // OR message is FROM us TO the peer
+                            (msg.sender == nickname && (msg.recipientNickname == peerNickname || 
+                             // Also check if this was a private message in a chat that only has us and one other person
+                             (msg.isPrivate && messages.allSatisfy { m in 
+                                 m.sender == nickname || m.sender == peerNickname 
+                             })))
                         }
                         
-                        if allMessagesAreWithPeer {
-                            // This entire chat history belongs to this peer, migrate it all
-                            migratedMessages.append(contentsOf: messages)
-                            oldPeerIDsToRemove.append(oldPeerID)
+                        if !messagesWithPeer.isEmpty {
+                            // Check if ALL messages in this chat are between us and this peer
+                            let allMessagesAreWithPeer = messages.allSatisfy { msg in
+                                (msg.sender == peerNickname || msg.sender == nickname) &&
+                                (msg.recipientNickname == nil || msg.recipientNickname == peerNickname || msg.recipientNickname == nickname)
+                            }
+                            
+                            if allMessagesAreWithPeer {
+                                // This entire chat history likely belongs to this peer, migrate it all
+                                migratedMessages.append(contentsOf: messages)
+                                oldPeerIDsToRemove.append(oldPeerID)
+                                
+                                SecureLogger.log("📦 Migrating \(messages.count) messages from old peer ID \(oldPeerID) to \(peerID) based on nickname match (no fingerprints available)", 
+                                                category: SecureLogger.session, level: .warning)
+                            }
                         }
                     }
                 }
@@ -725,8 +1001,172 @@ class ChatViewModel: ObservableObject {
         }
     }
     
+    // MARK: - Nostr Message Handling
+    
+    @objc private func handleNostrMessage(_ notification: Notification) {
+        guard let message = notification.userInfo?["message"] as? BitchatMessage else { return }
+        
+        // Store the Nostr pubkey if provided (for messages from unknown senders)
+        if let nostrPubkey = notification.userInfo?["nostrPubkey"] as? String,
+           let senderPeerID = message.senderPeerID {
+            // Store mapping for read receipts
+            nostrKeyMapping[senderPeerID] = nostrPubkey
+        }
+        
+        // Process the Nostr message through the same flow as Bluetooth messages
+        didReceiveMessage(message)
+    }
+    
+    @objc private func handleDeliveryAcknowledgment(_ notification: Notification) {
+        guard let messageId = notification.userInfo?["messageId"] as? String,
+              let senderNoiseKey = notification.userInfo?["senderNoiseKey"] as? Data else { return }
+        
+        let senderHexId = senderNoiseKey.hexEncodedString()
+        
+        SecureLogger.log("✅ Handling delivery acknowledgment for message \(messageId) from \(senderHexId)", 
+                        category: SecureLogger.session, level: .info)
+        
+        // Update the delivery status for the message
+        if let index = messages.firstIndex(where: { $0.id == messageId }) {
+            // Update delivery status to delivered
+            messages[index].deliveryStatus = DeliveryStatus.delivered(to: "nostr", at: Date())
+            
+            // Schedule UI update for delivery status
+            scheduleUIUpdate()
+        }
+        
+        // Also update in private chats if it's a private message
+        for (peerID, chatMessages) in privateChats {
+            if let index = chatMessages.firstIndex(where: { $0.id == messageId }) {
+                privateChats[peerID]?[index].deliveryStatus = DeliveryStatus.delivered(to: "nostr", at: Date())
+                scheduleUIUpdate()
+                break
+            }
+        }
+    }
+    
+    @objc private func handleNostrReadReceipt(_ notification: Notification) {
+        guard let receipt = notification.userInfo?["receipt"] as? ReadReceipt else { return }
+        
+        SecureLogger.log("📖 Handling read receipt for message \(receipt.originalMessageID) from Nostr", 
+                        category: SecureLogger.session, level: .info)
+        
+        // Process the read receipt through the same flow as Bluetooth read receipts
+        didReceiveReadReceipt(receipt)
+    }
+    
+    @objc private func handlePeerStatusUpdate(_ notification: Notification) {
+        // Update private chat peer if needed when peer status changes
+        updatePrivateChatPeerIfNeeded()
+    }
+    
+    @objc private func handleFavoriteStatusChanged(_ notification: Notification) {
+        guard let peerPublicKey = notification.userInfo?["peerPublicKey"] as? Data else { return }
+        
+        Task { @MainActor in
+            // Handle noise key updates
+            if let isKeyUpdate = notification.userInfo?["isKeyUpdate"] as? Bool,
+               isKeyUpdate,
+               let oldKey = notification.userInfo?["oldPeerPublicKey"] as? Data {
+                let oldPeerID = oldKey.hexEncodedString()
+                let newPeerID = peerPublicKey.hexEncodedString()
+                
+                // If we have a private chat open with the old peer ID, update it to the new one
+                if selectedPrivateChatPeer == oldPeerID {
+                    SecureLogger.log("📱 Updating private chat peer ID due to key change: \(oldPeerID) -> \(newPeerID)", 
+                                    category: SecureLogger.session, level: .info)
+                    
+                    // Transfer private chat messages to new peer ID
+                    if let messages = privateChats[oldPeerID] {
+                        privateChats[newPeerID] = messages
+                        privateChats.removeValue(forKey: oldPeerID)
+                    }
+                    
+                    // Transfer unread status
+                    if unreadPrivateMessages.contains(oldPeerID) {
+                        unreadPrivateMessages.remove(oldPeerID)
+                        unreadPrivateMessages.insert(newPeerID)
+                    }
+                    
+                    // Update selected peer
+                    selectedPrivateChatPeer = newPeerID
+                    
+                    // Update fingerprint tracking if needed
+                    if let fingerprint = peerIDToPublicKeyFingerprint[oldPeerID] {
+                        peerIDToPublicKeyFingerprint.removeValue(forKey: oldPeerID)
+                        peerIDToPublicKeyFingerprint[newPeerID] = fingerprint
+                        selectedPrivateChatFingerprint = fingerprint
+                    }
+                    
+                    // Schedule UI refresh
+                    scheduleUIUpdate()
+                } else {
+                    // Even if the chat isn't open, migrate any existing private chat data
+                    if let messages = privateChats[oldPeerID] {
+                        SecureLogger.log("📱 Migrating private chat messages from \(oldPeerID) to \(newPeerID)", 
+                                        category: SecureLogger.session, level: .debug)
+                        privateChats[newPeerID] = messages
+                        privateChats.removeValue(forKey: oldPeerID)
+                    }
+                    
+                    // Transfer unread status
+                    if unreadPrivateMessages.contains(oldPeerID) {
+                        unreadPrivateMessages.remove(oldPeerID)
+                        unreadPrivateMessages.insert(newPeerID)
+                    }
+                    
+                    // Update fingerprint mapping
+                    if let fingerprint = peerIDToPublicKeyFingerprint[oldPeerID] {
+                        peerIDToPublicKeyFingerprint.removeValue(forKey: oldPeerID)
+                        peerIDToPublicKeyFingerprint[newPeerID] = fingerprint
+                    }
+                }
+            }
+            
+            // First check if this is a peer ID update for our current chat
+            updatePrivateChatPeerIfNeeded()
+            
+            // Then handle favorite/unfavorite messages if applicable
+            if let isFavorite = notification.userInfo?["isFavorite"] as? Bool {
+                let peerID = peerPublicKey.hexEncodedString()
+                let action = isFavorite ? "favorited" : "unfavorited"
+                
+                // Find peer nickname
+                let peerNickname: String
+                if let nickname = meshService.getPeerNicknames()[peerID] {
+                    peerNickname = nickname
+                } else if let favorite = FavoritesPersistenceService.shared.getFavoriteStatus(for: peerPublicKey) {
+                    peerNickname = favorite.peerNickname
+                } else {
+                    peerNickname = "Unknown"
+                }
+                
+                // Create system message
+                let systemMessage = BitchatMessage(
+                    id: UUID().uuidString,
+                sender: "System",
+                content: "\(peerNickname) \(action) you",
+                timestamp: Date(),
+                isRelay: false,
+                originalSender: nil,
+                isPrivate: false,
+                recipientNickname: nil,
+                senderPeerID: nil,
+                mentions: nil
+            )
+            
+            // Add to message stream
+            addMessageToBatch(systemMessage)
+            
+            // Update peer manager to refresh UI
+            peerManager?.updatePeers()
+            }
+        }
+    }
+    
     // MARK: - App Lifecycle
     
+    @MainActor
     @objc private func appDidBecomeActive() {
         // When app becomes active, send read receipts for visible private chat
         if let peerID = selectedPrivateChatPeer {
@@ -796,6 +1236,9 @@ class ChatViewModel: ObservableObject {
         // Flush any pending messages when app goes to background
         flushMessageBatchImmediately()
         
+        // Flush any pending UI updates
+        flushUIUpdateImmediately()
+        
         userDefaults.synchronize()
     }
     
@@ -819,9 +1262,72 @@ class ChatViewModel: ObservableObject {
         // Flush any pending messages immediately
         flushMessageBatchImmediately()
         
+        // Flush any pending UI updates
+        flushUIUpdateImmediately()
+        
         userDefaults.synchronize()
     }
     
+    @MainActor
+    private func sendReadReceipt(_ receipt: ReadReceipt, to peerID: String, originalTransport: String? = nil) {
+        // First, try to resolve the current peer ID in case they reconnected with a new ID
+        var actualPeerID = peerID
+        
+        // Check if this peer ID exists in current nicknames
+        if meshService.getPeerNicknames()[peerID] == nil {
+            // Peer not found with this ID, try to find by fingerprint or nickname
+            if let oldNoiseKey = Data(hexString: peerID),
+               let favoriteStatus = FavoritesPersistenceService.shared.getFavoriteStatus(for: oldNoiseKey) {
+                let peerNickname = favoriteStatus.peerNickname
+                
+                // Search for the current peer ID with the same nickname
+                for (currentPeerID, currentNickname) in meshService.getPeerNicknames() {
+                    if currentNickname == peerNickname {
+                        SecureLogger.log("📖 Resolved updated peer ID for read receipt: \(peerID) -> \(currentPeerID)", 
+                                        category: SecureLogger.session, level: .info)
+                        actualPeerID = currentPeerID
+                        break
+                    }
+                }
+            }
+        }
+        
+        // If we know the original transport, use it for the read receipt
+        if originalTransport == "nostr" {
+            // Message was received via Nostr, send read receipt via Nostr
+            if let noiseKey = Data(hexString: actualPeerID) {
+                Task { @MainActor in
+                    try? await messageRouter?.sendReadReceipt(for: receipt.originalMessageID, to: noiseKey, preferredTransport: .nostr)
+                }
+            } else if let nostrPubkey = nostrKeyMapping[actualPeerID] {
+                // This is a Nostr-only peer we haven't mapped to a Noise key yet
+                Task { @MainActor in
+                    if let tempNoiseKey = Data(hexString: nostrPubkey) {
+                        try? await messageRouter?.sendReadReceipt(for: receipt.originalMessageID, to: tempNoiseKey, preferredTransport: .nostr)
+                    }
+                }
+            }
+        } else if meshService.getPeerNicknames()[actualPeerID] != nil {
+            // Use mesh for connected peers (default behavior)
+            meshService.sendReadReceipt(receipt, to: actualPeerID)
+        } else {
+            // Try Nostr for offline peers
+            if let noiseKey = Data(hexString: actualPeerID) {
+                Task { @MainActor in
+                    try? await messageRouter?.sendReadReceipt(for: receipt.originalMessageID, to: noiseKey)
+                }
+            } else if let nostrPubkey = nostrKeyMapping[actualPeerID] {
+                // This is a Nostr-only peer we haven't mapped to a Noise key yet
+                Task { @MainActor in
+                    if let tempNoiseKey = Data(hexString: nostrPubkey) {
+                        try? await messageRouter?.sendReadReceipt(for: receipt.originalMessageID, to: tempNoiseKey)
+                    }
+                }
+            }
+        }
+    }
+    
+    @MainActor
     func markPrivateMessagesAsRead(from peerID: String) {
         // Get the nickname for this peer
         let peerNickname = meshService.getPeerNicknames()[peerID] ?? ""
@@ -852,7 +1358,33 @@ class ChatViewModel: ObservableObject {
             // Check multiple conditions to ensure we catch all messages from the peer
             let isOurMessage = message.sender == nickname
             let isFromPeerByNickname = !peerNickname.isEmpty && message.sender == peerNickname
-            let isFromPeerByID = message.senderPeerID == peerID
+            
+            // Check if message is from this peer by comparing IDs
+            // Handle both Noise and Nostr keys
+            var isFromPeerByID = false
+            if let msgSenderID = message.senderPeerID {
+                // Direct match
+                isFromPeerByID = msgSenderID == peerID
+                
+                // If no direct match, check if we're comparing Nostr keys
+                if !isFromPeerByID {
+                    // Check if the peerID has a favorite entry with a Nostr key that matches
+                    if let noiseKey = Data(hexString: peerID),
+                       let favoriteStatus = FavoritesPersistenceService.shared.getFavoriteStatus(for: noiseKey),
+                       let nostrKey = favoriteStatus.peerNostrPublicKey {
+                        isFromPeerByID = msgSenderID == nostrKey
+                    }
+                    
+                    // getFavoriteStatusByNostrKey not implemented
+                    // Or check if the message sender ID maps to this peer's Noise key
+                    // if !isFromPeerByID,
+                    //    let senderFavorite = FavoritesPersistenceService.shared.getFavoriteStatusByNostrKey(msgSenderID),
+                    //    senderFavorite.peerNoisePublicKey.hexEncodedString() == peerID {
+                    //     isFromPeerByID = true
+                    // }
+                }
+            }
+            
             let isPrivateToUs = message.isPrivate && message.recipientNickname == nickname
             
             // This is a message FROM the peer if it's not from us AND (matches nickname OR peer ID OR is private to us)
@@ -868,13 +1400,29 @@ class ChatViewModel: ObservableObject {
                         // Create and send read receipt for sent or delivered messages
                         // Check if we've already sent a receipt for this message
                         if !sentReadReceipts.contains(message.id) {
-                            // Send to the CURRENT peer ID, not the old senderPeerID which may have changed
                             let receipt = ReadReceipt(
                                 originalMessageID: message.id,
                                 readerID: meshService.myPeerID,
                                 readerNickname: nickname
                             )
-                            meshService.sendReadReceipt(receipt, to: peerID)
+                            
+                            // Send read receipt to the message sender
+                            // Use the message's senderPeerID if available (for Nostr messages)
+                            // Otherwise use the current peerID
+                            let recipientID = message.senderPeerID ?? peerID
+                            
+                            // Check if message was delivered via Nostr
+                            var originalTransport: String? = nil
+                            if let status = message.deliveryStatus {
+                                switch status {
+                                case .delivered(let transport, _):
+                                    originalTransport = transport
+                                default:
+                                    break
+                                }
+                            }
+                            
+                            sendReadReceipt(receipt, to: recipientID, originalTransport: originalTransport)
                             sentReadReceipts.insert(message.id)
                             readReceiptsSent += 1
                         } else {
@@ -895,7 +1443,25 @@ class ChatViewModel: ObservableObject {
                             readerID: meshService.myPeerID,
                             readerNickname: nickname
                         )
-                        meshService.sendReadReceipt(receipt, to: peerID)
+                        // Use the message's senderPeerID if available (for Nostr messages)
+                        let recipientID = message.senderPeerID ?? peerID
+                        
+                        // For backwards compatibility, check if this might be a Nostr message
+                        // by checking if the sender has a Nostr key
+                        let receiptToSend = receipt
+                        let recipientToSend = recipientID
+                        Task { @MainActor in
+                            var originalTransport: String? = nil
+                            if let noiseKey = Data(hexString: recipientToSend),
+                               let favoriteStatus = FavoritesPersistenceService.shared.getFavoriteStatus(for: noiseKey),
+                               favoriteStatus.peerNostrPublicKey != nil,
+                               self.meshService.getPeerNicknames()[recipientToSend] == nil {
+                                // Peer has Nostr key and is not on mesh, likely received via Nostr
+                                originalTransport = "nostr"
+                            }
+                            
+                            self.sendReadReceipt(receiptToSend, to: recipientToSend, originalTransport: originalTransport)
+                        }
                         sentReadReceipts.insert(message.id)
                         readReceiptsSent += 1
                     } else {
@@ -923,6 +1489,7 @@ class ChatViewModel: ObservableObject {
     // MARK: - Emergency Functions
     
     // PANIC: Emergency data clearing for activist safety
+    @MainActor
     func panicClearAllData() {
         // Flush any pending messages immediately before clearing
         flushMessageBatchImmediately()
@@ -958,6 +1525,9 @@ class ChatViewModel: ObservableObject {
         favoritePeers.removeAll()
         peerIDToPublicKeyFingerprint.removeAll()
         
+        // Clear persistent favorites from keychain
+        FavoritesPersistenceService.shared.clearAllFavorites()
+        
         // Clear identity data from secure storage
         SecureIdentityStateManager.shared.clearAllIdentityData()
         
@@ -976,7 +1546,6 @@ class ChatViewModel: ObservableObject {
         
         // Clear all caches
         invalidateEncryptionCache()
-        invalidateRSSIColorCache()
         
         // Disconnect from all peers and clear persistent identity
         // This will force creation of a new identity (new fingerprint) on next launch
@@ -985,8 +1554,8 @@ class ChatViewModel: ObservableObject {
         // Force immediate UserDefaults synchronization
         userDefaults.synchronize()
         
-        // Force UI update
-        objectWillChange.send()
+        // Force immediate UI update for panic mode
+        flushUIUpdateImmediately()
         
     }
     
@@ -1000,40 +1569,6 @@ class ChatViewModel: ObservableObject {
         return formatter.string(from: date)
     }
     
-    func getRSSIColor(rssi: Int, colorScheme: ColorScheme) -> Color {
-        let isDark = colorScheme == .dark
-        let cacheKey = "\(rssi)_\(isDark)"
-        
-        // Check cache first
-        if let cachedColor = rssiColorCache[cacheKey] {
-            return cachedColor
-        }
-        
-        // RSSI typically ranges from -30 (excellent) to -90 (poor)
-        // We'll map this to colors from green (strong) to red (weak)
-        
-        let color: Color
-        if rssi >= -50 {
-            // Excellent signal: bright green
-            color = isDark ? Color(red: 0.0, green: 1.0, blue: 0.0) : Color(red: 0.0, green: 0.7, blue: 0.0)
-        } else if rssi >= -60 {
-            // Good signal: green-yellow
-            color = isDark ? Color(red: 0.5, green: 1.0, blue: 0.0) : Color(red: 0.3, green: 0.7, blue: 0.0)
-        } else if rssi >= -70 {
-            // Fair signal: yellow
-            color = isDark ? Color(red: 1.0, green: 1.0, blue: 0.0) : Color(red: 0.7, green: 0.7, blue: 0.0)
-        } else if rssi >= -80 {
-            // Weak signal: orange
-            color = isDark ? Color(red: 1.0, green: 0.6, blue: 0.0) : Color(red: 0.8, green: 0.4, blue: 0.0)
-        } else {
-            // Poor signal: red
-            color = isDark ? Color(red: 1.0, green: 0.2, blue: 0.2) : Color(red: 0.8, green: 0.0, blue: 0.0)
-        }
-        
-        // Cache the result
-        rssiColorCache[cacheKey] = color
-        return color
-    }
     
     // MARK: - Autocomplete
     
@@ -1135,7 +1670,6 @@ class ChatViewModel: ObservableObject {
         let isDark = colorScheme == .dark
         let primaryColor = isDark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
         
-        // Always use the same color for all senders - no RSSI-based coloring
         return primaryColor
     }
     
@@ -1451,9 +1985,9 @@ class ChatViewModel: ObservableObject {
         // Invalidate cache when encryption status changes
         invalidateEncryptionCache(for: peerID)
         
-        // Force UI update
+        // Schedule UI update
         DispatchQueue.main.async { [weak self] in
-            self?.objectWillChange.send()
+            self?.scheduleUIUpdate()
         }
     }
     
@@ -1465,6 +1999,9 @@ class ChatViewModel: ObservableObject {
         
         // This must be a pure function - no state mutations allowed
         // to avoid SwiftUI update loops
+        
+        // Check if we've ever established a session by looking for a fingerprint
+        let hasEverEstablishedSession = getFingerprint(for: peerID) != nil
         
         let sessionState = meshService.getNoiseSessionState(for: peerID)
         let storedStatus = peerEncryptionStatus[peerID]
@@ -1486,14 +2023,47 @@ class ChatViewModel: ObservableObject {
                 status = .noiseSecured
             }
         case .handshaking, .handshakeQueued:
-            // Currently establishing encryption
-            status = .noiseHandshaking
+            // If we've ever established a session, show secured instead of handshaking
+            if hasEverEstablishedSession {
+                // Check if it was verified before
+                if let fingerprint = getFingerprint(for: peerID),
+                   verifiedFingerprints.contains(fingerprint) {
+                    status = .noiseVerified
+                } else {
+                    status = .noiseSecured
+                }
+            } else {
+                // First time establishing - show handshaking
+                status = .noiseHandshaking
+            }
         case .none:
-            // No handshake attempted
-            status = .noHandshake
+            // If we've ever established a session, show secured instead of no handshake
+            if hasEverEstablishedSession {
+                // Check if it was verified before
+                if let fingerprint = getFingerprint(for: peerID),
+                   verifiedFingerprints.contains(fingerprint) {
+                    status = .noiseVerified
+                } else {
+                    status = .noiseSecured
+                }
+            } else {
+                // Never established - show no handshake
+                status = .noHandshake
+            }
         case .failed:
-            // Handshake failed - show broken lock
-            status = .none
+            // If we've ever established a session, show secured instead of failed
+            if hasEverEstablishedSession {
+                // Check if it was verified before
+                if let fingerprint = getFingerprint(for: peerID),
+                   verifiedFingerprints.contains(fingerprint) {
+                    status = .noiseVerified
+                } else {
+                    status = .noiseSecured
+                }
+            } else {
+                // Never established - show failed
+                status = .none
+            }
         }
         
         // Cache the result
@@ -1501,7 +2071,7 @@ class ChatViewModel: ObservableObject {
         
         // Only log occasionally to avoid spam
         if Int.random(in: 0..<100) == 0 {
-            SecureLogger.log("getEncryptionStatus for \(peerID): sessionState=\(sessionState), stored=\(String(describing: storedStatus)), final=\(status)", category: SecureLogger.security, level: .debug)
+            SecureLogger.log("getEncryptionStatus for \(peerID): sessionState=\(sessionState), stored=\(String(describing: storedStatus)), hasEverEstablished=\(hasEverEstablishedSession), final=\(status)", category: SecureLogger.security, level: .debug)
         }
         
         return status
@@ -1516,9 +2086,6 @@ class ChatViewModel: ObservableObject {
         }
     }
     
-    private func invalidateRSSIColorCache() {
-        rssiColorCache.removeAll()
-    }
     
     // MARK: - Message Batching
     
@@ -1599,8 +2166,8 @@ class ChatViewModel: ObservableObject {
                 }
             }
             
-            // Single UI update for all changes
-            self.objectWillChange.send()
+            // Single scheduled UI update for all changes
+            self.scheduleUIUpdate()
         }
     }
     
@@ -1608,6 +2175,40 @@ class ChatViewModel: ObservableObject {
     private func flushMessageBatchImmediately() {
         messageBatchTimer?.invalidate()
         flushMessageBatch()
+    }
+    
+    // MARK: - UI Update Debouncing
+    
+    // Schedule a debounced UI update
+    private func scheduleUIUpdate() {
+        guard !pendingUIUpdate else { return } // Already scheduled
+        
+        pendingUIUpdate = true
+        
+        // Cancel existing timer
+        uiUpdateTimer?.invalidate()
+        
+        // Schedule new update
+        uiUpdateTimer = Timer.scheduledTimer(withTimeInterval: uiUpdateInterval, repeats: false) { [weak self] _ in
+            self?.flushUIUpdate()
+        }
+    }
+    
+    // Execute the pending UI update
+    private func flushUIUpdate() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            self.pendingUIUpdate = false
+            self.objectWillChange.send()
+        }
+    }
+    
+    // Force immediate UI update for critical user actions
+    private func flushUIUpdateImmediately() {
+        uiUpdateTimer?.invalidate()
+        pendingUIUpdate = false
+        objectWillChange.send()
     }
     
     // Update encryption status in appropriate places, not during view updates
@@ -1634,9 +2235,9 @@ class ChatViewModel: ObservableObject {
         // Invalidate cache when encryption status changes
         invalidateEncryptionCache(for: peerID)
         
-        // Trigger UI update
+        // Schedule UI update
         DispatchQueue.main.async { [weak self] in
-            self?.objectWillChange.send()
+            self?.scheduleUIUpdate()
         }
     }
     
@@ -1644,6 +2245,12 @@ class ChatViewModel: ObservableObject {
     
     func showFingerprint(for peerID: String) {
         showingFingerprintFor = peerID
+    }
+    
+    // MARK: - Peer Lookup Helpers
+    
+    func getPeer(byID peerID: String) -> BitchatPeer? {
+        return peerIndex[peerID]
     }
     
     func getFingerprint(for peerID: String) -> String? {
@@ -1757,8 +2364,8 @@ class ChatViewModel: ObservableObject {
                 // Invalidate cache when encryption status changes
                 self.invalidateEncryptionCache(for: peerID)
                 
-                // Force UI update
-                self.objectWillChange.send()
+                // Schedule UI update
+                self.scheduleUIUpdate()
             }
         }
         
@@ -1771,22 +2378,20 @@ class ChatViewModel: ObservableObject {
                 // Invalidate cache when encryption status changes
                 self.invalidateEncryptionCache(for: peerID)
                 
-                // Force UI update
-                self.objectWillChange.send()
+                // Schedule UI update
+                self.scheduleUIUpdate()
             }
         }
     }
-}
-
-// MARK: - BitchatDelegate
-
-extension ChatViewModel: BitchatDelegate {
+    
+    // MARK: - BitchatDelegate Methods
     
     // MARK: - Command Handling
     
     /// Processes IRC-style commands starting with '/'.
     /// - Parameter command: The full command string including the leading slash
     /// - Note: Supports commands like /nick, /msg, /who, /slap, /clear, /help
+    @MainActor
     private func handleCommand(_ command: String) {
         let parts = command.split(separator: " ")
         guard let cmd = parts.first else { return }
@@ -2129,6 +2734,147 @@ extension ChatViewModel: BitchatDelegate {
                 messages.append(systemMessage)
             }
             
+        case "/fav":
+            if parts.count > 1 {
+                let targetName = String(parts[1])
+                // Remove @ if present
+                let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
+                
+                // Find peer ID for this nickname
+                if let peerID = getPeerIDForNickname(nickname) {
+                    // Add to favorites using the Nostr integration
+                    if let noisePublicKey = Data(hexString: peerID) {
+                        // Get or set Nostr public key
+                        let existingFavorite = FavoritesPersistenceService.shared.getFavoriteStatus(for: noisePublicKey)
+                        FavoritesPersistenceService.shared.addFavorite(
+                            peerNoisePublicKey: noisePublicKey,
+                            peerNostrPublicKey: existingFavorite?.peerNostrPublicKey,
+                            peerNickname: nickname
+                        )
+                        
+                        // Toggle favorite in identity manager for UI
+                        toggleFavorite(peerID: peerID)
+                        
+                        // Send favorite notification
+                        Task { [weak self] in
+                            try? await self?.messageRouter?.sendFavoriteNotification(to: noisePublicKey, isFavorite: true)
+                        }
+                        
+                        let systemMessage = BitchatMessage(
+                            sender: "system",
+                            content: "added \(nickname) to favorites.",
+                            timestamp: Date(),
+                            isRelay: false
+                        )
+                        messages.append(systemMessage)
+                    }
+                } else {
+                    let systemMessage = BitchatMessage(
+                        sender: "system",
+                        content: "can't find peer: \(nickname)",
+                        timestamp: Date(),
+                        isRelay: false
+                    )
+                    messages.append(systemMessage)
+                }
+            } else {
+                let systemMessage = BitchatMessage(
+                    sender: "system",
+                    content: "usage: /fav <nickname>",
+                    timestamp: Date(),
+                    isRelay: false
+                )
+                messages.append(systemMessage)
+            }
+            
+        case "/unfav":
+            if parts.count > 1 {
+                let targetName = String(parts[1])
+                // Remove @ if present
+                let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
+                
+                // Find peer ID for this nickname
+                if let peerID = getPeerIDForNickname(nickname) {
+                    // Remove from favorites
+                    if let noisePublicKey = Data(hexString: peerID) {
+                        FavoritesPersistenceService.shared.removeFavorite(peerNoisePublicKey: noisePublicKey)
+                        
+                        // Toggle favorite in identity manager for UI
+                        toggleFavorite(peerID: peerID)
+                        
+                        // Send unfavorite notification
+                        Task { [weak self] in
+                            try? await self?.messageRouter?.sendFavoriteNotification(to: noisePublicKey, isFavorite: false)
+                        }
+                        
+                        let systemMessage = BitchatMessage(
+                            sender: "system",
+                            content: "removed \(nickname) from favorites.",
+                            timestamp: Date(),
+                            isRelay: false
+                        )
+                        messages.append(systemMessage)
+                    }
+                } else {
+                    let systemMessage = BitchatMessage(
+                        sender: "system",
+                        content: "can't find peer: \(nickname)",
+                        timestamp: Date(),
+                        isRelay: false
+                    )
+                    messages.append(systemMessage)
+                }
+            } else {
+                let systemMessage = BitchatMessage(
+                    sender: "system",
+                    content: "usage: /unfav <nickname>",
+                    timestamp: Date(),
+                    isRelay: false
+                )
+                messages.append(systemMessage)
+            }
+            
+        case "/testnostr":
+            let systemMessage = BitchatMessage(
+                sender: "system",
+                content: "testing nostr relay connectivity...",
+                timestamp: Date(),
+                isRelay: false
+            )
+            messages.append(systemMessage)
+            
+            Task { @MainActor in
+                if let relayManager = self.nostrRelayManager {
+                    // Simple connectivity test
+                    relayManager.connect()
+                    
+                    // Wait a moment for connections
+                    try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
+                    
+                    let statusMessage = if relayManager.isConnected {
+                        "nostr relays connected successfully!"
+                    } else {
+                        "failed to connect to nostr relays - check console for details"
+                    }
+                    
+                    let completeMessage = BitchatMessage(
+                        sender: "system",
+                        content: statusMessage,
+                        timestamp: Date(),
+                        isRelay: false
+                    )
+                    self.messages.append(completeMessage)
+                } else {
+                    let errorMessage = BitchatMessage(
+                        sender: "system",
+                        content: "nostr relay manager not initialized",
+                        timestamp: Date(),
+                        isRelay: false
+                    )
+                    self.messages.append(errorMessage)
+                }
+            }
+            
         default:
             // Unknown command
             let systemMessage = BitchatMessage(
@@ -2208,22 +2954,41 @@ extension ChatViewModel: BitchatDelegate {
                 
                 // First check if we need to migrate existing messages from this sender
                 let senderNickname = message.sender
+                let currentFingerprint = getFingerprint(for: peerID)
+                
                 if privateChats[peerID] == nil || privateChats[peerID]?.isEmpty == true {
-                    // Check if we have messages from this nickname under a different peer ID
+                    // Check if we have messages under a different peer ID with same fingerprint
                     var migratedMessages: [BitchatMessage] = []
                     var oldPeerIDsToRemove: [String] = []
                     
                     for (oldPeerID, messages) in privateChats {
                         if oldPeerID != peerID {
-                            // Check if this chat contains messages with this sender
-                            let isRelevantChat = messages.contains { msg in
-                                (msg.sender == senderNickname && msg.sender != nickname) ||
-                                (msg.sender == nickname && msg.recipientNickname == senderNickname)
-                            }
+                            // Check fingerprint match first (most reliable)
+                            let oldFingerprint = peerIDToPublicKeyFingerprint[oldPeerID]
                             
-                            if isRelevantChat {
+                            if let currentFp = currentFingerprint,
+                               let oldFp = oldFingerprint,
+                               currentFp == oldFp {
+                                // Same peer with different ID - migrate all messages
                                 migratedMessages.append(contentsOf: messages)
                                 oldPeerIDsToRemove.append(oldPeerID)
+                                
+                                SecureLogger.log("📦 Migrating \(messages.count) messages from old peer ID \(oldPeerID) to \(peerID) for incoming message (fingerprint match)", 
+                                                category: SecureLogger.session, level: .info)
+                            } else if currentFingerprint == nil || oldFingerprint == nil {
+                                // Fallback: Check if this chat contains messages with this sender by nickname
+                                let isRelevantChat = messages.contains { msg in
+                                    (msg.sender == senderNickname && msg.sender != nickname) ||
+                                    (msg.sender == nickname && msg.recipientNickname == senderNickname)
+                                }
+                                
+                                if isRelevantChat {
+                                    migratedMessages.append(contentsOf: messages)
+                                    oldPeerIDsToRemove.append(oldPeerID)
+                                    
+                                    SecureLogger.log("📦 Migrating \(messages.count) messages from old peer ID \(oldPeerID) to \(peerID) for incoming message (nickname match)", 
+                                                    category: SecureLogger.session, level: .warning)
+                                }
                             }
                         }
                     }
@@ -2287,6 +3052,47 @@ extension ChatViewModel: BitchatDelegate {
                    chatFingerprint == senderFingerprint && selectedPrivateChatPeer != peerID {
                     // Update our private chat peer to the new ID
                     selectedPrivateChatPeer = peerID
+                    // Schedule UI update when peer ID changes
+                    scheduleUIUpdate()
+                }
+                
+                // Also check if we need to update the private chat peer for any reason
+                updatePrivateChatPeerIfNeeded()
+                
+                // If we're currently viewing this chat, force immediate UI update
+                if selectedPrivateChatPeer == peerID {
+                    // Immediately flush the batch for the current chat to ensure UI updates
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self = self else { return }
+                        if let pendingMessages = self.pendingPrivateMessages[peerID], !pendingMessages.isEmpty {
+                            // Process this peer's messages immediately
+                            self.pendingPrivateMessages.removeValue(forKey: peerID)
+                            
+                            if self.privateChats[peerID] == nil {
+                                self.privateChats[peerID] = []
+                            }
+                            
+                            // Add messages and sort
+                            self.privateChats[peerID]?.append(contentsOf: pendingMessages)
+                            self.privateChats[peerID]?.sort { $0.timestamp < $1.timestamp }
+                            
+                            // Remove duplicates
+                            var seen = Set<String>()
+                            self.privateChats[peerID] = self.privateChats[peerID]?.filter { msg in
+                                if seen.contains(msg.id) {
+                                    return false
+                                }
+                                seen.insert(msg.id)
+                                return true
+                            }
+                            
+                            // Trim if needed
+                            self.trimPrivateChatMessagesIfNeeded(for: peerID)
+                            
+                            // Schedule UI update
+                            self.scheduleUIUpdate()
+                        }
+                    }
                 }
                 
                 // Mark as unread if not currently viewing this chat
@@ -2298,14 +3104,31 @@ extension ChatViewModel: BitchatDelegate {
                     unreadPrivateMessages.remove(peerID)
                     
                     // Send read receipt immediately since we're viewing the chat
-                    // Send to the current peer ID since peer IDs change between sessions
                     if !sentReadReceipts.contains(message.id) {
                         let receipt = ReadReceipt(
                             originalMessageID: message.id,
                             readerID: meshService.myPeerID,
                             readerNickname: nickname
                         )
-                        meshService.sendReadReceipt(receipt, to: peerID)
+                        // Use the message's senderPeerID if available (for Nostr messages)
+                        let recipientID = message.senderPeerID ?? peerID
+                        
+                        // For backwards compatibility, check if this might be a Nostr message
+                        // by checking if the sender has a Nostr key
+                        let receiptToSend = receipt
+                        let recipientToSend = recipientID
+                        Task { @MainActor in
+                            var originalTransport: String? = nil
+                            if let noiseKey = Data(hexString: recipientToSend),
+                               let favoriteStatus = FavoritesPersistenceService.shared.getFavoriteStatus(for: noiseKey),
+                               favoriteStatus.peerNostrPublicKey != nil,
+                               self.meshService.getPeerNicknames()[recipientToSend] == nil {
+                                // Peer has Nostr key and is not on mesh, likely received via Nostr
+                                originalTransport = "nostr"
+                            }
+                            
+                            self.sendReadReceipt(receiptToSend, to: recipientToSend, originalTransport: originalTransport)
+                        }
                         sentReadReceipts.insert(message.id)
                     }
                     
@@ -2545,34 +3368,29 @@ extension ChatViewModel: BitchatDelegate {
             self.connectedPeers = peers
             self.isConnected = !peers.isEmpty
             
+            self.peerManager?.updatePeers()
+            
             // Register ephemeral sessions for all connected peers
             for peerID in peers {
                 SecureIdentityStateManager.shared.registerEphemeralSession(peerID: peerID)
             }
             
+            // Schedule UI refresh to ensure offline favorites are shown
+            self.scheduleUIUpdate()
+            
             // Update encryption status for all peers
             self.updateEncryptionStatusForPeers()
-            
-            // Invalidate RSSI cache since peer data may have changed
-            self.invalidateRSSIColorCache()
 
-            // Explicitly notify SwiftUI that the object has changed.
-            self.objectWillChange.send()
+            // Schedule UI update for peer list change
+            self.scheduleUIUpdate()
             
             // Check if we need to update private chat peer after reconnection
             if self.selectedPrivateChatFingerprint != nil {
                 self.updatePrivateChatPeerIfNeeded()
             }
             
-            // Only end private chat if we can't find the peer by fingerprint
-            if let currentChatPeer = self.selectedPrivateChatPeer,
-               !peers.contains(currentChatPeer),
-               self.selectedPrivateChatFingerprint != nil {
-                // Try one more time to find by fingerprint
-                if self.getCurrentPeerIDForFingerprint(self.selectedPrivateChatFingerprint!) == nil {
-                    self.endPrivateChat()
-                }
-            }
+            // Don't end private chat when peer temporarily disconnects
+            // The fingerprint tracking will allow us to reconnect when they come back
         }
     }
     
@@ -2600,6 +3418,36 @@ extension ChatViewModel: BitchatDelegate {
         return Array(Set(mentions)) // Remove duplicates
     }
     
+    @MainActor
+    func handlePeerFavoritedUs(peerID: String, favorited: Bool, nickname: String, nostrNpub: String? = nil) {
+        // Get peer's noise public key
+        guard let noisePublicKey = Data(hexString: peerID) else { return }
+        
+        // Decode npub to hex if provided
+        var nostrPublicKey: String? = nil
+        if let npub = nostrNpub {
+            do {
+                let (hrp, data) = try Bech32.decode(npub)
+                if hrp == "npub" {
+                    nostrPublicKey = data.hexEncodedString()
+                }
+            } catch {
+                SecureLogger.log("Failed to decode Nostr npub: \(error)", category: SecureLogger.session, level: .error)
+            }
+        }
+        
+        // Update favorite status in persistence service
+        FavoritesPersistenceService.shared.updatePeerFavoritedUs(
+            peerNoisePublicKey: noisePublicKey,
+            favorited: favorited,
+            peerNickname: nickname,
+            peerNostrPublicKey: nostrPublicKey
+        )
+        
+        // Update peer list to reflect the change
+        peerManager?.updatePeers()
+    }
+    
     func isFavorite(fingerprint: String) -> Bool {
         return SecureIdentityStateManager.shared.isFavorite(fingerprint: fingerprint)
     }
@@ -2625,7 +3473,6 @@ extension ChatViewModel: BitchatDelegate {
     }
     
     private func updateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) {
-        SecureLogger.log("Updating UI delivery status for message \(messageID): \(status)", category: SecureLogger.session, level: .debug)
         
         // Helper function to check if we should skip this update
         func shouldSkipUpdate(currentStatus: DeliveryStatus?, newStatus: DeliveryStatus) -> Bool {
@@ -2666,10 +3513,9 @@ extension ChatViewModel: BitchatDelegate {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             self.privateChats = updatedPrivateChats
-            self.objectWillChange.send()
+            self.scheduleUIUpdate()
         }
         
     }
     
-    
-}
+}  // End of ChatViewModel class

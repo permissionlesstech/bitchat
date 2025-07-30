@@ -54,5 +54,18 @@
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 	</array>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<false/>
+		<key>NSAllowsArbitraryLoadsForMedia</key>
+		<false/>
+		<key>NSAllowsArbitraryLoadsInWebContent</key>
+		<false/>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>bitchat uses local network access to discover and connect with other bitchat users on your network.</string>
 </dict>
 </plist>
