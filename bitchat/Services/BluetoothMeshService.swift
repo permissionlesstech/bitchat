@@ -1483,9 +1483,8 @@ class BluetoothMeshService: NSObject {
             self?.sendKeepAlivePings()
         }
         
-        // Log handshake states periodically for debugging and clean up stale states
-        #if DEBUG
-        Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
+        // Clean up stale handshake states periodically
+        Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { [weak self] _ in
             guard let self = self else { return }
             
             // Clean up stale handshakes
@@ -1494,13 +1493,15 @@ class BluetoothMeshService: NSObject {
                 for peerID in stalePeerIDs {
                     // Also remove from noise service
                     self.cleanupPeerCryptoState(peerID)
-                    // Cleaned up stale handshake
+                    SecureLogger.log("Cleaned up stale handshake for peer: \(peerID)", 
+                                   category: SecureLogger.handshake, level: .info)
                 }
             }
             
+            #if DEBUG
             self.handshakeCoordinator.logHandshakeStates()
+            #endif
         }
-        #endif
         
         // Schedule first peer ID rotation
         scheduleNextRotation()
@@ -4648,8 +4649,8 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
                 }
             }
             
-            // Reset handshake state to prevent stuck handshakes
-            handshakeCoordinator.resetHandshakeState(for: peerID)
+            // Clean up crypto state and handshake state on disconnect
+            cleanupPeerCryptoState(peerID)
             
             // Check if peer gracefully left and notify delegate
             let shouldNotifyDisconnect = collectionsQueue.sync {
