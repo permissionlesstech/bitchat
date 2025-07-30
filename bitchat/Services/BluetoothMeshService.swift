@@ -2916,9 +2916,20 @@ class BluetoothMeshService: NSObject {
                         // Remove any temp ID mapping if it exists
                         let tempIDToRemove = connectedPeripherals.first(where: { $0.value == peripheral && $0.key != senderID })?.key
                         if let tempID = tempIDToRemove {
+                            SecureLogger.log("Removing temp ID mapping: \(tempID) -> \(peripheralID)", 
+                                           category: SecureLogger.session, level: .debug)
                             connectedPeripherals.removeValue(forKey: tempID)
+                            // Also remove any peer session created with temp ID
+                            if peerSessions[tempID] != nil {
+                                SecureLogger.log("Removing temp peer session for \(tempID)", 
+                                               category: SecureLogger.session, level: .debug)
+                                peerSessions.removeValue(forKey: tempID)
+                            }
                         }
                         updatePeripheralConnection(senderID, peripheral: peripheral)
+                        
+                        // Update the peripheral mapping to use the real peer ID
+                        updatePeripheralMapping(peripheralID: peripheralID, peerID: senderID)
                     }
                 }
                 
@@ -4010,7 +4021,24 @@ class BluetoothMeshService: NSObject {
                 // Update connection state only if we're not already authenticated
                 let currentState = peerConnectionStates[announcement.peerID] ?? .disconnected
                 if currentState != .authenticated {
-                    updatePeerConnectionState(announcement.peerID, state: .connected)
+                    // Check if we have a direct peripheral connection or if this is relayed
+                    let hasDirectConnection = collectionsQueue.sync {
+                        // Check if any connected peripheral maps to this peer
+                        for (_, mapping) in self.peripheralMappings where mapping.peerID == announcement.peerID {
+                            if self.connectedPeripherals[announcement.peerID] != nil {
+                                return true
+                            }
+                        }
+                        return false
+                    }
+                    
+                    if hasDirectConnection {
+                        updatePeerConnectionState(announcement.peerID, state: .connected)
+                    } else {
+                        // This is a relayed identity announce - don't mark as directly connected
+                        SecureLogger.log("Received relayed identity announce from \(announcement.peerID) - not marking as directly connected", 
+                                       category: SecureLogger.noise, level: .debug)
+                    }
                 }
                 
                 // Register the peer's public key with ChatViewModel for verification tracking

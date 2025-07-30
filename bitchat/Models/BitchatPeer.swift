@@ -154,7 +154,14 @@ class PeerManager: ObservableObject {
             
             // Check if this peer is actually connected (not just known via relay)
             let isConnected = meshService.isPeerConnected(peerID)
-            let isRelayConnected = !isConnected && meshService.isPeerKnown(peerID)
+            let isKnown = meshService.isPeerKnown(peerID)
+            let isRelayConnected = !isConnected && isKnown
+            
+            // Debug logging for relay connection detection
+            if isKnown && !isConnected {
+                SecureLogger.log("Peer \(nickname) (\(peerID)): isConnected=\(isConnected), isKnown=\(isKnown), isRelayConnected=\(isRelayConnected)", 
+                               category: SecureLogger.session, level: .debug)
+            }
             
             // Skip disconnected peers unless they're favorites (handled later)
             if !isConnected && !isRelayConnected {
@@ -264,7 +271,18 @@ class PeerManager: ObservableObject {
             
             // Log each peer's status
             for peer in allPeers {
-                let statusIcon = peer.isConnected ? "🟢" : "🔴"
+                // Use the actual statusIcon from the peer which accounts for relay connections
+                let statusIcon: String
+                switch peer.connectionState {
+                case .bluetoothConnected:
+                    statusIcon = "🟢"
+                case .relayConnected:
+                    statusIcon = "🔗"
+                case .nostrAvailable:
+                    statusIcon = "🌐"
+                case .offline:
+                    statusIcon = "🔴"
+                }
                 let favoriteIcon = peer.isMutualFavorite ? "💕" : (peer.isFavorite ? "⭐" : (peer.theyFavoritedUs ? "🌙" : ""))
                 SecureLogger.log("  \(statusIcon) \(peer.displayName) (ID: \(peer.id.prefix(8))...) \(favoriteIcon)", 
                                 category: SecureLogger.session, level: .debug)
