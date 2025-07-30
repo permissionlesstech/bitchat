@@ -884,13 +884,27 @@ class BluetoothMeshService: NSObject {
     /// - Returns: The peer's Noise static key fingerprint if known, nil otherwise
     /// - Note: This fingerprint remains stable across peer ID rotations
     func getPeerFingerprint(_ peerID: String) -> String? {
+        // Check PeerSession first for O(1) lookup
+        if let fingerprint = collectionsQueue.sync(execute: { 
+            peerSessions[peerID]?.fingerprint 
+        }) {
+            return fingerprint
+        }
+        
+        // Fallback to noise service
         return noiseService.getPeerFingerprint(peerID)
     }
     
     // Get fingerprint for a peer ID
     func getFingerprint(for peerID: String) -> String? {
         return collectionsQueue.sync {
-            peerIDToFingerprint[peerID]
+            // Check PeerSession first for O(1) lookup
+            if let fingerprint = peerSessions[peerID]?.fingerprint {
+                return fingerprint
+            }
+            
+            // Fallback to peerIDToFingerprint map
+            return peerIDToFingerprint[peerID]
         }
     }
     
@@ -1508,14 +1522,29 @@ class BluetoothMeshService: NSObject {
         
         // Setup noise callbacks
         noiseService.onPeerAuthenticated = { [weak self] peerID, fingerprint in
+            guard let self = self else { return }
+            
+            // Store fingerprint in PeerSession for fast lookups
+            self.collectionsQueue.async(flags: .barrier) {
+                if let session = self.peerSessions[peerID] {
+                    session.fingerprint = fingerprint
+                    session.updateAuthenticationState(authenticated: true, noiseSession: true)
+                } else {
+                    let session = PeerSession(peerID: peerID)
+                    session.fingerprint = fingerprint
+                    session.updateAuthenticationState(authenticated: true, noiseSession: true)
+                    self.peerSessions[peerID] = session
+                }
+            }
+            
             // Get peer's public key data from noise service
-            if let publicKeyData = self?.noiseService.getPeerPublicKeyData(peerID) {
+            if let publicKeyData = self.noiseService.getPeerPublicKeyData(peerID) {
                 // Register with ChatViewModel for verification tracking
                 DispatchQueue.main.async {
-                    (self?.delegate as? ChatViewModel)?.registerPeerPublicKey(peerID: peerID, publicKeyData: publicKeyData)
+                    (self.delegate as? ChatViewModel)?.registerPeerPublicKey(peerID: peerID, publicKeyData: publicKeyData)
                     
                     // Force UI to update encryption status for this specific peer
-                    (self?.delegate as? ChatViewModel)?.updateEncryptionStatusForPeer(peerID)
+                    (self.delegate as? ChatViewModel)?.updateEncryptionStatusForPeer(peerID)
                 }
             }
             
@@ -2515,7 +2544,7 @@ class BluetoothMeshService: NSObject {
                let recipientID = packet.recipientID {
                 let recipientPeerID = recipientID.hexEncodedString()
                 // Check if recipient is a favorite via their public key fingerprint
-                if let fingerprint = self.noiseService.getPeerFingerprint(recipientPeerID) {
+                if let fingerprint = self.getPeerFingerprint(recipientPeerID) {
                     isForFavorite = self.delegate?.isFavorite(fingerprint: fingerprint) ?? false
                 }
             }
@@ -3221,7 +3250,7 @@ class BluetoothMeshService: NSObject {
                     
                     // Check if this message is for an offline favorite and cache it
                     let recipientIDString = recipientID.hexEncodedString()
-                    if let fingerprint = self.noiseService.getPeerFingerprint(recipientIDString) {
+                    if let fingerprint = self.getPeerFingerprint(recipientIDString) {
                         // Only cache if recipient is a favorite AND is currently offline
                         let isActive = self.peerSessions[recipientIDString]?.isActivePeer ?? false
                         if (self.delegate?.isFavorite(fingerprint: fingerprint) ?? false) && !isActive {
@@ -3639,7 +3668,7 @@ class BluetoothMeshService: NSObject {
                                 guard let self = self else { return }
                                 
                                 // Check if this is a favorite using their public key fingerprint
-                                if let fingerprint = self.noiseService.getPeerFingerprint(senderID) {
+                                if let fingerprint = self.getPeerFingerprint(senderID) {
                                     if self.delegate?.isFavorite(fingerprint: fingerprint) ?? false {
                                         NotificationService.shared.sendFavoriteOnlineNotification(nickname: nickname)
                                         
