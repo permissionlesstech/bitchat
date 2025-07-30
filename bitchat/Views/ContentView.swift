@@ -14,6 +14,8 @@ import SwiftUI
 struct PeerDisplayData: Identifiable {
     let id: String
     let displayName: String
+    let petname: String?
+    let claimedNickname: String
     let rssi: Int?
     let isFavorite: Bool
     let isMe: Bool
@@ -73,6 +75,11 @@ struct ContentView: View {
     @State private var lastScrollTime: Date = .distantPast
     @State private var scrollThrottleTimer: Timer?
     @State private var autocompleteDebounceTimer: Timer?
+    
+    // Petname editing state
+    @State private var editingPetnameForPeer: String? = nil
+    @State private var petnameEditText: String = ""
+    @FocusState private var isPetnameFieldFocused: Bool
     
     // MARK: - Computed Properties
     
@@ -225,6 +232,13 @@ struct ContentView: View {
             }
             
             Button("cancel", role: .cancel) {}
+        }
+        .onChange(of: isPetnameFieldFocused) { isFocused in
+            if !isFocused && editingPetnameForPeer != nil {
+                // Cancel petname editing when focus is lost
+                editingPetnameForPeer = nil
+                petnameEditText = ""
+            }
         }
         .onDisappear {
             // Clean up timers
@@ -633,9 +647,16 @@ struct ContentView: View {
                                 } else {
                                     print("ContentView: RSSI for peer \(peerID) is \(rssiValue!)")
                                 }
+                                
+                                let petname = viewModel.getPetname(peerID: peerID)
+                                let claimedNickname = peerNicknames[peerID] ?? "anon\(peerID.prefix(4))"
+                                let displayName = peerID == myPeerID ? viewModel.nickname : (petname ?? claimedNickname)
+                                
                                 return PeerDisplayData(
                                     id: peerID,
-                                    displayName: peerID == myPeerID ? viewModel.nickname : (peerNicknames[peerID] ?? "anon\(peerID.prefix(4))"),
+                                    displayName: displayName,
+                                    petname: petname,
+                                    claimedNickname: claimedNickname,
                                     rssi: rssiValue,
                                     isFavorite: viewModel.isFavorite(peerID: peerID),
                                     isMe: peerID == myPeerID,
@@ -676,7 +697,7 @@ struct ContentView: View {
                                         .accessibilityLabel("Signal strength: unknown")
                                 }
                                 
-                                // Peer name
+                                // Peer name with petname editing
                                 if peer.isMe {
                                     HStack {
                                         Text(peer.displayName + " (you)")
@@ -686,39 +707,101 @@ struct ContentView: View {
                                         Spacer()
                                     }
                                 } else {
-                                    Text(peer.displayName)
-                                        .font(.system(size: 14, design: .monospaced))
-                                        .foregroundColor(peerNicknames[peer.id] != nil ? textColor : secondaryTextColor)
-                                    
-                                    // Encryption status icon (after peer name)
-                                    if let icon = peer.encryptionStatus.icon {
-                                        Image(systemName: icon)
-                                            .font(.system(size: 10))
-                                            .foregroundColor(peer.encryptionStatus == .noiseVerified ? Color.green : 
-                                                           peer.encryptionStatus == .noiseSecured ? textColor :
-                                                           peer.encryptionStatus == .noiseHandshaking ? Color.orange :
-                                                           Color.red)
-                                            .accessibilityLabel("Encryption: \(peer.encryptionStatus == .noiseVerified ? "verified" : peer.encryptionStatus == .noiseSecured ? "secured" : peer.encryptionStatus == .noiseHandshaking ? "establishing" : "none")")
+                                    // Show either petname editing field or display name
+                                    if editingPetnameForPeer == peer.id {
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            TextField("petname", text: $petnameEditText)
+                                                .textFieldStyle(.plain)
+                                                .font(.system(size: 14, design: .monospaced))
+                                                .foregroundColor(textColor)
+                                                .focused($isPetnameFieldFocused)
+                                                .autocorrectionDisabled(true)
+                                                #if os(iOS)
+                                                .textInputAutocapitalization(.never)
+                                                #endif
+                                                .onSubmit {
+                                                    viewModel.setPetname(peerID: peer.id, petname: petnameEditText.isEmpty ? nil : petnameEditText)
+                                                    editingPetnameForPeer = nil
+                                                    petnameEditText = ""
+                                                }
+                                                .onAppear {
+                                                    isPetnameFieldFocused = true
+                                                }
+                                            
+                                            Text("claimed: \(peer.claimedNickname)")
+                                                .font(.system(size: 10, design: .monospaced))
+                                                .foregroundColor(secondaryTextColor.opacity(0.6))
+                                        }
+                                    } else {
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            HStack(spacing: 4) {
+                                                Text(peer.displayName)
+                                                    .font(.system(size: 14, design: .monospaced))
+                                                    .foregroundColor(peer.petname != nil ? textColor : secondaryTextColor)
+                                                
+                                                // Visual indicator for petname vs claimed nickname
+                                                if peer.petname != nil {
+                                                    Image(systemName: "person.badge.plus")
+                                                        .font(.system(size: 8))
+                                                        .foregroundColor(Color.blue.opacity(0.7))
+                                                        .accessibilityLabel("Petname assigned")
+                                                }
+                                                
+                                                // Encryption status icon
+                                                if let icon = peer.encryptionStatus.icon {
+                                                    Image(systemName: icon)
+                                                        .font(.system(size: 10))
+                                                        .foregroundColor(peer.encryptionStatus == .noiseVerified ? Color.green : 
+                                                                       peer.encryptionStatus == .noiseSecured ? textColor :
+                                                                       peer.encryptionStatus == .noiseHandshaking ? Color.orange :
+                                                                       Color.red)
+                                                        .accessibilityLabel("Encryption: \(peer.encryptionStatus == .noiseVerified ? "verified" : peer.encryptionStatus == .noiseSecured ? "secured" : peer.encryptionStatus == .noiseHandshaking ? "establishing" : "none")")
+                                                }
+                                                
+                                                Spacer()
+                                                
+                                                // Favorite star
+                                                Button(action: {
+                                                    viewModel.toggleFavorite(peerID: peer.id)
+                                                }) {
+                                                    Image(systemName: peer.isFavorite ? "star.fill" : "star")
+                                                        .font(.system(size: 12))
+                                                        .foregroundColor(peer.isFavorite ? Color.yellow : secondaryTextColor)
+                                                }
+                                                .buttonStyle(.plain)
+                                                .accessibilityLabel(peer.isFavorite ? "Remove \(peer.displayName) from favorites" : "Add \(peer.displayName) to favorites")
+                                            }
+                                            
+                                            // Show claimed nickname if petname is set
+                                            if peer.petname != nil && peer.petname != peer.claimedNickname {
+                                                Text("(\(peer.claimedNickname))")
+                                                    .font(.system(size: 10, design: .monospaced))
+                                                    .foregroundColor(secondaryTextColor.opacity(0.6))
+                                            }
+                                        }
+                                        .onLongPressGesture {
+                                            // Long press to edit petname
+                                            editingPetnameForPeer = peer.id
+                                            petnameEditText = peer.petname ?? ""
+                                        }
                                     }
-                                    
-                                    Spacer()
-                                    
-                                    // Favorite star
-                                    Button(action: {
-                                        viewModel.toggleFavorite(peerID: peer.id)
-                                    }) {
-                                        Image(systemName: peer.isFavorite ? "star.fill" : "star")
-                                            .font(.system(size: 12))
-                                            .foregroundColor(peer.isFavorite ? Color.yellow : secondaryTextColor)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .accessibilityLabel(peer.isFavorite ? "Remove \(peer.displayName) from favorites" : "Add \(peer.displayName) to favorites")
                                 }
                             }
                             .padding(.horizontal)
                             .padding(.vertical, 8)
                             .contentShape(Rectangle())
                             .onTapGesture {
+                                // If editing petname for this peer, don't do anything
+                                if editingPetnameForPeer == peer.id {
+                                    return
+                                }
+                                // If editing petname for another peer, cancel it
+                                if editingPetnameForPeer != nil {
+                                    editingPetnameForPeer = nil
+                                    petnameEditText = ""
+                                    return
+                                }
+                                // Normal tap behavior - start private chat
                                 if !peer.isMe && peerNicknames[peer.id] != nil {
                                     viewModel.startPrivateChat(with: peer.id)
                                     withAnimation(.easeInOut(duration: 0.2)) {
@@ -890,8 +973,8 @@ struct ContentView: View {
     
     private var privateHeaderView: some View {
         Group {
-            if let privatePeerID = viewModel.selectedPrivateChatPeer,
-               let privatePeerNick = viewModel.meshService.getPeerNicknames()[privatePeerID] {
+            if let privatePeerID = viewModel.selectedPrivateChatPeer {
+                let privatePeerNick = viewModel.resolveNickname(for: privatePeerID)
                 HStack {
                     Button(action: {
                         withAnimation(.easeInOut(duration: 0.2)) {
