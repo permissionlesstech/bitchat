@@ -148,6 +148,13 @@ class PeerManager: ObservableObject {
         for (peerID, nickname) in meshPeers {
             guard let noiseKey = Data(hexString: peerID) else { continue }
             
+            // Safety check: Never add our own peer ID
+            if peerID == meshService.myPeerID {
+                SecureLogger.log("⚠️ Skipping self peer ID \(peerID) in peer list", 
+                               category: SecureLogger.session, level: .warning)
+                continue
+            }
+            
             // Check if this peer is actually connected (not just known via relay)
             let isConnected = meshService.isPeerConnected(peerID)
             let isKnown = meshService.isPeerKnown(peerID)

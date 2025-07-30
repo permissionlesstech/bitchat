@@ -629,7 +629,14 @@ class BluetoothMeshService: NSObject {
     
     // MARK: - Peer Identity
     
-    var myPeerID: String
+    var myPeerID: String {
+        didSet {
+            if oldValue != "" && oldValue != myPeerID {
+                SecureLogger.log("📍 MY PEER ID CHANGED: \(oldValue) -> \(myPeerID)", 
+                               category: SecureLogger.security, level: .warning)
+            }
+        }
+    }
     
     // MARK: - Scaling Optimizations
     
@@ -5723,7 +5730,14 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
     private func initiateNoiseHandshake(with peerID: String) {
         // Use noiseService directly
         
-        SecureLogger.log("Initiating Noise handshake with \(peerID)", category: SecureLogger.noise, level: .info)
+        SecureLogger.log("Initiating Noise handshake with \(peerID), myPeerID: \(myPeerID)", category: SecureLogger.noise, level: .info)
+        
+        // Safety check: Don't handshake with ourselves
+        if peerID == myPeerID {
+            SecureLogger.log("⚠️ CRITICAL: Attempted to handshake with self! peerID=\(peerID), myPeerID=\(myPeerID)", 
+                           category: SecureLogger.handshake, level: .error)
+            return
+        }
         
         // Check if we already have an established session
         if noiseService.hasEstablishedSession(with: peerID) {
@@ -5759,6 +5773,8 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         }
         
         // Check with coordinator if we should initiate
+        SecureLogger.log("Checking handshake coordinator - myPeerID: \(myPeerID), remotePeerID: \(peerID), hasPending: \(hasPendingMessages)", 
+                        category: SecureLogger.handshake, level: .debug)
         if !handshakeCoordinator.shouldInitiateHandshake(myPeerID: myPeerID, remotePeerID: peerID, forceIfStale: hasPendingMessages) {
             SecureLogger.log("Coordinator says we should not initiate handshake with \(peerID)", category: SecureLogger.handshake, level: .debug)
             

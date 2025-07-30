@@ -620,16 +620,17 @@ struct ContentView: View {
                         } else {
                             // Extract peer data for display
                             let peerNicknames = viewModel.meshService.getPeerNicknames()
-                            let myPeerID = viewModel.meshService.myPeerID
                             
                             // Show all peers (connected and favorites)
                             // Pre-compute peer data outside ForEach to reduce overhead
                             let peerData = viewModel.allPeers.map { peer in
+                                // Get current myPeerID for each peer to avoid stale values
+                                let currentMyPeerID = viewModel.meshService.myPeerID
                                 return PeerDisplayData(
                                     id: peer.id,
-                                    displayName: peer.id == myPeerID ? viewModel.nickname : peer.nickname,
+                                    displayName: peer.id == currentMyPeerID ? viewModel.nickname : peer.nickname,
                                     isFavorite: peer.favoriteStatus?.isFavorite ?? false,
-                                    isMe: peer.id == myPeerID,
+                                    isMe: peer.id == currentMyPeerID,
                                     hasUnreadMessages: viewModel.unreadPrivateMessages.contains(peer.id),
                                     encryptionStatus: viewModel.getEncryptionStatus(for: peer.id),
                                     connectionState: peer.connectionState,
