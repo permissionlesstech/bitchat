@@ -2937,6 +2937,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             for (range, type) in allMatches {
                 // Add text before match
                 if let nsRange = Range(range, in: content) {
+                    if lastEnd > nsRange.lowerBound { continue }
                     let beforeText = String(content[lastEnd..<nsRange.lowerBound])
                     if !beforeText.isEmpty {
                         var beforeStyle = AttributeContainer()
