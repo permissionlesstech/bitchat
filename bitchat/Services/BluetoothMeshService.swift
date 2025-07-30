@@ -689,6 +689,7 @@ class BluetoothMeshService: NSObject {
     private var connectionBackoff: [String: TimeInterval] = [:]
     private var lastActivityByPeripheralID: [String: Date] = [:]  // Track last activity for LRU
     private var peerIDByPeripheralID: [String: String] = [:]  // Map peripheral ID to peer ID
+    private var lastVersionHelloTime: [String: Date] = [:]  // Track when version hello received from peer
     private let maxConnectionAttempts = 3
     private let baseBackoffInterval: TimeInterval = 1.0
     
@@ -2510,6 +2511,19 @@ class BluetoothMeshService: NSObject {
             recentDisconnectNotifications.removeValue(forKey: peerID)
         }
         
+        // Clean up old version hello times
+        collectionsQueue.async(flags: .barrier) { [weak self] in
+            guard let self = self else { return }
+            
+            let oldVersionHellos = self.lastVersionHelloTime.filter { (_, timestamp) in
+                now.timeIntervalSince(timestamp) > 60.0  // Clean up after 1 minute
+            }.map { $0.key }
+            
+            for peerID in oldVersionHellos {
+                self.lastVersionHelloTime.removeValue(forKey: peerID)
+            }
+        }
+        
         let peersToRemove = collectionsQueue.sync(flags: .barrier) {
             let toRemove = self.peerSessions.compactMap { (peerID, session) -> String? in
                 guard session.isActivePeer else { return nil }
@@ -3615,35 +3629,51 @@ class BluetoothMeshService: NSObject {
                             return false
                         }
                         
-                        // CRITICAL FIX: Only mark as active if we have a peripheral connection
-                        // This prevents ghost connections from relayed announce packets
+                        // Check if we should mark as active despite no peripheral
+                        // This can happen during reconnection when announces arrive before peripheral mapping
+                        let shouldMarkActive: Bool
                         
-                        if !hasPeripheralConnection {
-                            SecureLogger.log("⚠️ Not marking \(senderID) as active - no peripheral connection (announce was relayed)", 
-                                           category: SecureLogger.session, level: .warning)
-                            // Still update/create session to track the peer, but don't mark as connected
-                            if let session = self.peerSessions[senderID] {
-                                session.nickname = nickname  // Update nickname from announce
-                                session.hasReceivedAnnounce = true
-                                session.lastSeen = Date()
-                                // Don't set isConnected or isActivePeer without peripheral
-                            } else {
-                                // Create new session but not connected
-                                let session = PeerSession(peerID: senderID, nickname: nickname)
-                                session.hasReceivedAnnounce = true
-                                session.lastSeen = Date()
-                                // Don't set isConnected or isActivePeer without peripheral
-                                self.peerSessions[senderID] = session
-                            }
+                        if hasPeripheralConnection {
+                            shouldMarkActive = true
+                        } else {
+                            // Check if we recently had activity suggesting a direct connection
+                            let recentVersionHello = (self.lastVersionHelloTime[senderID] != nil && 
+                                                   Date().timeIntervalSince(self.lastVersionHelloTime[senderID]!) < 5.0)
+                            let hasUnmappedPeripheral = !self.unmappedPeripherals.isEmpty
                             
-                            // Trigger a rescan to try to find this peer's advertisement
-                            // This helps when announces arrive before we've discovered the peripheral
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                                SecureLogger.log("Triggering rescan to find peripheral for \(senderID)", 
+                            if recentVersionHello || hasUnmappedPeripheral {
+                                SecureLogger.log("Marking \(senderID) as active despite no peripheral - recent version hello or unmapped peripheral exists", 
                                                category: SecureLogger.session, level: .info)
-                                self?.triggerRescan()
+                                shouldMarkActive = true
+                                
+                                // Trigger a rescan to establish peripheral mapping
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                                    SecureLogger.log("Triggering rescan to find peripheral for \(senderID)", 
+                                                   category: SecureLogger.session, level: .info)
+                                    self?.triggerRescan()
+                                }
+                            } else {
+                                SecureLogger.log("⚠️ Not marking \(senderID) as active - no peripheral connection and no recent activity", 
+                                               category: SecureLogger.session, level: .warning)
+                                // Still update/create session to track the peer, but don't mark as connected
+                                if let session = self.peerSessions[senderID] {
+                                    session.nickname = nickname  // Update nickname from announce
+                                    session.hasReceivedAnnounce = true
+                                    session.lastSeen = Date()
+                                    // Don't set isConnected or isActivePeer without peripheral
+                                } else {
+                                    // Create new session but not connected
+                                    let session = PeerSession(peerID: senderID, nickname: nickname)
+                                    session.hasReceivedAnnounce = true
+                                    session.lastSeen = Date()
+                                    // Don't set isConnected or isActivePeer without peripheral
+                                    self.peerSessions[senderID] = session
+                                }
+                                shouldMarkActive = false
                             }
-                            
+                        }
+                        
+                        if !shouldMarkActive {
                             return false
                         }
                         
@@ -6500,6 +6530,11 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         SecureLogger.log("Received version hello from \(peerID): supported versions \(hello.supportedVersions), preferred \(hello.preferredVersion)", 
                           category: SecureLogger.session, level: .debug)
         
+        // Track when we received version hello from this peer
+        collectionsQueue.async(flags: .barrier) { [weak self] in
+            self?.lastVersionHelloTime[peerID] = Date()
+        }
+        
         // Find the best common version
         let ourVersions = Array(ProtocolVersion.supportedVersions)
         if let agreedVersion = ProtocolVersion.negotiateVersion(clientVersions: hello.supportedVersions, serverVersions: ourVersions) {
@@ -7027,12 +7062,12 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
     private func updateAllPeripheralRSSI() {
         // Use peripheral mappings to ensure we catch all connected peripherals
         for (_, mapping) in peripheralMappings {
-            if let peripheral = mapping.peripheral, peripheral.state == .connected {
+            if mapping.peripheral.state == .connected {
                 // Only read RSSI if we have a real peer ID (not temp ID)
                 if let peerID = mapping.peerID, peerID.count == 16 {
-                    SecureLogger.log("Reading RSSI for peer \(peerID) via peripheral \(peripheral.identifier.uuidString)", 
+                    SecureLogger.log("Reading RSSI for peer \(peerID) via peripheral \(mapping.peripheral.identifier.uuidString)", 
                                    category: SecureLogger.session, level: .debug)
-                    peripheral.readRSSI()
+                    mapping.peripheral.readRSSI()
                 }
             }
         }

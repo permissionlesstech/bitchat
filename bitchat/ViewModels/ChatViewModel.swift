@@ -3190,13 +3190,13 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             self.connectedPeers = peers
             self.isConnected = !peers.isEmpty
             
+            // Update peer manager to refresh peer objects with latest RSSI
+            self.peerManager?.updatePeers()
+            
             // Register ephemeral sessions for all connected peers
             for peerID in peers {
                 SecureIdentityStateManager.shared.registerEphemeralSession(peerID: peerID)
             }
-            
-            // Update the peer manager to refresh the unified peer list
-            self.peerManager?.updatePeers()
             
             // Force UI refresh to ensure offline favorites are shown
             self.objectWillChange.send()
