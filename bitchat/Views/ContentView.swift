@@ -959,26 +959,8 @@ struct ContentView: View {
             }
         }()
         
-        HStack {
-                    Button(action: {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            showPrivateChat = false
-                            viewModel.endPrivateChat()
-                        }
-                    }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "chevron.left")
-                                .font(.system(size: 12))
-                            Text("back")
-                                .font(.system(size: 14, design: .monospaced))
-                        }
-                        .foregroundColor(textColor)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Back to main chat")
-                    
-                    Spacer()
-                    
+        ZStack {
+                    // Center content - always perfectly centered
                     Button(action: {
                         viewModel.showFingerprint(for: privatePeerID)
                     }) {
@@ -1006,25 +988,44 @@ struct ContentView: View {
                                     .accessibilityLabel("Encryption status: \(encryptionStatus == .noiseVerified ? "verified" : encryptionStatus == .noiseSecured ? "secured" : "not encrypted")")
                             }
                         }
-                        .frame(maxWidth: .infinity)
                         .accessibilityLabel("Private chat with \(privatePeerNick)")
                         .accessibilityHint("Tap to view encryption fingerprint")
                     }
                     .buttonStyle(.plain)
                     
-                    Spacer()
-                    
-                    // Favorite button
-                    Button(action: {
-                        viewModel.toggleFavorite(peerID: privatePeerID)
-                    }) {
-                        Image(systemName: viewModel.isFavorite(peerID: privatePeerID) ? "star.fill" : "star")
-                            .font(.system(size: 16))
-                            .foregroundColor(viewModel.isFavorite(peerID: privatePeerID) ? Color.yellow : textColor)
+                    // Left and right buttons positioned with HStack
+                    HStack {
+                        Button(action: {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showPrivateChat = false
+                                viewModel.endPrivateChat()
+                            }
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "chevron.left")
+                                    .font(.system(size: 12))
+                                Text("back")
+                                    .font(.system(size: 14, design: .monospaced))
+                            }
+                            .foregroundColor(textColor)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Back to main chat")
+                        
+                        Spacer()
+                        
+                        // Favorite button
+                        Button(action: {
+                            viewModel.toggleFavorite(peerID: privatePeerID)
+                        }) {
+                            Image(systemName: viewModel.isFavorite(peerID: privatePeerID) ? "star.fill" : "star")
+                                .font(.system(size: 16))
+                                .foregroundColor(viewModel.isFavorite(peerID: privatePeerID) ? Color.yellow : textColor)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(viewModel.isFavorite(peerID: privatePeerID) ? "Remove from favorites" : "Add to favorites")
+                        .accessibilityHint("Double tap to toggle favorite status")
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(viewModel.isFavorite(peerID: privatePeerID) ? "Remove from favorites" : "Add to favorites")
-                    .accessibilityHint("Double tap to toggle favorite status")
                 }
                 .frame(height: 44)
                 .padding(.horizontal, 12)
