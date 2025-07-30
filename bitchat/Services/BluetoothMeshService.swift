@@ -4402,6 +4402,7 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
     
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi RSSI: NSNumber) {
         
+        let peripheralID = peripheral.identifier.uuidString
         
         // Extract peer ID from name (no prefix for stealth)
         // Peer IDs are 8 bytes = 16 hex characters
