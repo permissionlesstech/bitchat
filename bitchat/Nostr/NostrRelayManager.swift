@@ -95,12 +95,9 @@ class NostrRelayManager: ObservableObject {
                 return 
             }
             
-            SecureLogger.log("📤 Sending subscription \(id) to \(connections.count) relays", 
-                            category: SecureLogger.session, level: .info)
-            SecureLogger.log("📋 Filter JSON length: \(messageString.count) chars", 
-                            category: SecureLogger.session, level: .info)
-            SecureLogger.log("📋 Full filter JSON: \(messageString)", 
-                            category: SecureLogger.session, level: .debug)
+            // Sending subscription to relays
+            // Filter JSON prepared
+            // Full filter JSON logged
             
             // Send subscription to all connected relays
             for (relayUrl, connection) in connections {
@@ -109,8 +106,7 @@ class NostrRelayManager: ObservableObject {
                         SecureLogger.log("❌ Failed to send subscription to \(relayUrl): \(error)", 
                                         category: SecureLogger.session, level: .error)
                     } else {
-                        SecureLogger.log("✅ Sent subscription \(id) to \(relayUrl)", 
-                                        category: SecureLogger.session, level: .debug)
+                        // Subscription sent successfully
                         Task { @MainActor in
                             var subs = self.subscriptions[relayUrl] ?? Set<String>()
                             subs.insert(id)
@@ -160,7 +156,7 @@ class NostrRelayManager: ObservableObject {
             return 
         }
         
-        SecureLogger.log("Attempting to connect to Nostr relay: \(urlString)", category: SecureLogger.session, level: .info)
+        // Attempting to connect to Nostr relay
         
         let session = URLSession(configuration: .default)
         let task = session.webSocketTask(with: url)
@@ -175,7 +171,7 @@ class NostrRelayManager: ObservableObject {
         task.sendPing { [weak self] error in
             DispatchQueue.main.async {
                 if error == nil {
-                    SecureLogger.log("Successfully connected to Nostr relay: \(urlString)", category: SecureLogger.session, level: .info)
+                    // Successfully connected to Nostr relay
                     self?.updateRelayStatus(urlString, isConnected: true)
                 } else {
                     SecureLogger.log("Failed to connect to Nostr relay \(urlString): \(error?.localizedDescription ?? "Unknown error")", category: SecureLogger.session, level: .error)
@@ -228,8 +224,7 @@ class NostrRelayManager: ObservableObject {
                array.count >= 2,
                let type = array[0] as? String {
                 
-                SecureLogger.log("📩 Received \(type) message from \(relayUrl)", 
-                                category: SecureLogger.session, level: .debug)
+                // Received message from relay
                 
                 switch type {
                 case "EVENT":
@@ -239,8 +234,7 @@ class NostrRelayManager: ObservableObject {
                         
                         let event = try NostrEvent(from: eventDict)
                         
-                        SecureLogger.log("📬 Processing event kind=\(event.kind) for subscription \(subId)", 
-                                        category: SecureLogger.session, level: .info)
+                        // Processing event
                         
                         DispatchQueue.main.async {
                             // Update relay stats
@@ -261,8 +255,7 @@ class NostrRelayManager: ObservableObject {
                 case "EOSE":
                     if array.count >= 2,
                        let subId = array[1] as? String {
-                        SecureLogger.log("📭 End of stored events for subscription \(subId)", 
-                                        category: SecureLogger.session, level: .debug)
+                        // End of stored events
                     }
                     
                 case "OK":
@@ -270,8 +263,10 @@ class NostrRelayManager: ObservableObject {
                        let eventId = array[1] as? String,
                        let success = array[2] as? Bool {
                         let reason = array.count >= 4 ? (array[3] as? String ?? "no reason given") : "no reason given"
-                        SecureLogger.log("📮 Event \(eventId) \(success ? "accepted" : "rejected") by relay: \(reason)", 
-                                        category: SecureLogger.session, level: success ? .debug : .error)
+                        if !success {
+                            SecureLogger.log("📮 Event \(eventId) rejected by relay: \(reason)", 
+                                            category: SecureLogger.session, level: .error)
+                        }
                     }
                     
                 case "NOTICE":
@@ -282,8 +277,7 @@ class NostrRelayManager: ObservableObject {
                     }
                     
                 default:
-                    SecureLogger.log("🔍 Unknown message type: \(type)", 
-                                    category: SecureLogger.session, level: .debug)
+                    // Unknown message type
                 }
             }
         } catch {
@@ -300,10 +294,8 @@ class NostrRelayManager: ObservableObject {
             let data = try encoder.encode(req)
             let message = String(data: data, encoding: .utf8) ?? ""
             
-            SecureLogger.log("📤 Sending event \(event.id) to \(relayUrl)", 
-                            category: SecureLogger.session, level: .info)
-            SecureLogger.log("📝 Event JSON: \(message.prefix(500))...", 
-                            category: SecureLogger.session, level: .debug)
+            // Sending event to relay
+            // Event JSON prepared
             
             connection.send(.string(message)) { [weak self] error in
                 DispatchQueue.main.async {

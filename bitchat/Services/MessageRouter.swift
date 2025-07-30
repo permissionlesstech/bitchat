@@ -165,12 +165,10 @@ class MessageRouter: ObservableObject {
         // Get recipient's Nostr public key
         let favoriteStatus = favoritesService.getFavoriteStatus(for: message.recipientNoisePublicKey)
         
-        SecureLogger.log("🔍 Looking up Nostr key for noise key: \(message.recipientNoisePublicKey.hexEncodedString())", 
-                        category: SecureLogger.session, level: .debug)
+        // Looking up Nostr key for recipient
         
         if let status = favoriteStatus {
-            SecureLogger.log("📋 Found favorite: '\(status.peerNickname)', Nostr key: \(status.peerNostrPublicKey ?? "nil")", 
-                            category: SecureLogger.session, level: .info)
+            // Found favorite relationship
         } else {
             SecureLogger.log("❌ No favorite relationship found", 
                             category: SecureLogger.session, level: .error)
@@ -194,8 +192,7 @@ class MessageRouter: ObservableObject {
             senderIdentity: senderIdentity
         )
         
-        SecureLogger.log("📤 Created gift wrap event ID: \(event.id), tagged for: \(event.tags)", 
-                        category: SecureLogger.session, level: .info)
+        // Created gift wrap event
         
         // Send via relay
         nostrRelay.sendEvent(event)
@@ -249,7 +246,7 @@ class MessageRouter: ObservableObject {
     
     /// Check for Nostr messages when app becomes active
     func checkForNostrMessages() {
-        SecureLogger.log("📥 Checking for Nostr messages", category: SecureLogger.session, level: .info)
+        // Checking for Nostr messages
         
         guard (try? NostrIdentityBridge.getCurrentNostrIdentity()) != nil else { 
             SecureLogger.log("⚠️ No Nostr identity available for message check", category: SecureLogger.session, level: .warning)
@@ -258,7 +255,7 @@ class MessageRouter: ObservableObject {
         
         // Ensure we're connected to relays first
         if !nostrRelay.isConnected {
-            SecureLogger.log("🔌 Connecting to Nostr relays", category: SecureLogger.session, level: .info)
+            // Connecting to Nostr relays
             nostrRelay.connect()
             
             // Wait a bit for connections to establish before subscribing
@@ -274,12 +271,9 @@ class MessageRouter: ObservableObject {
     private func subscribeToNostrMessages() {
         guard let currentIdentity = try? NostrIdentityBridge.getCurrentNostrIdentity() else { return }
         
-        SecureLogger.log("📬 Subscribing to Nostr messages for pubkey: \(currentIdentity.publicKeyHex.prefix(8))...\(currentIdentity.publicKeyHex.suffix(8))", 
-                        category: SecureLogger.session, level: .info)
-        SecureLogger.log("📏 Full pubkey: \(currentIdentity.publicKeyHex)", 
-                        category: SecureLogger.session, level: .info)
-        SecureLogger.log("📏 Pubkey length: \(currentIdentity.publicKeyHex.count) chars (\(currentIdentity.publicKey.count) bytes)", 
-                        category: SecureLogger.session, level: .info)
+        // Subscribing to Nostr messages
+        // Full pubkey recorded
+        // Pubkey length verified
         
         // Unsubscribe existing subscription to refresh
         nostrRelay.unsubscribe(id: "router-messages")
@@ -291,15 +285,12 @@ class MessageRouter: ObservableObject {
             since: sinceDate
         )
         
-        SecureLogger.log("📅 Subscribing to messages since: \(sinceDate)", 
-                        category: SecureLogger.session, level: .info)
+        // Subscribing to messages since date
         
-        SecureLogger.log("📬 Subscribing to gift wraps for our pubkey with filter: kinds=\(filter.kinds ?? []), #p tag=\(currentIdentity.publicKeyHex)", 
-                        category: SecureLogger.session, level: .info)
+        // Subscribing to gift wraps
         
         nostrRelay.subscribe(filter: filter, id: "router-messages") { [weak self] event in
-            SecureLogger.log("📨 Received Nostr event: kind=\(event.kind), from=\(event.pubkey.prefix(8))...", 
-                            category: SecureLogger.session, level: .info)
+            // Received Nostr event
             self?.handleNostrMessage(event)
         }
     }
@@ -307,19 +298,14 @@ class MessageRouter: ObservableObject {
     private func handleNostrMessage(_ giftWrap: NostrEvent) {
         // Check if we've already processed this event
         if processedMessagesService.isMessageProcessed(giftWrap.id) {
-            SecureLogger.log("⏭️ Skipping already processed event: \(giftWrap.id.prefix(8))...", 
-                            category: SecureLogger.session, level: .debug)
+            // Skipping already processed event
             return
         }
         
-        SecureLogger.log("🎁 Attempting to decrypt gift wrap from \(giftWrap.pubkey.prefix(8))..., id: \(giftWrap.id.prefix(8))...", 
-                        category: SecureLogger.session, level: .info)
-        SecureLogger.log("🎁 Full event ID: \(giftWrap.id)", 
-                        category: SecureLogger.session, level: .info)
-        SecureLogger.log("🎁 Event timestamp: \(Date(timeIntervalSince1970: TimeInterval(giftWrap.created_at)))", 
-                        category: SecureLogger.session, level: .info)
-        SecureLogger.log("🎁 Event tags: \(giftWrap.tags)", 
-                        category: SecureLogger.session, level: .info)
+        // Attempting to decrypt gift wrap
+        // Full event ID recorded
+        // Event timestamp recorded
+        // Event tags recorded
         
         // Decrypt the message
         guard let currentIdentity = try? NostrIdentityBridge.getCurrentNostrIdentity() else {

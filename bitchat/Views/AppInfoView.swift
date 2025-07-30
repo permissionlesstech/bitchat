@@ -26,9 +26,9 @@ struct AppInfoView: View {
             static let offlineComm = ("wifi.slash", "offline communication", "works without internet using Bluetooth low energy")
             static let encryption = ("lock.shield", "end-to-end encryption", "private messages encrypted with noise protocol")
             static let extendedRange = ("antenna.radiowaves.left.and.right", "extended range", "messages relay through peers, going the distance")
-            static let favorites = ("star.fill", "favorites", "get notified when your favorite people join")
-            static let mutualFavorites = ("globe", "mutual favorites", "message each other via internet when out of range")
             static let mentions = ("at", "mentions", "use @nickname to notify specific people")
+            static let favorites = ("star.fill", "favorites", "get notified when your favorite people join")
+            static let mutualFavorites = ("globe", "mutual favorites", "private message each other via nostr when out of mesh range")
         }
         
         enum Privacy {

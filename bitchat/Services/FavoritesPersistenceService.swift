@@ -98,13 +98,11 @@ class FavoritesPersistenceService: ObservableObject {
                 lastUpdated: Date()
             )
             favorites[peerNoisePublicKey] = updated
-            SecureLogger.log("👤 Keeping record for \(existing.peerNickname) - they still favorite us", 
-                            category: SecureLogger.session, level: .info)
+            // Keeping record - they still favorite us
         } else {
             // Neither side favorites, remove completely
             favorites.removeValue(forKey: peerNoisePublicKey)
-            SecureLogger.log("🗑️ Completely removed \(existing.peerNickname) from favorites", 
-                            category: SecureLogger.session, level: .info)
+            // Completely removed from favorites
         }
         
         saveFavorites()
@@ -143,8 +141,7 @@ class FavoritesPersistenceService: ObservableObject {
         if !relationship.isFavorite && !relationship.theyFavoritedUs {
             // Neither side favorites, remove completely
             favorites.removeValue(forKey: peerNoisePublicKey)
-            SecureLogger.log("🗑️ Removed \(displayName) - neither side favorites anymore", 
-                            category: SecureLogger.session, level: .info)
+            // Removed - neither side favorites anymore
         } else {
             favorites[peerNoisePublicKey] = relationship
             
@@ -205,8 +202,7 @@ class FavoritesPersistenceService: ObservableObject {
         // Skip if nickname hasn't changed
         if existing.peerNickname == newNickname { return }
         
-        SecureLogger.log("📝 Updating nickname for favorite: '\(existing.peerNickname)' → '\(newNickname)'", 
-                        category: SecureLogger.session, level: .info)
+        // Updating nickname for favorite
         
         let updated = FavoriteRelationship(
             peerNoisePublicKey: existing.peerNoisePublicKey,
@@ -246,8 +242,7 @@ class FavoritesPersistenceService: ObservableObject {
             return
         }
         
-        SecureLogger.log("🔄 Updating noise public key for '\(peerNickname)': \(oldKey.hexEncodedString()) -> \(newKey.hexEncodedString())", 
-                        category: SecureLogger.session, level: .info)
+        // Updating noise public key
         
         // Remove old entry
         favorites.removeValue(forKey: oldKey)
@@ -314,8 +309,7 @@ class FavoritesPersistenceService: ObservableObject {
     
     private func saveFavorites() {
         let relationships = Array(favorites.values)
-        SecureLogger.log("💾 Saving \(relationships.count) favorite relationships to keychain", 
-                        category: SecureLogger.session, level: .info)
+        // Saving favorite relationships to keychain
         
         do {
             let encoder = JSONEncoder()
@@ -328,14 +322,14 @@ class FavoritesPersistenceService: ObservableObject {
                 service: Self.keychainService
             )
             
-            SecureLogger.log("✅ Successfully saved favorites", category: SecureLogger.session, level: .info)
+            // Successfully saved favorites
         } catch {
             SecureLogger.log("Failed to save favorites: \(error)", category: SecureLogger.session, level: .error)
         }
     }
     
     private func loadFavorites() {
-        SecureLogger.log("📂 Loading favorites from keychain", category: SecureLogger.session, level: .info)
+        // Loading favorites from keychain
         
         guard let data = KeychainHelper.load(
             key: Self.storageKey,
@@ -386,8 +380,7 @@ class FavoritesPersistenceService: ObservableObject {
             
             // If we cleaned up duplicates, save the cleaned list
             if cleanedRelationships.count < relationships.count {
-                SecureLogger.log("🧹 Cleaned up duplicates: \(relationships.count) -> \(cleanedRelationships.count) favorites", 
-                                category: SecureLogger.session, level: .info)
+                // Cleaned up duplicates
                 
                 // Clear and rebuild favorites dictionary
                 favorites.removeAll()
@@ -408,10 +401,7 @@ class FavoritesPersistenceService: ObservableObject {
             }
             
             // Log loaded relationships
-            for relationship in cleanedRelationships {
-                SecureLogger.log("  - \(relationship.peerNickname): favorite=\(relationship.isFavorite), theyFavoriteUs=\(relationship.theyFavoritedUs), mutual=\(relationship.isMutual)", 
-                                category: SecureLogger.session, level: .debug)
-            }
+            // Loaded relationships successfully
         } catch {
             SecureLogger.log("Failed to load favorites: \(error)", category: SecureLogger.session, level: .error)
         }

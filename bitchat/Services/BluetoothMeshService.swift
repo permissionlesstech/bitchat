@@ -1485,7 +1485,7 @@ class BluetoothMeshService: NSObject {
                 for peerID in stalePeerIDs {
                     // Also remove from noise service
                     self.cleanupPeerCryptoState(peerID)
-                    SecureLogger.log("Cleaned up stale handshake for \(peerID)", category: SecureLogger.handshake, level: .info)
+                    // Cleaned up stale handshake
                 }
             }
             
@@ -1589,12 +1589,12 @@ class BluetoothMeshService: NSObject {
     
     @objc private func appDidBecomeActive() {
         isAppInForeground = true
-        SecureLogger.log("App became active", category: SecureLogger.session, level: .debug)
+        // App became active
     }
     
     @objc private func appWillResignActive() {
         isAppInForeground = false
-        SecureLogger.log("App will resign active", category: SecureLogger.session, level: .debug)
+        // App will resign active
     }
     
     private func cleanup() {
@@ -1952,8 +1952,7 @@ class BluetoothMeshService: NSObject {
                     // Try direct delivery first for delivery ACKs
                     if !self.sendDirectToRecipient(outerPacket, recipientPeerID: recipientID) {
                         // Recipient not directly connected, use selective relay
-                        SecureLogger.log("Recipient \(recipientID) not directly connected for delivery ACK, using relay", 
-                                       category: SecureLogger.session, level: .info)
+                        // Using relay for delivery ACK
                         self.sendViaSelectiveRelay(outerPacket, recipientPeerID: recipientID)
                     }
                 } catch {
@@ -1961,8 +1960,7 @@ class BluetoothMeshService: NSObject {
                 }
             } else {
                 // Lazy handshake: No session available, drop the ACK
-                SecureLogger.log("No Noise session with \(recipientID) for delivery ACK - dropping (lazy handshake mode)", 
-                               category: SecureLogger.noise, level: .info)
+                // No session for delivery ACK, dropping
             }
         }
     }
@@ -2028,7 +2026,7 @@ class BluetoothMeshService: NSObject {
                         signature: nil,
                         ttl: 3                    )
                     
-                    SecureLogger.log("Sending encrypted read receipt for message \(receipt.originalMessageID) to \(recipientID)", category: SecureLogger.noise, level: .info)
+                    // Sending encrypted read receipt
                     
                     // Try direct delivery first for read receipts
                     if !self.sendDirectToRecipient(outerPacket, recipientPeerID: recipientID) {
@@ -2147,11 +2145,11 @@ class BluetoothMeshService: NSObject {
     
     // Trigger handshake with a peer (for UI)
     func triggerHandshake(with peerID: String) {
-        SecureLogger.log("UI triggered handshake with \(peerID)", category: SecureLogger.noise, level: .info)
+        // UI triggered handshake
         
         // Check if we already have a session
         if noiseService.hasEstablishedSession(with: peerID) {
-            SecureLogger.log("Already have session with \(peerID), skipping handshake", category: SecureLogger.noise, level: .debug)
+            // Already have session, skipping handshake
             return
         }
         
@@ -2819,7 +2817,7 @@ class BluetoothMeshService: NSObject {
                 
                 // If this is a reconnection, send our identity announcement
                 if wasReconnection && packet.type != MessageType.noiseIdentityAnnounce.rawValue {
-                    SecureLogger.log("Detected reconnection from \(senderID) after silence, sending identity announcement", category: SecureLogger.noise, level: .info)
+                    // Detected reconnection, sending identity
                     DispatchQueue.main.async { [weak self] in
                         self?.sendNoiseIdentityAnnounce(to: senderID)
                     }
@@ -2924,7 +2922,7 @@ class BluetoothMeshService: NSObject {
             processedMessages[messageID] = updatedState
             processedMessagesLock.unlock()
             
-            SecureLogger.log("Dropped duplicate message from \(senderID) (seen \(updatedState.seenCount) times)", category: SecureLogger.security, level: .debug)
+            // Dropped duplicate message
             // Cancel any pending relay for this message
             cancelPendingRelay(messageID: messageID)
             return
@@ -2938,7 +2936,7 @@ class BluetoothMeshService: NSObject {
             let isProcessed = processedMessages[messageID] != nil
             processedMessagesLock.unlock()
             if !isProcessed {
-                SecureLogger.log("Bloom filter false positive for message: \(messageID)", category: SecureLogger.security, level: .debug)
+                // Bloom filter false positive
             }
         }
         
@@ -3090,7 +3088,7 @@ class BluetoothMeshService: NSObject {
                             
                             SecureLogger.log("📨 Received \(action) notification from \(senderID)", category: SecureLogger.session, level: .info)
                             if let npub = nostrNpub {
-                                SecureLogger.log("📝 Peer's Nostr npub: \(npub)", category: SecureLogger.session, level: .info)
+                                // Peer's Nostr npub recorded
                             }
                             
                             // Handle favorite notification
@@ -3233,7 +3231,7 @@ class BluetoothMeshService: NSObject {
                 let nickname = rawNickname.trimmingCharacters(in: .whitespacesAndNewlines)
                 let senderID = packet.senderID.hexEncodedString()
                 
-                SecureLogger.log("handleReceivedPacket: Received announce from \(senderID), peripheral is \(peripheral != nil ? "present" : "nil")", category: SecureLogger.session, level: .debug)
+                // Received announce from peer
                 
                 // Ignore if it's from ourselves (including previous peer IDs)
                 if isPeerIDOurs(senderID) {
@@ -3343,7 +3341,7 @@ class BluetoothMeshService: NSObject {
                     peripheralToUpdate = self.connectedPeripherals[senderID]
                     
                     if peripheralToUpdate == nil {
-                        SecureLogger.log("handleReceivedPacket: No peripheral passed and no existing mapping for \(senderID)", category: SecureLogger.session, level: .debug)
+                        // No peripheral mapping found
                         
                         // Try to find an unidentified peripheral that might be this peer
                         // This handles case where announce is relayed and we need to update peripheral mapping
@@ -3352,14 +3350,14 @@ class BluetoothMeshService: NSObject {
                             // Check if this is a temp ID (UUID format, not a peer ID)
                             if tempID.count == 36 && tempID.contains("-") { // UUID length with dashes
                                 unmappedPeripherals.append((tempID, peripheral))
-                                SecureLogger.log("handleReceivedPacket: Found unmapped peripheral with temp ID \(tempID)", category: SecureLogger.session, level: .debug)
+                                // Found unmapped peripheral
                             }
                         }
                         
                         // If we have exactly one unmapped peripheral, it's likely this one
                         if unmappedPeripherals.count == 1 {
                             let (tempID, peripheral) = unmappedPeripherals[0]
-                            SecureLogger.log("handleReceivedPacket: Single unmapped peripheral \(tempID), mapping to \(senderID)", category: SecureLogger.session, level: .info)
+                            // Mapping peripheral to sender
                             peripheralToUpdate = peripheral
                             
                             // Remove temp mapping and add real mapping
@@ -3367,7 +3365,7 @@ class BluetoothMeshService: NSObject {
                             self.updatePeripheralConnection(senderID, peripheral: peripheral)
                             
                         } else if unmappedPeripherals.count > 1 {
-                            SecureLogger.log("handleReceivedPacket: Multiple unmapped peripherals (\(unmappedPeripherals.count)), cannot determine which is \(senderID)", category: SecureLogger.session, level: .debug)
+                            // Multiple unmapped peripherals
                             // TODO: Could use timing heuristics or other methods to match
                         }
                     }
@@ -3401,7 +3399,7 @@ class BluetoothMeshService: NSObject {
                         
                         // Don't notify about disconnect - this is just cleanup of temporary ID
                     } else {
-                        SecureLogger.log("handleReceivedPacket: No temp ID found for peripheral, directly mapping \(senderID)", category: SecureLogger.session, level: .debug)
+                        // Direct mapping peripheral
                         // No temp ID found, just add the mapping
                         self.updatePeripheralConnection(senderID, peripheral: peripheral)
                         self.peerIDByPeripheralID[peripheral.identifier.uuidString] = senderID
@@ -4016,7 +4014,7 @@ class BluetoothMeshService: NSObject {
             // Check if this handshake response is for us
             if let recipientID = packet.recipientID {
                 let recipientIDStr = recipientID.hexEncodedString()
-                SecureLogger.log("Response targeted to: \(recipientIDStr), is us: \(isPeerIDOurs(recipientIDStr))", category: SecureLogger.noise, level: .debug)
+                // Response targeted check
                 if !isPeerIDOurs(recipientIDStr) {
                     // Not for us, relay if TTL > 0
                     if packet.ttl > 0 {
@@ -4032,7 +4030,7 @@ class BluetoothMeshService: NSObject {
             if !isPeerIDOurs(senderID) {
                 // Check our current handshake state
                 let currentState = handshakeCoordinator.getHandshakeState(for: senderID)
-                SecureLogger.log("Processing handshake response from \(senderID), current state: \(currentState)", category: SecureLogger.noise, level: .info)
+                // Processing handshake response
                 
                 // Process the response - this could be message 2 or message 3 in the XX pattern
                 handleNoiseHandshakeMessage(from: senderID, message: packet.payload, isInitiation: false)
@@ -4425,16 +4423,16 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
         if let name = peripheral.name, name.count == 16 {
             // Assume 16-character hex names are peer IDs
             let peerID = name
-            SecureLogger.log("Discovery: Found peer ID \(peerID) from peripheral name", category: SecureLogger.session, level: .debug)
+            // Found peer ID from peripheral name
             
             // Don't process our own advertisements (including previous peer IDs)
             if isPeerIDOurs(peerID) {
-                SecureLogger.log("Discovery: Ignoring our own peer ID \(peerID)", category: SecureLogger.session, level: .debug)
+                // Ignoring our own peer ID
                 return
             }
             
             // Discovered potential peer
-            SecureLogger.log("Discovered peer with ID: \(peerID), self ID: \(myPeerID)", category: SecureLogger.noise, level: .debug)
+            // Discovered peer
             
             // Check if we have a relay-only session for this peer that needs upgrading
             collectionsQueue.sync {
@@ -4552,7 +4550,7 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
         // Check if this was an intentional disconnect
         if intentionalDisconnects.contains(peripheralID) {
             intentionalDisconnects.remove(peripheralID)
-            SecureLogger.log("Intentional disconnect: \(peripheralID)", category: SecureLogger.session, level: .debug)
+            // Intentional disconnect
             // Don't process this disconnect further
             return
         }
@@ -4561,7 +4559,7 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
         if let error = error {
             SecureLogger.logError(error, context: "Peripheral disconnected: \(peripheralID)", category: SecureLogger.session)
         } else {
-            SecureLogger.log("Peripheral disconnected normally: \(peripheralID)", category: SecureLogger.session, level: .info)
+            // Peripheral disconnected normally
         }
         
         // Find the real peer ID using simplified mapping
@@ -4632,7 +4630,7 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
                 if let lastNotification = self.recentDisconnectNotifications[peerID] {
                     let timeSinceLastNotification = now.timeIntervalSince(lastNotification)
                     if timeSinceLastNotification < self.disconnectNotificationDedupeWindow {
-                        SecureLogger.log("Physical disconnect for \(peerID) - duplicate disconnect within \(timeSinceLastNotification)s, NOT notifying delegate", category: SecureLogger.session, level: .info)
+                        // Duplicate disconnect, not notifying
                         return false
                     }
                 }
@@ -4640,16 +4638,16 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
                 // Check if this is an Unknown peer that never properly connected
                 if let session = self.peerSessions[peerID] {
                     if session.nickname == "Unknown" && !session.hasReceivedAnnounce {
-                        SecureLogger.log("Physical disconnect for \(peerID) - Unknown peer that never announced, NOT notifying delegate", category: SecureLogger.session, level: .info)
+                        // Unknown peer disconnect, not notifying
                         return false
                     }
                 }
                 
                 if isGracefullyLeft {
-                    SecureLogger.log("Physical disconnect for \(peerID) - was gracefully left, NOT notifying delegate", category: SecureLogger.session, level: .info)
+                    // Graceful disconnect, not notifying
                     return false
                 } else {
-                    SecureLogger.log("Physical disconnect for \(peerID) - was NOT gracefully left, will notify delegate", category: SecureLogger.session, level: .info)
+                    // Ungraceful disconnect, will notify
                     // Track this notification
                     self.recentDisconnectNotifications[peerID] = now
                     return true
@@ -4705,7 +4703,7 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
                 // Keep lastSuccessfulMessageTime to validate session on reconnect
                 let lastSuccess = self.peerSessions[peerID]?.lastSuccessfulMessageTime ?? Date.distantPast
                 let sessionAge = Date().timeIntervalSince(lastSuccess)
-                SecureLogger.log("Peer disconnected: \(peerID), keeping Noise session (age: \(Int(sessionAge))s)", category: SecureLogger.noise, level: .info)
+                // Keeping Noise session on disconnect
             }
             
             // Only remove from active peers if it's not a temp ID
@@ -4726,7 +4724,7 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
                             // Peer gracefully left, just clean up the tracking
                             self.gracefullyLeftPeers.remove(peerID)
                             self.gracefulLeaveTimestamps.removeValue(forKey: peerID)
-                            SecureLogger.log("Cleaning up gracefullyLeftPeers for \(peerID)", category: SecureLogger.session, level: .debug)
+                            // Cleaning up gracefullyLeftPeers
                         }
                     }
                     
@@ -5578,7 +5576,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             
             guard let messages = pendingMessages else { return }
             
-            SecureLogger.log("Sending \(messages.count) pending private messages to \(peerID)", category: SecureLogger.session, level: .info)
+            // Sending pending private messages
             
             // Clear pending messages for this peer
             self.collectionsQueue.sync(flags: .barrier) {
@@ -5591,7 +5589,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 if content.hasPrefix("READ_RECEIPT:") {
                     // Extract the original message ID
                     let originalMessageID = String(content.dropFirst("READ_RECEIPT:".count))
-                    SecureLogger.log("Sending queued read receipt for message \(originalMessageID) to \(peerID)", category: SecureLogger.session, level: .debug)
+                    // Sending queued read receipt
                     
                     // Create and send the actual read receipt
                     let receipt = ReadReceipt(
@@ -5606,7 +5604,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                     }
                 } else {
                     // Regular message
-                    SecureLogger.log("Sending pending message \(messageID) to \(peerID)", category: SecureLogger.session, level: .debug)
+                    // Sending pending message
                     // Use async to avoid blocking the queue
                     DispatchQueue.global().async { [weak self] in
                         self?.sendPrivateMessage(content, to: peerID, recipientNickname: recipientNickname, messageID: messageID)
@@ -5739,7 +5737,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
     private func initiateNoiseHandshake(with peerID: String) {
         // Use noiseService directly
         
-        SecureLogger.log("Initiating Noise handshake with \(peerID), myPeerID: \(myPeerID)", category: SecureLogger.noise, level: .info)
+        // Initiating Noise handshake
         
         // Safety check: Don't handshake with ourselves
         if peerID == myPeerID {
@@ -5750,7 +5748,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         
         // Check if we already have an established session
         if noiseService.hasEstablishedSession(with: peerID) {
-            SecureLogger.log("Already have established session with \(peerID)", category: SecureLogger.noise, level: .debug)
+            // Already have established session
             // Clear any lingering handshake attempt time
             handshakeAttemptTimes.removeValue(forKey: peerID)
             handshakeCoordinator.recordHandshakeSuccess(peerID: peerID)
@@ -5785,7 +5783,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         SecureLogger.log("Checking handshake coordinator - myPeerID: \(myPeerID), remotePeerID: \(peerID), hasPending: \(hasPendingMessages)", 
                         category: SecureLogger.handshake, level: .debug)
         if !handshakeCoordinator.shouldInitiateHandshake(myPeerID: myPeerID, remotePeerID: peerID, forceIfStale: hasPendingMessages) {
-            SecureLogger.log("Coordinator says we should not initiate handshake with \(peerID)", category: SecureLogger.handshake, level: .debug)
+            // Coordinator says no handshake
             
             if hasPendingMessages {
                 // Check if peer is still connected before retrying
@@ -5793,7 +5791,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 
                 if connectionState == .disconnected {
                     // Peer is disconnected - clear pending messages and stop retrying
-                    SecureLogger.log("Peer \(peerID) is disconnected, clearing pending messages", category: SecureLogger.handshake, level: .info)
+                    // Peer disconnected, clearing pending
                     collectionsQueue.async(flags: .barrier) { [weak self] in
                         self?.pendingPrivateMessages[peerID]?.removeAll()
                     }
@@ -5801,7 +5799,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 } else {
                     // Peer is still connected but handshake is stuck
                     // Send identity announce to prompt them to initiate if they have lower ID
-                    SecureLogger.log("Handshake stuck with connected peer \(peerID), sending identity announce", category: SecureLogger.handshake, level: .info)
+                    // Handshake stuck, sending identity
                     sendNoiseIdentityAnnounce(to: peerID)
                     
                     // Only retry if we haven't retried too many times
@@ -5825,7 +5823,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         
         // Check if there's a retry delay
         if let retryDelay = handshakeCoordinator.getRetryDelay(for: peerID), retryDelay > 0 {
-            SecureLogger.log("Waiting \(retryDelay)s before retrying handshake with \(peerID)", category: SecureLogger.handshake, level: .debug)
+            // Waiting before retry
             DispatchQueue.main.asyncAfter(deadline: .now() + retryDelay) { [weak self] in
                 self?.initiateNoiseHandshake(with: peerID)
             }
@@ -5896,18 +5894,18 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         // Get current handshake state before processing
         let currentState = handshakeCoordinator.getHandshakeState(for: peerID)
         let hasEstablishedSession = noiseService.hasEstablishedSession(with: peerID)
-        SecureLogger.log("Current handshake state for \(peerID): \(currentState), hasEstablishedSession: \(hasEstablishedSession)", category: SecureLogger.noise, level: .info)
+        // Current handshake state check
         
         // Check for duplicate handshake messages
         if handshakeCoordinator.isDuplicateHandshakeMessage(message) {
-            SecureLogger.log("Duplicate handshake message from \(peerID), ignoring", category: SecureLogger.handshake, level: .debug)
+            // Duplicate handshake message, ignoring
             return
         }
         
         // If this is an initiation, check if we should accept it
         if isInitiation {
             if !handshakeCoordinator.shouldAcceptHandshakeInitiation(myPeerID: myPeerID, remotePeerID: peerID) {
-                SecureLogger.log("Coordinator says we should not accept handshake from \(peerID)", category: SecureLogger.handshake, level: .debug)
+                // Coordinator says no accept
                 return
             }
             // Record that we're responding
@@ -5944,7 +5942,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                     broadcastPacket(packet)
                 }
             } else {
-                SecureLogger.log("No response needed from processHandshakeMessage (isInitiation: \(isInitiation))", category: SecureLogger.noise, level: .debug)
+                // No response needed
             }
             
             // Check if handshake is complete
@@ -5973,7 +5971,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 
                 // Initialize last successful message time
                 updateLastSuccessfulMessageTime(peerID)
-                SecureLogger.log("Initialized lastSuccessfulMessageTime for \(peerID)", category: SecureLogger.noise, level: .debug)
+                // Initialized message time
                 
                 // Update PeerSession
                 if let session = self.peerSessions[peerID] {
@@ -6005,7 +6003,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             }
         } catch NoiseSessionError.alreadyEstablished {
             // Session already established, ignore handshake
-            SecureLogger.log("Handshake already established with \(peerID)", category: SecureLogger.noise, level: .info)
+            // Handshake already established
             handshakeCoordinator.recordHandshakeSuccess(peerID: peerID)
             
             // Update session state to established
@@ -6075,7 +6073,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             let wasAdded = collectionsQueue.sync(flags: .barrier) {
                 let isActive = self.peerSessions[peerID]?.isActivePeer ?? false
                 if !isActive {
-                    SecureLogger.log("Marking \(peerID) as active after successful decryption", category: SecureLogger.noise, level: .info)
+                    // Marking peer as active
                     // Update PeerSession
                     if let session = self.peerSessions[peerID] {
                         session.isActivePeer = true
@@ -6108,7 +6106,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                     
                     // Decode the delivery ACK - try binary first, then JSON
                     if let ack = DeliveryAck.fromBinaryData(ackData) {
-                        SecureLogger.log("Received binary delivery ACK via Noise: \(ack.originalMessageID) from \(ack.recipientNickname)", category: SecureLogger.session, level: .debug)
+                        // Received binary delivery ACK
                         
                         // Process the ACK
                         DeliveryTracker.shared.processDeliveryAck(ack)
@@ -6119,7 +6117,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                         }
                         return
                     } else if let ack = DeliveryAck.decode(from: ackData) {
-                        SecureLogger.log("Received JSON delivery ACK via Noise: \(ack.originalMessageID) from \(ack.recipientNickname)", category: SecureLogger.session, level: .debug)
+                        // Received JSON delivery ACK
                         
                         // Process the ACK
                         DeliveryTracker.shared.processDeliveryAck(ack)
@@ -6141,7 +6139,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                     
                     // Decode the read receipt from binary
                     if let receipt = ReadReceipt.fromBinaryData(receiptData) {
-                        SecureLogger.log("Received binary read receipt via Noise: \(receipt.originalMessageID) from \(receipt.readerNickname)", category: SecureLogger.session, level: .debug)
+                        // Received binary read receipt
                         
                         // Process the read receipt
                         DispatchQueue.main.async {
@@ -6156,7 +6154,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             
             // Try to parse as a full inner packet (for backward compatibility and other message types)
             if let innerPacket = BitchatPacket.from(decryptedData) {
-                SecureLogger.log("Successfully parsed inner packet - type: \(MessageType(rawValue: innerPacket.type)?.description ?? "unknown"), from: \(innerPacket.senderID.hexEncodedString()), to: \(innerPacket.recipientID?.hexEncodedString() ?? "broadcast")", category: SecureLogger.session, level: .debug)
+                // Successfully parsed inner packet
                 
                 // Process the decrypted inner packet
                 // The packet will be handled according to its recipient ID
@@ -6170,7 +6168,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             // Failed to decrypt - might need to re-establish session
             SecureLogger.log("Failed to decrypt Noise message from \(peerID): \(error)", category: SecureLogger.encryption, level: .error)
             if !noiseService.hasEstablishedSession(with: peerID) {
-                SecureLogger.log("No Noise session with \(peerID), attempting handshake", category: SecureLogger.noise, level: .info)
+                // No Noise session, attempting handshake
                 attemptHandshakeIfNeeded(with: peerID, forceIfStale: true)
             } else {
                 SecureLogger.log("Have session with \(peerID) but decryption failed", category: SecureLogger.encryption, level: .warning)
@@ -6213,12 +6211,12 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             if timeSinceLastConnection > 86400.0 { // More than 24 hours since last connection
                 // Clear any stale Noise session
                 if noiseService.hasEstablishedSession(with: peerID) {
-                    SecureLogger.log("Peer \(peerID) reconnecting after \(Int(timeSinceLastConnection))s - clearing stale session", category: SecureLogger.noise, level: .info)
+                    // Clearing stale session on reconnect
                     cleanupPeerCryptoState(peerID)
                 }
             } else if timeSinceLastConnection > 5.0 {
                 // Just log the reconnection, don't clear the session
-                SecureLogger.log("Peer \(peerID) reconnecting after \(Int(timeSinceLastConnection))s - keeping existing session", category: SecureLogger.noise, level: .info)
+                // Keeping existing session on reconnect
             }
         }
         
@@ -6248,10 +6246,10 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         // Try JSON first if it looks like JSON
         let hello: VersionHello?
         if let firstByte = dataCopy.first, firstByte == 0x7B { // '{' character
-            SecureLogger.log("Version hello from \(peerID) appears to be JSON (size: \(dataCopy.count))", category: SecureLogger.session, level: .debug)
+            // Version hello is JSON
             hello = VersionHello.decode(from: dataCopy) ?? VersionHello.fromBinaryData(dataCopy)
         } else {
-            SecureLogger.log("Version hello from \(peerID) appears to be binary (size: \(dataCopy.count), first byte: \(dataCopy.first?.description ?? "nil"))", category: SecureLogger.session, level: .debug)
+            // Version hello is binary
             hello = VersionHello.fromBinaryData(dataCopy) ?? VersionHello.decode(from: dataCopy)
         }
         
@@ -6272,7 +6270,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         let ourVersions = Array(ProtocolVersion.supportedVersions)
         if let agreedVersion = ProtocolVersion.negotiateVersion(clientVersions: hello.supportedVersions, serverVersions: ourVersions) {
             // We can communicate! Send ACK
-            SecureLogger.log("Version negotiation agreed with \(peerID): v\(agreedVersion) (client: \(hello.clientVersion), platform: \(hello.platform))", category: SecureLogger.session, level: .info)
+            // Version negotiation agreed
             negotiatedVersions[peerID] = agreedVersion
             versionNegotiationState[peerID] = .ackReceived(version: agreedVersion)
             
@@ -6465,7 +6463,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         if let messageType = MessageType(rawValue: ack.packetType) {
             switch messageType {
             case .noiseHandshakeInit, .noiseHandshakeResp:
-                SecureLogger.log("Handshake confirmed by \(peerID)", category: SecureLogger.handshake, level: .info)
+                // Handshake confirmed
             case .noiseEncrypted:
                 // Encrypted message confirmed
                 break
@@ -6571,18 +6569,18 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         // Check if we already have a session
         if noiseService.hasEstablishedSession(with: peerID) {
             // We already have a session, no action needed
-            SecureLogger.log("Already have session with \(peerID), ignoring handshake request", category: SecureLogger.noise, level: .debug)
+            // Already have session, ignoring request
             return
         }
         
         // Apply tie-breaker logic for handshake initiation
         if myPeerID < peerID {
             // We have lower ID, initiate handshake
-            SecureLogger.log("Initiating handshake with \(peerID) in response to handshake request", category: SecureLogger.noise, level: .info)
+            // Initiating handshake in response
             initiateNoiseHandshake(with: peerID)
         } else {
             // We have higher ID, send identity announce to prompt them
-            SecureLogger.log("Sending identity announce to \(peerID) in response to handshake request", category: SecureLogger.noise, level: .info)
+            // Sending identity announce
             sendNoiseIdentityAnnounce(to: peerID)
         }
     }
@@ -7001,7 +6999,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 // Increase session validity to 24 hours - sessions should persist across temporary disconnects
                 if sessionAge > 86400.0 { // More than 24 hours since last successful message
                     sessionIsStale = true
-                    SecureLogger.log("Session with \(recipientPeerID) is stale (last success: \(Int(sessionAge))s ago), will re-establish", category: SecureLogger.noise, level: .info)
+                    // Session stale, will re-establish
                 }
             }
             
@@ -7016,7 +7014,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 self.noiseSessionStates[recipientPeerID] = .handshakeQueued
             }
             
-            SecureLogger.log("No valid Noise session with \(recipientPeerID), initiating handshake (lazy mode)", category: SecureLogger.noise, level: .info)
+            // No valid session, initiating handshake
             
             // Notify UI that we're establishing encryption
             DispatchQueue.main.async { [weak self] in
@@ -7034,7 +7032,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 }
                 self.pendingPrivateMessages[recipientPeerID]?.append((content, recipientNickname, messageID ?? UUID().uuidString))
                 let count = self.pendingPrivateMessages[recipientPeerID]?.count ?? 0
-                SecureLogger.log("Queued private message for \(recipientPeerID), \(count) messages pending", category: SecureLogger.noise, level: .info)
+                // Queued private message
             }
             
             // Send handshake request to notify recipient of pending messages
@@ -7112,9 +7110,9 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         
         do {
             // Encrypt with Noise
-            SecureLogger.log("Encrypting private message \(msgID) for \(recipientPeerID)", category: SecureLogger.encryption, level: .debug)
+            // Encrypting private message
             let encryptedData = try noiseService.encrypt(innerData, for: recipientPeerID)
-            SecureLogger.log("Successfully encrypted message, size: \(encryptedData.count)", category: SecureLogger.encryption, level: .debug)
+            // Successfully encrypted
             
             // Update last successful message time
             updateLastSuccessfulMessageTime(recipientPeerID)
@@ -7134,7 +7132,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 signature: nil,
                 ttl: adaptiveTTL            )
             
-            SecureLogger.log("Sending encrypted private message \(msgID) to \(recipientPeerID)", category: SecureLogger.session, level: .info)
+            // Sending encrypted private message
             
             // Track packet for ACK
             trackPacketForAck(outerPacket)
@@ -7165,7 +7163,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             
             // Send only to the intended recipient
             writeToPeripheral(data, peripheral: peripheral, characteristic: characteristic, peerID: recipientPeerID)
-            SecureLogger.log("Sent private message directly to \(recipientPeerID)", category: SecureLogger.session, level: .info)
+            // Sent message directly
             return true
         }
         
@@ -7195,11 +7193,11 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         
         // Try direct delivery first
         if sendDirectToRecipient(packet, recipientPeerID: targetPeerID) {
-            SecureLogger.log("Sent handshake request directly to \(targetPeerID)", category: SecureLogger.noise, level: .info)
+            // Sent handshake directly
         } else {
             // Use selective relay if direct delivery fails
             sendViaSelectiveRelay(packet, recipientPeerID: targetPeerID)
-            SecureLogger.log("Sent handshake request via relay to \(targetPeerID)", category: SecureLogger.noise, level: .info)
+            // Sent handshake via relay
         }
     }
     

@@ -24,8 +24,7 @@ struct NostrProtocol {
         senderIdentity: NostrIdentity
     ) throws -> NostrEvent {
         
-        SecureLogger.log("🔒 Creating private message to \(recipientPubkey.prefix(8))...", 
-                        category: SecureLogger.session, level: .info)
+        // Creating private message
         
         // 1. Create the rumor (unsigned event)
         let rumor = NostrEvent(
@@ -39,8 +38,7 @@ struct NostrProtocol {
         // 2. Create ephemeral key for this message
         let ephemeralKey = try P256K.Schnorr.PrivateKey()
         let ephemeralPubkey = Data(ephemeralKey.xonly.bytes).hexEncodedString()
-        SecureLogger.log("🔑 Created ephemeral key for seal: \(ephemeralPubkey)", 
-                        category: SecureLogger.session, level: .debug)
+        // Created ephemeral key for seal
         
         // 3. Seal the rumor (encrypt to recipient)
         let sealedEvent = try createSeal(
@@ -56,8 +54,7 @@ struct NostrProtocol {
             senderKey: ephemeralKey
         )
         
-        SecureLogger.log("✅ Created gift wrap with ID: \(giftWrap.id), pubkey: \(giftWrap.pubkey)", 
-                        category: SecureLogger.session, level: .info)
+        // Created gift wrap
         
         return giftWrap
     }
@@ -68,8 +65,7 @@ struct NostrProtocol {
         recipientIdentity: NostrIdentity
     ) throws -> (content: String, senderPubkey: String) {
         
-        SecureLogger.log("🔐 Starting decryption - gift wrap from: \(giftWrap.pubkey), our key: \(recipientIdentity.publicKeyHex)", 
-                        category: SecureLogger.session, level: .debug)
+        // Starting decryption
         
         // 1. Unwrap the gift wrap
         let seal: NostrEvent
@@ -78,8 +74,7 @@ struct NostrProtocol {
                 giftWrap: giftWrap,
                 recipientKey: recipientIdentity.schnorrSigningKey()
             )
-            SecureLogger.log("✅ Successfully unwrapped gift wrap", 
-                            category: SecureLogger.session, level: .debug)
+            // Successfully unwrapped gift wrap
         } catch {
             SecureLogger.log("❌ Failed to unwrap gift wrap: \(error)", 
                             category: SecureLogger.session, level: .error)
@@ -93,8 +88,7 @@ struct NostrProtocol {
                 seal: seal,
                 recipientKey: recipientIdentity.schnorrSigningKey()
             )
-            SecureLogger.log("✅ Successfully opened seal", 
-                            category: SecureLogger.session, level: .debug)
+            // Successfully opened seal
         } catch {
             SecureLogger.log("❌ Failed to open seal: \(error)", 
                             category: SecureLogger.session, level: .error)
@@ -142,8 +136,7 @@ struct NostrProtocol {
         
         // Create new ephemeral key for gift wrap
         let wrapKey = try P256K.Schnorr.PrivateKey()
-        SecureLogger.log("🎁 Creating gift wrap with ephemeral key: \(Data(wrapKey.xonly.bytes).hexEncodedString())", 
-                        category: SecureLogger.session, level: .debug)
+        // Creating gift wrap with ephemeral key
         
         // Encrypt the seal with the new ephemeral key (not the seal's key)
         let encrypted = try encrypt(
@@ -170,8 +163,7 @@ struct NostrProtocol {
         recipientKey: P256K.Schnorr.PrivateKey
     ) throws -> NostrEvent {
         
-        SecureLogger.log("🎁 Unwrapping gift wrap with pubkey: \(giftWrap.pubkey), our key: \(Data(recipientKey.xonly.bytes).hexEncodedString())", 
-                        category: SecureLogger.session, level: .debug)
+        // Unwrapping gift wrap
         
         let decrypted = try decrypt(
             ciphertext: giftWrap.content,
@@ -185,8 +177,7 @@ struct NostrProtocol {
         }
         
         let seal = try NostrEvent(from: sealDict)
-        SecureLogger.log("📦 Unwrapped seal with pubkey: \(seal.pubkey)", 
-                        category: SecureLogger.session, level: .debug)
+        // Unwrapped seal
         
         return seal
     }
@@ -223,8 +214,7 @@ struct NostrProtocol {
         }
         
         let senderPubkey = Data(senderKey.xonly.bytes).hexEncodedString()
-        SecureLogger.log("🔐 Encrypting - sender: \(senderPubkey), recipient: \(recipientPubkey)", 
-                        category: SecureLogger.session, level: .debug)
+        // Encrypting message
         
         // Derive shared secret
         let sharedSecret = try deriveSharedSecret(
@@ -232,8 +222,7 @@ struct NostrProtocol {
             publicKey: recipientPubkeyData
         )
         
-        SecureLogger.log("🤝 Derived shared secret for encryption: \(sharedSecret.hexEncodedString().prefix(16))...", 
-                        category: SecureLogger.session, level: .debug)
+        // Derived shared secret
         
         // Generate nonce
         let nonce = AES.GCM.Nonce()
@@ -260,8 +249,7 @@ struct NostrProtocol {
         recipientKey: P256K.Schnorr.PrivateKey
     ) throws -> String {
         
-        SecureLogger.log("🔐 Decrypt: sender pubkey: \(senderPubkey), ciphertext length: \(ciphertext.count)", 
-                        category: SecureLogger.session, level: .debug)
+        // Decrypting message
         
         guard let data = Data(base64Encoded: ciphertext),
               let senderPubkeyData = Data(hexString: senderPubkey) else {
@@ -270,16 +258,14 @@ struct NostrProtocol {
             throw NostrError.invalidCiphertext
         }
         
-        SecureLogger.log("📦 Ciphertext data length: \(data.count) bytes", 
-                        category: SecureLogger.session, level: .debug)
+        // Ciphertext data parsed
         
         // Extract components
         let nonceData = data.prefix(12)
         let ciphertextData = data.dropFirst(12).dropLast(16)
         let tagData = data.suffix(16)
         
-        SecureLogger.log("📊 Components - nonce: \(nonceData.count)B, cipher: \(ciphertextData.count)B, tag: \(tagData.count)B", 
-                        category: SecureLogger.session, level: .debug)
+        // Components parsed
         
         // Derive shared secret - try with default Y coordinate first
         var sharedSecret: Data
@@ -290,8 +276,7 @@ struct NostrProtocol {
                 privateKey: recipientKey,
                 publicKey: senderPubkeyData
             )
-            SecureLogger.log("✅ Derived shared secret with first Y coordinate", 
-                            category: SecureLogger.session, level: .debug)
+            // Derived shared secret with first Y coordinate
             
             // Try to decrypt
             let sealedBox = try AES.GCM.SealedBox(
@@ -305,16 +290,13 @@ struct NostrProtocol {
                     sealedBox,
                     using: SymmetricKey(data: sharedSecret)
                 )
-                SecureLogger.log("✅ AES-GCM decryption successful with first Y coordinate", 
-                                category: SecureLogger.session, level: .debug)
+                // AES-GCM decryption successful
             } catch {
-                SecureLogger.log("⚠️ AES-GCM decryption failed with first Y coordinate: \(error)", 
-                                category: SecureLogger.session, level: .debug)
+                // AES-GCM decryption failed, trying alternate
                 
                 // If the sender pubkey is x-only (32 bytes), try the other Y coordinate
                 if senderPubkeyData.count == 32 {
-                    SecureLogger.log("🔄 Trying alternate Y coordinate for x-only key", 
-                                    category: SecureLogger.session, level: .debug)
+                    // Trying alternate Y coordinate
                     
                     // Force deriveSharedSecret to use odd Y by manipulating the data
                     var altPubkey = Data()
@@ -330,8 +312,7 @@ struct NostrProtocol {
                         sealedBox,
                         using: SymmetricKey(data: sharedSecret)
                     )
-                    SecureLogger.log("✅ AES-GCM decryption successful with alternate Y coordinate", 
-                                    category: SecureLogger.session, level: .debug)
+                    // AES-GCM decryption successful with alternate Y
                 } else {
                     throw error
                 }
@@ -353,8 +334,7 @@ struct NostrProtocol {
         privateKey: P256K.Schnorr.PrivateKey,
         publicKey: Data
     ) throws -> Data {
-        SecureLogger.log("🔑 Deriving shared secret - pubkey length: \(publicKey.count), hex: \(publicKey.hexEncodedString().prefix(16))...", 
-                        category: SecureLogger.session, level: .debug)
+        // Deriving shared secret
         
         // Convert Schnorr private key to KeyAgreement private key
         let keyAgreementPrivateKey = try P256K.KeyAgreement.PrivateKey(
@@ -369,8 +349,7 @@ struct NostrProtocol {
             // First try with even Y (0x02 prefix)
             fullPublicKey.append(0x02)
             fullPublicKey.append(publicKey)
-            SecureLogger.log("📏 Trying with 0x02 prefix (even Y) for x-only key", 
-                            category: SecureLogger.session, level: .debug)
+            // Trying with even Y coordinate
         } else {
             fullPublicKey = publicKey
         }
@@ -385,8 +364,7 @@ struct NostrProtocol {
         } catch {
             if publicKey.count == 32 {
                 // Try with odd Y (0x03 prefix)
-                SecureLogger.log("⚠️ Even Y failed, trying with 0x03 prefix (odd Y)", 
-                                category: SecureLogger.session, level: .debug)
+                // Even Y failed, trying odd Y
                 fullPublicKey = Data()
                 fullPublicKey.append(0x03)
                 fullPublicKey.append(publicKey)
@@ -407,8 +385,7 @@ struct NostrProtocol {
         
         // Convert SharedSecret to Data
         let sharedSecretData = sharedSecret.withUnsafeBytes { Data($0) }
-        SecureLogger.log("🤝 ECDH shared secret length: \(sharedSecretData.count)", 
-                        category: SecureLogger.session, level: .debug)
+        // ECDH shared secret derived
         
         // Derive key using HKDF for NIP-44 v2
         let derivedKey = HKDF<CryptoKit.SHA256>.deriveKey(
@@ -419,8 +396,7 @@ struct NostrProtocol {
         )
         
         let result = derivedKey.withUnsafeBytes { Data($0) }
-        SecureLogger.log("🔐 Final derived key length: \(result.count)", 
-                        category: SecureLogger.session, level: .debug)
+        // Final derived key ready
         return result
     }
     
@@ -429,8 +405,7 @@ struct NostrProtocol {
         privateKey: P256K.Schnorr.PrivateKey,
         publicKey: Data
     ) throws -> Data {
-        SecureLogger.log("🔑 Direct shared secret - pubkey length: \(publicKey.count)", 
-                        category: SecureLogger.session, level: .debug)
+        // Direct shared secret calculation
         
         // Convert Schnorr private key to KeyAgreement private key
         let keyAgreementPrivateKey = try P256K.KeyAgreement.PrivateKey(
@@ -481,8 +456,7 @@ struct NostrProtocol {
         let nowLocal = formatter.string(from: now)
         let randomizedLocal = formatter.string(from: randomized)
         
-        SecureLogger.log("⏰ Timestamp: now=\(nowUTC) UTC (\(nowLocal) local), offset=\(Int(offset))s (\(Int(offset/60))min), result=\(randomizedUTC) UTC (\(randomizedLocal) local)", 
-                        category: SecureLogger.session, level: .info)
+        // Timestamp randomized for privacy
         
         return randomized
     }
