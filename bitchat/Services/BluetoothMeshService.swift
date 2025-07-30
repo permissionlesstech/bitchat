@@ -590,6 +590,12 @@ class BluetoothMeshService: NSObject {
     private var batteryMonitorTimer: Timer?
     private var currentBatteryLevel: Float = 1.0  // Default to full battery
     
+    // App state tracking for RSSI optimization
+    private var isAppInForeground = true
+    private var isPeerListVisible = false
+    private var rssiUpdateTimer: Timer?
+    private let rssiUpdateInterval: TimeInterval = 3.0  // Update RSSI every 3 seconds when visible
+    
     // Battery optimizer integration
     private let batteryOptimizer = BatteryOptimizer.shared
     private var batteryOptimizerCancellables = Set<AnyCancellable>()
@@ -1479,6 +1485,9 @@ class BluetoothMeshService: NSObject {
         centralManager = CBCentralManager(delegate: self, queue: nil)
         peripheralManager = CBPeripheralManager(delegate: self, queue: nil)
         
+        // Setup app state notifications
+        setupAppStateNotifications()
+        
         // Start bloom filter reset timer (reset every 5 minutes)
         bloomFilterResetTimer = Timer.scheduledTimer(withTimeInterval: 300.0, repeats: true) { [weak self] _ in
             self?.messageQueue.async(flags: .barrier) {
@@ -1613,10 +1622,84 @@ class BluetoothMeshService: NSObject {
         memoryCleanupTimer?.invalidate()
         connectionKeepAliveTimer?.invalidate()
         availabilityCheckTimer?.invalidate()
+        rssiUpdateTimer?.invalidate()
+        NotificationCenter.default.removeObserver(self)
     }
     
     @objc private func appWillTerminate() {
         cleanup()
+    }
+    
+    // MARK: - App State Management
+    
+    private func setupAppStateNotifications() {
+        #if os(iOS)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appDidBecomeActive),
+            name: UIApplication.didBecomeActiveNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appWillResignActive),
+            name: UIApplication.willResignActiveNotification,
+            object: nil
+        )
+        #elseif os(macOS)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appDidBecomeActive),
+            name: NSApplication.didBecomeActiveNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appWillResignActive),
+            name: NSApplication.willResignActiveNotification,
+            object: nil
+        )
+        #endif
+    }
+    
+    @objc private func appDidBecomeActive() {
+        isAppInForeground = true
+        SecureLogger.log("App became active, enabling RSSI updates", category: SecureLogger.session, level: .debug)
+        updateRSSITimerState()
+    }
+    
+    @objc private func appWillResignActive() {
+        isAppInForeground = false
+        SecureLogger.log("App will resign active, disabling RSSI updates", category: SecureLogger.session, level: .debug)
+        updateRSSITimerState()
+    }
+    
+    // Methods to be called by UI when peer list visibility changes
+    func setPeerListVisible(_ visible: Bool) {
+        isPeerListVisible = visible
+        SecureLogger.log("Peer list visibility changed to: \(visible)", category: SecureLogger.session, level: .debug)
+        updateRSSITimerState()
+    }
+    
+    private func updateRSSITimerState() {
+        if isAppInForeground && isPeerListVisible {
+            // Start RSSI update timer
+            if rssiUpdateTimer == nil {
+                SecureLogger.log("Starting RSSI update timer", category: SecureLogger.session, level: .info)
+                rssiUpdateTimer = Timer.scheduledTimer(withTimeInterval: rssiUpdateInterval, repeats: true) { [weak self] _ in
+                    self?.updateAllPeripheralRSSI()
+                }
+                // Trigger immediate update
+                updateAllPeripheralRSSI()
+            }
+        } else {
+            // Stop RSSI update timer
+            if rssiUpdateTimer != nil {
+                SecureLogger.log("Stopping RSSI update timer", category: SecureLogger.session, level: .info)
+                rssiUpdateTimer?.invalidate()
+                rssiUpdateTimer = nil
+            }
+        }
     }
     
     private func cleanup() {
@@ -4962,11 +5045,7 @@ extension BluetoothMeshService: CBPeripheralDelegate {
             }
         }
             
-        // Periodically update RSSI
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak peripheral] in
-            guard let peripheral = peripheral, peripheral.state == .connected else { return }
-            peripheral.readRSSI()
-        }
+        // Don't schedule periodic RSSI updates - they will be handled by the timer when peer list is visible
     }
 }
 

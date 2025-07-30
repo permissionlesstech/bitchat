@@ -182,6 +182,10 @@ struct ContentView: View {
                 showPrivateChat = newValue != nil
             }
         }
+        .onChange(of: showSidebar) { isVisible in
+            // Notify mesh service about peer list visibility for RSSI optimization
+            viewModel.meshService.setPeerListVisible(isVisible)
+        }
         .sheet(isPresented: $showAppInfo) {
             AppInfoView()
         }
