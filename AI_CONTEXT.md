@@ -13,6 +13,8 @@ BitChat is a decentralized, peer-to-peer messaging application that works over B
 - **Store & Forward**: Messages cached for offline peers
 - **IRC-Style Commands**: Familiar `/msg`, `/who` interface
 - **Cross-Platform**: Native iOS and macOS support
+- **Nostr Integration**: Seamless fallback for mutual favorites when out of Bluetooth range
+- **Hybrid Transport**: Automatic switching between Bluetooth and Nostr
 
 ## Architecture Overview
 
@@ -28,17 +30,24 @@ BitChat is a decentralized, peer-to-peer messaging application that works over B
 └─────────────────────────────────────────────────────────────────┘
                                    │
 ┌─────────────────────────────────────────────────────────────────┐
-│                       Security Layer                              │
-│     (NoiseEncryptionService, SecureIdentityStateManager)         │
+│                      Message Router                               │
+│         (Transport selection, Favorites integration)              │
 └─────────────────────────────────────────────────────────────────┘
-                                   │
+                    │                            │
+┌───────────────────────────────┐ ┌────────────────────────────────┐
+│        Security Layer         │ │      Nostr Protocol Layer      │
+│ (NoiseEncryptionService,      │ │  (NostrProtocol, NIP-17,      │
+│  SecureIdentityStateManager)  │ │   NostrRelayManager)          │
+└───────────────────────────────┘ └────────────────────────────────┘
+                    │                            │
+┌───────────────────────────────┐ ┌────────────────────────────────┐
+│       Protocol Layer          │ │         Transport              │
+│ (BitchatProtocol, Binary-     │ │    (WebSocket to Nostr        │
+│  Protocol, NoiseProtocol)     │ │      relay servers)           │
+└───────────────────────────────┘ └────────────────────────────────┘
+                    │
 ┌─────────────────────────────────────────────────────────────────┐
-│                      Protocol Layer                               │
-│        (BitchatProtocol, BinaryProtocol, NoiseProtocol)         │
-└─────────────────────────────────────────────────────────────────┘
-                                   │
-┌─────────────────────────────────────────────────────────────────┐
-│                      Transport Layer                              │
+│                   Bluetooth Transport Layer                       │
 │                   (BluetoothMeshService)                          │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -94,6 +103,32 @@ BitChat is a decentralized, peer-to-peer messaging application that works over B
   - UI state management
   - Private chat coordination
 
+### 6. Nostr Integration
+- **Locations**:
+  - `bitchat/Nostr/NostrProtocol.swift` - NIP-17 private message implementation
+  - `bitchat/Nostr/NostrRelayManager.swift` - WebSocket relay connections
+  - `bitchat/Nostr/NostrIdentity.swift` - Nostr key management
+  - `bitchat/Services/MessageRouter.swift` - Transport selection logic
+- **Purpose**: Enables communication with mutual favorites when out of Bluetooth range
+- **Key Features**:
+  - NIP-17 gift-wrapped private messages for metadata privacy
+  - Automatic relay connection management
+  - Seamless transport switching between Bluetooth and Nostr
+  - Integrated with favorites system for mutual authentication
+
+### 7. MessageRouter
+- **Location**: `bitchat/Services/MessageRouter.swift`
+- **Purpose**: Intelligent routing between Bluetooth mesh and Nostr transports
+- **Transport Selection Logic**:
+  1. Always prefer Bluetooth mesh when peer is connected
+  2. Use Nostr for mutual favorites when peer is offline
+  3. Fail gracefully when no transport is available
+- **Message Types Routed**:
+  - Regular chat messages
+  - Favorite/unfavorite notifications
+  - Delivery acknowledgments
+  - Read receipts
+
 ## Key Design Decisions
 
 ### 1. Protocol Design
@@ -116,6 +151,12 @@ BitChat is a decentralized, peer-to-peer messaging application that works over B
 - **Cover Traffic**: Optional dummy messages
 - **Timing Obfuscation**: Randomized delays
 - **Emergency Wipe**: Triple-tap to clear all data
+
+### 5. Nostr Integration
+- **NIP-17 Gift Wraps**: Maximum metadata privacy
+- **Ephemeral Keys**: Each message uses unique ephemeral keys
+- **Mutual Favorites Only**: Requires bidirectional trust
+- **Transport Abstraction**: Users don't need to know about Nostr
 
 ## Code Organization
 
@@ -145,6 +186,147 @@ MVVM architecture for UI:
 - `ContentView`: Main chat interface
 - `ChatViewModel`: Business logic and state
 - Supporting views for settings, identity, etc.
+
+## Nostr Protocol Implementation
+
+### Overview
+BitChat integrates Nostr as a secondary transport for communicating with mutual favorites when Bluetooth connectivity is unavailable. This integration is transparent to users - messages automatically route through Nostr when needed.
+
+### NIP-17 Private Direct Messages
+BitChat implements NIP-17 (Private Direct Messages) for metadata-private communication:
+
+1. **Gift Wrap Structure**:
+   ```
+   Gift Wrap (kind 1059) → Seal (kind 13) → Rumor (kind 1)
+   ```
+   - **Rumor**: The actual message content (unsigned)
+   - **Seal**: Encrypted rumor, hides sender identity
+   - **Gift Wrap**: Double-encrypted, tagged for recipient
+
+2. **Ephemeral Keys**:
+   - Each message uses TWO ephemeral key pairs
+   - Seal uses one ephemeral key
+   - Gift wrap uses a different ephemeral key
+   - Provides sender anonymity and forward secrecy
+
+3. **Timestamp Randomization**:
+   - ±1 minute randomization (reduced from NIP-17's ±15 minutes)
+   - Prevents timing correlation attacks
+   - Configurable in `NostrProtocol.randomizedTimestamp()`
+
+### Favorites Integration
+
+The Nostr transport is only available for mutual favorites:
+
+1. **Favorite Establishment**:
+   - User favorites a peer via `/fav` command
+   - Favorite notification sent via Bluetooth (if connected)
+   - Peer's Nostr public key exchanged during favorite process
+   - Stored in `FavoritesPersistenceService`
+
+2. **Mutual Requirement**:
+   - Both peers must favorite each other
+   - Prevents spam and unwanted Nostr messages
+   - Enforced by `MessageRouter` transport selection
+
+3. **Nostr Key Management**:
+   - Derived from Noise static key using BIP-32
+   - Path: `m/44'/1237'/0'/0/0` (1237 = "NOSTR" in decimal)
+   - Consistent npub across app reinstalls
+   - Keys never leave the device
+
+### Message Routing Logic
+
+`MessageRouter` automatically selects transport:
+
+```swift
+if peerAvailableOnMesh {
+    transport = .bluetoothMesh  // Always prefer mesh
+} else if isMutualFavorite {
+    transport = .nostr          // Use Nostr for offline favorites
+} else {
+    throw MessageRouterError.peerNotReachable
+}
+```
+
+### Relay Configuration
+
+Default relays (hardcoded for reliability):
+- `wss://relay.damus.io`
+- `wss://relay.primal.net`
+- `wss://offchain.pub`
+- `wss://nostr21.com`
+
+Relay selection criteria:
+- Geographic distribution
+- High uptime
+- No authentication required
+- Support for ephemeral events
+
+### Message Format
+
+Structured content for different message types:
+- Chat: `MSG:<messageID>:<content>`
+- Favorite: `FAVORITED:<senderNpub>` or `UNFAVORITED:<senderNpub>`
+- Delivery ACK: `DELIVERED:<messageID>`
+- Read Receipt: `READ:<base64EncodedReceipt>`
+
+### Implementation Details
+
+1. **NostrRelayManager**:
+   - Manages WebSocket connections to relays
+   - Handles reconnection logic
+   - Processes EVENT, EOSE, OK, NOTICE messages
+   - Implements NIP-01 relay protocol
+
+2. **NostrProtocol**:
+   - Implements NIP-17 encryption/decryption
+   - Handles gift wrap creation/unwrapping
+   - Manages ephemeral key generation
+   - Provides Schnorr signatures
+
+3. **ProcessedMessagesService**:
+   - Prevents duplicate message processing
+   - Tracks last subscription timestamp
+   - Persists across app launches
+   - 30-day retention window
+
+### Security Considerations
+
+1. **Metadata Protection**:
+   - Sender identity hidden via ephemeral keys
+   - Recipient only visible in gift wrap p-tag
+   - Timing correlation prevented via randomization
+   - Message content double-encrypted
+
+2. **Relay Trust**:
+   - Relays cannot read message content
+   - Relays can see recipient pubkey (gift wrap)
+   - Relays cannot determine sender
+   - Multiple relays used for redundancy
+
+3. **Key Hygiene**:
+   - Ephemeral keys used once and discarded
+   - Static Nostr key derived from Noise key
+   - No key reuse between messages
+   - Keys cleared from memory after use
+
+### Debugging Nostr Issues
+
+1. **Check relay connections**:
+   - Look for "Connected to Nostr relay" in logs
+   - Verify WebSocket state in NostrRelayManager
+   - Check for relay errors/notices
+
+2. **Verify gift wrap creation**:
+   - Enable debug logging in NostrProtocol
+   - Check ephemeral key generation
+   - Verify encryption steps
+
+3. **Message delivery**:
+   - Check ProcessedMessagesService for duplicates
+   - Verify subscription filters
+   - Look for EVENT messages in relay responses
 
 ## Development Guidelines
 
@@ -193,6 +375,20 @@ MVVM architecture for UI:
 2. Verify peer states and connections
 3. Monitor characteristic updates
 4. Use Bluetooth debugging tools
+
+### Working with Nostr Transport
+1. Verify mutual favorite status in `FavoritesPersistenceService`
+2. Check Nostr key derivation in `NostrIdentity`
+3. Monitor relay connections in `NostrRelayManager`
+4. Test gift wrap encryption/decryption
+5. Verify transport selection in `MessageRouter`
+
+### Adding Nostr Features
+1. Understand NIP-17 gift wrap structure
+2. Maintain ephemeral key hygiene
+3. Test with multiple relays
+4. Preserve metadata privacy
+5. Handle relay disconnections gracefully
 
 ## Security Threat Model
 
@@ -266,9 +462,11 @@ MVVM architecture for UI:
 ## Quick Start for AI Assistants
 
 1. **Understand the layers**: Transport → Protocol → Security → Services → UI
-2. **Follow the data flow**: BLE → Binary → Protocol → ViewModel → View
+2. **Follow the data flow**: BLE/Nostr → Binary/JSON → Protocol → ViewModel → View
 3. **Respect security boundaries**: Never mix trusted and untrusted data
 4. **Test thoroughly**: This is critical infrastructure for users
 5. **Ask about design decisions**: Many choices have non-obvious reasons
+6. **Dual Transport**: Remember that messages can flow over Bluetooth OR Nostr
+7. **Favorites System**: Nostr only works between mutual favorites
 
 When in doubt, prioritize security and privacy over features. BitChat users depend on this app in situations where traditional communication has failed them.

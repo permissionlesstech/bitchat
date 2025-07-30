@@ -46,6 +46,26 @@
 		04B6BA4F2E2038A70090FE39 /* NoiseEncryptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04B6BA4D2E2038A70090FE39 /* NoiseEncryptionService.swift */; };
 		04B6BA552E203D6C0090FE39 /* FingerprintView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04B6BA532E203D6C0090FE39 /* FingerprintView.swift */; };
 		04B6BA572E203D6C0090FE39 /* FingerprintView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04B6BA532E203D6C0090FE39 /* FingerprintView.swift */; };
+		04E363362E3800310048E624 /* P256K in Frameworks */ = {isa = PBXBuildFile; productRef = 04F127E72E37EBCD00FFBA8D /* P256K */; };
+		04E363372E3800310048E624 /* P256K in Frameworks */ = {isa = PBXBuildFile; productRef = 04F127E82E37EBDB00FFBA8D /* P256K */; };
+		04F127E42E37EBAA00FFBA8D /* NostrIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F127E22E37EBAA00FFBA8D /* NostrIdentity.swift */; };
+		04F127E52E37EBAA00FFBA8D /* NostrIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F127E22E37EBAA00FFBA8D /* NostrIdentity.swift */; };
+		04F127F22E37EEB800FFBA8D /* NostrProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F127F02E37EEB800FFBA8D /* NostrProtocol.swift */; };
+		04F127F32E37EEB800FFBA8D /* NostrRelayManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F127F12E37EEB800FFBA8D /* NostrRelayManager.swift */; };
+		04F127F42E37EEB800FFBA8D /* NostrProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F127F02E37EEB800FFBA8D /* NostrProtocol.swift */; };
+		04F127F52E37EEB800FFBA8D /* NostrRelayManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F127F12E37EEB800FFBA8D /* NostrRelayManager.swift */; };
+		04F127F82E37EEEE00FFBA8D /* MessageRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F127F72E37EEEE00FFBA8D /* MessageRouter.swift */; };
+		04F127F92E37EEEE00FFBA8D /* FavoritesPersistenceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F127F62E37EEEE00FFBA8D /* FavoritesPersistenceService.swift */; };
+		04F127FA2E37EEEE00FFBA8D /* MessageRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F127F72E37EEEE00FFBA8D /* MessageRouter.swift */; };
+		04F127FB2E37EEEE00FFBA8D /* FavoritesPersistenceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F127F62E37EEEE00FFBA8D /* FavoritesPersistenceService.swift */; };
+		04F127FE2E37EF3D00FFBA8D /* BitchatPeer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F127FC2E37EF3D00FFBA8D /* BitchatPeer.swift */; };
+		04F127FF2E37EF3D00FFBA8D /* BitchatPeer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F127FC2E37EF3D00FFBA8D /* BitchatPeer.swift */; };
+		04F128062E37F10000FFBA8D /* PeerSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F128072E37F10000FFBA8D /* PeerSession.swift */; };
+		04F128082E37F10000FFBA8D /* PeerSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F128072E37F10000FFBA8D /* PeerSession.swift */; };
+		04F128012E37FF4E00FFBA8D /* libsecp256k1 in Frameworks */ = {isa = PBXBuildFile; productRef = 04F128002E37FF4E00FFBA8D /* libsecp256k1 */; };
+		04F128032E37FFB900FFBA8D /* libsecp256k1 in Frameworks */ = {isa = PBXBuildFile; productRef = 04F128022E37FFB900FFBA8D /* libsecp256k1 */; };
+		04F128042E37F00000FFBA8D /* ProcessedMessagesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F127FF2E37F00000FFBA8D /* ProcessedMessagesService.swift */; };
+		04F128052E37F00000FFBA8D /* ProcessedMessagesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F127FF2E37F00000FFBA8D /* ProcessedMessagesService.swift */; };
 		0FBC81FF78CF4711B78E092A /* IdentityModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E2446380E7A44E49A35B664 /* IdentityModels.swift */; };
 		10E68BB889356219189E38EC /* BitchatApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF625BB3AD919322C01A46B2 /* BitchatApp.swift */; };
 		17901751FD8010AFC8E750F2 /* bitchatShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 61F92EBA29C47C0FCC482F1F /* bitchatShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -142,6 +162,14 @@
 		04B6BA432E2035530090FE39 /* NoiseSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoiseSession.swift; sourceTree = "<group>"; };
 		04B6BA4D2E2038A70090FE39 /* NoiseEncryptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoiseEncryptionService.swift; sourceTree = "<group>"; };
 		04B6BA532E203D6C0090FE39 /* FingerprintView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FingerprintView.swift; sourceTree = "<group>"; };
+		04F127E22E37EBAA00FFBA8D /* NostrIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NostrIdentity.swift; sourceTree = "<group>"; };
+		04F127F02E37EEB800FFBA8D /* NostrProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NostrProtocol.swift; sourceTree = "<group>"; };
+		04F127F12E37EEB800FFBA8D /* NostrRelayManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NostrRelayManager.swift; sourceTree = "<group>"; };
+		04F127F62E37EEEE00FFBA8D /* FavoritesPersistenceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoritesPersistenceService.swift; sourceTree = "<group>"; };
+		04F127F72E37EEEE00FFBA8D /* MessageRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageRouter.swift; sourceTree = "<group>"; };
+		04F127FC2E37EF3D00FFBA8D /* BitchatPeer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitchatPeer.swift; sourceTree = "<group>"; };
+		04F128072E37F10000FFBA8D /* PeerSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerSession.swift; sourceTree = "<group>"; };
+		04F127FF2E37F00000FFBA8D /* ProcessedMessagesService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessedMessagesService.swift; sourceTree = "<group>"; };
 		12B9C3EDF3BC73D3BC106DA4 /* DeliveryTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeliveryTracker.swift; sourceTree = "<group>"; };
 		136696FC4436A02D98CE6A77 /* KeychainManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainManager.swift; sourceTree = "<group>"; };
 		229F17B68CFF7AB1BC91C847 /* BitchatProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitchatProtocol.swift; sourceTree = "<group>"; };
@@ -173,6 +201,27 @@
 		EF625BB3AD919322C01A46B2 /* BitchatApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitchatApp.swift; sourceTree = "<group>"; };
 		FF7AF93D874001FBD94C8306 /* bitchat-macOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "bitchat-macOS.entitlements"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		04F127E92E37EBEF00FFBA8D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				04E363362E3800310048E624 /* P256K in Frameworks */,
+				04F128012E37FF4E00FFBA8D /* libsecp256k1 in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		04F127ED2E37EBFF00FFBA8D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				04E363372E3800310048E624 /* P256K in Frameworks */,
+				04F128032E37FFB900FFBA8D /* libsecp256k1 in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		04636BC62E30BE5100FBCFA8 /* EndToEnd */ = {
@@ -237,6 +286,32 @@
 			path = Noise;
 			sourceTree = "<group>";
 		};
+		04F127E32E37EBAA00FFBA8D /* Nostr */ = {
+			isa = PBXGroup;
+			children = (
+				04F127F02E37EEB800FFBA8D /* NostrProtocol.swift */,
+				04F127F12E37EEB800FFBA8D /* NostrRelayManager.swift */,
+				04F127E22E37EBAA00FFBA8D /* NostrIdentity.swift */,
+			);
+			path = Nostr;
+			sourceTree = "<group>";
+		};
+		04F127EA2E37EBF300FFBA8D /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		04F127FD2E37EF3D00FFBA8D /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				04F127FC2E37EF3D00FFBA8D /* BitchatPeer.swift */,
+				04F128072E37F10000FFBA8D /* PeerSession.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
 		18198ED912AAF495D8AF7763 = {
 			isa = PBXGroup;
 			children = (
@@ -244,6 +319,7 @@
 				A2E8C336FA1ADBEC03261DFD /* bitchatShareExtension */,
 				C3D98EB3E1B455E321F519F4 /* bitchatTests */,
 				9F37F9F2C353B58AC809E93B /* Products */,
+				04F127EA2E37EBF300FFBA8D /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -258,8 +334,10 @@
 				95F16C3A4A5621C74461D8D3 /* LaunchScreen.storyboard */,
 				ADD53BCDA233C02E53458926 /* Protocols */,
 				04B6BA442E2035530090FE39 /* Noise */,
+				04F127E32E37EBAA00FFBA8D /* Nostr */,
 				D98A3186D7E4C72E35BDF7FE /* Services */,
 				6078981E5A3646BC84CC6DB4 /* Identity */,
+				04F127FD2E37EF3D00FFBA8D /* Models */,
 				9A78348821A7D3374607D4E3 /* Utils */,
 				45BB7D87CAE42A8C0447D909 /* ViewModels */,
 				A55126E93155456CAA8D6656 /* Views */,
@@ -356,6 +434,9 @@
 		D98A3186D7E4C72E35BDF7FE /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				04F127F62E37EEEE00FFBA8D /* FavoritesPersistenceService.swift */,
+				04F127F72E37EEEE00FFBA8D /* MessageRouter.swift */,
+				04F127FF2E37F00000FFBA8D /* ProcessedMessagesService.swift */,
 				04B6BA4D2E2038A70090FE39 /* NoiseEncryptionService.swift */,
 				D5C3D880FF8AE1673B20E1E3 /* BluetoothMeshService.swift */,
 				12B9C3EDF3BC73D3BC106DA4 /* DeliveryTracker.swift */,
@@ -375,6 +456,7 @@
 			buildPhases = (
 				137ABE739BF20ACDDF8CC605 /* Sources */,
 				0214973A876129753D39EB47 /* Resources */,
+				04F127ED2E37EBFF00FFBA8D /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -382,6 +464,8 @@
 			);
 			name = bitchat_macOS;
 			packageProductDependencies = (
+				04F127E82E37EBDB00FFBA8D /* P256K */,
+				04F128022E37FFB900FFBA8D /* libsecp256k1 */,
 			);
 			productName = bitchat_macOS;
 			productReference = 8F3A7C058C2C8E1A06C8CF8B /* bitchat.app */;
@@ -447,6 +531,7 @@
 				4E49E34F00154C051AE90FED /* Sources */,
 				CD6E8F32BC38357473954F97 /* Resources */,
 				B6C356449BAE4E0F650565D1 /* Embed Foundation Extensions */,
+				04F127E92E37EBEF00FFBA8D /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -455,6 +540,8 @@
 			);
 			name = bitchat_iOS;
 			packageProductDependencies = (
+				04F127E72E37EBCD00FFBA8D /* P256K */,
+				04F128002E37FF4E00FFBA8D /* libsecp256k1 */,
 			);
 			productName = bitchat_iOS;
 			productReference = 96D0D41CA19EE5A772AA8434 /* bitchat.app */;
@@ -501,6 +588,9 @@
 			);
 			mainGroup = 18198ED912AAF495D8AF7763;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				04F127E62E37EBCD00FFBA8D /* XCRemoteSwiftPackageReference "swift-secp256k1" */,
+			);
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -556,22 +646,30 @@
 				04B6BA462E2035530090FE39 /* NoiseSession.swift in Sources */,
 				04B6BA472E2035530090FE39 /* NoiseProtocol.swift in Sources */,
 				7A50E2F04A3515A7E90EEAE4 /* BluetoothMeshService.swift in Sources */,
+				04F127F42E37EEB800FFBA8D /* NostrProtocol.swift in Sources */,
+				04F127F52E37EEB800FFBA8D /* NostrRelayManager.swift in Sources */,
 				D450CF41F207BDE1A1AAA56E /* ChatViewModel.swift in Sources */,
 				B0CA7796B2B2AC2B33F84548 /* CompressionUtil.swift in Sources */,
 				92D34E7A07C990C8A815B0CE /* ContentView.swift in Sources */,
 				04B6BA4F2E2038A70090FE39 /* NoiseEncryptionService.swift in Sources */,
 				8DCEEA289EF7C49E7CD38B08 /* DeliveryTracker.swift in Sources */,
 				FB8819B4C84FAFEF5C36B216 /* KeychainManager.swift in Sources */,
+				04F127E52E37EBAA00FFBA8D /* NostrIdentity.swift in Sources */,
 				04636BBA2E2FAA1700FBCFA8 /* BinaryEncodingUtils.swift in Sources */,
 				04AD0B4E2E25B9580002A40A /* IdentityModels.swift in Sources */,
 				04AD0B4F2E25B9580002A40A /* SecureIdentityStateManager.swift in Sources */,
 				31D147471B9F4E2815352DDA /* LinkPreviewView.swift in Sources */,
+				04F127FE2E37EF3D00FFBA8D /* BitchatPeer.swift in Sources */,
+				04F128062E37F10000FFBA8D /* PeerSession.swift in Sources */,
 				04B6BA572E203D6C0090FE39 /* FingerprintView.swift in Sources */,
 				04636BED2E30CD4A00FBCFA8 /* NoiseHandshakeCoordinator.swift in Sources */,
 				C99763A4761567F587D21688 /* MessageRetryService.swift in Sources */,
 				749D8CF8A362B6CD0786782D /* NotificationService.swift in Sources */,
 				04636BBF2E2FCA8A00FBCFA8 /* SecureLogger.swift in Sources */,
 				0245710AEAA58AD0A1425234 /* OptimizedBloomFilter.swift in Sources */,
+				04F127F82E37EEEE00FFBA8D /* MessageRouter.swift in Sources */,
+				04F127F92E37EEEE00FFBA8D /* FavoritesPersistenceService.swift in Sources */,
+				04F128042E37F00000FFBA8D /* ProcessedMessagesService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -589,22 +687,30 @@
 				04B6BA4A2E2035530090FE39 /* NoiseSession.swift in Sources */,
 				04B6BA4B2E2035530090FE39 /* NoiseProtocol.swift in Sources */,
 				D948085736ED8E736C1DE3B0 /* BluetoothMeshService.swift in Sources */,
+				04F127F22E37EEB800FFBA8D /* NostrProtocol.swift in Sources */,
+				04F127F32E37EEB800FFBA8D /* NostrRelayManager.swift in Sources */,
 				7576A357B278E5733E9D9F33 /* ChatViewModel.swift in Sources */,
 				7DCA0DBCB8884E3B31C7BCE3 /* CompressionUtil.swift in Sources */,
 				1D9674FA5F998503831DC281 /* ContentView.swift in Sources */,
 				04B6BA4E2E2038A70090FE39 /* NoiseEncryptionService.swift in Sources */,
 				CD0AE423F03AC52BAFC16834 /* DeliveryTracker.swift in Sources */,
 				8F737CE0435792CC2AD65FCB /* KeychainManager.swift in Sources */,
+				04F127E42E37EBAA00FFBA8D /* NostrIdentity.swift in Sources */,
 				04636BBC2E2FAA1700FBCFA8 /* BinaryEncodingUtils.swift in Sources */,
 				0FBC81FF78CF4711B78E092A /* IdentityModels.swift in Sources */,
 				1AF9F9036DEE42408D557A87 /* SecureIdentityStateManager.swift in Sources */,
 				7A5B1AB5642FEC168E917949 /* LinkPreviewView.swift in Sources */,
+				04F127FF2E37EF3D00FFBA8D /* BitchatPeer.swift in Sources */,
+				04F128082E37F10000FFBA8D /* PeerSession.swift in Sources */,
 				04B6BA552E203D6C0090FE39 /* FingerprintView.swift in Sources */,
 				04636BEE2E30CD4A00FBCFA8 /* NoiseHandshakeCoordinator.swift in Sources */,
 				CEAE115C9C3EB3C4ED82F128 /* MessageRetryService.swift in Sources */,
 				61C81ED5F679D5E973EE0C07 /* NotificationService.swift in Sources */,
 				04636BC02E2FCA8A00FBCFA8 /* SecureLogger.swift in Sources */,
 				1F48A8CEEE9399D1EBD08F0C /* OptimizedBloomFilter.swift in Sources */,
+				04F127FA2E37EEEE00FFBA8D /* MessageRouter.swift in Sources */,
+				04F127FB2E37EEEE00FFBA8D /* FavoritesPersistenceService.swift in Sources */,
+				04F128052E37F00000FFBA8D /* ProcessedMessagesService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -744,7 +850,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat.ShareExtension;
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -776,7 +882,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat;
 				PRODUCT_NAME = bitchat;
 				SDKROOT = iphoneos;
@@ -832,7 +938,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat;
 				PRODUCT_NAME = bitchat;
 				SDKROOT = iphoneos;
@@ -858,11 +964,14 @@
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = bitchat/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = bitchat;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat;
 				PRODUCT_NAME = bitchat;
 				REGISTER_APP_GROUPS = YES;
@@ -945,11 +1054,14 @@
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = bitchat/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = bitchat;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat;
 				PRODUCT_NAME = bitchat;
 				REGISTER_APP_GROUPS = YES;
@@ -1042,7 +1154,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat.ShareExtension;
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -1112,6 +1224,40 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		04F127E62E37EBCD00FFBA8D /* XCRemoteSwiftPackageReference "swift-secp256k1" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/21-DOT-DEV/swift-secp256k1";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.21.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		04F127E72E37EBCD00FFBA8D /* P256K */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 04F127E62E37EBCD00FFBA8D /* XCRemoteSwiftPackageReference "swift-secp256k1" */;
+			productName = P256K;
+		};
+		04F127E82E37EBDB00FFBA8D /* P256K */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 04F127E62E37EBCD00FFBA8D /* XCRemoteSwiftPackageReference "swift-secp256k1" */;
+			productName = P256K;
+		};
+		04F128002E37FF4E00FFBA8D /* libsecp256k1 */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 04F127E62E37EBCD00FFBA8D /* XCRemoteSwiftPackageReference "swift-secp256k1" */;
+			productName = libsecp256k1;
+		};
+		04F128022E37FFB900FFBA8D /* libsecp256k1 */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 04F127E62E37EBCD00FFBA8D /* XCRemoteSwiftPackageReference "swift-secp256k1" */;
+			productName = libsecp256k1;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 475D96681D0EA0AE57A4E06E /* Project object */;
 }
