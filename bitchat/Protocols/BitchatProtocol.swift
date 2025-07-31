@@ -355,10 +355,14 @@ struct DeliveryAck: Codable {
         
         guard let recipientIDData = dataCopy.readFixedBytes(at: &offset, count: 8) else { return nil }
         let recipientID = recipientIDData.hexEncodedString()
+        guard InputValidator.validatePeerID(recipientID) else { return nil }
         
         guard let hopCount = dataCopy.readUInt8(at: &offset),
+              InputValidator.validateHopCount(hopCount),
               let timestamp = dataCopy.readDate(at: &offset),
-              let recipientNickname = dataCopy.readString(at: &offset) else { return nil }
+              InputValidator.validateTimestamp(timestamp),
+              let recipientNicknameRaw = dataCopy.readString(at: &offset),
+              let recipientNickname = InputValidator.validateNickname(recipientNicknameRaw) else { return nil }
         
         return DeliveryAck(originalMessageID: originalMessageID,
                            ackID: ackID,
@@ -443,9 +447,12 @@ struct ReadReceipt: Codable {
         
         guard let readerIDData = dataCopy.readFixedBytes(at: &offset, count: 8) else { return nil }
         let readerID = readerIDData.hexEncodedString()
+        guard InputValidator.validatePeerID(readerID) else { return nil }
         
         guard let timestamp = dataCopy.readDate(at: &offset),
-              let readerNickname = dataCopy.readString(at: &offset) else { return nil }
+              InputValidator.validateTimestamp(timestamp),
+              let readerNicknameRaw = dataCopy.readString(at: &offset),
+              let readerNickname = InputValidator.validateNickname(readerNicknameRaw) else { return nil }
         
         return ReadReceipt(originalMessageID: originalMessageID,
                           receiptID: receiptID,
@@ -540,13 +547,17 @@ struct HandshakeRequest: Codable {
         
         guard let requesterIDData = dataCopy.readFixedBytes(at: &offset, count: 8) else { return nil }
         let requesterID = requesterIDData.hexEncodedString()
+        guard InputValidator.validatePeerID(requesterID) else { return nil }
         
         guard let targetIDData = dataCopy.readFixedBytes(at: &offset, count: 8) else { return nil }
         let targetID = targetIDData.hexEncodedString()
+        guard InputValidator.validatePeerID(targetID) else { return nil }
         
         guard let pendingMessageCount = dataCopy.readUInt8(at: &offset),
               let timestamp = dataCopy.readDate(at: &offset),
-              let requesterNickname = dataCopy.readString(at: &offset) else { return nil }
+              InputValidator.validateTimestamp(timestamp),
+              let requesterNicknameRaw = dataCopy.readString(at: &offset),
+              let requesterNickname = InputValidator.validateNickname(requesterNicknameRaw) else { return nil }
         
         return HandshakeRequest(requestID: requestID,
                                requesterID: requesterID,
@@ -616,11 +627,16 @@ struct ProtocolAck: Codable {
               let senderIDData = dataCopy.readFixedBytes(at: &offset, count: 8),
               let receiverIDData = dataCopy.readFixedBytes(at: &offset, count: 8),
               let packetType = dataCopy.readUInt8(at: &offset),
+              InputValidator.validateMessageType(packetType),
               let hopCount = dataCopy.readUInt8(at: &offset),
-              let timestamp = dataCopy.readDate(at: &offset) else { return nil }
+              InputValidator.validateHopCount(hopCount),
+              let timestamp = dataCopy.readDate(at: &offset),
+              InputValidator.validateTimestamp(timestamp) else { return nil }
         
         let senderID = senderIDData.hexEncodedString()
         let receiverID = receiverIDData.hexEncodedString()
+        guard InputValidator.validatePeerID(senderID),
+              InputValidator.validatePeerID(receiverID) else { return nil }
         
         return ProtocolAck(originalPacketID: originalPacketID,
                           ackID: ackID,
@@ -706,12 +722,17 @@ struct ProtocolNack: Codable {
               let senderIDData = dataCopy.readFixedBytes(at: &offset, count: 8),
               let receiverIDData = dataCopy.readFixedBytes(at: &offset, count: 8),
               let packetType = dataCopy.readUInt8(at: &offset),
+              InputValidator.validateMessageType(packetType),
               let errorCode = dataCopy.readUInt8(at: &offset),
               let timestamp = dataCopy.readDate(at: &offset),
-              let reason = dataCopy.readString(at: &offset) else { return nil }
+              InputValidator.validateTimestamp(timestamp),
+              let reasonRaw = dataCopy.readString(at: &offset),
+              let reason = InputValidator.validateReasonString(reasonRaw) else { return nil }
         
         let senderID = senderIDData.hexEncodedString()
         let receiverID = receiverIDData.hexEncodedString()
+        guard InputValidator.validatePeerID(senderID),
+              InputValidator.validatePeerID(receiverID) else { return nil }
         
         return ProtocolNack(originalPacketID: originalPacketID,
                            nackID: nackID,
@@ -839,23 +860,28 @@ struct NoiseIdentityAnnouncement: Codable {
         // Read peerID using safe method
         guard let peerIDBytes = dataCopy.readFixedBytes(at: &offset, count: 8) else { return nil }
         let peerID = peerIDBytes.hexEncodedString()
+        guard InputValidator.validatePeerID(peerID) else { return nil }
         
         guard let publicKey = dataCopy.readData(at: &offset),
+              InputValidator.validatePublicKey(publicKey),
               let signingPublicKey = dataCopy.readData(at: &offset),
+              InputValidator.validatePublicKey(signingPublicKey),
               let rawNickname = dataCopy.readString(at: &offset),
-              let timestamp = dataCopy.readDate(at: &offset) else { return nil }
-        
-        // Trim whitespace from nickname
-        let nickname = rawNickname.trimmingCharacters(in: .whitespacesAndNewlines)
+              let nickname = InputValidator.validateNickname(rawNickname),
+              let timestamp = dataCopy.readDate(at: &offset),
+              InputValidator.validateTimestamp(timestamp) else { return nil }
         
         var previousPeerID: String? = nil
         if hasPreviousPeerID {
             // Read previousPeerID using safe method
             guard let prevIDBytes = dataCopy.readFixedBytes(at: &offset, count: 8) else { return nil }
-            previousPeerID = prevIDBytes.hexEncodedString()
+            let prevID = prevIDBytes.hexEncodedString()
+            guard InputValidator.validatePeerID(prevID) else { return nil }
+            previousPeerID = prevID
         }
         
-        guard let signature = dataCopy.readData(at: &offset) else { return nil }
+        guard let signature = dataCopy.readData(at: &offset),
+              InputValidator.validateSignature(signature) else { return nil }
         
         return NoiseIdentityAnnouncement(peerID: peerID,
                                         publicKey: publicKey,
