@@ -1283,8 +1283,14 @@ class ChatViewModel: ObservableObject {
         result.append(timestamp.mergingAttributes(timestampStyle))
         
         if message.sender != "system" {
-            // Sender - use display name (petname if available)
-            let displayName = message.senderPeerID != nil ? resolveNickname(for: message.senderPeerID!) : message.sender
+            // Sender - use display name (petname if available), but always use actual nickname for ourselves
+            let displayName = if message.sender == nickname {
+                nickname
+            } else if let senderPeerID = message.senderPeerID {
+                resolveNickname(for: senderPeerID)
+            } else {
+                message.sender
+            }
             let sender = AttributedString("<@\(displayName)> ")
             var senderStyle = AttributeContainer()
             
@@ -1408,8 +1414,14 @@ class ChatViewModel: ObservableObject {
             contentStyle.font = .system(size: 12, design: .monospaced).italic()
             result.append(content.mergingAttributes(contentStyle))
         } else {
-            // Sender - use display name (petname if available)
-            let displayName = message.senderPeerID != nil ? resolveNickname(for: message.senderPeerID!) : message.sender
+            // Sender - use display name (petname if available), but always use actual nickname for ourselves
+            let displayName = if message.sender == nickname {
+                nickname  
+            } else if let senderPeerID = message.senderPeerID {
+                resolveNickname(for: senderPeerID)
+            } else {
+                message.sender
+            }
             let sender = AttributedString("<\(displayName)> ")
             var senderStyle = AttributeContainer()
             
