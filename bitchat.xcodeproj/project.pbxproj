@@ -60,12 +60,10 @@
 		04F127FB2E37EEEE00FFBA8D /* FavoritesPersistenceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F127F62E37EEEE00FFBA8D /* FavoritesPersistenceService.swift */; };
 		04F127FE2E37EF3D00FFBA8D /* BitchatPeer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F127FC2E37EF3D00FFBA8D /* BitchatPeer.swift */; };
 		04F127FF2E37EF3D00FFBA8D /* BitchatPeer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F127FC2E37EF3D00FFBA8D /* BitchatPeer.swift */; };
-		04F128062E37F10000FFBA8D /* PeerSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F128072E37F10000FFBA8D /* PeerSession.swift */; };
-		04F128082E37F10000FFBA8D /* PeerSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F128072E37F10000FFBA8D /* PeerSession.swift */; };
-		04F128012E37FF4E00FFBA8D /* libsecp256k1 in Frameworks */ = {isa = PBXBuildFile; productRef = 04F128002E37FF4E00FFBA8D /* libsecp256k1 */; };
-		04F128032E37FFB900FFBA8D /* libsecp256k1 in Frameworks */ = {isa = PBXBuildFile; productRef = 04F128022E37FFB900FFBA8D /* libsecp256k1 */; };
 		04F128042E37F00000FFBA8D /* ProcessedMessagesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F127FF2E37F00000FFBA8D /* ProcessedMessagesService.swift */; };
 		04F128052E37F00000FFBA8D /* ProcessedMessagesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F127FF2E37F00000FFBA8D /* ProcessedMessagesService.swift */; };
+		04F128062E37F10000FFBA8D /* PeerSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F128072E37F10000FFBA8D /* PeerSession.swift */; };
+		04F128082E37F10000FFBA8D /* PeerSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F128072E37F10000FFBA8D /* PeerSession.swift */; };
 		0FBC81FF78CF4711B78E092A /* IdentityModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E2446380E7A44E49A35B664 /* IdentityModels.swift */; };
 		10E68BB889356219189E38EC /* BitchatApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF625BB3AD919322C01A46B2 /* BitchatApp.swift */; };
 		17901751FD8010AFC8E750F2 /* bitchatShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 61F92EBA29C47C0FCC482F1F /* bitchatShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -168,8 +166,8 @@
 		04F127F62E37EEEE00FFBA8D /* FavoritesPersistenceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoritesPersistenceService.swift; sourceTree = "<group>"; };
 		04F127F72E37EEEE00FFBA8D /* MessageRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageRouter.swift; sourceTree = "<group>"; };
 		04F127FC2E37EF3D00FFBA8D /* BitchatPeer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitchatPeer.swift; sourceTree = "<group>"; };
-		04F128072E37F10000FFBA8D /* PeerSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerSession.swift; sourceTree = "<group>"; };
 		04F127FF2E37F00000FFBA8D /* ProcessedMessagesService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessedMessagesService.swift; sourceTree = "<group>"; };
+		04F128072E37F10000FFBA8D /* PeerSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerSession.swift; sourceTree = "<group>"; };
 		12B9C3EDF3BC73D3BC106DA4 /* DeliveryTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeliveryTracker.swift; sourceTree = "<group>"; };
 		136696FC4436A02D98CE6A77 /* KeychainManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainManager.swift; sourceTree = "<group>"; };
 		229F17B68CFF7AB1BC91C847 /* BitchatProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitchatProtocol.swift; sourceTree = "<group>"; };
@@ -208,7 +206,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				04E363362E3800310048E624 /* P256K in Frameworks */,
-				04F128012E37FF4E00FFBA8D /* libsecp256k1 in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -217,7 +214,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				04E363372E3800310048E624 /* P256K in Frameworks */,
-				04F128032E37FFB900FFBA8D /* libsecp256k1 in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -465,7 +461,6 @@
 			name = bitchat_macOS;
 			packageProductDependencies = (
 				04F127E82E37EBDB00FFBA8D /* P256K */,
-				04F128022E37FFB900FFBA8D /* libsecp256k1 */,
 			);
 			productName = bitchat_macOS;
 			productReference = 8F3A7C058C2C8E1A06C8CF8B /* bitchat.app */;
@@ -541,7 +536,6 @@
 			name = bitchat_iOS;
 			packageProductDependencies = (
 				04F127E72E37EBCD00FFBA8D /* P256K */,
-				04F128002E37FF4E00FFBA8D /* libsecp256k1 */,
 			);
 			productName = bitchat_iOS;
 			productReference = 96D0D41CA19EE5A772AA8434 /* bitchat.app */;
@@ -1246,16 +1240,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 04F127E62E37EBCD00FFBA8D /* XCRemoteSwiftPackageReference "swift-secp256k1" */;
 			productName = P256K;
-		};
-		04F128002E37FF4E00FFBA8D /* libsecp256k1 */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 04F127E62E37EBCD00FFBA8D /* XCRemoteSwiftPackageReference "swift-secp256k1" */;
-			productName = libsecp256k1;
-		};
-		04F128022E37FFB900FFBA8D /* libsecp256k1 */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 04F127E62E37EBCD00FFBA8D /* XCRemoteSwiftPackageReference "swift-secp256k1" */;
-			productName = libsecp256k1;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
