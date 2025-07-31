@@ -332,6 +332,28 @@ class BluetoothMeshService: NSObject {
     private var versionCache: [String: CachedVersion] = [:]
     private let versionCacheDuration: TimeInterval = 24 * 60 * 60  // 24 hours
     
+    // MARK: - Protocol Message Deduplication
+    
+    private struct DedupKey: Hashable {
+        let peerID: String  // Use "broadcast" for broadcast messages
+        let messageType: MessageType
+        let contentHash: Int?  // Optional hash of content for messages that vary
+    }
+    
+    private struct DedupEntry {
+        let sentAt: Date
+        let expiresAt: Date
+    }
+    
+    private var protocolMessageDedup: [DedupKey: DedupEntry] = [:]
+    private let dedupDurations: [MessageType: TimeInterval] = [
+        .announce: 5.0,          // Suppress duplicate announces for 5 seconds
+        .versionHello: 10.0,     // Suppress version hellos for 10 seconds
+        .versionAck: 10.0,       // Suppress version acks for 10 seconds
+        .noiseIdentity: 5.0,     // Suppress noise identity for 5 seconds
+        .leave: 1.0              // Suppress leave messages for 1 second
+    ]
+    
     // MARK: - Write Queue for Disconnected Peripherals
     private struct QueuedWrite {
         let data: Data
@@ -1551,6 +1573,9 @@ class BluetoothMeshService: NSObject {
             // Clean up expired version cache
             self.cleanupExpiredVersionCache()
             
+            // Clean up expired dedup entries
+            self.cleanupExpiredDedupEntries()
+            
             // Clean up stale handshakes
             let stalePeerIDs = self.handshakeCoordinator.cleanupStaleHandshakes()
             if !stalePeerIDs.isEmpty {
@@ -1787,6 +1812,11 @@ class BluetoothMeshService: NSObject {
     func sendBroadcastAnnounce() {
         guard let vm = delegate as? ChatViewModel else { return }
         
+        // Check for duplicate suppression
+        let contentHash = vm.nickname.hashValue
+        if shouldSuppressProtocolMessage(to: "broadcast", type: .announce, contentHash: contentHash) {
+            return
+        }
         
         let announcePacket = BitchatPacket(
             type: MessageType.announce.rawValue,
@@ -1799,6 +1829,8 @@ class BluetoothMeshService: NSObject {
         let initialDelay = self.smartCollisionAvoidanceDelay(baseDelay: self.randomDelay())
         DispatchQueue.main.asyncAfter(deadline: .now() + initialDelay) { [weak self] in
             self?.broadcastPacket(announcePacket)
+            // Record that we sent this message
+            self?.recordProtocolMessageSent(to: "broadcast", type: .announce, contentHash: contentHash)
             
             // Don't automatically send identity announcement on startup
             // Let it happen naturally when peers connect
@@ -2165,6 +2197,11 @@ class BluetoothMeshService: NSObject {
     private func sendAnnouncementToPeer(_ peerID: String) {
         guard let vm = delegate as? ChatViewModel else { return }
         
+        // Check for duplicate suppression
+        let contentHash = vm.nickname.hashValue
+        if shouldSuppressProtocolMessage(to: peerID, type: .announce, contentHash: contentHash) {
+            return
+        }
         
         // Always send announce, don't check if already announced
         // This ensures peers get our nickname even if they reconnect
@@ -2188,6 +2225,9 @@ class BluetoothMeshService: NSObject {
             }
         } else {
         }
+        
+        // Record that we sent this message
+        recordProtocolMessageSent(to: peerID, type: .announce, contentHash: contentHash)
         
         // Update PeerSession
         collectionsQueue.sync(flags: .barrier) {
@@ -2461,6 +2501,54 @@ class BluetoothMeshService: NSObject {
         // Also clear negotiated version to force re-negotiation
         negotiatedVersions.removeValue(forKey: peerID)
         versionNegotiationState.removeValue(forKey: peerID)
+    }
+    
+    // MARK: - Protocol Message Deduplication
+    
+    // Check if a protocol message should be suppressed as duplicate
+    private func shouldSuppressProtocolMessage(to peerID: String, type: MessageType, contentHash: Int? = nil) -> Bool {
+        let key = DedupKey(peerID: peerID, messageType: type, contentHash: contentHash)
+        
+        // Check if we have a recent entry
+        if let entry = protocolMessageDedup[key], !isExpired(entry) {
+            let timeSince = Date().timeIntervalSince(entry.sentAt)
+            SecureLogger.log("🔄 Suppressing duplicate \(type) to \(peerID) (sent \(String(format: "%.1f", timeSince))s ago)", 
+                           category: SecureLogger.session, level: .debug)
+            return true
+        }
+        
+        return false
+    }
+    
+    // Record that a protocol message was sent
+    private func recordProtocolMessageSent(to peerID: String, type: MessageType, contentHash: Int? = nil) {
+        guard let duration = dedupDurations[type] else { return }
+        
+        let key = DedupKey(peerID: peerID, messageType: type, contentHash: contentHash)
+        let now = Date()
+        let entry = DedupEntry(sentAt: now, expiresAt: now.addingTimeInterval(duration))
+        
+        protocolMessageDedup[key] = entry
+    }
+    
+    // Check if a dedup entry is expired
+    private func isExpired(_ entry: DedupEntry) -> Bool {
+        return Date() > entry.expiresAt
+    }
+    
+    // Clean up expired dedup entries
+    private func cleanupExpiredDedupEntries() {
+        let expiredKeys = protocolMessageDedup.compactMap { (key, entry) in
+            isExpired(entry) ? key : nil
+        }
+        
+        if !expiredKeys.isEmpty {
+            for key in expiredKeys {
+                protocolMessageDedup.removeValue(forKey: key)
+            }
+            SecureLogger.log("🗑️ Cleaned up \(expiredKeys.count) expired dedup entries", 
+                           category: SecureLogger.session, level: .debug)
+        }
     }
     
     // Clean up stale peers that haven't been seen in a while
@@ -6553,6 +6641,11 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 }
                 return
             }
+            
+            // Check for duplicate version hello
+            if shouldSuppressProtocolMessage(to: peerID, type: .versionHello) {
+                return
+            }
         }
         
         let hello = VersionHello(
@@ -6576,14 +6669,26 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             // Send directly to specific peripheral
             if let data = packet.toBinaryData() {
                 writeToPeripheral(data, peripheral: peripheral, characteristic: characteristic, peerID: nil)
+                
+                // Record if we know the peer ID
+                if let peripheralID = peripheralID,
+                   let peerID = peerIDByPeripheralID[peripheralID] {
+                    recordProtocolMessageSent(to: peerID, type: .versionHello)
+                }
             }
         } else {
             // Broadcast to all
             broadcastPacket(packet)
+            recordProtocolMessageSent(to: "broadcast", type: .versionHello)
         }
     }
     
     private func sendVersionAck(_ ack: VersionAck, to peerID: String) {
+        // Check for duplicate suppression
+        if shouldSuppressProtocolMessage(to: peerID, type: .versionAck) {
+            return
+        }
+        
         let ackData = ack.toBinaryData()
         
         let packet = BitchatPacket(
@@ -6601,6 +6706,9 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             // Fall back to selective relay if direct delivery fails
             sendViaSelectiveRelay(packet, recipientPeerID: peerID)
         }
+        
+        // Record that we sent this message
+        recordProtocolMessageSent(to: peerID, type: .versionAck)
     }
     
     private func getPlatformString() -> String {
