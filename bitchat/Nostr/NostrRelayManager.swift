@@ -168,6 +168,11 @@ class NostrRelayManager: ObservableObject {
             return 
         }
         
+        // Skip if we already have a connection object
+        if connections[urlString] != nil {
+            return
+        }
+        
         // Attempting to connect to Nostr relay
         
         let session = URLSession(configuration: .default)
