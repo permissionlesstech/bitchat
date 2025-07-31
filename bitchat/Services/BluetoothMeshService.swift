@@ -2424,6 +2424,45 @@ class BluetoothMeshService: NSObject {
         DispatchQueue.main.async { [weak self] in
             self?.delegate?.didUpdatePeerList([])
         }
+        
+        // Restart services after a short delay to create new identity
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            self?.restartAfterPanic()
+        }
+    }
+    
+    private func restartAfterPanic() {
+        SecureLogger.log("Restarting mesh services after panic mode", category: SecureLogger.session, level: .info)
+        
+        // Regenerate peer ID with new identity
+        myPeerID = generateNewPeerID()
+        
+        // Reset identity tracking since we have a new identity
+        peerIDToFingerprint.removeAll()
+        fingerprintToPeerID.removeAll()
+        peerIdentityBindings.removeAll()
+        
+        // Reset rotation tracking
+        rotationTimestamp = nil
+        rotationLocked = false
+        
+        // Restart advertising if peripheral is powered on
+        if peripheralManager?.state == .poweredOn {
+            setupPeripheral()
+            startAdvertising()
+            
+            // Send announce after restart with new identity
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.sendBroadcastAnnounce()
+            }
+        }
+        
+        // Restart scanning if central is powered on
+        if centralManager?.state == .poweredOn {
+            startScanning()
+        }
+        
+        SecureLogger.log("Mesh services restarted with new peer ID: \(myPeerID)", category: SecureLogger.session, level: .info)
     }
     
     private func getAllConnectedPeerIDs() -> [String] {
