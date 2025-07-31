@@ -1031,13 +1031,9 @@ struct ContentView: View {
                                 viewModel.endPrivateChat()
                             }
                         }) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "chevron.left")
-                                    .font(.system(size: 12))
-                                Text("back")
-                                    .font(.system(size: 14, design: .monospaced))
-                            }
-                            .foregroundColor(textColor)
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 12))
+                                .foregroundColor(textColor)
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel("Back to main chat")
