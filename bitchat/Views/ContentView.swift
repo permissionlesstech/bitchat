@@ -239,7 +239,7 @@ struct ContentView: View {
     private func messagesView(privatePeer: String?) -> some View {
         ScrollViewReader { proxy in
             ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
+                LazyVStack(alignment: .leading, spacing: 0) {
                     // Extract messages based on context (private or public chat)
                     let messages: [BitchatMessage] = {
                         if let privatePeer = privatePeer {
