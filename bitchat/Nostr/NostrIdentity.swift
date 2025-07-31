@@ -165,6 +165,14 @@ enum Bech32 {
         }
         
         let hrp = String(bech32String[..<separatorIndex])
+        
+        // Validate HRP contains only ASCII characters
+        for char in hrp {
+            guard char.asciiValue != nil else {
+                throw Bech32Error.invalidCharacter
+            }
+        }
+        
         let dataString = String(bech32String[bech32String.index(after: separatorIndex)...])
         
         // Convert characters to values
@@ -238,11 +246,17 @@ enum Bech32 {
     private static func hrpExpand(_ hrp: String) -> [UInt8] {
         var result = [UInt8]()
         for c in hrp {
-            result.append(UInt8(c.asciiValue! >> 5))
+            guard let asciiValue = c.asciiValue else {
+                return [] // Return empty array for invalid input
+            }
+            result.append(UInt8(asciiValue >> 5))
         }
         result.append(0)
         for c in hrp {
-            result.append(UInt8(c.asciiValue! & 31))
+            guard let asciiValue = c.asciiValue else {
+                return [] // Return empty array for invalid input
+            }
+            result.append(UInt8(asciiValue & 31))
         }
         return result
     }

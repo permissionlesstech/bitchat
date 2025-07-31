@@ -149,6 +149,10 @@ class NoiseCipherState {
         self.useExtractedNonce = useExtractedNonce
     }
     
+    deinit {
+        clearSensitiveData()
+    }
+    
     func initializeKey(_ key: SymmetricKey) {
         self.key = key
         self.nonce = 0
@@ -357,6 +361,21 @@ class NoiseCipherState {
             throw error
         }
     }
+    
+    /// Securely clear sensitive cryptographic data from memory
+    func clearSensitiveData() {
+        // Clear the symmetric key
+        key = nil
+        
+        // Reset nonce
+        nonce = 0
+        highestReceivedNonce = 0
+        
+        // Clear replay window
+        for i in 0..<replayWindow.count {
+            replayWindow[i] = 0
+        }
+    }
 }
 
 // MARK: - Symmetric State
@@ -557,7 +576,10 @@ class NoiseHandshakeState {
                     throw NoiseError.missingKeys
                 }
                 let shared = try localEphemeral.sharedSecretFromKeyAgreement(with: remoteEphemeral)
-                symmetricState.mixKey(shared.withUnsafeBytes { Data($0) })
+                var sharedData = shared.withUnsafeBytes { Data($0) }
+                symmetricState.mixKey(sharedData)
+                // Clear sensitive shared secret
+                KeychainManager.secureClear(&sharedData)
                 
             case .es:
                 // DH(ephemeral, static) - direction depends on role
@@ -602,7 +624,10 @@ class NoiseHandshakeState {
                     throw NoiseError.missingKeys
                 }
                 let shared = try localStatic.sharedSecretFromKeyAgreement(with: remoteStatic)
-                symmetricState.mixKey(shared.withUnsafeBytes { Data($0) })
+                var sharedData = shared.withUnsafeBytes { Data($0) }
+                symmetricState.mixKey(sharedData)
+                // Clear sensitive shared secret
+                KeychainManager.secureClear(&sharedData)
             }
         }
         
@@ -687,14 +712,20 @@ class NoiseHandshakeState {
                     throw NoiseError.missingKeys
                 }
                 let shared = try localEphemeral.sharedSecretFromKeyAgreement(with: remoteStatic)
-                symmetricState.mixKey(shared.withUnsafeBytes { Data($0) })
+                var sharedData = shared.withUnsafeBytes { Data($0) }
+                symmetricState.mixKey(sharedData)
+                // Clear sensitive shared secret
+                KeychainManager.secureClear(&sharedData)
             } else {
                 guard let localStatic = localStaticPrivate,
                       let remoteEphemeral = remoteEphemeralPublic else {
                     throw NoiseError.missingKeys
                 }
                 let shared = try localStatic.sharedSecretFromKeyAgreement(with: remoteEphemeral)
-                symmetricState.mixKey(shared.withUnsafeBytes { Data($0) })
+                var sharedData = shared.withUnsafeBytes { Data($0) }
+                symmetricState.mixKey(sharedData)
+                // Clear sensitive shared secret
+                KeychainManager.secureClear(&sharedData)
             }
             
         case .se:
@@ -704,14 +735,20 @@ class NoiseHandshakeState {
                     throw NoiseError.missingKeys
                 }
                 let shared = try localStatic.sharedSecretFromKeyAgreement(with: remoteEphemeral)
-                symmetricState.mixKey(shared.withUnsafeBytes { Data($0) })
+                var sharedData = shared.withUnsafeBytes { Data($0) }
+                symmetricState.mixKey(sharedData)
+                // Clear sensitive shared secret
+                KeychainManager.secureClear(&sharedData)
             } else {
                 guard let localEphemeral = localEphemeralPrivate,
                       let remoteStatic = remoteStaticPublic else {
                     throw NoiseError.missingKeys
                 }
                 let shared = try localEphemeral.sharedSecretFromKeyAgreement(with: remoteStatic)
-                symmetricState.mixKey(shared.withUnsafeBytes { Data($0) })
+                var sharedData = shared.withUnsafeBytes { Data($0) }
+                symmetricState.mixKey(sharedData)
+                // Clear sensitive shared secret
+                KeychainManager.secureClear(&sharedData)
             }
             
         case .ss:

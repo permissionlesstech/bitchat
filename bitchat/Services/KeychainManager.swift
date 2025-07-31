@@ -88,10 +88,29 @@ class KeychainManager {
     
     private func isSandboxed() -> Bool {
         #if os(macOS)
+        // More robust sandbox detection using multiple methods
+        
+        // Method 1: Check environment variable (can be spoofed)
         let environment = ProcessInfo.processInfo.environment
-        return environment["APP_SANDBOX_CONTAINER_ID"] != nil
+        let hasEnvVar = environment["APP_SANDBOX_CONTAINER_ID"] != nil
+        
+        // Method 2: Check if we can access a path outside sandbox
+        let homeDir = FileManager.default.homeDirectoryForCurrentUser
+        let testPath = homeDir.appendingPathComponent("../../../tmp/bitchat_sandbox_test_\(UUID().uuidString)")
+        let canWriteOutsideSandbox = FileManager.default.createFile(atPath: testPath.path, contents: nil, attributes: nil)
+        if canWriteOutsideSandbox {
+            try? FileManager.default.removeItem(at: testPath)
+        }
+        
+        // Method 3: Check container path
+        let containerPath = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first?.path ?? ""
+        let hasContainerPath = containerPath.contains("/Containers/")
+        
+        // If any method indicates sandbox, we consider it sandboxed
+        return hasEnvVar || !canWriteOutsideSandbox || hasContainerPath
         #else
-        return false
+        // iOS is always sandboxed
+        return true
         #endif
     }
     
@@ -139,10 +158,9 @@ class KeychainManager {
         // Add a label for easier debugging
         query[kSecAttrLabel as String] = "bitchat-\(key)"
         
-        // For sandboxed apps, use the app group for sharing between app instances
-        if isSandboxed() {
-            query[kSecAttrAccessGroup as String] = appGroup
-        }
+        // Always use app group when available for consistent behavior
+        // This ensures keychain items are properly isolated to our app
+        query[kSecAttrAccessGroup as String] = appGroup
         
         // For sandboxed macOS apps, we need to ensure the item is NOT synchronized
         #if os(macOS)
@@ -176,10 +194,8 @@ class KeychainManager {
             kSecMatchLimit as String: kSecMatchLimitOne
         ]
         
-        // For sandboxed apps, use the app group
-        if isSandboxed() {
-            query[kSecAttrAccessGroup as String] = appGroup
-        }
+        // Always use app group for consistent behavior
+        query[kSecAttrAccessGroup as String] = appGroup
         
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
@@ -201,10 +217,8 @@ class KeychainManager {
             kSecAttrService as String: service
         ]
         
-        // For sandboxed apps, use the app group
-        if isSandboxed() {
-            query[kSecAttrAccessGroup as String] = appGroup
-        }
+        // Always use app group for consistent behavior
+        query[kSecAttrAccessGroup as String] = appGroup
         
         let status = SecItemDelete(query as CFDictionary)
         return status == errSecSuccess || status == errSecItemNotFound
@@ -253,10 +267,25 @@ class KeychainManager {
                 var shouldDelete = false
                 let account = item[kSecAttrAccount as String] as? String ?? ""
                 let service = item[kSecAttrService as String] as? String ?? ""
+                let accessGroup = item[kSecAttrAccessGroup as String] as? String
                 
-                // ONLY delete if service name contains "bitchat"
-                // This is the safest approach - we only touch items we know are ours
-                if service.lowercased().contains("bitchat") {
+                // More precise deletion criteria:
+                // 1. Check for our specific app group
+                // 2. OR check for our exact service name
+                // 3. OR check for known legacy service names
+                if accessGroup == appGroup {
+                    shouldDelete = true
+                } else if service == self.service {
+                    shouldDelete = true
+                } else if [
+                    "com.bitchat.passwords",
+                    "com.bitchat.deviceidentity",
+                    "com.bitchat.noise.identity",
+                    "chat.bitchat.passwords",
+                    "bitchat.keychain",
+                    "bitchat",
+                    "com.bitchat"
+                ].contains(service) {
                     shouldDelete = true
                 }
                 
@@ -288,9 +317,10 @@ class KeychainManager {
             }
         }
         
-        // Also try to delete by known service names (in case we missed any)
+        // Also try to delete by known service names and app group
+        // This catches any items that might have been missed above
         let knownServices = [
-            "chat.bitchat",
+            self.service,  // Current service name
             "com.bitchat.passwords",
             "com.bitchat.deviceidentity", 
             "com.bitchat.noise.identity",
@@ -312,9 +342,40 @@ class KeychainManager {
             }
         }
         
+        // Also delete by app group to ensure complete cleanup
+        let groupQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccessGroup as String: appGroup
+        ]
+        
+        let groupStatus = SecItemDelete(groupQuery as CFDictionary)
+        if groupStatus == errSecSuccess {
+            totalDeleted += 1
+        }
+        
         SecureLogger.log("Panic mode cleanup completed. Total items deleted: \(totalDeleted)", category: SecureLogger.keychain, level: .warning)
         
         return totalDeleted > 0
+    }
+    
+    // MARK: - Security Utilities
+    
+    /// Securely clear sensitive data from memory
+    static func secureClear(_ data: inout Data) {
+        _ = data.withUnsafeMutableBytes { bytes in
+            // Use volatile memset to prevent compiler optimization
+            memset_s(bytes.baseAddress, bytes.count, 0, bytes.count)
+        }
+        data = Data() // Clear the data object
+    }
+    
+    /// Securely clear sensitive string from memory
+    static func secureClear(_ string: inout String) {
+        // Convert to mutable data and clear
+        if var data = string.data(using: .utf8) {
+            secureClear(&data)
+        }
+        string = "" // Clear the string object
     }
     
     // MARK: - Debug
