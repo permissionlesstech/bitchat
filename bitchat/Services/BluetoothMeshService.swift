@@ -319,6 +319,19 @@ class BluetoothMeshService: NSObject {
     private var versionNegotiationState: [String: VersionNegotiationState] = [:]
     private var negotiatedVersions: [String: UInt8] = [:]  // peerID -> agreed version
     
+    // Version cache for optimistic negotiation skip
+    private struct CachedVersion {
+        let version: UInt8
+        let cachedAt: Date
+        let expiresAt: Date
+        
+        var isExpired: Bool {
+            return Date() > expiresAt
+        }
+    }
+    private var versionCache: [String: CachedVersion] = [:]
+    private let versionCacheDuration: TimeInterval = 24 * 60 * 60  // 24 hours
+    
     // MARK: - Write Queue for Disconnected Peripherals
     private struct QueuedWrite {
         let data: Data
@@ -1535,6 +1548,9 @@ class BluetoothMeshService: NSObject {
         Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { [weak self] _ in
             guard let self = self else { return }
             
+            // Clean up expired version cache
+            self.cleanupExpiredVersionCache()
+            
             // Clean up stale handshakes
             let stalePeerIDs = self.handshakeCoordinator.cleanupStaleHandshakes()
             if !stalePeerIDs.isEmpty {
@@ -2419,6 +2435,32 @@ class BluetoothMeshService: NSObject {
                 }
             }
         }
+    }
+    
+    // Clean up expired version cache entries
+    private func cleanupExpiredVersionCache() {
+        let expiredPeers = versionCache.compactMap { (peerID, cached) in
+            cached.isExpired ? peerID : nil
+        }
+        
+        if !expiredPeers.isEmpty {
+            for peerID in expiredPeers {
+                versionCache.removeValue(forKey: peerID)
+            }
+            SecureLogger.log("🗑️ Cleaned up \(expiredPeers.count) expired version cache entries", 
+                           category: SecureLogger.session, level: .debug)
+        }
+    }
+    
+    // Invalidate cached version for a peer (used on protocol errors)
+    private func invalidateVersionCache(for peerID: String) {
+        if versionCache.removeValue(forKey: peerID) != nil {
+            SecureLogger.log("❌ Invalidated cached version for \(peerID) due to protocol error", 
+                           category: SecureLogger.session, level: .warning)
+        }
+        // Also clear negotiated version to force re-negotiation
+        negotiatedVersions.removeValue(forKey: peerID)
+        versionNegotiationState.removeValue(forKey: peerID)
     }
     
     // Clean up stale peers that haven't been seen in a while
@@ -3954,6 +3996,8 @@ class BluetoothMeshService: NSObject {
                 
                 guard let announcement = announcement else {
                     SecureLogger.log("Failed to decode NoiseIdentityAnnouncement from \(senderID), size: \(payloadCopy.count)", category: SecureLogger.noise, level: .error)
+                    // Invalidate version cache as this might be a protocol mismatch
+                    invalidateVersionCache(for: senderID)
                     return
                 }
                 
@@ -4908,7 +4952,9 @@ extension BluetoothMeshService: CBPeripheralDelegate {
                 peripheral.maximumWriteValueLength(for: .withoutResponse)
                 
                 // Start version negotiation instead of immediately sending Noise identity
-                self.sendVersionHello(to: peripheral)
+                // Pass the peripheral ID so we can check cache by peer ID if available
+                let peripheralID = peripheral.identifier.uuidString
+                self.sendVersionHello(to: peripheral, peripheralID: peripheralID)
                 
                 // Send announce packet after version negotiation completes
                 if let vm = self.delegate as? ChatViewModel {
@@ -6368,6 +6414,16 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             negotiatedVersions[peerID] = agreedVersion
             versionNegotiationState[peerID] = .ackReceived(version: agreedVersion)
             
+            // Cache the negotiated version for future connections
+            let now = Date()
+            versionCache[peerID] = CachedVersion(
+                version: agreedVersion,
+                cachedAt: now,
+                expiresAt: now.addingTimeInterval(versionCacheDuration)
+            )
+            SecureLogger.log("📘 Cached version \(agreedVersion) for \(peerID)", 
+                           category: SecureLogger.session, level: .debug)
+            
             let ack = VersionAck(
                 agreedVersion: agreedVersion,
                 serverVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0",
@@ -6460,13 +6516,45 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             negotiatedVersions[peerID] = ack.agreedVersion
             versionNegotiationState[peerID] = .ackReceived(version: ack.agreedVersion)
             
+            // Cache the negotiated version for future connections
+            let now = Date()
+            versionCache[peerID] = CachedVersion(
+                version: ack.agreedVersion,
+                cachedAt: now,
+                expiresAt: now.addingTimeInterval(versionCacheDuration)
+            )
+            SecureLogger.log("📘 Cached version \(ack.agreedVersion) for \(peerID)", 
+                           category: SecureLogger.session, level: .debug)
+            
             // If we were the initiator (sent hello first), proceed with Noise handshake
             // Note: Since we're handling their ACK, they initiated, so we should not initiate again
             // The peer who sent hello will initiate the Noise handshake
         }
     }
     
-    private func sendVersionHello(to peripheral: CBPeripheral? = nil) {
+    private func sendVersionHello(to peripheral: CBPeripheral? = nil, peripheralID: String? = nil) {
+        // Check if we have the peer ID for this peripheral
+        if let peripheralID = peripheralID,
+           let peerID = peerIDByPeripheralID[peripheralID] {
+            // Check version cache for this peer
+            if let cached = versionCache[peerID], !cached.isExpired {
+                // Skip negotiation - use cached version
+                SecureLogger.log("📗 Using cached version \(cached.version) for \(peerID) (cached \(Int(Date().timeIntervalSince(cached.cachedAt)))s ago)", 
+                               category: SecureLogger.session, level: .info)
+                
+                negotiatedVersions[peerID] = cached.version
+                versionNegotiationState[peerID] = .ackReceived(version: cached.version)
+                
+                // Proceed directly to Noise handshake
+                if let peripheral = peripheral {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                        self?.initiateNoiseHandshake(with: peerID)
+                    }
+                }
+                return
+            }
+        }
+        
         let hello = VersionHello(
             clientVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0",
             platform: getPlatformString()
@@ -6576,6 +6664,11 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         
         SecureLogger.log("Received protocol NACK from \(peerID) for packet \(nack.originalPacketID): \(nack.reason)", 
                        category: SecureLogger.session, level: .warning)
+        
+        // Invalidate version cache on protocol NACK as it might indicate version mismatch
+        if nack.reason.lowercased().contains("version") || nack.reason.lowercased().contains("protocol") {
+            invalidateVersionCache(for: peerID)
+        }
         
         // Remove from pending ACKs
         _ = collectionsQueue.sync(flags: .barrier) {
