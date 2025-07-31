@@ -6546,7 +6546,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 versionNegotiationState[peerID] = .ackReceived(version: cached.version)
                 
                 // Proceed directly to Noise handshake
-                if let peripheral = peripheral {
+                if peripheral != nil {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
                         self?.initiateNoiseHandshake(with: peerID)
                     }
