@@ -347,11 +347,11 @@ class BluetoothMeshService: NSObject {
     
     private var protocolMessageDedup: [DedupKey: DedupEntry] = [:]
     private let dedupDurations: [MessageType: TimeInterval] = [
-        .announce: 5.0,          // Suppress duplicate announces for 5 seconds
-        .versionHello: 10.0,     // Suppress version hellos for 10 seconds
-        .versionAck: 10.0,       // Suppress version acks for 10 seconds
-        .noiseIdentity: 5.0,     // Suppress noise identity for 5 seconds
-        .leave: 1.0              // Suppress leave messages for 1 second
+        .announce: 5.0,               // Suppress duplicate announces for 5 seconds
+        .versionHello: 10.0,          // Suppress version hellos for 10 seconds
+        .versionAck: 10.0,            // Suppress version acks for 10 seconds
+        .noiseIdentityAnnounce: 5.0,  // Suppress noise identity announcements for 5 seconds
+        .leave: 1.0                   // Suppress leave messages for 1 second
     ]
     
     // MARK: - Write Queue for Disconnected Peripherals
