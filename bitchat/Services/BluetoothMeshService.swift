@@ -336,7 +336,9 @@ class BluetoothMeshService: NSObject {
     private var writeQueueTimer: Timer?  // Timer for processing expired writes
     
     // MARK: - Connection Pooling
-    private let maxConnectedPeripherals = 10  // Limit simultaneous connections
+    private var maxConnectedPeripherals: Int {
+        calculateDynamicConnectionLimit()
+    }
     private let maxScanningDuration: TimeInterval = 5.0  // Stop scanning after 5 seconds to save battery
     
     func getNoiseService() -> NoiseEncryptionService {
@@ -736,6 +738,38 @@ class BluetoothMeshService: NSObject {
             let activePeerCount = peerSessions.values.filter { $0.isActivePeer }.count
             return max(activePeerCount, connectedPeripherals.count)
         }
+    }
+    
+    // Dynamic connection limit calculation based on network size and battery mode
+    private func calculateDynamicConnectionLimit() -> Int {
+        let powerMode = batteryOptimizer.currentPowerMode
+        let baseLimit = powerMode.maxConnections
+        let nearbyPeers = estimatedNetworkSize
+        
+        // For small groups, try to maintain full mesh connectivity
+        if nearbyPeers > 0 && nearbyPeers < 10 {
+            // Override battery limits for small groups to prevent thrashing
+            let dynamicLimit = max(baseLimit, nearbyPeers + 1)
+            if dynamicLimit != baseLimit {
+                SecureLogger.log("🔄 Dynamic connection limit: \(dynamicLimit) (base: \(baseLimit), peers: \(nearbyPeers)) - maintaining full mesh", 
+                               category: SecureLogger.session, level: .info)
+            }
+            return dynamicLimit
+        }
+        
+        // For larger groups, scale up the limit but cap it reasonably
+        let groupMultiplier = min(2.0, 1.0 + (Double(nearbyPeers) / 10.0))
+        let scaledLimit = Int(Double(baseLimit) * groupMultiplier)
+        
+        // Cap at a reasonable maximum to prevent resource exhaustion
+        let finalLimit = min(scaledLimit, 30)
+        
+        if finalLimit != baseLimit {
+            SecureLogger.log("🔄 Dynamic connection limit: \(finalLimit) (base: \(baseLimit), peers: \(nearbyPeers), multiplier: \(String(format: "%.2f", groupMultiplier)))", 
+                           category: SecureLogger.session, level: .info)
+        }
+        
+        return finalLimit
     }
     
     // Adaptive parameters based on network size
@@ -5097,12 +5131,12 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         activeScanDuration = params.duration
         scanPauseDuration = params.pause
         
-        // Update max connections
-        let maxConnections = powerMode.maxConnections
+        // Update max connections using dynamic calculation
+        let dynamicMaxConnections = calculateDynamicConnectionLimit()
         
         // If we have too many connections, disconnect from the least important ones
-        if connectedPeripherals.count > maxConnections {
-            disconnectLeastImportantPeripherals(keepCount: maxConnections)
+        if connectedPeripherals.count > dynamicMaxConnections {
+            disconnectLeastImportantPeripherals(keepCount: dynamicMaxConnections)
         }
         
         // Update message aggregation window
