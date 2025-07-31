@@ -319,6 +319,41 @@ class BluetoothMeshService: NSObject {
     private var versionNegotiationState: [String: VersionNegotiationState] = [:]
     private var negotiatedVersions: [String: UInt8] = [:]  // peerID -> agreed version
     
+    // Version cache for optimistic negotiation skip
+    private struct CachedVersion {
+        let version: UInt8
+        let cachedAt: Date
+        let expiresAt: Date
+        
+        var isExpired: Bool {
+            return Date() > expiresAt
+        }
+    }
+    private var versionCache: [String: CachedVersion] = [:]
+    private let versionCacheDuration: TimeInterval = 24 * 60 * 60  // 24 hours
+    
+    // MARK: - Protocol Message Deduplication
+    
+    private struct DedupKey: Hashable {
+        let peerID: String  // Use "broadcast" for broadcast messages
+        let messageType: MessageType
+        let contentHash: Int?  // Optional hash of content for messages that vary
+    }
+    
+    private struct DedupEntry {
+        let sentAt: Date
+        let expiresAt: Date
+    }
+    
+    private var protocolMessageDedup: [DedupKey: DedupEntry] = [:]
+    private let dedupDurations: [MessageType: TimeInterval] = [
+        .announce: 5.0,               // Suppress duplicate announces for 5 seconds
+        .versionHello: 10.0,          // Suppress version hellos for 10 seconds
+        .versionAck: 10.0,            // Suppress version acks for 10 seconds
+        .noiseIdentityAnnounce: 5.0,  // Suppress noise identity announcements for 5 seconds
+        .leave: 1.0                   // Suppress leave messages for 1 second
+    ]
+    
     // MARK: - Write Queue for Disconnected Peripherals
     private struct QueuedWrite {
         let data: Data
@@ -336,7 +371,9 @@ class BluetoothMeshService: NSObject {
     private var writeQueueTimer: Timer?  // Timer for processing expired writes
     
     // MARK: - Connection Pooling
-    private let maxConnectedPeripherals = 10  // Limit simultaneous connections
+    private var maxConnectedPeripherals: Int {
+        calculateDynamicConnectionLimit()
+    }
     private let maxScanningDuration: TimeInterval = 5.0  // Stop scanning after 5 seconds to save battery
     
     func getNoiseService() -> NoiseEncryptionService {
@@ -736,6 +773,38 @@ class BluetoothMeshService: NSObject {
             let activePeerCount = peerSessions.values.filter { $0.isActivePeer }.count
             return max(activePeerCount, connectedPeripherals.count)
         }
+    }
+    
+    // Dynamic connection limit calculation based on network size and battery mode
+    private func calculateDynamicConnectionLimit() -> Int {
+        let powerMode = batteryOptimizer.currentPowerMode
+        let baseLimit = powerMode.maxConnections
+        let nearbyPeers = estimatedNetworkSize
+        
+        // For small groups, try to maintain full mesh connectivity
+        if nearbyPeers > 0 && nearbyPeers < 10 {
+            // Override battery limits for small groups to prevent thrashing
+            let dynamicLimit = max(baseLimit, nearbyPeers + 1)
+            if dynamicLimit != baseLimit {
+                SecureLogger.log("🔄 Dynamic connection limit: \(dynamicLimit) (base: \(baseLimit), peers: \(nearbyPeers)) - maintaining full mesh", 
+                               category: SecureLogger.session, level: .info)
+            }
+            return dynamicLimit
+        }
+        
+        // For larger groups, scale up the limit but cap it reasonably
+        let groupMultiplier = min(2.0, 1.0 + (Double(nearbyPeers) / 10.0))
+        let scaledLimit = Int(Double(baseLimit) * groupMultiplier)
+        
+        // Cap at a reasonable maximum to prevent resource exhaustion
+        let finalLimit = min(scaledLimit, 30)
+        
+        if finalLimit != baseLimit {
+            SecureLogger.log("🔄 Dynamic connection limit: \(finalLimit) (base: \(baseLimit), peers: \(nearbyPeers), multiplier: \(String(format: "%.2f", groupMultiplier)))", 
+                           category: SecureLogger.session, level: .info)
+        }
+        
+        return finalLimit
     }
     
     // Adaptive parameters based on network size
@@ -1501,6 +1570,12 @@ class BluetoothMeshService: NSObject {
         Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { [weak self] _ in
             guard let self = self else { return }
             
+            // Clean up expired version cache
+            self.cleanupExpiredVersionCache()
+            
+            // Clean up expired dedup entries
+            self.cleanupExpiredDedupEntries()
+            
             // Clean up stale handshakes
             let stalePeerIDs = self.handshakeCoordinator.cleanupStaleHandshakes()
             if !stalePeerIDs.isEmpty {
@@ -1737,6 +1812,11 @@ class BluetoothMeshService: NSObject {
     func sendBroadcastAnnounce() {
         guard let vm = delegate as? ChatViewModel else { return }
         
+        // Check for duplicate suppression
+        let contentHash = vm.nickname.hashValue
+        if shouldSuppressProtocolMessage(to: "broadcast", type: .announce, contentHash: contentHash) {
+            return
+        }
         
         let announcePacket = BitchatPacket(
             type: MessageType.announce.rawValue,
@@ -1749,6 +1829,8 @@ class BluetoothMeshService: NSObject {
         let initialDelay = self.smartCollisionAvoidanceDelay(baseDelay: self.randomDelay())
         DispatchQueue.main.asyncAfter(deadline: .now() + initialDelay) { [weak self] in
             self?.broadcastPacket(announcePacket)
+            // Record that we sent this message
+            self?.recordProtocolMessageSent(to: "broadcast", type: .announce, contentHash: contentHash)
             
             // Don't automatically send identity announcement on startup
             // Let it happen naturally when peers connect
@@ -2115,6 +2197,11 @@ class BluetoothMeshService: NSObject {
     private func sendAnnouncementToPeer(_ peerID: String) {
         guard let vm = delegate as? ChatViewModel else { return }
         
+        // Check for duplicate suppression
+        let contentHash = vm.nickname.hashValue
+        if shouldSuppressProtocolMessage(to: peerID, type: .announce, contentHash: contentHash) {
+            return
+        }
         
         // Always send announce, don't check if already announced
         // This ensures peers get our nickname even if they reconnect
@@ -2138,6 +2225,9 @@ class BluetoothMeshService: NSObject {
             }
         } else {
         }
+        
+        // Record that we sent this message
+        recordProtocolMessageSent(to: peerID, type: .announce, contentHash: contentHash)
         
         // Update PeerSession
         collectionsQueue.sync(flags: .barrier) {
@@ -2384,6 +2474,80 @@ class BluetoothMeshService: NSObject {
                     self.delegate?.didUpdatePeerList(connectedPeerIDs)
                 }
             }
+        }
+    }
+    
+    // Clean up expired version cache entries
+    private func cleanupExpiredVersionCache() {
+        let expiredPeers = versionCache.compactMap { (peerID, cached) in
+            cached.isExpired ? peerID : nil
+        }
+        
+        if !expiredPeers.isEmpty {
+            for peerID in expiredPeers {
+                versionCache.removeValue(forKey: peerID)
+            }
+            SecureLogger.log("🗑️ Cleaned up \(expiredPeers.count) expired version cache entries", 
+                           category: SecureLogger.session, level: .debug)
+        }
+    }
+    
+    // Invalidate cached version for a peer (used on protocol errors)
+    private func invalidateVersionCache(for peerID: String) {
+        if versionCache.removeValue(forKey: peerID) != nil {
+            SecureLogger.log("❌ Invalidated cached version for \(peerID) due to protocol error", 
+                           category: SecureLogger.session, level: .warning)
+        }
+        // Also clear negotiated version to force re-negotiation
+        negotiatedVersions.removeValue(forKey: peerID)
+        versionNegotiationState.removeValue(forKey: peerID)
+    }
+    
+    // MARK: - Protocol Message Deduplication
+    
+    // Check if a protocol message should be suppressed as duplicate
+    private func shouldSuppressProtocolMessage(to peerID: String, type: MessageType, contentHash: Int? = nil) -> Bool {
+        let key = DedupKey(peerID: peerID, messageType: type, contentHash: contentHash)
+        
+        // Check if we have a recent entry
+        if let entry = protocolMessageDedup[key], !isExpired(entry) {
+            let timeSince = Date().timeIntervalSince(entry.sentAt)
+            SecureLogger.log("🔄 Suppressing duplicate \(type) to \(peerID) (sent \(String(format: "%.1f", timeSince))s ago)", 
+                           category: SecureLogger.session, level: .debug)
+            return true
+        }
+        
+        return false
+    }
+    
+    // Record that a protocol message was sent
+    private func recordProtocolMessageSent(to peerID: String, type: MessageType, contentHash: Int? = nil) {
+        guard let duration = dedupDurations[type] else { return }
+        
+        let key = DedupKey(peerID: peerID, messageType: type, contentHash: contentHash)
+        let now = Date()
+        let entry = DedupEntry(sentAt: now, expiresAt: now.addingTimeInterval(duration))
+        
+        protocolMessageDedup[key] = entry
+    }
+    
+    // Check if a dedup entry is expired
+    private func isExpired(_ entry: DedupEntry) -> Bool {
+        return Date() > entry.expiresAt
+    }
+    
+    // Clean up expired dedup entries
+    private func cleanupExpiredDedupEntries() {
+        let expiredKeys = protocolMessageDedup.compactMap { (key, entry) in
+            isExpired(entry) ? key : nil
+        }
+        
+        if !expiredKeys.isEmpty {
+            for key in expiredKeys {
+                protocolMessageDedup.removeValue(forKey: key)
+            }
+            SecureLogger.log("🗑️ Cleaned up \(expiredKeys.count) expired dedup entries", 
+                           category: SecureLogger.session, level: .debug)
         }
     }
     
@@ -3920,6 +4084,8 @@ class BluetoothMeshService: NSObject {
                 
                 guard let announcement = announcement else {
                     SecureLogger.log("Failed to decode NoiseIdentityAnnouncement from \(senderID), size: \(payloadCopy.count)", category: SecureLogger.noise, level: .error)
+                    // Invalidate version cache as this might be a protocol mismatch
+                    invalidateVersionCache(for: senderID)
                     return
                 }
                 
@@ -4874,7 +5040,9 @@ extension BluetoothMeshService: CBPeripheralDelegate {
                 peripheral.maximumWriteValueLength(for: .withoutResponse)
                 
                 // Start version negotiation instead of immediately sending Noise identity
-                self.sendVersionHello(to: peripheral)
+                // Pass the peripheral ID so we can check cache by peer ID if available
+                let peripheralID = peripheral.identifier.uuidString
+                self.sendVersionHello(to: peripheral, peripheralID: peripheralID)
                 
                 // Send announce packet after version negotiation completes
                 if let vm = self.delegate as? ChatViewModel {
@@ -5097,12 +5265,12 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         activeScanDuration = params.duration
         scanPauseDuration = params.pause
         
-        // Update max connections
-        let maxConnections = powerMode.maxConnections
+        // Update max connections using dynamic calculation
+        let dynamicMaxConnections = calculateDynamicConnectionLimit()
         
         // If we have too many connections, disconnect from the least important ones
-        if connectedPeripherals.count > maxConnections {
-            disconnectLeastImportantPeripherals(keepCount: maxConnections)
+        if connectedPeripherals.count > dynamicMaxConnections {
+            disconnectLeastImportantPeripherals(keepCount: dynamicMaxConnections)
         }
         
         // Update message aggregation window
@@ -6334,6 +6502,16 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             negotiatedVersions[peerID] = agreedVersion
             versionNegotiationState[peerID] = .ackReceived(version: agreedVersion)
             
+            // Cache the negotiated version for future connections
+            let now = Date()
+            versionCache[peerID] = CachedVersion(
+                version: agreedVersion,
+                cachedAt: now,
+                expiresAt: now.addingTimeInterval(versionCacheDuration)
+            )
+            SecureLogger.log("📘 Cached version \(agreedVersion) for \(peerID)", 
+                           category: SecureLogger.session, level: .debug)
+            
             let ack = VersionAck(
                 agreedVersion: agreedVersion,
                 serverVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0",
@@ -6426,13 +6604,50 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             negotiatedVersions[peerID] = ack.agreedVersion
             versionNegotiationState[peerID] = .ackReceived(version: ack.agreedVersion)
             
+            // Cache the negotiated version for future connections
+            let now = Date()
+            versionCache[peerID] = CachedVersion(
+                version: ack.agreedVersion,
+                cachedAt: now,
+                expiresAt: now.addingTimeInterval(versionCacheDuration)
+            )
+            SecureLogger.log("📘 Cached version \(ack.agreedVersion) for \(peerID)", 
+                           category: SecureLogger.session, level: .debug)
+            
             // If we were the initiator (sent hello first), proceed with Noise handshake
             // Note: Since we're handling their ACK, they initiated, so we should not initiate again
             // The peer who sent hello will initiate the Noise handshake
         }
     }
     
-    private func sendVersionHello(to peripheral: CBPeripheral? = nil) {
+    private func sendVersionHello(to peripheral: CBPeripheral? = nil, peripheralID: String? = nil) {
+        // Check if we have the peer ID for this peripheral
+        if let peripheralID = peripheralID,
+           let peerID = peerIDByPeripheralID[peripheralID] {
+            // Check version cache for this peer
+            if let cached = versionCache[peerID], !cached.isExpired {
+                // Skip negotiation - use cached version
+                SecureLogger.log("📗 Using cached version \(cached.version) for \(peerID) (cached \(Int(Date().timeIntervalSince(cached.cachedAt)))s ago)", 
+                               category: SecureLogger.session, level: .info)
+                
+                negotiatedVersions[peerID] = cached.version
+                versionNegotiationState[peerID] = .ackReceived(version: cached.version)
+                
+                // Proceed directly to Noise handshake
+                if peripheral != nil {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                        self?.initiateNoiseHandshake(with: peerID)
+                    }
+                }
+                return
+            }
+            
+            // Check for duplicate version hello
+            if shouldSuppressProtocolMessage(to: peerID, type: .versionHello) {
+                return
+            }
+        }
+        
         let hello = VersionHello(
             clientVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0",
             platform: getPlatformString()
@@ -6454,14 +6669,26 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             // Send directly to specific peripheral
             if let data = packet.toBinaryData() {
                 writeToPeripheral(data, peripheral: peripheral, characteristic: characteristic, peerID: nil)
+                
+                // Record if we know the peer ID
+                if let peripheralID = peripheralID,
+                   let peerID = peerIDByPeripheralID[peripheralID] {
+                    recordProtocolMessageSent(to: peerID, type: .versionHello)
+                }
             }
         } else {
             // Broadcast to all
             broadcastPacket(packet)
+            recordProtocolMessageSent(to: "broadcast", type: .versionHello)
         }
     }
     
     private func sendVersionAck(_ ack: VersionAck, to peerID: String) {
+        // Check for duplicate suppression
+        if shouldSuppressProtocolMessage(to: peerID, type: .versionAck) {
+            return
+        }
+        
         let ackData = ack.toBinaryData()
         
         let packet = BitchatPacket(
@@ -6479,6 +6706,9 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             // Fall back to selective relay if direct delivery fails
             sendViaSelectiveRelay(packet, recipientPeerID: peerID)
         }
+        
+        // Record that we sent this message
+        recordProtocolMessageSent(to: peerID, type: .versionAck)
     }
     
     private func getPlatformString() -> String {
@@ -6542,6 +6772,11 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         
         SecureLogger.log("Received protocol NACK from \(peerID) for packet \(nack.originalPacketID): \(nack.reason)", 
                        category: SecureLogger.session, level: .warning)
+        
+        // Invalidate version cache on protocol NACK as it might indicate version mismatch
+        if nack.reason.lowercased().contains("version") || nack.reason.lowercased().contains("protocol") {
+            invalidateVersionCache(for: peerID)
+        }
         
         // Remove from pending ACKs
         _ = collectionsQueue.sync(flags: .barrier) {
