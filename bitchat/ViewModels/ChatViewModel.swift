@@ -642,9 +642,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 selectedPrivateChatPeer = currentPeerID
                 
                 // Schedule UI update for encryption status change
-                DispatchQueue.main.async { [weak self] in
-                    self?.scheduleUIUpdate()
-                }
+                scheduleUIUpdate()
                 
                 // Also refresh the peer list to update encryption status
                 Task { @MainActor in
@@ -653,9 +651,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             } else if selectedPrivateChatPeer == nil {
                 // Just set the peer ID if we don't have one
                 selectedPrivateChatPeer = currentPeerID
-                DispatchQueue.main.async { [weak self] in
-                    self?.scheduleUIUpdate()
-                }
+                scheduleUIUpdate()
             }
             
             // Clear unread messages for the current peer ID
@@ -1986,9 +1982,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         invalidateEncryptionCache(for: peerID)
         
         // Schedule UI update
-        DispatchQueue.main.async { [weak self] in
-            self?.scheduleUIUpdate()
-        }
+        scheduleUIUpdate()
     }
     
     func getEncryptionStatus(for peerID: String) -> EncryptionStatus {
@@ -2181,16 +2175,23 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     
     // Schedule a debounced UI update
     private func scheduleUIUpdate() {
-        guard !pendingUIUpdate else { return } // Already scheduled
-        
-        pendingUIUpdate = true
-        
-        // Cancel existing timer
-        uiUpdateTimer?.invalidate()
-        
-        // Schedule new update
-        uiUpdateTimer = Timer.scheduledTimer(withTimeInterval: uiUpdateInterval, repeats: false) { [weak self] _ in
-            self?.flushUIUpdate()
+        // Ensure timer operations happen on main thread
+        if Thread.isMainThread {
+            guard !pendingUIUpdate else { return } // Already scheduled
+            
+            pendingUIUpdate = true
+            
+            // Cancel existing timer
+            uiUpdateTimer?.invalidate()
+            
+            // Schedule new update
+            uiUpdateTimer = Timer.scheduledTimer(withTimeInterval: uiUpdateInterval, repeats: false) { [weak self] _ in
+                self?.flushUIUpdate()
+            }
+        } else {
+            DispatchQueue.main.async { [weak self] in
+                self?.scheduleUIUpdate()
+            }
         }
     }
     
@@ -2236,9 +2237,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         invalidateEncryptionCache(for: peerID)
         
         // Schedule UI update
-        DispatchQueue.main.async { [weak self] in
-            self?.scheduleUIUpdate()
-        }
+        scheduleUIUpdate()
     }
     
     // MARK: - Fingerprint Management

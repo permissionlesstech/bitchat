@@ -765,6 +765,17 @@ class BluetoothMeshService: NSObject {
     private var messageBloomFilter = OptimizedBloomFilter(expectedItems: 2000, falsePositiveRate: 0.01)
     private var bloomFilterResetTimer: Timer?
     
+    // MARK: - Consolidated Timers
+    
+    // Consolidated timers for better performance
+    private var highFrequencyTimer: Timer?    // 2s - critical real-time tasks
+    private var mediumFrequencyTimer: Timer?  // 20s - regular maintenance 
+    private var lowFrequencyTimer: Timer?     // 5min - cleanup and optimization
+    
+    // Track execution counters for tasks that don't run every timer tick
+    private var mediumTimerTickCount = 0
+    private var lowTimerTickCount = 0
+    
     // MARK: - Network Size Estimation
     
     // Network size estimation
@@ -1493,7 +1504,10 @@ class BluetoothMeshService: NSObject {
         // Setup app state notifications
         setupAppStateNotifications()
         
-        // Start bloom filter reset timer (reset every 5 minutes)
+        // Setup consolidated timers for better performance
+        setupConsolidatedTimers()
+        
+        /* OLD TIMER SETUP - REPLACED BY CONSOLIDATED TIMERS
         bloomFilterResetTimer = Timer.scheduledTimer(withTimeInterval: 300.0, repeats: true) { [weak self] _ in
             self?.messageQueue.async(flags: .barrier) {
                 guard let self = self else { return }
@@ -1591,6 +1605,7 @@ class BluetoothMeshService: NSObject {
             self.handshakeCoordinator.logHandshakeStates()
             #endif
         }
+        END OF OLD TIMER SETUP */
         
         // Schedule first peer ID rotation
         scheduleNextRotation()
@@ -1652,6 +1667,13 @@ class BluetoothMeshService: NSObject {
     
     deinit {
         cleanup()
+        
+        // Invalidate consolidated timers
+        highFrequencyTimer?.invalidate()
+        mediumFrequencyTimer?.invalidate()
+        lowFrequencyTimer?.invalidate()
+        
+        // Invalidate other timers
         scanDutyCycleTimer?.invalidate()
         batteryMonitorTimer?.invalidate()
         coverTrafficTimer?.invalidate()
@@ -1804,6 +1826,101 @@ class BluetoothMeshService: NSObject {
         if coverTrafficEnabled {
             SecureLogger.log("Cover traffic enabled", category: SecureLogger.security, level: .info)
             startCoverTraffic()
+        }
+    }
+    
+    // MARK: - Consolidated Timer Management
+    
+    private func setupConsolidatedTimers() {
+        // High-frequency timer (2s) - critical real-time tasks
+        highFrequencyTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            
+            // Critical real-time tasks that need frequent checking
+            self.cleanupUnknownPeers()
+            self.checkAckTimeouts()
+        }
+        
+        // Medium-frequency timer (20s) - regular maintenance
+        mediumFrequencyTimer = Timer.scheduledTimer(withTimeInterval: 20.0, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            self.mediumTimerTickCount += 1
+            
+            // Every 20s: Connection keep-alive
+            self.sendKeepAlivePings()
+            
+            // Every 20s: Peer availability check
+            self.checkPeerAvailability()
+            
+            // Every 40s (every 2 ticks): Stale peer cleanup & write queue cleanup
+            if self.mediumTimerTickCount % 2 == 0 {
+                self.cleanupStalePeers()
+                self.cleanExpiredWriteQueues()
+            }
+        }
+        
+        // Low-frequency timer (5min) - cleanup and optimization
+        lowFrequencyTimer = Timer.scheduledTimer(withTimeInterval: 300.0, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            self.lowTimerTickCount += 1
+            
+            // Every 5min: Bloom filter reset and processed message cleanup
+            self.messageQueue.async(flags: .barrier) { [weak self] in
+                guard let self = self else { return }
+                
+                // Adapt Bloom filter size based on network size
+                let networkSize = self.estimatedNetworkSize
+                self.messageBloomFilter = OptimizedBloomFilter.adaptive(for: networkSize)
+                
+                // Clean up old processed messages (keep last 10 minutes of messages)
+                self.processedMessagesLock.lock()
+                let cutoffTime = Date().addingTimeInterval(-600) // 10 minutes ago
+                let originalCount = self.processedMessages.count
+                self.processedMessages = self.processedMessages.filter { _, state in
+                    state.firstSeen > cutoffTime
+                }
+                
+                // Also enforce max size limit during cleanup
+                if self.processedMessages.count > self.maxProcessedMessages {
+                    let targetSize = Int(Double(self.maxProcessedMessages) * 0.8)
+                    let sortedByFirstSeen = self.processedMessages.sorted { $0.value.firstSeen < $1.value.firstSeen }
+                    let toKeep = Array(sortedByFirstSeen.suffix(targetSize))
+                    self.processedMessages = Dictionary(uniqueKeysWithValues: toKeep)
+                }
+                
+                let removedCount = originalCount - self.processedMessages.count
+                self.processedMessagesLock.unlock()
+                
+                if removedCount > 0 {
+                    SecureLogger.log("🧹 Cleaned up \(removedCount) old processed messages (kept \(self.processedMessages.count) from last 10 minutes)", 
+                                    category: SecureLogger.session, level: .debug)
+                }
+            }
+            
+            // Every 5min: Memory cleanup
+            self.performMemoryCleanup()
+            
+            // Every 10min (every 2 ticks): Version cache and dedup cleanup
+            if self.lowTimerTickCount % 2 == 0 {
+                self.cleanupExpiredVersionCache()
+                self.cleanupExpiredDedupEntries()
+                
+                // Clean up stale handshakes
+                let stalePeerIDs = self.handshakeCoordinator.cleanupStaleHandshakes()
+                if !stalePeerIDs.isEmpty {
+                    for peerID in stalePeerIDs {
+                        // Also remove from noise service
+                        self.cleanupPeerCryptoState(peerID)
+                        SecureLogger.log("Cleaned up stale handshake for peer: \(peerID)", 
+                                       category: SecureLogger.handshake, level: .info)
+                    }
+                }
+            }
+            
+            // Every 60min (every 12 ticks): Identity cache cleanup
+            if self.lowTimerTickCount % 12 == 0 {
+                self.cleanExpiredIdentityCache()
+            }
         }
     }
     
