@@ -22,9 +22,6 @@ final class NostrProtocolTests: XCTestCase {
         let sender = try NostrIdentity.generate()
         let recipient = try NostrIdentity.generate()
         
-        print("Sender pubkey: \(sender.publicKeyHex)")
-        print("Recipient pubkey: \(recipient.publicKeyHex)")
-        
         // Create a test message
         let originalContent = "Hello from NIP-17 test!"
         
@@ -34,9 +31,6 @@ final class NostrProtocolTests: XCTestCase {
             recipientPubkey: recipient.publicKeyHex,
             senderIdentity: sender
         )
-        
-        print("Gift wrap created with ID: \(giftWrap.id)")
-        print("Gift wrap pubkey: \(giftWrap.pubkey)")
         
         // Decrypt the gift wrap
         let (decryptedContent, senderPubkey) = try NostrProtocol.decryptPrivateMessage(
@@ -48,7 +42,6 @@ final class NostrProtocolTests: XCTestCase {
         XCTAssertEqual(decryptedContent, originalContent)
         XCTAssertEqual(senderPubkey, sender.publicKeyHex)
         
-        print("✅ Successfully decrypted message: '\(decryptedContent)' from \(senderPubkey)")
     }
     
     func testGiftWrapUsesUniqueEphemeralKeys() throws {
@@ -71,8 +64,6 @@ final class NostrProtocolTests: XCTestCase {
         
         // Gift wrap pubkeys should be different (unique ephemeral keys)
         XCTAssertNotEqual(message1.pubkey, message2.pubkey)
-        print("Message 1 gift wrap pubkey: \(message1.pubkey)")
-        print("Message 2 gift wrap pubkey: \(message2.pubkey)")
         
         // Both should decrypt successfully
         let (content1, _) = try NostrProtocol.decryptPrivateMessage(
@@ -104,8 +95,6 @@ final class NostrProtocolTests: XCTestCase {
         XCTAssertThrowsError(try NostrProtocol.decryptPrivateMessage(
             giftWrap: giftWrap,
             recipientIdentity: wrongRecipient
-        )) { error in
-            print("Expected error when decrypting with wrong key: \(error)")
-        }
+        ))
     }
 }
