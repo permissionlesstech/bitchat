@@ -524,6 +524,59 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         
         return false
     }
+
+        // MARK: - Petname Management
+
+    func setPetname(peerID: String, petname: String?) {
+        // First try to get fingerprint from mesh service (supports peer ID rotation)
+        var fingerprint: String? = meshService.getFingerprint(for: peerID)
+
+        // Fallback to local mapping if not found in mesh service
+        if fingerprint == nil {
+            fingerprint = peerIDToPublicKeyFingerprint[peerID]
+        }
+
+        guard let fp = fingerprint else {
+            return
+        }
+
+        // Get existing social identity or create new one
+        var identity = SecureIdentityStateManager.shared.getSocialIdentity(for: fp) ?? SocialIdentity(
+            fingerprint: fp,
+            localPetname: nil,
+            claimedNickname: meshService.getPeerNicknames()[peerID] ?? "Unknown",
+            trustLevel: .unknown,
+            isFavorite: false,
+            isBlocked: false,
+            notes: nil
+        )
+
+        // Update petname
+        identity.localPetname = petname?.isEmpty == true ? nil : petname
+
+        // Save the updated identity
+        SecureIdentityStateManager.shared.updateSocialIdentity(identity)
+    }
+
+    func getPetname(peerID: String) -> String? {
+        // First try to get fingerprint from mesh service (supports peer ID rotation)
+        var fingerprint: String? = meshService.getFingerprint(for: peerID)
+
+        // Fallback to local mapping if not found in mesh service
+        if fingerprint == nil {
+            fingerprint = peerIDToPublicKeyFingerprint[peerID]
+        }
+
+        guard let fp = fingerprint else {
+            return nil
+        }
+
+        return SecureIdentityStateManager.shared.getSocialIdentity(for: fp)?.localPetname
+    }
+
+    func clearPetname(peerID: String) {
+        setPetname(peerID: peerID, petname: nil)
+    }
     
     // MARK: - Public Key and Identity Management
     
@@ -1781,8 +1834,15 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         result.append(timestamp.mergingAttributes(timestampStyle))
         
         if message.sender != "system" {
-            // Sender
-            let sender = AttributedString("<@\(message.sender)> ")
+            // Sender - use display name (petname if available), but always use actual nickname for ourselves
+            let displayName = if message.sender == nickname {
+                nickname
+            } else if let senderPeerID = message.senderPeerID {
+                resolveNickname(for: senderPeerID)
+            } else {
+                message.sender
+            }
+            let sender = AttributedString("<@\(displayName)> ")
             var senderStyle = AttributeContainer()
             
             // Use consistent color for all senders
@@ -1905,7 +1965,15 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             contentStyle.font = .system(size: 12, design: .monospaced).italic()
             result.append(content.mergingAttributes(contentStyle))
         } else {
-            let sender = AttributedString("<\(message.sender)> ")
+            // Sender - use display name (petname if available), but always use actual nickname for ourselves
+            let displayName = if message.sender == nickname {
+                nickname  
+            } else if let senderPeerID = message.senderPeerID {
+                resolveNickname(for: senderPeerID)
+            } else {
+                message.sender
+            }
+            let sender = AttributedString("<\(displayName)> ")
             var senderStyle = AttributeContainer()
             
             // Use consistent color for all senders
@@ -2203,35 +2271,29 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     
     // Helper to resolve nickname for a peer ID through various sources
     func resolveNickname(for peerID: String) -> String {
-        // Guard against empty or very short peer IDs
+        // Guard against empty peer ID
         guard !peerID.isEmpty else {
             return "unknown"
         }
         
-        // Check if this might already be a nickname (not a hex peer ID)
-        // Peer IDs are hex strings, so they only contain 0-9 and a-f
-        let isHexID = peerID.allSatisfy { $0.isHexDigit }
-        if !isHexID {
-            // If it's already a nickname, just return it
-            return peerID
+        // PRIORITY 1: Check for user-assigned petname (via fingerprint)
+        if let fingerprint = getFingerprint(for: peerID),
+           let identity = SecureIdentityStateManager.shared.getSocialIdentity(for: fingerprint),
+           let petname = identity.localPetname, !petname.isEmpty {
+            return petname
         }
         
-        // First try direct peer nicknames from mesh service
+        // PRIORITY 2: Use claimed nickname from mesh service
         let peerNicknames = meshService.getPeerNicknames()
-        if let nickname = peerNicknames[peerID] {
-            return nickname
+        if let claimedNickname = peerNicknames[peerID], !claimedNickname.isEmpty {
+            return claimedNickname
         }
         
-        // Try to resolve through fingerprint and social identity
-        if let fingerprint = getFingerprint(for: peerID) {
-            if let identity = SecureIdentityStateManager.shared.getSocialIdentity(for: fingerprint) {
-                // Prefer local petname if set
-                if let petname = identity.localPetname {
-                    return petname
-                }
-                // Otherwise use their claimed nickname
-                return identity.claimedNickname
-            }
+        // PRIORITY 3: Try claimed nickname from social identity (stored via fingerprint)
+        if let fingerprint = getFingerprint(for: peerID),
+           let identity = SecureIdentityStateManager.shared.getSocialIdentity(for: fingerprint),
+           !identity.claimedNickname.isEmpty {
+            return identity.claimedNickname
         }
         
         // Fallback to anonymous with shortened peer ID

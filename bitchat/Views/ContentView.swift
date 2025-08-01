@@ -17,6 +17,8 @@ import UIKit
 struct PeerDisplayData: Identifiable {
     let id: String
     let displayName: String
+    let petname: String?
+    let claimedNickname: String
     let isFavorite: Bool
     let isMe: Bool
     let hasUnreadMessages: Bool
@@ -77,6 +79,9 @@ struct ContentView: View {
     @State private var lastScrollTime: Date = .distantPast
     @State private var scrollThrottleTimer: Timer?
     @State private var autocompleteDebounceTimer: Timer?
+    @State private var editingPetnameForPeer: String? = nil
+    @State private var petnameEditText: String = ""
+    @FocusState private var isPetnameFieldFocused: Bool
     
     // MARK: - Computed Properties
     
@@ -241,6 +246,12 @@ struct ContentView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(viewModel.bluetoothAlertMessage)
+        .onChange(of: isPetnameFieldFocused) { isFocused in
+            if !isFocused && editingPetnameForPeer != nil {
+                // Cancel petname editing when focus is lost
+                editingPetnameForPeer = nil
+                petnameEditText = ""
+            }
         }
         .onDisappear {
             // Clean up timers
@@ -641,9 +652,14 @@ struct ContentView: View {
                             let peerData = viewModel.allPeers.map { peer in
                                 // Get current myPeerID for each peer to avoid stale values
                                 let currentMyPeerID = viewModel.meshService.myPeerID
+                                let petname = viewModel.getPetname(peerID: peer.id)
+                                let claimedNickname = peerNicknames[peer.id] ?? "anon\(peer.id.prefix(4))"
+                                let displayName = peer.id == currentMyPeerID ? viewModel.nickname : (petname ?? claimedNickname)
                                 return PeerDisplayData(
                                     id: peer.id,
-                                    displayName: peer.id == currentMyPeerID ? viewModel.nickname : peer.nickname,
+                                    displayName: displayName,
+                                    petname: petname,
+                                    claimedNickname: claimedNickname,
                                     isFavorite: peer.favoriteStatus?.isFavorite ?? false,
                                     isMe: peer.id == currentMyPeerID,
                                     hasUnreadMessages: viewModel.unreadPrivateMessages.contains(peer.id),
@@ -720,39 +736,101 @@ struct ContentView: View {
                                         Spacer()
                                     }
                                 } else {
-                                    Text(peer.displayName)
-                                        .font(.system(size: 14, design: .monospaced))
-                                        .foregroundColor(peer.isFavorite || peerNicknames[peer.id] != nil ? textColor : secondaryTextColor)
-                                    
-                                    // Encryption status icon (after peer name)
-                                    if let icon = peer.encryptionStatus.icon {
-                                        Image(systemName: icon)
-                                            .font(.system(size: 10))
-                                            .foregroundColor(peer.encryptionStatus == .noiseVerified ? textColor : 
-                                                           peer.encryptionStatus == .noiseSecured ? textColor :
-                                                           peer.encryptionStatus == .noiseHandshaking ? Color.orange :
-                                                           Color.red)
-                                            .accessibilityLabel("Encryption: \(peer.encryptionStatus == .noiseVerified ? "verified" : peer.encryptionStatus == .noiseSecured ? "secured" : peer.encryptionStatus == .noiseHandshaking ? "establishing" : "none")")
+                                    // Show either petname editing field or display name
+                                    if editingPetnameForPeer == peer.id {
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            TextField("petname", text: $petnameEditText)
+                                                .textFieldStyle(.plain)
+                                                .font(.system(size: 14, design: .monospaced))
+                                                .foregroundColor(textColor)
+                                                .focused($isPetnameFieldFocused)
+                                                .autocorrectionDisabled(true)
+                                                #if os(iOS)
+                                                .textInputAutocapitalization(.never)
+                                                #endif
+                                                .onSubmit {
+                                                    viewModel.setPetname(peerID: peer.id, petname: petnameEditText.isEmpty ? nil : petnameEditText)
+                                                    editingPetnameForPeer = nil
+                                                    petnameEditText = ""
+                                                }
+                                                .onAppear {
+                                                    isPetnameFieldFocused = true
+                                                }
+
+                                            Text("claimed: \(peer.claimedNickname)")
+                                                .font(.system(size: 10, design: .monospaced))
+                                                .foregroundColor(secondaryTextColor.opacity(0.6))
+                                        }
+                                    } else {
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            HStack(spacing: 4) {
+                                                Text(peer.displayName)
+                                                    .font(.system(size: 14, design: .monospaced))
+                                                    .foregroundColor(peer.petname != nil ? textColor : secondaryTextColor)
+
+                                                // Visual indicator for petname vs claimed nickname
+                                                if peer.petname != nil {
+                                                    Image(systemName: "person.badge.plus")
+                                                        .font(.system(size: 8))
+                                                        .foregroundColor(Color.blue.opacity(0.7))
+                                                        .accessibilityLabel("Petname assigned")
+                                                }
+
+                                                // Encryption status icon
+                                                if let icon = peer.encryptionStatus.icon {
+                                                    Image(systemName: icon)
+                                                        .font(.system(size: 10))
+                                                        .foregroundColor(peer.encryptionStatus == .noiseVerified ? Color.green : 
+                                                                       peer.encryptionStatus == .noiseSecured ? textColor :
+                                                                       peer.encryptionStatus == .noiseHandshaking ? Color.orange :
+                                                                       Color.red)
+                                                        .accessibilityLabel("Encryption: \(peer.encryptionStatus == .noiseVerified ? "verified" : peer.encryptionStatus == .noiseSecured ? "secured" : peer.encryptionStatus == .noiseHandshaking ? "establishing" : "none")")
+                                                }
+
+                                                Spacer()
+
+                                                // Favorite star
+                                                Button(action: {
+                                                    viewModel.toggleFavorite(peerID: peer.id)
+                                                }) {
+                                                    Image(systemName: peer.isFavorite ? "star.fill" : "star")
+                                                        .font(.system(size: 12))
+                                                        .foregroundColor(peer.isFavorite ? Color.yellow : secondaryTextColor)
+                                                }
+                                                .buttonStyle(.plain)
+                                                .accessibilityLabel(peer.isFavorite ? "Remove \(peer.displayName) from favorites" : "Add \(peer.displayName) to favorites")
+                                            }
+
+                                            // Show claimed nickname if petname is set
+                                            if peer.petname != nil && peer.petname != peer.claimedNickname {
+                                                Text("(\(peer.claimedNickname))")
+                                                    .font(.system(size: 10, design: .monospaced))
+                                                    .foregroundColor(secondaryTextColor.opacity(0.6))
+                                            }
+                                        }
+                                        .onLongPressGesture {
+                                            // Long press to edit petname
+                                            editingPetnameForPeer = peer.id
+                                            petnameEditText = peer.petname ?? ""
+                                        }
                                     }
-                                    
-                                    Spacer()
-                                    
-                                    // Favorite star
-                                    Button(action: {
-                                        viewModel.toggleFavorite(peerID: peer.id)
-                                    }) {
-                                        Image(systemName: peer.isFavorite ? "star.fill" : "star")
-                                            .font(.system(size: 12))
-                                            .foregroundColor(peer.isFavorite ? Color.yellow : secondaryTextColor)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .accessibilityLabel(peer.isFavorite ? "Remove \(peer.displayName) from favorites" : "Add \(peer.displayName) to favorites")
                                 }
                             }
                             .padding(.horizontal)
                             .padding(.vertical, 4)
                             .contentShape(Rectangle())
                             .onTapGesture {
+                                // If editing petname for this peer, don't do anything
+                                if editingPetnameForPeer == peer.id {
+                                    return
+                                }
+                                // If editing petname for another peer, cancel it
+                                if editingPetnameForPeer != nil {
+                                    editingPetnameForPeer = nil
+                                    petnameEditText = ""
+                                    return
+                                }
+                                // Normal tap behavior - start private chat
                                 if !peer.isMe {
                                     // Allow tapping on any peer (connected or offline favorite)
                                     viewModel.startPrivateChat(with: peer.id)
@@ -955,12 +1033,7 @@ struct ContentView: View {
         let currentPeerID: String = privatePeerID
         
         let peer = viewModel.getPeer(byID: currentPeerID)
-        let privatePeerNick = peer?.displayName ?? 
-                              viewModel.meshService.getPeerNicknames()[currentPeerID] ?? 
-                              FavoritesPersistenceService.shared.getFavoriteStatus(for: Data(hexString: privatePeerID) ?? Data())?.peerNickname ?? 
-                              // getFavoriteStatusByNostrKey not implemented
-                              // FavoritesPersistenceService.shared.getFavoriteStatusByNostrKey(privatePeerID)?.peerNickname ?? 
-                              "Unknown"
+        let privatePeerNick = viewModel.resolveNickname(for: currentPeerID)
         let isNostrAvailable: Bool = {
             guard let connectionState = peer?.connectionState else { 
                 // Check if we can reach this peer via Nostr even if not in allPeers
