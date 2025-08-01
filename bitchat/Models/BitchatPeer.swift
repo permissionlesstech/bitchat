@@ -143,6 +143,7 @@ class PeerManager: ObservableObject {
         // Build peer list
         var allPeers: [BitchatPeer] = []
         var connectedNicknames: Set<String> = []
+        var addedPeerIDs: Set<String> = []
         
         // Add connected mesh peers (only if actually connected or relay connected)
         for (peerID, nickname) in meshPeers {
@@ -179,6 +180,9 @@ class PeerManager: ObservableObject {
             if isConnected || isRelayConnected {
                 connectedNicknames.insert(nickname)
             }
+            
+            // Track that we've added this peer ID
+            addedPeerIDs.insert(peerID)
             
             var peer = BitchatPeer(
                 id: peerID,
@@ -221,6 +225,13 @@ class PeerManager: ObservableObject {
                 continue
             }
             
+            // Skip if we already added a peer with this ID (prevents duplicates)
+            if addedPeerIDs.contains(favoriteID) {
+                SecureLogger.log("  - Skipping '\(favorite.peerNickname)' - peer ID already added", 
+                                category: SecureLogger.session, level: .debug)
+                continue
+            }
+            
             // Only add peers that WE favorite (not just ones who favorite us)
             if !favorite.isFavorite {
                 SecureLogger.log("  - Skipping '\(favorite.peerNickname)' - we don't favorite them (they favorite us: \(favorite.theyFavoritedUs))", 
@@ -241,6 +252,7 @@ class PeerManager: ObservableObject {
             // Set favorite status
             peer.favoriteStatus = favorite
             peer.nostrPublicKey = favorite.peerNostrPublicKey
+            addedPeerIDs.insert(favoriteID)  // Track that we've added this ID
             allPeers.append(peer)
         }
         
@@ -287,7 +299,20 @@ class PeerManager: ObservableObject {
             }
         }
         
-        self.peers = allPeers
+        // Final safety check: ensure no duplicate IDs
+        var finalPeers: [BitchatPeer] = []
+        var seenIDs: Set<String> = []
+        for peer in allPeers {
+            if !seenIDs.contains(peer.id) {
+                seenIDs.insert(peer.id)
+                finalPeers.append(peer)
+            } else {
+                SecureLogger.log("⚠️ Removing duplicate peer ID in final check: \(peer.id) (\(peer.displayName))", 
+                               category: SecureLogger.session, level: .warning)
+            }
+        }
+        
+        self.peers = finalPeers
         self.favorites = favorites
         self.mutualFavorites = mutualFavorites
         
