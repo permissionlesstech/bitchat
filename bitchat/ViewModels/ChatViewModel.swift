@@ -194,55 +194,66 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         MessageRetryService.shared.meshService = meshService
         
         // Initialize Nostr services
-        Task { @MainActor in
-            nostrRelayManager = NostrRelayManager.shared
-            nostrRelayManager?.connect()
-            
-            messageRouter = MessageRouter(
-                meshService: meshService,
-                nostrRelay: nostrRelayManager!
-            )
-            
-            // Initialize peer manager
-            peerManager = PeerManager(meshService: meshService)
-            peerManager?.updatePeers()
-            
-            // Bind peer manager's peer list to our published property
-            peerManager?.$peers
-                .receive(on: DispatchQueue.main)
-                .sink { [weak self] peers in
-                    SecureLogger.log("📱 UI: Received \(peers.count) peers from PeerManager", 
-                                    category: SecureLogger.session, level: .info)
-                    for peer in peers {
-                        SecureLogger.log("  - \(peer.displayName): connected=\(peer.isConnected), state=\(peer.connectionState)", 
-                                        category: SecureLogger.session, level: .debug)
-                    }
-                    // Update peers directly
-                    self?.allPeers = peers
-                    // Update peer index for O(1) lookups
-                    // Deduplicate peers by ID to prevent crash from duplicate keys
-                    var uniquePeers: [String: PeerData] = [:]
-                    for peer in peers {
-                        // Keep the first occurrence of each peer ID
-                        if uniquePeers[peer.id] == nil {
-                            uniquePeers[peer.id] = peer
-                        } else {
-                            SecureLogger.log("⚠️ Duplicate peer ID detected: \(peer.id) (\(peer.displayName))", 
-                                           category: SecureLogger.session, level: .warning)
-                        }
-                    }
-                    self?.peerIndex = uniquePeers
-                    // Schedule UI update if peers changed
-                    if peers.count > 0 || self?.allPeers.count ?? 0 > 0 {
-                        // UI will update automatically
-                    }
+        Task { [weak self] in
+            await MainActor.run {
+                self?.nostrRelayManager = NostrRelayManager.shared
+                self?.nostrRelayManager?.connect()
+                
+                if let meshService = self?.meshService,
+                   let nostrRelayManager = self?.nostrRelayManager {
+                    self?.messageRouter = MessageRouter(
+                        meshService: meshService,
+                        nostrRelay: nostrRelayManager
+                    )
+                }
+                
+                // Initialize peer manager
+                if let meshService = self?.meshService {
+                    self?.peerManager = PeerManager(meshService: meshService)
+                    self?.peerManager?.updatePeers()
                     
-                    // Update private chat peer ID if needed when peers change
-                    if self?.selectedPrivateChatFingerprint != nil {
-                        self?.updatePrivateChatPeerIfNeeded()
+                    // Bind peer manager's peer list to our published property  
+                    if let peerManager = self?.peerManager,
+                       var cancellables = self?.cancellables {
+                        peerManager.$peers
+                            .receive(on: DispatchQueue.main)
+                            .sink { [weak self] peers in
+                                SecureLogger.log("📱 UI: Received \(peers.count) peers from PeerManager", 
+                                                category: SecureLogger.session, level: .info)
+                                for peer in peers {
+                                    SecureLogger.log("  - \(peer.displayName): connected=\(peer.isConnected), state=\(peer.connectionState)", 
+                                                    category: SecureLogger.session, level: .debug)
+                                }
+                                // Update peers directly
+                                self?.allPeers = peers
+                                // Update peer index for O(1) lookups
+                                // Deduplicate peers by ID to prevent crash from duplicate keys
+                                var uniquePeers: [String: BitchatPeer] = [:]
+                                for peer in peers {
+                                    // Keep the first occurrence of each peer ID
+                                    if uniquePeers[peer.id] == nil {
+                                        uniquePeers[peer.id] = peer
+                                    } else {
+                                        SecureLogger.log("⚠️ Duplicate peer ID detected: \(peer.id) (\(peer.displayName))", 
+                                                       category: SecureLogger.session, level: .warning)
+                                    }
+                                }
+                                self?.peerIndex = uniquePeers
+                                // Schedule UI update if peers changed
+                                if peers.count > 0 || self?.allPeers.count ?? 0 > 0 {
+                                    // UI will update automatically
+                                }
+                                
+                                // Update private chat peer ID if needed when peers change
+                                if self?.selectedPrivateChatFingerprint != nil {
+                                    self?.updatePrivateChatPeerIfNeeded()
+                                }
+                            }
+                            .store(in: &cancellables)
+                        self?.cancellables = cancellables
                     }
                 }
-                .store(in: &cancellables)
+            }
         }
         
         // Set up Noise encryption callbacks
