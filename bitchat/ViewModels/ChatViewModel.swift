@@ -220,7 +220,18 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     // Update peers directly
                     self?.allPeers = peers
                     // Update peer index for O(1) lookups
-                    self?.peerIndex = Dictionary(uniqueKeysWithValues: peers.map { ($0.id, $0) })
+                    // Deduplicate peers by ID to prevent crash from duplicate keys
+                    var uniquePeers: [String: PeerData] = [:]
+                    for peer in peers {
+                        // Keep the first occurrence of each peer ID
+                        if uniquePeers[peer.id] == nil {
+                            uniquePeers[peer.id] = peer
+                        } else {
+                            SecureLogger.log("⚠️ Duplicate peer ID detected: \(peer.id) (\(peer.displayName))", 
+                                           category: SecureLogger.session, level: .warning)
+                        }
+                    }
+                    self?.peerIndex = uniquePeers
                     // Schedule UI update if peers changed
                     if peers.count > 0 || self?.allPeers.count ?? 0 > 0 {
                         // UI will update automatically
