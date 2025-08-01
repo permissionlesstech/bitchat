@@ -82,6 +82,7 @@ import SwiftUI
 import Combine
 import CryptoKit
 import CommonCrypto
+import CoreBluetooth
 #if os(iOS)
 import UIKit
 #endif
@@ -154,6 +155,11 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     @Published var peerEncryptionStatus: [String: EncryptionStatus] = [:]  // peerID -> encryption status
     @Published var verifiedFingerprints: Set<String> = []  // Set of verified fingerprints
     @Published var showingFingerprintFor: String? = nil  // Currently showing fingerprint sheet for peer
+    
+    // Bluetooth state management
+    @Published var showBluetoothAlert = false
+    @Published var bluetoothAlertMessage = ""
+    @Published var bluetoothState: CBManagerState = .unknown
     
     // Messages are naturally ephemeral - no persistent storage
     
@@ -816,6 +822,36 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 isRelay: false
             )
             addMessage(systemMessage)
+        }
+    }
+    
+    // MARK: - Bluetooth State Management
+    
+    /// Updates the Bluetooth state and shows appropriate alerts
+    /// - Parameter state: The current Bluetooth manager state
+    @MainActor
+    func updateBluetoothState(_ state: CBManagerState) {
+        bluetoothState = state
+        
+        switch state {
+        case .poweredOff:
+            bluetoothAlertMessage = "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
+            showBluetoothAlert = true
+        case .unauthorized:
+            bluetoothAlertMessage = "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
+            showBluetoothAlert = true
+        case .unsupported:
+            bluetoothAlertMessage = "This device does not support Bluetooth. BitChat requires Bluetooth to function."
+            showBluetoothAlert = true
+        case .poweredOn:
+            // Hide alert when Bluetooth is powered on
+            showBluetoothAlert = false
+            bluetoothAlertMessage = ""
+        case .unknown, .resetting:
+            // Don't show alerts for transient states
+            showBluetoothAlert = false
+        @unknown default:
+            showBluetoothAlert = false
         }
     }
     
