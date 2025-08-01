@@ -7,6 +7,9 @@
 //
 
 import SwiftUI
+#if os(iOS)
+import UIKit
+#endif
 
 // MARK: - Supporting Types
 
@@ -226,6 +229,18 @@ struct ContentView: View {
             }
             
             Button("cancel", role: .cancel) {}
+        }
+        .alert("Bluetooth Required", isPresented: $viewModel.showBluetoothAlert) {
+            Button("Settings") {
+                #if os(iOS)
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+                #endif
+            }
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(viewModel.bluetoothAlertMessage)
         }
         .onDisappear {
             // Clean up timers

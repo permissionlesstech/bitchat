@@ -1937,6 +1937,15 @@ class BluetoothMeshService: NSObject {
         cleanupStaleSessions()
         cleanupUnknownPeers()
         
+        // Report initial Bluetooth state to delegate
+        if let chatViewModel = delegate as? ChatViewModel {
+            // Use the central manager state as primary indicator
+            let currentState = centralManager?.state ?? .unknown
+            Task { @MainActor in
+                chatViewModel.updateBluetoothState(currentState)
+            }
+        }
+        
         // Starting services
         // Start both central and peripheral services
         if centralManager?.state == .poweredOn {
@@ -4988,6 +4997,13 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
         @unknown default: break
         }
         
+        // Notify ChatViewModel of Bluetooth state change
+        if let chatViewModel = delegate as? ChatViewModel {
+            Task { @MainActor in
+                chatViewModel.updateBluetoothState(central.state)
+            }
+        }
+        
         if central.state == .unsupported {
         } else if central.state == .unauthorized {
         } else if central.state == .poweredOff {
@@ -5538,6 +5554,13 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         case .poweredOff: break
         case .poweredOn: break
         @unknown default: break
+        }
+        
+        // Notify ChatViewModel of Bluetooth state change
+        if let chatViewModel = delegate as? ChatViewModel {
+            Task { @MainActor in
+                chatViewModel.updateBluetoothState(peripheral.state)
+            }
         }
         
         switch peripheral.state {
