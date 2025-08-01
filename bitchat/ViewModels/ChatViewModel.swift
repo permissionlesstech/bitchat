@@ -3205,21 +3205,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         // Register ephemeral session with identity manager
         SecureIdentityStateManager.shared.registerEphemeralSession(peerID: peerID)
         
-        // Resolve nickname using helper
-        let displayName = resolveNickname(for: peerID)
-        
-        // Ensure we have a valid display name
-        let finalDisplayName = displayName.isEmpty ? "peer" : displayName
-        
-        let systemMessage = BitchatMessage(
-            sender: "system",
-            content: "\(finalDisplayName) connected",
-            timestamp: Date(),
-            isRelay: false,
-            originalSender: nil
-        )
-        // Add system message
-        addMessage(systemMessage)
+        // Connection messages removed to reduce chat noise
     }
     
     func didDisconnectFromPeer(_ peerID: String) {
@@ -3237,21 +3223,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             }
         }
         
-        // Resolve nickname using helper
-        let displayName = resolveNickname(for: peerID)
-        
-        // Ensure we have a valid display name
-        let finalDisplayName = displayName.isEmpty ? "peer" : displayName
-        
-        let systemMessage = BitchatMessage(
-            sender: "system",
-            content: "\(finalDisplayName) disconnected",
-            timestamp: Date(),
-            isRelay: false,
-            originalSender: nil
-        )
-        // Add system message
-        addMessage(systemMessage)
+        // Disconnection messages removed to reduce chat noise
     }
     
     func didUpdatePeerList(_ peers: [String]) {
