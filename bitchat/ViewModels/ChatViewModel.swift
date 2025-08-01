@@ -208,7 +208,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             peerManager?.updatePeers()
             
             // Bind peer manager's peer list to our published property
-            peerManager?.$peers
+            let cancellable = peerManager?.$peers
                 .receive(on: DispatchQueue.main)
                 .sink { [weak self] peers in
                     SecureLogger.log("📱 UI: Received \(peers.count) peers from PeerManager", 
@@ -221,7 +221,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     self?.allPeers = peers
                     // Update peer index for O(1) lookups
                     // Deduplicate peers by ID to prevent crash from duplicate keys
-                    var uniquePeers: [String: PeerData] = [:]
+                    var uniquePeers: [String: BitchatPeer] = [:]
                     for peer in peers {
                         // Keep the first occurrence of each peer ID
                         if uniquePeers[peer.id] == nil {
@@ -242,7 +242,10 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                         self?.updatePrivateChatPeerIfNeeded()
                     }
                 }
-                .store(in: &cancellables)
+            
+            if let cancellable = cancellable {
+                self.cancellables.insert(cancellable)
+            }
         }
         
         // Set up Noise encryption callbacks
