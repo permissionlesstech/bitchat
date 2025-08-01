@@ -167,8 +167,9 @@ class BluetoothMeshService: NSObject {
             if let session = peerSessions[peerID] {
                 session.updateBluetoothConnection(peripheral: peripheral, characteristic: characteristic)
             } else if let peripheral = peripheral {
-                // Create session if needed
-                let session = PeerSession(peerID: peerID)
+                // Create session if needed - try to get a better nickname
+                let nickname = getBestAvailableNickname(for: peerID)
+                let session = PeerSession(peerID: peerID, nickname: nickname)
                 session.updateBluetoothConnection(peripheral: peripheral, characteristic: characteristic)
                 peerSessions[peerID] = session
             }
@@ -188,8 +189,9 @@ class BluetoothMeshService: NSObject {
                 if let session = peerSessions[peerID] {
                     session.updateBluetoothConnection(peripheral: peripheral, characteristic: characteristic)
                 } else if let peripheral = peripheral {
-                    // Create session if needed
-                    let session = PeerSession(peerID: peerID)
+                    // Create session if needed - try to get a better nickname
+                    let nickname = getBestAvailableNickname(for: peerID)
+                    let session = PeerSession(peerID: peerID, nickname: nickname)
                     session.updateBluetoothConnection(peripheral: peripheral, characteristic: characteristic)
                     peerSessions[peerID] = session
                 }
@@ -741,7 +743,8 @@ class BluetoothMeshService: NSObject {
         if let session = peerSessions[peerID] {
             session.updateBluetoothConnection(peripheral: mapping.peripheral, characteristic: nil)
         } else {
-            let session = PeerSession(peerID: peerID)
+            let nickname = getBestAvailableNickname(for: peerID)
+            let session = PeerSession(peerID: peerID, nickname: nickname)
             session.updateBluetoothConnection(peripheral: mapping.peripheral, characteristic: nil)
             peerSessions[peerID] = session
         }
@@ -1019,7 +1022,9 @@ class BluetoothMeshService: NSObject {
             if let session = peerSessions[peerID] {
                 return session
             }
-            let newSession = PeerSession(peerID: peerID)
+            // Try to get a better nickname from various sources before defaulting to "Unknown"
+            let nickname = getBestAvailableNickname(for: peerID)
+            let newSession = PeerSession(peerID: peerID, nickname: nickname)
             peerSessions[peerID] = newSession
             return newSession
         }
@@ -1042,6 +1047,22 @@ class BluetoothMeshService: NSObject {
                 self.peerSessions[peerID] = session
             }
         }
+    }
+    
+    /// Get the best available nickname for a peer ID from various sources
+    /// This method should be called from within collectionsQueue context
+    private func getBestAvailableNickname(for peerID: String) -> String {
+        // Check if ChatViewModel has peer information available
+        if let chatViewModel = delegate as? ChatViewModel {
+            let peers = chatViewModel.allPeers
+            if let peer = peers.first(where: { $0.id == peerID }), !peer.displayName.isEmpty && peer.displayName != "Unknown" {
+                return peer.displayName
+            }
+        }
+        
+        // Generate a more user-friendly temporary nickname based on peer ID
+        // This is better than "Unknown" and helps users distinguish between different peers
+        return "anon\(peerID.prefix(4))"
     }
     
     /// Create a peer session only if we have a valid connection
@@ -1343,7 +1364,8 @@ class BluetoothMeshService: NSObject {
                         if let session = self.peerSessions[peerID] {
                             session.updateAuthenticationState(authenticated: true, noiseSession: true)
                         } else {
-                            let session = PeerSession(peerID: peerID)
+                            let nickname = self.getBestAvailableNickname(for: peerID)
+                            let session = PeerSession(peerID: peerID, nickname: nickname)
                             session.updateAuthenticationState(authenticated: true, noiseSession: true)
                             self.peerSessions[peerID] = session
                         }
@@ -1640,7 +1662,8 @@ class BluetoothMeshService: NSObject {
                     session.fingerprint = fingerprint
                     session.updateAuthenticationState(authenticated: true, noiseSession: true)
                 } else {
-                    let session = PeerSession(peerID: peerID)
+                    let nickname = self.getBestAvailableNickname(for: peerID)
+                    let session = PeerSession(peerID: peerID, nickname: nickname)
                     session.fingerprint = fingerprint
                     session.updateAuthenticationState(authenticated: true, noiseSession: true)
                     self.peerSessions[peerID] = session
@@ -2523,7 +2546,8 @@ class BluetoothMeshService: NSObject {
                 session.hasAnnounced = true
             } else {
                 // Create session if it doesn't exist
-                let session = PeerSession(peerID: peerID)
+                let nickname = self.getBestAvailableNickname(for: peerID)
+                let session = PeerSession(peerID: peerID, nickname: nickname)
                 session.hasAnnounced = true
                 self.peerSessions[peerID] = session
             }
@@ -2587,6 +2611,16 @@ class BluetoothMeshService: NSObject {
             // Get nicknames from PeerSessions only (including disconnected ones)
             // This allows proper nickname resolution for reconnecting peers
             for (peerID, session) in self.peerSessions {
+                // If we have an "Unknown" nickname, try to resolve a better one before returning
+                if session.nickname == "Unknown" {
+                    let betterNickname = getBestAvailableNickname(for: peerID)
+                    if betterNickname != "Unknown" {
+                        // Update the session with the better nickname
+                        session.nickname = betterNickname
+                        SecureLogger.log("Updated nickname for \(peerID) from 'Unknown' to '\(betterNickname)'", 
+                                       category: SecureLogger.session, level: .info)
+                    }
+                }
                 nicknames[peerID] = session.nickname
             }
             
@@ -6648,7 +6682,8 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 if let session = self.peerSessions[peerID] {
                     session.lastSuccessfulMessageTime = Date()
                 } else {
-                    let session = PeerSession(peerID: peerID)
+                    let nickname = self.getBestAvailableNickname(for: peerID)
+                    let session = PeerSession(peerID: peerID, nickname: nickname)
                     session.lastSuccessfulMessageTime = Date()
                     self.peerSessions[peerID] = session
                 }
@@ -6749,7 +6784,8 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                     if let session = self.peerSessions[peerID] {
                         session.isActivePeer = true
                     } else {
-                        let session = PeerSession(peerID: peerID)
+                        let nickname = self.getBestAvailableNickname(for: peerID)
+                        let session = PeerSession(peerID: peerID, nickname: nickname)
                         session.isActivePeer = true
                         self.peerSessions[peerID] = session
                     }
@@ -6898,7 +6934,8 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         if let session = peerSessions[peerID] {
             session.lastConnectionTime = Date()
         } else {
-            let session = PeerSession(peerID: peerID)
+            let nickname = getBestAvailableNickname(for: peerID)
+            let session = PeerSession(peerID: peerID, nickname: nickname)
             session.lastConnectionTime = Date()
             peerSessions[peerID] = session
         }
@@ -7565,7 +7602,8 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                         session.isAvailable = isAvailable
                     } else {
                         // Create session if needed
-                        let session = PeerSession(peerID: peerID)
+                        let nickname = self.getBestAvailableNickname(for: peerID)
+                        let session = PeerSession(peerID: peerID, nickname: nickname)
                         session.isAvailable = isAvailable
                         peerSessions[peerID] = session
                     }
