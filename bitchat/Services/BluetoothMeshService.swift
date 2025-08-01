@@ -6356,15 +6356,11 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                       let currentPeerID = fingerprintToPeerID[fingerprint],
                       currentPeerID == peerID else {
                     // This peer ID has rotated, skip it
-                    SecureLogger.log("Skipping keepalive for rotated peer ID: \(peerID)", 
-                                   category: SecureLogger.session, level: .debug)
                     return nil
                 }
                 
                 // Check if we actually have a Noise session with this peer
                 guard noiseService.hasEstablishedSession(with: peerID) else {
-                    SecureLogger.log("Skipping keepalive for \(peerID) - no established session", 
-                                   category: SecureLogger.session, level: .debug)
                     return nil
                 }
                 
@@ -6372,21 +6368,15 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             }
         }
         
-        SecureLogger.log("Keep-alive timer: checking \(connectedPeers.count) peers for pings", 
-                       category: SecureLogger.session, level: .debug)
         
         for peerID in connectedPeers {
             // Don't spam if we recently heard from them
             let lastHeard = self.peerSessions[peerID]?.lastHeardFromPeer
             if let lastHeard = lastHeard, 
                Date().timeIntervalSince(lastHeard) < keepAliveInterval / 2 {
-                SecureLogger.log("Skipping keepalive for \(peerID) - heard recently", 
-                               category: SecureLogger.session, level: .debug)
                 continue  // Skip if we heard from them in the last 10 seconds
             }
             
-            SecureLogger.log("Sending keepalive ping to \(peerID)", 
-                           category: SecureLogger.session, level: .debug)
             validateNoiseSession(with: peerID)
         }
     }
@@ -6485,8 +6475,6 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         }
         
         // Check with coordinator if we should initiate
-        SecureLogger.log("Checking handshake coordinator - myPeerID: \(myPeerID), remotePeerID: \(peerID), hasPending: \(hasPendingMessages)", 
-                        category: SecureLogger.handshake, level: .debug)
         if !handshakeCoordinator.shouldInitiateHandshake(myPeerID: myPeerID, remotePeerID: peerID, forceIfStale: hasPendingMessages) {
             // Coordinator says no handshake
             
@@ -7107,9 +7095,6 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             // Check version cache for this peer
             if let cached = versionCache[peerID], !cached.isExpired {
                 // Skip negotiation - use cached version
-                SecureLogger.log("📗 Using cached version \(cached.version) for \(peerID) (cached \(Int(Date().timeIntervalSince(cached.cachedAt)))s ago)", 
-                               category: SecureLogger.session, level: .info)
-                
                 negotiatedVersions[peerID] = cached.version
                 versionNegotiationState[peerID] = .ackReceived(version: cached.version)
                 
