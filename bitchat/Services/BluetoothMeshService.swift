@@ -601,6 +601,17 @@ class BluetoothMeshService: NSObject {
     // App state tracking
     private var isAppInForeground = true
     
+    // Background task management
+    #if os(iOS)
+    private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
+    private var scanBackgroundTask: UIBackgroundTaskIdentifier = .invalid
+    private var advertiseBackgroundTask: UIBackgroundTaskIdentifier = .invalid
+    #endif
+    
+    // Core Bluetooth state restoration identifiers
+    private static let centralManagerRestorationID = "com.bitchat.central"
+    private static let peripheralManagerRestorationID = "com.bitchat.peripheral"
+    
     // Battery optimizer integration
     private let batteryOptimizer = BatteryOptimizer.shared
     private var batteryOptimizerCancellables = Set<AnyCancellable>()
@@ -1498,8 +1509,17 @@ class BluetoothMeshService: NSObject {
         // Set up queue-specific key for deadlock prevention
         collectionsQueue.setSpecific(key: collectionsQueueKey, value: ())
         
-        centralManager = CBCentralManager(delegate: self, queue: nil)
-        peripheralManager = CBPeripheralManager(delegate: self, queue: nil)
+        // Initialize Bluetooth managers with state restoration
+        centralManager = CBCentralManager(
+            delegate: self, 
+            queue: nil,
+            options: [CBCentralManagerOptionRestoreIdentifierKey: Self.centralManagerRestorationID]
+        )
+        peripheralManager = CBPeripheralManager(
+            delegate: self, 
+            queue: nil,
+            options: [CBPeripheralManagerOptionRestoreIdentifierKey: Self.peripheralManagerRestorationID]
+        )
         
         // Setup app state notifications
         setupAppStateNotifications()
@@ -1691,6 +1711,52 @@ class BluetoothMeshService: NSObject {
         cleanup()
     }
     
+    // MARK: - Background Task Management
+    
+    #if os(iOS)
+    private func beginBackgroundTask() -> UIBackgroundTaskIdentifier {
+        return UIApplication.shared.beginBackgroundTask { [weak self] in
+            self?.endBackgroundTask(self?.backgroundTask ?? .invalid)
+        }
+    }
+    
+    private func endBackgroundTask(_ taskID: UIBackgroundTaskIdentifier) {
+        if taskID != .invalid {
+            UIApplication.shared.endBackgroundTask(taskID)
+        }
+    }
+    
+    private func beginScanBackgroundTask() {
+        guard scanBackgroundTask == .invalid else { return }
+        
+        scanBackgroundTask = UIApplication.shared.beginBackgroundTask(withName: "BluetoothScan") { [weak self] in
+            self?.endScanBackgroundTask()
+        }
+    }
+    
+    private func endScanBackgroundTask() {
+        if scanBackgroundTask != .invalid {
+            UIApplication.shared.endBackgroundTask(scanBackgroundTask)
+            scanBackgroundTask = .invalid
+        }
+    }
+    
+    private func beginAdvertiseBackgroundTask() {
+        guard advertiseBackgroundTask == .invalid else { return }
+        
+        advertiseBackgroundTask = UIApplication.shared.beginBackgroundTask(withName: "BluetoothAdvertise") { [weak self] in
+            self?.endAdvertiseBackgroundTask()
+        }
+    }
+    
+    private func endAdvertiseBackgroundTask() {
+        if advertiseBackgroundTask != .invalid {
+            UIApplication.shared.endBackgroundTask(advertiseBackgroundTask)
+            advertiseBackgroundTask = .invalid
+        }
+    }
+    #endif
+    
     // MARK: - App State Management
     
     private func setupAppStateNotifications() {
@@ -1705,6 +1771,18 @@ class BluetoothMeshService: NSObject {
             self,
             selector: #selector(appWillResignActive),
             name: UIApplication.willResignActiveNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appDidEnterBackground),
+            name: UIApplication.didEnterBackgroundNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appWillEnterForeground),
+            name: UIApplication.willEnterForegroundNotification,
             object: nil
         )
         #elseif os(macOS)
@@ -1731,6 +1809,40 @@ class BluetoothMeshService: NSObject {
     @objc private func appWillResignActive() {
         isAppInForeground = false
         // App will resign active
+    }
+    
+    @objc private func appDidEnterBackground() {
+        isAppInForeground = false
+        SecureLogger.log("📱 App entered background - switching to background scanning mode", level: .info)
+        
+        #if os(iOS)
+        // Begin background tasks for critical operations
+        beginScanBackgroundTask()
+        beginAdvertiseBackgroundTask()
+        #endif
+        
+        // Switch to background scanning mode (continuous with battery-efficient options)
+        switchToBackgroundScanning()
+        
+        // Update advertising for background mode
+        updateAdvertisingForBackgroundMode()
+    }
+    
+    @objc private func appWillEnterForeground() {
+        isAppInForeground = true
+        SecureLogger.log("📱 App entering foreground - switching to foreground scanning mode", level: .info)
+        
+        #if os(iOS)
+        // End background tasks as app is coming to foreground
+        endScanBackgroundTask()
+        endAdvertiseBackgroundTask()
+        #endif
+        
+        // Switch to foreground scanning mode (with duty cycling)
+        switchToForegroundScanning()
+        
+        // Update advertising for foreground mode
+        updateAdvertisingForForegroundMode()
     }
     
     private func cleanup() {
@@ -1973,14 +2085,41 @@ class BluetoothMeshService: NSObject {
         peripheralManager?.startAdvertising(advertisementData)
     }
     
+    private func updateAdvertisingForBackgroundMode() {
+        // Check if we should skip advertising in critically low battery
+        if batteryOptimizer.currentPowerMode == .ultraLowPower && batteryOptimizer.batteryLevel < 0.1 {
+            // Only skip advertising if battery is critically low (<10%)
+            if isAdvertising {
+                peripheralManager?.stopAdvertising()
+                isAdvertising = false
+                SecureLogger.log("⚡ Stopped advertising due to critically low battery", level: .info)
+            }
+            return
+        }
+        
+        // Continue advertising in background mode with battery considerations
+        if !isAdvertising && peripheralManager?.state == .poweredOn {
+            startAdvertising()
+            SecureLogger.log("📡 Continued advertising in background mode", level: .info)
+        }
+    }
+    
+    private func updateAdvertisingForForegroundMode() {
+        // Always start advertising when in foreground if possible
+        if !isAdvertising && peripheralManager?.state == .poweredOn {
+            startAdvertising()
+            SecureLogger.log("📡 Started advertising in foreground mode", level: .info)
+        }
+    }
+    
     func startScanning() {
         guard centralManager?.state == .poweredOn else { 
             return 
         }
         
-        // Enable duplicate detection
+        // Optimize scan options based on foreground/background state
         let scanOptions: [String: Any] = [
-            CBCentralManagerScanOptionAllowDuplicatesKey: true
+            CBCentralManagerScanOptionAllowDuplicatesKey: isAppInForeground ? true : false
         ]
         
         centralManager?.scanForPeripherals(
@@ -1991,8 +2130,10 @@ class BluetoothMeshService: NSObject {
         // Update scan parameters based on battery before starting
         updateScanParametersForBattery()
         
-        // Implement scan duty cycling for battery efficiency
-        scheduleScanDutyCycle()
+        // Implement scan duty cycling for battery efficiency (only in foreground)
+        if isAppInForeground {
+            scheduleScanDutyCycle()
+        }
     }
     
     func triggerRescan() {
@@ -2061,8 +2202,18 @@ class BluetoothMeshService: NSObject {
     func sendMessage(_ content: String, mentions: [String] = [], to recipientID: String? = nil, messageID: String? = nil, timestamp: Date? = nil) {
         // Defensive check for empty content
         guard !content.isEmpty else { return }
+        
+        #if os(iOS)
+        let backgroundTask = beginBackgroundTask()
+        #endif
+        
         messageQueue.async { [weak self] in
-            guard let self = self else { return }
+            guard let self = self else {
+                #if os(iOS)
+                self?.endBackgroundTask(backgroundTask)
+                #endif
+                return
+            }
             
             let nickname = self.delegate as? ChatViewModel
             let senderNick = nickname?.nickname ?? self.myPeerID
@@ -2112,7 +2263,14 @@ class BluetoothMeshService: NSObject {
                     let initialDelay = self.smartCollisionAvoidanceDelay(baseDelay: self.randomDelay())
                     DispatchQueue.main.asyncAfter(deadline: .now() + initialDelay) { [weak self] in
                         self?.broadcastPacket(packet)
+                        #if os(iOS)
+                        self?.endBackgroundTask(backgroundTask)
+                        #endif
                     }
+                } else {
+                    #if os(iOS)
+                    self.endBackgroundTask(backgroundTask)
+                    #endif
                 }
             }
         }
@@ -2134,8 +2292,17 @@ class BluetoothMeshService: NSObject {
         
         let msgID = messageID ?? UUID().uuidString
         
+        #if os(iOS)
+        let backgroundTask = beginBackgroundTask()
+        #endif
+        
         messageQueue.async { [weak self] in
-            guard let self = self else { return }
+            guard let self = self else {
+                #if os(iOS)
+                self?.endBackgroundTask(backgroundTask)
+                #endif
+                return
+            }
             
             // Check if this is an old peer ID that has rotated
             var targetPeerID = recipientPeerID
@@ -2150,6 +2317,10 @@ class BluetoothMeshService: NSObject {
             
             // Always use Noise encryption
             self.sendPrivateMessageViaNoise(content, to: targetPeerID, recipientNickname: recipientNickname, messageID: msgID)
+            
+            #if os(iOS)
+            self.endBackgroundTask(backgroundTask)
+            #endif
         }
     }
     
@@ -4796,6 +4967,50 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
         }
     }
     
+    func centralManager(_ central: CBCentralManager, willRestoreState dict: [String : Any]) {
+        // Restore central manager state after app backgrounding
+        SecureLogger.log("🔄 Restoring CBCentralManager state", level: .info)
+        
+        // Restore scanned services
+        if let services = dict[CBCentralManagerRestoredStateScanServicesKey] as? [CBUUID] {
+            SecureLogger.log("📡 Restoring scanned services: \(services)", level: .info)
+        }
+        
+        // Restore scan options
+        if let scanOptions = dict[CBCentralManagerRestoredStateScanOptionsKey] as? [String: Any] {
+            SecureLogger.log("🔍 Restoring scan options: \(scanOptions)", level: .info)
+        }
+        
+        // Restore peripherals
+        if let peripherals = dict[CBCentralManagerRestoredStatePeripheralsKey] as? [CBPeripheral] {
+            SecureLogger.log("📱 Restoring \(peripherals.count) peripherals", level: .info)
+            
+            collectionsQueue.async(flags: .barrier) { [weak self] in
+                guard let self = self else { return }
+                
+                // Restore discovered peripherals list
+                self.discoveredPeripherals = peripherals
+                
+                // Restore connections for connected peripherals
+                for peripheral in peripherals {
+                    if peripheral.state == .connected {
+                        // Find the peerID for this peripheral
+                        let peerID = peripheral.identifier.uuidString
+                        
+                        // Update our tracking
+                        self.updatePeripheralConnection(peerID, peripheral: peripheral)
+                        
+                        // Set delegate and discover services
+                        peripheral.delegate = self
+                        peripheral.discoverServices([BluetoothMeshService.serviceUUID])
+                        
+                        SecureLogger.log("🔗 Restored connection to peer: \(peerID)", level: .info)
+                    }
+                }
+            }
+        }
+    }
+    
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi RSSI: NSNumber) {
         
         let peripheralID = peripheral.identifier.uuidString
@@ -5311,6 +5526,33 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         }
     }
     
+    func peripheralManager(_ peripheral: CBPeripheralManager, willRestoreState dict: [String : Any]) {
+        // Restore peripheral manager state after app backgrounding
+        SecureLogger.log("🔄 Restoring CBPeripheralManager state", level: .info)
+        
+        // Restore services
+        if let services = dict[CBPeripheralManagerRestoredStateServicesKey] as? [CBMutableService] {
+            SecureLogger.log("🛠 Restoring \(services.count) services", level: .info)
+            
+            // Services are automatically restored by Core Bluetooth
+            // We just need to ensure our internal state is consistent
+            DispatchQueue.main.async { [weak self] in
+                self?.isAdvertising = false
+                // Will be set to true when advertising starts
+            }
+        }
+        
+        // Restore advertisement data
+        if let advertisementData = dict[CBPeripheralManagerRestoredStateAdvertisementDataKey] as? [String: Any] {
+            SecureLogger.log("📣 Restoring advertisement data: \(advertisementData)", level: .info)
+            self.advertisementData = advertisementData
+            
+            DispatchQueue.main.async { [weak self] in
+                self?.isAdvertising = true
+            }
+        }
+    }
+    
     func peripheralManager(_ peripheral: CBPeripheralManager, didAdd service: CBService, error: Error?) {
         // Service added
     }
@@ -5501,6 +5743,51 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
     private func updateBatteryLevel() {
         // This method is now handled by BatteryOptimizer
         // Keeping empty implementation for compatibility
+    }
+    
+    private func switchToBackgroundScanning() {
+        guard centralManager?.state == .poweredOn else { return }
+        
+        // Stop existing scanning and duty cycling
+        centralManager?.stopScan()
+        scanDutyCycleTimer?.invalidate()
+        scanDutyCycleTimer = nil
+        
+        // Use continuous scanning with battery-efficient options in background
+        let backgroundScanOptions: [String: Any] = [
+            CBCentralManagerScanOptionAllowDuplicatesKey: false  // Battery efficient
+        ]
+        
+        centralManager?.scanForPeripherals(
+            withServices: [BluetoothMeshService.serviceUUID],
+            options: backgroundScanOptions
+        )
+        
+        SecureLogger.log("🔄 Switched to continuous background scanning", level: .info)
+    }
+    
+    private func switchToForegroundScanning() {
+        guard centralManager?.state == .poweredOn else { return }
+        
+        // Stop existing scanning
+        centralManager?.stopScan()
+        scanDutyCycleTimer?.invalidate()
+        scanDutyCycleTimer = nil
+        
+        // Use foreground scanning with duty cycling and allow duplicates for faster discovery
+        let foregroundScanOptions: [String: Any] = [
+            CBCentralManagerScanOptionAllowDuplicatesKey: true  // Faster discovery
+        ]
+        
+        centralManager?.scanForPeripherals(
+            withServices: [BluetoothMeshService.serviceUUID],
+            options: foregroundScanOptions
+        )
+        
+        // Re-enable duty cycling for foreground operation
+        scheduleScanDutyCycle()
+        
+        SecureLogger.log("🔄 Switched to foreground scanning with duty cycling", level: .info)
     }
     
     private func updateScanParametersForBattery() {
