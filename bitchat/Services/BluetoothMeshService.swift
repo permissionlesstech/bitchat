@@ -638,13 +638,6 @@ class BluetoothMeshService: NSObject {
     // Noise session state tracking for lazy handshakes
     private var noiseSessionStates: [String: LazyHandshakeState] = [:]
     
-    // MARK: - Cover Traffic
-    
-    // Cover traffic for privacy
-    private var coverTrafficTimer: Timer?
-    private let coverTrafficPrefix = "☂DUMMY☂"  // Prefix to identify dummy messages after decryption
-    private var lastCoverTrafficTime = Date()
-    
     // MARK: - Connection State
     
     // Connection state tracking
@@ -1719,7 +1712,6 @@ class BluetoothMeshService: NSObject {
         // Invalidate other timers
         scanDutyCycleTimer?.invalidate()
         batteryMonitorTimer?.invalidate()
-        coverTrafficTimer?.invalidate()
         bloomFilterResetTimer?.invalidate()
         aggregationTimer?.invalidate()
         cleanupTimer?.invalidate()
@@ -1963,14 +1955,6 @@ class BluetoothMeshService: NSObject {
         
         // Setup battery optimizer
         setupBatteryOptimizer()
-        
-        // Start cover traffic for privacy (disabled by default for now)
-        // TODO: Make this configurable in settings
-        let coverTrafficEnabled = true
-        if coverTrafficEnabled {
-            SecureLogger.log("Cover traffic enabled", category: SecureLogger.security, level: .info)
-            startCoverTraffic()
-        }
     }
     
     // MARK: - Consolidated Timer Management
@@ -3667,11 +3651,6 @@ class BluetoothMeshService: NSObject {
                     
                     // Parse the message
                     if let message = BitchatMessage.fromBinaryPayload(decryptedPayload) {
-                        
-                        // Check if this is a dummy message for cover traffic
-                        if message.content.hasPrefix(self.coverTrafficPrefix) {
-                                return  // Silently discard dummy messages
-                        }
                         
                         // Check if this is a favorite/unfavorite notification
                         if message.content.hasPrefix("SYSTEM:FAVORITED") || message.content.hasPrefix("SYSTEM:UNFAVORITED") {
@@ -6207,85 +6186,6 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         
         SecureLogger.log("Rate limiter cleanup: tracking \(messageRateLimiter.count) chat peers, \(protocolMessageRateLimiter.count) protocol peers, \(totalMessageTimestamps.count) total messages", 
                        category: SecureLogger.session, level: .debug)
-    }
-    
-    // MARK: - Cover Traffic
-    
-    private func startCoverTraffic() {
-        // Start cover traffic with random interval
-        scheduleCoverTraffic()
-    }
-    
-    private func scheduleCoverTraffic() {
-        // Random interval between 30-120 seconds
-        let interval = TimeInterval.random(in: 30...120)
-        
-        coverTrafficTimer?.invalidate()
-        coverTrafficTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
-            self?.sendDummyMessage()
-            self?.scheduleCoverTraffic() // Schedule next dummy message
-        }
-    }
-    
-    private func sendDummyMessage() {
-        // Only send dummy messages if we have connected peers with established sessions
-        let peersWithSessions = getAllConnectedPeerIDs().filter { peerID in
-            return noiseService.hasEstablishedSession(with: peerID)
-        }
-        
-        guard !peersWithSessions.isEmpty else { 
-            SecureLogger.log("Cover traffic: No peers with established sessions, skipping dummy message", 
-                           category: SecureLogger.security, level: .debug)
-            return 
-        }
-        
-        // Skip if battery is low
-        if currentBatteryLevel < 0.2 {
-            SecureLogger.log("Cover traffic: Battery low, skipping dummy message", 
-                           category: SecureLogger.security, level: .debug)
-            return
-        }
-        
-        // Pick a random peer with an established session to send to
-        guard let randomPeer = peersWithSessions.randomElement() else { return }
-        
-        // Generate random dummy content
-        let dummyContent = generateDummyContent()
-        
-        SecureLogger.log("Cover traffic: Sending dummy message to \(randomPeer)", 
-                       category: SecureLogger.security, level: .info)
-        
-        // Send as a private message so it's encrypted
-        let recipientNickname = collectionsQueue.sync {
-            return self.peerSessions[randomPeer]?.nickname ?? "unknown"
-        }
-        
-        sendPrivateMessage(dummyContent, to: randomPeer, recipientNickname: recipientNickname)
-    }
-    
-    private func generateDummyContent() -> String {
-        // Generate realistic-looking dummy messages
-        let templates = [
-            "hey",
-            "ok",
-            "got it",
-            "sure",
-            "sounds good",
-            "thanks",
-            "np",
-            "see you there",
-            "on my way",
-            "running late",
-            "be there soon",
-            "👍",
-            "✓",
-            "meeting at the usual spot",
-            "confirmed",
-            "roger that"
-        ]
-        
-        // Prefix with dummy marker (will be encrypted)
-        return coverTrafficPrefix + (templates.randomElement() ?? "ok")
     }
     
     

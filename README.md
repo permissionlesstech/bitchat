@@ -21,7 +21,6 @@ This project is released into the public domain. See the [LICENSE](LICENSE) file
 
 - **Decentralized Mesh Network**: Automatic peer discovery and multi-hop message relay over Bluetooth LE
 - **Privacy First**: No accounts, no phone numbers, no persistent identifiers
-- **Cover Traffic**: Timing obfuscation and dummy messages for enhanced privacy
 - **Private Message End-to-End Encryption**: [Noise Protocol](http://noiseprotocol.org)
 - **Store & Forward**: Messages cached for offline peers and delivered when they reconnect
 - **IRC-Style Commands**: Familiar `/slap`, `/msg`, `/who` style interface
