@@ -246,6 +246,7 @@ struct ContentView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(viewModel.bluetoothAlertMessage)
+        }
         .onChange(of: isPetnameFieldFocused) { isFocused in
             if !isFocused && editingPetnameForPeer != nil {
                 // Cancel petname editing when focus is lost
