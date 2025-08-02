@@ -393,7 +393,7 @@ struct ContentView: View {
             // @mentions autocomplete
             if viewModel.showAutocomplete && !viewModel.autocompleteSuggestions.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(viewModel.autocompleteSuggestions, id: \.self) { suggestion in
+                    ForEach(Array(viewModel.autocompleteSuggestions.prefix(4)), id: \.self) { suggestion in
                         Button(action: {
                             _ = viewModel.completeNickname(suggestion, in: &messageText)
                         }) {
@@ -1049,6 +1049,8 @@ struct ContentView: View {
                             Image(systemName: "chevron.left")
                                 .font(.system(size: 12))
                                 .foregroundColor(textColor)
+                                .frame(width: 44, height: 44, alignment: .leading)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel("Back to main chat")
