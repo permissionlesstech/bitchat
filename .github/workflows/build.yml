@@ -1,0 +1,164 @@
+name: Build iOS IPA
+
+on:
+  push:
+    branches: [ main, develop ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Xcode
+      uses: maxim-lobanov/setup-xcode@v1
+      with:
+        xcode-version: latest-stable
+        
+    - name: Cache Swift Package Manager
+      uses: actions/cache@v4
+      with:
+        path: |
+          .build
+          ~/Library/Developer/Xcode/DerivedData
+        key: ${{ runner.os }}-spm-${{ hashFiles('Package.swift', 'Package.resolved') }}
+        restore-keys: |
+          ${{ runner.os }}-spm-
+          
+    - name: Install XcodeGen
+      run: |
+        brew install xcodegen
+        
+    - name: Generate Xcode Project
+      run: |
+        xcodegen generate
+        
+    - name: Resolve Swift Package Dependencies
+      run: |
+        xcodebuild -resolvePackageDependencies -scheme "bitchat (iOS)"
+        
+    - name: Build and Test
+      run: |
+        xcodebuild \
+          -scheme "bitchat (iOS)" \
+          -destination "platform=iOS Simulator,name=iPhone 15,OS=latest" \
+          -configuration Debug \
+          clean build test \
+          CODE_SIGNING_REQUIRED=NO \
+          CODE_SIGNING_ALLOWED=NO
+          
+    - name: Build for Device (Unsigned)
+      run: |
+        xcodebuild \
+          -scheme "bitchat (iOS)" \
+          -configuration Release \
+          -destination generic/platform=iOS \
+          -archivePath ./bitchat.xcarchive \
+          archive \
+          CODE_SIGNING_REQUIRED=NO \
+          CODE_SIGNING_ALLOWED=NO \
+          DEVELOPMENT_TEAM="" \
+          CODE_SIGN_IDENTITY=""
+          
+    - name: Export IPA (Unsigned)
+      run: |
+        # Create export options plist for unsigned build
+        cat > ExportOptions.plist << EOF
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+            <key>method</key>
+            <string>development</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>stripSwiftSymbols</key>
+            <true/>
+            <key>thinning</key>
+            <string>&lt;none&gt;</string>
+        </dict>
+        </plist>
+        EOF
+        
+        # Export the archive to IPA
+        xcodebuild \
+          -exportArchive \
+          -archivePath ./bitchat.xcarchive \
+          -exportPath ./export \
+          -exportOptionsPlist ExportOptions.plist \
+          -allowProvisioningUpdates
+          
+    - name: Rename and Prepare IPA
+      run: |
+        # Find the generated IPA and rename it with version info
+        find ./export -name "*.ipa" -exec cp {} ./bitchat-unsigned-${{ github.sha }}.ipa \;
+        ls -la *.ipa
+        
+    - name: Upload IPA Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: bitchat-ios-unsigned-${{ github.sha }}
+        path: "*.ipa"
+        retention-days: 30
+        
+    - name: Create Release (on tag)
+      if: startsWith(github.ref, 'refs/tags/v')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: "*.ipa"
+        draft: false
+        prerelease: false
+        name: Release ${{ github.ref_name }}
+        body: |
+          ## bitchat iOS Release ${{ github.ref_name }}
+          
+          ### Installation Instructions
+          1. Download the IPA file
+          2. Install using AltStore, Sideloadly, or similar sideloading tools
+          3. For development: Use Xcode to install directly to your device
+          
+          ### What's Changed
+          - Auto-generated release from tag ${{ github.ref_name }}
+          
+          **Note:** This is an unsigned build. You'll need to sideload it using appropriate tools.
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Optional: Build signed version if you have certificates
+  build-ios-signed:
+    runs-on: macos-latest
+    if: false  # Disabled by default - enable when you have signing certificates
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Xcode
+      uses: maxim-lobanov/setup-xcode@v1
+      with:
+        xcode-version: latest-stable
+        
+    - name: Import Code Signing Certificates
+      env:
+        P12_BASE64: ${{ secrets.CERTIFICATES_P12 }}
+        P12_PASSWORD: ${{ secrets.CERTIFICATES_PASSWORD }}
+        PROVISIONING_PROFILE_BASE64: ${{ secrets.PROVISIONING_PROFILE }}
+      run: |
+        # Create temporary keychain
+        security create-keychain -p "" build.keychain
+        security default-keychain -s build.keychain
+        security unlock-keychain -p "" build.keychain
+        security set-keychain-settings -t 3600 -u build.keychain
+        
+        # Import certificate
+        echo $P12_BASE64 | base64 --decode > certificate.p12
+        security import certificate.p12 -k build.keychain -P $P12_PASSWORD -T /usr/bin/codesign
+        security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "" build.keychain
+        
+    # ... rest of signed build steps
