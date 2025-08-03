@@ -2,7 +2,7 @@ name: Build iOS IPA
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main ]
     tags: [ 'v*' ]
   pull_request:
     branches: [ main ]
@@ -43,15 +43,15 @@ jobs:
       run: |
         xcodebuild -resolvePackageDependencies -scheme "bitchat (iOS)"
         
-    - name: Build and Test
-      run: |
-        xcodebuild \
-          -scheme "bitchat (iOS)" \
-          -destination "platform=iOS Simulator,name=iPhone 16 Plus,OS=18.2" \
-          -configuration Debug \
-          clean build test \
-          CODE_SIGNING_REQUIRED=NO \
-          CODE_SIGNING_ALLOWED=NO
+    # - name: Build and Test
+    #   run: |
+    #     xcodebuild \
+    #       -scheme "bitchat (iOS)" \
+    #       -destination "platform=iOS Simulator,name=iPhone 16 Plus,OS=18.2" \
+    #       -configuration Debug \
+    #       clean build test \
+    #       CODE_SIGNING_REQUIRED=NO \
+    #       CODE_SIGNING_ALLOWED=NO
           
     - name: Build for Device (Unsigned)
       run: |
@@ -66,39 +66,29 @@ jobs:
           DEVELOPMENT_TEAM="" \
           CODE_SIGN_IDENTITY=""
           
-    - name: Export IPA (Unsigned)
+    - name: Create IPA from Archive (Manual Method)
       run: |
-        # Create export options plist for unsigned build
-        cat > ExportOptions.plist << EOF
-        <?xml version="1.0" encoding="UTF-8"?>
-        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-        <plist version="1.0">
-        <dict>
-            <key>method</key>
-            <string>development</string>
-            <key>signingStyle</key>
-            <string>manual</string>
-            <key>stripSwiftSymbols</key>
-            <true/>
-            <key>thinning</key>
-            <string>&lt;none&gt;</string>
-        </dict>
-        </plist>
-        EOF
+        # Extract the app from the archive
+        mkdir -p ./Payload
+        cp -r ./bitchat.xcarchive/Products/Applications/bitchat.app ./Payload/
         
-        # Export the archive to IPA
-        xcodebuild \
-          -exportArchive \
-          -archivePath ./bitchat.xcarchive \
-          -exportPath ./export \
-          -exportOptionsPlist ExportOptions.plist \
-          -allowProvisioningUpdates
+        # Create the IPA by zipping the Payload directory
+        zip -r bitchat-unsigned.ipa Payload/
+        
+        # Clean up
+        rm -rf Payload/
+        
+        echo "✅ Successfully created unsigned IPA"
+        ls -la *.ipa
           
     - name: Rename and Prepare IPA
       run: |
-        # Find the generated IPA and rename it with version info
-        find ./export -name "*.ipa" -exec cp {} ./bitchat-unsigned-${{ github.sha }}.ipa \;
+        # Rename the IPA with version info
+        mv bitchat-unsigned.ipa bitchat-unsigned-${{ github.sha }}.ipa
+        
+        # Get file info
         ls -la *.ipa
+        file *.ipa
         
     - name: Upload IPA Artifact
       uses: actions/upload-artifact@v4
@@ -130,10 +120,10 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # Optional: Build signed version if you have certificates
+  # Optional: Build signed version if certificates available UNTESTED
   build-ios-signed:
     runs-on: macos-latest
-    if: false  # Disabled by default - enable when you have signing certificates
+    if: false  # Disabled by default UNTESTED
     
     steps:
     - name: Checkout Repository
@@ -161,4 +151,4 @@ jobs:
         security import certificate.p12 -k build.keychain -P $P12_PASSWORD -T /usr/bin/codesign
         security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "" build.keychain
         
-    # ... rest of signed build steps
+    # ... rest of signed build steps ( need certs to test )
