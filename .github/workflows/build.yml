@@ -47,7 +47,7 @@ jobs:
       run: |
         xcodebuild \
           -scheme "bitchat (iOS)" \
-          -destination "platform=iOS Simulator,name=iPhone 15,OS=latest" \
+          -destination "platform=iOS Simulator,name=iPhone 16 Plus,OS=18.2" \
           -configuration Debug \
           clean build test \
           CODE_SIGNING_REQUIRED=NO \
