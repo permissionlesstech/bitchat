@@ -215,7 +215,7 @@ To send messages to peers that are not directly connected, BitChat employs a "fl
 The logic is as follows:
 
 1.  A peer receives a packet.
-2.  It checks the Bloom filter to see if the packet's ID has likely been seen before. If so, the packet is discarded. Bloom filters can have false positives (though they are rare), but they guarantee no false negatives. This means a new packet will never be accidentally discarded.
+2.  It checks the Bloom filter to see if the packet's ID has likely been seen before. If so, the packet is discarded. Bloom filters can have false positives (though they are rare), but they guarantee no false negatives. This means that while some packets may be incorrectly discarded due to false positives, the gossip protocol's redundancy ensures these packets will eventually be received through subsequent exchanges with other peers.
 3.  If the packet is new, its ID is added to the Bloom filter.
 4.  The peer decrements the packet's Time-To-Live (TTL) field.
 5.  If the TTL is greater than zero, the peer re-broadcasts the packet to all of its connected peers, *except* for the peer from which it received the packet.
