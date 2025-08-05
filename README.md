@@ -1,8 +1,8 @@
-<img width="256" height="256" alt="icon_128x128@2x" src="https://github.com/user-attachments/assets/90133f83-b4f6-41c6-aab9-25d0859d2a47" />
+# BitChat
 
-## bitchat
+<img width="256" height="256" alt="BitChat Logo" src="https://github.com/user-attachments/assets/90133f83-b4f6-41c6-aab9-25d0859d2a47" />
 
-A decentralized peer-to-peer messaging app that works over Bluetooth mesh networks. No internet required, no servers, no phone numbers. It's the side-groupchat. 
+A decentralized peer-to-peer messaging app that works over Bluetooth mesh networks. No internet required, no servers, no phone numbers. It's the side-groupchat for when traditional networks are unavailable.
 
 [bitchat.free](http://bitchat.free)
 
@@ -11,11 +11,9 @@ A decentralized peer-to-peer messaging app that works over Bluetooth mesh networ
 > [!WARNING]
 > Private messages have not received external security review and may contain vulnerabilities. Do not use for sensitive use cases, and do not rely on its security until it has been reviewed. Now uses the [Noise Protocol](http://www.noiseprotocol.org) for identity and encryption. Public local chat (the main feature) has no security concerns. 
 
-
 ## License
 
 This project is released into the public domain. See the [LICENSE](LICENSE) file for details.
-
 
 ## Features
 
@@ -28,11 +26,10 @@ This project is released into the public domain. See the [LICENSE](LICENSE) file
 - **Emergency Wipe**: Triple-tap to instantly clear all data
 - **Performance Optimizations**: LZ4 message compression, adaptive battery modes, and optimized networking
 
-
 ## [Technical Architecture](https://deepwiki.com/permissionlesstech/bitchat)
 
 ### Binary Protocol
-bitchat uses an efficient binary protocol optimized for Bluetooth LE:
+BitChat uses an efficient binary protocol optimized for Bluetooth LE:
 - Compact packet format with 1-byte type field
 - TTL-based message routing (max 7 hops)
 - Automatic fragmentation for large messages
@@ -46,6 +43,12 @@ bitchat uses an efficient binary protocol optimized for Bluetooth LE:
 
 For detailed protocol documentation, see the [Technical Whitepaper](WHITEPAPER.md).
 
+## System Requirements
+
+- iOS 16.0 or later
+- macOS 13.0 or later
+- Device with Bluetooth LE capability
+- No internet connection required
 
 ## Setup
 
@@ -86,5 +89,48 @@ For detailed protocol documentation, see the [Technical Whitepaper](WHITEPAPER.m
 
 ### Option 4: just
 
-Want to try this on macos: `just run` will set it up and run from source. 
+Want to try this on macOS? `just run` will set it up and run from source.  
 Run `just clean` afterwards to restore things to original state for mobile app building and development.
+
+## How It Works
+
+BitChat creates a local mesh network using Bluetooth Low Energy technology. When users open the app, their devices automatically discover nearby BitChat users and establish connections. Messages are relayed through multiple devices in the network, allowing communication even between users who aren't directly within Bluetooth range of each other.
+
+This makes BitChat ideal for:
+- Conferences and events with poor cell reception
+- Outdoor activities in remote areas
+- Emergency situations where communication infrastructure is compromised
+- Privacy-focused communications
+- Crowded venues where cellular networks become congested
+
+## Usage Guide
+
+### Privacy Features
+- Triple-tap anywhere to quickly clear all chat history
+- All communications happen locally - no data ever leaves your device except to nearby peers
+- No persistent identifiers - your identity exists only as long as the app is running
+
+## Contributing
+
+Contributions are welcome! Feel free to submit issues or pull requests to help improve BitChat.
+
+## Community
+
+Join the BitChat community:
+- GitHub Discussions: Share ideas and ask questions
+- Try the app and provide feedback
+- Report bugs and suggest features through GitHub issues
+
+## Frequently Asked Questions
+
+**Q: How far can messages travel?**  
+A: Messages can hop through up to 7 devices, potentially extending range significantly beyond direct Bluetooth reach.
+
+**Q: Does BitChat work without internet?**  
+A: Yes! BitChat functions entirely offline using only Bluetooth technology.
+
+**Q: Is BitChat secure?**  
+A: Public local chat is designed for convenience, not security. Private messages use the Noise Protocol but have not been externally audited.
+
+**Q: How many people can join a BitChat network?**  
+A: The practical limit depends on device density and environmental factors, but networks of dozens of users have been successfully tested.
