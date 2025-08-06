@@ -148,7 +148,6 @@ BitChat is a decentralized, peer-to-peer messaging application that works over B
 
 ### 4. Privacy Features
 - **Message Padding**: Obscures message length
-- **Cover Traffic**: Optional dummy messages
 - **Timing Obfuscation**: Randomized delays
 - **Emergency Wipe**: Triple-tap to clear all data
 

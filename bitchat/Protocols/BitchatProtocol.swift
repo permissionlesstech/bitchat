@@ -166,6 +166,11 @@ enum MessageType: UInt8 {
     case favorited = 0x30               // Peer favorited us
     case unfavorited = 0x31             // Peer unfavorited us
     
+    // Voice message support
+    case voiceMessage = 0x40            // Voice message containing audio data
+    case voiceFragment = 0x41           // Voice message fragment
+    case voiceDeliveryAck = 0x42        // Voice message delivery acknowledgment
+    
     var description: String {
         switch self {
         case .announce: return "announce"
@@ -189,6 +194,9 @@ enum MessageType: UInt8 {
         case .handshakeRequest: return "handshakeRequest"
         case .favorited: return "favorited"
         case .unfavorited: return "unfavorited"
+        case .voiceMessage: return "voiceMessage"
+        case .voiceFragment: return "voiceFragment"
+        case .voiceDeliveryAck: return "voiceDeliveryAck"
         }
     }
 }
@@ -212,6 +220,10 @@ enum LazyHandshakeState {
 struct SpecialRecipients {
     static let broadcast = Data(repeating: 0xFF, count: 8)  // All 0xFF = broadcast
 }
+
+// MARK: - Voice Message Support
+
+// VoiceMessageData models are defined in Models/VoiceMessageData.swift
 
 // MARK: - Core Protocol Structures
 
@@ -280,15 +292,15 @@ struct BitchatPacket: Codable {
 /// Acknowledgment sent when a message is successfully delivered to a recipient.
 /// Provides delivery confirmation for reliable messaging and UI feedback.
 /// - Note: Only sent for direct messages, not broadcasts
-struct DeliveryAck: Codable {
-    let originalMessageID: String
-    let ackID: String
-    let recipientID: String  // Who received it
-    let recipientNickname: String
-    let timestamp: Date
-    let hopCount: UInt8  // How many hops to reach recipient
+public struct DeliveryAck: Codable {
+    public let originalMessageID: String
+    public let ackID: String
+    public let recipientID: String  // Who received it
+    public let recipientNickname: String
+    public let timestamp: Date
+    public let hopCount: UInt8  // How many hops to reach recipient
     
-    init(originalMessageID: String, recipientID: String, recipientNickname: String, hopCount: UInt8) {
+    public init(originalMessageID: String, recipientID: String, recipientNickname: String, hopCount: UInt8) {
         self.originalMessageID = originalMessageID
         self.ackID = UUID().uuidString
         self.recipientID = recipientID
@@ -355,10 +367,14 @@ struct DeliveryAck: Codable {
         
         guard let recipientIDData = dataCopy.readFixedBytes(at: &offset, count: 8) else { return nil }
         let recipientID = recipientIDData.hexEncodedString()
+        guard InputValidator.validatePeerID(recipientID) else { return nil }
         
         guard let hopCount = dataCopy.readUInt8(at: &offset),
+              InputValidator.validateHopCount(hopCount),
               let timestamp = dataCopy.readDate(at: &offset),
-              let recipientNickname = dataCopy.readString(at: &offset) else { return nil }
+              InputValidator.validateTimestamp(timestamp),
+              let recipientNicknameRaw = dataCopy.readString(at: &offset),
+              let recipientNickname = InputValidator.validateNickname(recipientNicknameRaw) else { return nil }
         
         return DeliveryAck(originalMessageID: originalMessageID,
                            ackID: ackID,
@@ -443,9 +459,12 @@ struct ReadReceipt: Codable {
         
         guard let readerIDData = dataCopy.readFixedBytes(at: &offset, count: 8) else { return nil }
         let readerID = readerIDData.hexEncodedString()
+        guard InputValidator.validatePeerID(readerID) else { return nil }
         
         guard let timestamp = dataCopy.readDate(at: &offset),
-              let readerNickname = dataCopy.readString(at: &offset) else { return nil }
+              InputValidator.validateTimestamp(timestamp),
+              let readerNicknameRaw = dataCopy.readString(at: &offset),
+              let readerNickname = InputValidator.validateNickname(readerNicknameRaw) else { return nil }
         
         return ReadReceipt(originalMessageID: originalMessageID,
                           receiptID: receiptID,
@@ -540,13 +559,17 @@ struct HandshakeRequest: Codable {
         
         guard let requesterIDData = dataCopy.readFixedBytes(at: &offset, count: 8) else { return nil }
         let requesterID = requesterIDData.hexEncodedString()
+        guard InputValidator.validatePeerID(requesterID) else { return nil }
         
         guard let targetIDData = dataCopy.readFixedBytes(at: &offset, count: 8) else { return nil }
         let targetID = targetIDData.hexEncodedString()
+        guard InputValidator.validatePeerID(targetID) else { return nil }
         
         guard let pendingMessageCount = dataCopy.readUInt8(at: &offset),
               let timestamp = dataCopy.readDate(at: &offset),
-              let requesterNickname = dataCopy.readString(at: &offset) else { return nil }
+              InputValidator.validateTimestamp(timestamp),
+              let requesterNicknameRaw = dataCopy.readString(at: &offset),
+              let requesterNickname = InputValidator.validateNickname(requesterNicknameRaw) else { return nil }
         
         return HandshakeRequest(requestID: requestID,
                                requesterID: requesterID,
@@ -616,11 +639,16 @@ struct ProtocolAck: Codable {
               let senderIDData = dataCopy.readFixedBytes(at: &offset, count: 8),
               let receiverIDData = dataCopy.readFixedBytes(at: &offset, count: 8),
               let packetType = dataCopy.readUInt8(at: &offset),
+              InputValidator.validateMessageType(packetType),
               let hopCount = dataCopy.readUInt8(at: &offset),
-              let timestamp = dataCopy.readDate(at: &offset) else { return nil }
+              InputValidator.validateHopCount(hopCount),
+              let timestamp = dataCopy.readDate(at: &offset),
+              InputValidator.validateTimestamp(timestamp) else { return nil }
         
         let senderID = senderIDData.hexEncodedString()
         let receiverID = receiverIDData.hexEncodedString()
+        guard InputValidator.validatePeerID(senderID),
+              InputValidator.validatePeerID(receiverID) else { return nil }
         
         return ProtocolAck(originalPacketID: originalPacketID,
                           ackID: ackID,
@@ -706,12 +734,17 @@ struct ProtocolNack: Codable {
               let senderIDData = dataCopy.readFixedBytes(at: &offset, count: 8),
               let receiverIDData = dataCopy.readFixedBytes(at: &offset, count: 8),
               let packetType = dataCopy.readUInt8(at: &offset),
+              InputValidator.validateMessageType(packetType),
               let errorCode = dataCopy.readUInt8(at: &offset),
               let timestamp = dataCopy.readDate(at: &offset),
-              let reason = dataCopy.readString(at: &offset) else { return nil }
+              InputValidator.validateTimestamp(timestamp),
+              let reasonRaw = dataCopy.readString(at: &offset),
+              let reason = InputValidator.validateReasonString(reasonRaw) else { return nil }
         
         let senderID = senderIDData.hexEncodedString()
         let receiverID = receiverIDData.hexEncodedString()
+        guard InputValidator.validatePeerID(senderID),
+              InputValidator.validatePeerID(receiverID) else { return nil }
         
         return ProtocolNack(originalPacketID: originalPacketID,
                            nackID: nackID,
@@ -839,23 +872,28 @@ struct NoiseIdentityAnnouncement: Codable {
         // Read peerID using safe method
         guard let peerIDBytes = dataCopy.readFixedBytes(at: &offset, count: 8) else { return nil }
         let peerID = peerIDBytes.hexEncodedString()
+        guard InputValidator.validatePeerID(peerID) else { return nil }
         
         guard let publicKey = dataCopy.readData(at: &offset),
+              InputValidator.validatePublicKey(publicKey),
               let signingPublicKey = dataCopy.readData(at: &offset),
+              InputValidator.validatePublicKey(signingPublicKey),
               let rawNickname = dataCopy.readString(at: &offset),
-              let timestamp = dataCopy.readDate(at: &offset) else { return nil }
-        
-        // Trim whitespace from nickname
-        let nickname = rawNickname.trimmingCharacters(in: .whitespacesAndNewlines)
+              let nickname = InputValidator.validateNickname(rawNickname),
+              let timestamp = dataCopy.readDate(at: &offset),
+              InputValidator.validateTimestamp(timestamp) else { return nil }
         
         var previousPeerID: String? = nil
         if hasPreviousPeerID {
             // Read previousPeerID using safe method
             guard let prevIDBytes = dataCopy.readFixedBytes(at: &offset, count: 8) else { return nil }
-            previousPeerID = prevIDBytes.hexEncodedString()
+            let prevID = prevIDBytes.hexEncodedString()
+            guard InputValidator.validatePeerID(prevID) else { return nil }
+            previousPeerID = prevID
         }
         
-        guard let signature = dataCopy.readData(at: &offset) else { return nil }
+        guard let signature = dataCopy.readData(at: &offset),
+              InputValidator.validateSignature(signature) else { return nil }
         
         return NoiseIdentityAnnouncement(peerID: peerID,
                                         publicKey: publicKey,
@@ -1123,7 +1161,7 @@ struct VersionAck: Codable {
 // MARK: - Delivery Status
 
 // Delivery status for messages
-enum DeliveryStatus: Codable, Equatable {
+public enum DeliveryStatus: Codable, Equatable {
     case sending
     case sent  // Left our device
     case delivered(to: String, at: Date)  // Confirmed by recipient
@@ -1149,13 +1187,38 @@ enum DeliveryStatus: Codable, Equatable {
     }
 }
 
+// MARK: - Voice Message Support
+
+/// Voice message model for BitChat voice communication
+public struct VoiceMessage: Codable, Identifiable {
+    public let id: String
+    public let senderID: String
+    public let senderNickname: String
+    public let audioData: Data
+    public let duration: TimeInterval
+    public let sampleRate: Int
+    public let codec: VoiceCodec
+    public let timestamp: Date
+    public let isPrivate: Bool
+    public let recipientID: String?
+    public let recipientNickname: String?
+    public var deliveryStatus: DeliveryStatus
+    
+    public enum VoiceCodec: String, Codable {
+        case opus = "opus"
+        case pcm = "pcm"
+    }
+}
+
+// Note: VoiceMessageData is defined in Models/VoiceMessageData.swift
+
 // MARK: - Message Model
 
 /// Represents a user-visible message in the BitChat system.
 /// Handles both broadcast messages and private encrypted messages,
 /// with support for mentions, replies, and delivery tracking.
 /// - Note: This is the primary data model for chat messages
-class BitchatMessage: Codable {
+public class BitchatMessage: Codable {
     let id: String
     let sender: String
     let content: String
@@ -1168,6 +1231,9 @@ class BitchatMessage: Codable {
     let mentions: [String]?  // Array of mentioned nicknames
     var deliveryStatus: DeliveryStatus? // Delivery tracking
     
+    // Voice message metadata (optional)
+    let voiceMessageData: VoiceMessageData?
+    
     // Cached formatted text (not included in Codable)
     private var _cachedFormattedText: [String: AttributedString] = [:]
     
@@ -1179,13 +1245,69 @@ class BitchatMessage: Codable {
         _cachedFormattedText["\(isDark)"] = text
     }
     
+    // MARK: - Voice Message Helpers
+    
+    /// Indicates if this message contains a voice message
+    var isVoiceMessage: Bool {
+        return voiceMessageData != nil
+    }
+    
+    /// Create a voice message with appropriate content text
+    static func voiceMessage(
+        id: String? = nil,
+        sender: String,
+        timestamp: Date = Date(),
+        voiceData: VoiceMessageData,
+        isPrivate: Bool = false,
+        recipientNickname: String? = nil,
+        senderPeerID: String? = nil
+    ) -> BitchatMessage {
+        // Use voice message icon and duration as content
+        let content = "🎤 Voice message (\(voiceData.formattedDuration))"
+        
+        return BitchatMessage(
+            id: id,
+            sender: sender,
+            content: content,
+            timestamp: timestamp,
+            isRelay: false,
+            isPrivate: isPrivate,
+            recipientNickname: recipientNickname,
+            senderPeerID: senderPeerID,
+            voiceMessageData: voiceData
+        )
+    }
+    
+    /// Create a BitchatMessage from a VoiceMessage
+    static func fromVoiceMessage(_ voiceMessage: VoiceMessage) -> BitchatMessage {
+        // Create VoiceMessageData from VoiceMessage
+        let voiceData = VoiceMessageData(
+            duration: voiceMessage.duration,
+            waveformData: [], // Empty waveform for now
+            filePath: nil,
+            audioData: voiceMessage.audioData,
+            format: voiceMessage.codec == .opus ? .opus : .aac
+        )
+        
+        return BitchatMessage.voiceMessage(
+            id: voiceMessage.id,
+            sender: voiceMessage.senderNickname,
+            timestamp: voiceMessage.timestamp,
+            voiceData: voiceData,
+            isPrivate: voiceMessage.isPrivate,
+            recipientNickname: nil,
+            senderPeerID: voiceMessage.senderID
+        )
+    }
+    
     // Codable implementation
     enum CodingKeys: String, CodingKey {
         case id, sender, content, timestamp, isRelay, originalSender
         case isPrivate, recipientNickname, senderPeerID, mentions, deliveryStatus
+        case voiceMessageData
     }
     
-    init(id: String? = nil, sender: String, content: String, timestamp: Date, isRelay: Bool, originalSender: String? = nil, isPrivate: Bool = false, recipientNickname: String? = nil, senderPeerID: String? = nil, mentions: [String]? = nil, deliveryStatus: DeliveryStatus? = nil) {
+    init(id: String? = nil, sender: String, content: String, timestamp: Date, isRelay: Bool, originalSender: String? = nil, isPrivate: Bool = false, recipientNickname: String? = nil, senderPeerID: String? = nil, mentions: [String]? = nil, deliveryStatus: DeliveryStatus? = nil, voiceMessageData: VoiceMessageData? = nil) {
         self.id = id ?? UUID().uuidString
         self.sender = sender
         self.content = content
@@ -1197,12 +1319,13 @@ class BitchatMessage: Codable {
         self.senderPeerID = senderPeerID
         self.mentions = mentions
         self.deliveryStatus = deliveryStatus ?? (isPrivate ? .sending : nil)
+        self.voiceMessageData = voiceMessageData
     }
 }
 
 // Equatable conformance for BitchatMessage
 extension BitchatMessage: Equatable {
-    static func == (lhs: BitchatMessage, rhs: BitchatMessage) -> Bool {
+    public static func == (lhs: BitchatMessage, rhs: BitchatMessage) -> Bool {
         return lhs.id == rhs.id &&
                lhs.sender == rhs.sender &&
                lhs.content == rhs.content &&
@@ -1213,9 +1336,108 @@ extension BitchatMessage: Equatable {
                lhs.recipientNickname == rhs.recipientNickname &&
                lhs.senderPeerID == rhs.senderPeerID &&
                lhs.mentions == rhs.mentions &&
-               lhs.deliveryStatus == rhs.deliveryStatus
+               lhs.deliveryStatus == rhs.deliveryStatus &&
+               lhs.voiceMessageData == rhs.voiceMessageData
     }
 }
+
+// MARK: - Voice Message Fragment Support
+// VoiceMessageFragment models are defined in Models/VoiceMessage.swift
+
+/// Voice message delivery acknowledgment
+public struct VoiceDeliveryAck: Codable {
+    public let originalVoiceMessageID: String
+    public let ackID: String
+    public let recipientID: String
+    public let recipientNickname: String
+    public let timestamp: Date
+    public let fragmentsReceived: Set<UInt16>  // Which fragments were successfully received
+    public let isComplete: Bool               // Whether all fragments were received
+    public let hopCount: UInt8
+    
+    public init(originalVoiceMessageID: String, recipientID: String, recipientNickname: String, 
+         fragmentsReceived: Set<UInt16>, isComplete: Bool, hopCount: UInt8) {
+        self.originalVoiceMessageID = originalVoiceMessageID
+        self.ackID = UUID().uuidString
+        self.recipientID = recipientID
+        self.recipientNickname = recipientNickname
+        self.timestamp = Date()
+        self.fragmentsReceived = fragmentsReceived
+        self.isComplete = isComplete
+        self.hopCount = hopCount
+    }
+    
+    // MARK: - Binary Encoding
+    
+    func toBinaryData() -> Data {
+        var data = Data()
+        data.appendUUID(originalVoiceMessageID)
+        data.appendUUID(ackID)
+        
+        // RecipientID as 8-byte hex string
+        var recipientData = Data()
+        var tempID = recipientID
+        while tempID.count >= 2 && recipientData.count < 8 {
+            let hexByte = String(tempID.prefix(2))
+            if let byte = UInt8(hexByte, radix: 16) {
+                recipientData.append(byte)
+            }
+            tempID = String(tempID.dropFirst(2))
+        }
+        while recipientData.count < 8 {
+            recipientData.append(0)
+        }
+        data.append(recipientData)
+        
+        data.appendUInt8(hopCount)
+        data.appendUInt8(isComplete ? 1 : 0)
+        data.appendDate(timestamp)
+        data.appendString(recipientNickname)
+        
+        // Encode fragment set
+        let fragmentArray = Array(fragmentsReceived).sorted()
+        data.appendUInt16(UInt16(fragmentArray.count))
+        for fragment in fragmentArray {
+            data.appendUInt16(fragment)
+        }
+        
+        return data
+    }
+    
+    static func fromBinaryData(_ data: Data) -> VoiceDeliveryAck? {
+        let dataCopy = Data(data)
+        guard dataCopy.count >= 52 else { return nil } // Minimum size check
+        
+        var offset = 0
+        guard let originalVoiceMessageID = dataCopy.readUUID(at: &offset),
+              let ackID = dataCopy.readUUID(at: &offset),
+              let recipientIDData = dataCopy.readFixedBytes(at: &offset, count: 8),
+              let hopCount = dataCopy.readUInt8(at: &offset),
+              let isCompleteByte = dataCopy.readUInt8(at: &offset),
+              let timestamp = dataCopy.readDate(at: &offset),
+              let recipientNickname = dataCopy.readString(at: &offset),
+              let fragmentCount = dataCopy.readUInt16(at: &offset) else { return nil }
+        
+        let recipientID = recipientIDData.hexEncodedString()
+        let isComplete = isCompleteByte == 1
+        
+        var fragmentsReceived: Set<UInt16> = []
+        for _ in 0..<fragmentCount {
+            guard let fragment = dataCopy.readUInt16(at: &offset) else { return nil }
+            fragmentsReceived.insert(fragment)
+        }
+        
+        return VoiceDeliveryAck(
+            originalVoiceMessageID: originalVoiceMessageID,
+            recipientID: recipientID,
+            recipientNickname: recipientNickname,
+            fragmentsReceived: fragmentsReceived,
+            isComplete: isComplete,
+            hopCount: hopCount
+        )
+    }
+}
+
 
 // MARK: - Delegate Protocol
 
@@ -1232,6 +1454,9 @@ protocol BitchatDelegate: AnyObject {
     func didReceiveDeliveryAck(_ ack: DeliveryAck)
     func didReceiveReadReceipt(_ receipt: ReadReceipt)
     func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus)
+    
+    // Voice message methods (optional - default implementation provided in extension)
+    func didReceiveVoiceMessage(_ voiceMessage: VoiceMessage)
     
     // Peer availability tracking
     func peerAvailabilityChanged(_ peerID: String, available: Bool)
@@ -1252,6 +1477,10 @@ extension BitchatDelegate {
     }
     
     func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) {
+        // Default empty implementation
+    }
+    
+    func didReceiveVoiceMessage(_ voiceMessage: VoiceMessage) {
         // Default empty implementation
     }
     

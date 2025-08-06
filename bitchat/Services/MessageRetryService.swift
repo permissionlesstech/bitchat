@@ -100,7 +100,7 @@ class MessageRetryService {
         }
     }
     
-    private func processRetryQueue() {
+    func processRetryQueue() {
         guard meshService != nil else { return }
         
         let now = Date()

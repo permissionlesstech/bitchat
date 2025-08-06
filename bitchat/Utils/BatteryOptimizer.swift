@@ -184,13 +184,15 @@ class BatteryOptimizer {
             // When charging, use performance mode unless battery is critical
             currentPowerMode = batteryLevel < 0.1 ? .balanced : .performance
         } else if isInBackground {
-            // In background, always use power saving
-            if batteryLevel < 0.2 {
+            // In background, be less aggressive with power management
+            // Don't force ultra-low power mode until battery is below 10%
+            // Use balanced mode in background above 30% battery
+            if batteryLevel < 0.1 {
                 currentPowerMode = .ultraLowPower
-            } else if batteryLevel < 0.5 {
+            } else if batteryLevel < 0.3 {
                 currentPowerMode = .powerSaver
             } else {
-                currentPowerMode = .balanced
+                currentPowerMode = .balanced  // Use balanced mode above 30% in background
             }
         } else {
             // Foreground, not charging

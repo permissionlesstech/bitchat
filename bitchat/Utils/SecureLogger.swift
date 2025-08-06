@@ -23,6 +23,8 @@ class SecureLogger {
     static let session = OSLog(subsystem: subsystem, category: "session")
     static let security = OSLog(subsystem: subsystem, category: "security")
     static let handshake = OSLog(subsystem: subsystem, category: "handshake")
+    static let voice = OSLog(subsystem: subsystem, category: "voice")
+    static let routing = OSLog(subsystem: subsystem, category: "routing")
     
     // MARK: - Timestamp Formatter
     

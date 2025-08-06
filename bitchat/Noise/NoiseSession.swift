@@ -221,9 +221,24 @@ class NoiseSession {
             let wasEstablished = state == .established
             state = .uninitialized
             handshakeState = nil
+            
+            // Clear sensitive cipher states
+            sendCipher?.clearSensitiveData()
+            receiveCipher?.clearSensitiveData()
             sendCipher = nil
             receiveCipher = nil
+            
+            // Clear sent handshake messages
+            for i in 0..<sentHandshakeMessages.count {
+                var message = sentHandshakeMessages[i]
+                KeychainManager.secureClear(&message)
+            }
             sentHandshakeMessages.removeAll()
+            
+            // Clear handshake hash
+            if var hash = handshakeHash {
+                KeychainManager.secureClear(&hash)
+            }
             handshakeHash = nil
             
             if wasEstablished {
@@ -270,8 +285,12 @@ class NoiseSessionManager {
     
     func removeSession(for peerID: String) {
         managerQueue.sync(flags: .barrier) {
-            if let session = sessions[peerID], session.isEstablished() {
-                SecureLogger.logSecurityEvent(.sessionExpired(peerID: peerID))
+            if let session = sessions[peerID] {
+                if session.isEstablished() {
+                    SecureLogger.logSecurityEvent(.sessionExpired(peerID: peerID))
+                }
+                // Clear sensitive data before removing
+                session.reset()
             }
             _ = sessions.removeValue(forKey: peerID)
         }

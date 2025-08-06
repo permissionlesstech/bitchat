@@ -85,8 +85,6 @@ class NoiseHandshakeCoordinator {
             // Check role
             let role = determineHandshakeRole(myPeerID: myPeerID, remotePeerID: remotePeerID)
             if role != .initiator {
-                SecureLogger.log("Not initiator for handshake with \(remotePeerID) (my: \(myPeerID), their: \(remotePeerID))", 
-                               category: SecureLogger.handshake, level: .debug)
                 return false
             }
             

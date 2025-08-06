@@ -1,4 +1,4 @@
-<img height="300" alt="bitchat" src="https://github.com/user-attachments/assets/2660f828-49c7-444d-beca-d8b01854667a" />
+<img width="256" height="256" alt="icon_128x128@2x" src="https://github.com/user-attachments/assets/90133f83-b4f6-41c6-aab9-25d0859d2a47" />
 
 ## bitchat
 
@@ -21,7 +21,6 @@ This project is released into the public domain. See the [LICENSE](LICENSE) file
 
 - **Decentralized Mesh Network**: Automatic peer discovery and multi-hop message relay over Bluetooth LE
 - **Privacy First**: No accounts, no phone numbers, no persistent identifiers
-- **Cover Traffic**: Timing obfuscation and dummy messages for enhanced privacy
 - **Private Message End-to-End Encryption**: [Noise Protocol](http://noiseprotocol.org)
 - **Store & Forward**: Messages cached for offline peers and delivered when they reconnect
 - **IRC-Style Commands**: Familiar `/slap`, `/msg`, `/who` style interface
