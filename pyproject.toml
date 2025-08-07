@@ -1,0 +1,11 @@
+[project]
+name = "repl-nix-workspace"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.11"
+dependencies = [
+    "meshtastic>=2.3.0",
+    "protobuf>=4.21.0",
+    "pubsub>=0.1.2",
+    "pyserial>=3.5",
+]

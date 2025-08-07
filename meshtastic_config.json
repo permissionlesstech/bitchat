@@ -1,0 +1,40 @@
+{
+  "enabled": true,
+  "auto_fallback": true,
+  "preferred_device": "test_device_123",
+  "scan_timeout": 10,
+  "connection_timeout": 5,
+  "retry_attempts": 3,
+  "user_consented": true,
+  "last_scan": 1752025980.4849148,
+  "known_devices": [
+    {
+      "device_id": "test_serial_001",
+      "name": "Test T-Beam",
+      "interface_type": "serial",
+      "connection_string": "/dev/ttyUSB0",
+      "signal_strength": -75,
+      "battery_level": 85,
+      "available": true
+    },
+    {
+      "device_id": "tbeam_001",
+      "name": "T-Beam Device",
+      "interface_type": "serial",
+      "connection_string": "/dev/ttyUSB0",
+      "signal_strength": -65,
+      "battery_level": 82,
+      "available": true
+    },
+    {
+      "device_id": "heltec_002",
+      "name": "Heltec WiFi LoRa",
+      "interface_type": "tcp",
+      "connection_string": "192.168.1.50",
+      "signal_strength": -58,
+      "battery_level": null,
+      "available": true
+    }
+  ],
+  "fallback_threshold": 30
+}
