@@ -13,6 +13,8 @@ struct FingerprintView: View {
     let peerID: String
     @Environment(\.dismiss) var dismiss
     @Environment(\.colorScheme) var colorScheme
+    @State private var petnameText: String = ""
+    @FocusState private var isPetnameFieldFocused: Bool
     
     private var textColor: Color {
         colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
@@ -66,6 +68,61 @@ struct FingerprintView: View {
                 .padding()
                 .background(Color.gray.opacity(0.1))
                 .cornerRadius(8)
+
+                // Petname management
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("PERSONAL NAME:")
+                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        .foregroundColor(textColor.opacity(0.7))
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            TextField("enter a name for this person", text: $petnameText)
+                                .textFieldStyle(.plain)
+                                .font(.system(size: 14, design: .monospaced))
+                                .foregroundColor(textColor)
+                                .focused($isPetnameFieldFocused)
+                                .autocorrectionDisabled(true)
+                                #if os(iOS)
+                                .textInputAutocapitalization(.never)
+                                #endif
+                                .onSubmit {
+                                    viewModel.setPetname(peerID: peerID, petname: petnameText.isEmpty ? nil : petnameText)
+                                }
+                                .onChange(of: petnameText) { newValue in
+                                    // Auto-save as user types (debounced)
+                                    viewModel.setPetname(peerID: peerID, petname: newValue.isEmpty ? nil : newValue)
+                                }
+
+                            if !petnameText.isEmpty || viewModel.getPetname(peerID: peerID) != nil {
+                                Button("CLEAR") {
+                                    petnameText = ""
+                                    viewModel.clearPetname(peerID: peerID)
+                                }
+                                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                .foregroundColor(Color.red)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(Color.red.opacity(0.1))
+                                .cornerRadius(6)
+                                .buttonStyle(.plain)
+                            }
+                        }
+
+                        Text("claimed name: \(peerNickname)")
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundColor(textColor.opacity(0.6))
+
+                        Text("this personal name is stored locally and only you can see it. it will persist even if they change their claimed name or peer id.")
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(textColor.opacity(0.5))
+                            .lineLimit(nil)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding()
+                    .background(Color.gray.opacity(0.1))
+                    .cornerRadius(8)
+                }
                 
                 // Their fingerprint
                 VStack(alignment: .leading, spacing: 8) {
@@ -181,6 +238,10 @@ struct FingerprintView: View {
         .background(backgroundColor)
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
+        .onAppear {
+            // Initialize petname text field with existing petname
+            petnameText = viewModel.getPetname(peerID: peerID) ?? ""
+        }
     }
     
     private func formatFingerprint(_ fingerprint: String) -> String {
