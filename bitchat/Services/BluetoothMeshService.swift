@@ -3495,6 +3495,8 @@ class BluetoothMeshService: NSObject {
                 messageTypeName = "SYSTEM_VALIDATION"
             case .handshakeRequest:
                 messageTypeName = "HANDSHAKE_REQUEST"
+            case .voiceMessage:
+                messageTypeName = "VOICE_MESSAGE"
             default:
                 messageTypeName = "UNKNOWN(\(packet.type))"
             }
@@ -4791,6 +4793,45 @@ class BluetoothMeshService: NSObject {
             // See handleReceivedPacket for MESSAGE type handling
             break
             
+        case .voiceMessage:
+            // Handle incoming voice message
+            let senderID = packet.senderID.hexEncodedString()
+            guard !senderID.isEmpty && !isPeerIDOurs(senderID) else { return }
+            
+            SecureLogger.log("🎙️ Received voice message from \(senderID)", 
+                           category: SecureLogger.voice, level: .info)
+            
+            // Parse voice message payload
+            if let voiceMessage = parseVoiceMessagePayload(packet.payload, senderID: senderID, timestamp: packet.timestamp) {
+                // Update peer nickname if provided
+                collectionsQueue.sync(flags: .barrier) {
+                    if let session = self.peerSessions[senderID] {
+                        session.nickname = voiceMessage.senderNickname
+                    } else {
+                        let session = PeerSession(peerID: senderID, nickname: voiceMessage.senderNickname)
+                        self.peerSessions[senderID] = session
+                    }
+                }
+                
+                // Notify delegate about received voice message
+                DispatchQueue.main.async {
+                    self.delegate?.didReceiveVoiceMessage(voiceMessage)
+                }
+                
+                // Relay voice message if needed
+                if packet.ttl > 1 {
+                    var relayPacket = packet
+                    relayPacket.ttl -= 1
+                    
+                    let relayProb = self.adaptiveRelayProbability
+                    if relayProb > 0 && Double.random(in: 0...1) < relayProb {
+                        let delay = self.exponentialRelayDelay()
+                        let messageID = self.generatePacketID(for: packet)
+                        self.scheduleRelay(relayPacket, messageID: messageID, delay: delay)
+                    }
+                }
+            }
+            
         default:
             break
         }
@@ -5975,7 +6016,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         case .message, .announce, .leave, .readReceipt, .deliveryStatusRequest,
              .fragmentStart, .fragmentContinue, .fragmentEnd,
              .noiseIdentityAnnounce, .noiseEncrypted, .protocolNack, 
-             .favorited, .unfavorited, .none:
+             .favorited, .unfavorited, .voiceMessage, .voiceFragment, .voiceDeliveryAck, .none:
             return false
         }
     }
@@ -8084,5 +8125,238 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
     // Track activity for peripherals
     private func updatePeripheralActivity(_ peripheralID: String) {
         lastActivityByPeripheralID[peripheralID] = Date()
+    }
+    
+    // MARK: - Voice Message Transmission
+    
+    /// Send voice message to a specific peer
+    /// - Parameters:
+    ///   - voiceMessage: The voice message to send
+    ///   - recipientPeerID: Target peer ID
+    ///   - recipientNickname: Target peer nickname
+    func sendVoiceMessage(_ voiceMessage: VoiceMessage, to recipientPeerID: String, recipientNickname: String) {
+        guard !voiceMessage.audioData.isEmpty else {
+            SecureLogger.log("❌ Attempted to send empty voice message", 
+                           category: SecureLogger.voice, level: .error)
+            return
+        }
+        
+        SecureLogger.log("📤 Sending voice message \(voiceMessage.id) to \(recipientPeerID)",
+                       category: SecureLogger.voice, level: .info)
+        
+        messageQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            // Create voice message payload
+            guard let voicePayload = self.createVoiceMessagePayload(voiceMessage) else {
+                SecureLogger.log("❌ Failed to create voice message payload", 
+                               category: SecureLogger.voice, level: .error)
+                return
+            }
+            
+            // Create packet with voice message type
+            let packet = BitchatPacket(
+                type: MessageType.voiceMessage.rawValue,
+                senderID: Data(hexString: self.myPeerID) ?? Data(),
+                recipientID: Data(hexString: recipientPeerID) ?? Data(),
+                timestamp: UInt64(voiceMessage.timestamp.timeIntervalSince1970 * 1000),
+                payload: voicePayload,
+                signature: nil,
+                ttl: self.adaptiveTTL
+            )
+            
+            DispatchQueue.main.async { [weak self] in
+                self?.broadcastPacket(packet)
+                SecureLogger.log("✅ Voice message sent to mesh network", 
+                               category: SecureLogger.voice, level: .info)
+            }
+        }
+    }
+    
+    /// Send voice message as broadcast to all peers
+    /// - Parameter voiceMessage: The voice message to broadcast
+    func sendBroadcastVoiceMessage(_ voiceMessage: VoiceMessage) {
+        guard !voiceMessage.audioData.isEmpty else {
+            SecureLogger.log("❌ Attempted to broadcast empty voice message", 
+                           category: SecureLogger.voice, level: .error)
+            return
+        }
+        
+        SecureLogger.log("📢 Broadcasting voice message \(voiceMessage.id)",
+                       category: SecureLogger.voice, level: .info)
+        
+        messageQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            // Create voice message payload
+            guard let voicePayload = self.createVoiceMessagePayload(voiceMessage) else {
+                SecureLogger.log("❌ Failed to create voice message payload for broadcast", 
+                               category: SecureLogger.voice, level: .error)
+                return
+            }
+            
+            // Create packet with voice message type and broadcast recipient
+            let packet = BitchatPacket(
+                type: MessageType.voiceMessage.rawValue,
+                senderID: Data(hexString: self.myPeerID) ?? Data(),
+                recipientID: SpecialRecipients.broadcast,
+                timestamp: UInt64(voiceMessage.timestamp.timeIntervalSince1970 * 1000),
+                payload: voicePayload,
+                signature: nil,
+                ttl: self.adaptiveTTL
+            )
+            
+            DispatchQueue.main.async { [weak self] in
+                self?.broadcastPacket(packet)
+                SecureLogger.log("✅ Voice message broadcasted to mesh network", 
+                               category: SecureLogger.voice, level: .info)
+            }
+        }
+    }
+    
+    /// Create binary payload for voice message
+    private func createVoiceMessagePayload(_ voiceMessage: VoiceMessage) -> Data? {
+        var payload = Data()
+        
+        // Message ID (UUID as string)
+        payload.appendString(voiceMessage.id)
+        
+        // Sender nickname
+        payload.appendString(voiceMessage.senderNickname)
+        
+        // Duration (8 bytes)
+        payload.appendTimeInterval(voiceMessage.duration)
+        
+        // Sample rate (4 bytes)
+        payload.appendUInt32(UInt32(voiceMessage.sampleRate))
+        
+        // Codec (1 byte: 0 = PCM, 1 = Opus)
+        let codecByte: UInt8 = voiceMessage.codec == .opus ? 1 : 0
+        payload.appendUInt8(codecByte)
+        
+        // Audio data length (4 bytes) + audio data
+        payload.appendUInt32(UInt32(voiceMessage.audioData.count))
+        payload.append(voiceMessage.audioData)
+        
+        // Privacy flag
+        payload.appendUInt8(voiceMessage.isPrivate ? 1 : 0)
+        
+        // Recipient info (if private)
+        if voiceMessage.isPrivate, let recipientID = voiceMessage.recipientID {
+            payload.appendString(recipientID)
+            payload.appendString(voiceMessage.recipientNickname ?? "")
+        } else {
+            payload.appendString("")  // Empty recipient ID
+            payload.appendString("")  // Empty recipient nickname
+        }
+        
+        return payload
+    }
+    
+    /// Parse voice message payload from binary data
+    private func parseVoiceMessagePayload(_ payload: Data, senderID: String, timestamp: UInt64) -> VoiceMessage? {
+        var offset = 0
+        
+        // Parse message ID
+        guard let messageID = payload.readString(at: &offset) else {
+            SecureLogger.log("❌ Failed to parse voice message ID", 
+                           category: SecureLogger.voice, level: .error)
+            return nil
+        }
+        
+        // Parse sender nickname
+        guard let senderNickname = payload.readString(at: &offset) else {
+            SecureLogger.log("❌ Failed to parse voice message sender nickname", 
+                           category: SecureLogger.voice, level: .error)
+            return nil
+        }
+        
+        // Parse duration
+        guard let duration = payload.readTimeInterval(at: &offset) else {
+            SecureLogger.log("❌ Failed to parse voice message duration", 
+                           category: SecureLogger.voice, level: .error)
+            return nil
+        }
+        
+        // Parse sample rate
+        guard let sampleRateRaw = payload.readUInt32(at: &offset) else {
+            SecureLogger.log("❌ Failed to parse voice message sample rate", 
+                           category: SecureLogger.voice, level: .error)
+            return nil
+        }
+        let sampleRate = Int(sampleRateRaw)
+        
+        // Parse codec
+        guard let codecByte = payload.readUInt8(at: &offset) else {
+            SecureLogger.log("❌ Failed to parse voice message codec", 
+                           category: SecureLogger.voice, level: .error)
+            return nil
+        }
+        let codec: VoiceMessage.VoiceCodec = codecByte == 1 ? .opus : .pcm
+        
+        // Parse audio data length
+        guard let audioDataLength = payload.readUInt32(at: &offset) else {
+            SecureLogger.log("❌ Failed to parse voice message audio data length", 
+                           category: SecureLogger.voice, level: .error)
+            return nil
+        }
+        
+        // Parse audio data
+        guard let audioData = payload.readFixedBytes(at: &offset, count: Int(audioDataLength)) else {
+            SecureLogger.log("❌ Failed to parse voice message audio data", 
+                           category: SecureLogger.voice, level: .error)
+            return nil
+        }
+        
+        // Parse privacy flag
+        guard let privacyFlag = payload.readUInt8(at: &offset) else {
+            SecureLogger.log("❌ Failed to parse voice message privacy flag", 
+                           category: SecureLogger.voice, level: .error)
+            return nil
+        }
+        let isPrivate = privacyFlag == 1
+        
+        // Parse recipient info (if private)
+        guard let recipientID = payload.readString(at: &offset) else {
+            SecureLogger.log("❌ Failed to parse voice message recipient ID", 
+                           category: SecureLogger.voice, level: .error)
+            return nil
+        }
+        
+        guard let recipientNickname = payload.readString(at: &offset) else {
+            SecureLogger.log("❌ Failed to parse voice message recipient nickname", 
+                           category: SecureLogger.voice, level: .error)
+            return nil
+        }
+        
+        // Create VoiceMessage
+        let voiceMessage = VoiceMessage(
+            id: messageID,
+            senderID: senderID,
+            senderNickname: senderNickname,
+            audioData: audioData,
+            duration: duration,
+            sampleRate: sampleRate,
+            codec: codec,
+            timestamp: Date(timeIntervalSince1970: Double(timestamp) / 1000.0),
+            isPrivate: isPrivate,
+            recipientID: recipientID.isEmpty ? nil : recipientID,
+            recipientNickname: recipientNickname.isEmpty ? nil : recipientNickname,
+            deliveryStatus: .sent
+        )
+        
+        SecureLogger.log("✅ Parsed voice message: \(messageID) from \(senderNickname)", 
+                       category: SecureLogger.voice, level: .info)
+        
+        return voiceMessage
+    }
+    
+    /// Get peer nickname from peer ID
+    /// - Parameter peerID: The peer ID to look up
+    /// - Returns: The nickname if found, nil otherwise
+    func getPeerNickname(_ peerID: String) -> String? {
+        return collectionsQueue.sync {
+            return peerSessions[peerID]?.nickname
+        }
     }
 }
