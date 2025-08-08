@@ -3374,7 +3374,7 @@ class BluetoothMeshService: NSObject {
         }
     }
     
-    private func handleReceivedPacket(_ packet: BitchatPacket, from peerID: String, peripheral: CBPeripheral? = nil) {
+    private func handleReceivedPacket(_ packet: BitchatPacket, from peerID: String, peripheral: CBPeripheral? = nil, decrypted: Bool = false) {
         messageQueue.async(flags: .barrier) { [weak self] in
             guard let self = self else { return }
             
@@ -3688,7 +3688,12 @@ class BluetoothMeshService: NSObject {
                     
                 } else if isPeerIDOurs(recipientID.hexEncodedString()) {
                     // PRIVATE MESSAGE FOR US
-                    
+                    if (decrypted == false) {
+                        //spoofing detected!!
+                        SecureLogger.log("YIKES spoofing detected from \(senderID)", category: SecureLogger.encryption, level: .warning)
+                        return;
+                    }
+
                     
                     // No signature verification - broadcasts are not authenticated
                     
@@ -6888,7 +6893,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 // The packet will be handled according to its recipient ID
                 // If it's for us, it won't be relayed
                 // Pass the peripheral context for proper ACK routing
-                handleReceivedPacket(innerPacket, from: peerID, peripheral: peripheral)
+                handleReceivedPacket(innerPacket, from: peerID, peripheral: peripheral, decrypted: true)
             } else {
                 SecureLogger.log("Failed to parse inner packet from decrypted data", category: SecureLogger.encryption, level: .warning)
             }
