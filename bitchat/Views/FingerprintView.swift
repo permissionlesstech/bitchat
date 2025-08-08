@@ -13,6 +13,9 @@ struct FingerprintView: View {
     let peerID: String
     @Environment(\.dismiss) var dismiss
     @Environment(\.colorScheme) var colorScheme
+    private var peerNickname: String {
+        viewModel.meshService.getPeerNicknames()[peerID] ?? "Unknown"
+    }
     
     private var textColor: Color {
         colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
@@ -29,6 +32,8 @@ struct FingerprintView: View {
                 Text("SECURITY VERIFICATION")
                     .font(.system(size: 16, weight: .bold, design: .monospaced))
                     .foregroundColor(textColor)
+                    .accessibilityAddTraits(.isHeader)
+                    .accessibilityHeading(.h1)
                 
                 Spacer()
                 
@@ -36,19 +41,22 @@ struct FingerprintView: View {
                     dismiss()
                 }
                 .foregroundColor(textColor)
+                .accessibilityLabel("Done")
+                .accessibilityHint(peerNickname == "Unknown" ? "Back to chat" : "Back to chat with \(peerNickname)")
             }
             .padding()
             
             VStack(alignment: .leading, spacing: 16) {
                 // Peer info
-                let peerNickname = viewModel.meshService.getPeerNicknames()[peerID] ?? "Unknown"
                 let encryptionStatus = viewModel.getEncryptionStatus(for: peerID)
                 
                 HStack {
+
                     if let icon = encryptionStatus.icon {
                         Image(systemName: icon)
                             .font(.system(size: 20))
                             .foregroundColor(encryptionStatus == .noiseVerified ? Color.green : textColor)
+                            .accessibilityLabel("Encryption status: \(encryptionStatus.description)")
                     }
                     
                     VStack(alignment: .leading, spacing: 4) {
@@ -66,12 +74,16 @@ struct FingerprintView: View {
                 .padding()
                 .background(Color.gray.opacity(0.1))
                 .cornerRadius(8)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Peer: \(peerNickname), \(encryptionStatus.description)")
                 
                 // Their fingerprint
                 VStack(alignment: .leading, spacing: 8) {
                     Text("THEIR FINGERPRINT:")
                         .font(.system(size: 12, weight: .bold, design: .monospaced))
                         .foregroundColor(textColor.opacity(0.7))
+                        .accessibilityAddTraits(.isHeader)
+                        .accessibilityHeading(.h2)
                     
                     if let fingerprint = viewModel.getFingerprint(for: peerID) {
                         Text(formatFingerprint(fingerprint))
@@ -84,6 +96,7 @@ struct FingerprintView: View {
                             .frame(maxWidth: .infinity)
                             .background(Color.gray.opacity(0.1))
                             .cornerRadius(8)
+                            .accessibilityLabel("Security fingerprint: \(fingerprint)")
                             .contextMenu {
                                 Button("Copy") {
                                     #if os(iOS)
@@ -93,6 +106,7 @@ struct FingerprintView: View {
                                     NSPasteboard.general.setString(fingerprint, forType: .string)
                                     #endif
                                 }
+                                .accessibilityLabel("Copy fingerprint to clipboard")
                             }
                     } else {
                         Text("not available - handshake in progress")
@@ -107,6 +121,8 @@ struct FingerprintView: View {
                     Text("YOUR FINGERPRINT:")
                         .font(.system(size: 12, weight: .bold, design: .monospaced))
                         .foregroundColor(textColor.opacity(0.7))
+                        .accessibilityAddTraits(.isHeader)
+                        .accessibilityHeading(.h2)
                     
                     let myFingerprint = viewModel.getMyFingerprint()
                     Text(formatFingerprint(myFingerprint))
@@ -119,6 +135,7 @@ struct FingerprintView: View {
                         .frame(maxWidth: .infinity)
                         .background(Color.gray.opacity(0.1))
                         .cornerRadius(8)
+                        .accessibilityLabel("Your security fingerprint: \(myFingerprint)")
                         .contextMenu {
                             Button("Copy") {
                                 #if os(iOS)
@@ -128,6 +145,7 @@ struct FingerprintView: View {
                                 NSPasteboard.general.setString(myFingerprint, forType: .string)
                                 #endif
                             }
+                            .accessibilityLabel("Copy your fingerprint to clipboard")
                         }
                 }
                 
@@ -140,6 +158,7 @@ struct FingerprintView: View {
                             .font(.system(size: 14, weight: .bold, design: .monospaced))
                             .foregroundColor(isVerified ? Color.green : Color.orange)
                             .frame(maxWidth: .infinity)
+                            .accessibilityLabel(isVerified ? "Verified" : "Not verified")
                         
                         Text(isVerified ? 
                              "you have verified this person's identity." :
@@ -165,6 +184,8 @@ struct FingerprintView: View {
                                     .cornerRadius(8)
                             }
                             .buttonStyle(PlainButtonStyle())
+                            .accessibilityLabel("Mark as verified")
+                            .accessibilityHint("Confirms you have verified this person's identity")
                         }
                     }
                     .padding(.top)
