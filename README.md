@@ -86,5 +86,16 @@ For detailed protocol documentation, see the [Technical Whitepaper](WHITEPAPER.m
 
 ### Option 4: just
 
-Want to try this on macos: `just run` will set it up and run from source. 
+Want to try this on macOS: `just run` will set it up and run from source. 
 Run `just clean` afterwards to restore things to original state for mobile app building and development.
+
+---
+
+## Development
+
+For contributor setup, logging guidance, and troubleshooting, see [DEVELOPMENT.md](DEVELOPMENT.md).
+
+Quick tips:
+- Ensure Bluetooth permissions are granted and the app is in the foreground
+- Prefer sequential baselines when debugging; add logs at connection/handshake boundaries
+- See [WHITEPAPER.md](WHITEPAPER.md) for protocol details and [AI_CONTEXT.md](AI_CONTEXT.md) for architecture
