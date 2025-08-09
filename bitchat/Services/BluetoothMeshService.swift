@@ -648,12 +648,8 @@ class BluetoothMeshService: NSObject {
     private var peerConnectionStates: [String: PeerConnectionState] = [:]
     private let connectionStateQueue = DispatchQueue(label: "chat.bitchat.connectionState", attributes: .concurrent)
     
-    // MARK: - Protocol ACK Tracking
+    // MARK: - Timers
     
-    // Protocol-level ACK tracking
-    private var pendingAcks: [String: (packet: BitchatPacket, timestamp: Date, retries: Int)] = [:]
-    private let ackTimeout: TimeInterval = 5.0  // 5 seconds to receive ACK
-    private let maxAckRetries = 3
     private var ackTimer: Timer?
     private var advertisingTimer: Timer?  // Timer for interval-based advertising
     private var connectionKeepAliveTimer: Timer?  // Timer to send keepalive pings
@@ -743,8 +739,6 @@ class BluetoothMeshService: NSObject {
         peerIDByPeripheralID[peripheralID] = peerID
         updatePeripheralConnection(peerID, peripheral: mapping.peripheral)
         
-        SecureLogger.log("[SUCCESS] Successfully mapped peripheral \(peripheralID.prefix(8)) to peer \(peerID)", 
-                       category: SecureLogger.session, level: .info)
         
         // Update PeerSession
         if let session = peerSessions[peerID] {
@@ -757,8 +751,6 @@ class BluetoothMeshService: NSObject {
             let session = PeerSession(peerID: peerID, nickname: nickname)
             session.updateBluetoothConnection(peripheral: mapping.peripheral, characteristic: nil)
             peerSessions[peerID] = session
-            SecureLogger.log("[NEW] Created new PeerSession for \(peerID) with peripheral", 
-                           category: SecureLogger.session, level: .info)
         }
     }
     
@@ -810,8 +802,6 @@ class BluetoothMeshService: NSObject {
             let activePeerCount = peerSessions.values.filter { $0.isActivePeer }.count
             let peripheralCount = connectedPeripherals.count
             let result = max(activePeerCount, peripheralCount)
-            SecureLogger.log("[NETWORK-SIZE] Network size calculation: activePeers=\(activePeerCount), peripherals=\(peripheralCount), result=\(result)", 
-                           category: SecureLogger.session, level: .debug)
             return result
         }
     }
@@ -869,8 +859,6 @@ class BluetoothMeshService: NSObject {
         let networkSize = estimatedNetworkSize
         if networkSize <= 2 {
             let prob = 0.3   // 30% for 2 nodes - helps with discovery and relay-only connections
-            SecureLogger.log("[RELAY-PROB] Relay probability for size \(networkSize): \(prob)", 
-                           category: SecureLogger.session, level: .debug)
             return prob
         } else if networkSize <= 5 {
             return 0.5   // 50% for very small networks
@@ -902,9 +890,6 @@ class BluetoothMeshService: NSObject {
     private let maxMemoryUsageBytes = 50 * 1024 * 1024  // 50MB limit
     private var memoryCleanupTimer: Timer?
     
-    // Track acknowledged packets to prevent unnecessary retries
-    private var acknowledgedPackets = Set<String>()
-    private let acknowledgedPacketsLock = NSLock()
     
     // MARK: - Rate Limiting
     
@@ -1171,9 +1156,7 @@ class BluetoothMeshService: NSObject {
                 return false
             }
             
-            for (peerID, session) in sessionsToRemove {
-                SecureLogger.log("Removing stale/ghost session for \(peerID) (nickname: \(session.nickname))", 
-                               category: SecureLogger.session, level: .debug)
+            for (peerID, _) in sessionsToRemove {
                 self.peerSessions.removeValue(forKey: peerID)
             }
         }
@@ -1376,8 +1359,6 @@ class BluetoothMeshService: NSObject {
                         if let session = self.peerSessions[peerID] {
                             session.isActivePeer = true
                         }
-                        SecureLogger.log("Marked \(peerID) as active (authenticated)", 
-                                       category: SecureLogger.session, level: .info)
                         
                         // Update PeerSession authentication state
                         if let session = self.peerSessions[peerID] {
@@ -1396,8 +1377,6 @@ class BluetoothMeshService: NSObject {
                         if let session = self.peerSessions[peerID] {
                             session.isActivePeer = false
                         }
-                        SecureLogger.log("Marked \(peerID) as inactive (disconnected)", 
-                                       category: SecureLogger.session, level: .info)
                     }
                     
                     // Update PeerSession to disconnected state
@@ -1408,8 +1387,6 @@ class BluetoothMeshService: NSObject {
                         session.isActivePeer = false
                         // Keep the session but mark it as disconnected
                         // This allows us to detect reconnections
-                        SecureLogger.log("Marked \(peerID) (\(session.nickname)) as disconnected in peerSessions", 
-                                       category: SecureLogger.session, level: .info)
                     }
                     
                     // Note: PeerSession is already updated in the disconnect case above
@@ -1597,8 +1574,6 @@ class BluetoothMeshService: NSObject {
                 self.processedMessagesLock.unlock()
                 
                 if removedCount > 0 {
-                    SecureLogger.log("🧹 Cleaned up \(removedCount) old processed messages (kept \(self.processedMessages.count) from last 10 minutes)", 
-                                    category: SecureLogger.session, level: .debug)
                 }
             }
         }
@@ -1611,11 +1586,6 @@ class BluetoothMeshService: NSObject {
         // Start more aggressive cleanup for Unknown peers (every 2 seconds)
         Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
             self?.cleanupUnknownPeers()
-        }
-        
-        // Start ACK timeout checking timer (every 2 seconds for timely retries)
-        Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
-            self?.checkAckTimeouts()
         }
         
         // Start peer availability checking timer (every 15 seconds)
@@ -1657,8 +1627,6 @@ class BluetoothMeshService: NSObject {
                 for peerID in stalePeerIDs {
                     // Also remove from noise service
                     self.cleanupPeerCryptoState(peerID)
-                    SecureLogger.log("Cleaned up stale handshake for peer: \(peerID)", 
-                                   category: SecureLogger.handshake, level: .info)
                 }
             }
             
@@ -1854,7 +1822,6 @@ class BluetoothMeshService: NSObject {
     
     @objc private func appDidEnterBackground() {
         isAppInForeground = false
-        SecureLogger.log("[APP-STATE] App entered background - switching to background scanning mode", level: .info)
         
         #if os(iOS)
         // Begin background tasks for critical operations
@@ -1871,7 +1838,6 @@ class BluetoothMeshService: NSObject {
     
     @objc private func appWillEnterForeground() {
         isAppInForeground = true
-        SecureLogger.log("[APP-STATE] App entering foreground - switching to foreground scanning mode", level: .info)
         
         #if os(iOS)
         // End background tasks as app is coming to foreground
@@ -1992,7 +1958,6 @@ class BluetoothMeshService: NSObject {
             
             // Critical real-time tasks that need frequent checking
             self.cleanupUnknownPeers()
-            self.checkAckTimeouts()
         }
         
         // Medium-frequency timer (20s) - regular maintenance
@@ -2046,8 +2011,6 @@ class BluetoothMeshService: NSObject {
                 self.processedMessagesLock.unlock()
                 
                 if removedCount > 0 {
-                    SecureLogger.log("🧹 Cleaned up \(removedCount) old processed messages (kept \(self.processedMessages.count) from last 10 minutes)", 
-                                    category: SecureLogger.session, level: .debug)
                 }
             }
             
@@ -2142,7 +2105,6 @@ class BluetoothMeshService: NSObject {
         // Continue advertising in background mode with battery considerations
         if !isAdvertising && peripheralManager?.state == .poweredOn {
             startAdvertising()
-            SecureLogger.log("[ADVERTISE] Continued advertising in background mode", level: .info)
         }
     }
     
@@ -2150,7 +2112,6 @@ class BluetoothMeshService: NSObject {
         // Always start advertising when in foreground if possible
         if !isAdvertising && peripheralManager?.state == .poweredOn {
             startAdvertising()
-            SecureLogger.log("[ADVERTISE] Started advertising in foreground mode", level: .info)
         }
     }
     
@@ -2161,8 +2122,6 @@ class BluetoothMeshService: NSObject {
             return 
         }
         
-        SecureLogger.log("[SCAN-START] Starting Bluetooth scanning for peripherals", 
-                       category: SecureLogger.session, level: .info)
         
         // Optimize scan options based on foreground/background state
         // macOS fix: Always allow duplicates to ensure we catch all advertisements
@@ -2190,7 +2149,6 @@ class BluetoothMeshService: NSObject {
         // Rate limit rescans to prevent excessive battery drain
         let now = Date()
         guard now.timeIntervalSince(lastRescanTime) >= minRescanInterval else {
-            SecureLogger.log("Skipping rescan - too soon after last rescan", category: SecureLogger.session, level: .debug)
             return
         }
         lastRescanTime = now
@@ -2530,8 +2488,6 @@ class BluetoothMeshService: NSObject {
         // Use existing message infrastructure
         if let recipientNickname = getPeerNicknames()[peerID] {
             sendPrivateMessage(content, to: peerID, recipientNickname: recipientNickname)
-            SecureLogger.log("[SUCCESS] Sent favorite notification as private message", 
-                            category: SecureLogger.session, level: .info)
         } else {
             SecureLogger.log("[ERROR] Failed to send favorite notification - peer not found", 
                             category: SecureLogger.session, level: .error)
@@ -2650,8 +2606,6 @@ class BluetoothMeshService: NSObject {
                     if betterNickname != "Unknown" {
                         // Update the session with the better nickname
                         session.nickname = betterNickname
-                        SecureLogger.log("Updated nickname for \(peerID) from 'Unknown' to '\(betterNickname)'", 
-                                       category: SecureLogger.session, level: .info)
                     }
                 }
                 nicknames[peerID] = session.nickname
@@ -3471,10 +3425,6 @@ class BluetoothMeshService: NSObject {
             switch MessageType(rawValue: packet.type) {
             case .message:
                 messageTypeName = "MESSAGE"
-            case .protocolAck:
-                messageTypeName = "PROTOCOL_ACK"
-            case .protocolNack:
-                messageTypeName = "PROTOCOL_NACK"
             case .noiseHandshakeInit:
                 messageTypeName = "NOISE_HANDSHAKE_INIT"
             case .noiseHandshakeResp:
@@ -3499,12 +3449,9 @@ class BluetoothMeshService: NSObject {
                 messageTypeName = "UNKNOWN(\(packet.type))"
             }
             
-            // Processing packet
             
             // Rate limiting check with message type awareness
-            let isHighPriority = [MessageType.protocolAck.rawValue,
-                                MessageType.protocolNack.rawValue,
-                                MessageType.noiseHandshakeInit.rawValue,
+            let isHighPriority = [MessageType.noiseHandshakeInit.rawValue,
                                 MessageType.noiseHandshakeResp.rawValue,
                                 MessageType.noiseIdentityAnnounce.rawValue,
                                 MessageType.leave.rawValue].contains(packet.type)
@@ -3538,7 +3485,6 @@ class BluetoothMeshService: NSObject {
             processedMessages[messageID] = updatedState
             processedMessagesLock.unlock()
             
-            // Dropped duplicate message
             // Cancel any pending relay for this message
             cancelPendingRelay(messageID: messageID)
             return
@@ -3673,7 +3619,6 @@ class BluetoothMeshService: NSObject {
                         let shouldRelay = effectiveProb > 0 && Double.random(in: 0...1) < effectiveProb
                         
                         if shouldRelay {
-                            // Relaying broadcast
                             // High priority messages relay immediately, others use exponential delay
                             if self.isHighPriorityMessage(type: relayPacket.type) {
                                 self.broadcastPacket(relayPacket)
@@ -3681,8 +3626,6 @@ class BluetoothMeshService: NSObject {
                                 let delay = self.exponentialRelayDelay()
                                 self.scheduleRelay(relayPacket, messageID: messageID, delay: delay)
                             }
-                        } else {
-                            // Dropped broadcast relay
                         }
                     }
                     
@@ -3850,8 +3793,6 @@ class BluetoothMeshService: NSObject {
                 // Trim whitespace from received nickname
                 let nickname = rawNickname.trimmingCharacters(in: .whitespacesAndNewlines)
                 let senderID = packet.senderID.hexEncodedString()
-                
-                // Received announce from peer
                 
                 // Ignore if it's from ourselves (including previous peer IDs)
                 if isPeerIDOurs(senderID) {
@@ -4627,9 +4568,6 @@ class BluetoothMeshService: NSObject {
                     versionNegotiationState[senderID] = .ackReceived(version: 1)
                 }
                 handleNoiseHandshakeMessage(from: senderID, message: packet.payload, isInitiation: true)
-                
-                // Send protocol ACK for successfully processed handshake initiation
-                sendProtocolAck(for: packet, to: senderID)
             }
             
         case .noiseHandshakeResp:
@@ -4660,9 +4598,6 @@ class BluetoothMeshService: NSObject {
                 
                 // Process the response - this could be message 2 or message 3 in the XX pattern
                 handleNoiseHandshakeMessage(from: senderID, message: packet.payload, isInitiation: false)
-                
-                // Send protocol ACK for successfully processed handshake response
-                sendProtocolAck(for: packet, to: senderID)
             }
             
         case .noiseEncrypted:
@@ -4729,22 +4664,6 @@ class BluetoothMeshService: NSObject {
                 handleVersionAck(from: senderID, data: packet.payload)
             }
             
-        case .protocolAck:
-            // Handle protocol-level acknowledgment
-            let senderID = packet.senderID.hexEncodedString()
-            if !isPeerIDOurs(senderID) {
-                handleProtocolAck(from: senderID, data: packet.payload)
-            }
-            
-        case .protocolNack:
-            // Handle protocol-level negative acknowledgment
-            let senderID = packet.senderID.hexEncodedString()
-            if let recipientIDData = packet.recipientID,
-               isPeerIDOurs(recipientIDData.hexEncodedString())
-               && !isPeerIDOurs(senderID) {
-                handleProtocolNack(from: senderID, data: packet.payload)
-            }
-            
         case .systemValidation:
             // Handle system validation ping (for session sync verification)
             let senderID = packet.senderID.hexEncodedString()
@@ -4764,13 +4683,16 @@ class BluetoothMeshService: NSObject {
                     }
                 } catch {
                     // Validation failed - session is out of sync
-                    SecureLogger.log("Session validation failed with \(senderID): \(error)", 
+                    SecureLogger.log("Session validation failed with \(senderID): \(error) - clearing and re-establishing", 
                                    category: SecureLogger.session, level: .warning)
                     
-                    // Send NACK to trigger session re-establishment
-                    sendProtocolNack(for: packet, to: senderID, 
-                                   reason: "Session validation failed", 
-                                   errorCode: .decryptionFailed)
+                    // Clear session state and re-establish
+                    cleanupPeerCryptoState(senderID)
+                    handshakeCoordinator.resetHandshakeState(for: senderID)
+                    updatePeerConnectionState(senderID, state: .connected)
+                    
+                    // Immediately attempt to re-establish session
+                    attemptHandshakeIfNeeded(with: senderID, forceIfStale: true)
                 }
             }
             
@@ -5053,21 +4975,17 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
     
     func centralManager(_ central: CBCentralManager, willRestoreState dict: [String : Any]) {
         // Restore central manager state after app backgrounding
-        SecureLogger.log("[RESTORE] Restoring CBCentralManager state", level: .info)
         
         // Restore scanned services
-        if let services = dict[CBCentralManagerRestoredStateScanServicesKey] as? [CBUUID] {
-            SecureLogger.log("[RESTORE] Restoring scanned services: \(services)", level: .info)
+        if let _ = dict[CBCentralManagerRestoredStateScanServicesKey] as? [CBUUID] {
         }
         
         // Restore scan options
-        if let scanOptions = dict[CBCentralManagerRestoredStateScanOptionsKey] as? [String: Any] {
-            SecureLogger.log("[RESTORE] Restoring scan options: \(scanOptions)", level: .info)
+        if let _ = dict[CBCentralManagerRestoredStateScanOptionsKey] as? [String: Any] {
         }
         
         // Restore peripherals
         if let peripherals = dict[CBCentralManagerRestoredStatePeripheralsKey] as? [CBPeripheral] {
-            SecureLogger.log("[RESTORE] Restoring \(peripherals.count) peripherals", level: .info)
             
             collectionsQueue.async(flags: .barrier) { [weak self] in
                 guard let self = self else { return }
@@ -5088,7 +5006,6 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
                         peripheral.delegate = self
                         peripheral.discoverServices([BluetoothMeshService.serviceUUID])
                         
-                        SecureLogger.log("[RESTORE] Restored connection to peer: \(peerID)", level: .info)
                     }
                 }
             }
@@ -5098,8 +5015,6 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi RSSI: NSNumber) {
         
         let peripheralID = peripheral.identifier.uuidString
-        SecureLogger.log("[DISCOVERY] Discovered peripheral \(peripheralID.prefix(8)): name=\(peripheral.name ?? "nil"), adData=\(advertisementData)", 
-                       category: SecureLogger.session, level: .debug)
         
         // Extract peer ID from name or advertisement data (macOS compatibility)
         // Peer IDs are 8 bytes = 16 hex characters
@@ -5119,8 +5034,6 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
         
         if let peerID = discoveredPeerID {
             // Found peer ID
-            SecureLogger.log("[SUCCESS] Extracted peer ID \(peerID) from peripheral \(peripheralID.prefix(8))", 
-                           category: SecureLogger.session, level: .info)
             
             // Don't process our own advertisements (including previous peer IDs)
             if isPeerIDOurs(peerID) {
@@ -5130,8 +5043,6 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
             }
             
             // Discovered potential peer
-            SecureLogger.log("[PROCESS] Processing discovered peer \(peerID)", 
-                           category: SecureLogger.session, level: .info)
             
             // Check if we have a relay-only session for this peer that needs upgrading
             collectionsQueue.sync {
@@ -5142,8 +5053,6 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
                 }
             }
         } else {
-            SecureLogger.log("[WARNING] No peer ID found in peripheral \(peripheralID.prefix(8)): name=\(peripheral.name ?? "nil"), localName=\(advertisementData[CBAdvertisementDataLocalNameKey] ?? "nil")", 
-                           category: SecureLogger.session, level: .warning)
         }
         
         // Connection pooling with exponential backoff
@@ -5664,11 +5573,9 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
     
     func peripheralManager(_ peripheral: CBPeripheralManager, willRestoreState dict: [String : Any]) {
         // Restore peripheral manager state after app backgrounding
-        SecureLogger.log("[RESTORE] Restoring CBPeripheralManager state", level: .info)
         
         // Restore services
-        if let services = dict[CBPeripheralManagerRestoredStateServicesKey] as? [CBMutableService] {
-            SecureLogger.log("[RESTORE] Restoring \(services.count) services", level: .info)
+        if dict[CBPeripheralManagerRestoredStateServicesKey] as? [CBMutableService] != nil {
             
             // Services are automatically restored by Core Bluetooth
             // We just need to ensure our internal state is consistent
@@ -5680,7 +5587,6 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         
         // Restore advertisement data
         if let advertisementData = dict[CBPeripheralManagerRestoredStateAdvertisementDataKey] as? [String: Any] {
-            SecureLogger.log("[RESTORE] Restoring advertisement data: \(advertisementData)", level: .info)
             self.advertisementData = advertisementData
             
             DispatchQueue.main.async { [weak self] in
@@ -5968,13 +5874,13 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
     // Check if message type is high priority (should bypass aggregation)
     private func isHighPriorityMessage(type: UInt8) -> Bool {
         switch MessageType(rawValue: type) {
-        case .noiseHandshakeInit, .noiseHandshakeResp, .protocolAck,
+        case .noiseHandshakeInit, .noiseHandshakeResp,
              .versionHello, .versionAck, .deliveryAck, .systemValidation,
              .handshakeRequest:
             return true
         case .message, .announce, .leave, .readReceipt, .deliveryStatusRequest,
              .fragmentStart, .fragmentContinue, .fragmentEnd,
-             .noiseIdentityAnnounce, .noiseEncrypted, .protocolNack, 
+             .noiseIdentityAnnounce, .noiseEncrypted,
              .favorited, .unfavorited, .none:
             return false
         }
@@ -6314,8 +6220,6 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             
             guard let messages = pendingMessages else { return }
             
-            // Sending pending private messages
-            
             // Clear pending messages for this peer
             self.collectionsQueue.sync(flags: .barrier) {
                 _ = self.pendingPrivateMessages.removeValue(forKey: peerID)
@@ -6579,9 +6483,6 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 ttl: 6 // Increased TTL for better delivery on startup
             )
             
-            // Track packet for ACK
-            trackPacketForAck(packet)
-            
             // Try direct delivery first for handshake init
             if !sendDirectToRecipient(packet, recipientPeerID: peerID) {
                 // Handshakes are critical - use broadcast as fallback to ensure delivery
@@ -6656,9 +6557,6 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                     signature: nil,
                     ttl: 6  // Increased TTL for better delivery on startup
                 )
-                
-                // Track packet for ACK
-                trackPacketForAck(packet)
                 
                 // Try direct delivery first for handshake response
                 if !sendDirectToRecipient(packet, recipientPeerID: peerID) {
@@ -6793,9 +6691,6 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 session.lastSuccessfulMessageTime = Date()
             }
             
-            // Send protocol ACK after successful decryption (only once per encrypted packet)
-            sendProtocolAck(for: originalPacket, to: peerID)
-            
             // If we can decrypt messages from this peer, they should be marked as active
             let wasAdded = collectionsQueue.sync(flags: .barrier) {
                 let isActive = self.peerSessions[peerID]?.isActivePeer ?? false
@@ -6899,15 +6794,17 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 // No Noise session, attempting handshake
                 attemptHandshakeIfNeeded(with: peerID, forceIfStale: true)
             } else {
-                SecureLogger.log("Have session with \(peerID) but decryption failed", category: SecureLogger.encryption, level: .warning)
+                SecureLogger.log("Have session with \(peerID) but decryption failed - clearing and re-establishing", category: SecureLogger.encryption, level: .warning)
                 
-                // Send a NACK to inform peer that decryption failed
-                sendProtocolNack(for: originalPacket, to: peerID,
-                               reason: "Decryption failed",
-                               errorCode: .decryptionFailed)
+                // Clear our session state and re-establish
+                cleanupPeerCryptoState(peerID)
+                handshakeCoordinator.resetHandshakeState(for: peerID)
                 
-                // The NACK handler will take care of clearing sessions and re-establishing
-                // Don't initiate anything here to avoid race conditions
+                // Update connection state
+                updatePeerConnectionState(peerID, state: .connected)
+                
+                // Immediately attempt to re-establish session
+                attemptHandshakeIfNeeded(with: peerID, forceIfStale: true)
                 
                 // Update UI to show encryption is broken
                 DispatchQueue.main.async { [weak self] in
@@ -7219,118 +7116,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         #endif
     }
     
-    // MARK: - Protocol ACK/NACK Handling
-    
-    private func handleProtocolAck(from peerID: String, data: Data) {
-        guard let ack = ProtocolAck.fromBinaryData(data) else {
-            SecureLogger.log("Failed to decode protocol ACK from \(peerID)", category: SecureLogger.session, level: .error)
-            return
-        }
-        
-        SecureLogger.log("Received protocol ACK from \(peerID) for packet \(ack.originalPacketID), type: \(ack.packetType), ackID: \(ack.ackID)", 
-                       category: SecureLogger.session, level: .debug)
-        
-        // Remove from pending ACKs and mark as acknowledged
-        // Note: readUUID returns uppercase, but we track with lowercase
-        let normalizedPacketID = ack.originalPacketID.lowercased()
-        _ = collectionsQueue.sync(flags: .barrier) {
-            pendingAcks.removeValue(forKey: normalizedPacketID)
-        }
-        
-        // Track this packet as acknowledged to prevent future retries
-        acknowledgedPacketsLock.lock()
-        acknowledgedPackets.insert(ack.originalPacketID)
-        // Keep only recent acknowledged packets (last 1000)
-        if acknowledgedPackets.count > 1000 {
-            // Remove oldest entries (this is approximate since Set doesn't maintain order)
-            acknowledgedPackets = Set(Array(acknowledgedPackets).suffix(1000))
-        }
-        acknowledgedPacketsLock.unlock()
-        
-        // Handle specific packet types that need ACK confirmation
-        if let messageType = MessageType(rawValue: ack.packetType) {
-            switch messageType {
-            case .noiseHandshakeInit, .noiseHandshakeResp:
-                // Handshake confirmed
-                break
-            case .noiseEncrypted:
-                // Encrypted message confirmed
-                break
-            default:
-                break
-            }
-        }
-    }
-    
-    private func handleProtocolNack(from peerID: String, data: Data) {
-        guard let nack = ProtocolNack.fromBinaryData(data) else {
-            SecureLogger.log("Failed to decode protocol NACK from \(peerID)", category: SecureLogger.session, level: .error)
-            return
-        }
-        
-        SecureLogger.log("Received protocol NACK from \(peerID) for packet \(nack.originalPacketID): \(nack.reason)", 
-                       category: SecureLogger.session, level: .warning)
-        
-        // Invalidate version cache on protocol NACK as it might indicate version mismatch
-        if nack.reason.lowercased().contains("version") || nack.reason.lowercased().contains("protocol") {
-            invalidateVersionCache(for: peerID)
-        }
-        
-        // Remove from pending ACKs
-        _ = collectionsQueue.sync(flags: .barrier) {
-            pendingAcks.removeValue(forKey: nack.originalPacketID)
-        }
-        
-        // Handle specific error codes
-        if let errorCode = ProtocolNack.ErrorCode(rawValue: nack.errorCode) {
-            switch errorCode {
-            case .decryptionFailed:
-                // Session is out of sync - both sides need to clear and re-establish
-                SecureLogger.log("Decryption failed at \(peerID), clearing session and re-establishing", 
-                               category: SecureLogger.encryption, level: .warning)
-                
-                // Clear our session state and handshake coordinator state
-                cleanupPeerCryptoState(peerID)
-                handshakeCoordinator.resetHandshakeState(for: peerID)
-                
-                // Update connection state
-                updatePeerConnectionState(peerID, state: .connected)
-                
-                // Use deterministic role assignment to prevent race conditions
-                let shouldInitiate = handshakeCoordinator.determineHandshakeRole(
-                    myPeerID: myPeerID,
-                    remotePeerID: peerID
-                ) == .initiator
-                
-                if shouldInitiate {
-                    // Small delay to ensure both sides have cleared state
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                        guard let self = self else { return }
-                        SecureLogger.log("Initiating handshake after decryption failure with \(peerID)", 
-                                       category: SecureLogger.session, level: .info)
-                        self.attemptHandshakeIfNeeded(with: peerID, forceIfStale: true)
-                    }
-                } else {
-                    // Send identity announcement to signal we're ready
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                        guard let self = self else { return }
-                        SecureLogger.log("Sending identity announcement after decryption failure to \(peerID)", 
-                                       category: SecureLogger.session, level: .info)
-                        self.sendNoiseIdentityAnnounce(to: peerID)
-                    }
-                }
-            case .sessionExpired:
-                // Clear session and re-handshake
-                SecureLogger.log("Session expired at \(peerID), clearing and re-handshaking", 
-                               category: SecureLogger.session, level: .warning)
-                cleanupPeerCryptoState(peerID)
-                handshakeCoordinator.resetHandshakeState(for: peerID)
-                attemptHandshakeIfNeeded(with: peerID, forceIfStale: true)
-            default:
-                break
-            }
-        }
-    }
+    // MARK: - Handshake Request Handling
     
     private func handleHandshakeRequest(from peerID: String, data: Data) {
         guard let request = HandshakeRequest.fromBinaryData(data) else {
@@ -7374,75 +7160,10 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             initiateNoiseHandshake(with: peerID)
         } else {
             // We have higher ID, send identity announce to prompt them
-            // Sending identity announce
             sendNoiseIdentityAnnounce(to: peerID)
         }
     }
     
-    // Send protocol ACK for important packets
-    private func sendProtocolAck(for packet: BitchatPacket, to peerID: String, hopCount: UInt8 = 0) {
-        // Generate packet ID from packet content hash
-        let packetID = generatePacketID(for: packet)
-        
-        // Debug: log packet details
-        _ = packet.senderID.prefix(4).hexEncodedString()
-        _ = packet.recipientID?.prefix(4).hexEncodedString() ?? "nil"
-        // Send protocol ACK
-        
-        let ack = ProtocolAck(
-            originalPacketID: packetID,
-            senderID: packet.senderID.hexEncodedString(),
-            receiverID: myPeerID,
-            packetType: packet.type,
-            hopCount: hopCount
-        )
-        
-        let ackPacket = BitchatPacket(
-            type: MessageType.protocolAck.rawValue,
-            senderID: Data(hexString: myPeerID) ?? Data(),
-            recipientID: Data(hexString: peerID) ?? Data(),
-            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-            payload: ack.toBinaryData(),
-            signature: nil,
-            ttl: 3  // ACKs don't need to travel far
-        )
-        
-        // Protocol ACKs should go directly to the sender when possible
-        if !sendDirectToRecipient(ackPacket, recipientPeerID: peerID) {
-            // Fall back to selective relay if direct delivery fails
-            sendViaSelectiveRelay(ackPacket, recipientPeerID: peerID)
-        }
-    }
-    
-    // Send protocol NACK for failed packets
-    private func sendProtocolNack(for packet: BitchatPacket, to peerID: String, reason: String, errorCode: ProtocolNack.ErrorCode) {
-        let packetID = generatePacketID(for: packet)
-        
-        let nack = ProtocolNack(
-            originalPacketID: packetID,
-            senderID: packet.senderID.hexEncodedString(),
-            receiverID: myPeerID,
-            packetType: packet.type,
-            reason: reason,
-            errorCode: errorCode
-        )
-        
-        let nackPacket = BitchatPacket(
-            type: MessageType.protocolNack.rawValue,
-            senderID: Data(hexString: myPeerID) ?? Data(),
-            recipientID: Data(hexString: peerID) ?? Data(),
-            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-            payload: nack.toBinaryData(),
-            signature: nil,
-            ttl: 3  // NACKs don't need to travel far
-        )
-        
-        // Protocol NACKs should go directly to the sender when possible
-        if !sendDirectToRecipient(nackPacket, recipientPeerID: peerID) {
-            // Fall back to selective relay if direct delivery fails
-            sendViaSelectiveRelay(nackPacket, recipientPeerID: peerID)
-        }
-    }
     
     // Generate unique packet ID from immutable packet fields
     private func generatePacketID(for packet: BitchatPacket) -> String {
@@ -7477,111 +7198,6 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         return result
     }
     
-    // Track packets that need ACKs
-    private func trackPacketForAck(_ packet: BitchatPacket) {
-        let packetID = generatePacketID(for: packet)
-        
-        // Debug: log packet details
-        _ = packet.senderID.prefix(4).hexEncodedString()
-        _ = packet.recipientID?.prefix(4).hexEncodedString() ?? "nil"
-        // Track packet for ACK
-        
-        collectionsQueue.sync(flags: .barrier) {
-            pendingAcks[packetID] = (packet: packet, timestamp: Date(), retries: 0)
-        }
-        
-        // Schedule timeout check with initial delay (using exponential backoff starting at 1s)
-        let initialDelay = calculateExponentialBackoff(retry: 1) // 1 second initial delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + initialDelay) { [weak self] in
-            self?.checkAckTimeout(for: packetID)
-        }
-    }
-    
-    // Check for ACK timeout and retry if needed
-    private func checkAckTimeout(for packetID: String) {
-        // Check if already acknowledged
-        acknowledgedPacketsLock.lock()
-        let isAcknowledged = acknowledgedPackets.contains(packetID)
-        acknowledgedPacketsLock.unlock()
-        
-        if isAcknowledged {
-            // Already acknowledged, remove from pending and don't retry
-            _ = collectionsQueue.sync(flags: .barrier) {
-                pendingAcks.removeValue(forKey: packetID)
-            }
-            SecureLogger.log("Packet \(packetID) already acknowledged, cancelling retries", 
-                           category: SecureLogger.session, level: .debug)
-            return
-        }
-        
-        collectionsQueue.sync(flags: .barrier) { [weak self] in
-            guard let self = self,
-                  let pending = self.pendingAcks[packetID] else { return }
-            
-            // Check if this is a handshake packet and we already have an established session
-            if pending.packet.type == MessageType.noiseHandshakeInit.rawValue ||
-               pending.packet.type == MessageType.noiseHandshakeResp.rawValue {
-                // Extract peer ID from packet
-                let peerID = pending.packet.recipientID?.hexEncodedString() ?? ""
-                if !peerID.isEmpty && self.noiseService.hasEstablishedSession(with: peerID) {
-                    // We have an established session, don't retry handshake packets
-                    SecureLogger.log("Not retrying handshake packet \(packetID) - session already established with \(peerID)", 
-                                   category: SecureLogger.handshake, level: .info)
-                    self.pendingAcks.removeValue(forKey: packetID)
-                    return
-                }
-            }
-            
-            if pending.retries < self.maxAckRetries {
-                // Retry sending the packet
-                SecureLogger.log("ACK timeout for packet \(packetID), retrying (attempt \(pending.retries + 1))", 
-                               category: SecureLogger.session, level: .warning)
-                
-                self.pendingAcks[packetID] = (packet: pending.packet, 
-                                              timestamp: Date(), 
-                                              retries: pending.retries + 1)
-                
-                // Resend the packet
-                SecureLogger.log("Resending packet due to ACK timeout (retry \(pending.retries + 1))", 
-                               category: SecureLogger.session, level: .debug)
-                DispatchQueue.main.async {
-                    self.broadcastPacket(pending.packet)
-                }
-                
-                // Schedule next timeout check with exponential backoff
-                let backoffDelay = self.calculateExponentialBackoff(retry: pending.retries + 1)
-                DispatchQueue.main.asyncAfter(deadline: .now() + backoffDelay) {
-                    self.checkAckTimeout(for: packetID)
-                }
-            } else {
-                // Max retries reached, give up
-                SecureLogger.log("Max ACK retries reached for packet \(packetID), giving up", 
-                               category: SecureLogger.session, level: .error)
-                self.pendingAcks.removeValue(forKey: packetID)
-                
-                // Could notify upper layer about delivery failure here
-            }
-        }
-    }
-    
-    // Check all pending ACKs for timeouts (called by timer)
-    private func checkAckTimeouts() {
-        let now = Date()
-        var timedOutPackets: [String] = []
-        
-        collectionsQueue.sync {
-            for (packetID, pending) in pendingAcks {
-                if now.timeIntervalSince(pending.timestamp) > ackTimeout {
-                    timedOutPackets.append(packetID)
-                }
-            }
-        }
-        
-        // Process timeouts outside the sync block
-        for packetID in timedOutPackets {
-            checkAckTimeout(for: packetID)
-        }
-    }
     
     // Check peer availability based on last heard time
     private func checkPeerAvailability() {
@@ -7772,8 +7388,6 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
     
     // Send private message using Noise Protocol
     private func sendPrivateMessageViaNoise(_ content: String, to recipientPeerID: String, recipientNickname: String, messageID: String? = nil) {
-        SecureLogger.log("sendPrivateMessageViaNoise called - content: '\(content.prefix(50))...', to: \(recipientPeerID), messageID: \(messageID ?? "nil")", 
-                       category: SecureLogger.noise, level: .info)
         
         // Use per-peer encryption queue to prevent nonce desynchronization
         let encryptionQueue = getEncryptionQueue(for: recipientPeerID)
@@ -7926,11 +7540,6 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 payload: encryptedData,
                 signature: nil,
                 ttl: adaptiveTTL            )
-            
-            // Sending encrypted private message
-            
-            // Track packet for ACK
-            trackPacketForAck(outerPacket)
             
             // Try direct delivery first
             if !sendDirectToRecipient(outerPacket, recipientPeerID: recipientPeerID) {

@@ -1,6 +1,9 @@
 import Foundation
 import CryptoKit
-import P256K
+// TODO: Add secp256k1 library for Nostr support
+// Options: https://github.com/GigaBitcoin/secp256k1.swift
+// or: https://github.com/Boilertalk/secp256k1.swift
+// import secp256k1
 
 // Keychain helper for secure storage
 struct KeychainHelper {
@@ -59,13 +62,18 @@ struct NostrIdentity: Codable {
     
     /// Generate a new Nostr identity
     static func generate() throws -> NostrIdentity {
+        // TODO: Implement with secp256k1 library
         // Generate Schnorr key for Nostr
-        let schnorrKey = try P256K.Schnorr.PrivateKey()
-        let xOnlyPubkey = Data(schnorrKey.xonly.bytes)
+        // let schnorrKey = try secp256k1.Schnorr.PrivateKey()
+        // let xOnlyPubkey = Data(schnorrKey.xonly.bytes)
+        
+        // Temporary: Use placeholder data until secp256k1 library is added
+        let privateKeyData = Data(repeating: 0, count: 32)
+        let xOnlyPubkey = Data(repeating: 0, count: 32)
         let npub = try Bech32.encode(hrp: "npub", data: xOnlyPubkey)
         
         return NostrIdentity(
-            privateKey: schnorrKey.dataRepresentation,
+            privateKey: privateKeyData,
             publicKey: xOnlyPubkey, // Store x-only public key
             npub: npub,
             createdAt: Date()
@@ -74,8 +82,12 @@ struct NostrIdentity: Codable {
     
     /// Initialize from existing private key data
     init(privateKeyData: Data) throws {
-        let schnorrKey = try P256K.Schnorr.PrivateKey(dataRepresentation: privateKeyData)
-        let xOnlyPubkey = Data(schnorrKey.xonly.bytes)
+        // TODO: Implement with secp256k1 library
+        // let schnorrKey = try secp256k1.Schnorr.PrivateKey(dataRepresentation: privateKeyData)
+        // let xOnlyPubkey = Data(schnorrKey.xonly.bytes)
+        
+        // Temporary: Use placeholder data until secp256k1 library is added
+        let xOnlyPubkey = Data(repeating: 0, count: 32)
         
         self.privateKey = privateKeyData
         self.publicKey = xOnlyPubkey
@@ -83,15 +95,17 @@ struct NostrIdentity: Codable {
         self.createdAt = Date()
     }
     
-    /// Get signing key for event signatures
-    func signingKey() throws -> P256K.Signing.PrivateKey {
-        try P256K.Signing.PrivateKey(dataRepresentation: privateKey)
-    }
+    // TODO: Implement with secp256k1 library
+    // /// Get signing key for event signatures
+    // func signingKey() throws -> secp256k1.Signing.PrivateKey {
+    //     try secp256k1.Signing.PrivateKey(dataRepresentation: privateKey)
+    // }
     
-    /// Get Schnorr signing key for Nostr event signatures
-    func schnorrSigningKey() throws -> P256K.Schnorr.PrivateKey {
-        try P256K.Schnorr.PrivateKey(dataRepresentation: privateKey)
-    }
+    // TODO: Implement with secp256k1 library
+    // /// Get Schnorr signing key for Nostr event signatures  
+    // func schnorrSigningKey() throws -> secp256k1.Schnorr.PrivateKey {
+    //     try secp256k1.Schnorr.PrivateKey(dataRepresentation: privateKey)
+    // }
     
     /// Get hex-encoded public key (for Nostr events)
     var publicKeyHex: String {

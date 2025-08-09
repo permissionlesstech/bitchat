@@ -156,9 +156,7 @@ enum MessageType: UInt8 {
     case versionHello = 0x20            // Initial version announcement
     case versionAck = 0x21              // Version acknowledgment
     
-    // Protocol-level acknowledgments
-    case protocolAck = 0x22             // Generic protocol acknowledgment
-    case protocolNack = 0x23            // Negative acknowledgment (failure)
+    // Protocol-level messages
     case systemValidation = 0x24        // Session validation ping
     case handshakeRequest = 0x25        // Request handshake for pending messages
     
@@ -183,8 +181,6 @@ enum MessageType: UInt8 {
         case .noiseIdentityAnnounce: return "noiseIdentityAnnounce"
         case .versionHello: return "versionHello"
         case .versionAck: return "versionAck"
-        case .protocolAck: return "protocolAck"
-        case .protocolNack: return "protocolNack"
         case .systemValidation: return "systemValidation"
         case .handshakeRequest: return "handshakeRequest"
         case .favorited: return "favorited"
@@ -568,182 +564,6 @@ struct HandshakeRequest: Codable {
     }
 }
 
-// MARK: - Protocol Acknowledgments
-
-// Protocol-level acknowledgment for reliable delivery
-struct ProtocolAck: Codable {
-    let originalPacketID: String    // ID of the packet being acknowledged
-    let ackID: String              // Unique ID for this ACK
-    let senderID: String           // Who sent the original packet
-    let receiverID: String         // Who received and is acknowledging
-    let packetType: UInt8          // Type of packet being acknowledged
-    let timestamp: Date            // When ACK was generated
-    let hopCount: UInt8            // Hops taken to reach receiver
-    
-    init(originalPacketID: String, senderID: String, receiverID: String, packetType: UInt8, hopCount: UInt8) {
-        self.originalPacketID = originalPacketID
-        self.ackID = UUID().uuidString
-        self.senderID = senderID
-        self.receiverID = receiverID
-        self.packetType = packetType
-        self.timestamp = Date()
-        self.hopCount = hopCount
-    }
-    
-    // Private init for binary decoding
-    private init(originalPacketID: String, ackID: String, senderID: String, receiverID: String, 
-                 packetType: UInt8, timestamp: Date, hopCount: UInt8) {
-        self.originalPacketID = originalPacketID
-        self.ackID = ackID
-        self.senderID = senderID
-        self.receiverID = receiverID
-        self.packetType = packetType
-        self.timestamp = timestamp
-        self.hopCount = hopCount
-    }
-    
-    func toBinaryData() -> Data {
-        var data = Data()
-        data.appendUUID(originalPacketID)
-        data.appendUUID(ackID)
-        
-        // Sender and receiver IDs as 8-byte hex strings
-        data.append(Data(hexString: senderID) ?? Data(repeating: 0, count: 8))
-        data.append(Data(hexString: receiverID) ?? Data(repeating: 0, count: 8))
-        
-        data.appendUInt8(packetType)
-        data.appendUInt8(hopCount)
-        data.appendDate(timestamp)
-        return data
-    }
-    
-    static func fromBinaryData(_ data: Data) -> ProtocolAck? {
-        let dataCopy = Data(data)
-        guard dataCopy.count >= 50 else { return nil } // 2 UUIDs + 2 IDs + type + hop + timestamp
-        
-        var offset = 0
-        guard let originalPacketID = dataCopy.readUUID(at: &offset),
-              let ackID = dataCopy.readUUID(at: &offset),
-              let senderIDData = dataCopy.readFixedBytes(at: &offset, count: 8),
-              let receiverIDData = dataCopy.readFixedBytes(at: &offset, count: 8),
-              let packetType = dataCopy.readUInt8(at: &offset),
-              InputValidator.validateMessageType(packetType),
-              let hopCount = dataCopy.readUInt8(at: &offset),
-              InputValidator.validateHopCount(hopCount),
-              let timestamp = dataCopy.readDate(at: &offset),
-              InputValidator.validateTimestamp(timestamp) else { return nil }
-        
-        let senderID = senderIDData.hexEncodedString()
-        let receiverID = receiverIDData.hexEncodedString()
-        guard InputValidator.validatePeerID(senderID),
-              InputValidator.validatePeerID(receiverID) else { return nil }
-        
-        return ProtocolAck(originalPacketID: originalPacketID,
-                          ackID: ackID,
-                          senderID: senderID,
-                          receiverID: receiverID,
-                          packetType: packetType,
-                          timestamp: timestamp,
-                          hopCount: hopCount)
-    }
-}
-
-// Protocol-level negative acknowledgment
-struct ProtocolNack: Codable {
-    let originalPacketID: String    // ID of the packet that failed
-    let nackID: String             // Unique ID for this NACK
-    let senderID: String           // Who sent the original packet
-    let receiverID: String         // Who is reporting the failure
-    let packetType: UInt8          // Type of packet that failed
-    let timestamp: Date            // When NACK was generated
-    let reason: String             // Reason for failure
-    let errorCode: UInt8           // Numeric error code
-    
-    // Error codes
-    enum ErrorCode: UInt8 {
-        case unknown = 0
-        case checksumFailed = 1
-        case decryptionFailed = 2
-        case malformedPacket = 3
-        case unsupportedVersion = 4
-        case resourceExhausted = 5
-        case routingFailed = 6
-        case sessionExpired = 7
-    }
-    
-    init(originalPacketID: String, senderID: String, receiverID: String, 
-         packetType: UInt8, reason: String, errorCode: ErrorCode = .unknown) {
-        self.originalPacketID = originalPacketID
-        self.nackID = UUID().uuidString
-        self.senderID = senderID
-        self.receiverID = receiverID
-        self.packetType = packetType
-        self.timestamp = Date()
-        self.reason = reason
-        self.errorCode = errorCode.rawValue
-    }
-    
-    // Private init for binary decoding
-    private init(originalPacketID: String, nackID: String, senderID: String, receiverID: String,
-                 packetType: UInt8, timestamp: Date, reason: String, errorCode: UInt8) {
-        self.originalPacketID = originalPacketID
-        self.nackID = nackID
-        self.senderID = senderID
-        self.receiverID = receiverID
-        self.packetType = packetType
-        self.timestamp = timestamp
-        self.reason = reason
-        self.errorCode = errorCode
-    }
-    
-    func toBinaryData() -> Data {
-        var data = Data()
-        data.appendUUID(originalPacketID)
-        data.appendUUID(nackID)
-        
-        // Sender and receiver IDs as 8-byte hex strings
-        data.append(Data(hexString: senderID) ?? Data(repeating: 0, count: 8))
-        data.append(Data(hexString: receiverID) ?? Data(repeating: 0, count: 8))
-        
-        data.appendUInt8(packetType)
-        data.appendUInt8(errorCode)
-        data.appendDate(timestamp)
-        data.appendString(reason)
-        return data
-    }
-    
-    static func fromBinaryData(_ data: Data) -> ProtocolNack? {
-        let dataCopy = Data(data)
-        guard dataCopy.count >= 52 else { return nil } // Minimum size
-        
-        var offset = 0
-        guard let originalPacketID = dataCopy.readUUID(at: &offset),
-              let nackID = dataCopy.readUUID(at: &offset),
-              let senderIDData = dataCopy.readFixedBytes(at: &offset, count: 8),
-              let receiverIDData = dataCopy.readFixedBytes(at: &offset, count: 8),
-              let packetType = dataCopy.readUInt8(at: &offset),
-              InputValidator.validateMessageType(packetType),
-              let errorCode = dataCopy.readUInt8(at: &offset),
-              let timestamp = dataCopy.readDate(at: &offset),
-              InputValidator.validateTimestamp(timestamp),
-              let reasonRaw = dataCopy.readString(at: &offset),
-              let reason = InputValidator.validateReasonString(reasonRaw) else { return nil }
-        
-        let senderID = senderIDData.hexEncodedString()
-        let receiverID = receiverIDData.hexEncodedString()
-        guard InputValidator.validatePeerID(senderID),
-              InputValidator.validatePeerID(receiverID) else { return nil }
-        
-        return ProtocolNack(originalPacketID: originalPacketID,
-                           nackID: nackID,
-                           senderID: senderID,
-                           receiverID: receiverID,
-                           packetType: packetType,
-                           timestamp: timestamp,
-                           reason: reason,
-                           errorCode: errorCode)
-    }
-}
 
 // MARK: - Peer Identity Rotation
 
