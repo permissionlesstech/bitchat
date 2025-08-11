@@ -286,6 +286,7 @@ class BluetoothMeshService: NSObject {
     
     private let collectionsQueue = DispatchQueue(label: "bitchat.collections", attributes: .concurrent)
     private let collectionsQueueKey = DispatchSpecificKey<Void>()
+    private var lastLoggedConnectionLimit: Int = 0
     
     // MARK: - Encryption Queues
     
@@ -402,10 +403,6 @@ class BluetoothMeshService: NSObject {
                 self.identityCacheTimestamps.removeValue(forKey: peerID)
             }
             
-            if !expiredPeerIDs.isEmpty {
-                SecureLogger.log("Cleaned \(expiredPeerIDs.count) expired identity cache entries", 
-                               category: SecureLogger.session, level: .debug)
-            }
         }
     }
     
@@ -462,8 +459,6 @@ class BluetoothMeshService: NSObject {
         queue.append(queuedWrite)
         writeQueue[peripheralID] = queue
         
-        SecureLogger.log("Queued write for disconnected peripheral \(peripheralID), queue size: \(queue.count)", 
-                       category: SecureLogger.session, level: .debug)
     }
     
     private func processWriteQueue(for peripheral: CBPeripheral) {
@@ -477,10 +472,6 @@ class BluetoothMeshService: NSObject {
         writeQueue[peripheralID] = []
         writeQueueLock.unlock()
         
-        if !queue.isEmpty {
-            SecureLogger.log("Processing \(queue.count) queued writes for \(peripheralID)", 
-                           category: SecureLogger.session, level: .info)
-        }
         
         // Process queued writes with small delay between them
         for (index, queuedWrite) in queue.enumerated() {
@@ -521,10 +512,6 @@ class BluetoothMeshService: NSObject {
             }
         }
         
-        if expiredWrites > 0 {
-            SecureLogger.log("Cleaned \(expiredWrites) expired queued writes", 
-                           category: SecureLogger.session, level: .debug)
-        }
     }
     // MARK: - Message Processing
     
@@ -720,8 +707,6 @@ class BluetoothMeshService: NSObject {
     }
     
     private func updatePeripheralMapping(peripheralID: String, peerID: String) {
-        SecureLogger.log("[MAPPING] updatePeripheralMapping called: peripheralID=\(peripheralID.prefix(8)) -> peerID=\(peerID)", 
-                       category: SecureLogger.session, level: .debug)
         
         guard var mapping = peripheralMappings[peripheralID] else { 
             SecureLogger.log("[WARNING] No peripheral mapping found for \(peripheralID.prefix(8))", 
@@ -743,22 +728,19 @@ class BluetoothMeshService: NSObject {
         peerIDByPeripheralID[peripheralID] = peerID
         updatePeripheralConnection(peerID, peripheral: mapping.peripheral)
         
-        SecureLogger.log("[SUCCESS] Successfully mapped peripheral \(peripheralID.prefix(8)) to peer \(peerID)", 
-                       category: SecureLogger.session, level: .info)
         
         // Update PeerSession
         if let session = peerSessions[peerID] {
-            let wasConnected = session.isConnected
+            let _ = session.isConnected
             session.updateBluetoothConnection(peripheral: mapping.peripheral, characteristic: nil)
-            SecureLogger.log("[UPDATE] Updated existing PeerSession for \(peerID): wasConnected=\(wasConnected)", 
-                           category: SecureLogger.session, level: .debug)
         } else {
+            // This is a truly new peer session
+            SecureLogger.log("New peer connected: \(peerID)", 
+                           category: SecureLogger.session, level: .info)
             let nickname = getBestAvailableNickname(for: peerID)
             let session = PeerSession(peerID: peerID, nickname: nickname)
             session.updateBluetoothConnection(peripheral: mapping.peripheral, characteristic: nil)
             peerSessions[peerID] = session
-            SecureLogger.log("[NEW] Created new PeerSession for \(peerID) with peripheral", 
-                           category: SecureLogger.session, level: .info)
         }
     }
     
@@ -810,8 +792,6 @@ class BluetoothMeshService: NSObject {
             let activePeerCount = peerSessions.values.filter { $0.isActivePeer }.count
             let peripheralCount = connectedPeripherals.count
             let result = max(activePeerCount, peripheralCount)
-            SecureLogger.log("[NETWORK-SIZE] Network size calculation: activePeers=\(activePeerCount), peripherals=\(peripheralCount), result=\(result)", 
-                           category: SecureLogger.session, level: .debug)
             return result
         }
     }
@@ -827,8 +807,11 @@ class BluetoothMeshService: NSObject {
             // Override battery limits for small groups to prevent thrashing
             let dynamicLimit = max(baseLimit, nearbyPeers + 1)
             if dynamicLimit != baseLimit {
-                SecureLogger.log("[CONN-LIMIT] Dynamic connection limit: \(dynamicLimit) (base: \(baseLimit), peers: \(nearbyPeers)) - maintaining full mesh", 
-                               category: SecureLogger.session, level: .info)
+                if abs(dynamicLimit - lastLoggedConnectionLimit) > 5 {
+                    SecureLogger.log("Connection limit changed: \(dynamicLimit)", 
+                                   category: SecureLogger.session, level: .info)
+                    lastLoggedConnectionLimit = dynamicLimit
+                }
             }
             return dynamicLimit
         }
@@ -841,8 +824,11 @@ class BluetoothMeshService: NSObject {
         let finalLimit = min(scaledLimit, 30)
         
         if finalLimit != baseLimit {
-            SecureLogger.log("[CONN-LIMIT] Dynamic connection limit: \(finalLimit) (base: \(baseLimit), peers: \(nearbyPeers), multiplier: \(String(format: "%.2f", groupMultiplier)))", 
-                           category: SecureLogger.session, level: .info)
+            if abs(finalLimit - lastLoggedConnectionLimit) > 5 {
+                SecureLogger.log("Connection limit changed: \(finalLimit)", 
+                               category: SecureLogger.session, level: .info)
+                lastLoggedConnectionLimit = finalLimit
+            }
         }
         
         return finalLimit
@@ -2137,8 +2123,6 @@ class BluetoothMeshService: NSObject {
             return 
         }
         
-        SecureLogger.log("[SCAN-START] Starting Bluetooth scanning for peripherals", 
-                       category: SecureLogger.session, level: .info)
         
         // Optimize scan options based on foreground/background state
         // macOS fix: Always allow duplicates to ensure we catch all advertisements
@@ -2166,7 +2150,6 @@ class BluetoothMeshService: NSObject {
         // Rate limit rescans to prevent excessive battery drain
         let now = Date()
         guard now.timeIntervalSince(lastRescanTime) >= minRescanInterval else {
-            SecureLogger.log("Skipping rescan - too soon after last rescan", category: SecureLogger.session, level: .debug)
             return
         }
         lastRescanTime = now
@@ -2500,14 +2483,10 @@ class BluetoothMeshService: NSObject {
                             category: SecureLogger.session, level: .info)
         }
         
-        SecureLogger.log("📤 Sending \(isFavorite ? "favorite" : "unfavorite") notification to \(peerID) via mesh", 
-                        category: SecureLogger.session, level: .info)
         
         // Use existing message infrastructure
         if let recipientNickname = getPeerNicknames()[peerID] {
             sendPrivateMessage(content, to: peerID, recipientNickname: recipientNickname)
-            SecureLogger.log("[SUCCESS] Sent favorite notification as private message", 
-                            category: SecureLogger.session, level: .info)
         } else {
             SecureLogger.log("[ERROR] Failed to send favorite notification - peer not found", 
                             category: SecureLogger.session, level: .error)
@@ -2820,16 +2799,9 @@ class BluetoothMeshService: NSObject {
     
     // Debounced peer list update notification
     private func notifyPeerListUpdate(immediate: Bool = false) {
-        let activePeerCount = collectionsQueue.sync { peerSessions.values.filter { $0.isActivePeer }.count }
-        let connectedPeripheralCount = collectionsQueue.sync { connectedPeripherals.count }
-        SecureLogger.log("[PEER-UPDATE] notifyPeerListUpdate called: immediate=\(immediate), activePeers=\(activePeerCount), connectedPeripherals=\(connectedPeripheralCount)", 
-                       category: SecureLogger.session, level: .debug)
-        
         if immediate {
             // For initial connections, update immediately
             let connectedPeerIDs = self.getAllConnectedPeerIDs()
-            SecureLogger.log("[IMMEDIATE] Immediate update with peerIDs: \(connectedPeerIDs)", 
-                           category: SecureLogger.session, level: .info)
             
             DispatchQueue.main.async {
                 self.delegate?.didUpdatePeerList(connectedPeerIDs)
@@ -2888,9 +2860,7 @@ class BluetoothMeshService: NSObject {
         
         // Check if we have a recent entry
         if let entry = protocolMessageDedup[key], !isExpired(entry) {
-            let timeSince = Date().timeIntervalSince(entry.sentAt)
-            SecureLogger.log("[DEDUP] Suppressing duplicate \(type) to \(peerID) (sent \(String(format: "%.1f", timeSince))s ago)", 
-                           category: SecureLogger.session, level: .debug)
+            let _ = Date().timeIntervalSince(entry.sentAt)
             return true
         }
         
@@ -3367,8 +3337,6 @@ class BluetoothMeshService: NSObject {
                     
                     // Check if we need to update the mapping
                     if peerIDByPeripheralID[peripheralID] != senderID {
-                        SecureLogger.log("Updating peripheral mapping: \(peripheralID) -> \(senderID)", 
-                                       category: SecureLogger.session, level: .debug)
                         peerIDByPeripheralID[peripheralID] = senderID
                         
                         // Also ensure connectedPeripherals has the correct mapping
@@ -3962,8 +3930,6 @@ class BluetoothMeshService: NSObject {
                 
                 if let peripheral = peripheralToUpdate {
                     let peripheralID = peripheral.identifier.uuidString
-                    SecureLogger.log("Updating peripheral \(peripheralID) mapping to peer ID \(senderID)", 
-                                   category: SecureLogger.session, level: .info)
                     
                     // Update simplified mapping
                     updatePeripheralMapping(peripheralID: peripheralID, peerID: senderID)
@@ -4064,14 +4030,10 @@ class BluetoothMeshService: NSObject {
                             }
                             
                             if recentVersionHello || hasUnmappedPeripheral {
-                                SecureLogger.log("Marking \(senderID) as active despite no peripheral - recent version hello or unmapped peripheral exists", 
-                                               category: SecureLogger.session, level: .info)
                                 shouldMarkActive = true
                                 
                                 // Trigger a rescan to establish peripheral mapping
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                                    SecureLogger.log("Triggering rescan to find peripheral for \(senderID)", 
-                                                   category: SecureLogger.session, level: .info)
                                     self?.triggerRescan()
                                 }
                             } else {
@@ -4144,8 +4106,6 @@ class BluetoothMeshService: NSObject {
                     let shouldShowConnectMessage = (isFirstAnnounce && wasInserted) || 
                                                  (wasDisconnected && hasPeripheralConnection)
                     
-                    SecureLogger.log("[CONNECT-CHECK] Connect message check for \(senderID): isFirstAnnounce=\(isFirstAnnounce), wasInserted=\(wasInserted), wasDisconnected=\(wasDisconnected), hasPeripheralConnection=\(hasPeripheralConnection), shouldShow=\(shouldShowConnectMessage)", 
-                                   category: SecureLogger.session, level: .debug)
                     
                     if shouldShowConnectMessage {
                         if wasUpgradedFromRelay {
@@ -4159,8 +4119,6 @@ class BluetoothMeshService: NSObject {
                         // Delay the connect message slightly to allow identity announcement to be processed
                         // This helps ensure fingerprint mappings are available for nickname resolution
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                            SecureLogger.log("[NOTIFY] Sending connected notification for \(senderID)", 
-                                           category: SecureLogger.session, level: .info)
                             self.delegate?.didConnectToPeer(senderID)
                         }
                         self.notifyPeerListUpdate(immediate: true)
@@ -4997,8 +4955,10 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
         @unknown default: stateString = "unknown default"
         }
         
-        SecureLogger.log("[BT-STATE] Central manager state changed to: \(stateString)", 
-                       category: SecureLogger.session, level: .info)
+        if centralManager?.state != .poweredOn {
+            SecureLogger.log("[BT-STATE] Central manager state changed to: \(stateString)", 
+                           category: SecureLogger.session, level: .warning)
+        }
         
         // Notify ChatViewModel of Bluetooth state change
         if let chatViewModel = delegate as? ChatViewModel {
@@ -5024,16 +4984,6 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
         // Restore central manager state after app backgrounding
         SecureLogger.log("[RESTORE] Restoring CBCentralManager state", level: .info)
         
-        // Restore scanned services
-        if let services = dict[CBCentralManagerRestoredStateScanServicesKey] as? [CBUUID] {
-            SecureLogger.log("[RESTORE] Restoring scanned services: \(services)", level: .info)
-        }
-        
-        // Restore scan options
-        if let scanOptions = dict[CBCentralManagerRestoredStateScanOptionsKey] as? [String: Any] {
-            SecureLogger.log("[RESTORE] Restoring scan options: \(scanOptions)", level: .info)
-        }
-        
         // Restore peripherals
         if let peripherals = dict[CBCentralManagerRestoredStatePeripheralsKey] as? [CBPeripheral] {
             SecureLogger.log("[RESTORE] Restoring \(peripherals.count) peripherals", level: .info)
@@ -5057,7 +5007,6 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
                         peripheral.delegate = self
                         peripheral.discoverServices([BluetoothMeshService.serviceUUID])
                         
-                        SecureLogger.log("[RESTORE] Restored connection to peer: \(peerID)", level: .info)
                     }
                 }
             }
@@ -5067,8 +5016,6 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi RSSI: NSNumber) {
         
         let peripheralID = peripheral.identifier.uuidString
-        SecureLogger.log("[DISCOVERY] Discovered peripheral \(peripheralID.prefix(8)): name=\(peripheral.name ?? "nil"), adData=\(advertisementData)", 
-                       category: SecureLogger.session, level: .debug)
         
         // Extract peer ID from name or advertisement data (macOS compatibility)
         // Peer IDs are 8 bytes = 16 hex characters
@@ -5088,19 +5035,13 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
         
         if let peerID = discoveredPeerID {
             // Found peer ID
-            SecureLogger.log("[SUCCESS] Extracted peer ID \(peerID) from peripheral \(peripheralID.prefix(8))", 
-                           category: SecureLogger.session, level: .info)
             
             // Don't process our own advertisements (including previous peer IDs)
             if isPeerIDOurs(peerID) {
-                SecureLogger.log("[SKIP] Ignoring our own peer ID \(peerID)", 
-                               category: SecureLogger.session, level: .debug)
                 return
             }
             
             // Discovered potential peer
-            SecureLogger.log("[PROCESS] Processing discovered peer \(peerID)", 
-                           category: SecureLogger.session, level: .info)
             
             // Check if we have a relay-only session for this peer that needs upgrading
             collectionsQueue.sync {
@@ -5111,8 +5052,6 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
                 }
             }
         } else {
-            SecureLogger.log("[WARNING] No peer ID found in peripheral \(peripheralID.prefix(8)): name=\(peripheral.name ?? "nil"), localName=\(advertisementData[CBAdvertisementDataLocalNameKey] ?? "nil")", 
-                           category: SecureLogger.session, level: .warning)
         }
         
         // Connection pooling with exponential backoff
@@ -5180,8 +5119,6 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
                 // Smart compromise: would set low latency for small networks if API supported it
                 // iOS/macOS don't expose connection interval control in public API
                 
-                SecureLogger.log("[CONNECT] Attempting to connect to peripheral \(peripheralID.prefix(8))", 
-                               category: SecureLogger.session, level: .info)
                 central.connect(peripheral, options: connectionOptions)
             }
         }
@@ -5189,14 +5126,10 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
     
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
         let peripheralID = peripheral.identifier.uuidString
-        SecureLogger.log("[CONNECTED] Connected to peripheral \(peripheralID) - awaiting peer ID", 
-                       category: SecureLogger.session, level: .info)
         
         // Log current peripheral mappings
-        let mappingCount = collectionsQueue.sync { peripheralMappings.count }
-        let poolCount = connectionPool.count
-        SecureLogger.log("[STATE] Current state: peripheralMappings=\(mappingCount), connectionPool=\(poolCount)", 
-                       category: SecureLogger.session, level: .debug)
+        let _ = collectionsQueue.sync { peripheralMappings.count }
+        let _ = connectionPool.count
         
         peripheral.delegate = self
         peripheral.discoverServices([BluetoothMeshService.serviceUUID])
@@ -5207,8 +5140,6 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
         // Store peripheral temporarily until we get the real peer ID
         updatePeripheralConnection(peripheralID, peripheral: peripheral)
         
-        SecureLogger.log("Connected to peripheral \(peripheralID) - awaiting peer ID", 
-                       category: SecureLogger.session, level: .debug)
         
         // Update connection state to connected (but not authenticated yet)
         // We don't know the real peer ID yet, so we can't update the state
@@ -5544,8 +5475,6 @@ extension BluetoothMeshService: CBPeripheralDelegate {
             return
         }
         
-        SecureLogger.log("[DATA-RX] Received \(data.count) bytes from peripheral \(peripheral.identifier.uuidString.prefix(8))", 
-                       category: SecureLogger.session, level: .debug)
         
         // Update activity tracking for this peripheral
         updatePeripheralActivity(peripheral.identifier.uuidString)
@@ -5562,8 +5491,6 @@ extension BluetoothMeshService: CBPeripheralDelegate {
         let _ = connectedPeripherals.first(where: { $0.value == peripheral })?.key ?? "unknown"
         let packetSenderID = packet.senderID.hexEncodedString()
         
-        SecureLogger.log("[MAPPING] Updating peripheral mapping: peripheral=\(peripheral.identifier.uuidString.prefix(8)) -> peerID=\(packetSenderID)", 
-                       category: SecureLogger.session, level: .info)
         
         
         // Always handle received packets
@@ -5649,7 +5576,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         
         // Restore advertisement data
         if let advertisementData = dict[CBPeripheralManagerRestoredStateAdvertisementDataKey] as? [String: Any] {
-            SecureLogger.log("[RESTORE] Restoring advertisement data: \(advertisementData)", level: .info)
+            SecureLogger.log("[RESTORE] Restoring advertisement data", level: .info)
             self.advertisementData = advertisementData
             
             DispatchQueue.main.async { [weak self] in
@@ -5667,18 +5594,12 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
     }
     
     func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveWrite requests: [CBATTRequest]) {
-        SecureLogger.log("[INCOMING] Received \(requests.count) write requests as peripheral", 
-                       category: SecureLogger.session, level: .debug)
         
         for request in requests {
             if let data = request.value {
-                SecureLogger.log("[DATA-IN] Processing \(data.count) bytes from central \(request.central.identifier.uuidString.prefix(8))", 
-                               category: SecureLogger.session, level: .debug)
                         
                 if let packet = BitchatPacket.from(data) {
                     let peerID = packet.senderID.hexEncodedString()
-                    SecureLogger.log("[PACKET] Packet from peer \(peerID) via central \(request.central.identifier.uuidString.prefix(8))", 
-                                   category: SecureLogger.session, level: .info)
                     
                     // Log specific Noise packet types
                     switch packet.type {
@@ -6651,6 +6572,9 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 unlockRotation()
                 
                 // Session established successfully
+                let nickname = collectionsQueue.sync { self.peerSessions[peerID]?.nickname ?? "Unknown" }
+                SecureLogger.log("✅ Successfully connected to peer \(peerID) (\(nickname))", 
+                               category: SecureLogger.session, level: .info)
                 handshakeCoordinator.recordHandshakeSuccess(peerID: peerID)
                 
                 // Update session state to established
@@ -6931,9 +6855,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         }
         
         // Check if we've already negotiated version with this peer
-        if let existingVersion = negotiatedVersions[peerID] {
-            SecureLogger.log("Already negotiated version \(existingVersion) with \(peerID), skipping re-negotiation", 
-                           category: SecureLogger.session, level: .debug)
+        if negotiatedVersions[peerID] != nil {
             // If we have a session, validate it
             if noiseService.hasEstablishedSession(with: peerID) {
                 validateNoiseSession(with: peerID)

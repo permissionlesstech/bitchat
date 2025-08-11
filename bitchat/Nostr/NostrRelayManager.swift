@@ -190,8 +190,6 @@ class NostrRelayManager: ObservableObject {
                 if error == nil {
                     // Successfully connected to Nostr relay
                     self?.updateRelayStatus(urlString, isConnected: true)
-                    SecureLogger.log("Successfully connected to Nostr relay \(urlString)", 
-                                   category: SecureLogger.session, level: .info)
                 } else {
                     SecureLogger.log("Failed to connect to Nostr relay \(urlString): \(error?.localizedDescription ?? "Unknown error")", 
                                    category: SecureLogger.session, level: .error)
@@ -293,9 +291,7 @@ class NostrRelayManager: ObservableObject {
                     
                 case "NOTICE":
                     if array.count >= 2,
-                       let notice = array[1] as? String {
-                        SecureLogger.log("📢 Relay notice: \(notice)", 
-                                        category: SecureLogger.session, level: .info)
+                       let _ = array[1] as? String {
                     }
                     
                 default:
@@ -397,8 +393,6 @@ class NostrRelayManager: ObservableObject {
         let nextReconnectTime = Date().addingTimeInterval(backoffInterval)
         relays[index].nextReconnectTime = nextReconnectTime
         
-        SecureLogger.log("Scheduling reconnection to \(relayUrl) in \(Int(backoffInterval))s (attempt \(relays[index].reconnectAttempts))", 
-                       category: SecureLogger.session, level: .info)
         
         // Schedule reconnection with exponential backoff
         DispatchQueue.main.asyncAfter(deadline: .now() + backoffInterval) { [weak self] in
