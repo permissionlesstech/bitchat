@@ -111,13 +111,9 @@ class MessageRouter: ObservableObject {
         let recipientHexID = recipientNoisePublicKey.hexEncodedString()
         let action = isFavorite ? "favorite" : "unfavorite"
         
-        SecureLogger.log("📤 Sending \(action) notification to \(recipientHexID)", 
-                        category: SecureLogger.session, level: .info)
         
         // Try mesh first
         if meshService.getPeerNicknames()[recipientHexID] != nil {
-            SecureLogger.log("📡 Sending \(action) notification via Bluetooth mesh", 
-                            category: SecureLogger.session, level: .info)
             
             // Send via mesh as a system message
             meshService.sendFavoriteNotification(to: recipientHexID, isFavorite: isFavorite)
@@ -125,8 +121,6 @@ class MessageRouter: ObservableObject {
         } else if let favoriteStatus = favoritesService.getFavoriteStatus(for: recipientNoisePublicKey),
                   let recipientNostrPubkey = favoriteStatus.peerNostrPublicKey {
             
-            SecureLogger.log("🌐 Sending \(action) notification via Nostr to \(favoriteStatus.peerNickname)", 
-                            category: SecureLogger.session, level: .info)
             
             // Send via Nostr as a special message
             guard let senderIdentity = try? NostrIdentityBridge.getCurrentNostrIdentity() else {
@@ -222,13 +216,11 @@ class MessageRouter: ObservableObject {
     }
     
     private func setupNostrMessageHandling() {
-        guard let currentIdentity = try? NostrIdentityBridge.getCurrentNostrIdentity() else { 
+        guard (try? NostrIdentityBridge.getCurrentNostrIdentity()) != nil else { 
             SecureLogger.log("⚠️ No Nostr identity available for initial setup", category: SecureLogger.session, level: .warning)
             return 
         }
         
-        SecureLogger.log("🚀 Setting up Nostr message handling for \(currentIdentity.npub)", 
-                        category: SecureLogger.session, level: .info)
         
         // Connect to relays if not already connected
         if !nostrRelay.isConnected {
@@ -332,8 +324,6 @@ class MessageRouter: ObservableObject {
                 recipientIdentity: currentIdentity
             )
             
-            SecureLogger.log("✅ Successfully decrypted message from \(senderPubkey.prefix(8))...: \(content)", 
-                            category: SecureLogger.session, level: .info)
         
             // Mark this event as processed to avoid duplicates on app restart
             let eventTimestamp = Date(timeIntervalSince1970: TimeInterval(giftWrap.created_at))
@@ -457,8 +447,6 @@ class MessageRouter: ObservableObject {
     }
     
     private func handleDeliveryAcknowledgment(messageId: String, from senderPubkey: String) {
-        SecureLogger.log("✅ Received delivery acknowledgment for message \(messageId) from \(senderPubkey)", 
-                        category: SecureLogger.session, level: .info)
         
         // Find the sender's Noise public key
         guard let senderNoiseKey = findNoisePublicKey(for: senderPubkey) else { return }
@@ -475,8 +463,6 @@ class MessageRouter: ObservableObject {
     }
     
     private func handleReadReceipt(_ receipt: ReadReceipt, from senderPubkey: String) {
-        SecureLogger.log("📖 Received read receipt for message \(receipt.originalMessageID) from \(senderPubkey)", 
-                        category: SecureLogger.session, level: .info)
         
         // Find the sender's Noise public key
         guard let senderNoiseKey = findNoisePublicKey(for: senderPubkey) else { return }
@@ -499,8 +485,6 @@ class MessageRouter: ObservableObject {
         to recipientNoisePublicKey: Data,
         preferredTransport: Transport? = nil
     ) async throws {
-        SecureLogger.log("📖 Sending read receipt for message \(originalMessageID)", 
-                        category: SecureLogger.session, level: .info)
         
         // Get nickname from delegate or use default
         let nickname = (meshService.delegate as? ChatViewModel)?.nickname ?? "Anonymous"

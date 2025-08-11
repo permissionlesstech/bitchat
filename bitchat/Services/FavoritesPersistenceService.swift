@@ -335,7 +335,6 @@ class FavoritesPersistenceService: ObservableObject {
             key: Self.storageKey,
             service: Self.keychainService
         ) else { 
-            SecureLogger.log("📭 No existing favorites found in keychain", category: SecureLogger.session, level: .info)
             return 
         }
         

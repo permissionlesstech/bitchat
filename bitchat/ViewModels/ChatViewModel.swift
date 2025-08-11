@@ -217,12 +217,6 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             let cancellable = peerManager?.$peers
                 .receive(on: DispatchQueue.main)
                 .sink { [weak self] peers in
-                    SecureLogger.log("📱 UI: Received \(peers.count) peers from PeerManager", 
-                                    category: SecureLogger.session, level: .info)
-                    for peer in peers {
-                        SecureLogger.log("  - \(peer.displayName): connected=\(peer.isConnected), state=\(peer.connectionState)", 
-                                        category: SecureLogger.session, level: .debug)
-                    }
                     // Update peers directly
                     self?.allPeers = peers
                     // Update peer index for O(1) lookups
@@ -464,8 +458,6 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             
             let isFavorite = currentStatus?.isFavorite ?? false
             
-            SecureLogger.log("📊 Current favorite status for \(peerID): isFavorite=\(isFavorite), isMutual=\(currentStatus?.isMutual ?? false)", 
-                            category: SecureLogger.session, level: .info)
             
             if isFavorite {
                 // Remove from favorites
@@ -614,8 +606,6 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         if let currentPeerID = getCurrentPeerIDForFingerprint(chatFingerprint) {
             // Update the selected peer if it's different
             if let oldPeerID = selectedPrivateChatPeer, oldPeerID != currentPeerID {
-                SecureLogger.log("📱 Updating private chat peer from \(oldPeerID) to \(currentPeerID)", 
-                                category: SecureLogger.session, level: .debug)
                 
                 // Migrate messages from old peer ID to new peer ID
                 if let oldMessages = privateChats[oldPeerID] {
@@ -797,8 +787,6 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         } else if let favoriteStatus = FavoritesPersistenceService.shared.getFavoriteStatus(for: noiseKey),
                   favoriteStatus.isMutual {
             // Mutual favorite offline - send via Nostr
-            SecureLogger.log("🌐 Sending private message to offline mutual favorite \(recipientNickname) via Nostr", 
-                            category: SecureLogger.session, level: .info)
             
             Task {
                 do {
@@ -938,8 +926,6 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                         migratedMessages.append(contentsOf: messages)
                         oldPeerIDsToRemove.append(oldPeerID)
                         
-                        SecureLogger.log("📦 Migrating \(messages.count) messages from old peer ID \(oldPeerID) to \(peerID) based on fingerprint match", 
-                                        category: SecureLogger.session, level: .info)
                     } else if currentFingerprint == nil || oldFingerprint == nil {
                         // Fallback: use nickname matching only if we don't have fingerprints
                         // This is less reliable but handles legacy data
@@ -1052,10 +1038,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         guard let messageId = notification.userInfo?["messageId"] as? String,
               let senderNoiseKey = notification.userInfo?["senderNoiseKey"] as? Data else { return }
         
-        let senderHexId = senderNoiseKey.hexEncodedString()
+        let _ = senderNoiseKey.hexEncodedString()
         
-        SecureLogger.log("✅ Handling delivery acknowledgment for message \(messageId) from \(senderHexId)", 
-                        category: SecureLogger.session, level: .info)
         
         // Update the delivery status for the message
         if let index = messages.firstIndex(where: { $0.id == messageId }) {
