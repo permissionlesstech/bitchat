@@ -212,8 +212,6 @@ class PeerManager: ObservableObject {
         }
         
         // Add offline favorites (only those not currently connected/relay-connected AND that we actively favorite)
-        SecureLogger.log("📋 Processing \(favoritesService.favorites.count) favorite relationships (connected/relay nicknames: \(connectedNicknames))", 
-                        category: SecureLogger.session, level: .info)
         
         for (favoriteKey, favorite) in favoritesService.favorites {
             let favoriteID = favorite.peerNoisePublicKey.hexEncodedString()

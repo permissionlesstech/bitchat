@@ -229,7 +229,7 @@ extension SecureLogger {
     /// Log key management operations
     static func logKeyOperation(_ operation: String, keyType: String, success: Bool = true,
                                file: String = #file, line: Int = #line, function: String = #function) {
-        let level: LogLevel = success ? .info : .error
+        let level: LogLevel = success ? .debug : .error
         log("Key operation '\(operation)' for \(keyType) \(success ? "succeeded" : "failed")", 
             category: keychain, level: level, file: file, line: line, function: function)
     }
