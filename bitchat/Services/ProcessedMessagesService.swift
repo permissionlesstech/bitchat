@@ -74,8 +74,6 @@ final class ProcessedMessagesService {
             lastProcessedTimestamp = Date(timeIntervalSince1970: timestampInterval)
         }
         
-        SecureLogger.log("📋 Loaded \(processedMessageIDs.count) processed message IDs, last timestamp: \(lastProcessedTimestamp?.description ?? "nil")",
-                        category: SecureLogger.session, level: .info)
     }
     
     private func saveProcessedMessages() {
