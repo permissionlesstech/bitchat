@@ -863,30 +863,6 @@ class BluetoothMeshService: NSObject {
         }
     }
     
-    private var adaptiveRelayProbability: Double {
-        // Adjust relay probability based on network size
-        // Small networks don't need 100% relay
-        let networkSize = estimatedNetworkSize
-        if networkSize <= 2 {
-            let prob = 0.3   // 30% for 2 nodes - helps with discovery and relay-only connections
-            SecureLogger.log("[RELAY-PROB] Relay probability for size \(networkSize): \(prob)", 
-                           category: SecureLogger.session, level: .debug)
-            return prob
-        } else if networkSize <= 5 {
-            return 0.5   // 50% for very small networks
-        } else if networkSize <= 10 {
-            return 0.6   // 60% for small networks
-        } else if networkSize <= 30 {
-            return 0.7   // 70% for medium networks
-        } else if networkSize <= 50 {
-            return 0.6   // 60% for larger networks
-        } else if networkSize <= 100 {
-            return 0.5   // 50% for big networks
-        } else {
-            return 0.4   // 40% minimum for very large networks
-        }
-    }
-    
     // MARK: - Relay Cancellation
     
     // Relay cancellation mechanism to prevent duplicate relays
@@ -3665,24 +3641,13 @@ class BluetoothMeshService: NSObject {
                     var relayPacket = packet
                     relayPacket.ttl -= 1
                     if relayPacket.ttl > 0 {
-                        // Use adaptive relay probability directly
-                        let relayProb = self.adaptiveRelayProbability
-                        
-                        // Relay based on probability only - no TTL boost if base probability is 0
-                        let effectiveProb = relayProb > 0 ? relayProb : 0.0
-                        let shouldRelay = effectiveProb > 0 && Double.random(in: 0...1) < effectiveProb
-                        
-                        if shouldRelay {
-                            // Relaying broadcast
-                            // High priority messages relay immediately, others use exponential delay
-                            if self.isHighPriorityMessage(type: relayPacket.type) {
-                                self.broadcastPacket(relayPacket)
-                            } else {
-                                let delay = self.exponentialRelayDelay()
-                                self.scheduleRelay(relayPacket, messageID: messageID, delay: delay)
-                            }
+                        // Relaying broadcast
+                        // High priority messages relay immediately, others use exponential delay
+                        if self.isHighPriorityMessage(type: relayPacket.type) {
+                            self.broadcastPacket(relayPacket)
                         } else {
-                            // Dropped broadcast relay
+                            let delay = self.exponentialRelayDelay()
+                            self.scheduleRelay(relayPacket, messageID: messageID, delay: delay)
                         }
                     }
                     
@@ -3823,9 +3788,8 @@ class BluetoothMeshService: NSObject {
                         }
                     }
                     
-                    // Private messages are important - use relay with boost
-                    let baseProb = min(self.adaptiveRelayProbability + 0.15, 1.0)  // Boost by 15%
-                    let relayProb = baseProb
+                    // Use constant relay prob
+                    let relayProb = 1.0
                     
                     // Relay based on probability only - no forced relay for small networks
                     let shouldRelay = Double.random(in: 0...1) < relayProb
