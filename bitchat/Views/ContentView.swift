@@ -271,7 +271,6 @@ struct ContentView: View {
                     ForEach(windowedMessages, id: \.id) { message in
                         VStack(alignment: .leading, spacing: 0) {
                             // Check if current user is mentioned
-                            let _ = message.mentions?.contains(viewModel.nickname) ?? false
                             
                             if message.sender == "system" {
                                 // System messages
