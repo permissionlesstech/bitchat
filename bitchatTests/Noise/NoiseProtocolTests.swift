@@ -226,23 +226,6 @@ final class NoiseProtocolTests: XCTestCase {
         XCTAssertEqual(decrypted, plaintext)
     }
     
-    func testSessionMigration() throws {
-        let manager = NoiseSessionManager(localStaticKey: aliceKey)
-        
-        // Create and establish a session
-        _ = try manager.initiateHandshake(with: TestConstants.testPeerID2)
-        
-        // Migrate to new peer ID
-        let newPeerID = TestConstants.testPeerID3
-        manager.migrateSession(from: TestConstants.testPeerID2, to: newPeerID)
-        
-        // Old peer ID should not have session
-        XCTAssertNil(manager.getSession(for: TestConstants.testPeerID2))
-        
-        // New peer ID should have the session
-        XCTAssertNotNil(manager.getSession(for: newPeerID))
-    }
-    
     // MARK: - Security Tests
     
     func testTamperedCiphertextDetection() throws {

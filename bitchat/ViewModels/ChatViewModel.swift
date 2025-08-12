@@ -1474,10 +1474,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         privateChats.removeAll()
         unreadPrivateMessages.removeAll()
         
-        // First run aggressive cleanup to get rid of all legacy items
-        _ = KeychainManager.shared.aggressiveCleanupLegacyItems()
-        
-        // Then delete all current keychain data
+        // Delete all keychain data
         _ = KeychainManager.shared.deleteAllKeychainData()
         
         // Clear UserDefaults identity fallbacks
