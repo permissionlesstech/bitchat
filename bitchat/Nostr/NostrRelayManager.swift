@@ -273,8 +273,7 @@ class NostrRelayManager: ObservableObject {
                     }
                     
                 case "EOSE":
-                    if array.count >= 2,
-                       let _ = array[1] as? String {
+                    if array.count >= 2 {
                         // End of stored events
                     }
                     
@@ -290,8 +289,8 @@ class NostrRelayManager: ObservableObject {
                     }
                     
                 case "NOTICE":
-                    if array.count >= 2,
-                       let _ = array[1] as? String {
+                    if array.count >= 2 {
+                        // Server notice received
                     }
                     
                 default:
