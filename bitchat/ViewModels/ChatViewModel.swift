@@ -122,7 +122,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     // MARK: - Autocomplete Properties
     
     // Autocomplete optimization
-    private let mentionRegex = try? NSRegularExpression(pattern: "@([a-zA-Z0-9_]*)$", options: [])
+    private let mentionRegex = try? NSRegularExpression(pattern: "@([\\p{L}0-9_]*)$", options: [])
     private var cachedNicknames: [String] = []
     private var lastNicknameUpdate: Date = .distantPast
     
@@ -1652,7 +1652,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         var processedContent = AttributedString()
         
         // Regular expressions for mentions and hashtags
-        let mentionPattern = "@([a-zA-Z0-9_]+)"
+        let mentionPattern = "@([\\p{L}0-9_]+)"
         let hashtagPattern = "#([a-zA-Z0-9_]+)"
         
         let mentionRegex = try? NSRegularExpression(pattern: mentionPattern, options: [])
@@ -1751,7 +1751,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             let content = message.content
             
             let hashtagPattern = "#([a-zA-Z0-9_]+)"
-            let mentionPattern = "@([a-zA-Z0-9_]+)"
+            let mentionPattern = "@([\\p{L}0-9_]+)"
             
             let hashtagRegex = try? NSRegularExpression(pattern: hashtagPattern, options: [])
             let mentionRegex = try? NSRegularExpression(pattern: mentionPattern, options: [])
@@ -1876,7 +1876,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             var processedContent = AttributedString()
             
             // Regular expression to find @mentions
-            let pattern = "@([a-zA-Z0-9_]+)"
+            let pattern = "@([\\p{L}0-9_]+)"
             let regex = try? NSRegularExpression(pattern: pattern, options: [])
             let matches = regex?.matches(in: contentText, options: [], range: NSRange(location: 0, length: contentText.count)) ?? []
             
@@ -3073,7 +3073,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     // MARK: - Helper Methods
     
     private func parseMentions(from content: String) -> [String] {
-        let pattern = "@([a-zA-Z0-9_]+)"
+        let pattern = "@([\\p{L}0-9_]+)"
         let regex = try? NSRegularExpression(pattern: pattern, options: [])
         let matches = regex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
         
