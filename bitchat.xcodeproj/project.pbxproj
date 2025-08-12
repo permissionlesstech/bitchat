@@ -66,12 +66,51 @@
 		04F128052E37F00000FFBA8D /* ProcessedMessagesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F127FF2E37F00000FFBA8D /* ProcessedMessagesService.swift */; };
 		04F128062E37F10000FFBA8D /* PeerSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F128072E37F10000FFBA8D /* PeerSession.swift */; };
 		04F128082E37F10000FFBA8D /* PeerSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F128072E37F10000FFBA8D /* PeerSession.swift */; };
+		0DD89A2E3B1B44208984254D /* HapticFeedbackManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F1CA95348745BE93CC4C27 /* HapticFeedbackManager.swift */; };
 		0FBC81FF78CF4711B78E092A /* IdentityModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E2446380E7A44E49A35B664 /* IdentityModels.swift */; };
 		10E68BB889356219189E38EC /* BitchatApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF625BB3AD919322C01A46B2 /* BitchatApp.swift */; };
 		17901751FD8010AFC8E750F2 /* bitchatShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 61F92EBA29C47C0FCC482F1F /* bitchatShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		1AF9F9036DEE42408D557A87 /* SecureIdentityStateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EE9D4FA625C4671ACD371D4 /* SecureIdentityStateManager.swift */; };
 		1D9674FA5F998503831DC281 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A08E03AA0C63E97C91749AEC /* ContentView.swift */; };
 		1F48A8CEEE9399D1EBD08F0C /* OptimizedBloomFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB043CA5EEB9AC8B07D61E97 /* OptimizedBloomFilter.swift */; };
+		2E03C0C32E445E7900798C63 /* VoiceMessageData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E03C0C22E445E7900798C63 /* VoiceMessageData.swift */; };
+		2E03C0C42E445E7900798C63 /* VoiceMessageData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E03C0C22E445E7900798C63 /* VoiceMessageData.swift */; };
+		2E03C0CA2E445EE600798C63 /* VoiceMessageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E03C0C82E445EE600798C63 /* VoiceMessageService.swift */; };
+		2E03C0CB2E445EE600798C63 /* AudioPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E03C0C52E445EE600798C63 /* AudioPlayer.swift */; };
+		2E03C0CC2E445EE600798C63 /* AudioRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E03C0C62E445EE600798C63 /* AudioRecorder.swift */; };
+		2E03C0CD2E445EE600798C63 /* OpusAudioService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E03C0C72E445EE600798C63 /* OpusAudioService.swift */; };
+		2E03C0CE2E445EE600798C63 /* VoiceServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E03C0C92E445EE600798C63 /* VoiceServices.swift */; };
+		2E03C0CF2E445EE600798C63 /* VoiceMessageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E03C0C82E445EE600798C63 /* VoiceMessageService.swift */; };
+		2E03C0D02E445EE600798C63 /* AudioPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E03C0C52E445EE600798C63 /* AudioPlayer.swift */; };
+		2E03C0D12E445EE600798C63 /* AudioRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E03C0C62E445EE600798C63 /* AudioRecorder.swift */; };
+		2E03C0D22E445EE600798C63 /* OpusAudioService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E03C0C72E445EE600798C63 /* OpusAudioService.swift */; };
+		2E03C0D32E445EE600798C63 /* VoiceServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E03C0C92E445EE600798C63 /* VoiceServices.swift */; };
+		2E03C0D52E445F0900798C63 /* ChatViewModel+Voice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E03C0D42E445F0900798C63 /* ChatViewModel+Voice.swift */; };
+		2E03C0D62E445F0900798C63 /* ChatViewModel+Voice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E03C0D42E445F0900798C63 /* ChatViewModel+Voice.swift */; };
+		2E03C0D92E445F3700798C63 /* VoiceRecordingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E03C0D82E445F3700798C63 /* VoiceRecordingView.swift */; };
+		2E03C0DA2E445F3700798C63 /* VoiceMessageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E03C0D72E445F3700798C63 /* VoiceMessageView.swift */; };
+		2E03C0DB2E445F3700798C63 /* VoiceRecordingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E03C0D82E445F3700798C63 /* VoiceRecordingView.swift */; };
+		2E03C0DC2E445F3700798C63 /* VoiceMessageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E03C0D72E445F3700798C63 /* VoiceMessageView.swift */; };
+		2E03C0E22E445F9D00798C63 /* OpusWrapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E03C0E02E445F9D00798C63 /* OpusWrapper.swift */; };
+		2E03C0E32E445F9D00798C63 /* OpusWrapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E03C0E02E445F9D00798C63 /* OpusWrapper.swift */; };
+		2E03C0E92E445FEF00798C63 /* MessageRetryService+Voice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E03C0E52E445FEF00798C63 /* MessageRetryService+Voice.swift */; };
+		2E03C0EA2E445FEF00798C63 /* NotificationService+Voice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E03C0E82E445FEF00798C63 /* NotificationService+Voice.swift */; };
+		2E03C0EB2E445FEF00798C63 /* DeliveryTracker+Voice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E03C0E42E445FEF00798C63 /* DeliveryTracker+Voice.swift */; };
+		2E03C0EC2E445FEF00798C63 /* MessageRouter+Voice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E03C0E62E445FEF00798C63 /* MessageRouter+Voice.swift */; };
+		2E03C0ED2E445FEF00798C63 /* NoiseEncryptionService+Voice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E03C0E72E445FEF00798C63 /* NoiseEncryptionService+Voice.swift */; };
+		2E03C0EE2E445FEF00798C63 /* MessageRetryService+Voice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E03C0E52E445FEF00798C63 /* MessageRetryService+Voice.swift */; };
+		2E03C0EF2E445FEF00798C63 /* NotificationService+Voice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E03C0E82E445FEF00798C63 /* NotificationService+Voice.swift */; };
+		2E03C0F02E445FEF00798C63 /* DeliveryTracker+Voice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E03C0E42E445FEF00798C63 /* DeliveryTracker+Voice.swift */; };
+		2E03C0F12E445FEF00798C63 /* MessageRouter+Voice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E03C0E62E445FEF00798C63 /* MessageRouter+Voice.swift */; };
+		2E03C0F22E445FEF00798C63 /* NoiseEncryptionService+Voice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E03C0E72E445FEF00798C63 /* NoiseEncryptionService+Voice.swift */; };
+		2E03C0F42E44600C00798C63 /* NostrProtocol+Voice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E03C0F32E44600C00798C63 /* NostrProtocol+Voice.swift */; };
+		2E03C0F52E44600C00798C63 /* NostrProtocol+Voice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E03C0F32E44600C00798C63 /* NostrProtocol+Voice.swift */; };
+		2E03C0F72E44602000798C63 /* VoiceSecurityConsiderations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E03C0F62E44602000798C63 /* VoiceSecurityConsiderations.swift */; };
+		2E03C0F82E44602000798C63 /* VoiceSecurityConsiderations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E03C0F62E44602000798C63 /* VoiceSecurityConsiderations.swift */; };
+		2E03C0FE2E44606000798C63 /* OpusCodec.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E03C0FD2E44606000798C63 /* OpusCodec.swift */; };
+		2E03C0FF2E44606000798C63 /* OpusCodec.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E03C0FD2E44606000798C63 /* OpusCodec.swift */; };
+		2E03C1032E44610000798C63 /* YbridOpus in Frameworks */ = {isa = PBXBuildFile; productRef = 2E03C1012E44610000798C63 /* YbridOpus */; };
+		2E03C1042E44610000798C63 /* YbridOpus in Frameworks */ = {isa = PBXBuildFile; productRef = 2E03C1022E44610000798C63 /* YbridOpus */; };
 		31D147471B9F4E2815352DDA /* LinkPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AC141774F6671FCDC347DC7 /* LinkPreviewView.swift */; };
 		4B747085D07A1BCE0F5BA612 /* BinaryProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2136C3E22D02D4A8DBE7EAB /* BinaryProtocol.swift */; };
 		5D95F2BFBE257A1225998389 /* BatteryOptimizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED176FF3B274E35C2D827894 /* BatteryOptimizer.swift */; };
@@ -99,6 +138,7 @@
 		CEAE115C9C3EB3C4ED82F128 /* MessageRetryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA4D7595A613F7ED3B386132 /* MessageRetryService.swift */; };
 		D450CF41F207BDE1A1AAA56E /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6B8F7B7D55092C2540A7996 /* ChatViewModel.swift */; };
 		D948085736ED8E736C1DE3B0 /* BluetoothMeshService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5C3D880FF8AE1673B20E1E3 /* BluetoothMeshService.swift */; };
+		DB0BA08D374240F583884858 /* HapticFeedbackManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F1CA95348745BE93CC4C27 /* HapticFeedbackManager.swift */; };
 		E65BBB6544FE0159F3C6C3A8 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 95F16C3A4A5621C74461D8D3 /* LaunchScreen.storyboard */; };
 		F455F011B3B648ADA233F998 /* BinaryProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2136C3E22D02D4A8DBE7EAB /* BinaryProtocol.swift */; };
 		FB8819B4C84FAFEF5C36B216 /* KeychainManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 136696FC4436A02D98CE6A77 /* KeychainManager.swift */; };
@@ -171,9 +211,28 @@
 		04F127FC2E37EF3D00FFBA8D /* BitchatPeer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitchatPeer.swift; sourceTree = "<group>"; };
 		04F127FF2E37F00000FFBA8D /* ProcessedMessagesService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessedMessagesService.swift; sourceTree = "<group>"; };
 		04F128072E37F10000FFBA8D /* PeerSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerSession.swift; sourceTree = "<group>"; };
+		09F1CA95348745BE93CC4C27 /* HapticFeedbackManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticFeedbackManager.swift; sourceTree = "<group>"; };
 		12B9C3EDF3BC73D3BC106DA4 /* DeliveryTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeliveryTracker.swift; sourceTree = "<group>"; };
 		136696FC4436A02D98CE6A77 /* KeychainManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainManager.swift; sourceTree = "<group>"; };
 		229F17B68CFF7AB1BC91C847 /* BitchatProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitchatProtocol.swift; sourceTree = "<group>"; };
+		2E03C0C22E445E7900798C63 /* VoiceMessageData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceMessageData.swift; sourceTree = "<group>"; };
+		2E03C0C52E445EE600798C63 /* AudioPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayer.swift; sourceTree = "<group>"; };
+		2E03C0C62E445EE600798C63 /* AudioRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRecorder.swift; sourceTree = "<group>"; };
+		2E03C0C72E445EE600798C63 /* OpusAudioService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpusAudioService.swift; sourceTree = "<group>"; };
+		2E03C0C82E445EE600798C63 /* VoiceMessageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceMessageService.swift; sourceTree = "<group>"; };
+		2E03C0C92E445EE600798C63 /* VoiceServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceServices.swift; sourceTree = "<group>"; };
+		2E03C0D42E445F0900798C63 /* ChatViewModel+Voice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ChatViewModel+Voice.swift"; sourceTree = "<group>"; };
+		2E03C0D72E445F3700798C63 /* VoiceMessageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceMessageView.swift; sourceTree = "<group>"; };
+		2E03C0D82E445F3700798C63 /* VoiceRecordingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceRecordingView.swift; sourceTree = "<group>"; };
+		2E03C0E02E445F9D00798C63 /* OpusWrapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpusWrapper.swift; sourceTree = "<group>"; };
+		2E03C0E42E445FEF00798C63 /* DeliveryTracker+Voice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DeliveryTracker+Voice.swift"; sourceTree = "<group>"; };
+		2E03C0E52E445FEF00798C63 /* MessageRetryService+Voice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MessageRetryService+Voice.swift"; sourceTree = "<group>"; };
+		2E03C0E62E445FEF00798C63 /* MessageRouter+Voice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MessageRouter+Voice.swift"; sourceTree = "<group>"; };
+		2E03C0E72E445FEF00798C63 /* NoiseEncryptionService+Voice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NoiseEncryptionService+Voice.swift"; sourceTree = "<group>"; };
+		2E03C0E82E445FEF00798C63 /* NotificationService+Voice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NotificationService+Voice.swift"; sourceTree = "<group>"; };
+		2E03C0F32E44600C00798C63 /* NostrProtocol+Voice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NostrProtocol+Voice.swift"; sourceTree = "<group>"; };
+		2E03C0F62E44602000798C63 /* VoiceSecurityConsiderations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceSecurityConsiderations.swift; sourceTree = "<group>"; };
+		2E03C0FD2E44606000798C63 /* OpusCodec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpusCodec.swift; sourceTree = "<group>"; };
 		2EE9D4FA625C4671ACD371D4 /* SecureIdentityStateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureIdentityStateManager.swift; sourceTree = "<group>"; };
 		32F149C43D1915831B60FE09 /* CompressionUtil.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompressionUtil.swift; sourceTree = "<group>"; };
 		3448F84BF86A42A3CC4A9379 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
@@ -209,6 +268,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				04E363362E3800310048E624 /* P256K in Frameworks */,
+				2E03C1032E44610000798C63 /* YbridOpus in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -217,6 +277,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				04E363372E3800310048E624 /* P256K in Frameworks */,
+				2E03C1042E44610000798C63 /* YbridOpus in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -277,6 +338,7 @@
 		04B6BA442E2035530090FE39 /* Noise */ = {
 			isa = PBXGroup;
 			children = (
+				2E03C0F62E44602000798C63 /* VoiceSecurityConsiderations.swift */,
 				04636BEC2E30CD4A00FBCFA8 /* NoiseHandshakeCoordinator.swift */,
 				04B6BA412E2035530090FE39 /* NoiseProtocol.swift */,
 				04B6BA422E2035530090FE39 /* NoiseSecurityConsiderations.swift */,
@@ -288,6 +350,7 @@
 		04F127E32E37EBAA00FFBA8D /* Nostr */ = {
 			isa = PBXGroup;
 			children = (
+				2E03C0F32E44600C00798C63 /* NostrProtocol+Voice.swift */,
 				04F127F02E37EEB800FFBA8D /* NostrProtocol.swift */,
 				04F127F12E37EEB800FFBA8D /* NostrRelayManager.swift */,
 				04F127E22E37EBAA00FFBA8D /* NostrIdentity.swift */,
@@ -305,6 +368,7 @@
 		04F127FD2E37EF3D00FFBA8D /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				2E03C0C22E445E7900798C63 /* VoiceMessageData.swift */,
 				04F127FC2E37EF3D00FFBA8D /* BitchatPeer.swift */,
 				04F128072E37F10000FFBA8D /* PeerSession.swift */,
 			);
@@ -322,9 +386,19 @@
 			);
 			sourceTree = "<group>";
 		};
+		2E03C0E12E445F9D00798C63 /* Wrappers */ = {
+			isa = PBXGroup;
+			children = (
+				2E03C0E02E445F9D00798C63 /* OpusWrapper.swift */,
+				2E03C0FD2E44606000798C63 /* OpusCodec.swift */,
+			);
+			path = Wrappers;
+			sourceTree = "<group>";
+		};
 		2F82C5FC8433F4064F079D1F /* bitchat */ = {
 			isa = PBXGroup;
 			children = (
+				2E03C0E12E445F9D00798C63 /* Wrappers */,
 				3A69677D382F1C3D5ED03F7D /* Assets.xcassets */,
 				FF7AF93D874001FBD94C8306 /* bitchat-macOS.entitlements */,
 				527EB217EFDFAD4CF1C91F07 /* bitchat.entitlements */,
@@ -347,6 +421,7 @@
 		45BB7D87CAE42A8C0447D909 /* ViewModels */ = {
 			isa = PBXGroup;
 			children = (
+				2E03C0D42E445F0900798C63 /* ChatViewModel+Voice.swift */,
 				E6B8F7B7D55092C2540A7996 /* ChatViewModel.swift */,
 			);
 			path = ViewModels;
@@ -369,7 +444,11 @@
 				04891CA82E22971E0064A111 /* LRUCache.swift */,
 				ED176FF3B274E35C2D827894 /* BatteryOptimizer.swift */,
 				32F149C43D1915831B60FE09 /* CompressionUtil.swift */,
+				09F1CA95348745BE93CC4C27 /* HapticFeedbackManager.swift */,
+				046D705C2E3C105D00C00594 /* InputValidator.swift */,
+				04891CA82E22971E0064A111 /* LRUCache.swift */,
 				CB043CA5EEB9AC8B07D61E97 /* OptimizedBloomFilter.swift */,
+				04636BBE2E2FCA8A00FBCFA8 /* SecureLogger.swift */,
 			);
 			path = Utils;
 			sourceTree = "<group>";
@@ -399,6 +478,8 @@
 		A55126E93155456CAA8D6656 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				2E03C0D72E445F3700798C63 /* VoiceMessageView.swift */,
+				2E03C0D82E445F3700798C63 /* VoiceRecordingView.swift */,
 				04B6BA532E203D6C0090FE39 /* FingerprintView.swift */,
 				763E0DBA9492A654FC0CDCB9 /* AppInfoView.swift */,
 				A08E03AA0C63E97C91749AEC /* ContentView.swift */,
@@ -434,6 +515,16 @@
 		D98A3186D7E4C72E35BDF7FE /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				2E03C0E42E445FEF00798C63 /* DeliveryTracker+Voice.swift */,
+				2E03C0E52E445FEF00798C63 /* MessageRetryService+Voice.swift */,
+				2E03C0E62E445FEF00798C63 /* MessageRouter+Voice.swift */,
+				2E03C0E72E445FEF00798C63 /* NoiseEncryptionService+Voice.swift */,
+				2E03C0E82E445FEF00798C63 /* NotificationService+Voice.swift */,
+				2E03C0C52E445EE600798C63 /* AudioPlayer.swift */,
+				2E03C0C62E445EE600798C63 /* AudioRecorder.swift */,
+				2E03C0C72E445EE600798C63 /* OpusAudioService.swift */,
+				2E03C0C82E445EE600798C63 /* VoiceMessageService.swift */,
+				2E03C0C92E445EE600798C63 /* VoiceServices.swift */,
 				04F127F62E37EEEE00FFBA8D /* FavoritesPersistenceService.swift */,
 				04F127F72E37EEEE00FFBA8D /* MessageRouter.swift */,
 				04F127FF2E37F00000FFBA8D /* ProcessedMessagesService.swift */,
@@ -465,6 +556,7 @@
 			name = bitchat_macOS;
 			packageProductDependencies = (
 				04F127E82E37EBDB00FFBA8D /* P256K */,
+				2E03C1022E44610000798C63 /* YbridOpus */,
 			);
 			productName = bitchat_macOS;
 			productReference = 8F3A7C058C2C8E1A06C8CF8B /* bitchat.app */;
@@ -540,6 +632,7 @@
 			name = bitchat_iOS;
 			packageProductDependencies = (
 				04F127E72E37EBCD00FFBA8D /* P256K */,
+				2E03C1012E44610000798C63 /* YbridOpus */,
 			);
 			productName = bitchat_iOS;
 			productReference = 96D0D41CA19EE5A772AA8434 /* bitchat.app */;
@@ -556,6 +649,7 @@
 				TargetAttributes = {
 					0576A29205865664C0937536 = {
 						DevelopmentTeam = L3N5LHJD5Y;
+						LastSwiftMigration = 1640;
 						ProvisioningStyle = Automatic;
 					};
 					47FF23248747DD7CB666CB91 = {
@@ -572,6 +666,7 @@
 					};
 					AF077EA0474EDEDE2C72716C = {
 						DevelopmentTeam = L3N5LHJD5Y;
+						LastSwiftMigration = 1640;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -588,6 +683,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				04F127E62E37EBCD00FFBA8D /* XCRemoteSwiftPackageReference "swift-secp256k1" */,
+				2E03C1002E44610000798C63 /* XCRemoteSwiftPackageReference "opus-swift" */,
 			);
 			projectDirPath = "";
 			projectRoot = "";
@@ -640,6 +736,11 @@
 				6E7761E21C99F28AE2F9BE5F /* BitchatApp.swift in Sources */,
 				04891CAA2E22971E0064A111 /* LRUCache.swift in Sources */,
 				923027D6F2F417AFA2488127 /* BitchatProtocol.swift in Sources */,
+				2E03C0E92E445FEF00798C63 /* MessageRetryService+Voice.swift in Sources */,
+				2E03C0EA2E445FEF00798C63 /* NotificationService+Voice.swift in Sources */,
+				2E03C0EB2E445FEF00798C63 /* DeliveryTracker+Voice.swift in Sources */,
+				2E03C0EC2E445FEF00798C63 /* MessageRouter+Voice.swift in Sources */,
+				2E03C0ED2E445FEF00798C63 /* NoiseEncryptionService+Voice.swift in Sources */,
 				04B6BA452E2035530090FE39 /* NoiseSecurityConsiderations.swift in Sources */,
 				04B6BA462E2035530090FE39 /* NoiseSession.swift in Sources */,
 				04B6BA472E2035530090FE39 /* NoiseProtocol.swift in Sources */,
@@ -649,16 +750,27 @@
 				D450CF41F207BDE1A1AAA56E /* ChatViewModel.swift in Sources */,
 				B0CA7796B2B2AC2B33F84548 /* CompressionUtil.swift in Sources */,
 				92D34E7A07C990C8A815B0CE /* ContentView.swift in Sources */,
+				2E03C0F42E44600C00798C63 /* NostrProtocol+Voice.swift in Sources */,
+				2E03C0D62E445F0900798C63 /* ChatViewModel+Voice.swift in Sources */,
 				04B6BA4F2E2038A70090FE39 /* NoiseEncryptionService.swift in Sources */,
 				8DCEEA289EF7C49E7CD38B08 /* DeliveryTracker.swift in Sources */,
 				FB8819B4C84FAFEF5C36B216 /* KeychainManager.swift in Sources */,
+				2E03C0F72E44602000798C63 /* VoiceSecurityConsiderations.swift in Sources */,
 				04F127E52E37EBAA00FFBA8D /* NostrIdentity.swift in Sources */,
 				04636BBA2E2FAA1700FBCFA8 /* BinaryEncodingUtils.swift in Sources */,
 				04AD0B4E2E25B9580002A40A /* IdentityModels.swift in Sources */,
 				04AD0B4F2E25B9580002A40A /* SecureIdentityStateManager.swift in Sources */,
 				31D147471B9F4E2815352DDA /* LinkPreviewView.swift in Sources */,
 				04F127FE2E37EF3D00FFBA8D /* BitchatPeer.swift in Sources */,
+				2E03C0CF2E445EE600798C63 /* VoiceMessageService.swift in Sources */,
+				2E03C0D02E445EE600798C63 /* AudioPlayer.swift in Sources */,
+				2E03C0D12E445EE600798C63 /* AudioRecorder.swift in Sources */,
+				2E03C0D22E445EE600798C63 /* OpusAudioService.swift in Sources */,
+				2E03C0D32E445EE600798C63 /* VoiceServices.swift in Sources */,
 				04F128062E37F10000FFBA8D /* PeerSession.swift in Sources */,
+				2E03C0E32E445F9D00798C63 /* OpusWrapper.swift in Sources */,
+				2E03C0FF2E44606000798C63 /* OpusCodec.swift in Sources */,
+				DB0BA08D374240F583884858 /* HapticFeedbackManager.swift in Sources */,
 				046D705E2E3C105D00C00594 /* InputValidator.swift in Sources */,
 				04B6BA572E203D6C0090FE39 /* FingerprintView.swift in Sources */,
 				04636BED2E30CD4A00FBCFA8 /* NoiseHandshakeCoordinator.swift in Sources */,
@@ -668,6 +780,9 @@
 				0245710AEAA58AD0A1425234 /* OptimizedBloomFilter.swift in Sources */,
 				04F127F82E37EEEE00FFBA8D /* MessageRouter.swift in Sources */,
 				04F127F92E37EEEE00FFBA8D /* FavoritesPersistenceService.swift in Sources */,
+				2E03C0C32E445E7900798C63 /* VoiceMessageData.swift in Sources */,
+				2E03C0D92E445F3700798C63 /* VoiceRecordingView.swift in Sources */,
+				2E03C0DA2E445F3700798C63 /* VoiceMessageView.swift in Sources */,
 				04F128042E37F00000FFBA8D /* ProcessedMessagesService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -682,6 +797,11 @@
 				10E68BB889356219189E38EC /* BitchatApp.swift in Sources */,
 				04891CA92E22971E0064A111 /* LRUCache.swift in Sources */,
 				6DE056E1EE9850E9FBF50157 /* BitchatProtocol.swift in Sources */,
+				2E03C0EE2E445FEF00798C63 /* MessageRetryService+Voice.swift in Sources */,
+				2E03C0EF2E445FEF00798C63 /* NotificationService+Voice.swift in Sources */,
+				2E03C0F02E445FEF00798C63 /* DeliveryTracker+Voice.swift in Sources */,
+				2E03C0F12E445FEF00798C63 /* MessageRouter+Voice.swift in Sources */,
+				2E03C0F22E445FEF00798C63 /* NoiseEncryptionService+Voice.swift in Sources */,
 				04B6BA492E2035530090FE39 /* NoiseSecurityConsiderations.swift in Sources */,
 				04B6BA4A2E2035530090FE39 /* NoiseSession.swift in Sources */,
 				04B6BA4B2E2035530090FE39 /* NoiseProtocol.swift in Sources */,
@@ -691,16 +811,27 @@
 				7576A357B278E5733E9D9F33 /* ChatViewModel.swift in Sources */,
 				7DCA0DBCB8884E3B31C7BCE3 /* CompressionUtil.swift in Sources */,
 				1D9674FA5F998503831DC281 /* ContentView.swift in Sources */,
+				2E03C0F52E44600C00798C63 /* NostrProtocol+Voice.swift in Sources */,
+				2E03C0D52E445F0900798C63 /* ChatViewModel+Voice.swift in Sources */,
 				04B6BA4E2E2038A70090FE39 /* NoiseEncryptionService.swift in Sources */,
 				CD0AE423F03AC52BAFC16834 /* DeliveryTracker.swift in Sources */,
 				8F737CE0435792CC2AD65FCB /* KeychainManager.swift in Sources */,
+				2E03C0F82E44602000798C63 /* VoiceSecurityConsiderations.swift in Sources */,
 				04F127E42E37EBAA00FFBA8D /* NostrIdentity.swift in Sources */,
 				04636BBC2E2FAA1700FBCFA8 /* BinaryEncodingUtils.swift in Sources */,
 				0FBC81FF78CF4711B78E092A /* IdentityModels.swift in Sources */,
 				1AF9F9036DEE42408D557A87 /* SecureIdentityStateManager.swift in Sources */,
 				7A5B1AB5642FEC168E917949 /* LinkPreviewView.swift in Sources */,
 				04F127FF2E37EF3D00FFBA8D /* BitchatPeer.swift in Sources */,
+				2E03C0CA2E445EE600798C63 /* VoiceMessageService.swift in Sources */,
+				2E03C0CB2E445EE600798C63 /* AudioPlayer.swift in Sources */,
+				2E03C0CC2E445EE600798C63 /* AudioRecorder.swift in Sources */,
+				2E03C0CD2E445EE600798C63 /* OpusAudioService.swift in Sources */,
+				2E03C0CE2E445EE600798C63 /* VoiceServices.swift in Sources */,
 				04F128082E37F10000FFBA8D /* PeerSession.swift in Sources */,
+				2E03C0E22E445F9D00798C63 /* OpusWrapper.swift in Sources */,
+				2E03C0FE2E44606000798C63 /* OpusCodec.swift in Sources */,
+				0DD89A2E3B1B44208984254D /* HapticFeedbackManager.swift in Sources */,
 				046D705D2E3C105D00C00594 /* InputValidator.swift in Sources */,
 				04B6BA552E203D6C0090FE39 /* FingerprintView.swift in Sources */,
 				04636BEE2E30CD4A00FBCFA8 /* NoiseHandshakeCoordinator.swift in Sources */,
@@ -710,6 +841,9 @@
 				1F48A8CEEE9399D1EBD08F0C /* OptimizedBloomFilter.swift in Sources */,
 				04F127FA2E37EEEE00FFBA8D /* MessageRouter.swift in Sources */,
 				04F127FB2E37EEEE00FFBA8D /* FavoritesPersistenceService.swift in Sources */,
+				2E03C0C42E445E7900798C63 /* VoiceMessageData.swift in Sources */,
+				2E03C0DB2E445F3700798C63 /* VoiceRecordingView.swift in Sources */,
+				2E03C0DC2E445F3700798C63 /* VoiceMessageView.swift in Sources */,
 				04F128052E37F00000FFBA8D /* ProcessedMessagesService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -868,6 +1002,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGNING_ALLOWED = YES;
 				CODE_SIGNING_REQUIRED = YES;
 				CODE_SIGN_ENTITLEMENTS = bitchat/bitchat.entitlements;
@@ -875,6 +1010,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 2;
 				ENABLE_PREVIEWS = YES;
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = arm64;
 				INFOPLIST_FILE = bitchat/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = bitchat;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
@@ -891,6 +1027,7 @@
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
@@ -924,6 +1061,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGNING_ALLOWED = YES;
 				CODE_SIGNING_REQUIRED = YES;
 				CODE_SIGN_ENTITLEMENTS = bitchat/bitchat.entitlements;
@@ -931,6 +1069,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 2;
 				ENABLE_PREVIEWS = YES;
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = arm64;
 				INFOPLIST_FILE = bitchat/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = bitchat;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
@@ -957,6 +1096,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGNING_ALLOWED = YES;
 				CODE_SIGNING_REQUIRED = YES;
 				CODE_SIGN_ENTITLEMENTS = "bitchat/bitchat-macOS.entitlements";
@@ -965,6 +1105,7 @@
 				CURRENT_PROJECT_VERSION = 2;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_PREVIEWS = YES;
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = arm64;
 				INFOPLIST_FILE = bitchat/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = bitchat;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
@@ -1049,6 +1190,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGNING_ALLOWED = YES;
 				CODE_SIGNING_REQUIRED = YES;
 				CODE_SIGN_ENTITLEMENTS = "bitchat/bitchat-macOS.entitlements";
@@ -1057,6 +1199,7 @@
 				CURRENT_PROJECT_VERSION = 2;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_PREVIEWS = YES;
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = arm64;
 				INFOPLIST_FILE = bitchat/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = bitchat;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
@@ -1070,6 +1213,7 @@
 				PRODUCT_NAME = bitchat;
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = macosx;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
@@ -1240,6 +1384,14 @@
 				minimumVersion = 0.21.1;
 			};
 		};
+		2E03C1002E44610000798C63 /* XCRemoteSwiftPackageReference "opus-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ybrid/opus-swift.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.8.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -1252,6 +1404,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 04F127E62E37EBCD00FFBA8D /* XCRemoteSwiftPackageReference "swift-secp256k1" */;
 			productName = P256K;
+		};
+		2E03C1012E44610000798C63 /* YbridOpus */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 2E03C1002E44610000798C63 /* XCRemoteSwiftPackageReference "opus-swift" */;
+			productName = YbridOpus;
+		};
+		2E03C1022E44610000798C63 /* YbridOpus */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 2E03C1002E44610000798C63 /* XCRemoteSwiftPackageReference "opus-swift" */;
+			productName = YbridOpus;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

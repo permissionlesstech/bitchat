@@ -1,6 +1,15 @@
 {
   "pins" : [
     {
+      "identity" : "opus-swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/ybrid/opus-swift.git",
+      "state" : {
+        "revision" : "92e76803ce7efc8e8903433cfd5f7f68938534ba",
+        "version" : "0.8.0"
+      }
+    },
+    {
       "identity" : "swift-secp256k1",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/21-DOT-DEV/swift-secp256k1",

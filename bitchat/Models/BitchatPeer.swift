@@ -207,6 +207,13 @@ class PeerManager: ObservableObject {
                 continue
             }
             
+            // Skip if we already added a peer with this ID (prevents duplicates)
+            if addedPeerIDs.contains(favoriteID) {
+                SecureLogger.log("  - Skipping '\(favorite.peerNickname)' - peer ID already added", 
+                                category: SecureLogger.session, level: .debug)
+                continue
+            }
+            
             // Only add peers that WE favorite (not just ones who favorite us)
             if !favorite.isFavorite {
                 SecureLogger.log("  - Skipping '\(favorite.peerNickname)' - we don't favorite them (they favorite us: \(favorite.theyFavoritedUs))", 

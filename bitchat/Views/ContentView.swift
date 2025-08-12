@@ -92,88 +92,103 @@ struct ContentView: View {
         colorScheme == .dark ? Color.green.opacity(0.8) : Color(red: 0, green: 0.5, blue: 0).opacity(0.8)
     }
     
+    // Helper to calculate sidebar offset
+    private func sidebarOffset(geometry: GeometryProxy) -> CGFloat {
+        let dragOffset = sidebarDragOffset.isNaN ? 0 : sidebarDragOffset
+        let width = geometry.size.width.isNaN ? 0 : max(0, geometry.size.width)
+        return showSidebar ? -dragOffset : width - dragOffset
+    }
+    
+    // Helper to calculate sidebar width
+    private func sidebarWidth(geometry: GeometryProxy) -> CGFloat {
+        let safeWidth = geometry.size.width.isNaN ? 300 : geometry.size.width
+        #if os(macOS)
+        return min(300, max(0, safeWidth) * 0.4)
+        #else
+        return max(0, safeWidth) * 0.7
+        #endif
+    }
+    
+    // Private chat overlay view
+    @ViewBuilder
+    private func privateChatOverlay(geometry: GeometryProxy) -> some View {
+        if viewModel.selectedPrivateChatPeer != nil {
+            privateChatView
+                .frame(width: geometry.size.width)
+                .background(backgroundColor)
+                .transition(.asymmetric(
+                    insertion: .move(edge: .trailing),
+                    removal: .move(edge: .trailing)
+                ))
+                .offset(x: showPrivateChat ? -1 : max(0, geometry.size.width))
+                .offset(x: backSwipeOffset.isNaN ? 0 : backSwipeOffset)
+                .gesture(privateChatBackSwipeGesture(geometry: geometry))
+        }
+    }
+    
+    // Sidebar overlay view
+    @ViewBuilder
+    private func sidebarOverlay(geometry: GeometryProxy) -> some View {
+        HStack(spacing: 0) {
+            // Tap to dismiss area
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showSidebar = false
+                        sidebarDragOffset = 0
+                    }
+                }
+            
+            // Only render sidebar content when it's visible or animating
+            if showSidebar || sidebarDragOffset != 0 {
+                sidebarView
+                    .frame(width: sidebarWidth(geometry: geometry))
+                    .transition(.move(edge: .trailing))
+            } else {
+                // Empty placeholder when hidden
+                Color.clear
+                    .frame(width: sidebarWidth(geometry: geometry))
+            }
+        }
+        .offset(x: sidebarOffset(geometry: geometry))
+        .animation(.easeInOut(duration: 0.25), value: showSidebar)
+    }
+    
+    // Computed binding for fingerprint sheet
+    private var showFingerprintBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.showingFingerprintFor != nil },
+            set: { _ in viewModel.showingFingerprintFor = nil }
+        )
+    }
+    
     // MARK: - Body
     
     var body: some View {
+        contentView
+            .sheet(isPresented: $showAppInfo) {
+                AppInfoView()
+            }
+            .sheet(isPresented: showFingerprintBinding) {
+                if let peerID = viewModel.showingFingerprintFor {
+                    FingerprintView(viewModel: viewModel, peerID: peerID)
+                }
+            }
+    }
+    
+    // Main content view
+    private var contentView: some View {
         GeometryReader { geometry in
             ZStack {
                 // Base layer - Main public chat (always visible)
                 mainChatView
                 
                 // Private chat slide-over
-                if viewModel.selectedPrivateChatPeer != nil {
-                    privateChatView
-                        .frame(width: geometry.size.width)
-                        .background(backgroundColor)
-                        .transition(.asymmetric(
-                            insertion: .move(edge: .trailing),
-                            removal: .move(edge: .trailing)
-                        ))
-                        .offset(x: showPrivateChat ? -1 : max(0, geometry.size.width))
-                        .offset(x: backSwipeOffset.isNaN ? 0 : backSwipeOffset)
-                        .gesture(
-                            DragGesture()
-                                .onChanged { value in
-                                    if value.translation.width > 0 && !value.translation.width.isNaN {
-                                        let maxWidth = max(0, geometry.size.width)
-                                        backSwipeOffset = min(value.translation.width, maxWidth.isNaN ? 0 : maxWidth)
-                                    }
-                                }
-                                .onEnded { value in
-                                    let translation = value.translation.width.isNaN ? 0 : value.translation.width
-                                    let velocity = value.velocity.width.isNaN ? 0 : value.velocity.width
-                                    if translation > 50 || (translation > 30 && velocity > 300) {
-                                        withAnimation(.easeOut(duration: 0.2)) {
-                                            showPrivateChat = false
-                                            backSwipeOffset = 0
-                                            viewModel.endPrivateChat()
-                                        }
-                                    } else {
-                                        withAnimation(.easeOut(duration: 0.15)) {
-                                            backSwipeOffset = 0
-                                        }
-                                    }
-                                }
-                        )
-                }
+                privateChatOverlay(geometry: geometry)
                 
                 // Sidebar overlay
-                HStack(spacing: 0) {
-                    // Tap to dismiss area
-                    Color.clear
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                showSidebar = false
-                                sidebarDragOffset = 0
-                            }
-                        }
-                    
-                    // Only render sidebar content when it's visible or animating
-                    if showSidebar || sidebarDragOffset != 0 {
-                        sidebarView
-                            #if os(macOS)
-                            .frame(width: min(300, max(0, geometry.size.width.isNaN ? 300 : geometry.size.width) * 0.4))
-                            #else
-                            .frame(width: max(0, geometry.size.width.isNaN ? 300 : geometry.size.width) * 0.7)
-                            #endif
-                            .transition(.move(edge: .trailing))
-                    } else {
-                        // Empty placeholder when hidden
-                        Color.clear
-                            #if os(macOS)
-                            .frame(width: min(300, max(0, geometry.size.width.isNaN ? 300 : geometry.size.width) * 0.4))
-                            #else
-                            .frame(width: max(0, geometry.size.width.isNaN ? 300 : geometry.size.width) * 0.7)
-                            #endif
-                    }
-                }
-                .offset(x: {
-                    let dragOffset = sidebarDragOffset.isNaN ? 0 : sidebarDragOffset
-                    let width = geometry.size.width.isNaN ? 0 : max(0, geometry.size.width)
-                    return showSidebar ? -dragOffset : width - dragOffset
-                }())
-                .animation(.easeInOut(duration: 0.25), value: showSidebar)
+                sidebarOverlay(geometry: geometry)
             }
         }
         #if os(macOS)
@@ -182,17 +197,6 @@ struct ContentView: View {
         .onChange(of: viewModel.selectedPrivateChatPeer) { newValue in
             withAnimation(.easeInOut(duration: 0.2)) {
                 showPrivateChat = newValue != nil
-            }
-        }
-        .sheet(isPresented: $showAppInfo) {
-            AppInfoView()
-        }
-        .sheet(isPresented: Binding(
-            get: { viewModel.showingFingerprintFor != nil },
-            set: { _ in viewModel.showingFingerprintFor = nil }
-        )) {
-            if let peerID = viewModel.showingFingerprintFor {
-                FingerprintView(viewModel: viewModel, peerID: peerID)
             }
         }
         .confirmationDialog(
@@ -294,6 +298,15 @@ struct ContentView: View {
                                             DeliveryStatusView(status: status, colorScheme: colorScheme)
                                                 .padding(.leading, 4)
                                         }
+                                    }
+                                    
+                                    // Voice message view  
+                                    if message.voiceMessageData != nil {
+                                        VoiceMessageView(
+                                            message: message,
+                                            isFromCurrentUser: message.sender == viewModel.nickname
+                                        )
+                                        .padding(.top, 4)
                                     }
                                     
                                     // Check for plain URLs
@@ -490,7 +503,7 @@ struct ContentView: View {
                 .font(.system(size: 14, design: .monospaced))
                 .foregroundColor(textColor)
                 .focused($isTextFieldFocused)
-                .padding(.leading, 12)
+                .padding(.leading, 4)
                 .autocorrectionDisabled(true)
                 #if os(iOS)
                 .textInputAutocapitalization(.never)
@@ -553,17 +566,53 @@ struct ContentView: View {
                     sendMessage()
                 }
             
-            Button(action: sendMessage) {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 20))
-                    .foregroundColor(messageText.isEmpty ? Color.gray :
-                                            viewModel.selectedPrivateChatPeer != nil
-                                             ? Color.orange : textColor)
+            // Show microphone when no text, send button when there's text
+            if messageText.isEmpty {
+                // Voice recording button
+                Button(action: {
+                    if viewModel.voiceRecordingState == .recording {
+                        viewModel.stopVoiceRecording()
+                    } else {
+                        viewModel.startVoiceRecording()
+                    }
+                }) {
+                    HStack(spacing: 4) {
+                        if viewModel.voiceRecordingState == .recording {
+                            // Recording state with timer
+                            Circle()
+                                .fill(Color.red)
+                                .frame(width: 6, height: 6)
+                            
+                            Text(String(format: "%.1fs", viewModel.recordingDuration))
+                                .font(.system(size: 12, design: .monospaced))
+                                .foregroundColor(Color.red)
+                            
+                            Image(systemName: "stop.circle.fill")
+                                .font(.system(size: 20))
+                                .foregroundColor(Color.red)
+                        } else {
+                            // Idle microphone
+                            Image(systemName: "mic")
+                                .font(.system(size: 20))
+                                .foregroundColor(textColor)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, 12)
+                .accessibilityLabel(viewModel.voiceRecordingState == .recording ? "Stop recording" : "Start voice recording")
+            } else {
+                Button(action: sendMessage) {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(viewModel.selectedPrivateChatPeer != nil
+                                         ? Color.orange : textColor)
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, 12)
+                .accessibilityLabel("Send message")
+                .accessibilityHint("Double tap to send")
             }
-            .buttonStyle(.plain)
-            .padding(.trailing, 12)
-            .accessibilityLabel("Send message")
-            .accessibilityHint(messageText.isEmpty ? "Enter a message to send" : "Double tap to send")
             }
             .padding(.vertical, 8)
             .background(backgroundColor.opacity(0.95))
@@ -1241,5 +1290,35 @@ struct DeliveryStatusView: View {
             .foregroundColor(secondaryTextColor.opacity(0.6))
             .help("Delivered to \(reached) of \(total) members")
         }
+    }
+}
+
+// MARK: - ContentView Extensions
+
+extension ContentView {
+    
+    private func privateChatBackSwipeGesture(geometry: GeometryProxy) -> some Gesture {
+        DragGesture()
+            .onChanged { value in
+                if value.translation.width > 0 && !value.translation.width.isNaN {
+                    let maxWidth = max(0, geometry.size.width)
+                    backSwipeOffset = min(value.translation.width, maxWidth.isNaN ? 0 : maxWidth)
+                }
+            }
+            .onEnded { value in
+                let translation = value.translation.width.isNaN ? 0 : value.translation.width
+                let velocity = value.velocity.width.isNaN ? 0 : value.velocity.width
+                if translation > 50 || (translation > 30 && velocity > 300) {
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        showPrivateChat = false
+                        backSwipeOffset = 0
+                        viewModel.endPrivateChat()
+                    }
+                } else {
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        backSwipeOffset = 0
+                    }
+                }
+            }
     }
 }

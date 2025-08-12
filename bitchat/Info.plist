@@ -67,5 +67,9 @@
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>bitchat uses local network access to discover and connect with other bitchat users on your network.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>bitchat needs access to your microphone to record voice messages for secure communication.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>bitchat uses speech recognition to provide voice message transcription (optional).</string>
 </dict>
 </plist>

@@ -1,6 +1,5 @@
 import Foundation
 import CryptoKit
-import P256K
 
 // Note: This file depends on Data extension from BinaryEncodingUtils.swift
 // Make sure BinaryEncodingUtils.swift is included in the target
@@ -36,7 +35,8 @@ struct NostrProtocol {
         )
         
         // 2. Create ephemeral key for this message
-        let ephemeralKey = try P256K.Schnorr.PrivateKey()
+        let ephemeralKey = try BitchatP256K.Schnorr.PrivateKey()
+        let _ = Data(ephemeralKey.xonly.bytes).hexEncodedString()
         // Created ephemeral key for seal
         
         // 3. Seal the rumor (encrypt to recipient)
@@ -102,7 +102,7 @@ struct NostrProtocol {
     private static func createSeal(
         rumor: NostrEvent,
         recipientPubkey: String,
-        senderKey: P256K.Schnorr.PrivateKey
+        senderKey: BitchatP256K.Schnorr.PrivateKey
     ) throws -> NostrEvent {
         
         let rumorJSON = try rumor.jsonString()
@@ -120,21 +120,21 @@ struct NostrProtocol {
             content: encrypted
         )
         
-        // Convert to P256K.Signing.PrivateKey for signing (temporary until we update sign method)
-        let signingKey = try P256K.Signing.PrivateKey(dataRepresentation: senderKey.dataRepresentation)
+        // Convert to BitchatP256K.Signing.PrivateKey for signing (temporary until we update sign method)
+        let signingKey = try BitchatP256K.Signing.PrivateKey(dataRepresentation: senderKey.dataRepresentation)
         return try seal.sign(with: signingKey)
     }
     
     private static func createGiftWrap(
         seal: NostrEvent,
         recipientPubkey: String,
-        senderKey: P256K.Schnorr.PrivateKey  // This is the ephemeral key used for the seal
+        senderKey: BitchatP256K.Schnorr.PrivateKey  // This is the ephemeral key used for the seal
     ) throws -> NostrEvent {
         
         let sealJSON = try seal.jsonString()
         
         // Create new ephemeral key for gift wrap
-        let wrapKey = try P256K.Schnorr.PrivateKey()
+        let wrapKey = try BitchatP256K.Schnorr.PrivateKey()
         // Creating gift wrap with ephemeral key
         
         // Encrypt the seal with the new ephemeral key (not the seal's key)
@@ -152,14 +152,14 @@ struct NostrProtocol {
             content: encrypted
         )
         
-        // Convert to P256K.Signing.PrivateKey for signing (temporary until we update sign method)
-        let signingKey = try P256K.Signing.PrivateKey(dataRepresentation: wrapKey.dataRepresentation)
+        // Convert to BitchatP256K.Signing.PrivateKey for signing (temporary until we update sign method)
+        let signingKey = try BitchatP256K.Signing.PrivateKey(dataRepresentation: wrapKey.dataRepresentation)
         return try giftWrap.sign(with: signingKey)
     }
     
     private static func unwrapGiftWrap(
         giftWrap: NostrEvent,
-        recipientKey: P256K.Schnorr.PrivateKey
+        recipientKey: BitchatP256K.Schnorr.PrivateKey
     ) throws -> NostrEvent {
         
         // Unwrapping gift wrap
@@ -183,7 +183,7 @@ struct NostrProtocol {
     
     private static func openSeal(
         seal: NostrEvent,
-        recipientKey: P256K.Schnorr.PrivateKey
+        recipientKey: BitchatP256K.Schnorr.PrivateKey
     ) throws -> NostrEvent {
         
         let decrypted = try decrypt(
@@ -205,7 +205,7 @@ struct NostrProtocol {
     private static func encrypt(
         plaintext: String,
         recipientPubkey: String,
-        senderKey: P256K.Schnorr.PrivateKey
+        senderKey: BitchatP256K.Schnorr.PrivateKey
     ) throws -> String {
         
         guard let recipientPubkeyData = Data(hexString: recipientPubkey) else {
@@ -244,7 +244,7 @@ struct NostrProtocol {
     private static func decrypt(
         ciphertext: String,
         senderPubkey: String,
-        recipientKey: P256K.Schnorr.PrivateKey
+        recipientKey: BitchatP256K.Schnorr.PrivateKey
     ) throws -> String {
         
         // Decrypting message
@@ -329,13 +329,13 @@ struct NostrProtocol {
     }
     
     private static func deriveSharedSecret(
-        privateKey: P256K.Schnorr.PrivateKey,
+        privateKey: BitchatP256K.Schnorr.PrivateKey,
         publicKey: Data
     ) throws -> Data {
         // Deriving shared secret
         
         // Convert Schnorr private key to KeyAgreement private key
-        let keyAgreementPrivateKey = try P256K.KeyAgreement.PrivateKey(
+        let keyAgreementPrivateKey = try BitchatP256K.KeyAgreement.PrivateKey(
             dataRepresentation: privateKey.dataRepresentation
         )
         
@@ -353,9 +353,9 @@ struct NostrProtocol {
         }
         
         // Try to create public key, if it fails with even Y, try odd Y
-        let keyAgreementPublicKey: P256K.KeyAgreement.PublicKey
+        let keyAgreementPublicKey: BitchatP256K.KeyAgreement.PublicKey
         do {
-            keyAgreementPublicKey = try P256K.KeyAgreement.PublicKey(
+            keyAgreementPublicKey = try BitchatP256K.KeyAgreement.PublicKey(
                 dataRepresentation: fullPublicKey,
                 format: .compressed
             )
@@ -366,7 +366,7 @@ struct NostrProtocol {
                 fullPublicKey = Data()
                 fullPublicKey.append(0x03)
                 fullPublicKey.append(publicKey)
-                keyAgreementPublicKey = try P256K.KeyAgreement.PublicKey(
+                keyAgreementPublicKey = try BitchatP256K.KeyAgreement.PublicKey(
                     dataRepresentation: fullPublicKey,
                     format: .compressed
                 )
@@ -400,18 +400,18 @@ struct NostrProtocol {
     
     // Direct version that doesn't try to add prefixes
     private static func deriveSharedSecretDirect(
-        privateKey: P256K.Schnorr.PrivateKey,
+        privateKey: BitchatP256K.Schnorr.PrivateKey,
         publicKey: Data
     ) throws -> Data {
         // Direct shared secret calculation
         
         // Convert Schnorr private key to KeyAgreement private key
-        let keyAgreementPrivateKey = try P256K.KeyAgreement.PrivateKey(
+        let keyAgreementPrivateKey = try BitchatP256K.KeyAgreement.PrivateKey(
             dataRepresentation: privateKey.dataRepresentation
         )
         
         // Use the public key as-is (should already have prefix)
-        let keyAgreementPublicKey = try P256K.KeyAgreement.PublicKey(
+        let keyAgreementPublicKey = try BitchatP256K.KeyAgreement.PublicKey(
             dataRepresentation: publicKey,
             format: .compressed
         )
@@ -501,11 +501,11 @@ struct NostrEvent: Codable {
         self.sig = dict["sig"] as? String
     }
     
-    func sign(with key: P256K.Signing.PrivateKey) throws -> NostrEvent {
+    func sign(with key: BitchatP256K.Signing.PrivateKey) throws -> NostrEvent {
         let (eventId, eventIdHash) = try calculateEventId()
         
         // Convert to Schnorr key for Nostr signing
-        let schnorrKey = try P256K.Schnorr.PrivateKey(dataRepresentation: key.dataRepresentation)
+        let schnorrKey = try BitchatP256K.Schnorr.PrivateKey(dataRepresentation: key.dataRepresentation)
         
         // Sign with Schnorr
         var messageBytes = [UInt8](eventIdHash)
