@@ -56,15 +56,6 @@ enum PowerMode {
         case .ultraLowPower: return 30.0 // Advertise every 30 seconds
         }
     }
-    
-    var messageAggregationWindow: TimeInterval {
-        switch self {
-        case .performance: return 0.05  // 50ms
-        case .balanced: return 0.1      // 100ms
-        case .powerSaver: return 0.3    // 300ms
-        case .ultraLowPower: return 0.5 // 500ms
-        }
-    }
 }
 
 class BatteryOptimizer {
