@@ -859,7 +859,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         // Check if this is a moon peer (we favorite them but they don't favorite us) AND they're offline
         // Only require mutual favorites for offline Nostr messaging
         if let peer = peerIndex[peerID],
-           peer.isFavorite && !peer.theyFavoritedUs && !peer.isConnected && !peer.isRelayConnected {
+           peer.isFavorite && !peer.theyFavoritedUs && !peer.isConnected {
             addSystemMessage("cannot start chat with \(peerNickname): mutual favorite required for offline messaging.")
             return
         }
