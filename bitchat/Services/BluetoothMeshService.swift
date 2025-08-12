@@ -705,7 +705,6 @@ class BluetoothMeshService: NSObject {
         
         // Update PeerSession
         if let session = peerSessions[peerID] {
-            let _ = session.isConnected
             session.updateBluetoothConnection(peripheral: mapping.peripheral, characteristic: nil)
         } else {
             // This is a truly new peer session
@@ -2804,7 +2803,6 @@ class BluetoothMeshService: NSObject {
         
         // Check if we have a recent entry
         if let entry = protocolMessageDedup[key], !isExpired(entry) {
-            let _ = Date().timeIntervalSince(entry.sentAt)
             return true
         }
         
@@ -3466,7 +3464,6 @@ class BluetoothMeshService: NSObject {
         
         // Bloom filter will be reset by timer, processedMessages is now bounded
         
-        // let _ = packet.senderID.hexEncodedString()
         
         
         // Note: We'll decode messages in the switch statement below, not here
@@ -4548,7 +4545,6 @@ class BluetoothMeshService: NSObject {
             
             if !isPeerIDOurs(senderID) {
                 // Check our current handshake state
-                let _ = handshakeCoordinator.getHandshakeState(for: senderID)
                 // Processing handshake response
                 
                 // Process the response - this could be message 2 or message 3 in the XX pattern
@@ -4734,7 +4730,6 @@ class BluetoothMeshService: NSObject {
             }
         }
         
-        let _ = Double(fragments.count - 1) * delayBetweenFragments
     }
     
     private func handleFragment(_ packet: BitchatPacket, from peerID: String) {
@@ -5093,8 +5088,6 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
                        category: SecureLogger.session, level: .info)
         
         // Log current peripheral mappings
-        let _ = collectionsQueue.sync { peripheralMappings.count }
-        let _ = connectionPool.count
         
         peripheral.delegate = self
         peripheral.discoverServices([BluetoothMeshService.serviceUUID])
@@ -5283,7 +5276,6 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
                 // Time tracking removed - now in PeerSession
                 // Keep lastSuccessfulMessageTime to validate session on reconnect
                 let lastSuccess = self.peerSessions[peerID]?.lastSuccessfulMessageTime ?? Date.distantPast
-                let _ = Date().timeIntervalSince(lastSuccess)
                 // Keeping Noise session on disconnect
             }
             
@@ -5500,7 +5492,6 @@ extension BluetoothMeshService: CBPeripheralDelegate {
         
         
         // Use the sender ID from the packet, not our local mapping which might still be a temp ID
-        let _ = connectedPeripherals.first(where: { $0.value == peripheral })?.key ?? "unknown"
         let packetSenderID = packet.senderID.hexEncodedString()
         
         // Log the packet type we received
@@ -6611,8 +6602,6 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         SecureLogger.logHandshake("processing \(isInitiation ? "init" : "response")", peerID: peerID, success: true)
         
         // Get current handshake state before processing
-        let _ = handshakeCoordinator.getHandshakeState(for: peerID)
-        let _ = noiseService.hasEstablishedSession(with: peerID)
         // Current handshake state check
         
         // Check for duplicate handshake messages
@@ -7535,7 +7524,6 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                     self.pendingPrivateMessages[recipientPeerID] = []
                 }
                 self.pendingPrivateMessages[recipientPeerID]?.append((content, recipientNickname, messageID ?? UUID().uuidString))
-                let _ = self.pendingPrivateMessages[recipientPeerID]?.count ?? 0
                 // Queued private message
             }
             
