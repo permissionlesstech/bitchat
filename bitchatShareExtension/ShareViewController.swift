@@ -138,44 +138,6 @@ class ShareViewController: SLComposeServiceViewController {
     
     // MARK: - Helper Methods
     
-    private func handleSharedText(_ text: String) {
-        // Save to shared user defaults to pass to main app
-        saveToSharedDefaults(content: text, type: "text")
-        openMainApp()
-    }
-    
-    private func handleSharedURL(_ url: URL) {
-        // Get the page title if available from the extension context
-        var pageTitle: String? = nil
-        if let item = extensionContext?.inputItems.first as? NSExtensionItem {
-            pageTitle = item.attributedContentText?.string ?? item.attributedTitle?.string
-        }
-        
-        // Create a structured format for URL sharing
-        let urlData: [String: String] = [
-            "url": url.absoluteString,
-            "title": pageTitle ?? url.host ?? "Shared Link"
-        ]
-        
-        // Convert to JSON string
-        if let jsonData = try? JSONSerialization.data(withJSONObject: urlData),
-           let jsonString = String(data: jsonData, encoding: .utf8) {
-            saveToSharedDefaults(content: jsonString, type: "url")
-        } else {
-            // Fallback to simple URL
-            saveToSharedDefaults(content: url.absoluteString, type: "url")
-        }
-        
-        openMainApp()
-    }
-    
-    private func handleSharedImage(_ image: UIImage) {
-        // For now, we'll just notify that image sharing isn't supported
-        // In the future, we could implement image sharing via the mesh
-        saveToSharedDefaults(content: "Image sharing coming soon!", type: "image")
-        openMainApp()
-    }
-    
     private func saveToSharedDefaults(content: String, type: String) {
         // Use app groups to share data between extension and main app
         guard let userDefaults = UserDefaults(suiteName: "group.chat.bitchat") else {
