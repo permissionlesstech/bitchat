@@ -296,19 +296,6 @@ class NoiseSessionManager {
         }
     }
     
-    func migrateSession(from oldPeerID: String, to newPeerID: String) {
-        managerQueue.sync(flags: .barrier) {
-            // Check if we have a session for the old peer ID
-            if let session = sessions[oldPeerID] {
-                // Move the session to the new peer ID
-                sessions[newPeerID] = session
-                _ = sessions.removeValue(forKey: oldPeerID)
-                
-                SecureLogger.log("Migrated Noise session from \(oldPeerID) to \(newPeerID)", category: SecureLogger.noise, level: .info)
-            }
-        }
-    }
-    
     func getEstablishedSessions() -> [String: NoiseSession] {
         return managerQueue.sync {
             return sessions.filter { $0.value.isEstablished() }
