@@ -680,12 +680,6 @@ struct ContentView: View {
                                             .font(.system(size: 10))
                                             .foregroundColor(textColor)
                                             .accessibilityLabel("Connected via mesh")
-                                    case .relayConnected:
-                                        // Chain link for relay connection
-                                        Image(systemName: "link")
-                                            .font(.system(size: 10))
-                                            .foregroundColor(Color.blue)
-                                            .accessibilityLabel("Connected via relay")
                                     case .nostrAvailable:
                                         // Purple globe for mutual favorites reachable via Nostr
                                         Image(systemName: "globe")
@@ -901,7 +895,7 @@ struct ContentView: View {
                 let peerCounts = viewModel.allPeers.reduce(into: (others: 0, mesh: 0)) { counts, peer in
                     guard peer.id != viewModel.meshService.myPeerID else { return }
                     
-                    let isMeshConnected = peer.isConnected || peer.isRelayConnected
+                    let isMeshConnected = peer.isConnected
                     if isMeshConnected {
                         counts.mesh += 1
                         counts.others += 1
@@ -993,12 +987,6 @@ struct ContentView: View {
                                         .font(.system(size: 14))
                                         .foregroundColor(textColor)
                                         .accessibilityLabel("Connected via mesh")
-                                case .relayConnected:
-                                    // Chain link for relay connection
-                                    Image(systemName: "link")
-                                        .font(.system(size: 14))
-                                        .foregroundColor(Color.blue)
-                                        .accessibilityLabel("Connected via relay")
                                 case .nostrAvailable:
                                     // Purple globe for Nostr
                                     Image(systemName: "globe")
