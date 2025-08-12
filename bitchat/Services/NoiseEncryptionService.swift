@@ -419,24 +419,6 @@ class NoiseEncryptionService {
         SecureLogger.logSecurityEvent(.sessionExpired(peerID: peerID))
     }
     
-    /// Migrate session when peer ID changes
-    func migratePeerSession(from oldPeerID: String, to newPeerID: String, fingerprint: String) {
-        // First update the fingerprint mappings
-        serviceQueue.sync(flags: .barrier) {
-            // Remove old mapping
-            if let oldFingerprint = peerFingerprints[oldPeerID], oldFingerprint == fingerprint {
-                peerFingerprints.removeValue(forKey: oldPeerID)
-            }
-            
-            // Add new mapping
-            peerFingerprints[newPeerID] = fingerprint
-            fingerprintToPeerID[fingerprint] = newPeerID
-        }
-        
-        // Migrate the session in session manager
-        sessionManager.migrateSession(from: oldPeerID, to: newPeerID)
-    }
-    
     // MARK: - Private Helpers
     
     private func handleSessionEstablished(peerID: String, remoteStaticKey: Curve25519.KeyAgreement.PublicKey) {

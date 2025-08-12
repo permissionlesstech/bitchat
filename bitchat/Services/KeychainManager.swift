@@ -17,73 +17,7 @@ class KeychainManager {
     private let service = "chat.bitchat"
     private let appGroup = "group.chat.bitchat"
     
-    private init() {
-        // Clean up legacy keychain items on first run
-        cleanupLegacyKeychainItems()
-    }
-    
-    private func cleanupLegacyKeychainItems() {
-        // Check if we've already done cleanup
-        let cleanupKey = "bitchat.keychain.cleanup.v2"
-        if UserDefaults.standard.bool(forKey: cleanupKey) {
-            return
-        }
-        
-        
-        // List of old service names to migrate from
-        let legacyServices = [
-            "com.bitchat.passwords",
-            "com.bitchat.deviceidentity",
-            "com.bitchat.noise.identity",
-            "chat.bitchat.passwords",
-            "bitchat.keychain"
-        ]
-        
-        var migratedItems = 0
-        
-        // Try to migrate identity keys
-        for oldService in legacyServices {
-            // Check for noise identity key
-            let query: [String: Any] = [
-                kSecClass as String: kSecClassGenericPassword,
-                kSecAttrService as String: oldService,
-                kSecAttrAccount as String: "identity_noiseStaticKey",
-                kSecReturnData as String: true
-            ]
-            
-            var result: AnyObject?
-            let status = SecItemCopyMatching(query as CFDictionary, &result)
-            
-            if status == errSecSuccess, let data = result as? Data {
-                // Save to new service
-                if saveIdentityKey(data, forKey: "noiseStaticKey") {
-                    migratedItems += 1
-                    SecureLogger.logKeyOperation("migrate", keyType: "noiseStaticKey", success: true)
-                }
-                // Delete from old service
-                let deleteQuery: [String: Any] = [
-                    kSecClass as String: kSecClassGenericPassword,
-                    kSecAttrService as String: oldService,
-                    kSecAttrAccount as String: "identity_noiseStaticKey"
-                ]
-                SecItemDelete(deleteQuery as CFDictionary)
-            }
-        }
-        
-        // Clean up all other legacy items
-        for oldService in legacyServices {
-            let deleteQuery: [String: Any] = [
-                kSecClass as String: kSecClassGenericPassword,
-                kSecAttrService as String: oldService
-            ]
-            
-            SecItemDelete(deleteQuery as CFDictionary)
-        }
-        
-        
-        // Mark cleanup as done
-        UserDefaults.standard.set(true, forKey: cleanupKey)
-    }
+    private init() {}
     
     
     private func isSandboxed() -> Bool {
@@ -240,11 +174,6 @@ class KeychainManager {
         return status == errSecSuccess || status == errSecItemNotFound
     }
     
-    // Force cleanup to run again (for development/testing)
-    func resetCleanupFlag() {
-        UserDefaults.standard.removeObject(forKey: "bitchat.keychain.cleanup.v2")
-    }
-    
     
     // Delete ALL keychain data for panic mode
     func deleteAllKeychainData() -> Bool {
@@ -383,77 +312,5 @@ class KeychainManager {
     func verifyIdentityKeyExists() -> Bool {
         let key = "identity_noiseStaticKey"
         return retrieveData(forKey: key) != nil
-    }
-    
-    // Aggressive cleanup for legacy items - can be called manually
-    func aggressiveCleanupLegacyItems() -> Int {
-        var deletedCount = 0
-        
-        // List of KNOWN bitchat service names from our development history
-        let knownBitchatServices = [
-            "com.bitchat.passwords",
-            "com.bitchat.deviceidentity",
-            "com.bitchat.noise.identity",
-            "chat.bitchat.passwords",
-            "bitchat.keychain",
-            "Bitchat",
-            "BitChat"
-        ]
-        
-        // First, delete all items from known legacy services
-        for legacyService in knownBitchatServices {
-            let deleteQuery: [String: Any] = [
-                kSecClass as String: kSecClassGenericPassword,
-                kSecAttrService as String: legacyService
-            ]
-            
-            let status = SecItemDelete(deleteQuery as CFDictionary)
-            if status == errSecSuccess {
-                deletedCount += 1
-            }
-        }
-        
-        // Now search for items that have our specific account patterns with bitchat service names
-        let searchQuery: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecMatchLimit as String: kSecMatchLimitAll,
-            kSecReturnAttributes as String: true
-        ]
-        
-        var result: AnyObject?
-        let status = SecItemCopyMatching(searchQuery as CFDictionary, &result)
-        
-        if status == errSecSuccess, let items = result as? [[String: Any]] {
-            for item in items {
-                let account = item[kSecAttrAccount as String] as? String ?? ""
-                let service = item[kSecAttrService as String] as? String ?? ""
-                
-                // ONLY delete if service name contains "bitchat" somewhere
-                // This ensures we never touch other apps' keychain items
-                var shouldDelete = false
-                
-                // Check if service contains "bitchat" (case insensitive) but NOT our current service
-                let serviceLower = service.lowercased()
-                if service != self.service && serviceLower.contains("bitchat") {
-                    shouldDelete = true
-                }
-                
-                if shouldDelete {
-                    // Build precise delete query
-                    let deleteQuery: [String: Any] = [
-                        kSecClass as String: kSecClassGenericPassword,
-                        kSecAttrService as String: service,
-                        kSecAttrAccount as String: account
-                    ]
-                    
-                    let deleteStatus = SecItemDelete(deleteQuery as CFDictionary)
-                    if deleteStatus == errSecSuccess {
-                        deletedCount += 1
-                    }
-                }
-            }
-        }
-        
-        return deletedCount
     }
 }
