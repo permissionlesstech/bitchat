@@ -531,22 +531,9 @@ class BluetoothMeshService: NSObject {
     private var peerLastSeenTimestamps = LRUCache<String, Date>(maxSize: 100)  // Bounded cache for peer timestamps
     private var cleanupTimer: Timer?  // Timer to clean up stale peers
     
-    // MARK: - Store-and-Forward Cache
+    // MARK: - Message Tracking
     
-    // Store-and-forward message cache
-    private struct StoredMessage {
-        let packet: BitchatPacket
-        let timestamp: Date
-        let messageID: String
-        let isForFavorite: Bool  // Messages for favorites stored indefinitely
-    }
-    private var messageCache: [StoredMessage] = []
-    private let messageCacheTimeout: TimeInterval = 43200  // 12 hours for regular peers
-    private let maxCachedMessages = 100  // For regular peers
-    private let maxCachedMessagesForFavorites = 1000  // Much larger cache for favorites
-    private var favoriteMessageQueue: [String: [StoredMessage]] = [:]  // Per-favorite message queues
     private let deliveredMessages = BoundedSet<String>(maxSize: 5000)  // Bounded to prevent memory growth
-    private var cachedMessagesSentToPeer = Set<String>()  // Track which peers have already received cached messages
     private let receivedMessageTimestamps = LRUCache<String, Date>(maxSize: 1000)  // Bounded cache
     private let recentlySentMessages = BoundedSet<String>(maxSize: 500)  // Short-term bounded cache
     private let lastMessageFromPeer = LRUCache<String, Date>(maxSize: 100)  // Bounded cache
@@ -732,13 +719,6 @@ class BluetoothMeshService: NSObject {
     private var relayProbability: Double = 1.0  // Start at 100%, decrease with peer count
     private let minRelayProbability: Double = 0.4  // Minimum 40% relay chance - ensures coverage
     
-    // MARK: - Message Aggregation
-    
-    // Message aggregation
-    private var pendingMessages: [(message: BitchatPacket, destination: String?)] = []
-    private var aggregationTimer: Timer?
-    private var aggregationWindow: TimeInterval = 0.1  // 100ms window
-    private let maxAggregatedMessages = 5
     
     // MARK: - Bloom Filter
     
@@ -833,7 +813,6 @@ class BluetoothMeshService: NSObject {
     
     // Global memory limits to prevent unbounded growth
     private let maxPendingPrivateMessages = 100
-    private let maxCachedMessagesSentToPeer = 1000
     private let maxMemoryUsageBytes = 50 * 1024 * 1024  // 50MB limit
     private var memoryCleanupTimer: Timer?
     
@@ -859,69 +838,6 @@ class BluetoothMeshService: NSObject {
     private var advertisementData: [String: Any] = [:]
     private var isAdvertising = false
     
-    // MARK: - Message Aggregation Implementation
-    
-    private func startAggregationTimer() {
-        aggregationTimer?.invalidate()
-        aggregationTimer = Timer.scheduledTimer(withTimeInterval: aggregationWindow, repeats: false) { [weak self] _ in
-            self?.flushPendingMessages()
-        }
-    }
-    
-    private func flushPendingMessages() {
-        guard !pendingMessages.isEmpty else { return }
-        
-        messageQueue.async { [weak self] in
-            guard let self = self else { return }
-            
-            // Group messages by destination
-            var messagesByDestination: [String?: [BitchatPacket]] = [:]
-            
-            for (message, destination) in self.pendingMessages {
-                if messagesByDestination[destination] == nil {
-                    messagesByDestination[destination] = []
-                }
-                messagesByDestination[destination]?.append(message)
-            }
-            
-            // Send aggregated messages
-            for (destination, messages) in messagesByDestination {
-                if messages.count == 1 {
-                    // Single message, send normally
-                    if destination == nil {
-                        self.broadcastPacket(messages[0])
-                    } else if let dest = destination,
-                              let peripheral = self.connectedPeripherals[dest],
-                              let characteristic = self.peripheralCharacteristics[peripheral] {
-                        if let data = messages[0].toBinaryData() {
-                            self.writeToPeripheral(data, peripheral: peripheral, characteristic: characteristic, peerID: dest)
-                        }
-                    }
-                } else {
-                    // Multiple messages - could aggregate into a single packet
-                    // For now, send with minimal delay between them
-                    for (index, message) in messages.enumerated() {
-                        let delay = Double(index) * 0.02  // 20ms between messages
-                        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-                            if destination == nil {
-                                self?.broadcastPacket(message)
-                            } else if let dest = destination,
-                                      let peripheral = self?.connectedPeripherals[dest],
-                                      peripheral.state == .connected,
-                                      let characteristic = self?.peripheralCharacteristics[peripheral] {
-                                if let data = message.toBinaryData() {
-                                    self?.writeToPeripheral(data, peripheral: peripheral, characteristic: characteristic, peerID: dest)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            
-            // Clear pending messages
-            self.pendingMessages.removeAll()
-        }
-    }
     
     // Removed getPublicKeyFingerprint - no longer needed with Noise
     
@@ -1671,7 +1587,6 @@ class BluetoothMeshService: NSObject {
         scanDutyCycleTimer?.invalidate()
         batteryMonitorTimer?.invalidate()
         bloomFilterResetTimer?.invalidate()
-        aggregationTimer?.invalidate()
         cleanupTimer?.invalidate()
         rotationTimer?.invalidate()
         memoryCleanupTimer?.invalidate()
@@ -2957,186 +2872,6 @@ class BluetoothMeshService: NSObject {
         }
     }
     
-    // MARK: - Store-and-Forward Methods
-    
-    private func cacheMessage(_ packet: BitchatPacket, messageID: String) {
-        messageQueue.async(flags: .barrier) { [weak self] in
-            guard let self = self else { return }
-            
-            // Don't cache certain message types
-            guard packet.type != MessageType.announce.rawValue,
-                  packet.type != MessageType.leave.rawValue,
-                  packet.type != MessageType.fragmentStart.rawValue,
-                  packet.type != MessageType.fragmentContinue.rawValue,
-                  packet.type != MessageType.fragmentEnd.rawValue else {
-                return
-            }
-            
-            // Don't cache broadcast messages
-            if let recipientID = packet.recipientID,
-               recipientID == SpecialRecipients.broadcast {
-                return  // Never cache broadcast messages
-            }
-            
-            // Check if this is a private message for a favorite
-            var isForFavorite = false
-            if packet.type == MessageType.message.rawValue,
-               let recipientID = packet.recipientID {
-                let recipientPeerID = recipientID.hexEncodedString()
-                // Check if recipient is a favorite via their public key fingerprint
-                if let fingerprint = self.getPeerFingerprint(recipientPeerID) {
-                    isForFavorite = self.delegate?.isFavorite(fingerprint: fingerprint) ?? false
-                }
-            }
-            
-            // Create stored message with original packet timestamp preserved
-            let storedMessage = StoredMessage(
-                packet: packet,
-                timestamp: Date(timeIntervalSince1970: TimeInterval(packet.timestamp) / 1000.0), // convert from milliseconds
-                messageID: messageID,
-                isForFavorite: isForFavorite
-            )
-            
-            
-            if isForFavorite {
-                if let recipientID = packet.recipientID {
-                    let recipientPeerID = recipientID.hexEncodedString()
-                    if self.favoriteMessageQueue[recipientPeerID] == nil {
-                        self.favoriteMessageQueue[recipientPeerID] = []
-                    }
-                    self.favoriteMessageQueue[recipientPeerID]?.append(storedMessage)
-                    
-                    // Limit favorite queue size
-                    if let count = self.favoriteMessageQueue[recipientPeerID]?.count,
-                       count > self.maxCachedMessagesForFavorites {
-                        self.favoriteMessageQueue[recipientPeerID]?.removeFirst()
-                    }
-                    
-                }
-            } else {
-                // Clean up old messages first (only for regular cache)
-                self.cleanupMessageCache()
-                
-                // Add to regular cache
-                self.messageCache.append(storedMessage)
-                
-                // Limit cache size
-                if self.messageCache.count > self.maxCachedMessages {
-                    self.messageCache.removeFirst()
-                }
-                
-            }
-        }
-    }
-    
-    private func cleanupMessageCache() {
-        let cutoffTime = Date().addingTimeInterval(-messageCacheTimeout)
-        // Only remove non-favorite messages that are older than timeout
-        messageCache.removeAll { !$0.isForFavorite && $0.timestamp < cutoffTime }
-        
-        // Clean up delivered messages set periodically (keep recent 1000 entries)
-        if deliveredMessages.count > 1000 {
-            // Clear older entries while keeping recent ones
-            deliveredMessages.removeAll()
-        }
-    }
-    
-    private func sendCachedMessages(to peerID: String) {
-        messageQueue.async { [weak self] in
-            guard let self = self,
-                  let peripheral = self.connectedPeripherals[peerID],
-                  let characteristic = self.peripheralCharacteristics[peripheral] else {
-                return
-            }
-            
-            
-            // Check if we've already sent cached messages to this peer in this session
-            if self.cachedMessagesSentToPeer.contains(peerID) {
-                return  // Already sent cached messages to this peer in this session
-            }
-            
-            // Mark that we're sending cached messages to this peer
-            self.cachedMessagesSentToPeer.insert(peerID)
-            
-            // Clean up old messages first
-            self.cleanupMessageCache()
-            
-            var messagesToSend: [StoredMessage] = []
-            
-            // First, check if this peer has any favorite messages waiting
-            if let favoriteMessages = self.favoriteMessageQueue[peerID] {
-                // Filter out already delivered messages
-                let undeliveredFavoriteMessages = favoriteMessages.filter { !self.deliveredMessages.contains($0.messageID) }
-                messagesToSend.append(contentsOf: undeliveredFavoriteMessages)
-                // Clear the favorite queue after adding to send list
-                self.favoriteMessageQueue[peerID] = nil
-            }
-            
-            // Filter regular cached messages for this specific recipient
-            let recipientMessages = self.messageCache.filter { storedMessage in
-                if self.deliveredMessages.contains(storedMessage.messageID) {
-                    return false
-                }
-                if let recipientID = storedMessage.packet.recipientID {
-                    let recipientPeerID = recipientID.hexEncodedString()
-                    return recipientPeerID == peerID
-                }
-                return false  // Don't forward broadcast messages
-            }
-            messagesToSend.append(contentsOf: recipientMessages)
-            
-            
-            // Sort messages by timestamp to ensure proper ordering
-            messagesToSend.sort { $0.timestamp < $1.timestamp }
-            
-            if !messagesToSend.isEmpty {
-            }
-            
-            // Mark messages as delivered immediately to prevent duplicates
-            let messageIDsToRemove = messagesToSend.map { $0.messageID }
-            for messageID in messageIDsToRemove {
-                self.deliveredMessages.insert(messageID)
-            }
-            
-            // Send cached messages with slight delay between each
-            for (index, storedMessage) in messagesToSend.enumerated() {
-                let delay = Double(index) * 0.02 // 20ms between messages for faster sync
-                
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self, weak peripheral] in
-                    guard let peripheral = peripheral,
-                          peripheral.state == .connected else {
-                        return
-                    }
-                    
-                    // Send the original packet with preserved timestamp
-                    let packetToSend = storedMessage.packet
-                    
-                    if let data = packetToSend.toBinaryData(),
-                       characteristic.properties.contains(.writeWithoutResponse) {
-                        self?.writeToPeripheral(data, peripheral: peripheral, characteristic: characteristic, peerID: peerID)
-                    }
-                }
-            }
-            
-            // Remove sent messages immediately
-            if !messageIDsToRemove.isEmpty {
-                self.messageQueue.async(flags: .barrier) {
-                    // Remove only the messages we sent to this specific peer
-                    self.messageCache.removeAll { message in
-                        messageIDsToRemove.contains(message.messageID)
-                    }
-                    
-                    // Also remove from favorite queue if any
-                    if var favoriteQueue = self.favoriteMessageQueue[peerID] {
-                        favoriteQueue.removeAll { message in
-                            messageIDsToRemove.contains(message.messageID)
-                        }
-                        self.favoriteMessageQueue[peerID] = favoriteQueue.isEmpty ? nil : favoriteQueue
-                    }
-                }
-            }
-        }
-    }
     
     
     private func broadcastPacket(_ packet: BitchatPacket) {
@@ -3670,15 +3405,6 @@ class BluetoothMeshService: NSObject {
                     var relayPacket = packet
                     relayPacket.ttl -= 1
                     
-                    // Check if this message is for an offline favorite and cache it
-                    let recipientIDString = recipientID.hexEncodedString()
-                    if let fingerprint = self.getPeerFingerprint(recipientIDString) {
-                        // Only cache if recipient is a favorite AND is currently offline
-                        let isActive = self.peerSessions[recipientIDString]?.isActivePeer ?? false
-                        if (self.delegate?.isFavorite(fingerprint: fingerprint) ?? false) && !isActive {
-                            self.cacheMessage(relayPacket, messageID: messageID)
-                        }
-                    }
                     
                     // Use constant relay prob
                     let relayProb = 1.0
@@ -3779,9 +3505,6 @@ class BluetoothMeshService: NSObject {
                             self.connectedPeripherals.removeValue(forKey: stalePeerID)
                             self.peripheralCharacteristics.removeValue(forKey: peripheral)
                         }
-                        
-                        // Clear cached messages tracking
-                        self.cachedMessagesSentToPeer.remove(stalePeerID)
                         
                         // Remove from last seen timestamps
                         self.peerLastSeenTimestamps.remove(stalePeerID)
@@ -4089,9 +3812,6 @@ class BluetoothMeshService: NSObject {
                                 if let fingerprint = self.getPeerFingerprint(senderID) {
                                     if self.delegate?.isFavorite(fingerprint: fingerprint) ?? false {
                                         NotificationService.shared.sendFavoriteOnlineNotification(nickname: nickname)
-                                        
-                                        // Send any cached messages for this favorite
-                                        self.sendCachedMessages(to: senderID)
                                     }
                                 }
                             }
@@ -5309,9 +5029,6 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
                 } else {
                 }
                 
-                // Clear cached messages tracking for this peer to allow re-sending if they reconnect
-                cachedMessagesSentToPeer.remove(peerID)
-                
                 
                 // Peer disconnected
                 
@@ -5801,9 +5518,6 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
             disconnectLeastImportantPeripherals(keepCount: dynamicMaxConnections)
         }
         
-        // Update message aggregation window
-        aggregationWindow = powerMode.messageAggregationWindow
-        
         // If we're currently scanning, restart with new parameters
         if scanDutyCycleTimer != nil {
             scanDutyCycleTimer?.invalidate()
@@ -5949,7 +5663,7 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         return min(maxMessageDelay, max(minMessageDelay, exponentialDelay))
     }
     
-    // Check if message type is high priority (should bypass aggregation)
+    // Check if message type is high priority
     private func isHighPriorityMessage(type: UInt8) -> Bool {
         switch MessageType(rawValue: type) {
         case .noiseHandshakeInit, .noiseHandshakeResp, .protocolAck,
@@ -6091,15 +5805,6 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                                category: SecureLogger.session, level: .info)
             }
             
-            // Limit cached messages sent to peer
-            if self.cachedMessagesSentToPeer.count > self.maxCachedMessagesSentToPeer {
-                let excess = self.cachedMessagesSentToPeer.count - self.maxCachedMessagesSentToPeer
-                let toRemove = self.cachedMessagesSentToPeer.prefix(excess)
-                self.cachedMessagesSentToPeer.subtract(toRemove)
-                SecureLogger.log("Removed \(excess) oldest cached message tracking entries", 
-                               category: SecureLogger.session, level: .debug)
-            }
-            
             // Clean up pending relays
             self.pendingRelaysLock.lock()
             _ = self.pendingRelays.count
@@ -6144,7 +5849,6 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         }
         
         // Other caches
-        totalBytes += cachedMessagesSentToPeer.count * 50  // peerID strings
         totalBytes += deliveredMessages.count * 100  // messageID strings
         totalBytes += recentlySentMessages.count * 100  // messageID strings
         
@@ -6708,9 +6412,6 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 
                 // Send any pending private messages
                 self.sendPendingPrivateMessages(to: peerID)
-                
-                // Send any cached store-and-forward messages
-                sendCachedMessages(to: peerID)
             }
         } catch NoiseSessionError.alreadyEstablished {
             // Session already established, ignore handshake
