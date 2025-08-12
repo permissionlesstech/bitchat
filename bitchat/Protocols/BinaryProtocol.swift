@@ -223,8 +223,8 @@ struct BinaryProtocol {
         guard offset + 1 <= unpaddedData.count else { return nil }
         let version = unpaddedData[offset]; offset += 1
         
-        // Check if version is supported
-        guard ProtocolVersion.isSupported(version) else { 
+        // Check if version is 1 (only supported version)
+        guard version == 1 else { 
             return nil 
         }
         
