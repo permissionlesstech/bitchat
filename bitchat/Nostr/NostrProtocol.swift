@@ -37,7 +37,6 @@ struct NostrProtocol {
         
         // 2. Create ephemeral key for this message
         let ephemeralKey = try P256K.Schnorr.PrivateKey()
-        let _ = Data(ephemeralKey.xonly.bytes).hexEncodedString()
         // Created ephemeral key for seal
         
         // 3. Seal the rumor (encrypt to recipient)
@@ -213,7 +212,6 @@ struct NostrProtocol {
             throw NostrError.invalidPublicKey
         }
         
-        let _ = Data(senderKey.xonly.bytes).hexEncodedString()
         // Encrypting message
         
         // Derive shared secret
@@ -447,14 +445,11 @@ struct NostrProtocol {
         
         // Log with explicit UTC and local time for debugging
         let formatter = DateFormatter()
+        // Removed unnecessary date formatting operations
         formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
         formatter.timeZone = TimeZone(abbreviation: "UTC")
-        let _ = formatter.string(from: now)
-        let _ = formatter.string(from: randomized)
         
         formatter.timeZone = TimeZone.current
-        let _ = formatter.string(from: now)
-        let _ = formatter.string(from: randomized)
         
         // Timestamp randomized for privacy
         
