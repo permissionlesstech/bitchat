@@ -10,7 +10,6 @@ BitChat is a decentralized, peer-to-peer messaging application that works over B
 - **Bluetooth Mesh Networking**: Multi-hop message relay over BLE
 - **Privacy-First Design**: No accounts, no persistent identifiers
 - **End-to-End Encryption**: Uses Noise Protocol Framework for private messages
-- **Store & Forward**: Messages cached for offline peers
 - **IRC-Style Commands**: Familiar `/msg`, `/who` interface
 - **Cross-Platform**: Native iOS and macOS support
 - **Nostr Integration**: Seamless fallback for mutual favorites when out of Bluetooth range
@@ -142,7 +141,6 @@ BitChat is a decentralized, peer-to-peer messaging application that works over B
 - **No Long-Term Identifiers**: Enhances privacy and deniability
 
 ### 3. Mesh Networking
-- **Store & Forward**: Essential for intermittent connectivity
 - **TTL-Based Routing**: Prevents infinite loops in mesh
 - **Bloom Filters**: Efficient duplicate detection
 
