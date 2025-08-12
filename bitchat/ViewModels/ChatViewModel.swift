@@ -1011,8 +1011,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     }
     
     @objc private func handleDeliveryAcknowledgment(_ notification: Notification) {
-        guard let messageId = notification.userInfo?["messageId"] as? String,
-              let senderNoiseKey = notification.userInfo?["senderNoiseKey"] as? Data else { return }
+        guard let messageId = notification.userInfo?["messageId"] as? String else { return }
         
         
         

@@ -5275,7 +5275,6 @@ extension BluetoothMeshService: CBCentralManagerDelegate {
                 // Time tracking removed - now in PeerSession
                 // Time tracking removed - now in PeerSession
                 // Keep lastSuccessfulMessageTime to validate session on reconnect
-                let lastSuccess = self.peerSessions[peerID]?.lastSuccessfulMessageTime ?? Date.distantPast
                 // Keeping Noise session on disconnect
             }
             
