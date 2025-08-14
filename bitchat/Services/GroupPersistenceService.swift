@@ -10,7 +10,7 @@ public class GroupPersistenceService: ObservableObject {
     
     @Published private(set) var groups: [String: BitchatGroup] = [:] // groupID -> group
     @Published private(set) var groupChats: [String: [BitchatMessage]] = [:] // groupID -> messages
-    @Published private(set) var pendingInvitations: [String: GroupInvitation] = [:] // groupID -> invitation
+    private var _pendingInvitations: [String: GroupInvitation] = [:] // groupID -> invitation
     
     private let userDefaults = UserDefaults.standard
     private var cancellables = Set<AnyCancellable>()
@@ -43,7 +43,7 @@ public class GroupPersistenceService: ObservableObject {
         saveGroups()
         saveGroupChats()
         
-        SecureLogger.log("📱 Created group '\(name)' with \(group.memberIDs.count) members", 
+        SecureLogger.log("📱 Created group '\(name)' with \(group.memberIDs.count) members",
                         category: SecureLogger.session, level: .info)
         
         return group
@@ -66,7 +66,7 @@ public class GroupPersistenceService: ObservableObject {
         groups[group.id] = group
         saveGroups()
         
-        SecureLogger.log("📱 Updated group '\(group.name)'", 
+        SecureLogger.log("📱 Updated group '\(group.name)'",
                         category: SecureLogger.session, level: .info)
     }
     
@@ -77,7 +77,7 @@ public class GroupPersistenceService: ObservableObject {
         saveGroups()
         saveGroupChats()
         
-        SecureLogger.log("📱 Deleted group \(groupID)", 
+        SecureLogger.log("📱 Deleted group \(groupID)",
                         category: SecureLogger.session, level: .info)
     }
     
@@ -119,7 +119,7 @@ public class GroupPersistenceService: ObservableObject {
         )
         addMessageToGroup(systemMessage, groupID: groupID)
         
-        SecureLogger.log("📱 Added \(nickname) to group '\(group.name)'", 
+        SecureLogger.log("📱 Added \(nickname) to group '\(group.name)'",
                         category: SecureLogger.session, level: .info)
         
         return true
@@ -164,7 +164,7 @@ public class GroupPersistenceService: ObservableObject {
         )
         addMessageToGroup(systemMessage, groupID: groupID)
         
-        SecureLogger.log("📱 Removed \(nickname) from group '\(group.name)'", 
+        SecureLogger.log("📱 Removed \(nickname) from group '\(group.name)'",
                         category: SecureLogger.session, level: .info)
         
         return true
@@ -260,22 +260,56 @@ public class GroupPersistenceService: ObservableObject {
     
     /// Store a pending invitation
     func storeInvitation(_ invitation: GroupInvitation) {
-        pendingInvitations[invitation.groupID] = invitation
+        SecureLogger.log("📱 About to store invitation for group '\(invitation.groupName)' (ID: \(invitation.groupID))",
+                        category: SecureLogger.session, level: .info)
+        
+        _pendingInvitations[invitation.groupID] = invitation
         savePendingInvitations()
         
-        SecureLogger.log("📱 Stored invitation for group '\(invitation.groupName)'", 
+        SecureLogger.log("📱 Stored invitation for group '\(invitation.groupName)' - total invitations: \(pendingInvitations.count)",
                         category: SecureLogger.session, level: .info)
     }
     
     /// Get a pending invitation
     func getPendingInvitation(_ groupID: String) -> GroupInvitation? {
-        return pendingInvitations[groupID]
+        // Clean up expired invitations first
+        cleanupExpiredInvitations()
+        return _pendingInvitations[groupID]
     }
     
     /// Remove a pending invitation
     func removeInvitation(_ groupID: String) {
-        pendingInvitations.removeValue(forKey: groupID)
+        _pendingInvitations.removeValue(forKey: groupID)
         savePendingInvitations()
+    }
+    
+    /// Clean up expired invitations
+    func cleanupExpiredInvitations() {
+        let expiredGroupIDs = _pendingInvitations.compactMap { groupID, invitation in
+            invitation.isExpired ? groupID : nil
+        }
+        
+        for groupID in expiredGroupIDs {
+            _pendingInvitations.removeValue(forKey: groupID)
+            SecureLogger.log("📱 Removed expired invitation for group \(groupID)",
+                            category: SecureLogger.session, level: .info)
+        }
+        
+        if !expiredGroupIDs.isEmpty {
+            savePendingInvitations()
+        }
+    }
+    
+    /// Get all pending invitations (with expired cleanup)
+    var pendingInvitations: [String: GroupInvitation] {
+        get {
+            // Clean up expired invitations before returning
+            cleanupExpiredInvitations()
+            return _pendingInvitations
+        }
+        set {
+            _pendingInvitations = newValue
+        }
     }
     
     /// Validate an invite code
@@ -339,12 +373,12 @@ public class GroupPersistenceService: ObservableObject {
     private func loadPendingInvitations() {
         if let data = userDefaults.data(forKey: "\(GroupPersistenceService.storageKey).invitations"),
            let decodedInvitations = try? JSONDecoder().decode([String: GroupInvitation].self, from: data) {
-            pendingInvitations = decodedInvitations
+            _pendingInvitations = decodedInvitations
         }
     }
     
     private func savePendingInvitations() {
-        if let encoded = try? JSONEncoder().encode(pendingInvitations) {
+        if let encoded = try? JSONEncoder().encode(_pendingInvitations) {
             userDefaults.set(encoded, forKey: "\(GroupPersistenceService.storageKey).invitations")
         }
     }

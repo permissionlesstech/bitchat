@@ -114,6 +114,16 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     @Published var selectedPrivateChatPeer: String? = nil
     private var selectedPrivateChatFingerprint: String? = nil  // Track by fingerprint for persistence across reconnections
     @Published var unreadPrivateMessages: Set<String> = []
+    
+    // MARK: - Group Chat Properties
+    
+    @Published var groupChats: [String: [BitchatMessage]] = [:] // groupID -> messages
+    @Published var selectedGroupChat: String? = nil
+    @Published var unreadGroupMessages: Set<String> = []
+    @Published var showGroupCreationSheet = false
+    @Published var showGroupInviteSheet = false
+    @Published var selectedGroupForInvite: String? = nil
+    
     @Published var autocompleteSuggestions: [String] = []
     @Published var showAutocomplete: Bool = false
     @Published var autocompleteRange: NSRange? = nil
@@ -135,6 +145,9 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     private var nostrRelayManager: NostrRelayManager?
     private var messageRouter: MessageRouter?
     private var peerManager: PeerManager?
+    public var groupService: GroupPersistenceService {
+        return GroupPersistenceService.shared
+    }
     private let userDefaults = UserDefaults.standard
     private let nicknameKey = "bitchat.nickname"
     
@@ -213,14 +226,16 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             peerManager = PeerManager(meshService: meshService)
             peerManager?.updatePeers()
             
+            // Group service is now lazy-loaded
+            
             // Bind peer manager's peer list to our published property
             let cancellable = peerManager?.$peers
                 .receive(on: DispatchQueue.main)
                 .sink { [weak self] peers in
-                    SecureLogger.log("📱 UI: Received \(peers.count) peers from PeerManager", 
+                    SecureLogger.log("📱 UI: Received \(peers.count) peers from PeerManager",
                                     category: SecureLogger.session, level: .info)
                     for peer in peers {
-                        SecureLogger.log("  - \(peer.displayName): connected=\(peer.isConnected), state=\(peer.connectionState)", 
+                        SecureLogger.log("  - \(peer.displayName): connected=\(peer.isConnected), state=\(peer.connectionState)",
                                         category: SecureLogger.session, level: .debug)
                     }
                     // Update peers directly
@@ -233,7 +248,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                         if uniquePeers[peer.id] == nil {
                             uniquePeers[peer.id] = peer
                         } else {
-                            SecureLogger.log("⚠️ Duplicate peer ID detected: \(peer.id) (\(peer.displayName))", 
+                            SecureLogger.log("⚠️ Duplicate peer ID detected: \(peer.id) (\(peer.displayName))",
                                            category: SecureLogger.session, level: .warning)
                         }
                     }
@@ -260,6 +275,11 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         // Request notification permission
         NotificationService.shared.requestAuthorization()
         
+        #if DEBUG
+        // Run invitation system tests in debug mode
+        InvitationSystemTest.runAllTests()
+        #endif
+        
         // Subscribe to delivery status updates
         deliveryTrackerCancellable = DeliveryTracker.shared.deliveryStatusUpdated
             .receive(on: DispatchQueue.main)
@@ -274,6 +294,13 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             name: Notification.Name("bitchat.retryMessage"),
             object: nil
         )
+        
+        // Set up periodic cleanup of expired invitations
+        Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { _ in // Every 5 minutes
+            Task { @MainActor in
+                self.groupService.cleanupExpiredInvitations()
+            }
+        }
         
         // Listen for Nostr messages
         NotificationCenter.default.addObserver(
@@ -464,7 +491,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             
             let isFavorite = currentStatus?.isFavorite ?? false
             
-            SecureLogger.log("📊 Current favorite status for \(peerID): isFavorite=\(isFavorite), isMutual=\(currentStatus?.isMutual ?? false)", 
+            SecureLogger.log("📊 Current favorite status for \(peerID): isFavorite=\(isFavorite), isMutual=\(currentStatus?.isMutual ?? false)",
                             category: SecureLogger.session, level: .info)
             
             if isFavorite {
@@ -614,7 +641,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         if let currentPeerID = getCurrentPeerIDForFingerprint(chatFingerprint) {
             // Update the selected peer if it's different
             if let oldPeerID = selectedPrivateChatPeer, oldPeerID != currentPeerID {
-                SecureLogger.log("📱 Updating private chat peer from \(oldPeerID) to \(currentPeerID)", 
+                SecureLogger.log("📱 Updating private chat peer from \(oldPeerID) to \(currentPeerID)",
                                 category: SecureLogger.session, level: .debug)
                 
                 // Migrate messages from old peer ID to new peer ID
@@ -682,7 +709,12 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             return
         }
         
-        if selectedPrivateChatPeer != nil {
+        if selectedGroupChat != nil {
+            // Send as group message
+            if let selectedGroup = selectedGroupChat {
+                sendGroupMessage(content, to: selectedGroup)
+            }
+        } else if selectedPrivateChatPeer != nil {
             // Update peer ID in case it changed due to reconnection
             updatePrivateChatPeerIfNeeded()
             
@@ -797,21 +829,21 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         } else if let favoriteStatus = FavoritesPersistenceService.shared.getFavoriteStatus(for: noiseKey),
                   favoriteStatus.isMutual {
             // Mutual favorite offline - send via Nostr
-            SecureLogger.log("🌐 Sending private message to offline mutual favorite \(recipientNickname) via Nostr", 
+            SecureLogger.log("🌐 Sending private message to offline mutual favorite \(recipientNickname) via Nostr",
                             category: SecureLogger.session, level: .info)
             
             Task {
                 do {
                     try await messageRouter?.sendMessage(content, to: noiseKey, messageId: message.id)
                 } catch {
-                    SecureLogger.log("Failed to send message via Nostr: \(error)", 
+                    SecureLogger.log("Failed to send message via Nostr: \(error)",
                                     category: SecureLogger.session, level: .error)
                     // DeliveryTracker will handle timeout automatically
                 }
             }
         } else {
             // Not reachable - show error to user
-            SecureLogger.log("⚠️ Cannot send message to \(recipientNickname) - not available on mesh or Nostr", 
+            SecureLogger.log("⚠️ Cannot send message to \(recipientNickname) - not available on mesh or Nostr",
                             category: SecureLogger.session, level: .warning)
             
             // Add system message to inform user
@@ -864,14 +896,14 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     func startPrivateChat(with peerID: String) {
         // Safety check: Don't allow starting chat with ourselves
         if peerID == meshService.myPeerID {
-            SecureLogger.log("⚠️ Attempted to start private chat with self, ignoring", 
+            SecureLogger.log("⚠️ Attempted to start private chat with self, ignoring",
                             category: SecureLogger.session, level: .warning)
             return
         }
         
         // Try to get nickname from mesh first, then from peer list
-        let peerNickname = meshService.getPeerNicknames()[peerID] ?? 
-                          peerIndex[peerID]?.displayName ?? 
+        let peerNickname = meshService.getPeerNicknames()[peerID] ??
+                          peerIndex[peerID]?.displayName ??
                           "unknown"
         
         // Check if the peer is blocked
@@ -938,7 +970,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                         migratedMessages.append(contentsOf: messages)
                         oldPeerIDsToRemove.append(oldPeerID)
                         
-                        SecureLogger.log("📦 Migrating \(messages.count) messages from old peer ID \(oldPeerID) to \(peerID) based on fingerprint match", 
+                        SecureLogger.log("📦 Migrating \(messages.count) messages from old peer ID \(oldPeerID) to \(peerID) based on fingerprint match",
                                         category: SecureLogger.session, level: .info)
                     } else if currentFingerprint == nil || oldFingerprint == nil {
                         // Fallback: use nickname matching only if we don't have fingerprints
@@ -947,10 +979,10 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                             // Message is FROM the peer to us
                             (msg.sender == peerNickname && msg.sender != nickname) ||
                             // OR message is FROM us TO the peer
-                            (msg.sender == nickname && (msg.recipientNickname == peerNickname || 
+                            (msg.sender == nickname && (msg.recipientNickname == peerNickname ||
                              // Also check if this was a private message in a chat that only has us and one other person
-                             (msg.isPrivate && messages.allSatisfy { m in 
-                                 m.sender == nickname || m.sender == peerNickname 
+                             (msg.isPrivate && messages.allSatisfy { m in
+                                 m.sender == nickname || m.sender == peerNickname
                              })))
                         }
                         
@@ -966,7 +998,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                                 migratedMessages.append(contentsOf: messages)
                                 oldPeerIDsToRemove.append(oldPeerID)
                                 
-                                SecureLogger.log("📦 Migrating \(messages.count) messages from old peer ID \(oldPeerID) to \(peerID) based on nickname match (no fingerprints available)", 
+                                SecureLogger.log("📦 Migrating \(messages.count) messages from old peer ID \(oldPeerID) to \(peerID) based on nickname match (no fingerprints available)",
                                                 category: SecureLogger.session, level: .warning)
                             }
                         }
@@ -1006,6 +1038,381 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         selectedPrivateChatFingerprint = nil
     }
     
+    // MARK: - Group Chat Management
+    
+    /// Create a new group
+    @MainActor
+    func createGroup(name: String, initialMembers: Set<String> = [], isPrivate: Bool = false, description: String? = nil) {
+        // groupService is now non-optional
+        let group = groupService.createGroup(
+            name: name,
+            creatorID: meshService.myPeerID,
+            initialMembers: initialMembers,
+            isPrivate: isPrivate,
+            description: description
+        )
+        
+        // Add system message to group chat
+        let systemMessage = BitchatMessage(
+            sender: "system",
+            content: "Group '\(name)' created by \(nickname)",
+            timestamp: Date(),
+            isRelay: false,
+            isPrivate: false
+        )
+        groupService.addMessageToGroup(systemMessage, groupID: group.id)
+        
+        // Send invitations to initial members
+        for memberID in initialMembers {
+            invitePeerToGroup(memberID, groupID: group.id, groupName: group.name)
+        }
+        
+        SecureLogger.log("📱 Created group '\(name)' with \(group.memberIDs.count) members",
+                        category: SecureLogger.session, level: .info)
+    }
+    
+    /// Start a group chat
+    @MainActor
+    func startGroupChat(with groupID: String) {
+        selectedGroupChat = groupID
+        selectedPrivateChatPeer = nil // Exit private chat if active
+        unreadGroupMessages.remove(groupID)
+        
+        // Load group messages
+        let groupMessages = groupService.getGroupMessages(groupID)
+        groupChats[groupID] = groupMessages
+        
+        SecureLogger.log("📱 Started group chat for group \(groupID)",
+                        category: SecureLogger.session, level: .info)
+    }
+    
+    /// End group chat
+    @MainActor
+    func endGroupChat() {
+        selectedGroupChat = nil
+    }
+    
+    /// Send a message to a group
+    @MainActor
+    func sendGroupMessage(_ content: String, to groupID: String) {
+        guard !content.isEmpty else { return }
+        
+        // Get group info
+        guard let group = groupService.getGroup(groupID) else { return }
+        
+        // Create the message locally
+        let message = BitchatMessage(
+            sender: nickname,
+            content: content,
+            timestamp: Date(),
+            isRelay: false,
+            originalSender: nil,
+            isPrivate: false,
+            recipientNickname: nil,
+            senderPeerID: meshService.myPeerID,
+            deliveryStatus: .sending
+        )
+        
+        // Add to our group chat history
+        if groupChats[groupID] == nil {
+            groupChats[groupID] = []
+        }
+        groupChats[groupID]?.append(message)
+        
+        // Also add to group service
+        groupService.addMessageToGroup(message, groupID: groupID)
+        
+        // Immediate UI update for user's own messages
+        objectWillChange.send()
+        
+        // Send to all group members
+        Task {
+            do {
+                try await messageRouter?.sendGroupMessage(content, to: groupID, groupName: group.name)
+            } catch {
+                SecureLogger.log("Failed to send group message: \(error)",
+                                category: SecureLogger.session, level: .error)
+                // Update delivery status to failed
+                updateGroupMessageDeliveryStatus(message.id, status: .failed(reason: "Failed to send"))
+            }
+        }
+    }
+    
+    /// Invite a peer to a group
+    @MainActor
+    func invitePeerToGroup(_ peerID: String, groupID: String, groupName: String) {
+        guard let noiseKey = Data(hexString: peerID) else { return }
+        
+        // Create invitation
+        let invitation = GroupInvitation(
+            groupID: groupID,
+            groupName: groupName,
+            inviterID: meshService.myPeerID,
+            inviterNickname: nickname,
+            inviteCode: groupService.getGroup(groupID)?.inviteCode ?? ""
+        )
+        
+        // Send invitation
+        Task {
+            do {
+                try await messageRouter?.sendGroupInvitation(invitation, to: noiseKey)
+                SecureLogger.log("📤 Sent group invitation to \(peerID) for group '\(groupName)'",
+                                category: SecureLogger.session, level: .info)
+            } catch {
+                SecureLogger.log("❌ Failed to send group invitation: \(error)",
+                                category: SecureLogger.session, level: .error)
+            }
+        }
+    }
+    
+    /// Handle group invitation
+    @MainActor
+    func handleGroupInvitation(_ invitation: GroupInvitation, from peerID: String) {
+        SecureLogger.log("📱 Handling group invitation from \(peerID) for group '\(invitation.groupName)'",
+                        category: SecureLogger.session, level: .info)
+        
+        // Check if already a member
+        if groupService.isMember(meshService.myPeerID, of: invitation.groupID) {
+            SecureLogger.log("⚠️ Already a member of group '\(invitation.groupName)' - ignoring invitation",
+                            category: SecureLogger.session, level: .warning)
+            
+            let systemMessage = BitchatMessage(
+                sender: "system",
+                content: "ℹ️ \(invitation.inviterNickname) invited you to join group '\(invitation.groupName)' (you're already a member)",
+                timestamp: Date(),
+                isRelay: false,
+                isPrivate: false
+            )
+            messages.append(systemMessage)
+            return
+        }
+        
+        // Check if invitation is expired
+        if invitation.isExpired {
+            SecureLogger.log("⚠️ Received expired invitation for group '\(invitation.groupName)' from \(invitation.inviterNickname)",
+                            category: SecureLogger.session, level: .warning)
+            
+            let systemMessage = BitchatMessage(
+                sender: "system",
+                content: "⚠️ \(invitation.inviterNickname) invited you to join group '\(invitation.groupName)' (invitation expired)",
+                timestamp: Date(),
+                isRelay: false,
+                isPrivate: false
+            )
+            messages.append(systemMessage)
+            return
+        }
+        
+        // Store invitation
+        groupService.storeInvitation(invitation)
+        
+        // Show system message
+        let systemMessage = BitchatMessage(
+            sender: "system",
+            content: "📨 \(invitation.inviterNickname) invited you to join group '\(invitation.groupName)'",
+            timestamp: Date(),
+            isRelay: false,
+            isPrivate: false
+        )
+        messages.append(systemMessage)
+        
+        // Show notification
+        NotificationService.shared.sendLocalNotification(
+            title: "Group Invitation",
+            body: "\(invitation.inviterNickname) invited you to join '\(invitation.groupName)'",
+            identifier: "group-invite-\(invitation.groupID)"
+        )
+        
+        SecureLogger.log("📱 Received group invitation for '\(invitation.groupName)' from \(invitation.inviterNickname)",
+                        category: SecureLogger.session, level: .info)
+    }
+    
+    /// Accept group invitation
+    @MainActor
+    func acceptGroupInvitation(_ groupID: String) {
+        guard let invitation = groupService.getPendingInvitation(groupID) else { 
+            SecureLogger.log("❌ No pending invitation found for group \(groupID)",
+                            category: SecureLogger.session, level: .error)
+            return 
+        }
+        
+        // Check if invitation is expired
+        if invitation.isExpired {
+            SecureLogger.log("❌ Cannot accept expired invitation for group '\(invitation.groupName)'",
+                            category: SecureLogger.session, level: .error)
+            
+            // Remove expired invitation
+            groupService.removeInvitation(groupID)
+            
+            let systemMessage = BitchatMessage(
+                sender: "system",
+                content: "❌ Cannot join group '\(invitation.groupName)' - invitation has expired",
+                timestamp: Date(),
+                isRelay: false,
+                isPrivate: false
+            )
+            messages.append(systemMessage)
+            return
+        }
+        
+        // Check if already a member
+        if groupService.isMember(meshService.myPeerID, of: groupID) {
+            SecureLogger.log("⚠️ Already a member of group '\(invitation.groupName)'",
+                            category: SecureLogger.session, level: .warning)
+            
+            // Remove invitation since we're already a member
+            groupService.removeInvitation(groupID)
+            
+            let systemMessage = BitchatMessage(
+                sender: "system",
+                content: "ℹ️ You are already a member of group '\(invitation.groupName)'",
+                timestamp: Date(),
+                isRelay: false,
+                isPrivate: false
+            )
+            messages.append(systemMessage)
+            return
+        }
+        
+        // Add self to group
+        if groupService.addMember(meshService.myPeerID, to: groupID, nickname: nickname) {
+            // Remove invitation
+            groupService.removeInvitation(groupID)
+            
+            // Send acceptance to group members
+            Task {
+                do {
+                    try await messageRouter?.sendGroupMemberUpdate("JOIN", groupID: groupID, groupName: invitation.groupName, memberID: meshService.myPeerID, memberNickname: nickname)
+                } catch {
+                    SecureLogger.log("❌ Failed to send group join notification: \(error)",
+                                    category: SecureLogger.session, level: .error)
+                }
+            }
+            
+            // Show system message
+            let systemMessage = BitchatMessage(
+                sender: "system",
+                content: "✅ You joined group '\(invitation.groupName)'",
+                timestamp: Date(),
+                isRelay: false,
+                isPrivate: false
+            )
+            messages.append(systemMessage)
+            
+            SecureLogger.log("📱 Successfully joined group '\(invitation.groupName)'",
+                            category: SecureLogger.session, level: .info)
+        } else {
+            SecureLogger.log("❌ Failed to add self to group '\(invitation.groupName)'",
+                            category: SecureLogger.session, level: .error)
+            
+            let systemMessage = BitchatMessage(
+                sender: "system",
+                content: "❌ Failed to join group '\(invitation.groupName)'",
+                timestamp: Date(),
+                isRelay: false,
+                isPrivate: false
+            )
+            messages.append(systemMessage)
+        }
+    }
+    
+    /// Decline group invitation
+    @MainActor
+    func declineGroupInvitation(_ groupID: String) {
+        groupService.removeInvitation(groupID)
+        
+        let systemMessage = BitchatMessage(
+            sender: "system",
+            content: "You declined the group invitation",
+            timestamp: Date(),
+            isRelay: false,
+            isPrivate: false
+        )
+        messages.append(systemMessage)
+    }
+    
+    /// Leave a group
+    @MainActor
+    func leaveGroup(_ groupID: String) {
+        guard let group = groupService.getGroup(groupID) else { return }
+        
+        // Cannot leave if you're the creator
+        if group.creatorID == meshService.myPeerID {
+            let systemMessage = BitchatMessage(
+                sender: "system",
+                content: "Cannot leave group '\(group.name)' - you are the creator. Delete the group instead.",
+                timestamp: Date(),
+                isRelay: false,
+                isPrivate: false
+            )
+            messages.append(systemMessage)
+            return
+        }
+        
+        // Remove from group
+        if groupService.removeMember(meshService.myPeerID, from: groupID, nickname: nickname) {
+            // Send leave notification to group members
+            Task {
+                do {
+                    try await messageRouter?.sendGroupMemberUpdate("LEAVE", groupID: groupID, groupName: group.name, memberID: meshService.myPeerID, memberNickname: nickname)
+                } catch {
+                    SecureLogger.log("❌ Failed to send group leave notification: \(error)",
+                                    category: SecureLogger.session, level: .error)
+                }
+            }
+            
+            // Exit group chat if currently viewing it
+            if selectedGroupChat == groupID {
+                endGroupChat()
+            }
+            
+            // Show system message
+            let systemMessage = BitchatMessage(
+                sender: "system",
+                content: "You left group '\(group.name)'",
+                timestamp: Date(),
+                isRelay: false,
+                isPrivate: false
+            )
+            messages.append(systemMessage)
+            
+            SecureLogger.log("📱 Left group '\(group.name)'",
+                            category: SecureLogger.session, level: .info)
+        }
+    }
+    
+    /// Get groups for current user
+    @MainActor
+    func getMyGroups() -> [BitchatGroup] {
+        return groupService.getGroupsForPeer(meshService.myPeerID)
+    }
+    
+    /// Get pending invitations
+    @MainActor
+    func getPendingInvitations() -> [GroupInvitation] {
+        return Array(groupService.pendingInvitations.values)
+    }
+    
+    /// Update group message delivery status
+    @MainActor
+    func updateGroupMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) {
+        // Update in group chats
+        for (groupID, messages) in groupChats {
+            if let index = messages.firstIndex(where: { $0.id == messageID }) {
+                groupChats[groupID]?[index].deliveryStatus = status
+                break
+            }
+        }
+        
+        // Also update in group service
+        for (groupID, messages) in groupService.groupChats {
+            if let index = messages.firstIndex(where: { $0.id == messageID }) {
+                groupService.groupChats[groupID]?[index].deliveryStatus = status
+                break
+            }
+        }
+    }
+    
     // MARK: - Message Retry Handling
     
     @objc private func handleRetryMessage(_ notification: Notification) {
@@ -1013,7 +1420,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         
         // Find the message to retry
         if let message = messages.first(where: { $0.id == messageID }) {
-            SecureLogger.log("Retrying message \(messageID) to \(message.recipientNickname ?? "unknown")", 
+            SecureLogger.log("Retrying message \(messageID) to \(message.recipientNickname ?? "unknown")",
                            category: SecureLogger.session, level: .info)
             
             // Resend the message through mesh service
@@ -1023,8 +1430,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 updateMessageDeliveryStatus(messageID, status: .sending)
                 
                 // Resend via mesh service
-                meshService.sendMessage(message.content, 
-                                      mentions: message.mentions ?? [], 
+                meshService.sendMessage(message.content,
+                                      mentions: message.mentions ?? [],
                                       to: peerID,
                                       messageID: messageID,
                                       timestamp: message.timestamp)
@@ -1054,7 +1461,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         
         let senderHexId = senderNoiseKey.hexEncodedString()
         
-        SecureLogger.log("✅ Handling delivery acknowledgment for message \(messageId) from \(senderHexId)", 
+        SecureLogger.log("✅ Handling delivery acknowledgment for message \(messageId) from \(senderHexId)",
                         category: SecureLogger.session, level: .info)
         
         // Update the delivery status for the message
@@ -1079,7 +1486,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     @objc private func handleNostrReadReceipt(_ notification: Notification) {
         guard let receipt = notification.userInfo?["receipt"] as? ReadReceipt else { return }
         
-        SecureLogger.log("📖 Handling read receipt for message \(receipt.originalMessageID) from Nostr", 
+        SecureLogger.log("📖 Handling read receipt for message \(receipt.originalMessageID) from Nostr",
                         category: SecureLogger.session, level: .info)
         
         // Process the read receipt through the same flow as Bluetooth read receipts
@@ -1104,7 +1511,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 
                 // If we have a private chat open with the old peer ID, update it to the new one
                 if selectedPrivateChatPeer == oldPeerID {
-                    SecureLogger.log("📱 Updating private chat peer ID due to key change: \(oldPeerID) -> \(newPeerID)", 
+                    SecureLogger.log("📱 Updating private chat peer ID due to key change: \(oldPeerID) -> \(newPeerID)",
                                     category: SecureLogger.session, level: .info)
                     
                     // Transfer private chat messages to new peer ID
@@ -1134,7 +1541,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 } else {
                     // Even if the chat isn't open, migrate any existing private chat data
                     if let messages = privateChats[oldPeerID] {
-                        SecureLogger.log("📱 Migrating private chat messages from \(oldPeerID) to \(newPeerID)", 
+                        SecureLogger.log("📱 Migrating private chat messages from \(oldPeerID) to \(newPeerID)",
                                         category: SecureLogger.session, level: .debug)
                         privateChats[newPeerID] = messages
                         privateChats.removeValue(forKey: oldPeerID)
@@ -1301,7 +1708,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 // Search for the current peer ID with the same nickname
                 for (currentPeerID, currentNickname) in meshService.getPeerNicknames() {
                     if currentNickname == peerNickname {
-                        SecureLogger.log("📖 Resolved updated peer ID for read receipt: \(peerID) -> \(currentPeerID)", 
+                        SecureLogger.log("📖 Resolved updated peer ID for read receipt: \(peerID) -> \(currentPeerID)",
                                         category: SecureLogger.session, level: .info)
                         actualPeerID = currentPeerID
                         break
@@ -1364,8 +1771,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             }
         }
         
-        guard let messages = privateChats[peerID], !messages.isEmpty else { 
-            return 
+        guard let messages = privateChats[peerID], !messages.isEmpty else {
+            return
         }
         
         
@@ -2900,7 +3307,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                                 migratedMessages.append(contentsOf: messages)
                                 oldPeerIDsToRemove.append(oldPeerID)
                                 
-                                SecureLogger.log("📦 Migrating \(messages.count) messages from old peer ID \(oldPeerID) to \(peerID) for incoming message (fingerprint match)", 
+                                SecureLogger.log("📦 Migrating \(messages.count) messages from old peer ID \(oldPeerID) to \(peerID) for incoming message (fingerprint match)",
                                                 category: SecureLogger.session, level: .info)
                             } else if currentFingerprint == nil || oldFingerprint == nil {
                                 // Fallback: Check if this chat contains messages with this sender by nickname
@@ -2913,7 +3320,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                                     migratedMessages.append(contentsOf: messages)
                                     oldPeerIDsToRemove.append(oldPeerID)
                                     
-                                    SecureLogger.log("📦 Migrating \(messages.count) messages from old peer ID \(oldPeerID) to \(peerID) for incoming message (nickname match)", 
+                                    SecureLogger.log("📦 Migrating \(messages.count) messages from old peer ID \(oldPeerID) to \(peerID) for incoming message (nickname match)",
                                                     category: SecureLogger.session, level: .warning)
                                 }
                             }
@@ -2947,7 +3354,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 
                 // Check if this is an action that should be converted to system message
                 let isActionMessage = messageToStore.content.hasPrefix("* ") && messageToStore.content.hasSuffix(" *") &&
-                                      (messageToStore.content.contains("🫂") || messageToStore.content.contains("🐟") || 
+                                      (messageToStore.content.contains("🫂") || messageToStore.content.contains("🐟") ||
                                        messageToStore.content.contains("took a screenshot"))
                 
                 if isActionMessage {
@@ -3033,12 +3440,109 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             } else if message.sender == nickname {
                 // Our own message that was echoed back - ignore it since we already added it locally
             }
+        } else if message.content.hasPrefix("GROUP_INVITE:") {
+            // Handle group invitation
+            SecureLogger.log("📱 Detected GROUP_INVITE message: \(message.content)",
+                            category: SecureLogger.session, level: .info)
+            
+            let parts = message.content.split(separator: ":", maxSplits: 3)
+            if parts.count >= 4 {
+                let groupID = String(parts[1])
+                let groupName = String(parts[2])
+                let inviteCode = String(parts[3])
+                
+                let invitation = GroupInvitation(
+                    groupID: groupID,
+                    groupName: groupName,
+                    inviterID: message.senderPeerID ?? "",
+                    inviterNickname: message.sender,
+                    inviteCode: inviteCode
+                )
+                
+                SecureLogger.log("📱 Created invitation object: groupID=\(groupID), groupName=\(groupName), inviter=\(message.sender)",
+                                category: SecureLogger.session, level: .info)
+                
+                Task { @MainActor in
+                    handleGroupInvitation(invitation, from: message.senderPeerID ?? "")
+                }
+            } else {
+                SecureLogger.log("📱 Failed to parse GROUP_INVITE message: \(message.content) - parts count: \(parts.count)",
+                                category: SecureLogger.session, level: .error)
+            }
+        } else if message.content.hasPrefix("GROUP_MSG:") {
+            // Handle group message
+            let parts = message.content.split(separator: ":", maxSplits: 2)
+            if parts.count >= 3 {
+                let groupID = String(parts[1])
+                let groupName = String(parts[2])
+                let content = String(parts[3])
+                
+                // Create group message
+                let groupMessage = BitchatMessage(
+                    sender: message.sender,
+                    content: content,
+                    timestamp: message.timestamp,
+                    isRelay: message.isRelay,
+                    originalSender: message.originalSender,
+                    isPrivate: false,
+                    recipientNickname: nil,
+                    senderPeerID: message.senderPeerID,
+                    mentions: message.mentions,
+                    deliveryStatus: .delivered(to: groupName, at: Date())
+                )
+                
+                // Add to group chat
+                if groupChats[groupID] == nil {
+                    groupChats[groupID] = []
+                }
+                groupChats[groupID]?.append(groupMessage)
+                
+                // Also add to group service
+                Task { @MainActor in
+                    groupService.addMessageToGroup(groupMessage, groupID: groupID)
+                }
+                
+                // Mark as unread if not currently viewing this group
+                if selectedGroupChat != groupID {
+                    unreadGroupMessages.insert(groupID)
+                }
+                
+                SecureLogger.log("📱 Received group message in '\(groupName)' from \(message.sender)",
+                                category: SecureLogger.session, level: .info)
+            }
+        } else if message.content.hasPrefix("GROUP_UPDATE:") {
+            // Handle group member update
+            let parts = message.content.split(separator: ":", maxSplits: 4)
+            if parts.count >= 5 {
+                let updateType = String(parts[1])
+                let groupID = String(parts[2])
+                let groupName = String(parts[3])
+                let memberID = String(parts[4])
+                let memberNickname = String(parts[5])
+                
+                Task { @MainActor in
+                    switch updateType {
+                    case "JOIN":
+                        if groupService.addMember(memberID, to: groupID, nickname: memberNickname) {
+                            SecureLogger.log("📱 \(memberNickname) joined group '\(groupName)'",
+                                            category: SecureLogger.session, level: .info)
+                        }
+                    case "LEAVE":
+                        if groupService.removeMember(memberID, from: groupID, nickname: memberNickname) {
+                            SecureLogger.log("📱 \(memberNickname) left group '\(groupName)'",
+                                            category: SecureLogger.session, level: .info)
+                        }
+                    default:
+                        break
+                    }
+                }
+            }
         } else {
             // Regular public message (main chat)
             
             // Check if this is an action that should be converted to system message
             let isActionMessage = message.content.hasPrefix("* ") && message.content.hasSuffix(" *") &&
-                                  (message.content.contains("🫂") || message.content.contains("🐟") || 
+                                  (message.content.contains("🫂") || message.content.contains("🐟") ||
                                    message.content.contains("took a screenshot"))
             
             let finalMessage: BitchatMessage
@@ -3073,7 +3577,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                         return true
                     }
                     // Check by content and sender with time window (within 1 second)
-                    if existingMsg.content == finalMessage.content && 
+                    if existingMsg.content == finalMessage.content &&
                        existingMsg.sender == finalMessage.sender {
                         let timeDiff = abs(existingMsg.timestamp.timeIntervalSince(finalMessage.timestamp))
                         return timeDiff < 1.0
@@ -3114,12 +3618,12 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             return
         }
         // Check if this is a hug message directed at the user
-        let isHugForMe = message.content.contains("🫂") && 
+        let isHugForMe = message.content.contains("🫂") &&
                          (message.content.contains("hugs \(nickname)") ||
                           message.content.contains("hugs you"))
         
         // Check if this is a slap message directed at the user
-        let isSlapForMe = message.content.contains("🐟") && 
+        let isSlapForMe = message.content.contains("🐟") &&
                           (message.content.contains("slaps \(nickname) around") ||
                            message.content.contains("slaps you around"))
         

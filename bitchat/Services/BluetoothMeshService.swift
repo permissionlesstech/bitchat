@@ -3469,33 +3469,65 @@ class BluetoothMeshService: NSObject {
             // Log message type for debugging
             let messageTypeName: String
             switch MessageType(rawValue: packet.type) {
+            case .announce:
+                messageTypeName = "ANNOUNCE"
+            case .leave:
+                messageTypeName = "LEAVE"
             case .message:
                 messageTypeName = "MESSAGE"
-            case .protocolAck:
-                messageTypeName = "PROTOCOL_ACK"
-            case .protocolNack:
-                messageTypeName = "PROTOCOL_NACK"
+            case .fragmentStart:
+                messageTypeName = "FRAGMENT_START"
+            case .fragmentContinue:
+                messageTypeName = "FRAGMENT_CONTINUE"
+            case .fragmentEnd:
+                messageTypeName = "FRAGMENT_END"
+            case .deliveryAck:
+                messageTypeName = "DELIVERY_ACK"
+            case .deliveryStatusRequest:
+                messageTypeName = "DELIVERY_STATUS_REQUEST"
+            case .readReceipt:
+                messageTypeName = "READ_RECEIPT"
             case .noiseHandshakeInit:
                 messageTypeName = "NOISE_HANDSHAKE_INIT"
             case .noiseHandshakeResp:
                 messageTypeName = "NOISE_HANDSHAKE_RESP"
-            case .noiseIdentityAnnounce:
-                messageTypeName = "NOISE_IDENTITY_ANNOUNCE"
             case .noiseEncrypted:
                 messageTypeName = "NOISE_ENCRYPTED"
-            case .leave:
-                messageTypeName = "LEAVE"
-            case .readReceipt:
-                messageTypeName = "READ_RECEIPT"
+            case .noiseIdentityAnnounce:
+                messageTypeName = "NOISE_IDENTITY_ANNOUNCE"
             case .versionHello:
                 messageTypeName = "VERSION_HELLO"
             case .versionAck:
                 messageTypeName = "VERSION_ACK"
+            case .protocolAck:
+                messageTypeName = "PROTOCOL_ACK"
+            case .protocolNack:
+                messageTypeName = "PROTOCOL_NACK"
             case .systemValidation:
                 messageTypeName = "SYSTEM_VALIDATION"
             case .handshakeRequest:
                 messageTypeName = "HANDSHAKE_REQUEST"
-            default:
+            case .favorited:
+                messageTypeName = "FAVORITED"
+            case .unfavorited:
+                messageTypeName = "UNFAVORITED"
+            case .groupCreate:
+                messageTypeName = "GROUP_CREATE"
+            case .groupInvite:
+                messageTypeName = "GROUP_INVITE"
+            case .groupJoin:
+                messageTypeName = "GROUP_JOIN"
+            case .groupLeave:
+                messageTypeName = "GROUP_LEAVE"
+            case .groupMessage:
+                messageTypeName = "GROUP_MESSAGE"
+            case .groupMemberAdd:
+                messageTypeName = "GROUP_MEMBER_ADD"
+            case .groupMemberRemove:
+                messageTypeName = "GROUP_MEMBER_REMOVE"
+            case .groupUpdate:
+                messageTypeName = "GROUP_UPDATE"
+            case .none:
                 messageTypeName = "UNKNOWN(\(packet.type))"
             }
             
@@ -5975,7 +6007,9 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         case .message, .announce, .leave, .readReceipt, .deliveryStatusRequest,
              .fragmentStart, .fragmentContinue, .fragmentEnd,
              .noiseIdentityAnnounce, .noiseEncrypted, .protocolNack, 
-             .favorited, .unfavorited, .none:
+             .favorited, .unfavorited, .groupCreate, .groupInvite, .groupJoin,
+             .groupLeave, .groupMessage, .groupMemberAdd, .groupMemberRemove,
+             .groupUpdate, .none:
             return false
         }
     }

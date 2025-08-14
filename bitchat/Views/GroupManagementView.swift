@@ -140,7 +140,7 @@ struct GroupInviteView: View {
         NavigationView {
             List {
                 Section("Select Peers to Invite") {
-                    ForEach(viewModel.allPeers.filter { !$0.isMe && !group.memberIDs.contains($0.id) }) { peer in
+                    ForEach(viewModel.allPeers.filter { $0.id != viewModel.meshService.myPeerID && !group.memberIDs.contains($0.id) }) { peer in
                         HStack {
                             Text(peer.displayName)
                             Spacer()

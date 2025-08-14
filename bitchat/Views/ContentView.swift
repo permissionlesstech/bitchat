@@ -58,6 +58,7 @@ struct ContentView: View {
     // MARK: - Properties
     
     @EnvironmentObject var viewModel: ChatViewModel
+    @ObservedObject var groupService = GroupPersistenceService.shared
     @State private var messageText = ""
     @State private var textFieldSelection: NSRange? = nil
     @FocusState private var isTextFieldFocused: Bool
@@ -70,6 +71,7 @@ struct ContentView: View {
     @State private var commandSuggestions: [String] = []
     @State private var backSwipeOffset: CGFloat = 0
     @State private var showPrivateChat = false
+    @State private var showGroupChat = false
     @State private var showMessageActions = false
     @State private var selectedMessageSender: String?
     @State private var selectedMessageSenderID: String?
@@ -77,6 +79,7 @@ struct ContentView: View {
     @State private var lastScrollTime: Date = .distantPast
     @State private var scrollThrottleTimer: Timer?
     @State private var autocompleteDebounceTimer: Timer?
+    @State private var showGroupInvitations = false
     
     // MARK: - Computed Properties
     
@@ -137,6 +140,43 @@ struct ContentView: View {
                         )
                 }
                 
+                // Group chat slide-over
+                if viewModel.selectedGroupChat != nil {
+                    groupChatView
+                        .frame(width: geometry.size.width)
+                        .background(backgroundColor)
+                        .transition(.asymmetric(
+                            insertion: .move(edge: .trailing),
+                            removal: .move(edge: .trailing)
+                        ))
+                        .offset(x: showGroupChat ? -1 : max(0, geometry.size.width))
+                        .offset(x: backSwipeOffset.isNaN ? 0 : backSwipeOffset)
+                        .gesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    if value.translation.width > 0 && !value.translation.width.isNaN {
+                                        let maxWidth = max(0, geometry.size.width)
+                                        backSwipeOffset = min(value.translation.width, maxWidth.isNaN ? 0 : maxWidth)
+                                    }
+                                }
+                                .onEnded { value in
+                                    let translation = value.translation.width.isNaN ? 0 : value.translation.width
+                                    let velocity = value.velocity.width.isNaN ? 0 : value.velocity.width
+                                    if translation > 50 || (translation > 30 && velocity > 300) {
+                                        withAnimation(.easeOut(duration: 0.2)) {
+                                            showGroupChat = false
+                                            backSwipeOffset = 0
+                                            viewModel.endGroupChat()
+                                        }
+                                    } else {
+                                        withAnimation(.easeOut(duration: 0.15)) {
+                                            backSwipeOffset = 0
+                                        }
+                                    }
+                                }
+                        )
+                }
+                
                 // Sidebar overlay
                 HStack(spacing: 0) {
                     // Tap to dismiss area
@@ -184,8 +224,19 @@ struct ContentView: View {
                 showPrivateChat = newValue != nil
             }
         }
+        .onChange(of: viewModel.selectedGroupChat) { newValue in
+            withAnimation(.easeInOut(duration: 0.2)) {
+                showGroupChat = newValue != nil
+            }
+        }
         .sheet(isPresented: $showAppInfo) {
             AppInfoView()
+        }
+        .sheet(isPresented: $viewModel.showGroupCreationSheet) {
+            GroupCreationView(viewModel: viewModel)
+        }
+        .sheet(isPresented: $showGroupInvitations) {
+            GroupInvitationsView(viewModel: viewModel)
         }
         .sheet(isPresented: Binding(
             get: { viewModel.showingFingerprintFor != nil },
@@ -247,18 +298,24 @@ struct ContentView: View {
             scrollThrottleTimer?.invalidate()
             autocompleteDebounceTimer?.invalidate()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .showGroupInvitations)) { _ in
+            showGroupInvitations = true
+        }
     }
     
     // MARK: - Message List View
     
-    private func messagesView(privatePeer: String?) -> some View {
+    private func messagesView(privatePeer: String?, groupID: String? = nil) -> some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    // Extract messages based on context (private or public chat)
+                    // Extract messages based on context (private, group, or public chat)
                     let messages: [BitchatMessage] = {
                         if let privatePeer = privatePeer {
                             let msgs = viewModel.getPrivateChatMessages(for: privatePeer)
+                            return msgs
+                        } else if let groupID = groupID {
+                            let msgs = viewModel.groupChats[groupID] ?? []
                             return msgs
                         } else {
                             return viewModel.messages
@@ -276,17 +333,32 @@ struct ContentView: View {
                         Group {
                             if isSystem {
                                 // System banner — spans full width, no bubble tail
-                                Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme))
-                                    .font(.footnote)
-                                    .foregroundStyle(.secondary)
-                                    .frame(maxWidth: .infinity, alignment: .center)
-                                    .padding(.vertical, 6)
-                                    .padding(.horizontal, 12)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                            .fill(colorScheme == .dark ? Color(white: 0.12) : Color(white: 0.92))
-                                    )
-                                    .padding(.horizontal, 24)
+                                HStack(spacing: 8) {
+                                    // Show icon for group invitations
+                                    if message.content.contains("invited you to join group") {
+                                        Image(systemName: "envelope.fill")
+                                            .font(.caption)
+                                            .foregroundColor(.blue)
+                                    }
+                                    
+                                    Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme))
+                                        .font(.footnote)
+                                        .foregroundStyle(.secondary)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .padding(.vertical, 6)
+                                .padding(.horizontal, 12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                        .fill(colorScheme == .dark ? Color(white: 0.12) : Color(white: 0.92))
+                                )
+                                .padding(.horizontal, 24)
+                                .onTapGesture {
+                                    // If this is a group invitation message, open invitations view
+                                    if message.content.contains("invited you to join group") {
+                                        showGroupInvitations = true
+                                    }
+                                }
                             } else {
                                 // Regular chat bubbles
                                 HStack(alignment: .bottom, spacing: 8) {
@@ -743,7 +815,7 @@ struct ContentView: View {
                                     if let icon = peer.encryptionStatus.icon {
                                         Image(systemName: icon)
                                             .font(.system(size: 10))
-                                            .foregroundColor(peer.encryptionStatus == .noiseVerified ? textColor : 
+                                            .foregroundColor(peer.encryptionStatus == .noiseVerified ? textColor :
                                                            peer.encryptionStatus == .noiseSecured ? textColor :
                                                            peer.encryptionStatus == .noiseHandshaking ? Color.orange :
                                                            Color.red)
@@ -784,6 +856,105 @@ struct ContentView: View {
                                 }
                             }
                         }
+                        }
+                    }
+                    
+                    // Groups section
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Button(action: {
+                                viewModel.showGroupCreationSheet = true
+                            }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "plus.circle.fill")
+                                        .font(.system(size: 10))
+                                    Text("GROUPS")
+                                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                }
+                                .foregroundColor(secondaryTextColor)
+                            }
+                            .buttonStyle(.plain)
+                            
+                            Spacer()
+                            
+                            // Group invitations button
+                            Button(action: {
+                                showGroupInvitations = true
+                            }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "envelope.fill")
+                                        .font(.system(size: 10))
+                                    Text("INVITES")
+                                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                    
+                                    // Badge for pending invitations
+                                    if !groupService.pendingInvitations.isEmpty {
+                                        Text("\(groupService.pendingInvitations.count)")
+                                            .font(.system(size: 8, weight: .bold))
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 4)
+                                            .padding(.vertical, 1)
+                                            .background(Color.red)
+                                            .clipShape(Capsule())
+                                    }
+                                }
+                                .foregroundColor(secondaryTextColor)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.top, 12)
+                        
+                        let myGroups = viewModel.getMyGroups()
+                        if myGroups.isEmpty {
+                            Text("no groups...")
+                                .font(.system(size: 14, design: .monospaced))
+                                .foregroundColor(secondaryTextColor)
+                                .padding(.horizontal)
+                                .padding(.top, 4)
+                        } else {
+                            ForEach(myGroups) { group in
+                                HStack(spacing: 4) {
+                                    // Group icon
+                                    Image(systemName: "person.3.fill")
+                                        .font(.system(size: 10))
+                                        .foregroundColor(textColor)
+                                    
+                                    // Group name
+                                    Text(group.name)
+                                        .font(.system(size: 14, design: .monospaced))
+                                        .foregroundColor(textColor)
+                                    
+                                    // Unread indicator
+                                    if viewModel.unreadGroupMessages.contains(group.id) {
+                                        Image(systemName: "envelope.fill")
+                                            .font(.system(size: 10))
+                                            .foregroundColor(Color.orange)
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    // Group settings button
+                                    Button(action: {
+                                        // Show group management
+                                    }) {
+                                        Image(systemName: "ellipsis.circle")
+                                            .font(.system(size: 10))
+                                            .foregroundColor(secondaryTextColor)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                                .padding(.horizontal)
+                                .padding(.vertical, 4)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    viewModel.startGroupChat(with: group.id)
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        showSidebar = false
+                                        sidebarDragOffset = 0
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -853,6 +1024,25 @@ struct ContentView: View {
                 privateHeaderView
                 Divider()
                 messagesView(privatePeer: viewModel.selectedPrivateChatPeer)
+                Divider()
+                inputView
+            }
+            .background(backgroundColor)
+            .foregroundColor(textColor)
+        }
+    }
+    
+    private var groupChatView: some View {
+        HStack(spacing: 0) {
+            // Vertical separator bar
+            Rectangle()
+                .fill(Color.gray.opacity(0.3))
+                .frame(width: 1)
+            
+            VStack(spacing: 0) {
+                groupHeaderView
+                Divider()
+                messagesView(privatePeer: nil, groupID: viewModel.selectedGroupChat)
                 Divider()
                 inputView
             }
@@ -963,6 +1153,68 @@ struct ContentView: View {
         }
     }
     
+    private var groupHeaderView: some View {
+        Group {
+            if let groupID = viewModel.selectedGroupChat {
+                groupHeaderContent(for: groupID)
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func groupHeaderContent(for groupID: String) -> some View {
+        let group = viewModel.groupService.getGroup(groupID)
+        let groupName = group?.name ?? "Unknown Group"
+        let memberCount = group?.memberIDs.count ?? 0
+        
+        ZStack {
+            // Center content
+            HStack(spacing: 6) {
+                Image(systemName: "person.3.fill")
+                    .font(.system(size: 14))
+                    .foregroundColor(textColor)
+                
+                Text("\(groupName)")
+                    .font(.system(size: 16, weight: .medium, design: .monospaced))
+                    .foregroundColor(textColor)
+                
+                Text("(\(memberCount))")
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundColor(secondaryTextColor)
+            }
+            
+            // Left and right buttons
+            HStack {
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        viewModel.endGroupChat()
+                    }
+                }) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 12))
+                        .foregroundColor(textColor)
+                        .frame(width: 44, height: 44, alignment: .leading)
+                }
+                .buttonStyle(.plain)
+                
+                Spacer()
+                
+                Button(action: {
+                    // Show group management
+                }) {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.system(size: 14))
+                        .foregroundColor(textColor)
+                        .frame(width: 44, height: 44, alignment: .trailing)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(height: 44)
+        .padding(.horizontal, 12)
+        .background(backgroundColor.opacity(0.95))
+    }
+    
     @ViewBuilder
     private func privateHeaderContent(for privatePeerID: String) -> some View {
         // Try to resolve to current peer ID if this is an old one
@@ -970,21 +1222,21 @@ struct ContentView: View {
         let currentPeerID: String = privatePeerID
         
         let peer = viewModel.getPeer(byID: currentPeerID)
-        let privatePeerNick = peer?.displayName ?? 
-                              viewModel.meshService.getPeerNicknames()[currentPeerID] ?? 
-                              FavoritesPersistenceService.shared.getFavoriteStatus(for: Data(hexString: privatePeerID) ?? Data())?.peerNickname ?? 
+        let privatePeerNick = peer?.displayName ??
+                              viewModel.meshService.getPeerNicknames()[currentPeerID] ??
+                              FavoritesPersistenceService.shared.getFavoriteStatus(for: Data(hexString: privatePeerID) ?? Data())?.peerNickname ??
                               // getFavoriteStatusByNostrKey not implemented
-                              // FavoritesPersistenceService.shared.getFavoriteStatusByNostrKey(privatePeerID)?.peerNickname ?? 
+                              // FavoritesPersistenceService.shared.getFavoriteStatusByNostrKey(privatePeerID)?.peerNickname ??
                               "Unknown"
         let isNostrAvailable: Bool = {
-            guard let connectionState = peer?.connectionState else { 
+            guard let connectionState = peer?.connectionState else {
                 // Check if we can reach this peer via Nostr even if not in allPeers
                 if let noiseKey = Data(hexString: privatePeerID),
                    let favoriteStatus = FavoritesPersistenceService.shared.getFavoriteStatus(for: noiseKey),
                    favoriteStatus.isMutual {
                     return true
                 }
-                return false 
+                return false
             }
             switch connectionState {
             case .nostrAvailable:
@@ -1042,7 +1294,7 @@ struct ContentView: View {
                             if let icon = encryptionStatus.icon {
                                 Image(systemName: icon)
                                     .font(.system(size: 14))
-                                    .foregroundColor(encryptionStatus == .noiseVerified ? textColor : 
+                                    .foregroundColor(encryptionStatus == .noiseVerified ? textColor :
                                                    encryptionStatus == .noiseSecured ? textColor :
                                                    Color.red)
                                     .accessibilityLabel("Encryption status: \(encryptionStatus == .noiseVerified ? "verified" : encryptionStatus == .noiseSecured ? "secured" : "not encrypted")")

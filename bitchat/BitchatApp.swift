@@ -164,6 +164,14 @@ class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
             }
         }
         
+        // Check if this is a group invitation notification
+        if identifier.hasPrefix("group-invite-") {
+            DispatchQueue.main.async {
+                // Post notification to open group invitations view
+                NotificationCenter.default.post(name: .showGroupInvitations, object: nil)
+            }
+        }
+        
         completionHandler()
     }
     
@@ -192,4 +200,8 @@ extension String {
     var nilIfEmpty: String? {
         self.isEmpty ? nil : self
     }
+}
+
+extension Notification.Name {
+    static let showGroupInvitations = Notification.Name("showGroupInvitations")
 }

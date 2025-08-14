@@ -166,6 +166,16 @@ enum MessageType: UInt8 {
     case favorited = 0x30               // Peer favorited us
     case unfavorited = 0x31             // Peer unfavorited us
     
+    // Group chat messages
+    case groupCreate = 0x40             // Create a new group
+    case groupInvite = 0x41             // Invite someone to group
+    case groupJoin = 0x42               // Accept group invitation
+    case groupLeave = 0x43              // Leave group
+    case groupMessage = 0x44            // Message sent to group
+    case groupMemberAdd = 0x45          // Add member to group
+    case groupMemberRemove = 0x46       // Remove member from group
+    case groupUpdate = 0x47             // Update group settings
+    
     var description: String {
         switch self {
         case .announce: return "announce"
@@ -189,6 +199,14 @@ enum MessageType: UInt8 {
         case .handshakeRequest: return "handshakeRequest"
         case .favorited: return "favorited"
         case .unfavorited: return "unfavorited"
+        case .groupCreate: return "groupCreate"
+        case .groupInvite: return "groupInvite"
+        case .groupJoin: return "groupJoin"
+        case .groupLeave: return "groupLeave"
+        case .groupMessage: return "groupMessage"
+        case .groupMemberAdd: return "groupMemberAdd"
+        case .groupMemberRemove: return "groupMemberRemove"
+        case .groupUpdate: return "groupUpdate"
         }
     }
 }
@@ -1240,6 +1258,87 @@ extension BitchatMessage: Equatable {
                lhs.senderPeerID == rhs.senderPeerID &&
                lhs.mentions == rhs.mentions &&
                lhs.deliveryStatus == rhs.deliveryStatus
+    }
+}
+
+// MARK: - Group Chat Structures
+
+/// Represents a group in the BitChat system
+public struct BitchatGroup: Codable, Identifiable, Equatable {
+    public let id: String                    // Unique group identifier
+    public let name: String                  // Group display name
+    public let creatorID: String             // Who created the group
+    public let memberIDs: Set<String>        // Current members
+    public let adminIDs: Set<String>         // Group administrators
+    public let createdAt: Date
+    public let isPrivate: Bool               // Private vs public group
+    public let inviteCode: String?           // For private group invites
+    public let description: String?          // Optional group description
+    
+    public init(id: String? = nil, name: String, creatorID: String, memberIDs: Set<String> = [], adminIDs: Set<String> = [], isPrivate: Bool = false, inviteCode: String? = nil, description: String? = nil) {
+        self.id = id ?? UUID().uuidString
+        self.name = name
+        self.creatorID = creatorID
+        self.memberIDs = memberIDs
+        self.adminIDs = adminIDs
+        self.createdAt = Date()
+        self.isPrivate = isPrivate
+        self.inviteCode = inviteCode
+        self.description = description
+    }
+    
+    public var isAdmin: (String) -> Bool {
+        return { peerID in
+            self.adminIDs.contains(peerID) || self.creatorID == peerID
+        }
+    }
+    
+    public var isMember: (String) -> Bool {
+        return { peerID in
+            self.memberIDs.contains(peerID)
+        }
+    }
+}
+
+/// Group invitation structure
+public struct GroupInvitation: Codable {
+    public let groupID: String
+    public let groupName: String
+    public let inviterID: String
+    public let inviterNickname: String
+    public let inviteCode: String
+    public let timestamp: Date
+    public let expiresAt: Date
+    
+    public init(groupID: String, groupName: String, inviterID: String, inviterNickname: String, inviteCode: String, expiresIn: TimeInterval = 24 * 60 * 60) {
+        self.groupID = groupID
+        self.groupName = groupName
+        self.inviterID = inviterID
+        self.inviterNickname = inviterNickname
+        self.inviteCode = inviteCode
+        self.timestamp = Date()
+        self.expiresAt = Date().addingTimeInterval(expiresIn)
+    }
+    
+    public var isExpired: Bool {
+        return Date() > expiresAt
+    }
+}
+
+/// Group member information
+public struct GroupMember: Codable, Identifiable, Equatable {
+    public let id: String                    // Peer ID
+    public let nickname: String
+    public let joinedAt: Date
+    public let isAdmin: Bool
+    public let isCreator: Bool
+    
+    public init(id: String, nickname: String, joinedAt: Date = Date(), isAdmin: Bool = false, isCreator: Bool = false) {
+        self.id = id
+        self.nickname = nickname
+        self.joinedAt = joinedAt
+        self.isAdmin = isAdmin
+        self.isCreator = isCreator
     }
 }
 

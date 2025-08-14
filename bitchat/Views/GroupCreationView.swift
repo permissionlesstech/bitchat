@@ -1,3 +1,11 @@
+//
+//  GroupCreationView.swift
+//  bitchat
+//
+//  Created by Waluya Juang Husada on 14/08/25.
+//
+
+
 import SwiftUI
 
 struct GroupCreationView: View {
@@ -94,7 +102,7 @@ struct PeerSelectionView: View {
     var body: some View {
         NavigationView {
             List {
-                ForEach(viewModel.allPeers.filter { !$0.isMe }) { peer in
+                ForEach(viewModel.allPeers.filter { $0.id != viewModel.meshService.myPeerID}) { peer in
                     HStack {
                         Text(peer.displayName)
                         Spacer()

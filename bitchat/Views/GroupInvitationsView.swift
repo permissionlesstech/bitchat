@@ -9,12 +9,14 @@ import SwiftUI
 
 struct GroupInvitationsView: View {
     @ObservedObject var viewModel: ChatViewModel
+    @ObservedObject var groupService = GroupPersistenceService.shared
     @Environment(\.dismiss) private var dismiss
+    
     
     var body: some View {
         NavigationView {
             List {
-                if viewModel.getPendingInvitations().isEmpty {
+                if groupService.pendingInvitations.isEmpty {
                     Section {
                         VStack(spacing: 16) {
                             Image(systemName: "envelope.open")
@@ -35,7 +37,7 @@ struct GroupInvitationsView: View {
                     }
                 } else {
                     Section("Pending Invitations") {
-                        ForEach(viewModel.getPendingInvitations(), id: \.groupID) { invitation in
+                        ForEach(Array(groupService.pendingInvitations.values), id: \.groupID) { invitation in
                             GroupInvitationRow(
                                 invitation: invitation,
                                 viewModel: viewModel

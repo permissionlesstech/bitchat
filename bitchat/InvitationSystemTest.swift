@@ -1,6 +1,8 @@
 //
-// InvitationSystemTest.swift
-// bitchat
+//  InvitationSystemTest.swift
+//  bitchat
+//
+//  Created by Waluya Juang Husada on 14/08/25.
 //
 // Test file to verify group invitation system functionality
 //

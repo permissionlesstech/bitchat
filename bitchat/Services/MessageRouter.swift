@@ -148,6 +148,120 @@ class MessageRouter: ObservableObject {
         }
     }
     
+    // MARK: - Group Message Routing
+    
+    /// Send a group invitation to a peer
+    func sendGroupInvitation(_ invitation: GroupInvitation, to recipientNoisePublicKey: Data) async throws {
+        let recipientHexID = recipientNoisePublicKey.hexEncodedString()
+        
+        SecureLogger.log("📤 Sending group invitation to \(recipientHexID) for group '\(invitation.groupName)'", 
+                        category: SecureLogger.session, level: .info)
+        
+        // Create invitation content
+        let content = "GROUP_INVITE:\(invitation.groupID):\(invitation.groupName):\(invitation.inviteCode)"
+        
+        // Try mesh first
+        if meshService.getPeerNicknames()[recipientHexID] != nil {
+            SecureLogger.log("📡 Sending group invitation via Bluetooth mesh", 
+                            category: SecureLogger.session, level: .info)
+            
+            if let recipientNickname = meshService.getPeerNicknames()[recipientHexID] {
+                meshService.sendPrivateMessage(content, to: recipientHexID, recipientNickname: recipientNickname)
+            }
+            
+        } else if let favoriteStatus = favoritesService.getFavoriteStatus(for: recipientNoisePublicKey),
+                  let recipientNostrPubkey = favoriteStatus.peerNostrPublicKey {
+            
+            SecureLogger.log("🌐 Sending group invitation via Nostr to \(favoriteStatus.peerNickname)", 
+                            category: SecureLogger.session, level: .info)
+            
+            // Send via Nostr
+            guard let senderIdentity = try? NostrIdentityBridge.getCurrentNostrIdentity() else {
+                throw MessageRouterError.noNostrIdentity
+            }
+            
+            let event = try NostrProtocol.createPrivateMessage(
+                content: content,
+                recipientPubkey: recipientNostrPubkey,
+                senderIdentity: senderIdentity
+            )
+            
+            nostrRelay.sendEvent(event)
+        } else {
+            SecureLogger.log("⚠️ Cannot send group invitation - peer not reachable via mesh or Nostr", 
+                            category: SecureLogger.session, level: .warning)
+            throw MessageRouterError.peerNotReachable
+        }
+    }
+    
+    /// Send a group message to all members
+    func sendGroupMessage(_ content: String, to groupID: String, groupName: String) async throws {
+        SecureLogger.log("📤 Sending group message to '\(groupName)'", 
+                        category: SecureLogger.session, level: .info)
+        
+        // Get group members
+        let groupService = GroupPersistenceService.shared
+        guard let group = groupService.getGroup(groupID) else {
+            throw MessageRouterError.peerNotReachable
+        }
+        
+        // Send to all members except self
+        let myPeerID = meshService.myPeerID
+        let membersToNotify = group.memberIDs.filter { $0 != myPeerID }
+        
+        var sentCount = 0
+        var failedCount = 0
+        
+        for memberID in membersToNotify {
+            do {
+                if let noiseKey = Data(hexString: memberID) {
+                    // Create group message content
+                    let groupMessageContent = "GROUP_MSG:\(groupID):\(groupName):\(content)"
+                    
+                    // Try to send via existing transport
+                    try await sendMessage(groupMessageContent, to: noiseKey)
+                    sentCount += 1
+                }
+            } catch {
+                failedCount += 1
+                SecureLogger.log("❌ Failed to send group message to \(memberID): \(error)", 
+                                category: SecureLogger.session, level: .error)
+            }
+        }
+        
+        SecureLogger.log("📤 Group message sent: \(sentCount) successful, \(failedCount) failed", 
+                        category: SecureLogger.session, level: .info)
+    }
+    
+    /// Send group member update (join/leave/add/remove)
+    func sendGroupMemberUpdate(_ updateType: String, groupID: String, groupName: String, memberID: String, memberNickname: String) async throws {
+        SecureLogger.log("📤 Sending group member update: \(updateType) for '\(memberNickname)' in '\(groupName)'", 
+                        category: SecureLogger.session, level: .info)
+        
+        // Get group members
+        let groupService = GroupPersistenceService.shared
+        guard let group = groupService.getGroup(groupID) else {
+            throw MessageRouterError.peerNotReachable
+        }
+        
+        // Send to all members except self and the affected member
+        let myPeerID = meshService.myPeerID
+        let membersToNotify = group.memberIDs.filter { $0 != myPeerID && $0 != memberID }
+        
+        let updateContent = "GROUP_UPDATE:\(updateType):\(groupID):\(groupName):\(memberID):\(memberNickname)"
+        
+        for memberID in membersToNotify {
+            do {
+                if let noiseKey = Data(hexString: memberID) {
+                    try await sendMessage(updateContent, to: noiseKey)
+                }
+            } catch {
+                SecureLogger.log("❌ Failed to send group update to \(memberID): \(error)", 
+                                category: SecureLogger.session, level: .error)
+            }
+        }
+    }
+    
     // MARK: - Private Methods
     
     private func sendViaMesh(_ message: RoutedMessage) async throws {
