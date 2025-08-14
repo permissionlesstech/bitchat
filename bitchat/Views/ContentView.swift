@@ -269,53 +269,68 @@ struct ContentView: View {
                     let windowedMessages = messages.suffix(100)
                     
                     ForEach(windowedMessages, id: \.id) { message in
-                        VStack(alignment: .leading, spacing: 0) {
-                            // Check if current user is mentioned
-                            let _ = message.mentions?.contains(viewModel.nickname) ?? false
-                            
-                            if message.sender == "system" {
-                                // System messages
+                        // Determine direction
+                        let isOutgoing = message.sender == viewModel.nickname
+                        let isSystem   = message.sender == "system"
+
+                        Group {
+                            if isSystem {
+                                // System banner — spans full width, no bubble tail
                                 Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme))
-                                    .textSelection(.enabled)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                                    .frame(maxWidth: .infinity, alignment: .center)
+                                    .padding(.vertical, 6)
+                                    .padding(.horizontal, 12)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                            .fill(colorScheme == .dark ? Color(white: 0.12) : Color(white: 0.92))
+                                    )
+                                    .padding(.horizontal, 24)
                             } else {
-                                // Regular messages with natural text wrapping
-                                VStack(alignment: .leading, spacing: 0) {
-                                    HStack(alignment: .top, spacing: 0) {
-                                        // Single text view for natural wrapping
-                                        Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme))
-                                            .textSelection(.enabled)
-                                            .fixedSize(horizontal: false, vertical: true)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                        
-                                        // Delivery status indicator for private messages
-                                        if message.isPrivate && message.sender == viewModel.nickname,
-                                           let status = message.deliveryStatus {
-                                            DeliveryStatusView(status: status, colorScheme: colorScheme)
-                                                .padding(.leading, 4)
+                                // Regular chat bubbles
+                                HStack(alignment: .bottom, spacing: 8) {
+                                    if isOutgoing { Spacer(minLength: 48) }
+
+                                    VStack(alignment: .leading, spacing: 0) {
+                                        HStack(alignment: .top, spacing: 6) {
+                                            // Text
+                                            Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme))
+                                                .textSelection(.enabled)
+                                                .fixedSize(horizontal: false, vertical: true)
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+
+                                            // Delivery status (private, self)
+                                            if message.isPrivate && isOutgoing, let status = message.deliveryStatus {
+                                                DeliveryStatusView(status: status, colorScheme: colorScheme)
+                                                    .padding(.leading, 2)
+                                            }
+                                        }
+
+                                        // Plain URL previews (max 3)
+                                        let urls = message.content.extractURLs()
+                                        if !urls.isEmpty {
+                                            ForEach(urls.prefix(3).indices, id: \.self) { index in
+                                                let urlInfo = urls[index]
+                                                LazyLinkPreviewView(url: urlInfo.url, title: nil)
+                                                    .padding(.top, 6)
+                                                    .padding(.horizontal, 2)
+                                                    .id("\(message.id)-\(urlInfo.url.absoluteString)")
+                                            }
                                         }
                                     }
-                                    
-                                    // Check for plain URLs
-                                    let urls = message.content.extractURLs()
-                                    if !urls.isEmpty {
-                                        ForEach(urls.prefix(3).indices, id: \.self) { index in
-                                            let urlInfo = urls[index]
-                                            LazyLinkPreviewView(url: urlInfo.url, title: nil)
-                                                .padding(.top, 3)
-                                                .padding(.horizontal, 1)
-                                                .id("\(message.id)-\(urlInfo.url.absoluteString)")
-                                        }
-                                    }
+                                    .messageBubble(isOutgoing: isOutgoing)        // <<— bubble modifier from earlier
+                                    .frame(maxWidth: 280, alignment: .leading)    // typical bubble width cap
+
+                                    if !isOutgoing { Spacer(minLength: 48) }
                                 }
                             }
                         }
                         .id(message.id)
                         .contentShape(Rectangle())
                         .onTapGesture {
-                            // Only show actions for messages from other users (not system or self)
-                            if message.sender != "system" && message.sender != viewModel.nickname {
+                            // Only show actions for other users
+                            if !isSystem && !isOutgoing {
                                 selectedMessageSender = message.sender
                                 selectedMessageSenderID = message.senderPeerID
                                 showMessageActions = true

@@ -18,7 +18,7 @@ struct AppInfoView: View {
     
     // MARK: - Constants
     private enum Strings {
-        static let appName = "bitchat"
+        static let appName = "BITCH APP"
         static let tagline = "mesh sidegroupchat"
         
         enum Features {
