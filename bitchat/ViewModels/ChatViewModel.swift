@@ -82,6 +82,7 @@ import SwiftUI
 import Combine
 import CryptoKit
 import CommonCrypto
+import AVFoundation
 import CoreBluetooth
 #if os(iOS)
 import UIKit
@@ -99,6 +100,24 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     @Published var allPeers: [BitchatPeer] = []  // Unified peer list including favorites
     private var peerIndex: [String: BitchatPeer] = [:] // Quick lookup by peer ID
     
+    // MARK: - Message Batching Properties
+    
+    // Message batching for performance
+    private var pendingMessages: [BitchatMessage] = []
+    private var pendingPrivateMessages: [String: [BitchatMessage]] = [:] // peerID -> messages
+    private var messageBatchTimer: Timer?
+    private let messageBatchInterval: TimeInterval = 0.1 // 100ms batching window
+    
+    // UI update debouncing for performance
+    private var uiUpdateTimer: Timer?
+    private let uiUpdateInterval: TimeInterval = 0.05 // 50ms debounce window
+    private var pendingUIUpdate = false
+    
+    // MARK: - Thread-Safe Voice Message Processing (Fix #4)
+    /// Thread-safe recording state management queue
+    let voiceStateQueue = DispatchQueue(label: "voice.recording.state", qos: .userInteractive)
+    /// Thread-safe message processing queue
+    let messageProcessingQueue = DispatchQueue(label: "voice.message.processing", qos: .userInteractive)
     // MARK: - Properties
     @Published var nickname: String = "" {
         didSet {
@@ -175,6 +194,65 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     // Track Nostr pubkey mappings for unknown senders
     private var nostrKeyMapping: [String: String] = [:]  // senderPeerID -> nostrPubkey
     
+    // MARK: - Voice Recording Properties
+    
+    enum VoiceRecordingState: Equatable {
+        case idle
+        case recording
+        case processing
+        case sending
+        case sent
+        case error(String)
+        
+        var canStartRecording: Bool {
+            switch self {
+            case .idle:
+                return true
+            default:
+                return false
+            }
+        }
+    }
+    
+    enum VoicePlaybackState: Equatable {
+        case idle
+        case loading(messageID: String)
+        case playing(messageID: String)
+        case paused(messageID: String)
+        case error(String)
+    }
+    
+    @Published var voiceRecordingState: VoiceRecordingState = .idle
+    @Published var recordingDuration: TimeInterval = 0
+    @Published var recordingAmplitude: Float = 0
+    @Published var hasAudioPermission: Bool = false
+    @Published var activeVoiceMessages: [String: VoiceMessageData] = [:]
+    @Published var voicePlaybackState: VoicePlaybackState = .idle
+    
+    // Additional voice properties needed by ChatViewModel+Voice.swift
+    @Published var isRecordingVoiceMessage: Bool = false
+    @Published var voiceActivityDetected: Bool = false
+    @Published var currentAudioLevel: Float = 0.0
+    @Published var microphonePermissionStatus: Int = 0
+    @Published var playingVoiceMessageID: String? = nil
+    @Published var voicePlaybackProgress: Double = 0.0
+    @Published var showBluetoothAlert: Bool = false
+    @Published var bluetoothAlertMessage: String = ""
+    
+    // Timer for playback progress tracking
+    var playbackProgressTimer: Timer?
+    
+    // Audio player for voice messages
+    var audioPlayer: AudioPlayer?
+    
+    // Voice service cancellables
+    var voiceServiceCancellables = Set<AnyCancellable>()
+    
+    // MARK: - Voice Recording
+    // Voice recording implementation is in ChatViewModel+Voice.swift extension
+    
+    // Voice service integration is handled in ChatViewModel+Voice.swift extension
+    
     // MARK: - Initialization
     
     init() {
@@ -199,6 +277,9 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         // Set up message retry service
         MessageRetryService.shared.meshService = meshService
         
+        // Set up voice service bindings
+        setupVoiceServiceBindings()
+        
         // Initialize Nostr services
         Task { @MainActor in
             nostrRelayManager = NostrRelayManager.shared
@@ -209,6 +290,9 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 nostrRelay: nostrRelayManager!
             )
             
+            // Connect VoiceMessageService to MessageRouter for transmission
+            VoiceMessageService.shared.setMessageRouter(messageRouter!)
+            
             // Initialize peer manager
             peerManager = PeerManager(meshService: meshService)
             peerManager?.updatePeers()
@@ -217,6 +301,12 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             let cancellable = peerManager?.$peers
                 .receive(on: DispatchQueue.main)
                 .sink { [weak self] peers in
+                    SecureLogger.log("📱 UI: Received \(peers.count) peers from PeerManager", 
+                                    category: SecureLogger.session, level: .info)
+                    for peer in peers {
+                        SecureLogger.log("  - \(peer.displayName): connected=\(peer.isConnected), state=\(peer.connectionState)", 
+                                        category: SecureLogger.session, level: .debug)
+                    }
                     // Update peers directly
                     self?.allPeers = peers
                     // Update peer index for O(1) lookups
@@ -458,6 +548,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             
             let isFavorite = currentStatus?.isFavorite ?? false
             
+            SecureLogger.log("📊 Current favorite status for \(peerID): isFavorite=\(isFavorite), isMutual=\(currentStatus?.isMutual ?? false)", 
+                            category: SecureLogger.session, level: .info)
             
             if isFavorite {
                 // Remove from favorites
@@ -606,6 +698,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         if let currentPeerID = getCurrentPeerIDForFingerprint(chatFingerprint) {
             // Update the selected peer if it's different
             if let oldPeerID = selectedPrivateChatPeer, oldPeerID != currentPeerID {
+                SecureLogger.log("📱 Updating private chat peer from \(oldPeerID) to \(currentPeerID)", 
+                                category: SecureLogger.session, level: .debug)
                 
                 // Migrate messages from old peer ID to new peer ID
                 if let oldMessages = privateChats[oldPeerID] {
@@ -737,7 +831,13 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         
         // Check if the recipient is blocked
         if isPeerBlocked(peerID) {
-            addSystemMessage("cannot send message to \(recipientNickname): user is blocked.")
+            let systemMessage = BitchatMessage(
+                sender: "system",
+                content: "cannot send message to \(recipientNickname): user is blocked.",
+                timestamp: Date(),
+                isRelay: false
+            )
+            messages.append(systemMessage)
             return
         }
         
@@ -781,6 +881,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         } else if let favoriteStatus = FavoritesPersistenceService.shared.getFavoriteStatus(for: noiseKey),
                   favoriteStatus.isMutual {
             // Mutual favorite offline - send via Nostr
+            SecureLogger.log("🌐 Sending private message to offline mutual favorite \(recipientNickname) via Nostr", 
+                            category: SecureLogger.session, level: .info)
             
             Task {
                 do {
@@ -797,7 +899,13 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                             category: SecureLogger.session, level: .warning)
             
             // Add system message to inform user
-            addSystemMessage("Cannot send message to \(recipientNickname) - peer is not reachable via mesh or Nostr.")
+            let systemMessage = BitchatMessage(
+                sender: "system",
+                content: "Cannot send message to \(recipientNickname) - peer is not reachable via mesh or Nostr.",
+                timestamp: Date(),
+                isRelay: false
+            )
+            addMessage(systemMessage)
         }
     }
     
@@ -852,15 +960,27 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         
         // Check if the peer is blocked
         if isPeerBlocked(peerID) {
-            addSystemMessage("cannot start chat with \(peerNickname): user is blocked.")
+            let systemMessage = BitchatMessage(
+                sender: "system",
+                content: "cannot start chat with \(peerNickname): user is blocked.",
+                timestamp: Date(),
+                isRelay: false
+            )
+            messages.append(systemMessage)
             return
         }
         
         // Check if this is a moon peer (we favorite them but they don't favorite us) AND they're offline
         // Only require mutual favorites for offline Nostr messaging
         if let peer = peerIndex[peerID],
-           peer.isFavorite && !peer.theyFavoritedUs && !peer.isConnected {
-            addSystemMessage("cannot start chat with \(peerNickname): mutual favorite required for offline messaging.")
+           peer.isFavorite && !peer.theyFavoritedUs && !peer.isConnected && !peer.isRelayConnected {
+            let systemMessage = BitchatMessage(
+                sender: "system",
+                content: "cannot start chat with \(peerNickname): mutual favorite required for offline messaging.",
+                timestamp: Date(),
+                isRelay: false
+            )
+            messages.append(systemMessage)
             return
         }
         
@@ -902,6 +1022,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                         migratedMessages.append(contentsOf: messages)
                         oldPeerIDsToRemove.append(oldPeerID)
                         
+                        SecureLogger.log("📦 Migrating \(messages.count) messages from old peer ID \(oldPeerID) to \(peerID) based on fingerprint match", 
+                                        category: SecureLogger.session, level: .info)
                     } else if currentFingerprint == nil || oldFingerprint == nil {
                         // Fallback: use nickname matching only if we don't have fingerprints
                         // This is less reliable but handles legacy data
@@ -1011,9 +1133,13 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     }
     
     @objc private func handleDeliveryAcknowledgment(_ notification: Notification) {
-        guard let messageId = notification.userInfo?["messageId"] as? String else { return }
+        guard let messageId = notification.userInfo?["messageId"] as? String,
+              let senderNoiseKey = notification.userInfo?["senderNoiseKey"] as? Data else { return }
         
+        let senderHexId = senderNoiseKey.hexEncodedString()
         
+        SecureLogger.log("✅ Handling delivery acknowledgment for message \(messageId) from \(senderHexId)", 
+                        category: SecureLogger.session, level: .info)
         
         // Update the delivery status for the message
         if let index = messages.firstIndex(where: { $0.id == messageId }) {
@@ -1474,7 +1600,10 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         privateChats.removeAll()
         unreadPrivateMessages.removeAll()
         
-        // Delete all keychain data
+        // First run aggressive cleanup to get rid of all legacy items
+        _ = KeychainManager.shared.aggressiveCleanupLegacyItems()
+        
+        // Then delete all current keychain data
         _ = KeychainManager.shared.deleteAllKeychainData()
         
         // Clear UserDefaults identity fallbacks
@@ -2294,24 +2423,54 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                         let messageContent = parts[2...].joined(separator: " ")
                         sendPrivateMessage(messageContent, to: peerID)
                     } else {
-                        addSystemMessage("started private chat with \(nickname)")
+                        let systemMessage = BitchatMessage(
+                            sender: "system",
+                            content: "started private chat with \(nickname)",
+                            timestamp: Date(),
+                            isRelay: false
+                        )
+                        messages.append(systemMessage)
                     }
                 } else {
-                    addSystemMessage("user '\(nickname)' not found. they may be offline or using a different nickname.")
+                    let systemMessage = BitchatMessage(
+                        sender: "system",
+                        content: "user '\(nickname)' not found. they may be offline or using a different nickname.",
+                        timestamp: Date(),
+                        isRelay: false
+                    )
+                    messages.append(systemMessage)
                 }
             } else {
-                addSystemMessage("usage: /m @nickname [message] or /m nickname [message]")
+                let systemMessage = BitchatMessage(
+                    sender: "system",
+                    content: "usage: /m @nickname [message] or /m nickname [message]",
+                    timestamp: Date(),
+                    isRelay: false
+                )
+                messages.append(systemMessage)
             }
         case "/w":
             let peerNicknames = meshService.getPeerNicknames()
             if connectedPeers.isEmpty {
-                addSystemMessage("no one else is online right now.")
+                let systemMessage = BitchatMessage(
+                    sender: "system",
+                    content: "no one else is online right now.",
+                    timestamp: Date(),
+                    isRelay: false
+                )
+                messages.append(systemMessage)
             } else {
                 let onlineList = connectedPeers.compactMap { peerID in
                     peerNicknames[peerID]
                 }.sorted().joined(separator: ", ")
                 
-                addSystemMessage("online users: \(onlineList)")
+                let systemMessage = BitchatMessage(
+                    sender: "system",
+                    content: "online users: \(onlineList)",
+                    timestamp: Date(),
+                    isRelay: false
+                )
+                messages.append(systemMessage)
             }
         case "/clear":
             // Clear messages based on current context
@@ -2434,7 +2593,13 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     if let fingerprintStr = meshService.getPeerFingerprint(peerID) {
                         
                         if SecureIdentityStateManager.shared.isBlocked(fingerprint: fingerprintStr) {
-                            addSystemMessage("\(nickname) is already blocked.")
+                            let systemMessage = BitchatMessage(
+                                sender: "system",
+                                content: "\(nickname) is already blocked.",
+                                timestamp: Date(),
+                                isRelay: false
+                            )
+                            messages.append(systemMessage)
                         } else {
                             // Update or create social identity with blocked status
                             if var identity = SecureIdentityStateManager.shared.getSocialIdentity(for: fingerprintStr) {
@@ -2458,18 +2623,42 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                             blockedUsers.insert(fingerprintStr)
                             favoritePeers.remove(fingerprintStr)
                             
-                            addSystemMessage("blocked \(nickname). you will no longer receive messages from them.")
+                            let systemMessage = BitchatMessage(
+                                sender: "system",
+                                content: "blocked \(nickname). you will no longer receive messages from them.",
+                                timestamp: Date(),
+                                isRelay: false
+                            )
+                            messages.append(systemMessage)
                         }
                     } else {
-                        addSystemMessage("cannot block \(nickname): unable to verify identity.")
+                        let systemMessage = BitchatMessage(
+                            sender: "system",
+                            content: "cannot block \(nickname): unable to verify identity.",
+                            timestamp: Date(),
+                            isRelay: false
+                        )
+                        messages.append(systemMessage)
                     }
                 } else {
-                    addSystemMessage("cannot block \(nickname): user not found.")
+                    let systemMessage = BitchatMessage(
+                        sender: "system",
+                        content: "cannot block \(nickname): user not found.",
+                        timestamp: Date(),
+                        isRelay: false
+                    )
+                    messages.append(systemMessage)
                 }
             } else {
                 // List blocked users
                 if blockedUsers.isEmpty {
-                    addSystemMessage("no blocked peers.")
+                    let systemMessage = BitchatMessage(
+                        sender: "system",
+                        content: "no blocked peers.",
+                        timestamp: Date(),
+                        isRelay: false
+                    )
+                    messages.append(systemMessage)
                 } else {
                     // Find nicknames for blocked users
                     var blockedNicknames: [String] = []
@@ -2484,7 +2673,13 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     }
                     
                     let blockedList = blockedNicknames.isEmpty ? "blocked peers (not currently online)" : blockedNicknames.sorted().joined(separator: ", ")
-                    addSystemMessage("blocked peers: \(blockedList)")
+                    let systemMessage = BitchatMessage(
+                        sender: "system",
+                        content: "blocked peers: \(blockedList)",
+                        timestamp: Date(),
+                        isRelay: false
+                    )
+                    messages.append(systemMessage)
                 }
             }
             
@@ -2506,18 +2701,48 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                             // Update local set for UI
                             blockedUsers.remove(fingerprintStr)
                             
-                            addSystemMessage("unblocked \(nickname).")
+                            let systemMessage = BitchatMessage(
+                                sender: "system",
+                                content: "unblocked \(nickname).",
+                                timestamp: Date(),
+                                isRelay: false
+                            )
+                            messages.append(systemMessage)
                         } else {
-                            addSystemMessage("\(nickname) is not blocked.")
+                            let systemMessage = BitchatMessage(
+                                sender: "system",
+                                content: "\(nickname) is not blocked.",
+                                timestamp: Date(),
+                                isRelay: false
+                            )
+                            messages.append(systemMessage)
                         }
                     } else {
-                        addSystemMessage("cannot unblock \(nickname): unable to verify identity.")
+                        let systemMessage = BitchatMessage(
+                            sender: "system",
+                            content: "cannot unblock \(nickname): unable to verify identity.",
+                            timestamp: Date(),
+                            isRelay: false
+                        )
+                        messages.append(systemMessage)
                     }
                 } else {
-                    addSystemMessage("cannot unblock \(nickname): user not found.")
+                    let systemMessage = BitchatMessage(
+                        sender: "system",
+                        content: "cannot unblock \(nickname): user not found.",
+                        timestamp: Date(),
+                        isRelay: false
+                    )
+                    messages.append(systemMessage)
                 }
             } else {
-                addSystemMessage("usage: /unblock <nickname>")
+                let systemMessage = BitchatMessage(
+                    sender: "system",
+                    content: "usage: /unblock <nickname>",
+                    timestamp: Date(),
+                    isRelay: false
+                )
+                messages.append(systemMessage)
             }
             
         case "/fav":
@@ -2546,13 +2771,31 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                             try? await self?.messageRouter?.sendFavoriteNotification(to: noisePublicKey, isFavorite: true)
                         }
                         
-                        addSystemMessage("added \(nickname) to favorites.")
+                        let systemMessage = BitchatMessage(
+                            sender: "system",
+                            content: "added \(nickname) to favorites.",
+                            timestamp: Date(),
+                            isRelay: false
+                        )
+                        messages.append(systemMessage)
                     }
                 } else {
-                    addSystemMessage("can't find peer: \(nickname)")
+                    let systemMessage = BitchatMessage(
+                        sender: "system",
+                        content: "can't find peer: \(nickname)",
+                        timestamp: Date(),
+                        isRelay: false
+                    )
+                    messages.append(systemMessage)
                 }
             } else {
-                addSystemMessage("usage: /fav <nickname>")
+                let systemMessage = BitchatMessage(
+                    sender: "system",
+                    content: "usage: /fav <nickname>",
+                    timestamp: Date(),
+                    isRelay: false
+                )
+                messages.append(systemMessage)
             }
             
         case "/unfav":
@@ -2575,17 +2818,41 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                             try? await self?.messageRouter?.sendFavoriteNotification(to: noisePublicKey, isFavorite: false)
                         }
                         
-                        addSystemMessage("removed \(nickname) from favorites.")
+                        let systemMessage = BitchatMessage(
+                            sender: "system",
+                            content: "removed \(nickname) from favorites.",
+                            timestamp: Date(),
+                            isRelay: false
+                        )
+                        messages.append(systemMessage)
                     }
                 } else {
-                    addSystemMessage("can't find peer: \(nickname)")
+                    let systemMessage = BitchatMessage(
+                        sender: "system",
+                        content: "can't find peer: \(nickname)",
+                        timestamp: Date(),
+                        isRelay: false
+                    )
+                    messages.append(systemMessage)
                 }
             } else {
-                addSystemMessage("usage: /unfav <nickname>")
+                let systemMessage = BitchatMessage(
+                    sender: "system",
+                    content: "usage: /unfav <nickname>",
+                    timestamp: Date(),
+                    isRelay: false
+                )
+                messages.append(systemMessage)
             }
             
         case "/testnostr":
-            addSystemMessage("testing nostr relay connectivity...")
+            let systemMessage = BitchatMessage(
+                sender: "system",
+                content: "testing nostr relay connectivity...",
+                timestamp: Date(),
+                isRelay: false
+            )
+            messages.append(systemMessage)
             
             Task { @MainActor in
                 if let relayManager = self.nostrRelayManager {
@@ -2621,7 +2888,13 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             
         default:
             // Unknown command
-            addSystemMessage("unknown command: \(cmd).")
+            let systemMessage = BitchatMessage(
+                sender: "system",
+                content: "unknown command: \(cmd).",
+                timestamp: Date(),
+                isRelay: false
+            )
+            messages.append(systemMessage)
         }
     }
     
@@ -2683,6 +2956,12 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         
         if message.isPrivate {
             // Handle private message
+            
+            // SECURITY: Check if this is an encrypted voice message
+            if message.content.hasPrefix("VOICE:") {
+                handleEncryptedVoiceMessage(message)
+                return
+            }
             
             // Use the senderPeerID from the message if available
             let senderPeerID = message.senderPeerID ?? getPeerIDForNickname(message.sender)
@@ -3194,15 +3473,68 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         
     }
     
-    // MARK: - Helper for System Messages
-    private func addSystemMessage(_ content: String, timestamp: Date = Date()) {
-        let systemMessage = BitchatMessage(
-            sender: "system",
-            content: content,
-            timestamp: timestamp,
-            isRelay: false
+    // MARK: - Encrypted Voice Message Handling
+    
+    /// Handle encrypted voice message received through private message channel
+    /// Decrypts and reconstructs voice message from VOICE:<metadata>:<audioData> format
+    private func handleEncryptedVoiceMessage(_ message: BitchatMessage) {
+        SecureLogger.log("🔓 Processing encrypted voice message from \(message.sender)", 
+                        category: SecureLogger.voice, level: .info)
+        
+        // Parse encrypted voice content: VOICE:<metadata>:<audioData>
+        let components = message.content.components(separatedBy: ":")
+        guard components.count >= 3,
+              components[0] == "VOICE" else {
+            SecureLogger.log("❌ Invalid encrypted voice message format", 
+                           category: SecureLogger.voice, level: .error)
+            return
+        }
+        
+        let metadataString = components[1]
+        let base64AudioData = components[2]
+        
+        // Parse metadata JSON
+        guard let metadataData = metadataString.data(using: .utf8),
+              let metadata = try? JSONSerialization.jsonObject(with: metadataData) as? [String: String],
+              let durationString = metadata["duration"],
+              let duration = TimeInterval(durationString),
+              let messageId = metadata["messageId"],
+              let audioData = Data(base64Encoded: base64AudioData) else {
+            SecureLogger.log("❌ Failed to parse encrypted voice message metadata", 
+                           category: SecureLogger.voice, level: .error)
+            return
+        }
+        
+        // Create VoiceMessageData from decrypted content
+        let voiceData = VoiceMessageData(
+            duration: duration,
+            waveformData: [], // Empty waveform for now
+            filePath: nil,
+            audioData: audioData,
+            format: .opus
         )
-        messages.append(systemMessage)
+        
+        // Create reconstructed voice message
+        let voiceMessage = BitchatMessage(
+            id: messageId,
+            sender: message.sender,
+            content: "🎵 Voice message (\(String(format: "%.1f", duration))s)",
+            timestamp: message.timestamp,
+            isRelay: message.isRelay,
+            originalSender: message.originalSender,
+            isPrivate: true,
+            recipientNickname: message.recipientNickname,
+            senderPeerID: message.senderPeerID,
+            mentions: message.mentions,
+            deliveryStatus: message.deliveryStatus,
+            voiceMessageData: voiceData
+        )
+        
+        SecureLogger.log("✅ Successfully reconstructed encrypted voice message \(messageId) with \(audioData.count) bytes of audio", 
+                        category: SecureLogger.voice, level: .info)
+        
+        // Process the reconstructed voice message through normal private message flow
+        didReceiveMessage(voiceMessage)
     }
     
 }  // End of ChatViewModel class

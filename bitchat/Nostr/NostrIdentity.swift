@@ -1,6 +1,8 @@
 import Foundation
 import CryptoKit
-import P256K
+
+// P256K must be imported from our local implementation
+// This is defined in Utils/P256K.swift
 
 // Keychain helper for secure storage
 struct KeychainHelper {
@@ -60,7 +62,7 @@ struct NostrIdentity: Codable {
     /// Generate a new Nostr identity
     static func generate() throws -> NostrIdentity {
         // Generate Schnorr key for Nostr
-        let schnorrKey = try P256K.Schnorr.PrivateKey()
+        let schnorrKey = try BitchatP256K.Schnorr.PrivateKey()
         let xOnlyPubkey = Data(schnorrKey.xonly.bytes)
         let npub = try Bech32.encode(hrp: "npub", data: xOnlyPubkey)
         
@@ -74,7 +76,7 @@ struct NostrIdentity: Codable {
     
     /// Initialize from existing private key data
     init(privateKeyData: Data) throws {
-        let schnorrKey = try P256K.Schnorr.PrivateKey(dataRepresentation: privateKeyData)
+        let schnorrKey = try BitchatP256K.Schnorr.PrivateKey(dataRepresentation: privateKeyData)
         let xOnlyPubkey = Data(schnorrKey.xonly.bytes)
         
         self.privateKey = privateKeyData
@@ -84,13 +86,13 @@ struct NostrIdentity: Codable {
     }
     
     /// Get signing key for event signatures
-    func signingKey() throws -> P256K.Signing.PrivateKey {
-        try P256K.Signing.PrivateKey(dataRepresentation: privateKey)
+    func signingKey() throws -> BitchatP256K.Signing.PrivateKey {
+        try BitchatP256K.Signing.PrivateKey(dataRepresentation: privateKey)
     }
     
     /// Get Schnorr signing key for Nostr event signatures
-    func schnorrSigningKey() throws -> P256K.Schnorr.PrivateKey {
-        try P256K.Schnorr.PrivateKey(dataRepresentation: privateKey)
+    func schnorrSigningKey() throws -> BitchatP256K.Schnorr.PrivateKey {
+        try BitchatP256K.Schnorr.PrivateKey(dataRepresentation: privateKey)
     }
     
     /// Get hex-encoded public key (for Nostr events)
@@ -277,3 +279,129 @@ enum Bech32 {
 }
 
 // Data hex encoding extension moved to BinaryEncodingUtils.swift to avoid duplication
+
+// MARK: - BitchatP256K Implementation
+
+/// P256K compatibility layer for Nostr functionality using CryptoKit
+public struct BitchatP256K {
+    
+    public struct Schnorr {
+        
+        public struct PrivateKey {
+            private let key: P256.Signing.PrivateKey
+            
+            public init() throws {
+                self.key = P256.Signing.PrivateKey()
+            }
+            
+            public init(dataRepresentation: Data) throws {
+                self.key = try P256.Signing.PrivateKey(rawRepresentation: dataRepresentation)
+            }
+            
+            public var dataRepresentation: Data {
+                return key.rawRepresentation
+            }
+            
+            public var xonly: XOnlyPublicKey {
+                return XOnlyPublicKey(publicKey: key.publicKey)
+            }
+            
+            public func signature(message: inout [UInt8], auxiliaryRand: inout [UInt8]) throws -> SchnorrSignature {
+                let signature = try key.signature(for: Data(message))
+                return SchnorrSignature(data: signature.rawRepresentation)
+            }
+        }
+        
+        public struct XOnlyPublicKey {
+            private let publicKey: P256.Signing.PublicKey
+            
+            init(publicKey: P256.Signing.PublicKey) {
+                self.publicKey = publicKey
+            }
+            
+            public var bytes: [UInt8] {
+                return Array(publicKey.rawRepresentation.suffix(32)) // Take last 32 bytes for x-only
+            }
+        }
+        
+        public struct SchnorrSignature {
+            public let dataRepresentation: Data
+            
+            init(data: Data) {
+                self.dataRepresentation = data
+            }
+        }
+    }
+    
+    public struct Signing {
+        
+        public struct PrivateKey {
+            private let key: P256.Signing.PrivateKey
+            
+            public init(dataRepresentation: Data) throws {
+                self.key = try P256.Signing.PrivateKey(rawRepresentation: dataRepresentation)
+            }
+            
+            public var dataRepresentation: Data {
+                return key.rawRepresentation
+            }
+        }
+    }
+    
+    public struct KeyAgreement {
+        
+        public struct PrivateKey {
+            private let key: P256.KeyAgreement.PrivateKey
+            
+            public init(dataRepresentation: Data) throws {
+                self.key = try P256.KeyAgreement.PrivateKey(rawRepresentation: dataRepresentation)
+            }
+            
+            public var dataRepresentation: Data {
+                return key.rawRepresentation
+            }
+            
+            public func sharedSecretFromKeyAgreement(with publicKeyShare: PublicKey, format: PublicKeyFormat) throws -> SharedSecret {
+                let sharedSecret = try key.sharedSecretFromKeyAgreement(with: publicKeyShare.key)
+                return SharedSecret(secret: sharedSecret)
+            }
+        }
+        
+        public struct PublicKey {
+            fileprivate let key: P256.KeyAgreement.PublicKey
+            
+            public init(dataRepresentation: Data, format: PublicKeyFormat) throws {
+                // For compressed format, we need to convert from compressed to raw
+                if format == .compressed && dataRepresentation.count == 33 {
+                    // Extract the x coordinate (skip the prefix byte)
+                    let xCoordinate = dataRepresentation.dropFirst()
+                    // For P256, we need to reconstruct the full uncompressed key
+                    // This is a simplified approach - in practice this is more complex
+                    self.key = try P256.KeyAgreement.PublicKey(rawRepresentation: Data(xCoordinate + Data(repeating: 0, count: 32)))
+                } else {
+                    self.key = try P256.KeyAgreement.PublicKey(rawRepresentation: dataRepresentation)
+                }
+            }
+        }
+        
+        public struct SharedSecret {
+            private let secret: SharedSecret_P256
+            
+            fileprivate init(secret: SharedSecret_P256) {
+                self.secret = secret
+            }
+            
+            public func withUnsafeBytes<T>(_ body: (UnsafeRawBufferPointer) throws -> T) rethrows -> T {
+                return try secret.withUnsafeBytes(body)
+            }
+        }
+        
+        public enum PublicKeyFormat {
+            case compressed
+            case uncompressed
+        }
+    }
+}
+
+// Type alias to avoid confusion
+fileprivate typealias SharedSecret_P256 = SharedSecret

@@ -17,20 +17,30 @@ class MessageRouter: ObservableObject {
         case failed(Error)
     }
     
+    public enum MessageUrgency {
+        case low
+        case normal
+        case high
+        case urgent
+    }
+    
     struct RoutedMessage {
         let id: String
         let content: String
         let recipientNoisePublicKey: Data
-        let transport: Transport
+        var transport: Transport
         let timestamp: Date
         var status: DeliveryStatus
     }
     
     @Published private(set) var pendingMessages: [String: RoutedMessage] = [:]
     
-    private let meshService: BluetoothMeshService
+    internal let meshService: BluetoothMeshService
     private let nostrRelay: NostrRelayManager
     private let favoritesService: FavoritesPersistenceService
+    
+    // Computed properties for voice extensions
+    internal var myPeerID: String { meshService.myPeerID }
     private let processedMessagesService = ProcessedMessagesService.shared
     
     private var cancellables = Set<AnyCancellable>()
@@ -47,33 +57,35 @@ class MessageRouter: ObservableObject {
         setupBindings()
     }
     
-    /// Send a message to a peer, automatically selecting the best transport
+    /// Send a message to a peer with intelligent transport fallback
     func sendMessage(
         _ content: String,
         to recipientNoisePublicKey: Data,
         preferredTransport: Transport? = nil,
-        messageId: String? = nil
+        messageId: String? = nil,
+        urgency: MessageUrgency = .normal
     ) async throws {
         
         let finalMessageId = messageId ?? UUID().uuidString
-        
-        // Check if peer is available on mesh (actually connected, not just known)
         let recipientHexID = recipientNoisePublicKey.hexEncodedString()
-        let peerAvailableOnMesh = meshService.isPeerConnected(recipientHexID)
         
-        // Check if this is a mutual favorite
+        // Check transport availability
+        let peerAvailableOnMesh = meshService.isPeerConnected(recipientHexID)
         let isMutualFavorite = favoritesService.isMutualFavorite(recipientNoisePublicKey)
         
-        // Determine transport
-        let transport: Transport
+        // Determine transport strategy with fallback
+        let primaryTransport: Transport
+        let fallbackTransport: Transport?
+        
         if let preferred = preferredTransport {
-            transport = preferred
+            primaryTransport = preferred
+            fallbackTransport = determineFallbackTransport(primary: preferred, peerOnMesh: peerAvailableOnMesh, isFavorite: isMutualFavorite)
         } else if peerAvailableOnMesh {
-            // Always prefer mesh when available
-            transport = .bluetoothMesh
+            primaryTransport = .bluetoothMesh
+            fallbackTransport = isMutualFavorite ? .nostr : nil
         } else if isMutualFavorite {
-            // Use Nostr for mutual favorites when not on mesh
-            transport = .nostr
+            primaryTransport = .nostr
+            fallbackTransport = nil // Nostr is our last resort
         } else {
             throw MessageRouterError.peerNotReachable
         }
@@ -83,20 +95,133 @@ class MessageRouter: ObservableObject {
             id: finalMessageId,
             content: content,
             recipientNoisePublicKey: recipientNoisePublicKey,
-            transport: transport,
+            transport: primaryTransport,
             timestamp: Date(),
             status: .pending
         )
         
         pendingMessages[finalMessageId] = routedMessage
         
-        // Route based on transport
+        // Try primary transport with intelligent fallback
+        do {
+            try await sendWithFallback(
+                routedMessage, 
+                primaryTransport: primaryTransport,
+                fallbackTransport: fallbackTransport,
+                urgency: urgency
+            )
+        } catch {
+            // Update final failure status
+            pendingMessages[finalMessageId]?.status = .failed(error)
+            throw error
+        }
+    }
+    
+    /// Intelligent fallback transport determination
+    private func determineFallbackTransport(
+        primary: Transport, 
+        peerOnMesh: Bool, 
+        isFavorite: Bool
+    ) -> Transport? {
+        switch primary {
+        case .bluetoothMesh:
+            return isFavorite ? .nostr : nil
+        case .nostr:
+            return peerOnMesh ? .bluetoothMesh : nil
+        }
+    }
+    
+    /// Send message with intelligent fallback and retry logic
+    private func sendWithFallback(
+        _ message: RoutedMessage,
+        primaryTransport: Transport,
+        fallbackTransport: Transport?,
+        urgency: MessageUrgency
+    ) async throws {
+        let timeout: TimeInterval = urgency == .urgent ? 15 : 30 // Shorter timeout for urgent messages
+        let maxRetries = urgency == .urgent ? 1 : 2
+        
+        // Try primary transport
+        do {
+            try await withTimeout(timeout) {
+                try await self.sendViaTransport(message, transport: primaryTransport)
+            }
+            SecureLogger.log("✅ Message \(message.id) sent via primary transport: \(primaryTransport)", 
+                           category: SecureLogger.routing, level: .info)
+            return
+        } catch {
+            SecureLogger.log("❌ Primary transport \(primaryTransport) failed for message \(message.id): \(error)", 
+                           category: SecureLogger.routing, level: .warning)
+            
+            // Update message transport status
+            pendingMessages[message.id]?.status = .failed(error)
+        }
+        
+        // Try fallback transport if available
+        guard let fallback = fallbackTransport else {
+            throw MessageRouterError.transportFailed
+        }
+        
+        SecureLogger.log("🔄 Attempting fallback transport \(fallback) for message \(message.id)", 
+                       category: SecureLogger.routing, level: .info)
+        
+        // Update message to use fallback transport
+        var fallbackMessage = message
+        fallbackMessage.transport = fallback
+        pendingMessages[message.id] = fallbackMessage
+        
+        // Try fallback with retry
+        for attempt in 1...maxRetries {
+            do {
+                try await withTimeout(timeout) {
+                    try await self.sendViaTransport(fallbackMessage, transport: fallback)
+                }
+                SecureLogger.log("✅ Message \(message.id) sent via fallback transport: \(fallback) (attempt \(attempt))", 
+                               category: SecureLogger.routing, level: .info)
+                return
+            } catch {
+                SecureLogger.log("❌ Fallback attempt \(attempt) failed for message \(message.id): \(error)", 
+                               category: SecureLogger.routing, level: .warning)
+                
+                if attempt < maxRetries {
+                    // Wait before retry (exponential backoff)
+                    let delay = TimeInterval(attempt) * 2.0
+                    try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                }
+            }
+        }
+        
+        throw MessageRouterError.transportFailed
+    }
+    
+    /// Send via specific transport (unified interface)
+    private func sendViaTransport(_ message: RoutedMessage, transport: Transport) async throws {
         switch transport {
         case .bluetoothMesh:
-            try await sendViaMesh(routedMessage)
-            
+            try await sendViaMesh(message)
         case .nostr:
-            try await sendViaNostr(routedMessage)
+            try await sendViaNostr(message)
+        }
+    }
+    
+    /// Timeout wrapper for async operations
+    private func withTimeout<T>(_ timeout: TimeInterval, operation: @escaping () async throws -> T) async throws -> T {
+        return try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask {
+                try await operation()
+            }
+            
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                throw MessageRouterError.timeout
+            }
+            
+            guard let result = try await group.next() else {
+                throw MessageRouterError.timeout
+            }
+            
+            group.cancelAll()
+            return result
         }
     }
     
@@ -623,6 +748,7 @@ enum MessageRouterError: LocalizedError {
     case noNostrKey
     case noIdentity
     case encryptionFailed
+    case timeout
     
     var errorDescription: String? {
         switch self {
@@ -640,6 +766,8 @@ enum MessageRouterError: LocalizedError {
             return "No identity available"
         case .encryptionFailed:
             return "Failed to encrypt message"
+        case .timeout:
+            return "Message sending timed out"
         }
     }
 }

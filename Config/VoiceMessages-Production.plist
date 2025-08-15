@@ -1,0 +1,227 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Voice Messages Production Configuration -->
+    
+    <!-- Audio Configuration -->
+    <key>VoiceMessages</key>
+    <dict>
+        <key>AudioConfiguration</key>
+        <dict>
+            <key>SampleRate</key>
+            <integer>48000</integer>
+            <key>Channels</key>
+            <integer>1</integer>
+            <key>Format</key>
+            <string>Float32</string>
+            <key>MaxRecordingDuration</key>
+            <real>300.0</real>
+            <key>FrameSize</key>
+            <integer>960</integer>
+        </dict>
+        
+        <!-- Security Limits -->
+        <key>SecurityLimits</key>
+        <dict>
+            <key>MaxInputSize</key>
+            <integer>52428800</integer> <!-- 50MB -->
+            <key>MaxOutputSize</key>
+            <integer>10485760</integer> <!-- 10MB -->
+            <key>MaxFrameSize</key>
+            <integer>8000</integer>
+            <key>MinFrameSize</key>
+            <integer>2</integer>
+            <key>MaxFramesPerSecond</key>
+            <integer>200</integer>
+        </dict>
+        
+        <!-- Performance Settings -->
+        <key>PerformanceSettings</key>
+        <dict>
+            <key>EnableBatteryOptimization</key>
+            <true/>
+            <key>MaxConcurrentPlayback</key>
+            <integer>3</integer>
+            <key>AudioBufferSize</key>
+            <integer>1024</integer>
+            <key>PreloadBufferCount</key>
+            <integer>3</integer>
+        </dict>
+        
+        <!-- Codec Configuration -->
+        <key>OpusConfiguration</key>
+        <dict>
+            <key>Application</key>
+            <integer>2049</integer> <!-- OPUS_APPLICATION_VOIP -->
+            <key>Bitrate</key>
+            <integer>64000</integer> <!-- 64 kbps -->
+            <key>Complexity</key>
+            <integer>10</integer>
+            <key>UseInBandFEC</key>
+            <true/>
+            <key>UseVBR</key>
+            <true/>
+            <key>MaxPacketSize</key>
+            <integer>4000</integer>
+        </dict>
+        
+        <!-- Quality Settings -->
+        <key>QualitySettings</key>
+        <dict>
+            <key>HighQuality</key>
+            <dict>
+                <key>SampleRate</key>
+                <integer>48000</integer>
+                <key>Bitrate</key>
+                <integer>128000</integer>
+                <key>Complexity</key>
+                <integer>10</integer>
+            </dict>
+            <key>StandardQuality</key>
+            <dict>
+                <key>SampleRate</key>
+                <integer>48000</integer>
+                <key>Bitrate</key>
+                <integer>64000</integer>
+                <key>Complexity</key>
+                <integer>8</integer>
+            </dict>
+            <key>LowQuality</key>
+            <dict>
+                <key>SampleRate</key>
+                <integer>16000</integer>
+                <key>Bitrate</key>
+                <integer>32000</integer>
+                <key>Complexity</key>
+                <integer>5</integer>
+            </dict>
+        </dict>
+        
+        <!-- Network Configuration -->
+        <key>NetworkConfiguration</key>
+        <dict>
+            <key>RetryAttempts</key>
+            <integer>3</integer>
+            <key>RetryDelay</key>
+            <real>2.0</real>
+            <key>MaxRetryDelay</key>
+            <real>30.0</real>
+            <key>ConnectionTimeout</key>
+            <real>10.0</real>
+        </dict>
+        
+        <!-- Security Configuration -->
+        <key>SecurityConfiguration</key>
+        <dict>
+            <key>EnableInputValidation</key>
+            <true/>
+            <key>EnableRateLimiting</key>
+            <true/>
+            <key>EnableSecureLogging</key>
+            <true/>
+            <key>LogSecurityIncidents</key>
+            <true/>
+            <key>EnableIntegrityChecks</key>
+            <true/>
+        </dict>
+        
+        <!-- UI Configuration -->
+        <key>UIConfiguration</key>
+        <dict>
+            <key>ShowWaveform</key>
+            <true/>
+            <key>EnableHapticFeedback</key>
+            <true/>
+            <key>RecordingIndicatorColor</key>
+            <string>#FF3B30</string>
+            <key>PlaybackIndicatorColor</key>
+            <string>#007AFF</string>
+            <key>MaxWaveformPoints</key>
+            <integer>100</integer>
+        </dict>
+        
+        <!-- Debug Configuration (Development Only) -->
+        <key>DebugConfiguration</key>
+        <dict>
+            <key>EnableVerboseLogging</key>
+            <false/>
+            <key>EnablePerformanceMetrics</key>
+            <false/>
+            <key>EnableCodecDebugging</key>
+            <false/>
+            <key>LogAudioBuffers</key>
+            <false/>
+        </dict>
+        
+        <!-- Platform Specific -->
+        <key>iOS</key>
+        <dict>
+            <key>AudioSessionCategory</key>
+            <string>playAndRecord</string>
+            <key>AudioSessionMode</key>
+            <string>voiceChat</string>
+            <key>AudioSessionOptions</key>
+            <array>
+                <string>allowBluetooth</string>
+                <string>defaultToSpeaker</string>
+            </array>
+            <key>BackgroundAudioEnabled</key>
+            <true/>
+        </dict>
+        
+        <key>macOS</key>
+        <dict>
+            <key>AudioDeviceBufferSize</key>
+            <integer>512</integer>
+            <key>EnableAudioDeviceSelection</key>
+            <true/>
+            <key>DefaultInputDevice</key>
+            <string>default</string>
+            <key>DefaultOutputDevice</key>
+            <string>default</string>
+        </dict>
+        
+        <!-- Feature Flags -->
+        <key>FeatureFlags</key>
+        <dict>
+            <key>EnableVoiceActivation</key>
+            <false/>
+            <key>EnableNoiseSuppression</key>
+            <false/>
+            <key>EnableEchoCancellation</key>
+            <true/>
+            <key>EnableAutomaticGainControl</key>
+            <true/>
+        </dict>
+        
+        <!-- Monitoring -->
+        <key>MonitoringConfiguration</key>
+        <dict>
+            <key>EnableCrashReporting</key>
+            <true/>
+            <key>EnablePerformanceTracking</key>
+            <true/>
+            <key>EnableUsageAnalytics</key>
+            <false/>
+            <key>MetricsUploadInterval</key>
+            <real>300.0</real> <!-- 5 minutes -->
+        </dict>
+        
+    </dict>
+    
+    <!-- Version Information -->
+    <key>VoiceMessagesVersion</key>
+    <string>1.0.0</string>
+    
+    <key>ConfigurationVersion</key>
+    <string>1.0</string>
+    
+    <key>BuildConfiguration</key>
+    <string>Production</string>
+    
+    <key>LastUpdated</key>
+    <string>2025-01-08</string>
+    
+</dict>
+</plist>
