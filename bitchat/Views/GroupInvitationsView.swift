@@ -46,9 +46,18 @@ struct GroupInvitationsView: View {
                     }
                 }
             }
-            .navigationTitle("Group Invitations")
+            .navigationTitle("Group Invitations (\(groupService.pendingInvitations.count))")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    #if DEBUG
+                    Button("Test") {
+                        viewModel.debugCreateTestInvitation()
+                    }
+                    .foregroundColor(.orange)
+                    #endif
+                }
+                
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Done") {
                         dismiss()

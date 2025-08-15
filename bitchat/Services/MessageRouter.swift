@@ -158,21 +158,28 @@ class MessageRouter: ObservableObject {
                         category: SecureLogger.session, level: .info)
         
         // Create invitation content
-        let content = "GROUP_INVITE:\(invitation.groupID):\(invitation.groupName):\(invitation.inviteCode)"
+        // For public groups, use group ID as invite code if no invite code is provided
+        let inviteCode = invitation.inviteCode.isEmpty ? invitation.groupID : invitation.inviteCode
+        let content = "GROUP_INVITE:\(invitation.groupID):\(invitation.groupName):\(inviteCode)"
+        
+        SecureLogger.log("📤 Created GROUP_INVITE content: \(content)",
+                        category: SecureLogger.session, level: .info)
         
         // Try mesh first
         if meshService.getPeerNicknames()[recipientHexID] != nil {
-            SecureLogger.log("📡 Sending group invitation via Bluetooth mesh", 
+            SecureLogger.log("📡 Sending group invitation via Bluetooth mesh to \(recipientHexID)", 
                             category: SecureLogger.session, level: .info)
             
             if let recipientNickname = meshService.getPeerNicknames()[recipientHexID] {
+                SecureLogger.log("📤 Calling sendPrivateMessage with content: \(content.prefix(50))...",
+                                category: SecureLogger.session, level: .info)
                 meshService.sendPrivateMessage(content, to: recipientHexID, recipientNickname: recipientNickname)
             }
             
         } else if let favoriteStatus = favoritesService.getFavoriteStatus(for: recipientNoisePublicKey),
                   let recipientNostrPubkey = favoriteStatus.peerNostrPublicKey {
             
-            SecureLogger.log("🌐 Sending group invitation via Nostr to \(favoriteStatus.peerNickname)", 
+            SecureLogger.log("🌐 Sending group invitation via Nostr to \(favoriteStatus.peerNickname) with content: \(content.prefix(50))...", 
                             category: SecureLogger.session, level: .info)
             
             // Send via Nostr

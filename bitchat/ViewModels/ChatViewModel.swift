@@ -1042,7 +1042,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     
     /// Create a new group
     @MainActor
-    func createGroup(name: String, initialMembers: Set<String> = [], isPrivate: Bool = false, description: String? = nil) {
+    func createGroup(name: String, initialMembers: Set<String> = [], isPrivate: Bool = false, description: String? = nil) -> BitchatGroup {
         // groupService is now non-optional
         let group = groupService.createGroup(
             name: name,
@@ -1069,6 +1069,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         
         SecureLogger.log("📱 Created group '\(name)' with \(group.memberIDs.count) members",
                         category: SecureLogger.session, level: .info)
+        
+        return group
     }
     
     /// Start a group chat
@@ -1141,25 +1143,41 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     /// Invite a peer to a group
     @MainActor
     func invitePeerToGroup(_ peerID: String, groupID: String, groupName: String) {
-        guard let noiseKey = Data(hexString: peerID) else { return }
+        SecureLogger.log("📤 About to invite peer \(peerID) to group '\(groupName)' (ID: \(groupID))",
+                        category: SecureLogger.session, level: .info)
+        
+        guard let noiseKey = Data(hexString: peerID) else { 
+            SecureLogger.log("❌ Failed to create noise key from peer ID \(peerID)",
+                            category: SecureLogger.session, level: .error)
+            return 
+        }
         
         // Create invitation
+        // For public groups, use group ID as invite code if no invite code is provided
+        let group = groupService.getGroup(groupID)
+        let inviteCode = group?.inviteCode ?? groupID // Use group ID as fallback for public groups
+        
+        SecureLogger.log("📤 Creating invitation with groupID=\(groupID), groupName=\(groupName), inviteCode=\(inviteCode)",
+                        category: SecureLogger.session, level: .info)
+        
         let invitation = GroupInvitation(
             groupID: groupID,
             groupName: groupName,
             inviterID: meshService.myPeerID,
             inviterNickname: nickname,
-            inviteCode: groupService.getGroup(groupID)?.inviteCode ?? ""
+            inviteCode: inviteCode
         )
         
         // Send invitation
         Task {
             do {
+                SecureLogger.log("📤 Attempting to send group invitation to \(peerID) for group '\(groupName)'",
+                                category: SecureLogger.session, level: .info)
                 try await messageRouter?.sendGroupInvitation(invitation, to: noiseKey)
-                SecureLogger.log("📤 Sent group invitation to \(peerID) for group '\(groupName)'",
+                SecureLogger.log("📤 Successfully sent group invitation to \(peerID) for group '\(groupName)'",
                                 category: SecureLogger.session, level: .info)
             } catch {
-                SecureLogger.log("❌ Failed to send group invitation: \(error)",
+                SecureLogger.log("❌ Failed to send group invitation to \(peerID): \(error)",
                                 category: SecureLogger.session, level: .error)
             }
         }
@@ -1203,8 +1221,14 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             return
         }
         
+        SecureLogger.log("📱 About to store invitation for group '\(invitation.groupName)'",
+                        category: SecureLogger.session, level: .info)
+        
         // Store invitation
         groupService.storeInvitation(invitation)
+        
+        // Force UI update by triggering objectWillChange
+        objectWillChange.send()
         
         // Show system message
         let systemMessage = BitchatMessage(
@@ -1224,6 +1248,11 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         )
         
         SecureLogger.log("📱 Received group invitation for '\(invitation.groupName)' from \(invitation.inviterNickname)",
+                        category: SecureLogger.session, level: .info)
+        
+        // Log current invitation count for debugging
+        let currentInvitations = groupService.pendingInvitations.count
+        SecureLogger.log("📱 Current pending invitations count: \(currentInvitations)",
                         category: SecureLogger.session, level: .info)
     }
     
@@ -1272,6 +1301,27 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             )
             messages.append(systemMessage)
             return
+        }
+        
+        // Check if group exists in local storage, if not create it
+        if groupService.getGroup(groupID) == nil {
+            SecureLogger.log("📱 Creating group '\(invitation.groupName)' from invitation with ID \(groupID)",
+                            category: SecureLogger.session, level: .info)
+            
+            // Create the group with the invitation's groupID and the inviter as creator
+            let group = groupService.createGroupWithID(
+                id: groupID,
+                name: invitation.groupName,
+                creatorID: invitation.inviterID,
+                memberIDs: [invitation.inviterID], // Start with just the inviter
+                adminIDs: [invitation.inviterID], // Inviter is admin
+                isPrivate: !invitation.inviteCode.isEmpty,
+                inviteCode: invitation.inviteCode.isEmpty ? nil : invitation.inviteCode,
+                description: nil
+            )
+            
+            SecureLogger.log("📱 Created group '\(group.name)' with ID \(group.id)",
+                            category: SecureLogger.session, level: .info)
         }
         
         // Add self to group
@@ -1391,6 +1441,88 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     @MainActor
     func getPendingInvitations() -> [GroupInvitation] {
         return Array(groupService.pendingInvitations.values)
+    }
+    
+    /// Debug method to test invitation system
+    @MainActor
+    func debugCreateTestInvitation() {
+        let testInvitation = GroupInvitation(
+            groupID: "test-group-\(UUID().uuidString)",
+            groupName: "Test Group",
+            inviterID: "test-inviter",
+            inviterNickname: "TestUser",
+            inviteCode: "TEST123"
+        )
+        
+        SecureLogger.log("🧪 Creating test invitation for debugging",
+                        category: SecureLogger.session, level: .info)
+        
+        handleGroupInvitation(testInvitation, from: "test-inviter")
+    }
+    
+    /// Debug method to simulate receiving a real GROUP_INVITE message
+    @MainActor
+    func debugSimulateRealInvitation() {
+        let testMessage = BitchatMessage(
+            sender: "RealUser",
+            content: "GROUP_INVITE:real-group-123:Real Test Group:REAL123",
+            timestamp: Date(),
+            isRelay: false,
+            originalSender: nil,
+            isPrivate: true,  // This is the key - real invitations come as private messages
+            recipientNickname: nickname,
+            senderPeerID: "real-peer-id-123"
+        )
+        
+        SecureLogger.log("🧪 Simulating real GROUP_INVITE message: isPrivate=\(testMessage.isPrivate)",
+                        category: SecureLogger.session, level: .info)
+        
+        didReceiveMessage(testMessage)
+    }
+    
+    /// Debug method to simulate receiving a GROUP_INVITE message as public (this should NOT work)
+    @MainActor
+    func debugSimulatePublicInvitation() {
+        let testMessage = BitchatMessage(
+            sender: "PublicUser",
+            content: "GROUP_INVITE:public-group-456:Public Test Group:PUBLIC456",
+            timestamp: Date(),
+            isRelay: false,
+            originalSender: nil,
+            isPrivate: false,  // This should NOT work - invitations should be private
+            recipientNickname: nickname,
+            senderPeerID: "public-peer-id-456"
+        )
+        
+        SecureLogger.log("🧪 Simulating public GROUP_INVITE message: isPrivate=\(testMessage.isPrivate)",
+                        category: SecureLogger.session, level: .info)
+        
+        didReceiveMessage(testMessage)
+    }
+    
+    /// Debug method to test end-to-end invitation system
+    @MainActor
+    func debugTestEndToEndInvitation() {
+        SecureLogger.log("🧪 Testing end-to-end invitation system",
+                        category: SecureLogger.session, level: .info)
+        
+        // Create a test group
+        let groupName = "Debug Test Group"
+        let group = createGroup(name: groupName, initialMembers: [], isPrivate: false)
+        
+        SecureLogger.log("🧪 Created test group '\(groupName)' with ID: \(group.id)",
+                        category: SecureLogger.session, level: .info)
+        
+        // Try to invite a peer (use the first available peer)
+        if let firstPeer = allPeers.first(where: { $0.id != meshService.myPeerID }) {
+            SecureLogger.log("🧪 Attempting to invite peer \(firstPeer.displayName) (\(firstPeer.id)) to group '\(groupName)'",
+                            category: SecureLogger.session, level: .info)
+            
+            invitePeerToGroup(firstPeer.id, groupID: group.id, groupName: groupName)
+        } else {
+            SecureLogger.log("🧪 No peers available to invite",
+                            category: SecureLogger.session, level: .warning)
+        }
     }
     
     /// Update group message delivery status
@@ -3263,15 +3395,34 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     
     func didReceiveMessage(_ message: BitchatMessage) {
         
+        // Debug logging for all received messages
+        SecureLogger.log("📱 Received message: sender=\(message.sender), content=\(message.content.prefix(50)), isPrivate=\(message.isPrivate), senderPeerID=\(message.senderPeerID ?? "nil")",
+                        category: SecureLogger.session, level: .info)
+        
+        // Log all messages to help track what's being received
+        if message.content.count > 0 {
+            SecureLogger.log("📱 FULL MESSAGE: sender=\(message.sender), content=\(message.content), isPrivate=\(message.isPrivate)",
+                            category: SecureLogger.session, level: .debug)
+        }
+        
+        // Special debug for GROUP_INVITE messages
+        if message.content.hasPrefix("GROUP_INVITE:") {
+            SecureLogger.log("🔍 GROUP_INVITE DEBUG: isPrivate=\(message.isPrivate), sender=\(message.sender), content=\(message.content)",
+                            category: SecureLogger.session, level: .info)
+        }
         
         // Check if sender is blocked (for both private and public messages)
         if let senderPeerID = message.senderPeerID {
             if isPeerBlocked(senderPeerID) {
+                SecureLogger.log("📱 Blocked message from \(senderPeerID) - ignoring",
+                                category: SecureLogger.session, level: .warning)
                 // Silently ignore messages from blocked users
                 return
             }
         } else if let peerID = getPeerIDForNickname(message.sender) {
             if isPeerBlocked(peerID) {
+                SecureLogger.log("📱 Blocked message from \(peerID) - ignoring",
+                                category: SecureLogger.session, level: .warning)
                 // Silently ignore messages from blocked users
                 return
             }
@@ -3279,6 +3430,54 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         
         if message.isPrivate {
             // Handle private message
+            SecureLogger.log("📱 Processing private message from \(message.sender)",
+                            category: SecureLogger.session, level: .info)
+            
+            // Special debug for GROUP_INVITE in private messages
+            if message.content.hasPrefix("GROUP_INVITE:") {
+                SecureLogger.log("🔍 GROUP_INVITE in PRIVATE branch: isPrivate=\(message.isPrivate)",
+                                category: SecureLogger.session, level: .info)
+            }
+            
+            // Check for GROUP_INVITE messages first (they come as private messages)
+            if message.content.hasPrefix("GROUP_INVITE:") {
+                SecureLogger.log("📱 Detected GROUP_INVITE message in PRIVATE section: \(message.content)",
+                                category: SecureLogger.session, level: .info)
+                
+                let parts = message.content.split(separator: ":", maxSplits: 3)
+                SecureLogger.log("📱 Parsed \(parts.count) parts from GROUP_INVITE message", 
+                                category: SecureLogger.session, level: .info)
+                
+                if parts.count >= 4 {
+                    let groupID = String(parts[1])
+                    let groupName = String(parts[2])
+                    let inviteCode = String(parts[3])
+                    
+                    SecureLogger.log("📱 Parsed invitation details - groupID: \(groupID), groupName: \(groupName), inviteCode: \(inviteCode)",
+                                    category: SecureLogger.session, level: .info)
+                    
+                    let invitation = GroupInvitation(
+                        groupID: groupID,
+                        groupName: groupName,
+                        inviterID: message.senderPeerID ?? "",
+                        inviterNickname: message.sender,
+                        inviteCode: inviteCode
+                    )
+                    
+                    SecureLogger.log("📱 Created invitation object: groupID=\(groupID), groupName=\(groupName), inviter=\(message.sender)",
+                                    category: SecureLogger.session, level: .info)
+                    
+                    Task { @MainActor in
+                        SecureLogger.log("📱 About to call handleGroupInvitation for group '\(groupName)'",
+                                        category: SecureLogger.session, level: .info)
+                        handleGroupInvitation(invitation, from: message.senderPeerID ?? "")
+                    }
+                    return // Don't process as regular private message
+                } else {
+                    SecureLogger.log("📱 Failed to parse GROUP_INVITE message: \(message.content) - parts count: \(parts.count)",
+                                    category: SecureLogger.session, level: .error)
+                }
+            }
             
             // Use the senderPeerID from the message if available
             let senderPeerID = message.senderPeerID ?? getPeerIDForNickname(message.sender)
@@ -3441,15 +3640,21 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 // Our own message that was echoed back - ignore it since we already added it locally
             }
         } else if message.content.hasPrefix("GROUP_INVITE:") {
-            // Handle group invitation
-            SecureLogger.log("📱 Detected GROUP_INVITE message: \(message.content)",
+            // Handle group invitation (public message section)
+            SecureLogger.log("📱 Detected GROUP_INVITE message in PUBLIC section: \(message.content)",
                             category: SecureLogger.session, level: .info)
             
             let parts = message.content.split(separator: ":", maxSplits: 3)
+            SecureLogger.log("📱 Parsed \(parts.count) parts from GROUP_INVITE message", 
+                            category: SecureLogger.session, level: .info)
+            
             if parts.count >= 4 {
                 let groupID = String(parts[1])
                 let groupName = String(parts[2])
                 let inviteCode = String(parts[3])
+                
+                SecureLogger.log("📱 Parsed invitation details - groupID: \(groupID), groupName: \(groupName), inviteCode: \(inviteCode)",
+                                category: SecureLogger.session, level: .info)
                 
                 let invitation = GroupInvitation(
                     groupID: groupID,
@@ -3463,6 +3668,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                                 category: SecureLogger.session, level: .info)
                 
                 Task { @MainActor in
+                    SecureLogger.log("📱 About to call handleGroupInvitation for group '\(groupName)'",
+                                    category: SecureLogger.session, level: .info)
                     handleGroupInvitation(invitation, from: message.senderPeerID ?? "")
                 }
             } else {
@@ -3539,6 +3746,14 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             }
         } else {
             // Regular public message (main chat)
+            SecureLogger.log("📱 Processing public message from \(message.sender)",
+                            category: SecureLogger.session, level: .info)
+            
+            // Special debug for GROUP_INVITE in public messages
+            if message.content.hasPrefix("GROUP_INVITE:") {
+                SecureLogger.log("🔍 GROUP_INVITE in PUBLIC branch: isPrivate=\(message.isPrivate)",
+                                category: SecureLogger.session, level: .info)
+            }
             
             // Check if this is an action that should be converted to system message
             let isActionMessage = message.content.hasPrefix("* ") && message.content.hasSuffix(" *") &&

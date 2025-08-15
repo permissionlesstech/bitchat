@@ -901,6 +901,64 @@ struct ContentView: View {
                                 .foregroundColor(secondaryTextColor)
                             }
                             .buttonStyle(.plain)
+                            
+                            #if DEBUG
+                            // Debug test invitation button
+                            Button(action: {
+                                viewModel.debugCreateTestInvitation()
+                            }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "wrench.fill")
+                                        .font(.system(size: 10))
+                                    Text("TEST")
+                                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                }
+                                .foregroundColor(.orange)
+                            }
+                            .buttonStyle(.plain)
+                            
+                            // Debug simulate real invitation button
+                            Button(action: {
+                                viewModel.debugSimulateRealInvitation()
+                            }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "envelope.fill")
+                                        .font(.system(size: 10))
+                                    Text("SIM")
+                                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                }
+                                .foregroundColor(.red)
+                            }
+                            .buttonStyle(.plain)
+                            
+                            // Debug simulate public invitation button (should NOT work)
+                            Button(action: {
+                                viewModel.debugSimulatePublicInvitation()
+                            }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "globe")
+                                        .font(.system(size: 10))
+                                    Text("PUB")
+                                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                }
+                                .foregroundColor(.purple)
+                            }
+                            .buttonStyle(.plain)
+                            
+                            // Debug end-to-end test button
+                            Button(action: {
+                                viewModel.debugTestEndToEndInvitation()
+                            }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "arrow.triangle.2.circlepath")
+                                        .font(.system(size: 10))
+                                    Text("E2E")
+                                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                }
+                                .foregroundColor(.green)
+                            }
+                            .buttonStyle(.plain)
+                            #endif
                         }
                         .padding(.horizontal, 12)
                         .padding(.top, 12)
