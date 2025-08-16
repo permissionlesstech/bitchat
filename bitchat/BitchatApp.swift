@@ -13,6 +13,7 @@ import UserNotifications
 struct BitchatApp: App {
     @StateObject private var chatViewModel = ChatViewModel()
     #if os(iOS)
+    @Environment(\.scenePhase) var scenePhase
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     #elseif os(macOS)
     @NSApplicationDelegateAdaptor(MacAppDelegate.self) var appDelegate
@@ -40,16 +41,28 @@ struct BitchatApp: App {
                     handleURL(url)
                 }
                 #if os(iOS)
+                .onChange(of: scenePhase) { newPhase in
+                    switch newPhase {
+                    case .background:
+                        // Send leave message when going to background
+                        chatViewModel.meshService.stopServices()
+                    case .active:
+                        // Restart services when becoming active
+                        chatViewModel.meshService.startServices()
+                        checkForSharedContent()
+                    case .inactive:
+                        break
+                    @unknown default:
+                        break
+                    }
+                }
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
                     // Check for shared content when app becomes active
                     checkForSharedContent()
-                    // Notify MessageRouter to check for Nostr messages
-                    NotificationCenter.default.post(name: .appDidBecomeActive, object: nil)
                 }
                 #elseif os(macOS)
                 .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-                    // Notify MessageRouter to check for Nostr messages
-                    NotificationCenter.default.post(name: .appDidBecomeActive, object: nil)
+                    // App became active
                 }
                 #endif
         }

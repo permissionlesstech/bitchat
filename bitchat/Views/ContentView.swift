@@ -397,7 +397,7 @@ struct ContentView: View {
                             _ = viewModel.completeNickname(suggestion, in: &messageText)
                         }) {
                             HStack {
-                                Text("@\(suggestion)")
+                                Text(suggestion)
                                     .font(.system(size: 11, design: .monospaced))
                                     .foregroundColor(textColor)
                                     .fontWeight(.medium)
@@ -426,10 +426,13 @@ struct ContentView: View {
                     let commandInfo: [(commands: [String], syntax: String?, description: String)] = [
                         (["/block"], "[nickname]", "block or list blocked peers"),
                         (["/clear"], nil, "clear chat messages"),
+                        (["/fav"], "<nickname>", "add to favorites"),
+                        (["/help"], nil, "show this help"),
                         (["/hug"], "<nickname>", "send someone a warm hug"),
                         (["/m", "/msg"], "<nickname> [message]", "send private message"),
                         (["/slap"], "<nickname>", "slap someone with a trout"),
                         (["/unblock"], "<nickname>", "unblock a peer"),
+                        (["/unfav"], "<nickname>", "remove from favorites"),
                         (["/w"], nil, "see who's online")
                     ]
                     
@@ -512,10 +515,13 @@ struct ContentView: View {
                         let commandDescriptions = [
                             ("/block", "block or list blocked peers"),
                             ("/clear", "clear chat messages"),
+                            ("/fav", "add to favorites"),
+                            ("/help", "show this help"),
                             ("/hug", "send someone a warm hug"),
                             ("/m", "send private message"),
                             ("/slap", "slap someone with a trout"),
                             ("/unblock", "unblock a peer"),
+                            ("/unfav", "remove from favorites"),
                             ("/w", "see who's online")
                         ]
                         
@@ -645,7 +651,7 @@ struct ContentView: View {
                                     displayName: peer.id == currentMyPeerID ? viewModel.nickname : peer.nickname,
                                     isFavorite: peer.favoriteStatus?.isFavorite ?? false,
                                     isMe: peer.id == currentMyPeerID,
-                                    hasUnreadMessages: viewModel.unreadPrivateMessages.contains(peer.id),
+                                    hasUnreadMessages: viewModel.hasUnreadMessages(for: peer.id),
                                     encryptionStatus: viewModel.getEncryptionStatus(for: peer.id),
                                     connectionState: peer.connectionState,
                                     isMutualFavorite: peer.favoriteStatus?.isMutual ?? false
@@ -884,7 +890,7 @@ struct ContentView: View {
             
             // People counter with unread indicator
             HStack(spacing: 4) {
-                if !viewModel.unreadPrivateMessages.isEmpty {
+                if viewModel.hasAnyUnreadMessages {
                     Image(systemName: "envelope.fill")
                         .font(.system(size: 12))
                         .foregroundColor(Color.orange)
