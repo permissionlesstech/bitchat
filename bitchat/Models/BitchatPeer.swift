@@ -98,10 +98,10 @@ class PeerManager: ObservableObject {
     @Published var favorites: [BitchatPeer] = []
     @Published var mutualFavorites: [BitchatPeer] = []
     
-    private let meshService: BluetoothMeshService
+    private let meshService: SimplifiedBluetoothService
     private let favoritesService = FavoritesPersistenceService.shared
     
-    init(meshService: BluetoothMeshService) {
+    init(meshService: SimplifiedBluetoothService) {
         self.meshService = meshService
         updatePeers()
         
@@ -142,8 +142,6 @@ class PeerManager: ObservableObject {
             
             // Safety check: Never add our own peer ID
             if peerID == meshService.myPeerID {
-                SecureLogger.log("⚠️ Skipping self peer ID \(peerID) in peer list", 
-                               category: SecureLogger.session, level: .warning)
                 continue
             }
             
@@ -195,22 +193,19 @@ class PeerManager: ObservableObject {
             
             // Skip if this peer is already connected (by nickname)
             if connectedNicknames.contains(favorite.peerNickname) {
-                SecureLogger.log("  - Skipping '\(favorite.peerNickname)' (key: \(favoriteKey.hexEncodedString())) - already connected", 
-                                category: SecureLogger.session, level: .debug)
+                // Skipping favorite - already connected
                 continue
             }
             
             // Skip if we already added a peer with this ID (prevents duplicates)
             if addedPeerIDs.contains(favoriteID) {
-                SecureLogger.log("  - Skipping '\(favorite.peerNickname)' - peer ID already added", 
-                                category: SecureLogger.session, level: .debug)
+                // Skipping favorite - peer ID already added
                 continue
             }
             
             // Only add peers that WE favorite (not just ones who favorite us)
             if !favorite.isFavorite {
-                SecureLogger.log("  - Skipping '\(favorite.peerNickname)' - we don't favorite them (they favorite us: \(favorite.theyFavoritedUs))", 
-                                category: SecureLogger.session, level: .debug)
+                // Skipping - we don't favorite them
                 continue
             }
             
@@ -292,21 +287,7 @@ class PeerManager: ObservableObject {
             SecureLogger.log("📊 Peer list update: \(allPeers.count) total (\(connectedCount) connected, \(offlineCount) offline), \(favorites.count) favorites, \(mutualFavorites.count) mutual", 
                             category: SecureLogger.session, level: .info)
             
-            // Log each peer's status
-            for peer in allPeers {
-                let statusIcon: String
-                switch peer.connectionState {
-                case .bluetoothConnected:
-                    statusIcon = "🟢"
-                case .nostrAvailable:
-                    statusIcon = "🌐"
-                case .offline:
-                    statusIcon = "🔴"
-                }
-                let favoriteIcon = peer.isMutualFavorite ? "💕" : (peer.isFavorite ? "⭐" : (peer.theyFavoritedUs ? "🌙" : ""))
-                SecureLogger.log("  \(statusIcon) \(peer.displayName) (ID: \(peer.id.prefix(8))...) \(favoriteIcon)", 
-                                category: SecureLogger.session, level: .debug)
-            }
+            // Detailed peer status logging removed for brevity
         } else if previousCount != allPeers.count {
             // Only log non-favorite updates if count changed
             SecureLogger.log("✅ Updated peer list: \(allPeers.count) total peers", 

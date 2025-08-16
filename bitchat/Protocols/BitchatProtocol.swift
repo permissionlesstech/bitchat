@@ -32,7 +32,7 @@
 /// 1. **Creation**: Messages are created with type, content, and metadata
 /// 2. **Encoding**: Converted to binary format with proper field ordering
 /// 3. **Fragmentation**: Split if larger than BLE MTU (512 bytes)
-/// 4. **Transmission**: Sent via BluetoothMeshService
+/// 4. **Transmission**: Sent via SimplifiedBluetoothService
 /// 5. **Routing**: Relayed by intermediate nodes (TTL decrements)
 /// 6. **Reassembly**: Fragments collected and reassembled
 /// 7. **Decoding**: Binary data parsed back to message objects
@@ -49,12 +49,12 @@
 /// - **Fragment**: Multi-part message handling
 /// - **Delivery/Read**: Message acknowledgments
 /// - **Noise**: Encrypted channel establishment
-/// - **Version**: Protocol compatibility negotiation
+/// - **Version**: Protocol version negotiation
 ///
 /// ## Future Extensions
 /// The protocol is designed to be extensible:
 /// - Reserved message type ranges for future use
-/// - Version negotiation for backward compatibility
+/// - Version field for protocol evolution
 /// - Optional fields for new features
 ///
 
@@ -95,21 +95,21 @@ struct MessagePadding {
         guard !data.isEmpty else { return data }
         
         // Last byte tells us how much padding to remove
-        let paddingLength = Int(data[data.count - 1])
+        let lastIndex = data.count - 1
+        guard lastIndex >= 0 else { return data }
+        
+        let paddingLength = Int(data[lastIndex])
         guard paddingLength > 0 && paddingLength <= data.count else { 
-            // Debug logging for 243-byte packets
-            if data.count == 243 {
-            }
+            // No valid padding, return original data
             return data 
         }
         
-        let result = data.prefix(data.count - paddingLength)
+        // Create a new Data object (not a subsequence) for thread safety
+        let unpaddedLength = data.count - paddingLength
+        guard unpaddedLength >= 0 else { return Data() }
         
-        // Debug logging for 243-byte packets
-        if data.count == 243 {
-        }
-        
-        return result
+        // Return a proper copy, not a subsequence
+        return Data(data.prefix(unpaddedLength))
     }
     
     // Find optimal block size for data
@@ -132,57 +132,50 @@ struct MessagePadding {
 
 // MARK: - Message Types
 
-/// Defines all message types in the BitChat protocol.
-/// Each type has a unique identifier for efficient binary encoding.
-/// Types are grouped by function: user messages, protocol control, encryption, etc.
+/// Simplified BitChat protocol message types.
+/// Reduced from 24 types to just 6 essential ones.
+/// All private communication metadata (receipts, status) is embedded in noiseEncrypted payloads.
 enum MessageType: UInt8 {
-    case announce = 0x01
-    case leave = 0x03
-    case message = 0x04  // All user messages (private and broadcast)
-    case fragmentStart = 0x05
-    case fragmentContinue = 0x06
-    case fragmentEnd = 0x07
-    case deliveryAck = 0x0A  // Acknowledge message received
-    case deliveryStatusRequest = 0x0B  // Request delivery status update
-    case readReceipt = 0x0C  // Message has been read/viewed
+    // Public messages (unencrypted)
+    case announce = 0x01        // "I'm here" with nickname
+    case message = 0x02         // Public chat message  
+    case leave = 0x03           // "I'm leaving"
     
-    // Noise Protocol messages
-    case noiseHandshakeInit = 0x10  // Noise handshake initiation
-    case noiseHandshakeResp = 0x11  // Noise handshake response
-    case noiseEncrypted = 0x12      // Noise encrypted transport message
-    case noiseIdentityAnnounce = 0x13  // Announce static public key for discovery
+    // Noise encryption
+    case noiseHandshake = 0x10  // Handshake (init or response determined by payload)
+    case noiseEncrypted = 0x11  // All encrypted payloads (messages, receipts, etc.)
     
-    // Protocol-level acknowledgments
-    case protocolAck = 0x22             // Generic protocol acknowledgment
-    case protocolNack = 0x23            // Negative acknowledgment (failure)
-    case systemValidation = 0x24        // Session validation ping
-    case handshakeRequest = 0x25        // Request handshake for pending messages
-    
-    // Favorite system messages
-    case favorited = 0x30               // Peer favorited us
-    case unfavorited = 0x31             // Peer unfavorited us
+    // Fragmentation (simplified)
+    case fragment = 0x20        // Single fragment type for large messages
     
     var description: String {
         switch self {
         case .announce: return "announce"
-        case .leave: return "leave"
         case .message: return "message"
-        case .fragmentStart: return "fragmentStart"
-        case .fragmentContinue: return "fragmentContinue"
-        case .fragmentEnd: return "fragmentEnd"
-        case .deliveryAck: return "deliveryAck"
-        case .deliveryStatusRequest: return "deliveryStatusRequest"
-        case .readReceipt: return "readReceipt"
-        case .noiseHandshakeInit: return "noiseHandshakeInit"
-        case .noiseHandshakeResp: return "noiseHandshakeResp"
+        case .leave: return "leave"
+        case .noiseHandshake: return "noiseHandshake"
         case .noiseEncrypted: return "noiseEncrypted"
-        case .noiseIdentityAnnounce: return "noiseIdentityAnnounce"
-        case .protocolAck: return "protocolAck"
-        case .protocolNack: return "protocolNack"
-        case .systemValidation: return "systemValidation"
-        case .handshakeRequest: return "handshakeRequest"
-        case .favorited: return "favorited"
-        case .unfavorited: return "unfavorited"
+        case .fragment: return "fragment"
+        }
+    }
+}
+
+// MARK: - Noise Payload Types
+
+/// Types of payloads embedded within noiseEncrypted messages.
+/// The first byte of decrypted Noise payload indicates the type.
+/// This provides privacy - observers can't distinguish message types.
+enum NoisePayloadType: UInt8 {
+    // Messages and status
+    case privateMessage = 0x01      // Private chat message
+    case readReceipt = 0x02         // Message was read
+    case delivered = 0x03           // Message was delivered
+    
+    var description: String {
+        switch self {
+        case .privateMessage: return "privateMessage"
+        case .readReceipt: return "readReceipt"
+        case .delivered: return "delivered"
         }
     }
 }
@@ -1049,5 +1042,39 @@ extension BitchatDelegate {
     
     func peerAvailabilityChanged(_ peerID: String, available: Bool) {
         // Default empty implementation
+    }
+}
+
+// MARK: - Noise Payload Helpers
+
+/// Helper to create typed Noise payloads
+struct NoisePayload {
+    let type: NoisePayloadType
+    let data: Data
+    
+    /// Encode payload with type prefix
+    func encode() -> Data {
+        var encoded = Data()
+        encoded.append(type.rawValue)
+        encoded.append(data)
+        return encoded
+    }
+    
+    /// Decode payload from data
+    static func decode(_ data: Data) -> NoisePayload? {
+        // Ensure we have at least 1 byte for the type
+        guard !data.isEmpty else {
+            return nil
+        }
+        
+        // Safely get the first byte
+        let firstByte = data[data.startIndex]
+        guard let type = NoisePayloadType(rawValue: firstByte) else {
+            return nil
+        }
+        
+        // Create a proper Data copy (not a subsequence) for thread safety
+        let payloadData = data.count > 1 ? Data(data.dropFirst()) : Data()
+        return NoisePayload(type: type, data: payloadData)
     }
 }
