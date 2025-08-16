@@ -576,11 +576,8 @@ class NoiseHandshakeState {
                     throw NoiseError.missingKeys
                 }
                 let shared = try localEphemeral.sharedSecretFromKeyAgreement(with: remoteEphemeral)
-                var sharedData = shared.withUnsafeBytes { Data($0) }
-                symmetricState.mixKey(sharedData)
-                // Clear sensitive shared secret
-                KeychainManager.secureClear(&sharedData)
-                
+                mix(key: shared)
+
             case .es:
                 // DH(ephemeral, static) - direction depends on role
                 if role == .initiator {
@@ -624,10 +621,7 @@ class NoiseHandshakeState {
                     throw NoiseError.missingKeys
                 }
                 let shared = try localStatic.sharedSecretFromKeyAgreement(with: remoteStatic)
-                var sharedData = shared.withUnsafeBytes { Data($0) }
-                symmetricState.mixKey(sharedData)
-                // Clear sensitive shared secret
-                KeychainManager.secureClear(&sharedData)
+                mix(key: shared)
             }
         }
         
@@ -712,20 +706,14 @@ class NoiseHandshakeState {
                     throw NoiseError.missingKeys
                 }
                 let shared = try localEphemeral.sharedSecretFromKeyAgreement(with: remoteStatic)
-                var sharedData = shared.withUnsafeBytes { Data($0) }
-                symmetricState.mixKey(sharedData)
-                // Clear sensitive shared secret
-                KeychainManager.secureClear(&sharedData)
+                mix(key: shared)
             } else {
                 guard let localStatic = localStaticPrivate,
                       let remoteEphemeral = remoteEphemeralPublic else {
                     throw NoiseError.missingKeys
                 }
                 let shared = try localStatic.sharedSecretFromKeyAgreement(with: remoteEphemeral)
-                var sharedData = shared.withUnsafeBytes { Data($0) }
-                symmetricState.mixKey(sharedData)
-                // Clear sensitive shared secret
-                KeychainManager.secureClear(&sharedData)
+                mix(key: shared)
             }
             
         case .se:
@@ -735,20 +723,14 @@ class NoiseHandshakeState {
                     throw NoiseError.missingKeys
                 }
                 let shared = try localStatic.sharedSecretFromKeyAgreement(with: remoteEphemeral)
-                var sharedData = shared.withUnsafeBytes { Data($0) }
-                symmetricState.mixKey(sharedData)
-                // Clear sensitive shared secret
-                KeychainManager.secureClear(&sharedData)
+                mix(key: shared)
             } else {
                 guard let localEphemeral = localEphemeralPrivate,
                       let remoteStatic = remoteStaticPublic else {
                     throw NoiseError.missingKeys
                 }
                 let shared = try localEphemeral.sharedSecretFromKeyAgreement(with: remoteStatic)
-                var sharedData = shared.withUnsafeBytes { Data($0) }
-                symmetricState.mixKey(sharedData)
-                // Clear sensitive shared secret
-                KeychainManager.secureClear(&sharedData)
+                mix(key: shared)
             }
             
         case .ss:
@@ -786,6 +768,13 @@ class NoiseHandshakeState {
     
     func getHandshakeHash() -> Data {
         return symmetricState.getHandshakeHash()
+    }
+
+    private func mix(key shared: SharedSecret) {
+        var sharedData = shared.withUnsafeBytes { Data($0) }
+        symmetricState.mixKey(sharedData)
+        // Clear sensitive shared secret
+        KeychainManager.secureClear(&sharedData)
     }
 }
 
