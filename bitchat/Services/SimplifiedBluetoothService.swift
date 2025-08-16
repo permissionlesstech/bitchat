@@ -309,7 +309,7 @@ final class SimplifiedBluetoothService: NSObject {
     }
     
     func sendFavoriteNotification(to peerID: String, isFavorite: Bool) {
-        SecureLogger.log("🔔 sendFavoriteNotification called - peerID: \(peerID), isFavorite: \(isFavorite)", 
+        SecureLogger.log("🔔 sendFavoriteNotification called - peerID: \(peerID), isFavorite: \(isFavorite)",
                         category: SecureLogger.session, level: .info)
         
         // Include Nostr public key in the notification
@@ -318,11 +318,11 @@ final class SimplifiedBluetoothService: NSObject {
         // Add our Nostr public key if available
         if let myNostrIdentity = try? NostrIdentityBridge.getCurrentNostrIdentity() {
             content += ":" + myNostrIdentity.npub
-            SecureLogger.log("📝 Sending favorite notification with Nostr npub: \(myNostrIdentity.npub)", 
+            SecureLogger.log("📝 Sending favorite notification with Nostr npub: \(myNostrIdentity.npub)",
                             category: SecureLogger.session, level: .info)
         }
         
-        SecureLogger.log("📤 Sending favorite notification to \(peerID): \(content)", 
+        SecureLogger.log("📤 Sending favorite notification to \(peerID): \(content)",
                         category: SecureLogger.session, level: .info)
         sendPrivateMessage(content, to: peerID, messageID: UUID().uuidString)
     }
@@ -468,10 +468,16 @@ final class SimplifiedBluetoothService: NSObject {
         if noiseService.hasEstablishedSession(with: recipientID) {
             // Encrypt and send
             do {
-                // Create message payload with ID: [type byte] + [ID:xxxxx|content]
+                // Create TLV-encoded private message
+                let privateMessage = PrivateMessagePacket(messageID: messageID, content: content)
+                guard let tlvData = privateMessage.encode() else {
+                    SecureLogger.log("Failed to encode private message with TLV", category: SecureLogger.noise, level: .error)
+                    return
+                }
+                
+                // Create message payload with TLV: [type byte] + [TLV data]
                 var messagePayload = Data([NoisePayloadType.privateMessage.rawValue])
-                let messageWithID = "ID:\(messageID)|\(content)"
-                messagePayload.append(contentsOf: messageWithID.utf8)
+                messagePayload.append(tlvData)
                 
                 let encrypted = try noiseService.encrypt(messagePayload, for: recipientID)
                 
@@ -569,7 +575,7 @@ final class SimplifiedBluetoothService: NSObject {
         // Only log broadcasts for non-announce packets
         // Log encrypted and relayed packets for debugging
         if packet.type == MessageType.noiseEncrypted.rawValue {
-            SecureLogger.log("📡 Encrypted packet to \(packet.recipientID?.hexEncodedString() ?? "unknown")", 
+            SecureLogger.log("📡 Encrypted packet to \(packet.recipientID?.hexEncodedString() ?? "unknown")",
                             category: SecureLogger.session, level: .info)
         } else if packet.ttl < messageTTL {
             // Relayed packet
@@ -620,7 +626,7 @@ final class SimplifiedBluetoothService: NSObject {
             
             if !sentEncrypted {
                 // Log detailed routing failure for debugging
-                SecureLogger.log("⚠️ Failed to route encrypted message to \(recipientPeerID) - peripheral=\(hasPeripheral) central=\(hasCentral)", 
+                SecureLogger.log("⚠️ Failed to route encrypted message to \(recipientPeerID) - peripheral=\(hasPeripheral) central=\(hasCentral)",
                                category: SecureLogger.session, level: .warning)
             }
             
@@ -660,7 +666,7 @@ final class SimplifiedBluetoothService: NSObject {
                 }
             } else {
                 // Notification queue full
-                SecureLogger.log("⚠️ Notification queue full for packet type \(packet.type)", 
+                SecureLogger.log("⚠️ Notification queue full for packet type \(packet.type)",
                                category: SecureLogger.session, level: .warning)
             }
         }
@@ -820,8 +826,8 @@ final class SimplifiedBluetoothService: NSObject {
         // Relay if TTL > 1 and we're not the original sender
         // Do this asynchronously to avoid blocking and potential loops
         // BUT: Don't relay private encrypted messages (they have a specific recipient)
-        let shouldRelay = packet.ttl > 1 && 
-                         senderID != myPeerID && 
+        let shouldRelay = packet.ttl > 1 &&
+                         senderID != myPeerID &&
                          packet.type != MessageType.noiseEncrypted.rawValue
         
         if shouldRelay {
@@ -960,9 +966,9 @@ final class SimplifiedBluetoothService: NSObject {
             return
         }
         
-        guard let content = String(data: packet.payload, encoding: .utf8) else { 
+        guard let content = String(data: packet.payload, encoding: .utf8) else {
             SecureLogger.log("❌ Failed to decode message payload as UTF-8", category: SecureLogger.session, level: .error)
-            return 
+            return
         }
         
         let senderNickname = peers[peerID]?.nickname ?? "Unknown"
@@ -1050,18 +1056,11 @@ final class SimplifiedBluetoothService: NSObject {
             
             switch NoisePayloadType(rawValue: payloadType) {
             case .privateMessage:
-                guard let content = String(data: payloadData, encoding: .utf8) else { return }
-                
-                // Extract message ID if present (format: "ID:xxxxx|content")
-                var messageID = UUID().uuidString
-                var messageContent = content
-                if content.hasPrefix("ID:") {
-                    let parts = content.split(separator: "|", maxSplits: 1)
-                    if parts.count == 2 {
-                        messageID = String(parts[0].dropFirst(3)) // Remove "ID:"
-                        messageContent = String(parts[1])
-                    }
-                }
+                // Try to decode as TLV first
+                guard let privateMessage = PrivateMessagePacket.decode(from: Data(payloadData)) else { return }
+                // Successfully decoded TLV format
+                let messageID = privateMessage.messageID
+                let messageContent = privateMessage.content
                 
                 // Parse mentions even in private messages
                 let mentions = parseMentions(from: messageContent)
@@ -1079,7 +1078,7 @@ final class SimplifiedBluetoothService: NSObject {
                     mentions: mentions.isEmpty ? nil : mentions
                 )
                 
-                SecureLogger.log("🔓 Decrypted PM from \(message.sender): \(messageContent.prefix(30))...", category: SecureLogger.session, level: .info)
+                SecureLogger.log("🔓 Decrypted TLV PM from \(message.sender): \(messageContent.prefix(30))...", category: SecureLogger.session, level: .info)
                 
                 // Send on main thread
                 notifyUI { [weak self] in
@@ -1089,7 +1088,6 @@ final class SimplifiedBluetoothService: NSObject {
                 // Send delivery ACK
                 sendDeliveryAck(for: messageID, to: peerID)
                 
-                // Don't send announce here - the keep-alive timer handles it
                 
             case .delivered:
                 // Handle delivery ACK
@@ -1184,7 +1182,7 @@ final class SimplifiedBluetoothService: NSObject {
             payload: payload
         )
         
-        // Call directly if on messageQueue, otherwise dispatch  
+        // Call directly if on messageQueue, otherwise dispatch
         if DispatchQueue.getSpecific(key: messageQueueKey) != nil {
             broadcastPacket(packet)
         } else {
@@ -1286,14 +1284,14 @@ final class SimplifiedBluetoothService: NSObject {
             for (peerID, peer) in peers {
                 if peer.isConnected && now.timeIntervalSince(peer.lastSeen) > 20 {
                     // Check if we still have an active BLE connection to this peer
-                    let hasPeripheralConnection = peerToPeripheralUUID[peerID] != nil && 
+                    let hasPeripheralConnection = peerToPeripheralUUID[peerID] != nil &&
                                                  peripherals[peerToPeripheralUUID[peerID]!]?.isConnected == true
                     let hasCentralConnection = centralToPeerID.values.contains(peerID)
                     
                     // Only remove if we don't have an active BLE connection
                     if !hasPeripheralConnection && !hasCentralConnection {
                         // Remove the peer completely (they'll be re-added when they reconnect)
-                        SecureLogger.log("⏱️ Peer timed out (no packets for 20s): \(peerID) (\(peer.nickname))", 
+                        SecureLogger.log("⏱️ Peer timed out (no packets for 20s): \(peerID) (\(peer.nickname))",
                                        category: SecureLogger.session, level: .info)
                         peers.removeValue(forKey: peerID)
                         disconnectedPeers.append(peerID)
@@ -1348,7 +1346,7 @@ extension SimplifiedBluetoothService: CBCentralManagerDelegate {
     }
     
     private func startScanning() {
-        guard let central = centralManager, 
+        guard let central = centralManager,
               central.state == .poweredOn,
               !central.isScanning else { return }
         
@@ -1417,7 +1415,7 @@ extension SimplifiedBluetoothService: CBCentralManagerDelegate {
         peripheral.delegate = self
         
         // Connect to the peripheral with options for faster connection
-        SecureLogger.log("📱 Connect: \(advertisedName) [RSSI:\(rssiValue)]", 
+        SecureLogger.log("📱 Connect: \(advertisedName) [RSSI:\(rssiValue)]",
                         category: SecureLogger.session, level: .info)
         
         // Use connection options for faster reconnection
@@ -1435,7 +1433,7 @@ extension SimplifiedBluetoothService: CBCentralManagerDelegate {
                   state.isConnecting && !state.isConnected else { return }
             
             // Connection timed out - cancel it
-            SecureLogger.log("⏱️ Timeout: \(advertisedName)", 
+            SecureLogger.log("⏱️ Timeout: \(advertisedName)",
                             category: SecureLogger.session, level: .warning)
             central.cancelPeripheralConnection(peripheral)
             self.peripherals[peripheralID] = nil
@@ -1473,7 +1471,7 @@ extension SimplifiedBluetoothService: CBCentralManagerDelegate {
         // Find the peer ID if we have it
         let peerID = peripherals[peripheralID]?.peerID
         
-        SecureLogger.log("📱 Disconnect: \(peerID ?? peripheralID)\(error != nil ? " (\(error!.localizedDescription))" : "")", 
+        SecureLogger.log("📱 Disconnect: \(peerID ?? peripheralID)\(error != nil ? " (\(error!.localizedDescription))" : "")",
                         category: SecureLogger.session, level: .info)
         
         // Clean up references
@@ -1616,7 +1614,7 @@ extension SimplifiedBluetoothService: CBPeripheralDelegate {
         
         // Process directly on main thread to avoid deadlocks (matches original implementation)
         guard let packet = BinaryProtocol.decode(data) else {
-            SecureLogger.log("❌ Failed to decode notification packet, full data: \(data.map { String(format: "%02x", $0) }.joined(separator: " "))", 
+            SecureLogger.log("❌ Failed to decode notification packet, full data: \(data.map { String(format: "%02x", $0) }.joined(separator: " "))",
                             category: SecureLogger.session, level: .error)
             return
         }
@@ -2027,5 +2025,61 @@ private struct AnnouncementPacket {
         
         guard let nickname = nickname, let publicKey = publicKey else { return nil }
         return AnnouncementPacket(nickname: nickname, publicKey: publicKey)
+    }
+}
+
+private struct PrivateMessagePacket {
+    let messageID: String
+    let content: String
+    
+    private enum TLVType: UInt8 {
+        case messageID = 0x00
+        case content = 0x01
+    }
+    
+    func encode() -> Data? {
+        var data = Data()
+        
+        // TLV for messageID
+        guard let messageIDData = messageID.data(using: .utf8), messageIDData.count <= 255 else { return nil }
+        data.append(TLVType.messageID.rawValue)
+        data.append(UInt8(messageIDData.count))
+        data.append(messageIDData)
+        
+        // TLV for content
+        guard let contentData = content.data(using: .utf8), contentData.count <= 255 else { return nil }
+        data.append(TLVType.content.rawValue)
+        data.append(UInt8(contentData.count))
+        data.append(contentData)
+        
+        return data
+    }
+    
+    static func decode(from data: Data) -> PrivateMessagePacket? {
+        var offset = 0
+        var messageID: String?
+        var content: String?
+        
+        while offset + 2 <= data.count {
+            guard let type = TLVType(rawValue: data[offset]) else { return nil }
+            offset += 1
+            
+            let length = Int(data[offset])
+            offset += 1
+            
+            guard offset + length <= data.count else { return nil }
+            let value = data[offset..<offset + length]
+            offset += length
+            
+            switch type {
+            case .messageID:
+                messageID = String(data: value, encoding: .utf8)
+            case .content:
+                content = String(data: value, encoding: .utf8)
+            }
+        }
+        
+        guard let messageID = messageID, let content = content else { return nil }
+        return PrivateMessagePacket(messageID: messageID, content: content)
     }
 }
