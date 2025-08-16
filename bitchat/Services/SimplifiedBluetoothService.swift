@@ -1978,18 +1978,54 @@ private struct AnnouncementPacket {
     let nickname: String
     let publicKey: Data
     
+    private enum TLVType: UInt8 {
+        case nickname = 0x01
+        case noisePublicKey = 0x02
+    }
+    
     func encode() -> Data? {
         var data = Data()
-        data.append(contentsOf: nickname.utf8)
-        data.append(0)  // Null terminator
+        
+        // TLV for nickname
+        guard let nicknameData = nickname.data(using: .utf8), nicknameData.count <= 255 else { return nil }
+        data.append(TLVType.nickname.rawValue)
+        data.append(UInt8(nicknameData.count))
+        data.append(nicknameData)
+        
+        // TLV for public key
+        guard publicKey.count <= 255 else { return nil }
+        data.append(TLVType.noisePublicKey.rawValue)
+        data.append(UInt8(publicKey.count))
         data.append(publicKey)
+        
         return data
     }
     
     static func decode(from data: Data) -> AnnouncementPacket? {
-        guard let nullIndex = data.firstIndex(of: 0) else { return nil }
-        let nickname = String(data: data[..<nullIndex], encoding: .utf8) ?? "Unknown"
-        let publicKey = data[(nullIndex + 1)...]
-        return AnnouncementPacket(nickname: nickname, publicKey: Data(publicKey))
+        var offset = 0
+        var nickname: String?
+        var publicKey: Data?
+        
+        while offset + 2 <= data.count {
+            guard let type = TLVType(rawValue: data[offset]) else { return nil }
+            offset += 1
+            
+            let length = Int(data[offset])
+            offset += 1
+            
+            guard offset + length <= data.count else { return nil }
+            let value = data[offset..<offset + length]
+            offset += length
+            
+            switch type {
+            case .nickname:
+                nickname = String(data: value, encoding: .utf8)
+            case .noisePublicKey:
+                publicKey = Data(value)
+            }
+        }
+        
+        guard let nickname = nickname, let publicKey = publicKey else { return nil }
+        return AnnouncementPacket(nickname: nickname, publicKey: publicKey)
     }
 }
