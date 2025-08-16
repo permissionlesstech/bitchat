@@ -6,7 +6,7 @@
 	<true/>
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>group.chat.bitchat-local</string>
+		<string>group.chat.bitchat</string>
 	</array>
 	<key>com.apple.security.device.bluetooth</key>
 	<true/>
