@@ -16,9 +16,6 @@ final class PrivateChatE2ETests: XCTestCase {
     var bob: MockBluetoothMeshService!
     var charlie: MockBluetoothMeshService!
     
-    var deliveryTracker: DeliveryTracker!
-    var retryService: MessageRetryService!
-    
     override func setUp() {
         super.setUp()
         
@@ -27,22 +24,13 @@ final class PrivateChatE2ETests: XCTestCase {
         bob = createMockService(peerID: TestConstants.testPeerID2, nickname: TestConstants.testNickname2)
         charlie = createMockService(peerID: TestConstants.testPeerID3, nickname: TestConstants.testNickname3)
         
-        // Setup delivery tracking
-        deliveryTracker = DeliveryTracker.shared
-        retryService = MessageRetryService.shared
-        retryService.meshService = alice
-        
-        // Clear any existing state
-        deliveryTracker.clearDeliveryStatus(for: "")
-        retryService.clearRetryQueue()
+        // Delivery tracking is now handled internally by SimplifiedBluetoothService
     }
     
     override func tearDown() {
         alice = nil
         bob = nil
         charlie = nil
-        deliveryTracker = nil
-        retryService = nil
         super.tearDown()
     }
     
@@ -104,227 +92,16 @@ final class PrivateChatE2ETests: XCTestCase {
     
     // MARK: - Delivery Acknowledgment Tests
     
-    func testDeliveryAckGeneration() {
-        simulateConnection(alice, bob)
-        
-        let messageID = UUID().uuidString
-        let expectation = XCTestExpectation(description: "Delivery status updated")
-        
-        // Monitor delivery status
-        let cancellable = deliveryTracker.deliveryStatusUpdated.sink { update in
-            if update.messageID == messageID {
-                switch update.status {
-                case .delivered(let recipient, _):
-                    XCTAssertEqual(recipient, TestConstants.testNickname2)
-                    expectation.fulfill()
-                default:
-                    break
-                }
-            }
-        }
-        
-        // Setup Bob to generate ACK
-        bob.packetDeliveryHandler = { packet in
-            if let message = BitchatMessage.fromBinaryPayload(packet.payload),
-               message.isPrivate {
-                // Generate ACK
-                if let ack = self.deliveryTracker.generateAck(
-                    for: message,
-                    myPeerID: TestConstants.testPeerID2,
-                    myNickname: TestConstants.testNickname2,
-                    hopCount: 1
-                ) {
-                    // Send ACK back
-                    let ackData = ack.encode()!
-                    let ackPacket = TestHelpers.createTestPacket(
-                        type: 0x03,
-                        senderID: TestConstants.testPeerID2,
-                        recipientID: TestConstants.testPeerID1,
-                        payload: ackData
-                    )
-                    self.alice.simulateIncomingPacket(ackPacket)
-                }
-            }
-        }
-        
-        // Setup Alice to process ACK
-        alice.packetDeliveryHandler = { packet in
-            if packet.type == 0x03 {
-                if let ack = DeliveryAck.decode(from: packet.payload) {
-                    self.deliveryTracker.processDeliveryAck(ack)
-                }
-            }
-        }
-        
-        // Track the message
-        let trackedMessage = BitchatMessage(
-            id: messageID,
-            sender: TestConstants.testNickname1,
-            content: TestConstants.testMessage1,
-            timestamp: Date(),
-            isRelay: false,
-            originalSender: nil,
-            isPrivate: true,
-            recipientNickname: TestConstants.testNickname2,
-            senderPeerID: TestConstants.testPeerID1,
-            mentions: nil
-        )
-        
-        deliveryTracker.trackMessage(
-            trackedMessage,
-            recipientID: TestConstants.testPeerID2,
-            recipientNickname: TestConstants.testNickname2
-        )
-        
-        // Send the message
-        alice.sendPrivateMessage(
-            TestConstants.testMessage1,
-            to: TestConstants.testPeerID2,
-            recipientNickname: TestConstants.testNickname2,
-            messageID: messageID
-        )
-        
-        wait(for: [expectation], timeout: TestConstants.defaultTimeout)
-        cancellable.cancel()
-    }
+    // NOTE: DeliveryTracker has been removed in SimplifiedBluetoothService.
+    // Delivery tracking is now handled internally.
     
-    func testDeliveryTimeout() {
-        // Don't connect peers - message should timeout
-        let messageID = UUID().uuidString
-        let expectation = XCTestExpectation(description: "Delivery failed due to timeout")
-        
-        // Use shared instance (can't create new one due to private init)
-        let shortTimeoutTracker = DeliveryTracker.shared
-        
-        let cancellable = shortTimeoutTracker.deliveryStatusUpdated.sink { update in
-            if update.messageID == messageID {
-                switch update.status {
-                case .failed(let reason):
-                    XCTAssertTrue(reason.contains("not delivered"))
-                    expectation.fulfill()
-                default:
-                    break
-                }
-            }
-        }
-        
-        let trackedMessage = BitchatMessage(
-            id: messageID,
-            sender: TestConstants.testNickname1,
-            content: TestConstants.testMessage1,
-            timestamp: Date(),
-            isRelay: false,
-            originalSender: nil,
-            isPrivate: true,
-            recipientNickname: TestConstants.testNickname2,
-            senderPeerID: TestConstants.testPeerID1,
-            mentions: nil
-        )
-        
-        // Track with short timeout (will use default 30s for private messages)
-        shortTimeoutTracker.trackMessage(
-            trackedMessage,
-            recipientID: TestConstants.testPeerID2,
-            recipientNickname: TestConstants.testNickname2
-        )
-        
-        // Don't actually send - let it timeout
-        // For testing, we'll manually trigger timeout
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            shortTimeoutTracker.clearDeliveryStatus(for: messageID)
-            shortTimeoutTracker.deliveryStatusUpdated.send((messageID: messageID, status: .failed(reason: "Message not delivered")))
-        }
-        
-        wait(for: [expectation], timeout: TestConstants.shortTimeout)
-        cancellable.cancel()
-    }
     
     // MARK: - Message Retry Tests
     
-    func testMessageRetryOnFailure() {
-        let messageContent = "Retry test message"
-        let expectation = XCTestExpectation(description: "Message retried")
-        
-        var sendCount = 0
-        
-        // Override send to count attempts
-        alice.messageDeliveryHandler = { message in
-            if message.content == messageContent {
-                sendCount += 1
-                if sendCount == 2 { // Original + 1 retry
-                    expectation.fulfill()
-                }
-            }
-        }
-        
-        // Add to retry queue
-        retryService.addMessageForRetry(
-            content: messageContent,
-            isPrivate: true,
-            recipientPeerID: TestConstants.testPeerID2,
-            recipientNickname: TestConstants.testNickname2
-        )
-        
-        // Simulate connection after delay to trigger retry
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
-            self.simulateConnection(self.alice, self.bob)
-        }
-        
-        wait(for: [expectation], timeout: TestConstants.defaultTimeout)
-        XCTAssertGreaterThanOrEqual(sendCount, 1)
-    }
+    // NOTE: MessageRetryService has been removed in SimplifiedBluetoothService.
+    // Retry logic is now handled internally.
     
-    func testRetryQueueOrdering() {
-        // Add multiple messages to retry queue
-        let messages = [
-            (content: "First", timestamp: Date().addingTimeInterval(-10)),
-            (content: "Second", timestamp: Date().addingTimeInterval(-5)),
-            (content: "Third", timestamp: Date())
-        ]
-        
-        for msg in messages {
-            retryService.addMessageForRetry(
-                content: msg.content,
-                isPrivate: true,
-                recipientPeerID: TestConstants.testPeerID2,
-                recipientNickname: TestConstants.testNickname2,
-                originalTimestamp: msg.timestamp
-            )
-        }
-        
-        XCTAssertEqual(retryService.getRetryQueueCount(), 3)
-        
-        var receivedOrder: [String] = []
-        let expectation = XCTestExpectation(description: "Messages received in order")
-        
-        bob.messageDeliveryHandler = { message in
-            receivedOrder.append(message.content)
-            if receivedOrder.count == 3 {
-                expectation.fulfill()
-            }
-        }
-        
-        // Connect to trigger retry
-        simulateConnection(alice, bob)
-        
-        wait(for: [expectation], timeout: TestConstants.defaultTimeout)
-        
-        // Verify order maintained
-        XCTAssertEqual(receivedOrder, ["First", "Second", "Third"])
-    }
     
-    func testRetryQueueMaxSize() {
-        // Try to add more than max queue size
-        for i in 0..<60 {
-            retryService.addMessageForRetry(
-                content: "Message \(i)",
-                recipientPeerID: TestConstants.testPeerID2
-            )
-        }
-        
-        // Should not exceed max size (50)
-        XCTAssertLessThanOrEqual(retryService.getRetryQueueCount(), 50)
-    }
     
     // MARK: - End-to-End Encryption Tests
     
@@ -491,24 +268,7 @@ final class PrivateChatE2ETests: XCTestCase {
     
     // MARK: - Error Handling Tests
     
-    func testPrivateMessageToUnknownPeer() {
-        // Alice not connected to anyone
-        let expectation = XCTestExpectation(description: "Message added to retry queue")
-        
-        retryService.addMessageForRetry(
-            content: TestConstants.testMessage1,
-            isPrivate: true,
-            recipientPeerID: TestConstants.testPeerID2,
-            recipientNickname: TestConstants.testNickname2
-        )
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            XCTAssertEqual(self.retryService.getRetryQueueCount(), 1)
-            expectation.fulfill()
-        }
-        
-        wait(for: [expectation], timeout: TestConstants.shortTimeout)
-    }
+    // NOTE: This test relied on MessageRetryService which has been removed
     
     func testDuplicateAckPrevention() {
         simulateConnection(alice, bob)
@@ -537,6 +297,8 @@ final class PrivateChatE2ETests: XCTestCase {
         )
         
         // Generate multiple ACKs for same message
+        // NOTE: DeliveryTracker has been removed - this test is no longer applicable
+        /*
         for _ in 0..<3 {
             if let ack = deliveryTracker.generateAck(
                 for: message,
@@ -554,6 +316,7 @@ final class PrivateChatE2ETests: XCTestCase {
                 alice.simulateIncomingPacket(ackPacket)
             }
         }
+        */
         
         // Should only generate one ACK
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {

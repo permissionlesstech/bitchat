@@ -32,7 +32,7 @@
 /// 1. **Creation**: Messages are created with type, content, and metadata
 /// 2. **Encoding**: Converted to binary format with proper field ordering
 /// 3. **Fragmentation**: Split if larger than BLE MTU (512 bytes)
-/// 4. **Transmission**: Sent via BluetoothMeshService
+/// 4. **Transmission**: Sent via SimplifiedBluetoothService
 /// 5. **Routing**: Relayed by intermediate nodes (TTL decrements)
 /// 6. **Reassembly**: Fragments collected and reassembled
 /// 7. **Decoding**: Binary data parsed back to message objects
@@ -49,12 +49,12 @@
 /// - **Fragment**: Multi-part message handling
 /// - **Delivery/Read**: Message acknowledgments
 /// - **Noise**: Encrypted channel establishment
-/// - **Version**: Protocol compatibility negotiation
+/// - **Version**: Protocol version negotiation
 ///
 /// ## Future Extensions
 /// The protocol is designed to be extensible:
 /// - Reserved message type ranges for future use
-/// - Version negotiation for backward compatibility
+/// - Version field for protocol evolution
 /// - Optional fields for new features
 ///
 
@@ -95,21 +95,21 @@ struct MessagePadding {
         guard !data.isEmpty else { return data }
         
         // Last byte tells us how much padding to remove
-        let paddingLength = Int(data[data.count - 1])
+        let lastIndex = data.count - 1
+        guard lastIndex >= 0 else { return data }
+        
+        let paddingLength = Int(data[lastIndex])
         guard paddingLength > 0 && paddingLength <= data.count else { 
-            // Debug logging for 243-byte packets
-            if data.count == 243 {
-            }
+            // No valid padding, return original data
             return data 
         }
         
-        let result = data.prefix(data.count - paddingLength)
+        // Create a new Data object (not a subsequence) for thread safety
+        let unpaddedLength = data.count - paddingLength
+        guard unpaddedLength >= 0 else { return Data() }
         
-        // Debug logging for 243-byte packets
-        if data.count == 243 {
-        }
-        
-        return result
+        // Return a proper copy, not a subsequence
+        return Data(data.prefix(unpaddedLength))
     }
     
     // Find optimal block size for data
@@ -132,57 +132,50 @@ struct MessagePadding {
 
 // MARK: - Message Types
 
-/// Defines all message types in the BitChat protocol.
-/// Each type has a unique identifier for efficient binary encoding.
-/// Types are grouped by function: user messages, protocol control, encryption, etc.
+/// Simplified BitChat protocol message types.
+/// Reduced from 24 types to just 6 essential ones.
+/// All private communication metadata (receipts, status) is embedded in noiseEncrypted payloads.
 enum MessageType: UInt8 {
-    case announce = 0x01
-    case leave = 0x03
-    case message = 0x04  // All user messages (private and broadcast)
-    case fragmentStart = 0x05
-    case fragmentContinue = 0x06
-    case fragmentEnd = 0x07
-    case deliveryAck = 0x0A  // Acknowledge message received
-    case deliveryStatusRequest = 0x0B  // Request delivery status update
-    case readReceipt = 0x0C  // Message has been read/viewed
+    // Public messages (unencrypted)
+    case announce = 0x01        // "I'm here" with nickname
+    case message = 0x02         // Public chat message  
+    case leave = 0x03           // "I'm leaving"
     
-    // Noise Protocol messages
-    case noiseHandshakeInit = 0x10  // Noise handshake initiation
-    case noiseHandshakeResp = 0x11  // Noise handshake response
-    case noiseEncrypted = 0x12      // Noise encrypted transport message
-    case noiseIdentityAnnounce = 0x13  // Announce static public key for discovery
+    // Noise encryption
+    case noiseHandshake = 0x10  // Handshake (init or response determined by payload)
+    case noiseEncrypted = 0x11  // All encrypted payloads (messages, receipts, etc.)
     
-    // Protocol-level acknowledgments
-    case protocolAck = 0x22             // Generic protocol acknowledgment
-    case protocolNack = 0x23            // Negative acknowledgment (failure)
-    case systemValidation = 0x24        // Session validation ping
-    case handshakeRequest = 0x25        // Request handshake for pending messages
-    
-    // Favorite system messages
-    case favorited = 0x30               // Peer favorited us
-    case unfavorited = 0x31             // Peer unfavorited us
+    // Fragmentation (simplified)
+    case fragment = 0x20        // Single fragment type for large messages
     
     var description: String {
         switch self {
         case .announce: return "announce"
-        case .leave: return "leave"
         case .message: return "message"
-        case .fragmentStart: return "fragmentStart"
-        case .fragmentContinue: return "fragmentContinue"
-        case .fragmentEnd: return "fragmentEnd"
-        case .deliveryAck: return "deliveryAck"
-        case .deliveryStatusRequest: return "deliveryStatusRequest"
-        case .readReceipt: return "readReceipt"
-        case .noiseHandshakeInit: return "noiseHandshakeInit"
-        case .noiseHandshakeResp: return "noiseHandshakeResp"
+        case .leave: return "leave"
+        case .noiseHandshake: return "noiseHandshake"
         case .noiseEncrypted: return "noiseEncrypted"
-        case .noiseIdentityAnnounce: return "noiseIdentityAnnounce"
-        case .protocolAck: return "protocolAck"
-        case .protocolNack: return "protocolNack"
-        case .systemValidation: return "systemValidation"
-        case .handshakeRequest: return "handshakeRequest"
-        case .favorited: return "favorited"
-        case .unfavorited: return "unfavorited"
+        case .fragment: return "fragment"
+        }
+    }
+}
+
+// MARK: - Noise Payload Types
+
+/// Types of payloads embedded within noiseEncrypted messages.
+/// The first byte of decrypted Noise payload indicates the type.
+/// This provides privacy - observers can't distinguish message types.
+enum NoisePayloadType: UInt8 {
+    // Messages and status
+    case privateMessage = 0x01      // Private chat message
+    case readReceipt = 0x02         // Message was read
+    case delivered = 0x03           // Message was delivered
+    
+    var description: String {
+        switch self {
+        case .privateMessage: return "privateMessage"
+        case .readReceipt: return "readReceipt"
+        case .delivered: return "delivered"
         }
     }
 }
@@ -198,14 +191,8 @@ enum LazyHandshakeState {
     case failed(Error)         // Handshake failed
 }
 
-// MARK: - Special Recipients
-
-/// Defines special recipient identifiers used in the protocol.
-/// These magic values indicate broadcast or system-level recipients
-/// rather than specific peer IDs.
-struct SpecialRecipients {
-    static let broadcast = Data(repeating: 0xFF, count: 8)  // All 0xFF = broadcast
-}
+// MARK: - Special Recipients (removed)
+// Previously defined broadcast identifiers were unused; removed for simplicity.
 
 // MARK: - Core Protocol Structures
 
@@ -269,103 +256,8 @@ struct BitchatPacket: Codable {
     }
 }
 
-// MARK: - Delivery Acknowledgments
-
-/// Acknowledgment sent when a message is successfully delivered to a recipient.
-/// Provides delivery confirmation for reliable messaging and UI feedback.
-/// - Note: Only sent for direct messages, not broadcasts
-struct DeliveryAck: Codable {
-    let originalMessageID: String
-    let ackID: String
-    let recipientID: String  // Who received it
-    let recipientNickname: String
-    let timestamp: Date
-    let hopCount: UInt8  // How many hops to reach recipient
-    
-    init(originalMessageID: String, recipientID: String, recipientNickname: String, hopCount: UInt8) {
-        self.originalMessageID = originalMessageID
-        self.ackID = UUID().uuidString
-        self.recipientID = recipientID
-        self.recipientNickname = recipientNickname
-        self.timestamp = Date()
-        self.hopCount = hopCount
-    }
-    
-    // For binary decoding
-    private init(originalMessageID: String, ackID: String, recipientID: String, recipientNickname: String, timestamp: Date, hopCount: UInt8) {
-        self.originalMessageID = originalMessageID
-        self.ackID = ackID
-        self.recipientID = recipientID
-        self.recipientNickname = recipientNickname
-        self.timestamp = timestamp
-        self.hopCount = hopCount
-    }
-    
-    func encode() -> Data? {
-        try? JSONEncoder().encode(self)
-    }
-    
-    static func decode(from data: Data) -> DeliveryAck? {
-        try? JSONDecoder().decode(DeliveryAck.self, from: data)
-    }
-    
-    // MARK: - Binary Encoding
-    
-    func toBinaryData() -> Data {
-        var data = Data()
-        data.appendUUID(originalMessageID)
-        data.appendUUID(ackID)
-        // RecipientID as 8-byte hex string
-        var recipientData = Data()
-        var tempID = recipientID
-        while tempID.count >= 2 && recipientData.count < 8 {
-            let hexByte = String(tempID.prefix(2))
-            if let byte = UInt8(hexByte, radix: 16) {
-                recipientData.append(byte)
-            }
-            tempID = String(tempID.dropFirst(2))
-        }
-        while recipientData.count < 8 {
-            recipientData.append(0)
-        }
-        data.append(recipientData)
-        data.appendUInt8(hopCount)
-        data.appendDate(timestamp)
-        data.appendString(recipientNickname)
-        return data
-    }
-    
-    static func fromBinaryData(_ data: Data) -> DeliveryAck? {
-        // Create defensive copy
-        let dataCopy = Data(data)
-        
-        // Minimum size: 2 UUIDs (32) + recipientID (8) + hopCount (1) + timestamp (8) + min nickname
-        guard dataCopy.count >= 50 else { return nil }
-        
-        var offset = 0
-        
-        guard let originalMessageID = dataCopy.readUUID(at: &offset),
-              let ackID = dataCopy.readUUID(at: &offset) else { return nil }
-        
-        guard let recipientIDData = dataCopy.readFixedBytes(at: &offset, count: 8) else { return nil }
-        let recipientID = recipientIDData.hexEncodedString()
-        guard InputValidator.validatePeerID(recipientID) else { return nil }
-        
-        guard let hopCount = dataCopy.readUInt8(at: &offset),
-              InputValidator.validateHopCount(hopCount),
-              let timestamp = dataCopy.readDate(at: &offset),
-              InputValidator.validateTimestamp(timestamp),
-              let recipientNicknameRaw = dataCopy.readString(at: &offset),
-              let recipientNickname = InputValidator.validateNickname(recipientNicknameRaw) else { return nil }
-        
-        return DeliveryAck(originalMessageID: originalMessageID,
-                           ackID: ackID,
-                           recipientID: recipientID,
-                           recipientNickname: recipientNickname,
-                           timestamp: timestamp,
-                           hopCount: hopCount)
-    }
-}
+// MARK: - Delivery Acknowledgments (removed)
+// Legacy DeliveryAck structures are no longer used; delivery status flows via Noise payloads.
 
 // MARK: - Read Receipts
 
@@ -456,460 +348,8 @@ struct ReadReceipt: Codable {
     }
 }
 
-// MARK: - Handshake Requests
 
-// Handshake request for pending messages
-struct HandshakeRequest: Codable {
-    let requestID: String
-    let requesterID: String           // Who needs the handshake
-    let requesterNickname: String     // Nickname of requester
-    let targetID: String              // Who should initiate handshake
-    let pendingMessageCount: UInt8    // Number of messages queued
-    let timestamp: Date
-    
-    init(requesterID: String, requesterNickname: String, targetID: String, pendingMessageCount: UInt8) {
-        self.requestID = UUID().uuidString
-        self.requesterID = requesterID
-        self.requesterNickname = requesterNickname
-        self.targetID = targetID
-        self.pendingMessageCount = pendingMessageCount
-        self.timestamp = Date()
-    }
-    
-    // For binary decoding
-    private init(requestID: String, requesterID: String, requesterNickname: String, targetID: String, pendingMessageCount: UInt8, timestamp: Date) {
-        self.requestID = requestID
-        self.requesterID = requesterID
-        self.requesterNickname = requesterNickname
-        self.targetID = targetID
-        self.pendingMessageCount = pendingMessageCount
-        self.timestamp = timestamp
-    }
-    
-    // MARK: - Binary Encoding
-    
-    func toBinaryData() -> Data {
-        var data = Data()
-        data.appendUUID(requestID)
-        
-        // RequesterID as 8-byte hex string
-        var requesterData = Data()
-        var tempID = requesterID
-        while tempID.count >= 2 && requesterData.count < 8 {
-            let hexByte = String(tempID.prefix(2))
-            if let byte = UInt8(hexByte, radix: 16) {
-                requesterData.append(byte)
-            }
-            tempID = String(tempID.dropFirst(2))
-        }
-        while requesterData.count < 8 {
-            requesterData.append(0)
-        }
-        data.append(requesterData)
-        
-        // TargetID as 8-byte hex string
-        var targetData = Data()
-        tempID = targetID
-        while tempID.count >= 2 && targetData.count < 8 {
-            let hexByte = String(tempID.prefix(2))
-            if let byte = UInt8(hexByte, radix: 16) {
-                targetData.append(byte)
-            }
-            tempID = String(tempID.dropFirst(2))
-        }
-        while targetData.count < 8 {
-            targetData.append(0)
-        }
-        data.append(targetData)
-        
-        data.appendUInt8(pendingMessageCount)
-        data.appendDate(timestamp)
-        data.appendString(requesterNickname)
-        return data
-    }
-    
-    static func fromBinaryData(_ data: Data) -> HandshakeRequest? {
-        // Create defensive copy
-        let dataCopy = Data(data)
-        
-        // Minimum size: UUID (16) + requesterID (8) + targetID (8) + count (1) + timestamp (8) + min nickname
-        guard dataCopy.count >= 42 else { return nil }
-        
-        var offset = 0
-        
-        guard let requestID = dataCopy.readUUID(at: &offset) else { return nil }
-        
-        guard let requesterIDData = dataCopy.readFixedBytes(at: &offset, count: 8) else { return nil }
-        let requesterID = requesterIDData.hexEncodedString()
-        guard InputValidator.validatePeerID(requesterID) else { return nil }
-        
-        guard let targetIDData = dataCopy.readFixedBytes(at: &offset, count: 8) else { return nil }
-        let targetID = targetIDData.hexEncodedString()
-        guard InputValidator.validatePeerID(targetID) else { return nil }
-        
-        guard let pendingMessageCount = dataCopy.readUInt8(at: &offset),
-              let timestamp = dataCopy.readDate(at: &offset),
-              InputValidator.validateTimestamp(timestamp),
-              let requesterNicknameRaw = dataCopy.readString(at: &offset),
-              let requesterNickname = InputValidator.validateNickname(requesterNicknameRaw) else { return nil }
-        
-        return HandshakeRequest(requestID: requestID,
-                               requesterID: requesterID,
-                               requesterNickname: requesterNickname,
-                               targetID: targetID,
-                               pendingMessageCount: pendingMessageCount,
-                               timestamp: timestamp)
-    }
-}
-
-// MARK: - Protocol Acknowledgments
-
-// Protocol-level acknowledgment for reliable delivery
-struct ProtocolAck: Codable {
-    let originalPacketID: String    // ID of the packet being acknowledged
-    let ackID: String              // Unique ID for this ACK
-    let senderID: String           // Who sent the original packet
-    let receiverID: String         // Who received and is acknowledging
-    let packetType: UInt8          // Type of packet being acknowledged
-    let timestamp: Date            // When ACK was generated
-    let hopCount: UInt8            // Hops taken to reach receiver
-    
-    init(originalPacketID: String, senderID: String, receiverID: String, packetType: UInt8, hopCount: UInt8) {
-        self.originalPacketID = originalPacketID
-        self.ackID = UUID().uuidString
-        self.senderID = senderID
-        self.receiverID = receiverID
-        self.packetType = packetType
-        self.timestamp = Date()
-        self.hopCount = hopCount
-    }
-    
-    // Private init for binary decoding
-    private init(originalPacketID: String, ackID: String, senderID: String, receiverID: String, 
-                 packetType: UInt8, timestamp: Date, hopCount: UInt8) {
-        self.originalPacketID = originalPacketID
-        self.ackID = ackID
-        self.senderID = senderID
-        self.receiverID = receiverID
-        self.packetType = packetType
-        self.timestamp = timestamp
-        self.hopCount = hopCount
-    }
-    
-    func toBinaryData() -> Data {
-        var data = Data()
-        data.appendUUID(originalPacketID)
-        data.appendUUID(ackID)
-        
-        // Sender and receiver IDs as 8-byte hex strings
-        data.append(Data(hexString: senderID) ?? Data(repeating: 0, count: 8))
-        data.append(Data(hexString: receiverID) ?? Data(repeating: 0, count: 8))
-        
-        data.appendUInt8(packetType)
-        data.appendUInt8(hopCount)
-        data.appendDate(timestamp)
-        return data
-    }
-    
-    static func fromBinaryData(_ data: Data) -> ProtocolAck? {
-        let dataCopy = Data(data)
-        guard dataCopy.count >= 50 else { return nil } // 2 UUIDs + 2 IDs + type + hop + timestamp
-        
-        var offset = 0
-        guard let originalPacketID = dataCopy.readUUID(at: &offset),
-              let ackID = dataCopy.readUUID(at: &offset),
-              let senderIDData = dataCopy.readFixedBytes(at: &offset, count: 8),
-              let receiverIDData = dataCopy.readFixedBytes(at: &offset, count: 8),
-              let packetType = dataCopy.readUInt8(at: &offset),
-              InputValidator.validateMessageType(packetType),
-              let hopCount = dataCopy.readUInt8(at: &offset),
-              InputValidator.validateHopCount(hopCount),
-              let timestamp = dataCopy.readDate(at: &offset),
-              InputValidator.validateTimestamp(timestamp) else { return nil }
-        
-        let senderID = senderIDData.hexEncodedString()
-        let receiverID = receiverIDData.hexEncodedString()
-        guard InputValidator.validatePeerID(senderID),
-              InputValidator.validatePeerID(receiverID) else { return nil }
-        
-        return ProtocolAck(originalPacketID: originalPacketID,
-                          ackID: ackID,
-                          senderID: senderID,
-                          receiverID: receiverID,
-                          packetType: packetType,
-                          timestamp: timestamp,
-                          hopCount: hopCount)
-    }
-}
-
-// Protocol-level negative acknowledgment
-struct ProtocolNack: Codable {
-    let originalPacketID: String    // ID of the packet that failed
-    let nackID: String             // Unique ID for this NACK
-    let senderID: String           // Who sent the original packet
-    let receiverID: String         // Who is reporting the failure
-    let packetType: UInt8          // Type of packet that failed
-    let timestamp: Date            // When NACK was generated
-    let reason: String             // Reason for failure
-    let errorCode: UInt8           // Numeric error code
-    
-    // Error codes
-    enum ErrorCode: UInt8 {
-        case unknown = 0
-        case checksumFailed = 1
-        case decryptionFailed = 2
-        case malformedPacket = 3
-        case unsupportedVersion = 4
-        case resourceExhausted = 5
-        case routingFailed = 6
-        case sessionExpired = 7
-    }
-    
-    init(originalPacketID: String, senderID: String, receiverID: String, 
-         packetType: UInt8, reason: String, errorCode: ErrorCode = .unknown) {
-        self.originalPacketID = originalPacketID
-        self.nackID = UUID().uuidString
-        self.senderID = senderID
-        self.receiverID = receiverID
-        self.packetType = packetType
-        self.timestamp = Date()
-        self.reason = reason
-        self.errorCode = errorCode.rawValue
-    }
-    
-    // Private init for binary decoding
-    private init(originalPacketID: String, nackID: String, senderID: String, receiverID: String,
-                 packetType: UInt8, timestamp: Date, reason: String, errorCode: UInt8) {
-        self.originalPacketID = originalPacketID
-        self.nackID = nackID
-        self.senderID = senderID
-        self.receiverID = receiverID
-        self.packetType = packetType
-        self.timestamp = timestamp
-        self.reason = reason
-        self.errorCode = errorCode
-    }
-    
-    func toBinaryData() -> Data {
-        var data = Data()
-        data.appendUUID(originalPacketID)
-        data.appendUUID(nackID)
-        
-        // Sender and receiver IDs as 8-byte hex strings
-        data.append(Data(hexString: senderID) ?? Data(repeating: 0, count: 8))
-        data.append(Data(hexString: receiverID) ?? Data(repeating: 0, count: 8))
-        
-        data.appendUInt8(packetType)
-        data.appendUInt8(errorCode)
-        data.appendDate(timestamp)
-        data.appendString(reason)
-        return data
-    }
-    
-    static func fromBinaryData(_ data: Data) -> ProtocolNack? {
-        let dataCopy = Data(data)
-        guard dataCopy.count >= 52 else { return nil } // Minimum size
-        
-        var offset = 0
-        guard let originalPacketID = dataCopy.readUUID(at: &offset),
-              let nackID = dataCopy.readUUID(at: &offset),
-              let senderIDData = dataCopy.readFixedBytes(at: &offset, count: 8),
-              let receiverIDData = dataCopy.readFixedBytes(at: &offset, count: 8),
-              let packetType = dataCopy.readUInt8(at: &offset),
-              InputValidator.validateMessageType(packetType),
-              let errorCode = dataCopy.readUInt8(at: &offset),
-              let timestamp = dataCopy.readDate(at: &offset),
-              InputValidator.validateTimestamp(timestamp),
-              let reasonRaw = dataCopy.readString(at: &offset),
-              let reason = InputValidator.validateReasonString(reasonRaw) else { return nil }
-        
-        let senderID = senderIDData.hexEncodedString()
-        let receiverID = receiverIDData.hexEncodedString()
-        guard InputValidator.validatePeerID(senderID),
-              InputValidator.validatePeerID(receiverID) else { return nil }
-        
-        return ProtocolNack(originalPacketID: originalPacketID,
-                           nackID: nackID,
-                           senderID: senderID,
-                           receiverID: receiverID,
-                           packetType: packetType,
-                           timestamp: timestamp,
-                           reason: reason,
-                           errorCode: errorCode)
-    }
-}
-
-// MARK: - Peer Identity Rotation
-
-/// Announces a peer's cryptographic identity to enable secure communication.
-/// Contains the peer's Noise static public key and supports identity rotation
-/// by binding ephemeral peer IDs to stable cryptographic fingerprints.
-/// - Note: Critical for establishing end-to-end encrypted channels
-struct NoiseIdentityAnnouncement: Codable {
-    let peerID: String               // Current ephemeral peer ID
-    let publicKey: Data              // Noise static public key
-    let signingPublicKey: Data       // Ed25519 signing public key
-    let nickname: String             // Current nickname
-    let timestamp: Date              // When this binding was created
-    let previousPeerID: String?      // Previous peer ID (for smooth transition)
-    let signature: Data              // Signature proving ownership
-    
-    init(peerID: String, publicKey: Data, signingPublicKey: Data, nickname: String, timestamp: Date, previousPeerID: String? = nil, signature: Data) {
-        self.peerID = peerID
-        self.publicKey = publicKey
-        self.signingPublicKey = signingPublicKey
-        // Trim whitespace from nickname
-        self.nickname = nickname.trimmingCharacters(in: .whitespacesAndNewlines)
-        self.timestamp = timestamp
-        self.previousPeerID = previousPeerID
-        self.signature = signature
-    }
-    
-    // Custom decoder to ensure nickname is trimmed
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.peerID = try container.decode(String.self, forKey: .peerID)
-        self.publicKey = try container.decode(Data.self, forKey: .publicKey)
-        self.signingPublicKey = try container.decode(Data.self, forKey: .signingPublicKey)
-        // Trim whitespace from decoded nickname
-        let rawNickname = try container.decode(String.self, forKey: .nickname)
-        self.nickname = rawNickname.trimmingCharacters(in: .whitespacesAndNewlines)
-        self.timestamp = try container.decode(Date.self, forKey: .timestamp)
-        self.previousPeerID = try container.decodeIfPresent(String.self, forKey: .previousPeerID)
-        self.signature = try container.decode(Data.self, forKey: .signature)
-    }
-    
-    func encode() -> Data? {
-        return try? JSONEncoder().encode(self)
-    }
-    
-    static func decode(from data: Data) -> NoiseIdentityAnnouncement? {
-        return try? JSONDecoder().decode(NoiseIdentityAnnouncement.self, from: data)
-    }
-    
-    // MARK: - Binary Encoding
-    
-    func toBinaryData() -> Data {
-        var data = Data()
-        
-        // Flags byte: bit 0 = hasPreviousPeerID
-        var flags: UInt8 = 0
-        if previousPeerID != nil { flags |= 0x01 }
-        data.appendUInt8(flags)
-        
-        // PeerID as 8-byte hex string
-        var peerData = Data()
-        var tempID = peerID
-        while tempID.count >= 2 && peerData.count < 8 {
-            let hexByte = String(tempID.prefix(2))
-            if let byte = UInt8(hexByte, radix: 16) {
-                peerData.append(byte)
-            }
-            tempID = String(tempID.dropFirst(2))
-        }
-        while peerData.count < 8 {
-            peerData.append(0)
-        }
-        data.append(peerData)
-        
-        data.appendData(publicKey)
-        data.appendData(signingPublicKey)
-        data.appendString(nickname)
-        data.appendDate(timestamp)
-        
-        if let previousPeerID = previousPeerID {
-            // Previous PeerID as 8-byte hex string
-            var prevData = Data()
-            var tempPrevID = previousPeerID
-            while tempPrevID.count >= 2 && prevData.count < 8 {
-                let hexByte = String(tempPrevID.prefix(2))
-                if let byte = UInt8(hexByte, radix: 16) {
-                    prevData.append(byte)
-                }
-                tempPrevID = String(tempPrevID.dropFirst(2))
-            }
-            while prevData.count < 8 {
-                prevData.append(0)
-            }
-            data.append(prevData)
-        }
-        
-        data.appendData(signature)
-        
-        return data
-    }
-    
-    static func fromBinaryData(_ data: Data) -> NoiseIdentityAnnouncement? {
-        // Create defensive copy
-        let dataCopy = Data(data)
-        
-        // Minimum size check: flags(1) + peerID(8) + min data lengths
-        guard dataCopy.count >= 20 else { return nil }
-        
-        var offset = 0
-        
-        guard let flags = dataCopy.readUInt8(at: &offset) else { return nil }
-        let hasPreviousPeerID = (flags & 0x01) != 0
-        
-        // Read peerID using safe method
-        guard let peerIDBytes = dataCopy.readFixedBytes(at: &offset, count: 8) else { return nil }
-        let peerID = peerIDBytes.hexEncodedString()
-        guard InputValidator.validatePeerID(peerID) else { return nil }
-        
-        guard let publicKey = dataCopy.readData(at: &offset),
-              InputValidator.validatePublicKey(publicKey),
-              let signingPublicKey = dataCopy.readData(at: &offset),
-              InputValidator.validatePublicKey(signingPublicKey),
-              let rawNickname = dataCopy.readString(at: &offset),
-              let nickname = InputValidator.validateNickname(rawNickname),
-              let timestamp = dataCopy.readDate(at: &offset),
-              InputValidator.validateTimestamp(timestamp) else { return nil }
-        
-        var previousPeerID: String? = nil
-        if hasPreviousPeerID {
-            // Read previousPeerID using safe method
-            guard let prevIDBytes = dataCopy.readFixedBytes(at: &offset, count: 8) else { return nil }
-            let prevID = prevIDBytes.hexEncodedString()
-            guard InputValidator.validatePeerID(prevID) else { return nil }
-            previousPeerID = prevID
-        }
-        
-        guard let signature = dataCopy.readData(at: &offset),
-              InputValidator.validateSignature(signature) else { return nil }
-        
-        return NoiseIdentityAnnouncement(peerID: peerID,
-                                        publicKey: publicKey,
-                                        signingPublicKey: signingPublicKey,
-                                        nickname: nickname,
-                                        timestamp: timestamp,
-                                        previousPeerID: previousPeerID,
-                                        signature: signature)
-    }
-}
-
-// Binding between ephemeral peer ID and cryptographic identity
-struct PeerIdentityBinding {
-    let currentPeerID: String        // Current ephemeral ID
-    let fingerprint: String          // Permanent cryptographic identity
-    let publicKey: Data              // Noise static public key
-    let signingPublicKey: Data       // Ed25519 signing public key
-    let nickname: String             // Last known nickname
-    let bindingTimestamp: Date       // When this binding was created
-    let signature: Data              // Cryptographic proof of binding
-    
-    // Verify the binding signature
-    func verify() -> Bool {
-        let bindingData = currentPeerID.data(using: .utf8)! + publicKey + 
-                         String(Int64(bindingTimestamp.timeIntervalSince1970 * 1000)).data(using: .utf8)!
-        
-        do {
-            let signingKey = try Curve25519.Signing.PublicKey(rawRepresentation: signingPublicKey)
-            return signingKey.isValidSignature(signature, for: bindingData)
-        } catch {
-            return false
-        }
-    }
-}
+// PeerIdentityBinding removed (unused).
 
 
 // MARK: - Delivery Status
@@ -1020,13 +460,7 @@ protocol BitchatDelegate: AnyObject {
     // Optional method to check if a fingerprint belongs to a favorite peer
     func isFavorite(fingerprint: String) -> Bool
     
-    // Delivery confirmation methods
-    func didReceiveDeliveryAck(_ ack: DeliveryAck)
-    func didReceiveReadReceipt(_ receipt: ReadReceipt)
     func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus)
-    
-    // Peer availability tracking
-    func peerAvailabilityChanged(_ peerID: String, available: Bool)
 }
 
 // Provide default implementation to make it effectively optional
@@ -1035,19 +469,41 @@ extension BitchatDelegate {
         return false
     }
     
-    func didReceiveDeliveryAck(_ ack: DeliveryAck) {
-        // Default empty implementation
-    }
-    
-    func didReceiveReadReceipt(_ receipt: ReadReceipt) {
-        // Default empty implementation
-    }
-    
     func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) {
         // Default empty implementation
     }
+}
+
+// MARK: - Noise Payload Helpers
+
+/// Helper to create typed Noise payloads
+struct NoisePayload {
+    let type: NoisePayloadType
+    let data: Data
     
-    func peerAvailabilityChanged(_ peerID: String, available: Bool) {
-        // Default empty implementation
+    /// Encode payload with type prefix
+    func encode() -> Data {
+        var encoded = Data()
+        encoded.append(type.rawValue)
+        encoded.append(data)
+        return encoded
+    }
+    
+    /// Decode payload from data
+    static func decode(_ data: Data) -> NoisePayload? {
+        // Ensure we have at least 1 byte for the type
+        guard !data.isEmpty else {
+            return nil
+        }
+        
+        // Safely get the first byte
+        let firstByte = data[data.startIndex]
+        guard let type = NoisePayloadType(rawValue: firstByte) else {
+            return nil
+        }
+        
+        // Create a proper Data copy (not a subsequence) for thread safety
+        let payloadData = data.count > 1 ? Data(data.dropFirst()) : Data()
+        return NoisePayload(type: type, data: payloadData)
     }
 }

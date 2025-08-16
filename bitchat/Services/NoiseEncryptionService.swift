@@ -11,7 +11,7 @@
 ///
 /// High-level encryption service that manages Noise Protocol sessions for secure
 /// peer-to-peer communication in BitChat. Acts as the bridge between the transport
-/// layer (BluetoothMeshService) and the cryptographic layer (NoiseProtocol).
+/// layer (SimplifiedBluetoothService) and the cryptographic layer (NoiseProtocol).
 ///
 /// ## Overview
 /// This service provides a simplified API for establishing and managing encrypted
@@ -60,7 +60,7 @@
 /// ```
 ///
 /// ## Integration Points
-/// - **BluetoothMeshService**: Calls this service for all private messages
+/// - **SimplifiedBluetoothService**: Calls this service for all private messages
 /// - **ChatViewModel**: Monitors encryption status for UI indicators
 /// - **NoiseHandshakeCoordinator**: Prevents handshake race conditions
 /// - **KeychainManager**: Secure storage for identity keys
@@ -162,8 +162,25 @@ class NoiseEncryptionService {
     private let rekeyCheckInterval: TimeInterval = 60.0 // Check every minute
     
     // Callbacks
-    var onPeerAuthenticated: ((String, String) -> Void)? // peerID, fingerprint
+    private var onPeerAuthenticatedHandlers: [((String, String) -> Void)] = [] // Array of handlers for peer authentication
     var onHandshakeRequired: ((String) -> Void)? // peerID needs handshake
+    
+    // Add a handler for peer authentication
+    func addOnPeerAuthenticatedHandler(_ handler: @escaping (String, String) -> Void) {
+        serviceQueue.async(flags: .barrier) { [weak self] in
+            self?.onPeerAuthenticatedHandlers.append(handler)
+        }
+    }
+    
+    // Legacy support - setting this will add to the handlers array
+    var onPeerAuthenticated: ((String, String) -> Void)? {
+        get { nil } // Always return nil for backward compatibility
+        set {
+            if let handler = newValue {
+                addOnPeerAuthenticatedHandler(handler)
+            }
+        }
+    }
     
     init() {
         // Load or create static identity key (ONLY from keychain)
@@ -434,8 +451,12 @@ class NoiseEncryptionService {
         // Log security event
         SecureLogger.logSecurityEvent(.handshakeCompleted(peerID: peerID))
         
-        // Notify about authentication
-        onPeerAuthenticated?(peerID, fingerprint)
+        // Notify all handlers about authentication
+        serviceQueue.async { [weak self] in
+            self?.onPeerAuthenticatedHandlers.forEach { handler in
+                handler(peerID, fingerprint)
+            }
+        }
     }
     
     private func calculateFingerprint(for publicKey: Curve25519.KeyAgreement.PublicKey) -> String {
