@@ -287,7 +287,7 @@ final class IntegrationTests: XCTestCase {
         
         // Track identity announcements
         nodes["Bob"]!.packetDeliveryHandler = { packet in
-            if packet.type == MessageType.noiseIdentityAnnounce.rawValue {
+            if packet.type == 0x04 { // noiseIdentityAnnounce was removed
                 bobReceivedIdentityAnnounce = true
                 if aliceReceivedIdentityAnnounce {
                     expectation.fulfill()
@@ -296,7 +296,7 @@ final class IntegrationTests: XCTestCase {
         }
         
         nodes["Alice"]!.packetDeliveryHandler = { packet in
-            if packet.type == MessageType.noiseIdentityAnnounce.rawValue {
+            if packet.type == 0x04 { // noiseIdentityAnnounce was removed
                 aliceReceivedIdentityAnnounce = true
                 if bobReceivedIdentityAnnounce {
                     expectation.fulfill()
@@ -347,7 +347,7 @@ final class IntegrationTests: XCTestCase {
         let handshakeExpectation = XCTestExpectation(description: "New handshake completed")
         
         nodes["Bob"]!.packetDeliveryHandler = { packet in
-            if packet.type == MessageType.noiseHandshakeInit.rawValue {
+            if packet.type == 0x05 { // noiseHandshakeInit was removed
                 // Bob initiates new handshake after restart
                 do {
                     let response = try self.noiseManagers["Alice"]!.handleIncomingHandshake(
@@ -357,7 +357,7 @@ final class IntegrationTests: XCTestCase {
                     if let resp = response {
                         // Send response back to Bob
                         let responsePacket = TestHelpers.createTestPacket(
-                            type: MessageType.noiseHandshakeResp.rawValue,
+                            type: 0x06, // noiseHandshakeResp was removed
                             payload: resp
                         )
                         self.nodes["Bob"]!.simulateIncomingPacket(responsePacket)
@@ -365,7 +365,7 @@ final class IntegrationTests: XCTestCase {
                 } catch {
                     XCTFail("Handshake handling failed: \(error)")
                 }
-            } else if packet.type == MessageType.noiseHandshakeResp.rawValue && packet.senderID.hexEncodedString() == TestConstants.testPeerID1 {
+            } else if packet.type == 0x06 // noiseHandshakeResp was removed && packet.senderID.hexEncodedString() == TestConstants.testPeerID1 {
                 // Final handshake message (message 3 in XX pattern)
                 handshakeExpectation.fulfill()
             }
@@ -552,7 +552,7 @@ final class IntegrationTests: XCTestCase {
                     
                     let nackData = nack.toBinaryData()
                     let nackPacket = TestHelpers.createTestPacket(
-                        type: MessageType.protocolNack.rawValue,
+                        type: 0x08, // protocolNack was removed
                         payload: nackData
                     )
                     self.nodes["Alice"]!.simulateIncomingPacket(nackPacket)
@@ -560,7 +560,7 @@ final class IntegrationTests: XCTestCase {
                     // Bob clears session
                     self.noiseManagers["Bob"]!.removeSession(for: TestConstants.testPeerID1)
                 }
-            } else if packet.type == MessageType.noiseHandshakeInit.rawValue {
+            } else if packet.type == 0x05 { // noiseHandshakeInit was removed
                 // Bob receives handshake init from Alice after NACK
                 do {
                     let response = try self.noiseManagers["Bob"]!.handleIncomingHandshake(
@@ -569,7 +569,7 @@ final class IntegrationTests: XCTestCase {
                     )
                     if let resp = response {
                         let responsePacket = TestHelpers.createTestPacket(
-                            type: MessageType.noiseHandshakeResp.rawValue,
+                            type: 0x06, // noiseHandshakeResp was removed
                             payload: resp
                         )
                         self.nodes["Alice"]!.simulateIncomingPacket(responsePacket)
@@ -582,7 +582,7 @@ final class IntegrationTests: XCTestCase {
         
         // Setup Alice's handler to clear session on NACK and initiate handshake
         nodes["Alice"]!.packetDeliveryHandler = { packet in
-            if packet.type == MessageType.protocolNack.rawValue {
+            if packet.type == 0x08 { // protocolNack was removed
                 // Alice receives NACK - clear session
                 self.noiseManagers["Alice"]!.removeSession(for: TestConstants.testPeerID2)
                 
@@ -590,14 +590,14 @@ final class IntegrationTests: XCTestCase {
                 do {
                     let handshakeInit = try self.noiseManagers["Alice"]!.initiateHandshake(with: TestConstants.testPeerID2)
                     let handshakePacket = TestHelpers.createTestPacket(
-                        type: MessageType.noiseHandshakeInit.rawValue,
+                        type: 0x05, // noiseHandshakeInit was removed
                         payload: handshakeInit
                     )
                     self.nodes["Bob"]!.simulateIncomingPacket(handshakePacket)
                 } catch {
                     XCTFail("Alice failed to initiate handshake: \(error)")
                 }
-            } else if packet.type == MessageType.noiseHandshakeResp.rawValue {
+            } else if packet.type == 0x06 // noiseHandshakeResp was removed {
                 // Complete handshake
                 do {
                     let final = try self.noiseManagers["Alice"]!.handleIncomingHandshake(
@@ -606,7 +606,7 @@ final class IntegrationTests: XCTestCase {
                     )
                     if let finalMsg = final {
                         let finalPacket = TestHelpers.createTestPacket(
-                            type: MessageType.noiseHandshakeResp.rawValue,
+                            type: 0x06, // noiseHandshakeResp was removed
                             payload: finalMsg
                         )
                         self.nodes["Bob"]!.simulateIncomingPacket(finalPacket)

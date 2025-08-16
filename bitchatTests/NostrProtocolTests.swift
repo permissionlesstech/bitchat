@@ -13,8 +13,7 @@ final class NostrProtocolTests: XCTestCase {
     
     override func setUp() {
         super.setUp()
-        // Enable secure logging for tests
-        SecureLogger.enableLogging()
+        // SecureLogger is always enabled
     }
     
     func testNIP17MessageRoundTrip() throws {
@@ -39,7 +38,7 @@ final class NostrProtocolTests: XCTestCase {
         print("Gift wrap pubkey: \(giftWrap.pubkey)")
         
         // Decrypt the gift wrap
-        let (decryptedContent, senderPubkey) = try NostrProtocol.decryptPrivateMessage(
+        let (decryptedContent, senderPubkey, timestamp) = try NostrProtocol.decryptPrivateMessage(
             giftWrap: giftWrap,
             recipientIdentity: recipient
         )
@@ -48,7 +47,12 @@ final class NostrProtocolTests: XCTestCase {
         XCTAssertEqual(decryptedContent, originalContent)
         XCTAssertEqual(senderPubkey, sender.publicKeyHex)
         
-        print("✅ Successfully decrypted message: '\(decryptedContent)' from \(senderPubkey)")
+        // Verify timestamp is reasonable (within last minute)
+        let messageDate = Date(timeIntervalSince1970: TimeInterval(timestamp))
+        let timeDiff = abs(messageDate.timeIntervalSinceNow)
+        XCTAssertLessThan(timeDiff, 60, "Message timestamp should be recent")
+        
+        print("✅ Successfully decrypted message: '\(decryptedContent)' from \(senderPubkey) at \(messageDate)")
     }
     
     func testGiftWrapUsesUniqueEphemeralKeys() throws {
@@ -75,11 +79,11 @@ final class NostrProtocolTests: XCTestCase {
         print("Message 2 gift wrap pubkey: \(message2.pubkey)")
         
         // Both should decrypt successfully
-        let (content1, _) = try NostrProtocol.decryptPrivateMessage(
+        let (content1, _, _) = try NostrProtocol.decryptPrivateMessage(
             giftWrap: message1,
             recipientIdentity: recipient
         )
-        let (content2, _) = try NostrProtocol.decryptPrivateMessage(
+        let (content2, _, _) = try NostrProtocol.decryptPrivateMessage(
             giftWrap: message2,
             recipientIdentity: recipient
         )
