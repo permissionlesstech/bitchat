@@ -651,7 +651,7 @@ struct ContentView: View {
                                     displayName: peer.id == currentMyPeerID ? viewModel.nickname : peer.nickname,
                                     isFavorite: peer.favoriteStatus?.isFavorite ?? false,
                                     isMe: peer.id == currentMyPeerID,
-                                    hasUnreadMessages: viewModel.unreadPrivateMessages.contains(peer.id),
+                                    hasUnreadMessages: viewModel.hasUnreadMessages(for: peer.id),
                                     encryptionStatus: viewModel.getEncryptionStatus(for: peer.id),
                                     connectionState: peer.connectionState,
                                     isMutualFavorite: peer.favoriteStatus?.isMutual ?? false
@@ -890,7 +890,7 @@ struct ContentView: View {
             
             // People counter with unread indicator
             HStack(spacing: 4) {
-                if !viewModel.unreadPrivateMessages.isEmpty {
+                if viewModel.hasAnyUnreadMessages {
                     Image(systemName: "envelope.fill")
                         .font(.system(size: 12))
                         .foregroundColor(Color.orange)

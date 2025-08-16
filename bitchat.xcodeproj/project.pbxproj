@@ -10,11 +10,9 @@
 		049BD3902E4EC4F0001A566B /* PrivateChatManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 049BD38F2E4EC4F0001A566B /* PrivateChatManager.swift */; };
 		049BD3912E4EC4F0001A566B /* AutocompleteService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 049BD38C2E4EC4F0001A566B /* AutocompleteService.swift */; };
 		049BD3922E4EC4F0001A566B /* CommandProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 049BD38D2E4EC4F0001A566B /* CommandProcessor.swift */; };
-		049BD3932E4EC4F0001A566B /* PeerStateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 049BD38E2E4EC4F0001A566B /* PeerStateManager.swift */; };
 		049BD3942E4EC4F0001A566B /* PrivateChatManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 049BD38F2E4EC4F0001A566B /* PrivateChatManager.swift */; };
 		049BD3952E4EC4F0001A566B /* AutocompleteService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 049BD38C2E4EC4F0001A566B /* AutocompleteService.swift */; };
 		049BD3962E4EC4F0001A566B /* CommandProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 049BD38D2E4EC4F0001A566B /* CommandProcessor.swift */; };
-		049BD3972E4EC4F0001A566B /* PeerStateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 049BD38E2E4EC4F0001A566B /* PeerStateManager.swift */; };
 		049BD3992E506A12001A566B /* UnifiedPeerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 049BD3982E506A12001A566B /* UnifiedPeerService.swift */; };
 		049BD39A2E506A12001A566B /* UnifiedPeerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 049BD3982E506A12001A566B /* UnifiedPeerService.swift */; };
 		0AE840940F21AFC07C226636 /* PrivateChatE2ETests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A262EDDC04B7D7B5E31F321 /* PrivateChatE2ETests.swift */; };
@@ -144,7 +142,6 @@
 		03C57F452B55FD0FD8F51421 /* bitchatTests_macOS.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = bitchatTests_macOS.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		049BD38C2E4EC4F0001A566B /* AutocompleteService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutocompleteService.swift; sourceTree = "<group>"; };
 		049BD38D2E4EC4F0001A566B /* CommandProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandProcessor.swift; sourceTree = "<group>"; };
-		049BD38E2E4EC4F0001A566B /* PeerStateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerStateManager.swift; sourceTree = "<group>"; };
 		049BD38F2E4EC4F0001A566B /* PrivateChatManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivateChatManager.swift; sourceTree = "<group>"; };
 		049BD3982E506A12001A566B /* UnifiedPeerService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnifiedPeerService.swift; sourceTree = "<group>"; };
 		05BA20BC0F123F1507C5C247 /* IdentityModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdentityModels.swift; sourceTree = "<group>"; };
@@ -414,7 +411,6 @@
 				049BD3982E506A12001A566B /* UnifiedPeerService.swift */,
 				049BD38C2E4EC4F0001A566B /* AutocompleteService.swift */,
 				049BD38D2E4EC4F0001A566B /* CommandProcessor.swift */,
-				049BD38E2E4EC4F0001A566B /* PeerStateManager.swift */,
 				049BD38F2E4EC4F0001A566B /* PrivateChatManager.swift */,
 				419BFFF209EBA93F410E9E9F /* FavoritesPersistenceService.swift */,
 				136696FC4436A02D98CE6A77 /* KeychainManager.swift */,
@@ -651,7 +647,6 @@
 				049BD3942E4EC4F0001A566B /* PrivateChatManager.swift in Sources */,
 				049BD3952E4EC4F0001A566B /* AutocompleteService.swift in Sources */,
 				049BD3962E4EC4F0001A566B /* CommandProcessor.swift in Sources */,
-				049BD3972E4EC4F0001A566B /* PeerStateManager.swift in Sources */,
 				D111988977C3BC246AB27FA4 /* SecureLogger.swift in Sources */,
 				8DE687D2EB5EB120868DBFB5 /* SimplifiedBluetoothService.swift in Sources */,
 			);
@@ -690,7 +685,6 @@
 				049BD3902E4EC4F0001A566B /* PrivateChatManager.swift in Sources */,
 				049BD3912E4EC4F0001A566B /* AutocompleteService.swift in Sources */,
 				049BD3922E4EC4F0001A566B /* CommandProcessor.swift in Sources */,
-				049BD3932E4EC4F0001A566B /* PeerStateManager.swift in Sources */,
 				EC5241969D2550B97629EBD0 /* SecureLogger.swift in Sources */,
 				C165DD35BB8E9C327A3C2DA4 /* SimplifiedBluetoothService.swift in Sources */,
 			);

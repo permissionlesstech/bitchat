@@ -278,8 +278,5 @@ private class MockBitchatDelegate: BitchatDelegate {
     func didDisconnectFromPeer(_ peerID: String) {}
     func didUpdatePeerList(_ peers: [String]) {}
     func isFavorite(fingerprint: String) -> Bool { return false }
-    func didReceiveDeliveryAck(_ ack: DeliveryAck) {}
-    func didReceiveReadReceipt(_ receipt: ReadReceipt) {}
     func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) {}
-    func peerAvailabilityChanged(_ peerID: String, available: Bool) {}
 }

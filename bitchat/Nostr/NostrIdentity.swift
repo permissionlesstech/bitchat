@@ -140,6 +140,16 @@ struct NostrIdentityBridge {
         }
         return pubkey
     }
+    
+    /// Clear all Nostr identity associations and current identity
+    static func clearAllAssociations() {
+        // Delete current Nostr identity
+        KeychainHelper.delete(key: currentIdentityKey, service: keychainService)
+        
+        // Note: We can't efficiently delete all noise-nostr associations 
+        // without tracking them, but they'll be orphaned and eventually cleaned up
+        // The important part is deleting the current identity so a new one is generated
+    }
 }
 
 // Bech32 encoding for Nostr (minimal implementation)

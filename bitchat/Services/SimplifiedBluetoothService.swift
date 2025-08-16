@@ -11,7 +11,7 @@ final class SimplifiedBluetoothService: NSObject {
     
     // MARK: - Constants
     
-    static let serviceUUID = CBUUID(string: "F47B5E2D-4A9E-4C5A-9B3F-8E1D2C3A4B5B") // testnet
+    static let serviceUUID = CBUUID(string: "F47B5E2D-4A9E-4C5A-9B3F-8E1D2C3A4B5A") // testnet
     //static let serviceUUID = CBUUID(string: "F47B5E2D-4A9E-4C5A-9B3F-8E1D2C3A4B5C") // mainnet
     static let characteristicUUID = CBUUID(string: "A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D")
     
@@ -82,6 +82,12 @@ final class SimplifiedBluetoothService: NSObject {
     private let messageQueueKey = DispatchSpecificKey<Void>()
     private let bleQueue = DispatchQueue(label: "mesh.bluetooth", qos: .userInitiated)
     
+    // Queue for messages pending handshake completion
+    private var pendingMessagesAfterHandshake: [String: [(content: String, messageID: String)]] = [:]
+    
+    // Queue for notifications that failed due to full queue
+    private var pendingNotifications: [(data: Data, centrals: [CBCentral]?)] = []
+    
     // MARK: - Maintenance Timer
     
     private weak var maintenanceTimer: Timer?  // Single timer for all maintenance tasks
@@ -136,6 +142,17 @@ final class SimplifiedBluetoothService: NSObject {
         
         // Set queue key for identification
         messageQueue.setSpecific(key: messageQueueKey, value: ())
+        
+        // Set up Noise session establishment callback
+        // This ensures we send pending messages only when session is truly established
+        noiseService.onPeerAuthenticated = { [weak self] peerID, fingerprint in
+            SecureLogger.log("🔐 Noise session authenticated with \(peerID), fingerprint: \(fingerprint.prefix(16))...", 
+                            category: SecureLogger.noise, level: .info)
+            // Send any messages that were queued during handshake
+            self?.messageQueue.async { [weak self] in
+                self?.sendPendingMessagesAfterHandshake(for: peerID)
+            }
+        }
         
         // Set up application state tracking (iOS only)
         #if os(iOS)
@@ -277,6 +294,11 @@ final class SimplifiedBluetoothService: NSObject {
         // Give leave message a moment to send
         Thread.sleep(forTimeInterval: 0.05)
         
+        // Clear pending notifications
+        collectionsQueue.sync(flags: .barrier) {
+            pendingNotifications.removeAll()
+        }
+        
         // Stop timer
         maintenanceTimer?.invalidate()
         maintenanceTimer = nil
@@ -333,6 +355,9 @@ final class SimplifiedBluetoothService: NSObject {
             SecureLogger.log("Cannot send read receipt - no Noise session with \(peerID)", category: SecureLogger.noise, level: .warning)
             return
         }
+        
+        SecureLogger.log("📤 Sending READ receipt for message \(receipt.originalMessageID) to \(peerID)", 
+                        category: SecureLogger.session, level: .info)
         
         // Create read receipt payload: [type byte] + [message ID]
         var receiptPayload = Data([NoisePayloadType.readReceipt.rawValue])
@@ -523,13 +548,22 @@ final class SimplifiedBluetoothService: NSObject {
                 SecureLogger.log("Failed to encrypt message: \(error)", category: SecureLogger.noise, level: .error)
             }
         } else {
-            // Fire and forget - initiate handshake but don't queue
-            SecureLogger.log("🤝 No session with \(recipientID), initiating handshake", category: SecureLogger.session, level: .info)
+            // Queue message for sending after handshake completes
+            SecureLogger.log("🤝 No session with \(recipientID), initiating handshake and queueing message", category: SecureLogger.session, level: .info)
+            
+            // Queue the message (especially important for favorite notifications)
+            collectionsQueue.sync(flags: .barrier) {
+                if pendingMessagesAfterHandshake[recipientID] == nil {
+                    pendingMessagesAfterHandshake[recipientID] = []
+                }
+                pendingMessagesAfterHandshake[recipientID]?.append((content, messageID))
+            }
+            
             initiateNoiseHandshake(with: recipientID)
             
-            // Notify delegate immediately - accept occasional loss
+            // Notify delegate that message is pending
             notifyUI { [weak self] in
-                self?.delegate?.didUpdateMessageDeliveryStatus(messageID, status: .sent)
+                self?.delegate?.didUpdateMessageDeliveryStatus(messageID, status: .sending)
             }
         }
     }
@@ -561,6 +595,62 @@ final class SimplifiedBluetoothService: NSObject {
             }
         } catch {
             SecureLogger.log("Failed to initiate handshake: \(error)", category: SecureLogger.noise, level: .error)
+        }
+    }
+    
+    private func sendPendingMessagesAfterHandshake(for peerID: String) {
+        // Get and clear pending messages for this peer
+        let pendingMessages = collectionsQueue.sync(flags: .barrier) { () -> [(content: String, messageID: String)]? in
+            let messages = pendingMessagesAfterHandshake[peerID]
+            pendingMessagesAfterHandshake.removeValue(forKey: peerID)
+            return messages
+        }
+        
+        guard let messages = pendingMessages, !messages.isEmpty else { return }
+        
+        SecureLogger.log("📤 Sending \(messages.count) pending messages after handshake to \(peerID)", 
+                        category: SecureLogger.session, level: .info)
+        
+        // Send each pending message directly (we know session is established)
+        for (content, messageID) in messages {
+            // Encrypt and send directly without checking session again
+            do {
+                // Create message payload with ID: [type byte] + [ID:xxxxx|content]
+                var messagePayload = Data([NoisePayloadType.privateMessage.rawValue])
+                let messageWithID = "ID:\(messageID)|\(content)"
+                messagePayload.append(contentsOf: messageWithID.utf8)
+                
+                let encrypted = try noiseService.encrypt(messagePayload, for: peerID)
+                
+                let packet = BitchatPacket(
+                    type: MessageType.noiseEncrypted.rawValue,
+                    senderID: hexStringToData(myPeerID),
+                    recipientID: hexStringToData(peerID),
+                    timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                    payload: encrypted,
+                    signature: nil,
+                    ttl: messageTTL
+                )
+                
+                // We're already on messageQueue from the callback
+                broadcastPacket(packet)
+                
+                // Notify delegate that message was sent
+                notifyUI { [weak self] in
+                    self?.delegate?.didUpdateMessageDeliveryStatus(messageID, status: .sent)
+                }
+                
+                SecureLogger.log("✅ Sent pending message \(messageID) to \(peerID) after handshake", 
+                                category: SecureLogger.session, level: .info)
+            } catch {
+                SecureLogger.log("Failed to send pending message after handshake: \(error)", 
+                                category: SecureLogger.noise, level: .error)
+                
+                // Notify delegate of failure
+                notifyUI { [weak self] in
+                    self?.delegate?.didUpdateMessageDeliveryStatus(messageID, status: .failed(reason: "Encryption failed"))
+                }
+            }
         }
     }
     
@@ -614,9 +704,25 @@ final class SimplifiedBluetoothService: NSObject {
                 // Find the specific central for this peer
                 for central in subscribedCentrals {
                     if centralToPeerID[central.identifier.uuidString] == recipientPeerID {
-                        peripheralManager?.updateValue(data, for: characteristic, onSubscribedCentrals: [central])
-                        // Successfully routed via central notification
-                        sentEncrypted = true
+                        let success = peripheralManager?.updateValue(data, for: characteristic, onSubscribedCentrals: [central]) ?? false
+                        if success {
+                            // Successfully routed via central notification
+                            sentEncrypted = true
+                        } else {
+                            // Queue for retry when notification queue has space
+                            collectionsQueue.async(flags: .barrier) { [weak self] in
+                                guard let self = self else { return }
+                                // Limit queue size to prevent memory issues
+                                if self.pendingNotifications.count < 20 {
+                                    self.pendingNotifications.append((data: data, centrals: [central]))
+                                    SecureLogger.log("📋 Queued encrypted packet for retry (notification queue full)", 
+                                                   category: SecureLogger.session, level: .debug)
+                                } else {
+                                    SecureLogger.log("⚠️ Pending notification queue full, dropping packet", 
+                                                   category: SecureLogger.session, level: .warning)
+                                }
+                            }
+                        }
                     }
                 }
                 
@@ -665,9 +771,20 @@ final class SimplifiedBluetoothService: NSObject {
                     // Handshake broadcast to centrals
                 }
             } else {
-                // Notification queue full
-                SecureLogger.log("⚠️ Notification queue full for packet type \(packet.type)",
-                               category: SecureLogger.session, level: .warning)
+                // Notification queue full - queue for retry on handshake packets
+                if packet.type == MessageType.noiseHandshake.rawValue {
+                    collectionsQueue.async(flags: .barrier) { [weak self] in
+                        guard let self = self else { return }
+                        if self.pendingNotifications.count < 20 {
+                            self.pendingNotifications.append((data: data, centrals: nil))
+                            SecureLogger.log("📋 Queued handshake packet for retry (notification queue full)", 
+                                           category: SecureLogger.session, level: .debug)
+                        }
+                    }
+                } else {
+                    SecureLogger.log("⚠️ Notification queue full for packet type \(packet.type)", 
+                                   category: SecureLogger.session, level: .warning)
+                }
             }
         }
         
@@ -782,15 +899,24 @@ final class SimplifiedBluetoothService: NSObject {
     private func handleReceivedPacket(_ packet: BitchatPacket, from peerID: String) {
         // Deduplication (thread-safe)
         let senderID = dataToHexString(packet.senderID)
-        let messageID = "\(senderID)-\(packet.timestamp)"
+        // Include packet type in message ID to prevent collisions between different packet types
+        let messageID = "\(senderID)-\(packet.timestamp)-\(packet.type)"
         
         // Only log non-announce packets to reduce noise
         if packet.type != MessageType.announce.rawValue {
-            // Handling packet
+            // Log packet details for debugging
+            SecureLogger.log("📦 Handling packet type \(packet.type) from \(senderID), messageID: \(messageID)", 
+                            category: SecureLogger.session, level: .debug)
         }
         
         // Efficient deduplication
         if messageDeduplicator.isDuplicate(messageID) {
+            // Announce packets (type 1) are sent every 10 seconds for peer discovery
+            // It's normal to see these as duplicates - don't log them to reduce noise
+            if packet.type != MessageType.announce.rawValue {
+                SecureLogger.log("⚠️ Duplicate packet ignored: \(messageID)", 
+                                category: SecureLogger.session, level: .debug)
+            }
             return // Duplicate ignored
         }
         
@@ -1020,7 +1146,8 @@ final class SimplifiedBluetoothService: NSObject {
                     broadcastPacket(responsePacket)
                 }
                 
-                // Session established - no pending messages to send (fire and forget)
+                // Session establishment will trigger onPeerAuthenticated callback
+                // which will send any pending messages at the right time
             } catch {
                 SecureLogger.log("Failed to process handshake: \(error)", category: SecureLogger.noise, level: .error)
                 // Try initiating a new handshake
@@ -1032,6 +1159,9 @@ final class SimplifiedBluetoothService: NSObject {
     }
     
     private func handleNoiseEncrypted(_ packet: BitchatPacket, from peerID: String) {
+        SecureLogger.log("🔐 handleNoiseEncrypted called for packet from \(peerID)", 
+                        category: SecureLogger.noise, level: .debug)
+        
         guard let recipientID = packet.recipientID else {
             SecureLogger.log("⚠️ Encrypted message has no recipient ID", category: SecureLogger.session, level: .warning)
             return
@@ -1057,7 +1187,11 @@ final class SimplifiedBluetoothService: NSObject {
             switch NoisePayloadType(rawValue: payloadType) {
             case .privateMessage:
                 // Try to decode as TLV first
-                guard let privateMessage = PrivateMessagePacket.decode(from: Data(payloadData)) else { return }
+                guard let privateMessage = PrivateMessagePacket.decode(from: Data(payloadData)) else {
+                    SecureLogger.log("⚠️ Failed to decode private message with TLV format", 
+                                    category: SecureLogger.noise, level: .warning)
+                    return
+                }
                 // Successfully decoded TLV format
                 let messageID = privateMessage.messageID
                 let messageContent = privateMessage.content
@@ -1082,7 +1216,12 @@ final class SimplifiedBluetoothService: NSObject {
                 
                 // Send on main thread
                 notifyUI { [weak self] in
-                    self?.delegate?.didReceiveMessage(message)
+                    if let delegate = self?.delegate {
+                        SecureLogger.log("📨 Forwarding PM to ChatViewModel delegate", category: SecureLogger.session, level: .debug)
+                        delegate.didReceiveMessage(message)
+                    } else {
+                        SecureLogger.log("⚠️ Delegate is nil, cannot forward PM to ChatViewModel", category: SecureLogger.session, level: .warning)
+                    }
                 }
                 
                 // Send delivery ACK
@@ -1102,7 +1241,9 @@ final class SimplifiedBluetoothService: NSObject {
             case .readReceipt:
                 // Handle read receipt
                 guard let messageID = String(data: payloadData, encoding: .utf8) else { return }
-                // Read receipt received - no need to log
+                
+                SecureLogger.log("📖 Received READ receipt for message \(messageID) from \(peerID)", 
+                                category: SecureLogger.session, level: .info)
                 
                 // Update read status
                 notifyUI { [weak self] in
@@ -1114,7 +1255,8 @@ final class SimplifiedBluetoothService: NSObject {
                 SecureLogger.log("⚠️ Unknown noise payload type: \(payloadType)", category: SecureLogger.noise, level: .warning)
             }
         } catch {
-            SecureLogger.log("Failed to decrypt message: \(error)", category: SecureLogger.noise, level: .error)
+            SecureLogger.log("❌ Failed to decrypt message from \(peerID): \(error)", 
+                            category: SecureLogger.noise, level: .error)
         }
     }
     
@@ -1786,8 +1928,47 @@ extension SimplifiedBluetoothService: CBPeripheralManagerDelegate {
     
     func peripheralManagerIsReady(toUpdateSubscribers peripheral: CBPeripheralManager) {
         SecureLogger.log("📤 Peripheral manager ready to send more notifications", category: SecureLogger.session, level: .info)
-        // Notification queue has space now - could retry failed sends here
-        // For now, just log that we're ready again
+        
+        // Retry pending notifications now that queue has space
+        collectionsQueue.async(flags: .barrier) { [weak self] in
+            guard let self = self,
+                  let characteristic = self.characteristic,
+                  !self.pendingNotifications.isEmpty else { return }
+            
+            let pending = self.pendingNotifications
+            self.pendingNotifications.removeAll()
+            
+            // Try to send pending notifications
+            for (data, centrals) in pending {
+                if let centrals = centrals {
+                    // Send to specific centrals
+                    let success = self.peripheralManager?.updateValue(data, for: characteristic, onSubscribedCentrals: centrals) ?? false
+                    if !success {
+                        // Still full, re-queue
+                        self.pendingNotifications.append((data: data, centrals: centrals))
+                        SecureLogger.log("⚠️ Notification queue still full, re-queuing", 
+                                       category: SecureLogger.session, level: .debug)
+                        break  // Stop trying, wait for next ready callback
+                    } else {
+                        SecureLogger.log("✅ Sent pending notification from retry queue", 
+                                       category: SecureLogger.session, level: .debug)
+                    }
+                } else {
+                    // Broadcast to all
+                    let success = self.peripheralManager?.updateValue(data, for: characteristic, onSubscribedCentrals: nil) ?? false
+                    if !success {
+                        // Still full, re-queue
+                        self.pendingNotifications.append((data: data, centrals: nil))
+                        break
+                    }
+                }
+            }
+            
+            if !self.pendingNotifications.isEmpty {
+                SecureLogger.log("📋 Still have \(self.pendingNotifications.count) pending notifications", 
+                               category: SecureLogger.session, level: .debug)
+            }
+        }
     }
     
     func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveWrite requests: [CBATTRequest]) {
