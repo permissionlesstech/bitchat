@@ -2015,45 +2015,6 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     
     // MARK: - Message Reception
     
-    @MainActor
-    func handleHandshakeRequest(from peerID: String, nickname: String, pendingCount: UInt8) {
-        // Create a notification message
-        let notificationMessage = BitchatMessage(
-            sender: "system",
-            content: "📨 \(nickname) wants to send you \(pendingCount) message\(pendingCount == 1 ? "" : "s"). open the conversation to receive.",
-            timestamp: Date(),
-            isRelay: false,
-            originalSender: nil,
-            isPrivate: false,
-            recipientNickname: nil,
-            senderPeerID: "system",
-            mentions: nil
-        )
-        
-        // Add to messages
-        messages.append(notificationMessage)
-        trimMessagesIfNeeded()
-        
-        // Show system notification
-        if let fingerprint = getFingerprint(for: peerID) {
-            let isFavorite = favoritePeers.contains(fingerprint)
-            if isFavorite {
-                // Send favorite notification
-                NotificationService.shared.sendPrivateMessageNotification(
-                    from: nickname,
-                    message: "\(pendingCount) message\(pendingCount == 1 ? "" : "s") pending",
-                    peerID: peerID
-                )
-            } else {
-                // Send regular notification
-                NotificationService.shared.sendMentionNotification(
-                    from: nickname,
-                    message: "\(pendingCount) message\(pendingCount == 1 ? "" : "s") pending. Open conversation to receive."
-                )
-            }
-        }
-    }
-    
     func didReceiveMessage(_ message: BitchatMessage) {
         Task { @MainActor in
             // Early validation
