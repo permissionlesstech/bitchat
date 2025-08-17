@@ -9,7 +9,7 @@ import UIKit
 /// BLEService — Bluetooth Mesh Transport
 /// - Emits events exclusively via `BitchatDelegate`. Publishers remain internal for non-UI services.
 /// - ChatViewModel must consume delegate callbacks (`didReceivePublicMessage`, `didReceiveNoisePayload`).
-/// - UnifiedPeerService currently uses `fullPeersPublisher` for peer snapshots (internal use).
+/// - UnifiedPeerService consumes `peerSnapshotPublisher` (mapped from internal fullPeersPublisher).
 final class BLEService: NSObject {
     
     // MARK: - Constants
@@ -126,6 +126,35 @@ final class BLEService: NSObject {
             noisePublicKey: info.noisePublicKey,
             lastSeen: info.lastSeen
         )
+    }
+
+    // Map full peer data to TransportPeerSnapshot for consumers outside UI
+    lazy var peerSnapshotPublisher: AnyPublisher<[TransportPeerSnapshot], Never> = {
+        fullPeersPublisher
+            .map { dict in
+                dict.values.map { s in
+                    TransportPeerSnapshot(
+                        id: s.id,
+                        nickname: s.nickname,
+                        isConnected: s.isConnected,
+                        noisePublicKey: s.noisePublicKey,
+                        lastSeen: s.lastSeen
+                    )
+                }
+            }
+            .eraseToAnyPublisher()
+    }()
+
+    func currentPeerSnapshots() -> [TransportPeerSnapshot] {
+        return fullPeersPublisher.value.values.map { s in
+            TransportPeerSnapshot(
+                id: s.id,
+                nickname: s.nickname,
+                isConnected: s.isConnected,
+                noisePublicKey: s.noisePublicKey,
+                lastSeen: s.lastSeen
+            )
+        }
     }
     
     // MARK: - Delegate

@@ -1,7 +1,16 @@
 import Foundation
+import Combine
 
 /// Abstract transport interface used by ChatViewModel and services.
 /// BLEService implements this protocol; a future Nostr transport can too.
+struct TransportPeerSnapshot {
+    let id: String
+    let nickname: String
+    let isConnected: Bool
+    let noisePublicKey: Data?
+    let lastSeen: Date
+}
+
 protocol Transport: AnyObject {
     // Event sink
     var delegate: BitchatDelegate? { get set }
@@ -33,7 +42,10 @@ protocol Transport: AnyObject {
     func sendFavoriteNotification(to peerID: String, isFavorite: Bool)
     func sendBroadcastAnnounce()
     func sendDeliveryAck(for messageID: String, to peerID: String)
+
+    // Peer snapshots (for non-UI services)
+    var peerSnapshotPublisher: AnyPublisher<[TransportPeerSnapshot], Never> { get }
+    func currentPeerSnapshots() -> [TransportPeerSnapshot]
 }
 
 extension BLEService: Transport {}
-
