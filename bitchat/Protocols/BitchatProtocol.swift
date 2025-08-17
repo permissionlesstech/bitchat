@@ -461,6 +461,10 @@ protocol BitchatDelegate: AnyObject {
     func isFavorite(fingerprint: String) -> Bool
     
     func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus)
+
+    // Low-level events for better separation of concerns
+    func didReceiveNoisePayload(from peerID: String, type: NoisePayloadType, payload: Data, timestamp: Date)
+    func didReceivePublicMessage(from peerID: String, nickname: String, content: String, timestamp: Date)
 }
 
 // Provide default implementation to make it effectively optional
@@ -470,6 +474,14 @@ extension BitchatDelegate {
     }
     
     func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) {
+        // Default empty implementation
+    }
+
+    func didReceiveNoisePayload(from peerID: String, type: NoisePayloadType, payload: Data, timestamp: Date) {
+        // Default empty implementation
+    }
+
+    func didReceivePublicMessage(from peerID: String, nickname: String, content: String, timestamp: Date) {
         // Default empty implementation
     }
 }

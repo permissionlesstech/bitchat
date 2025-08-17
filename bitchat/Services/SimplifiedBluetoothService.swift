@@ -8,7 +8,7 @@ import UIKit
 
 /// Simplified Bluetooth Mesh Service - Core functionality only
 /// Target: <1500 lines (from 6470)
-final class SimplifiedBluetoothService: NSObject {
+final class BLEService: NSObject {
     
     // MARK: - Constants
     
@@ -261,7 +261,7 @@ final class SimplifiedBluetoothService: NSObject {
         // Start BLE services if not already running
         if centralManager?.state == .poweredOn {
             centralManager?.scanForPeripherals(
-                withServices: [SimplifiedBluetoothService.serviceUUID],
+                withServices: [BLEService.serviceUUID],
                 options: [CBCentralManagerScanOptionAllowDuplicatesKey: false]
             )
         }
@@ -277,7 +277,7 @@ final class SimplifiedBluetoothService: NSObject {
         // Send leave message synchronously to ensure delivery
         let leavePacket = BitchatPacket(
             type: MessageType.leave.rawValue,
-            senderID: hexStringToData(myPeerID),
+            senderID: Data(hexString: myPeerID) ?? Data(),
             recipientID: nil,
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
             payload: Data(),
@@ -322,9 +322,14 @@ final class SimplifiedBluetoothService: NSObject {
     }
     
     func isPeerConnected(_ peerID: String) -> Bool {
-        return collectionsQueue.sync {
-            return peers[peerID]?.isConnected ?? false
-        }
+        // Accept both 16-hex short IDs and 64-hex Noise keys
+        let shortID: String = {
+            if peerID.count == 64, let key = Data(hexString: peerID) {
+                return PeerIDUtils.derivePeerID(fromPublicKey: key)
+            }
+            return peerID
+        }()
+        return collectionsQueue.sync { peers[shortID]?.isConnected ?? false }
     }
     
     func getPeerNicknames() -> [String: String] {
@@ -376,8 +381,8 @@ final class SimplifiedBluetoothService: NSObject {
             let encrypted = try noiseService.encrypt(receiptPayload, for: peerID)
             let packet = BitchatPacket(
                 type: MessageType.noiseEncrypted.rawValue,
-                senderID: hexStringToData(myPeerID),
-                recipientID: hexStringToData(peerID),
+                senderID: Data(hexString: myPeerID) ?? Data(),
+                recipientID: Data(hexString: peerID),
                 timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                 payload: encrypted,
                 signature: nil,
@@ -406,7 +411,7 @@ final class SimplifiedBluetoothService: NSObject {
     func getPeerFingerprint(_ peerID: String) -> String? {
         return collectionsQueue.sync {
             if let publicKey = peers[peerID]?.noisePublicKey {
-                return dataToHexString(publicKey)
+                return publicKey.hexEncodedString()
             }
             return nil
         }
@@ -531,15 +536,15 @@ final class SimplifiedBluetoothService: NSObject {
                     }
                 }
                 
-                let packet = BitchatPacket(
-                    type: MessageType.noiseEncrypted.rawValue,
-                    senderID: hexStringToData(myPeerID),
-                    recipientID: recipientData,
-                    timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-                    payload: encrypted,
-                    signature: nil,
-                    ttl: messageTTL
-                )
+            let packet = BitchatPacket(
+                type: MessageType.noiseEncrypted.rawValue,
+                senderID: Data(hexString: myPeerID) ?? Data(),
+                recipientID: recipientData,
+                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                payload: encrypted,
+                signature: nil,
+                ttl: messageTTL
+            )
                 // Call directly if already on messageQueue, otherwise dispatch
                 if DispatchQueue.getSpecific(key: messageQueueKey) != nil {
                     broadcastPacket(packet)
@@ -587,8 +592,8 @@ final class SimplifiedBluetoothService: NSObject {
             // Send handshake init
             let packet = BitchatPacket(
                 type: MessageType.noiseHandshake.rawValue,
-                senderID: hexStringToData(myPeerID),
-                recipientID: hexStringToData(peerID),
+                senderID: Data(hexString: myPeerID) ?? Data(),
+                recipientID: Data(hexString: peerID),
                 timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                 payload: handshakeData,
                 signature: nil,
@@ -633,8 +638,8 @@ final class SimplifiedBluetoothService: NSObject {
                 
                 let packet = BitchatPacket(
                     type: MessageType.noiseEncrypted.rawValue,
-                    senderID: hexStringToData(myPeerID),
-                    recipientID: hexStringToData(peerID),
+                    senderID: Data(hexString: myPeerID) ?? Data(),
+                    recipientID: Data(hexString: peerID),
                     timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                     payload: encrypted,
                     signature: nil,
@@ -691,7 +696,7 @@ final class SimplifiedBluetoothService: NSObject {
         // Handshakes need broader delivery to establish encryption
         if packet.type == MessageType.noiseEncrypted.rawValue,
            let recipientID = packet.recipientID {
-            let recipientPeerID = dataToHexString(recipientID)
+            let recipientPeerID = recipientID.hexEncodedString()
             var sentEncrypted = false
             
             // Check routing availability (only log if there's an issue)
@@ -756,7 +761,7 @@ final class SimplifiedBluetoothService: NSObject {
         // 1. First try sending as central via writes to connected peripherals
         // This is the preferred path when we have direct peripheral connections
         for state in peripherals.values where state.isConnected {
-            if let characteristic = state.characteristic {
+                if let characteristic = state.characteristic {
                 state.peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
                 sentToPeripherals += 1
             }
@@ -907,7 +912,7 @@ final class SimplifiedBluetoothService: NSObject {
     
     private func handleReceivedPacket(_ packet: BitchatPacket, from peerID: String) {
         // Deduplication (thread-safe)
-        let senderID = dataToHexString(packet.senderID)
+                let senderID = packet.senderID.hexEncodedString()
         // Include packet type in message ID to prevent collisions between different packet types
         let messageID = "\(senderID)-\(packet.timestamp)-\(packet.type)"
         
@@ -1081,29 +1086,7 @@ final class SimplifiedBluetoothService: NSObject {
         }
     }
     
-    private func parseMentions(from content: String) -> [String] {
-        let pattern = "@([\\p{L}0-9_]+)"
-        let regex = try? NSRegularExpression(pattern: pattern, options: [])
-        let matches = regex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
-        
-        var mentions: [String] = []
-        
-        // Get all known nicknames including our own
-        var allNicknames = Set(peers.values.map { $0.nickname })
-        allNicknames.insert(myNickname)
-        
-        for match in matches {
-            if let range = Range(match.range(at: 1), in: content) {
-                let mentionedName = String(content[range])
-                // Check if this is a valid nickname
-                if allNicknames.contains(mentionedName) {
-                    mentions.append(mentionedName)
-                }
-            }
-        }
-        
-        return Array(Set(mentions)) // Remove duplicates
-    }
+    // Mention parsing moved to ChatViewModel
     
     private func handleMessage(_ packet: BitchatPacket, from peerID: String) {
         // Don't process our own messages
@@ -1119,43 +1102,24 @@ final class SimplifiedBluetoothService: NSObject {
         let senderNickname = peers[peerID]?.nickname ?? "Unknown"
         SecureLogger.log("💬 [\(senderNickname)] TTL:\(packet.ttl): \(String(content.prefix(50)))\(content.count > 50 ? "..." : "")", category: SecureLogger.session, level: .debug)
         
-        // Parse mentions from the message content
-        let mentions = parseMentions(from: content)
-        
-        let message = BitchatMessage(
-            id: UUID().uuidString,
-            sender: senderNickname,
-            content: content,
-            timestamp: Date(timeIntervalSince1970: Double(packet.timestamp) / 1000),
-            isRelay: false,
-            originalSender: nil,
-            isPrivate: false,
-            recipientNickname: nil,
-            senderPeerID: peerID,
-            mentions: mentions.isEmpty ? nil : mentions
-        )
-        
-        // Send on main thread (without capturing self strongly)
+        let ts = Date(timeIntervalSince1970: Double(packet.timestamp) / 1000)
         notifyUI { [weak self] in
-            guard let self = self else { return }
-            // Deliver to UI
-            self.messagesPublisher.send(message)
-            self.delegate?.didReceiveMessage(message)
+            self?.delegate?.didReceivePublicMessage(from: peerID, nickname: senderNickname, content: content, timestamp: ts)
         }
     }
     
     private func handleNoiseHandshake(_ packet: BitchatPacket, from peerID: String) {
         // Use NoiseEncryptionService for handshake processing
         if let recipientID = packet.recipientID,
-           dataToHexString(recipientID) == myPeerID {
+           recipientID.hexEncodedString() == myPeerID {
             // Handshake is for us
             do {
                 if let response = try noiseService.processHandshakeMessage(from: peerID, message: packet.payload) {
                     // Send response
                     let responsePacket = BitchatPacket(
                         type: MessageType.noiseHandshake.rawValue,
-                        senderID: hexStringToData(myPeerID),
-                        recipientID: hexStringToData(peerID),
+                        senderID: Data(hexString: myPeerID) ?? Data(),
+                        recipientID: Data(hexString: peerID),
                         timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                         payload: response,
                         signature: nil,
@@ -1186,7 +1150,7 @@ final class SimplifiedBluetoothService: NSObject {
             return
         }
         
-        let recipientHex = dataToHexString(recipientID)
+        let recipientHex = recipientID.hexEncodedString()
         if recipientHex != myPeerID {
             SecureLogger.log("🔐 Encrypted message not for me (for \(recipientHex), I am \(myPeerID))", category: SecureLogger.session, level: .debug)
             return
@@ -1205,71 +1169,20 @@ final class SimplifiedBluetoothService: NSObject {
             
             switch NoisePayloadType(rawValue: payloadType) {
             case .privateMessage:
-                // Try to decode as TLV first
-                guard let privateMessage = PrivateMessagePacket.decode(from: Data(payloadData)) else {
-                    SecureLogger.log("⚠️ Failed to decode private message with TLV format", 
-                                    category: SecureLogger.noise, level: .warning)
-                    return
-                }
-                // Successfully decoded TLV format
-                let messageID = privateMessage.messageID
-                let messageContent = privateMessage.content
-                
-                // Parse mentions even in private messages
-                let mentions = parseMentions(from: messageContent)
-                
-                let message = BitchatMessage(
-                    id: messageID,
-                    sender: peers[peerID]?.nickname ?? "Unknown",
-                    content: messageContent,
-                    timestamp: Date(timeIntervalSince1970: Double(packet.timestamp) / 1000),
-                    isRelay: false,
-                    originalSender: nil,
-                    isPrivate: true,
-                    recipientNickname: myNickname,
-                    senderPeerID: peerID,
-                    mentions: mentions.isEmpty ? nil : mentions
-                )
-                
-                SecureLogger.log("🔓 Decrypted TLV PM from \(message.sender): \(messageContent.prefix(30))...", category: SecureLogger.session, level: .debug)
-                
-                // Send on main thread
+                let ts = Date(timeIntervalSince1970: Double(packet.timestamp) / 1000)
                 notifyUI { [weak self] in
-                    if let delegate = self?.delegate {
-                        SecureLogger.log("📨 Forwarding PM to ChatViewModel delegate", category: SecureLogger.session, level: .debug)
-                        delegate.didReceiveMessage(message)
-                    } else {
-                        SecureLogger.log("⚠️ Delegate is nil, cannot forward PM to ChatViewModel", category: SecureLogger.session, level: .warning)
-                    }
+                    self?.delegate?.didReceiveNoisePayload(from: peerID, type: .privateMessage, payload: Data(payloadData), timestamp: ts)
                 }
-                
-                // Send delivery ACK
-                sendDeliveryAck(for: messageID, to: peerID)
-                
-                
             case .delivered:
-                // Handle delivery ACK
-                guard let messageID = String(data: payloadData, encoding: .utf8) else { return }
-                // Delivery ACK received - no need to log
-                
-                // Update delivery status
+                let ts = Date(timeIntervalSince1970: Double(packet.timestamp) / 1000)
                 notifyUI { [weak self] in
-                    self?.delegate?.didUpdateMessageDeliveryStatus(messageID, status: .delivered(to: peerID, at: Date()))
+                    self?.delegate?.didReceiveNoisePayload(from: peerID, type: .delivered, payload: Data(payloadData), timestamp: ts)
                 }
-                
             case .readReceipt:
-                // Handle read receipt
-                guard let messageID = String(data: payloadData, encoding: .utf8) else { return }
-                
-                SecureLogger.log("📖 Received READ receipt for message \(messageID) from \(peerID)", 
-                                category: SecureLogger.session, level: .debug)
-                
-                // Update read status
+                let ts = Date(timeIntervalSince1970: Double(packet.timestamp) / 1000)
                 notifyUI { [weak self] in
-                    let nickname = self?.peers[peerID]?.nickname ?? "Unknown"
-                    self?.delegate?.didUpdateMessageDeliveryStatus(messageID, status: .read(by: nickname, at: Date()))
+                    self?.delegate?.didReceiveNoisePayload(from: peerID, type: .readReceipt, payload: Data(payloadData), timestamp: ts)
                 }
-                
             default:
                 SecureLogger.log("⚠️ Unknown noise payload type: \(payloadType)", category: SecureLogger.noise, level: .warning)
             }
@@ -1361,7 +1274,7 @@ final class SimplifiedBluetoothService: NSObject {
         }
     }
     
-    private func sendDeliveryAck(for messageID: String, to peerID: String) {
+    func sendDeliveryAck(for messageID: String, to peerID: String) {
         // Send encrypted delivery ACK
         guard noiseService.hasSession(with: peerID) else {
             SecureLogger.log("Cannot send ACK - no Noise session with \(peerID)", category: SecureLogger.noise, level: .warning)
@@ -1376,8 +1289,8 @@ final class SimplifiedBluetoothService: NSObject {
             let encrypted = try noiseService.encrypt(ackPayload, for: peerID)
             let packet = BitchatPacket(
                 type: MessageType.noiseEncrypted.rawValue,
-                senderID: hexStringToData(myPeerID),
-                recipientID: hexStringToData(peerID),
+                senderID: Data(hexString: myPeerID) ?? Data(),
+                recipientID: Data(hexString: peerID),
                 timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                 payload: encrypted,
                 signature: nil,
@@ -1505,7 +1418,7 @@ final class SimplifiedBluetoothService: NSObject {
 
 // MARK: - CBCentralManagerDelegate
 
-extension SimplifiedBluetoothService: CBCentralManagerDelegate {
+extension BLEService: CBCentralManagerDelegate {
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         if central.state == .poweredOn {
             // Start scanning - use allow duplicates for faster discovery when active
@@ -1527,7 +1440,7 @@ extension SimplifiedBluetoothService: CBCentralManagerDelegate {
         #endif
         
         central.scanForPeripherals(
-            withServices: [SimplifiedBluetoothService.serviceUUID],
+                withServices: [BLEService.serviceUUID],
             options: [CBCentralManagerScanOptionAllowDuplicatesKey: allowDuplicates]
         )
         
@@ -1630,7 +1543,7 @@ extension SimplifiedBluetoothService: CBCentralManagerDelegate {
         SecureLogger.log("✅ Connected: \(peripheral.name ?? "Unknown") [\(peripheralID)]", category: SecureLogger.session, level: .debug)
         
         // Discover services
-        peripheral.discoverServices([SimplifiedBluetoothService.serviceUUID])
+        peripheral.discoverServices([BLEService.serviceUUID])
     }
     
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
@@ -1692,14 +1605,14 @@ extension SimplifiedBluetoothService: CBCentralManagerDelegate {
 
 // MARK: - CBPeripheralDelegate
 
-extension SimplifiedBluetoothService: CBPeripheralDelegate {
+extension BLEService: CBPeripheralDelegate {
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         if let error = error {
             SecureLogger.log("❌ Error discovering services for \(peripheral.name ?? "Unknown"): \(error.localizedDescription)", category: SecureLogger.session, level: .error)
             // Retry service discovery after a delay
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 guard peripheral.state == .connected else { return }
-                peripheral.discoverServices([SimplifiedBluetoothService.serviceUUID])
+                peripheral.discoverServices([BLEService.serviceUUID])
             }
             return
         }
@@ -1709,14 +1622,14 @@ extension SimplifiedBluetoothService: CBPeripheralDelegate {
             return
         }
         
-        guard let service = services.first(where: { $0.uuid == SimplifiedBluetoothService.serviceUUID }) else {
+        guard let service = services.first(where: { $0.uuid == BLEService.serviceUUID }) else {
             // Not a BitChat peer - disconnect
             centralManager?.cancelPeripheralConnection(peripheral)
             return
         }
         
         // Discovering BLE characteristics
-        peripheral.discoverCharacteristics([SimplifiedBluetoothService.characteristicUUID], for: service)
+        peripheral.discoverCharacteristics([BLEService.characteristicUUID], for: service)
     }
     
     func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
@@ -1725,7 +1638,7 @@ extension SimplifiedBluetoothService: CBPeripheralDelegate {
             return
         }
         
-        guard let characteristic = service.characteristics?.first(where: { $0.uuid == SimplifiedBluetoothService.characteristicUUID }) else {
+        guard let characteristic = service.characteristics?.first(where: { $0.uuid == BLEService.characteristicUUID }) else {
             SecureLogger.log("⚠️ No matching characteristic found for \(peripheral.name ?? "Unknown")", category: SecureLogger.session, level: .warning)
             return
         }
@@ -1788,7 +1701,7 @@ extension SimplifiedBluetoothService: CBPeripheralDelegate {
         }
         
         // Use the packet's senderID as the peer identifier
-        let senderID = dataToHexString(packet.senderID)
+        let senderID = packet.senderID.hexEncodedString()
         // Only log non-announce packets
     if packet.type != MessageType.announce.rawValue {
         SecureLogger.log("📦 Decoded notification packet type: \(packet.type) from sender: \(senderID)", category: SecureLogger.session, level: .debug)
@@ -1834,7 +1747,7 @@ extension SimplifiedBluetoothService: CBPeripheralDelegate {
         SecureLogger.log("⚠️ Services modified for \(peripheral.name ?? peripheral.identifier.uuidString)", category: SecureLogger.session, level: .warning)
         
         // Check if our service was invalidated (peer app quit)
-        let hasOurService = peripheral.services?.contains { $0.uuid == SimplifiedBluetoothService.serviceUUID } ?? false
+        let hasOurService = peripheral.services?.contains { $0.uuid == BLEService.serviceUUID } ?? false
         
         if !hasOurService {
             // Service is gone - disconnect
@@ -1842,7 +1755,7 @@ extension SimplifiedBluetoothService: CBPeripheralDelegate {
             centralManager?.cancelPeripheralConnection(peripheral)
         } else {
             // Try to rediscover
-            peripheral.discoverServices([SimplifiedBluetoothService.serviceUUID])
+            peripheral.discoverServices([BLEService.serviceUUID])
         }
     }
     
@@ -1863,7 +1776,7 @@ extension SimplifiedBluetoothService: CBPeripheralDelegate {
 
 // MARK: - CBPeripheralManagerDelegate
 
-extension SimplifiedBluetoothService: CBPeripheralManagerDelegate {
+extension BLEService: CBPeripheralManagerDelegate {
     func peripheralManagerDidUpdateState(_ peripheral: CBPeripheralManager) {
         SecureLogger.log("📡 Peripheral manager state: \(peripheral.state.rawValue)", category: SecureLogger.session, level: .debug)
         
@@ -1873,14 +1786,14 @@ extension SimplifiedBluetoothService: CBPeripheralManagerDelegate {
             
             // Create characteristic
             characteristic = CBMutableCharacteristic(
-                type: SimplifiedBluetoothService.characteristicUUID,
+                type: BLEService.characteristicUUID,
                 properties: [.notify, .write, .writeWithoutResponse, .read],
                 value: nil,
                 permissions: [.readable, .writeable]
             )
             
             // Create service
-            let service = CBMutableService(type: SimplifiedBluetoothService.serviceUUID, primary: true)
+            let service = CBMutableService(type: BLEService.serviceUUID, primary: true)
             service.characteristics = [characteristic!]
             
             // Add service (advertising will start in didAdd delegate)
@@ -2019,7 +1932,7 @@ extension SimplifiedBluetoothService: CBPeripheralManagerDelegate {
             
             if let packet = BinaryProtocol.decode(data) {
                 // Use the packet's senderID as the peer identifier
-                let senderID = dataToHexString(packet.senderID)
+                let senderID = packet.senderID.hexEncodedString()
                 // Only log non-announce packets
                 if packet.type != MessageType.announce.rawValue {
                     SecureLogger.log("📦 Decoded packet type: \(packet.type) from sender: \(senderID)", category: SecureLogger.session, level: .debug)
@@ -2055,36 +1968,14 @@ extension SimplifiedBluetoothService: CBPeripheralManagerDelegate {
     }
     
     // MARK: - Helper Functions
-    
-    private func hexStringToData(_ hex: String) -> Data {
-    var data = Data()
-    var tempID = hex
-    while tempID.count >= 2 {
-        let hexByte = String(tempID.prefix(2))
-        if let byte = UInt8(hexByte, radix: 16) {
-            data.append(byte)
-        }
-        tempID = String(tempID.dropFirst(2))
-    }
-    if tempID.count == 1 {
-        if let byte = UInt8(tempID, radix: 16) {
-            data.append(byte)
-        }
-    }
-    return data
-    }
-    
-    private func dataToHexString(_ data: Data) -> String {
-        return data.map { String(format: "%02x", $0) }.joined()
-    }
 }
 
 // MARK: - Advertising Builders & Alias Rotation
 
-extension SimplifiedBluetoothService {
+extension BLEService {
     private func buildAdvertisementData() -> [String: Any] {
         let data: [String: Any] = [
-            CBAdvertisementDataServiceUUIDsKey: [SimplifiedBluetoothService.serviceUUID]
+            CBAdvertisementDataServiceUUIDsKey: [BLEService.serviceUUID]
         ]
         // No Local Name for privacy
         return data
