@@ -2089,7 +2089,7 @@ extension SimplifiedBluetoothService {
     }
     
     private func buildAdvertisementData() -> [String: Any] {
-        var data: [String: Any] = [
+        let data: [String: Any] = [
             CBAdvertisementDataServiceUUIDsKey: [SimplifiedBluetoothService.serviceUUID]
         ]
         // No Local Name for privacy
@@ -2097,6 +2097,96 @@ extension SimplifiedBluetoothService {
     }
     
     // No alias rotation or advertising restarts required.
+}
+
+// MARK: - Nostr Embedding Helpers
+
+extension SimplifiedBluetoothService {
+    /// Build a `bitchat1:` base64url-encoded BitChat packet carrying a private message
+    /// for transport over Nostr DMs. The payload is a plaintext typed NoisePayload
+    /// (no inner Noise encryption; NIP-17 provides transport-layer E2E).
+    func buildNostrEmbeddedPrivateMessageContent(content: String, to recipientPeerID: String, messageID: String) -> String? {
+        // TLV-encode the private message
+        let pm = PrivateMessagePacket(messageID: messageID, content: content)
+        guard let tlv = pm.encode() else { return nil }
+
+        // Prefix with NoisePayloadType
+        var payload = Data([NoisePayloadType.privateMessage.rawValue])
+        payload.append(tlv)
+
+        // Build BitChat packet (noiseEncrypted type used as a typed envelope)
+        // Determine correct 8-byte recipient ID (peerID) to embed
+        let recipientIDHex: String = {
+            if let maybeData = Data(hexString: recipientPeerID) {
+                if maybeData.count == 32 {
+                    // Treat as Noise static public key; derive peerID from fingerprint
+                    return Self.derivePeerID(fromPublicKey: maybeData)
+                } else if maybeData.count == 8 {
+                    // Already an 8-byte peer ID
+                    return recipientPeerID
+                }
+            }
+            // Fallback (should not happen): use myPeerID to avoid dropping
+            return recipientPeerID.count == 16 ? recipientPeerID : myPeerID
+        }()
+
+        let packet = BitchatPacket(
+            type: MessageType.noiseEncrypted.rawValue,
+            senderID: hexStringToData(myPeerID),
+            recipientID: hexStringToData(recipientIDHex),
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: payload,
+            signature: nil,
+            ttl: messageTTL
+        )
+
+        guard let data = packet.toBinaryData() else { return nil }
+        return "bitchat1:" + Self.base64URLEncode(data)
+    }
+
+    /// Build a `bitchat1:` base64url-encoded BitChat packet carrying a delivery/read ack
+    /// for transport over Nostr DMs. Payload is plaintext typed NoisePayload.
+    func buildNostrEmbeddedAckContent(type: NoisePayloadType, messageID: String, to recipientPeerID: String) -> String? {
+        guard type == .delivered || type == .readReceipt else { return nil }
+
+        var payload = Data([type.rawValue])
+        payload.append(Data(messageID.utf8))
+
+        // Determine correct 8-byte recipient ID (peerID) to embed
+        let recipientIDHex: String = {
+            if let maybeData = Data(hexString: recipientPeerID) {
+                if maybeData.count == 32 {
+                    return Self.derivePeerID(fromPublicKey: maybeData)
+                } else if maybeData.count == 8 {
+                    return recipientPeerID
+                }
+            }
+            return recipientPeerID.count == 16 ? recipientPeerID : myPeerID
+        }()
+
+        let packet = BitchatPacket(
+            type: MessageType.noiseEncrypted.rawValue,
+            senderID: hexStringToData(myPeerID),
+            recipientID: hexStringToData(recipientIDHex),
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: payload,
+            signature: nil,
+            ttl: messageTTL
+        )
+
+        guard let data = packet.toBinaryData() else { return nil }
+        return "bitchat1:" + Self.base64URLEncode(data)
+    }
+
+    /// Base64url encode without padding
+    private static func base64URLEncode(_ data: Data) -> String {
+        let b64 = data.base64EncodedString()
+        let urlSafe = b64
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+        return urlSafe
+    }
 }
 
 // MARK: - Message Deduplicator
