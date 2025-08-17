@@ -949,21 +949,29 @@ struct ContentView: View {
     
     @ViewBuilder
     private func privateHeaderContent(for privatePeerID: String) -> some View {
-        // Try to resolve to current peer ID if this is an old one
-        // resolveCurrentPeerID not implemented
-        let currentPeerID: String = privatePeerID
+        // Prefer short (mesh) ID when mesh-connected (radio). Only use full Noise key when not connected (globe).
+        let headerPeerID: String = {
+            if privatePeerID.count == 16 {
+                let isMeshConnected = viewModel.meshService.isPeerConnected(privatePeerID) || viewModel.connectedPeers.contains(privatePeerID)
+                if !isMeshConnected, let stable = viewModel.getNoiseKeyForShortID(privatePeerID) {
+                    return stable
+                }
+            }
+            return privatePeerID
+        }()
         
-        let peer = viewModel.getPeer(byID: currentPeerID)
+        // Resolve peer object for header context (may be offline favorite)
+        let peer = viewModel.getPeer(byID: headerPeerID)
         let privatePeerNick = peer?.displayName ?? 
-                              viewModel.meshService.getPeerNicknames()[currentPeerID] ?? 
-                              FavoritesPersistenceService.shared.getFavoriteStatus(for: Data(hexString: privatePeerID) ?? Data())?.peerNickname ?? 
+                              viewModel.meshService.getPeerNicknames()[headerPeerID] ?? 
+                              FavoritesPersistenceService.shared.getFavoriteStatus(for: Data(hexString: headerPeerID) ?? Data())?.peerNickname ?? 
                               // getFavoriteStatusByNostrKey not implemented
                               // FavoritesPersistenceService.shared.getFavoriteStatusByNostrKey(privatePeerID)?.peerNickname ?? 
                               "Unknown"
         let isNostrAvailable: Bool = {
             guard let connectionState = peer?.connectionState else { 
                 // Check if we can reach this peer via Nostr even if not in allPeers
-                if let noiseKey = Data(hexString: privatePeerID),
+                if let noiseKey = Data(hexString: headerPeerID),
                    let favoriteStatus = FavoritesPersistenceService.shared.getFavoriteStatus(for: noiseKey),
                    favoriteStatus.isMutual {
                     return true
@@ -981,7 +989,7 @@ struct ContentView: View {
         ZStack {
                     // Center content - always perfectly centered
                     Button(action: {
-                        viewModel.showFingerprint(for: privatePeerID)
+                        viewModel.showFingerprint(for: headerPeerID)
                     }) {
                         HStack(spacing: 6) {
                             // Show transport icon based on connection state (like peer list)
@@ -1009,6 +1017,12 @@ struct ContentView: View {
                                     .font(.system(size: 14))
                                     .foregroundColor(.purple)
                                     .accessibilityLabel("Available via Nostr")
+                            } else if viewModel.meshService.isPeerConnected(headerPeerID) || viewModel.connectedPeers.contains(headerPeerID) {
+                                // Fallback: if peer lookup is missing but mesh reports connected, show radio
+                                Image(systemName: "dot.radiowaves.left.and.right")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(textColor)
+                                    .accessibilityLabel("Connected via mesh")
                             }
                             
                             Text("\(privatePeerNick)")
@@ -1016,7 +1030,7 @@ struct ContentView: View {
                                 .foregroundColor(textColor)
                             
                             // Dynamic encryption status icon
-                            let encryptionStatus = viewModel.getEncryptionStatus(for: privatePeerID)
+                            let encryptionStatus = viewModel.getEncryptionStatus(for: headerPeerID)
                             if let icon = encryptionStatus.icon {
                                 Image(systemName: icon)
                                     .font(.system(size: 14))
@@ -1052,11 +1066,11 @@ struct ContentView: View {
                         
                         // Favorite button
                         Button(action: {
-                            viewModel.toggleFavorite(peerID: privatePeerID)
+                            viewModel.toggleFavorite(peerID: headerPeerID)
                         }) {
-                            Image(systemName: viewModel.isFavorite(peerID: privatePeerID) ? "star.fill" : "star")
+                            Image(systemName: viewModel.isFavorite(peerID: headerPeerID) ? "star.fill" : "star")
                                 .font(.system(size: 16))
-                                .foregroundColor(viewModel.isFavorite(peerID: privatePeerID) ? Color.yellow : textColor)
+                                .foregroundColor(viewModel.isFavorite(peerID: headerPeerID) ? Color.yellow : textColor)
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel(viewModel.isFavorite(peerID: privatePeerID) ? "Remove from favorites" : "Add to favorites")

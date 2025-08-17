@@ -190,7 +190,7 @@ class UnifiedPeerService: ObservableObject {
                 SecureLogger.log(
                     "🔄 Found favorite for '\(peerInfo.nickname)' by nickname, updating noise key",
                     category: SecureLogger.session,
-                    level: .info
+                    level: .debug
                 )
                 
                 // Update the favorite's key in persistence
@@ -277,7 +277,7 @@ class UnifiedPeerService: ObservableObject {
         
         // Debug logging to understand the issue
         SecureLogger.log("🔍 Toggle favorite - peer.nickname: '\(peer.nickname)', peer.displayName: '\(peer.displayName)', peerID: \(peerID)", 
-                       category: SecureLogger.session, level: .info)
+                       category: SecureLogger.session, level: .debug)
         
         if actualNickname.isEmpty {
             // Try to get from mesh service's current peer list
@@ -312,7 +312,7 @@ class UnifiedPeerService: ObservableObject {
         
         // Log the final nickname being saved
         SecureLogger.log("⭐️ Toggled favorite for '\(finalNickname)' (peerID: \(peerID), was: \(wasFavorite), now: \(!wasFavorite))",
-                       category: SecureLogger.session, level: .info)
+                       category: SecureLogger.session, level: .debug)
         
         // Send favorite notification to the peer
         meshService.sendFavoriteNotification(to: peerID, isFavorite: !wasFavorite)
