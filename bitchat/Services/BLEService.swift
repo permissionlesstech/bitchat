@@ -635,15 +635,19 @@ final class BLEService: NSObject {
         
         // Send each pending message directly (we know session is established)
         for (content, messageID) in messages {
-            // Encrypt and send directly without checking session again
             do {
-                // Create message payload with ID: [type byte] + [ID:xxxxx|content]
+                // Use the same TLV format as normal sends to keep receiver decoding consistent
+                let privateMessage = PrivateMessagePacket(messageID: messageID, content: content)
+                guard let tlvData = privateMessage.encode() else {
+                    SecureLogger.log("Failed to encode pending private message TLV", category: SecureLogger.noise, level: .error)
+                    continue
+                }
+
                 var messagePayload = Data([NoisePayloadType.privateMessage.rawValue])
-                let messageWithID = "ID:\(messageID)|\(content)"
-                messagePayload.append(contentsOf: messageWithID.utf8)
-                
+                messagePayload.append(tlvData)
+
                 let encrypted = try noiseService.encrypt(messagePayload, for: peerID)
-                
+
                 let packet = BitchatPacket(
                     type: MessageType.noiseEncrypted.rawValue,
                     senderID: Data(hexString: myPeerID) ?? Data(),
@@ -653,21 +657,21 @@ final class BLEService: NSObject {
                     signature: nil,
                     ttl: messageTTL
                 )
-                
+
                 // We're already on messageQueue from the callback
                 broadcastPacket(packet)
-                
+
                 // Notify delegate that message was sent
                 notifyUI { [weak self] in
                     self?.delegate?.didUpdateMessageDeliveryStatus(messageID, status: .sent)
                 }
-                
+
                 SecureLogger.log("✅ Sent pending message \(messageID) to \(peerID) after handshake", 
                                 category: SecureLogger.session, level: .debug)
             } catch {
                 SecureLogger.log("Failed to send pending message after handshake: \(error)", 
                                 category: SecureLogger.noise, level: .error)
-                
+
                 // Notify delegate of failure
                 notifyUI { [weak self] in
                     self?.delegate?.didUpdateMessageDeliveryStatus(messageID, status: .failed(reason: "Encryption failed"))
