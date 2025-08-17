@@ -127,7 +127,7 @@ class CommandProcessor {
             }
         } else {
             // In public chat
-            meshService?.sendMessage(emoteContent)
+            meshService?.sendMessage(emoteContent, mentions: [])
         }
         
         return .handled

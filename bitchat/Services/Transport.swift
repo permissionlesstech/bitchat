@@ -12,6 +12,8 @@ struct TransportPeerSnapshot {
 }
 
 protocol Transport: AnyObject {
+    // Peer events (preferred over publishers for UI)
+    var peerEventsDelegate: TransportPeerEventsDelegate? { get set }
     // Event sink
     var delegate: BitchatDelegate? { get set }
 
@@ -46,6 +48,10 @@ protocol Transport: AnyObject {
     // Peer snapshots (for non-UI services)
     var peerSnapshotPublisher: AnyPublisher<[TransportPeerSnapshot], Never> { get }
     func currentPeerSnapshots() -> [TransportPeerSnapshot]
+}
+
+protocol TransportPeerEventsDelegate: AnyObject {
+    @MainActor func didUpdatePeerSnapshots(_ peers: [TransportPeerSnapshot])
 }
 
 extension BLEService: Transport {}

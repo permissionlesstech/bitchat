@@ -116,6 +116,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     // MARK: - Service Delegates
     
     private let commandProcessor: CommandProcessor
+    private let messageRouter: MessageRouter
     private let privateChatManager: PrivateChatManager
     private let unifiedPeerService: UnifiedPeerService
     private let autocompleteService: AutocompleteService
@@ -274,6 +275,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         self.commandProcessor = CommandProcessor()
         self.privateChatManager = PrivateChatManager(meshService: meshService)
         self.unifiedPeerService = UnifiedPeerService(meshService: meshService)
+        let nostrTransport = NostrTransport()
+        self.messageRouter = MessageRouter(mesh: meshService, nostr: nostrTransport)
         self.autocompleteService = AutocompleteService()
         
         // Wire up dependencies
@@ -860,7 +863,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         // Send via appropriate transport
         if isConnected {
             // Send via mesh
-            meshService.sendPrivateMessage(content, to: peerID, recipientNickname: recipientNickname ?? "user", messageID: messageID)
+            messageRouter.sendPrivate(content, to: peerID, recipientNickname: recipientNickname ?? "user", messageID: messageID)
         } else if isMutualFavorite && hasNostrKey,
                   let recipientNostrPubkey = favoriteStatus?.peerNostrPublicKey {
             // Mutual favorite offline - send via Nostr
@@ -1304,6 +1307,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         }
     }
     
+    @MainActor
     @objc private func userDidTakeScreenshot() {
         // Send screenshot notification based on current context
         let screenshotMessage = "* \(nickname) took a screenshot *"
@@ -1317,7 +1321,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 switch sessionState {
                 case .established:
                     // Send the message directly without going through sendPrivateMessage to avoid local echo
-                    meshService.sendPrivateMessage(screenshotMessage, to: peerID, recipientNickname: peerNickname, messageID: UUID().uuidString)
+                    messageRouter.sendPrivate(screenshotMessage, to: peerID, recipientNickname: peerNickname, messageID: UUID().uuidString)
                 default:
                     // Don't send screenshot notification if no session exists
                     SecureLogger.log("Skipping screenshot notification to \(peerID) - no established session", category: SecureLogger.security, level: .debug)
@@ -1414,7 +1418,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             // The radical simplification plan says to accept occasional loss
         } else if meshService.getPeerNicknames()[actualPeerID] != nil {
             // Use mesh for connected peers (default behavior)
-            meshService.sendReadReceipt(receipt, to: actualPeerID)
+            messageRouter.sendReadReceipt(receipt, to: actualPeerID)
         } else {
             // Skip read receipts for offline peers - fire and forget principle
         }
@@ -3421,7 +3425,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         
         // Try mesh first for connected peers
         if meshService.isPeerConnected(peerID) {
-            meshService.sendFavoriteNotification(to: peerID, isFavorite: isFavorite)
+            messageRouter.sendFavoriteNotification(to: peerID, isFavorite: isFavorite)
             SecureLogger.log("📤 Sent favorite notification via BLE to \(peerID)", category: SecureLogger.session, level: .debug)
         } else if let key = noiseKey,
                   let favoriteStatus = FavoritesPersistenceService.shared.getFavoriteStatus(for: key),

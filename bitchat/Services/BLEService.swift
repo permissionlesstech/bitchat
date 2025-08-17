@@ -160,15 +160,15 @@ final class BLEService: NSObject {
     // MARK: - Delegate
     
     weak var delegate: BitchatDelegate?
+    weak var peerEventsDelegate: TransportPeerEventsDelegate?
     
     // MARK: - Initialization
     
-    /// Notify UI on main thread (only if needed)
+    /// Notify UI on the MainActor to satisfy Swift concurrency isolation
     private func notifyUI(_ block: @escaping () -> Void) {
-        if Thread.isMainThread {
+        // Always hop onto the MainActor so calls to @MainActor delegates are safe
+        Task { @MainActor in
             block()
-        } else {
-            DispatchQueue.main.async(execute: block)
         }
     }
     
@@ -458,9 +458,7 @@ final class BLEService: NSObject {
     }
 
     // Transport compatibility: generic naming
-    func getFingerprint(for peerID: String) -> String? {
-        return getPeerFingerprint(peerID)
-    }
+    
     
     func getNoiseSessionState(for peerID: String) -> LazyHandshakeState {
         if noiseService.hasEstablishedSession(with: peerID) {
@@ -1358,7 +1356,7 @@ final class BLEService: NSObject {
         }
     }
     
-    // NEW: Publish full peer data to subscribers
+    // NEW: Publish full peer data to subscribers and notify Transport delegates
     private func publishFullPeerData() {
         let snapshot = collectionsQueue.sync { () -> [String: PeerInfoSnapshot] in
             Dictionary(uniqueKeysWithValues: peers.map { (id, info) in
@@ -1366,6 +1364,18 @@ final class BLEService: NSObject {
             })
         }
         fullPeersPublisher.send(snapshot)
+        let transportPeers: [TransportPeerSnapshot] = snapshot.values.map { s in
+            TransportPeerSnapshot(
+                id: s.id,
+                nickname: s.nickname,
+                isConnected: s.isConnected,
+                noisePublicKey: s.noisePublicKey,
+                lastSeen: s.lastSeen
+            )
+        }
+        Task { @MainActor [weak self] in
+            self?.peerEventsDelegate?.didUpdatePeerSnapshots(transportPeers)
+        }
     }
     
     // MARK: - Consolidated Maintenance

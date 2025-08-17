@@ -13,7 +13,7 @@ import CryptoKit
 
 /// Single source of truth for peer state, combining mesh connectivity and favorites
 @MainActor
-class UnifiedPeerService: ObservableObject {
+class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
     
     // MARK: - Published Properties
     
@@ -47,14 +47,8 @@ class UnifiedPeerService: ObservableObject {
     // MARK: - Setup
     
     private func setupSubscriptions() {
-        // Subscribe to mesh peer updates
-        meshService.peerSnapshotPublisher
-            .combineLatest(favoritesService.$favorites)
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.updatePeers()
-            }
-            .store(in: &cancellables)
+        // Subscribe to mesh peer updates via delegate (preferred over publishers)
+        meshService.peerEventsDelegate = self
         
         // Also listen for favorite change notifications
         NotificationCenter.default.publisher(for: .favoriteStatusChanged)
@@ -63,6 +57,11 @@ class UnifiedPeerService: ObservableObject {
                 self?.updatePeers()
             }
             .store(in: &cancellables)
+    }
+
+    // TransportPeerEventsDelegate
+    func didUpdatePeerSnapshots(_ peers: [TransportPeerSnapshot]) {
+        updatePeers()
     }
     
     // MARK: - Core Update Logic
