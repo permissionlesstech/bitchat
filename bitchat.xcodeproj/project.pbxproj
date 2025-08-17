@@ -35,7 +35,7 @@
 		2EFCCAA297B16FA2B56747C7 /* TestConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC75901A0F0073B5BB8356E7 /* TestConstants.swift */; };
 		31D147471B9F4E2815352DDA /* LinkPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AC141774F6671FCDC347DC7 /* LinkPreviewView.swift */; };
 		37DDF3D09E2BAB92A5A8A9C1 /* TestHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E346DF8E026FD34EE3DD038 /* TestHelpers.swift */; };
-		3849CA6D99B2D536636DF4A6 /* MockSimplifiedBluetoothService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE7CCF2BD78A3F3DAE6DA145 /* MockSimplifiedBluetoothService.swift */; };
+		3849CA6D99B2D536636DF4A6 /* MockBLEService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE7CCF2BD78A3F3DAE6DA145 /* MockBLEService.swift */; };
 		38EDDC049FD56B1BB1F14C91 /* IdentityModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05BA20BC0F123F1507C5C247 /* IdentityModels.swift */; };
 		3EE336D150427F736F32B56C /* P256K in Frameworks */ = {isa = PBXBuildFile; productRef = B1D9136AA0083366353BFA2F /* P256K */; };
 		4B747085D07A1BCE0F5BA612 /* BinaryProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2136C3E22D02D4A8DBE7EAB /* BinaryProtocol.swift */; };
@@ -47,7 +47,7 @@
 		68C4BE564735F6E7915274A2 /* SecureIdentityStateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDC18D910D6FF2E8B1B6C885 /* SecureIdentityStateManager.swift */; };
 		6A85FC357ACD85DBD9020845 /* NostrRelayManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78595178957244CBDF7E79B6 /* NostrRelayManager.swift */; };
 		6C63FA98D59854C15C57B3D6 /* FingerprintView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9195CDC7EB236AFBC9A4D41A /* FingerprintView.swift */; };
-		6C803BF930E7E19BE6E99EAA /* MockSimplifiedBluetoothService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE7CCF2BD78A3F3DAE6DA145 /* MockSimplifiedBluetoothService.swift */; };
+		6C803BF930E7E19BE6E99EAA /* MockBLEService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE7CCF2BD78A3F3DAE6DA145 /* MockBLEService.swift */; };
 		6D0D4A0B1D8B659DCBAE7C9C /* NoiseHandshakeCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1D6A89B36A3D31E590B94E5 /* NoiseHandshakeCoordinator.swift */; };
 		6DE056E1EE9850E9FBF50157 /* BitchatProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 229F17B68CFF7AB1BC91C847 /* BitchatProtocol.swift */; };
 		6E7761E21C99F28AE2F9BE5F /* BitchatApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF625BB3AD919322C01A46B2 /* BitchatApp.swift */; };
@@ -210,7 +210,7 @@
 		EF625BB3AD919322C01A46B2 /* BitchatApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitchatApp.swift; sourceTree = "<group>"; };
 		FC75901A0F0073B5BB8356E7 /* TestConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestConstants.swift; sourceTree = "<group>"; };
 		FDC18D910D6FF2E8B1B6C885 /* SecureIdentityStateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureIdentityStateManager.swift; sourceTree = "<group>"; };
-		FE7CCF2BD78A3F3DAE6DA145 /* MockSimplifiedBluetoothService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockSimplifiedBluetoothService.swift; sourceTree = "<group>"; };
+		FE7CCF2BD78A3F3DAE6DA145 /* MockBLEService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockBLEService.swift; sourceTree = "<group>"; };
 		FF7AF93D874001FBD94C8306 /* bitchat-macOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "bitchat-macOS.entitlements"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -322,7 +322,7 @@
 			isa = PBXGroup;
 			children = (
 				C27328EE574221395B2B8E87 /* MockBluetoothMeshService.swift */,
-				FE7CCF2BD78A3F3DAE6DA145 /* MockSimplifiedBluetoothService.swift */,
+				FE7CCF2BD78A3F3DAE6DA145 /* MockBLEService.swift */,
 			);
 			path = Mocks;
 			sourceTree = "<group>";
@@ -732,7 +732,7 @@
 				AA6E067DB034FC0FA23C28A9 /* BinaryProtocolTests.swift in Sources */,
 				8F282E9CCA5AE1ECC001D2E4 /* IntegrationTests.swift in Sources */,
 				D727EA273CB214FC32612469 /* MockBluetoothMeshService.swift in Sources */,
-				6C803BF930E7E19BE6E99EAA /* MockSimplifiedBluetoothService.swift in Sources */,
+				6C803BF930E7E19BE6E99EAA /* MockBLEService.swift in Sources */,
 				765254F56997F01054699AC0 /* NoiseProtocolTests.swift in Sources */,
 				968181D255CA7A804340B4DA /* NostrProtocolTests.swift in Sources */,
 				ED83C7AC1E6BEF15389C0132 /* PrivateChatE2ETests.swift in Sources */,
@@ -750,7 +750,7 @@
 				0B6F25559A21F8C69C8357C6 /* BinaryProtocolTests.swift in Sources */,
 				686441ABC2AF83EE98E6ECF2 /* IntegrationTests.swift in Sources */,
 				8851F08D88C5B1DE7B9F55C6 /* MockBluetoothMeshService.swift in Sources */,
-				3849CA6D99B2D536636DF4A6 /* MockSimplifiedBluetoothService.swift in Sources */,
+				3849CA6D99B2D536636DF4A6 /* MockBLEService.swift in Sources */,
 				BC4DC75F4FB823FF40569676 /* NoiseProtocolTests.swift in Sources */,
 				EE8C3ECADAB3083A2687D50B /* NostrProtocolTests.swift in Sources */,
 				0AE840940F21AFC07C226636 /* PrivateChatE2ETests.swift in Sources */,

@@ -1,5 +1,5 @@
 //
-// MockSimplifiedBluetoothService.swift
+// MockBLEService.swift
 // bitchatTests
 //
 // This is free and unencumbered software released into the public domain.
@@ -10,10 +10,10 @@ import Foundation
 import CoreBluetooth
 @testable import bitchat
 
-// Mock implementation that mimics SimplifiedBluetoothService behavior
-class MockSimplifiedBluetoothService: NSObject {
+// Mock implementation that mimics BLEService behavior
+class MockBLEService: NSObject {
     
-    // MARK: - Properties matching SimplifiedBluetoothService
+    // MARK: - Properties matching BLEService
     
     weak var delegate: BitchatDelegate?
     var myPeerID: String = "MOCK1234"
@@ -46,7 +46,7 @@ class MockSimplifiedBluetoothService: NSObject {
         super.init()
     }
     
-    // MARK: - Methods matching SimplifiedBluetoothService
+    // MARK: - Methods matching BLEService
     
     func setNickname(_ nickname: String) {
         self.myNickname = nickname
@@ -225,3 +225,6 @@ class MockSimplifiedBluetoothService: NSObject {
         sendPrivateMessage(content, to: recipientPeerID, recipientNickname: recipientNickname, messageID: messageID ?? UUID().uuidString)
     }
 }
+
+// Backward compatibility for older tests
+typealias MockSimplifiedBluetoothService = MockBLEService
