@@ -364,7 +364,7 @@ class UnifiedPeerService: ObservableObject {
         }
         
         // Try to get from mesh service
-        if let fingerprint = meshService.getPeerFingerprint(peerID) {
+        if let fingerprint = meshService.getFingerprint(for: peerID) {
             fingerprintCache[peerID] = fingerprint
             return fingerprint
         }

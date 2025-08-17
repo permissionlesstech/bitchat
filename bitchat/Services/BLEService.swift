@@ -306,6 +306,12 @@ final class BLEService: NSObject {
             self?.sendAnnounce(forceSend: true)
         }
     }
+
+    // Transport protocol conformance helper: simplified public message send
+    func sendMessage(_ content: String, mentions: [String]) {
+        // Delegate to the full API with default routing
+        sendMessage(content, mentions: mentions, to: nil, messageID: nil, timestamp: nil)
+    }
     
     func stopServices() {
         // Send leave message synchronously to ensure delivery
@@ -449,6 +455,11 @@ final class BLEService: NSObject {
             }
             return nil
         }
+    }
+
+    // Transport compatibility: generic naming
+    func getFingerprint(for peerID: String) -> String? {
+        return getPeerFingerprint(peerID)
     }
     
     func getNoiseSessionState(for peerID: String) -> LazyHandshakeState {

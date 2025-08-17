@@ -19,9 +19,9 @@ enum CommandResult {
 @MainActor
 class CommandProcessor {
     weak var chatViewModel: ChatViewModel?
-    weak var meshService: BLEService?
+    weak var meshService: Transport?
     
-    init(chatViewModel: ChatViewModel? = nil, meshService: BLEService? = nil) {
+    init(chatViewModel: ChatViewModel? = nil, meshService: Transport? = nil) {
         self.chatViewModel = chatViewModel
         self.meshService = meshService
     }
@@ -145,7 +145,7 @@ class CommandProcessor {
             var blockedNicknames: [String] = []
             if let peers = meshService?.getPeerNicknames() {
                 for (peerID, nickname) in peers {
-                    if let fingerprint = meshService?.getPeerFingerprint(peerID),
+                    if let fingerprint = meshService?.getFingerprint(for: peerID),
                        blockedUsers.contains(fingerprint) {
                         blockedNicknames.append(nickname)
                     }
@@ -160,7 +160,7 @@ class CommandProcessor {
         let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
         
         guard let peerID = chatViewModel?.getPeerIDForNickname(nickname),
-              let fingerprint = meshService?.getPeerFingerprint(peerID) else {
+              let fingerprint = meshService?.getFingerprint(for: peerID) else {
             return .error(message: "cannot block \(nickname): not found or unable to verify identity")
         }
         
@@ -200,7 +200,7 @@ class CommandProcessor {
         let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
         
         guard let peerID = chatViewModel?.getPeerIDForNickname(nickname),
-              let fingerprint = meshService?.getPeerFingerprint(peerID) else {
+              let fingerprint = meshService?.getFingerprint(for: peerID) else {
             return .error(message: "cannot unblock \(nickname): not found")
         }
         
