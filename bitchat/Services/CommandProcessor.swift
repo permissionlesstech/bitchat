@@ -119,7 +119,7 @@ class CommandProcessor {
         
         if chatViewModel?.selectedPrivateChatPeer != nil {
             // In private chat
-            if let peerNickname = meshService?.getPeerNicknames()[targetPeerID] {
+            if let peerNickname = meshService?.peerNickname(peerID: targetPeerID) {
                 let personalMessage = "* \(emoji) \(myNickname) \(action) you\(suffix) *"
                 meshService?.sendPrivateMessage(personalMessage, to: targetPeerID, 
                                                recipientNickname: peerNickname, 

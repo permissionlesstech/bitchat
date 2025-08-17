@@ -63,7 +63,11 @@ class MockBLEService: NSObject {
     func isPeerConnected(_ peerID: String) -> Bool {
         return connectedPeers.contains(peerID)
     }
-    
+
+    func peerNickname(peerID: String) -> String? {
+        "MockPeer_\(peerID)"
+    }
+
     func getPeerNicknames() -> [String: String] {
         var nicknames: [String: String] = [:]
         for peer in connectedPeers {
