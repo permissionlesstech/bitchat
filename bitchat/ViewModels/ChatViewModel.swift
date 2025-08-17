@@ -1458,7 +1458,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     if !sentReadReceipts.contains(message.id) {
                         // Use stable Noise key hex if available; else fall back to peerID
                         let recipPeer = (Data(hexString: peerID) != nil) ? peerID : (unifiedPeerService.getPeer(by: peerID)?.noisePublicKey.hexEncodedString() ?? peerID)
-                        let receipt = ReadReceipt(originalMessageID: message.id, readerPeerID: meshService.myPeerID)
+                        let receipt = ReadReceipt(originalMessageID: message.id, readerID: meshService.myPeerID, readerNickname: nickname)
                         messageRouter.sendReadReceipt(receipt, to: recipPeer)
                         sentReadReceipts.insert(message.id)
                     }
@@ -2930,7 +2930,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                         unreadPrivateMessages.remove(ephemeralPeerID)
                     }
                     if !sentReadReceipts.contains(messageId), let key = actualSenderNoiseKey {
-                        let receipt = ReadReceipt(originalMessageID: messageId, readerPeerID: meshService.myPeerID)
+                        let receipt = ReadReceipt(originalMessageID: messageId, readerID: meshService.myPeerID, readerNickname: nickname)
                         messageRouter.sendReadReceipt(receipt, to: key.hexEncodedString())
                         sentReadReceipts.insert(messageId)
                     }
