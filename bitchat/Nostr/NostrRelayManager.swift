@@ -97,7 +97,7 @@ class NostrRelayManager: ObservableObject {
     ) {
         messageHandlers[id] = handler
         
-        SecureLogger.log("📡 Setting up subscription '\(id)' with filter - kinds: \(filter.kinds ?? []), since: \(filter.since ?? 0)", 
+        SecureLogger.log("📡 Subscribing to Nostr filter id=\(id) kinds=\(filter.kinds ?? []) since=\(filter.since ?? 0)", 
                         category: SecureLogger.session, level: .debug)
         
         let req = NostrRequest.subscribe(id: id, filters: [filter])
