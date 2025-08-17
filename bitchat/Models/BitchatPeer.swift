@@ -98,10 +98,10 @@ class PeerManager: ObservableObject {
     @Published var favorites: [BitchatPeer] = []
     @Published var mutualFavorites: [BitchatPeer] = []
     
-    private let meshService: SimplifiedBluetoothService
+    private let meshService: Transport
     private let favoritesService = FavoritesPersistenceService.shared
     
-    init(meshService: SimplifiedBluetoothService) {
+    init(meshService: Transport) {
         self.meshService = meshService
         updatePeers()
         

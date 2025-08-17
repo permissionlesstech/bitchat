@@ -10,5 +10,5 @@ import Foundation
 import CoreBluetooth
 @testable import bitchat
 
-// Compatibility wrapper for old tests - please use MockSimplifiedBluetoothService directly
-typealias MockBluetoothMeshService = MockSimplifiedBluetoothService
+// Compatibility wrapper for old tests - please use MockBLEService directly
+typealias MockBluetoothMeshService = MockBLEService

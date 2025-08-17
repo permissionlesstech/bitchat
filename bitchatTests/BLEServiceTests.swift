@@ -1,5 +1,5 @@
 //
-// SimplifiedBluetoothServiceTests.swift
+// BLEServiceTests.swift
 // bitchatTests
 //
 // This is free and unencumbered software released into the public domain.
@@ -10,13 +10,13 @@ import XCTest
 import CoreBluetooth
 @testable import bitchat
 
-final class SimplifiedBluetoothServiceTests: XCTestCase {
+final class BLEServiceTests: XCTestCase {
     
-    var service: MockSimplifiedBluetoothService!
+    var service: MockBLEService!
     
     override func setUp() {
         super.setUp()
-        service = MockSimplifiedBluetoothService()
+        service = MockBLEService()
         service.myPeerID = "TEST1234"
         service.mockNickname = "TestUser"
     }
