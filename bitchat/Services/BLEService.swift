@@ -6,14 +6,16 @@ import CryptoKit
 import UIKit
 #endif
 
-/// Simplified Bluetooth Mesh Service - Core functionality only
-/// Target: <1500 lines (from 6470)
+
 final class BLEService: NSObject {
     
     // MARK: - Constants
     
+    #if DEBUG
     static let serviceUUID = CBUUID(string: "F47B5E2D-4A9E-4C5A-9B3F-8E1D2C3A4B5A") // testnet
-    //static let serviceUUID = CBUUID(string: "F47B5E2D-4A9E-4C5A-9B3F-8E1D2C3A4B5C") // mainnet
+    #else
+    static let serviceUUID = CBUUID(string: "F47B5E2D-4A9E-4C5A-9B3F-8E1D2C3A4B5C") // mainnet
+    #endif
     static let characteristicUUID = CBUUID(string: "A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D")
     
     private let maxFragmentSize = 469 // 512 MTU - headers
@@ -1983,8 +1985,3 @@ extension BLEService {
     
     // No alias rotation or advertising restarts required.
 }
-
-// Temporary typealias for compatibility with older references
-typealias SimplifiedBluetoothService = BLEService
-
-// Remove Nostr embedding, deduplicator, and TLV supporting types from BLE file.

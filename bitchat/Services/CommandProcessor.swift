@@ -19,9 +19,9 @@ enum CommandResult {
 @MainActor
 class CommandProcessor {
     weak var chatViewModel: ChatViewModel?
-    weak var meshService: SimplifiedBluetoothService?
+    weak var meshService: BLEService?
     
-    init(chatViewModel: ChatViewModel? = nil, meshService: SimplifiedBluetoothService? = nil) {
+    init(chatViewModel: ChatViewModel? = nil, meshService: BLEService? = nil) {
         self.chatViewModel = chatViewModel
         self.meshService = meshService
     }

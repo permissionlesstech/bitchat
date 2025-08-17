@@ -18,9 +18,9 @@ class PrivateChatManager: ObservableObject {
     private var selectedPeerFingerprint: String? = nil
     var sentReadReceipts: Set<String> = []  // Made accessible for ChatViewModel
     
-    weak var meshService: SimplifiedBluetoothService?
+    weak var meshService: BLEService?
     
-    init(meshService: SimplifiedBluetoothService? = nil) {
+    init(meshService: BLEService? = nil) {
         self.meshService = meshService
     }
     

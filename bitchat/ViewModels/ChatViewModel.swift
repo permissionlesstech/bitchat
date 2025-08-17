@@ -23,7 +23,7 @@
 ///
 /// ## Architecture
 /// The ViewModel acts as:
-/// - **BitchatDelegate**: Receives messages and events from SimplifiedBluetoothService
+/// - **BitchatDelegate**: Receives messages and events from BLEService
 /// - **State Manager**: Maintains all UI-relevant state with @Published properties
 /// - **Command Processor**: Handles IRC-style commands (/msg, /who, etc.)
 /// - **Message Router**: Directs messages to appropriate chats (public/private)
@@ -181,7 +181,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     
     // MARK: - Services and Storage
     
-    var meshService = SimplifiedBluetoothService()
+    var meshService = BLEService()
     private var nostrRelayManager: NostrRelayManager?
     // PeerManager replaced by UnifiedPeerService
     private var processedNostrEvents = Set<String>()  // Simple deduplication

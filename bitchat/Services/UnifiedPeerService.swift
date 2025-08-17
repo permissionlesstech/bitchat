@@ -26,13 +26,13 @@ class UnifiedPeerService: ObservableObject {
     
     private var peerIndex: [String: BitchatPeer] = [:]
     private var fingerprintCache: [String: String] = [:]  // peerID -> fingerprint
-    private let meshService: SimplifiedBluetoothService
+    private let meshService: BLEService
     private let favoritesService = FavoritesPersistenceService.shared
     private var cancellables = Set<AnyCancellable>()
     
     // MARK: - Initialization
     
-    init(meshService: SimplifiedBluetoothService) {
+    init(meshService: BLEService) {
         self.meshService = meshService
         
         // Subscribe to changes from both services
@@ -163,7 +163,7 @@ class UnifiedPeerService: ObservableObject {
     
     private func buildPeerFromMesh(
         peerID: String,
-        peerInfo: SimplifiedBluetoothService.PeerInfoSnapshot,
+        peerInfo: BLEService.PeerInfoSnapshot,
         favorites: [Data: FavoritesPersistenceService.FavoriteRelationship]
     ) -> BitchatPeer {
         var peer = BitchatPeer(
