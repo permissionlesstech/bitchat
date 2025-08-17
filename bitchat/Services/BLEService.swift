@@ -7,9 +7,9 @@ import UIKit
 #endif
 
 /// BLEService — Bluetooth Mesh Transport
-/// - Emits events exclusively via `BitchatDelegate`. Publishers remain internal for non-UI services.
+/// - Emits events exclusively via `BitchatDelegate` for UI.
 /// - ChatViewModel must consume delegate callbacks (`didReceivePublicMessage`, `didReceiveNoisePayload`).
-/// - UnifiedPeerService consumes `peerSnapshotPublisher` (mapped from internal fullPeersPublisher).
+/// - A lightweight `peerSnapshotPublisher` is provided for non-UI services.
 final class BLEService: NSObject {
     
     // MARK: - Constants
@@ -102,58 +102,23 @@ final class BLEService: NSObject {
     private weak var maintenanceTimer: Timer?  // Single timer for all maintenance tasks
     private var maintenanceCounter = 0  // Track maintenance cycles
     
-    // MARK: - Publishers
-    
-    let messagesPublisher = PassthroughSubject<BitchatMessage, Never>()
-    let peersPublisher = PassthroughSubject<[String: String], Never>()  // Legacy - for backward compatibility
-    
-    // NEW: Full peer data publisher for UnifiedPeerService
-    struct PeerInfoSnapshot {
-        let id: String
-        let nickname: String
-        let isConnected: Bool
-        let noisePublicKey: Data?
-        let lastSeen: Date
+    // MARK: - Peer snapshots publisher (non-UI convenience)
+    private let peerSnapshotSubject = PassthroughSubject<[TransportPeerSnapshot], Never>()
+    var peerSnapshotPublisher: AnyPublisher<[TransportPeerSnapshot], Never> {
+        peerSnapshotSubject.eraseToAnyPublisher()
     }
-    let fullPeersPublisher = CurrentValueSubject<[String: PeerInfoSnapshot], Never>([:])
-    
-    // Helper to convert internal PeerInfo to public snapshot
-    private func createPeerSnapshot(_ info: PeerInfo) -> PeerInfoSnapshot {
-        PeerInfoSnapshot(
-            id: info.id,
-            nickname: info.nickname,
-            isConnected: info.isConnected,
-            noisePublicKey: info.noisePublicKey,
-            lastSeen: info.lastSeen
-        )
-    }
-
-    // Map full peer data to TransportPeerSnapshot for consumers outside UI
-    lazy var peerSnapshotPublisher: AnyPublisher<[TransportPeerSnapshot], Never> = {
-        fullPeersPublisher
-            .map { dict in
-                dict.values.map { s in
-                    TransportPeerSnapshot(
-                        id: s.id,
-                        nickname: s.nickname,
-                        isConnected: s.isConnected,
-                        noisePublicKey: s.noisePublicKey,
-                        lastSeen: s.lastSeen
-                    )
-                }
-            }
-            .eraseToAnyPublisher()
-    }()
 
     func currentPeerSnapshots() -> [TransportPeerSnapshot] {
-        return fullPeersPublisher.value.values.map { s in
-            TransportPeerSnapshot(
-                id: s.id,
-                nickname: s.nickname,
-                isConnected: s.isConnected,
-                noisePublicKey: s.noisePublicKey,
-                lastSeen: s.lastSeen
-            )
+        collectionsQueue.sync {
+            peers.values.map { info in
+                TransportPeerSnapshot(
+                    id: info.id,
+                    nickname: info.nickname,
+                    isConnected: info.isConnected,
+                    noisePublicKey: info.noisePublicKey,
+                    lastSeen: info.lastSeen
+                )
+            }
         }
     }
     
@@ -1110,8 +1075,7 @@ final class BLEService: NSObject {
                 self.delegate?.didConnectToPeer(peerID)
             }
             
-            self.peersPublisher.send(self.getPeers())
-            self.publishFullPeerData()  // NEW: Publish full peer data
+            self.publishFullPeerData()
             self.delegate?.didUpdatePeerList(currentPeerIDs)
         }
         
@@ -1255,7 +1219,6 @@ final class BLEService: NSObject {
             // Get current peer list (after removal)
             let currentPeerIDs = self.collectionsQueue.sync { Array(self.peers.keys) }
             
-            self.peersPublisher.send(self.getPeers())
             self.delegate?.didDisconnectFromPeer(peerID)
             self.delegate?.didUpdatePeerList(currentPeerIDs)
         }
@@ -1356,23 +1319,22 @@ final class BLEService: NSObject {
         }
     }
     
-    // NEW: Publish full peer data to subscribers and notify Transport delegates
+    // NEW: Publish peer snapshots to subscribers and notify Transport delegates
     private func publishFullPeerData() {
-        let snapshot = collectionsQueue.sync { () -> [String: PeerInfoSnapshot] in
-            Dictionary(uniqueKeysWithValues: peers.map { (id, info) in
-                (id, createPeerSnapshot(info))
-            })
+        let transportPeers: [TransportPeerSnapshot] = collectionsQueue.sync {
+            peers.values.map { info in
+                TransportPeerSnapshot(
+                    id: info.id,
+                    nickname: info.nickname,
+                    isConnected: info.isConnected,
+                    noisePublicKey: info.noisePublicKey,
+                    lastSeen: info.lastSeen
+                )
+            }
         }
-        fullPeersPublisher.send(snapshot)
-        let transportPeers: [TransportPeerSnapshot] = snapshot.values.map { s in
-            TransportPeerSnapshot(
-                id: s.id,
-                nickname: s.nickname,
-                isConnected: s.isConnected,
-                noisePublicKey: s.noisePublicKey,
-                lastSeen: s.lastSeen
-            )
-        }
+        // Notify non-UI listeners
+        peerSnapshotSubject.send(transportPeers)
+        // Notify UI on MainActor via delegate
         Task { @MainActor [weak self] in
             self?.peerEventsDelegate?.didUpdatePeerSnapshots(transportPeers)
         }
@@ -1447,7 +1409,6 @@ final class BLEService: NSObject {
                 for peerID in disconnectedPeers {
                     self.delegate?.didDisconnectFromPeer(peerID)
                 }
-                self.peersPublisher.send(self.getPeers())
                 self.delegate?.didUpdatePeerList(currentPeerIDs)
             }
         }
@@ -1642,8 +1603,7 @@ extension BLEService: CBCentralManagerDelegate {
             if let peerID = peerID {
                 self.delegate?.didDisconnectFromPeer(peerID)
             }
-            self.peersPublisher.send(self.getPeers())
-            self.publishFullPeerData()  // NEW: Publish full peer data
+            self.publishFullPeerData()
             self.delegate?.didUpdatePeerList(currentPeerIDs)
         }
     }
@@ -1909,7 +1869,6 @@ extension BLEService: CBPeripheralManagerDelegate {
                 let currentPeerIDs = self.collectionsQueue.sync { Array(self.peers.keys) }
                 
                 self.delegate?.didDisconnectFromPeer(peerID)
-                self.peersPublisher.send(self.getPeers())
                 self.delegate?.didUpdatePeerList(currentPeerIDs)
             }
         }
@@ -2020,9 +1979,7 @@ extension BLEService: CBPeripheralManagerDelegate {
                 SecureLogger.log("❌ Failed to decode packet from central, full data: \(data.map { String(format: "%02x", $0) }.joined(separator: " "))", category: SecureLogger.session, level: .error)
             }
         }
-    }
-    
-    // MARK: - Helper Functions
+    }    
 }
 
 // MARK: - Advertising Builders & Alias Rotation
