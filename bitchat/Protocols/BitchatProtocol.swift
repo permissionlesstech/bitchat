@@ -32,7 +32,7 @@
 /// 1. **Creation**: Messages are created with type, content, and metadata
 /// 2. **Encoding**: Converted to binary format with proper field ordering
 /// 3. **Fragmentation**: Split if larger than BLE MTU (512 bytes)
-/// 4. **Transmission**: Sent via SimplifiedBluetoothService
+/// 4. **Transmission**: Sent via BLEService
 /// 5. **Routing**: Relayed by intermediate nodes (TTL decrements)
 /// 6. **Reassembly**: Fragments collected and reassembled
 /// 7. **Decoding**: Binary data parsed back to message objects
