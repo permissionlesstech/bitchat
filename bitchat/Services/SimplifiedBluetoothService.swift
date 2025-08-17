@@ -1,6 +1,7 @@
 import Foundation
 import CoreBluetooth
 import Combine
+import CryptoKit
 #if os(iOS)
 import UIKit
 #endif
@@ -74,6 +75,9 @@ final class SimplifiedBluetoothService: NSObject {
     var myPeerID: String = ""
     var myNickname: String = "Anonymous"
     private let noiseService = NoiseEncryptionService()
+
+    // MARK: - Advertising Privacy
+    // No Local Name by default for maximum privacy. No rotating alias.
     
     // MARK: - Queues
     
@@ -137,8 +141,9 @@ final class SimplifiedBluetoothService: NSObject {
     override init() {
         super.init()
         
-        // Generate ephemeral peer ID (8 random bytes as hex)
-        self.myPeerID = (0..<8).map { _ in String(format: "%02x", UInt8.random(in: 0...255)) }.joined()
+        // Derive stable peer ID from Noise static public key fingerprint (first 8 bytes → 16 hex chars)
+        let fingerprint = noiseService.getIdentityFingerprint() // 64 hex chars
+        self.myPeerID = String(fingerprint.prefix(16))
         
         // Set queue key for identification
         messageQueue.setSpecific(key: messageQueueKey, value: ())
@@ -199,6 +204,8 @@ final class SimplifiedBluetoothService: NSObject {
         // Send announce to notify peers of nickname change (force send)
         sendAnnounce(forceSend: true)
     }
+
+    // No advertising policy to set; we never include Local Name in adverts.
     
     deinit {
         maintenanceTimer?.invalidate()
@@ -219,6 +226,7 @@ final class SimplifiedBluetoothService: NSObject {
             centralManager?.stopScan()
             startScanning()
         }
+        // No Local Name; nothing to refresh for advertising policy
     }
     
     @objc private func appDidEnterBackground() {
@@ -228,6 +236,7 @@ final class SimplifiedBluetoothService: NSObject {
             centralManager?.stopScan()
             startScanning()
         }
+        // No Local Name; nothing to refresh for advertising policy
     }
     #endif
     
@@ -972,6 +981,16 @@ final class SimplifiedBluetoothService: NSObject {
             return
         }
         
+        // Verify that the sender's derived ID from the announced public key matches the packet senderID
+        // This helps detect relayed or spoofed announces. Only warn in release; assert in debug.
+        let derivedFromKey = Self.derivePeerID(fromPublicKey: announcement.publicKey)
+        if derivedFromKey != peerID {
+            SecureLogger.log("⚠️ Announce sender mismatch: derived \(derivedFromKey.prefix(8))… vs packet \(peerID.prefix(8))…", category: SecureLogger.security, level: .warning)
+            #if DEBUG
+            assertionFailure("Announce senderID does not match key-derived ID")
+            #endif
+        }
+        
         // Don't add ourselves as a peer
         if peerID == myPeerID {
             return
@@ -1254,6 +1273,14 @@ final class SimplifiedBluetoothService: NSObject {
             default:
                 SecureLogger.log("⚠️ Unknown noise payload type: \(payloadType)", category: SecureLogger.noise, level: .warning)
             }
+        } catch NoiseEncryptionError.sessionNotEstablished {
+            // We received an encrypted message before establishing a session with this peer.
+            // Trigger a handshake so future messages can be decrypted.
+            SecureLogger.log("🔑 Encrypted message from \(peerID) without session; initiating handshake", 
+                            category: SecureLogger.noise, level: .info)
+            if !noiseService.hasSession(with: peerID) {
+                initiateNoiseHandshake(with: peerID)
+            }
         } catch {
             SecureLogger.log("❌ Failed to decrypt message from \(peerID): \(error)", 
                             category: SecureLogger.noise, level: .error)
@@ -1395,10 +1422,7 @@ final class SimplifiedBluetoothService: NSObject {
         if peers.isEmpty {
             // Ensure we're advertising as peripheral
             if let pm = peripheralManager, pm.state == .poweredOn && !pm.isAdvertising {
-                pm.startAdvertising([
-                    CBAdvertisementDataServiceUUIDsKey: [SimplifiedBluetoothService.serviceUUID],
-                    CBAdvertisementDataLocalNameKey: myPeerID
-                ])
+                pm.startAdvertising(buildAdvertisementData())
             }
         }
         
@@ -1411,6 +1435,8 @@ final class SimplifiedBluetoothService: NSObject {
         if maintenanceCounter % 3 == 0 {
             performCleanup()
         }
+        
+        // No rotating alias: nothing to refresh
         
         // Reset counter to prevent overflow (every 60 seconds)
         if maintenanceCounter >= 6 {
@@ -1871,13 +1897,11 @@ extension SimplifiedBluetoothService: CBPeripheralManagerDelegate {
         
         SecureLogger.log("✅ Service added successfully, starting advertising", category: SecureLogger.session, level: .info)
         
-        // Now start advertising after service is confirmed added
-        peripheral.startAdvertising([
-            CBAdvertisementDataServiceUUIDsKey: [SimplifiedBluetoothService.serviceUUID],
-            CBAdvertisementDataLocalNameKey: myPeerID
-        ])
+        // Start advertising after service is confirmed added
+        let adData = buildAdvertisementData()
+        peripheral.startAdvertising(adData)
         
-        SecureLogger.log("📡 Started advertising as peripheral with ID: \(myPeerID)", category: SecureLogger.session, level: .info)
+        SecureLogger.log("📡 Started advertising (LocalName: \((adData[CBAdvertisementDataLocalNameKey] as? String) != nil ? "on" : "off"), ID: \(myPeerID.prefix(8))…)", category: SecureLogger.session, level: .info)
     }
     
     func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didSubscribeTo characteristic: CBCharacteristic) {
@@ -1895,10 +1919,7 @@ extension SimplifiedBluetoothService: CBPeripheralManagerDelegate {
         // Ensure we're still advertising for other devices to find us
         if peripheral.isAdvertising == false {
             SecureLogger.log("📡 Restarting advertising after central unsubscribed", category: SecureLogger.session, level: .info)
-            peripheral.startAdvertising([
-                CBAdvertisementDataServiceUUIDsKey: [SimplifiedBluetoothService.serviceUUID],
-                CBAdvertisementDataLocalNameKey: myPeerID
-            ])
+            peripheral.startAdvertising(buildAdvertisementData())
         }
         
         // Find and disconnect the peer associated with this central
@@ -2056,6 +2077,26 @@ extension SimplifiedBluetoothService: CBPeripheralManagerDelegate {
     private func dataToHexString(_ data: Data) -> String {
         return data.map { String(format: "%02x", $0) }.joined()
     }
+}
+
+// MARK: - Advertising Builders & Alias Rotation
+
+extension SimplifiedBluetoothService {
+    static func derivePeerID(fromPublicKey publicKey: Data) -> String {
+        let digest = SHA256.hash(data: publicKey)
+        let hex = digest.map { String(format: "%02x", $0) }.joined()
+        return String(hex.prefix(16))
+    }
+    
+    private func buildAdvertisementData() -> [String: Any] {
+        var data: [String: Any] = [
+            CBAdvertisementDataServiceUUIDsKey: [SimplifiedBluetoothService.serviceUUID]
+        ]
+        // No Local Name for privacy
+        return data
+    }
+    
+    // No alias rotation or advertising restarts required.
 }
 
 // MARK: - Message Deduplicator
