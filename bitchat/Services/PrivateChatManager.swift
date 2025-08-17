@@ -18,9 +18,9 @@ class PrivateChatManager: ObservableObject {
     private var selectedPeerFingerprint: String? = nil
     var sentReadReceipts: Set<String> = []  // Made accessible for ChatViewModel
     
-    weak var meshService: SimplifiedBluetoothService?
+    weak var meshService: Transport?
     
-    init(meshService: SimplifiedBluetoothService? = nil) {
+    init(meshService: Transport? = nil) {
         self.meshService = meshService
     }
     
@@ -29,7 +29,7 @@ class PrivateChatManager: ObservableObject {
         selectedPeer = peerID
         
         // Store fingerprint for persistence across reconnections
-        if let fingerprint = meshService?.getPeerFingerprint(peerID) {
+        if let fingerprint = meshService?.getFingerprint(for: peerID) {
             selectedPeerFingerprint = fingerprint
         }
         
@@ -130,7 +130,7 @@ class PrivateChatManager: ObservableObject {
         
         // Find peer with matching fingerprint
         for (peerID, _) in peers {
-            if meshService?.getPeerFingerprint(peerID) == fingerprint {
+            if meshService?.getFingerprint(for: peerID) == fingerprint {
                 selectedPeer = peerID
                 break
             }

@@ -11,7 +11,7 @@
 ///
 /// High-level encryption service that manages Noise Protocol sessions for secure
 /// peer-to-peer communication in BitChat. Acts as the bridge between the transport
-/// layer (SimplifiedBluetoothService) and the cryptographic layer (NoiseProtocol).
+/// layer (BLEService) and the cryptographic layer (NoiseProtocol).
 ///
 /// ## Overview
 /// This service provides a simplified API for establishing and managing encrypted
@@ -60,7 +60,7 @@
 /// ```
 ///
 /// ## Integration Points
-/// - **SimplifiedBluetoothService**: Calls this service for all private messages
+/// - **BLEService**: Calls this service for all private messages
 /// - **ChatViewModel**: Monitors encryption status for UI indicators
 /// - **NoiseHandshakeCoordinator**: Prevents handshake race conditions
 /// - **KeychainManager**: Secure storage for identity keys
