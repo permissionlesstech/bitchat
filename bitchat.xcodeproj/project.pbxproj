@@ -15,6 +15,14 @@
 		049BD3962E4EC4F0001A566B /* CommandProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 049BD38D2E4EC4F0001A566B /* CommandProcessor.swift */; };
 		049BD3992E506A12001A566B /* UnifiedPeerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 049BD3982E506A12001A566B /* UnifiedPeerService.swift */; };
 		049BD39A2E506A12001A566B /* UnifiedPeerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 049BD3982E506A12001A566B /* UnifiedPeerService.swift */; };
+		049BD39C2E51DBD9001A566B /* NostrEmbeddedBitChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 049BD39B2E51DBD9001A566B /* NostrEmbeddedBitChat.swift */; };
+		049BD39D2E51DBD9001A566B /* NostrEmbeddedBitChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 049BD39B2E51DBD9001A566B /* NostrEmbeddedBitChat.swift */; };
+		049BD3A02E51DBF4001A566B /* Packets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 049BD39E2E51DBF4001A566B /* Packets.swift */; };
+		049BD3A12E51DBF4001A566B /* PeerID.swift in Sources */ = {isa = PBXBuildFile; fileRef = 049BD39F2E51DBF4001A566B /* PeerID.swift */; };
+		049BD3A22E51DBF4001A566B /* Packets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 049BD39E2E51DBF4001A566B /* Packets.swift */; };
+		049BD3A32E51DBF4001A566B /* PeerID.swift in Sources */ = {isa = PBXBuildFile; fileRef = 049BD39F2E51DBF4001A566B /* PeerID.swift */; };
+		049BD3A52E51DC0E001A566B /* MessageDeduplicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 049BD3A42E51DC0E001A566B /* MessageDeduplicator.swift */; };
+		049BD3A62E51DC0E001A566B /* MessageDeduplicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 049BD3A42E51DC0E001A566B /* MessageDeduplicator.swift */; };
 		0AE840940F21AFC07C226636 /* PrivateChatE2ETests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A262EDDC04B7D7B5E31F321 /* PrivateChatE2ETests.swift */; };
 		0B6F25559A21F8C69C8357C6 /* BinaryProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B3CC6FA298729906109F61B /* BinaryProtocolTests.swift */; };
 		10E68BB889356219189E38EC /* BitchatApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF625BB3AD919322C01A46B2 /* BitchatApp.swift */; };
@@ -144,6 +152,10 @@
 		049BD38D2E4EC4F0001A566B /* CommandProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandProcessor.swift; sourceTree = "<group>"; };
 		049BD38F2E4EC4F0001A566B /* PrivateChatManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivateChatManager.swift; sourceTree = "<group>"; };
 		049BD3982E506A12001A566B /* UnifiedPeerService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnifiedPeerService.swift; sourceTree = "<group>"; };
+		049BD39B2E51DBD9001A566B /* NostrEmbeddedBitChat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NostrEmbeddedBitChat.swift; sourceTree = "<group>"; };
+		049BD39E2E51DBF4001A566B /* Packets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Packets.swift; sourceTree = "<group>"; };
+		049BD39F2E51DBF4001A566B /* PeerID.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerID.swift; sourceTree = "<group>"; };
+		049BD3A42E51DC0E001A566B /* MessageDeduplicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageDeduplicator.swift; sourceTree = "<group>"; };
 		05BA20BC0F123F1507C5C247 /* IdentityModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdentityModels.swift; sourceTree = "<group>"; };
 		0B3CC6FA298729906109F61B /* BinaryProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BinaryProtocolTests.swift; sourceTree = "<group>"; };
 		11186E29A064E8D210880E1B /* BitchatPeer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitchatPeer.swift; sourceTree = "<group>"; };
@@ -313,6 +325,7 @@
 		9A78348821A7D3374607D4E3 /* Utils */ = {
 			isa = PBXGroup;
 			children = (
+				049BD3A42E51DC0E001A566B /* MessageDeduplicator.swift */,
 				32F149C43D1915831B60FE09 /* CompressionUtil.swift */,
 				90CB7A5CD1D1A521CD31F380 /* InputValidator.swift */,
 				EE7EFB209C86BBD956B749EC /* SecureLogger.swift */,
@@ -356,6 +369,8 @@
 		ADD53BCDA233C02E53458926 /* Protocols */ = {
 			isa = PBXGroup;
 			children = (
+				049BD39E2E51DBF4001A566B /* Packets.swift */,
+				049BD39F2E51DBF4001A566B /* PeerID.swift */,
 				5318B743C64628A125261163 /* BinaryEncodingUtils.swift */,
 				A2136C3E22D02D4A8DBE7EAB /* BinaryProtocol.swift */,
 				229F17B68CFF7AB1BC91C847 /* BitchatProtocol.swift */,
@@ -424,6 +439,7 @@
 		E78C7F4B6769C0A72F5DE544 /* Nostr */ = {
 			isa = PBXGroup;
 			children = (
+				049BD39B2E51DBD9001A566B /* NostrEmbeddedBitChat.swift */,
 				5F8043995007F0D84438EDD9 /* NostrIdentity.swift */,
 				2E5A9FF4AEA8A923317ED26A /* NostrProtocol.swift */,
 				78595178957244CBDF7E79B6 /* NostrRelayManager.swift */,
@@ -638,12 +654,16 @@
 				8C1AB0F2D48207E0755DA91A /* NoiseProtocol.swift in Sources */,
 				D691938B4029A04CC905FDC8 /* NoiseSecurityConsiderations.swift in Sources */,
 				8A14ADADF5CD7A79919CB655 /* NoiseSession.swift in Sources */,
+				049BD39D2E51DBD9001A566B /* NostrEmbeddedBitChat.swift in Sources */,
 				049BD3992E506A12001A566B /* UnifiedPeerService.swift in Sources */,
 				C3B1226CD30C87501EF6F12F /* NostrIdentity.swift in Sources */,
 				FBC409E105493C491531B59A /* NostrProtocol.swift in Sources */,
+				049BD3A62E51DC0E001A566B /* MessageDeduplicator.swift in Sources */,
 				6A85FC357ACD85DBD9020845 /* NostrRelayManager.swift in Sources */,
 				749D8CF8A362B6CD0786782D /* NotificationService.swift in Sources */,
 				E2DCF7817344F1CCDB8B7B2F /* SecureIdentityStateManager.swift in Sources */,
+				049BD3A02E51DBF4001A566B /* Packets.swift in Sources */,
+				049BD3A12E51DBF4001A566B /* PeerID.swift in Sources */,
 				049BD3942E4EC4F0001A566B /* PrivateChatManager.swift in Sources */,
 				049BD3952E4EC4F0001A566B /* AutocompleteService.swift in Sources */,
 				049BD3962E4EC4F0001A566B /* CommandProcessor.swift in Sources */,
@@ -676,12 +696,16 @@
 				A7187D48B07C6857DE01D0ED /* NoiseProtocol.swift in Sources */,
 				9CCF09F7527EC681A13FC246 /* NoiseSecurityConsiderations.swift in Sources */,
 				92D1CF17DF88EA298F6E5E8E /* NoiseSession.swift in Sources */,
+				049BD39C2E51DBD9001A566B /* NostrEmbeddedBitChat.swift in Sources */,
 				049BD39A2E506A12001A566B /* UnifiedPeerService.swift in Sources */,
 				D782AB596DDB5C846554F7C3 /* NostrIdentity.swift in Sources */,
 				F06732B1719EE13C5D09CE77 /* NostrProtocol.swift in Sources */,
+				049BD3A52E51DC0E001A566B /* MessageDeduplicator.swift in Sources */,
 				BCD0EBACD82AF5E55C2CB2B9 /* NostrRelayManager.swift in Sources */,
 				61C81ED5F679D5E973EE0C07 /* NotificationService.swift in Sources */,
 				68C4BE564735F6E7915274A2 /* SecureIdentityStateManager.swift in Sources */,
+				049BD3A22E51DBF4001A566B /* Packets.swift in Sources */,
+				049BD3A32E51DBF4001A566B /* PeerID.swift in Sources */,
 				049BD3902E4EC4F0001A566B /* PrivateChatManager.swift in Sources */,
 				049BD3912E4EC4F0001A566B /* AutocompleteService.swift in Sources */,
 				049BD3922E4EC4F0001A566B /* CommandProcessor.swift in Sources */,

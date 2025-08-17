@@ -2711,10 +2711,11 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         }
         
         // Build embedded BitChat packet content (bitchat1:...)
-        guard let embeddedContent = meshService.buildNostrEmbeddedPrivateMessageContent(
+        guard let embeddedContent = NostrEmbeddedBitChat.encodePMForNostr(
                 content: content,
-                to: recipientPeerID,
-                messageID: messageId
+                messageID: messageId,
+                recipientPeerID: recipientPeerID,
+                senderPeerID: meshService.myPeerID
             ) else {
             SecureLogger.log("Failed to build embedded BitChat content for Nostr", category: SecureLogger.session, level: .error)
             return
@@ -2786,7 +2787,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         // Build embedded BitChat ACK content
         let ackType: NoisePayloadType? = (type == "DELIVERED") ? .delivered : (type == "READ" ? .readReceipt : nil)
         guard let ackTypeUnwrapped = ackType,
-              let ackContent = meshService.buildNostrEmbeddedAckContent(type: ackTypeUnwrapped, messageID: messageId, to: recipientPeerID),
+              let ackContent = NostrEmbeddedBitChat.encodeAckForNostr(type: ackTypeUnwrapped, messageID: messageId, recipientPeerID: recipientPeerID, senderPeerID: meshService.myPeerID),
               let event = try? NostrProtocol.createPrivateMessage(
             content: ackContent,
             recipientPubkey: recipientHexPubkey,
@@ -2893,7 +2894,9 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
 
             switch noisePayload.type {
             case .privateMessage:
-                guard let (messageId, messageContent) = Self.decodePrivateMessageTLV(noisePayload.data) else { return }
+                guard let pm = PrivateMessagePacket.decode(from: noisePayload.data) else { return }
+                let messageId = pm.messageID
+                let messageContent = pm.content
 
                 // Favorite/unfavorite notifications embedded as private messages
                 if messageContent.hasPrefix("[FAVORITED]") || messageContent.hasPrefix("[UNFAVORITED]") {
@@ -3101,26 +3104,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         return Data(base64Encoded: str)
     }
     
-    // Decode PrivateMessagePacket TLV (local minimal decoder)
-    private static func decodePrivateMessageTLV(_ data: Data) -> (String, String)? {
-        var offset = 0
-        var messageID: String?
-        var content: String?
-        while offset + 2 <= data.count {
-            let type = data[offset]; offset += 1
-            let length = Int(data[offset]); offset += 1
-            guard offset + length <= data.count else { return nil }
-            let value = data[offset..<offset+length]
-            offset += length
-            if type == 0x00 {
-                messageID = String(data: value, encoding: .utf8)
-            } else if type == 0x01 {
-                content = String(data: value, encoding: .utf8)
-            }
-        }
-        if let id = messageID, let c = content { return (id, c) }
-        return nil
-    }
+    // Removed local TLV decoder; using PrivateMessagePacket.decode from Protocols
     
     @MainActor
     private func handleFavoriteNotificationFromMesh(_ content: String, from peerID: String, senderNickname: String) {
@@ -3339,7 +3323,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             
             let content = isFavorite ? "[FAVORITED]:\(senderIdentity.npub)" : "[UNFAVORITED]:\(senderIdentity.npub)"
             let recipientPeerID = noisePublicKey.hexEncodedString()
-            guard let embedded = meshService.buildNostrEmbeddedPrivateMessageContent(content: content, to: recipientPeerID, messageID: UUID().uuidString),
+            guard let embedded = NostrEmbeddedBitChat.encodePMForNostr(content: content, messageID: UUID().uuidString, recipientPeerID: recipientPeerID, senderPeerID: meshService.myPeerID),
                   let event = try? NostrProtocol.createPrivateMessage(
                     content: embedded,
                     recipientPubkey: recipientNostrPubkey,
@@ -3382,7 +3366,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             
             let content = isFavorite ? "[FAVORITED]:\(senderIdentity.npub)" : "[UNFAVORITED]:\(senderIdentity.npub)"
             let recipientPeerID = key.hexEncodedString()
-            guard let embedded = meshService.buildNostrEmbeddedPrivateMessageContent(content: content, to: recipientPeerID, messageID: UUID().uuidString),
+            guard let embedded = NostrEmbeddedBitChat.encodePMForNostr(content: content, messageID: UUID().uuidString, recipientPeerID: recipientPeerID, senderPeerID: meshService.myPeerID),
                   let event = try? NostrProtocol.createPrivateMessage(
                     content: embedded,
                     recipientPubkey: recipientNostrPubkey,
