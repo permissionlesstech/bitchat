@@ -22,6 +22,7 @@ final class NostrTransport: Transport {
     func emergencyDisconnectAll() { /* no-op */ }
 
     func isPeerConnected(_ peerID: String) -> Bool { false }
+    func peerNickname(peerID: String) -> String? { nil }
     func getPeerNicknames() -> [String : String] { [:] }
 
     func getFingerprint(for peerID: String) -> String? { nil }
