@@ -6,7 +6,10 @@ import CryptoKit
 import UIKit
 #endif
 
-
+/// BLEService — Bluetooth Mesh Transport
+/// - Emits events exclusively via `BitchatDelegate`. Publishers remain internal for non-UI services.
+/// - ChatViewModel must consume delegate callbacks (`didReceivePublicMessage`, `didReceiveNoisePayload`).
+/// - UnifiedPeerService currently uses `fullPeersPublisher` for peer snapshots (internal use).
 final class BLEService: NSObject {
     
     // MARK: - Constants
