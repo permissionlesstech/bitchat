@@ -279,7 +279,7 @@ class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         
         if actualNickname.isEmpty {
             // Try to get from mesh service's current peer list
-            if let meshPeerNickname = meshService.getPeerNicknames()[peerID] {
+            if let meshPeerNickname = meshService.peerNickname(peerID: peerID) {
                 actualNickname = meshPeerNickname
                 SecureLogger.log("🔍 Got nickname from mesh service: '\(actualNickname)'", 
                                category: SecureLogger.session, level: .debug)

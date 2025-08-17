@@ -336,7 +336,14 @@ final class BLEService: NSObject {
         }()
         return collectionsQueue.sync { peers[shortID]?.isConnected ?? false }
     }
-    
+
+    func peerNickname(peerID: String) -> String? {
+        collectionsQueue.sync {
+            guard let peer = peers[peerID], peer.isConnected else { return nil }
+            return peer.nickname
+        }
+    }
+
     func getPeerNicknames() -> [String: String] {
         return collectionsQueue.sync {
             Dictionary(uniqueKeysWithValues: peers.compactMap { (id, info) in

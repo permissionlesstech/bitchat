@@ -527,8 +527,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         }
         
         // Get the peer's nickname to check for temporary Nostr peer IDs
-        let peerNickname = meshService.getPeerNicknames()[peerID]?.lowercased() ?? ""
-        
+        let peerNickname = meshService.peerNickname(peerID: peerID)?.lowercased() ?? ""
+
         // Check if any temporary Nostr peer IDs have unread messages from this nickname
         for unreadPeerID in unreadPrivateMessages {
             if unreadPeerID.hasPrefix("nostr_") {
@@ -833,7 +833,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         
         // Check if blocked
         if unifiedPeerService.isBlocked(peerID) {
-            let nickname = meshService.getPeerNicknames()[peerID] ?? "user"
+            let nickname = meshService.peerNickname(peerID: peerID) ?? "user"
             addSystemMessage("cannot send message to \(nickname): user is blocked.")
             return
         }
@@ -846,7 +846,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         let hasNostrKey = favoriteStatus?.peerNostrPublicKey != nil
         
         // Get nickname from various sources
-        var recipientNickname = meshService.getPeerNicknames()[peerID]
+        var recipientNickname = meshService.peerNickname(peerID: peerID)
         if recipientNickname == nil && favoriteStatus != nil {
             recipientNickname = favoriteStatus?.peerNickname
         }
@@ -938,7 +938,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             return
         }
         
-        let peerNickname = meshService.getPeerNicknames()[peerID] ?? "unknown"
+        let peerNickname = meshService.peerNickname(peerID: peerID) ?? "unknown"
         
         // Check if the peer is blocked
         if unifiedPeerService.isBlocked(peerID) {
@@ -1280,7 +1280,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 
                 // Find peer nickname
                 let peerNickname: String
-                if let nickname = meshService.getPeerNicknames()[peerID] {
+                if let nickname = meshService.peerNickname(peerID: peerID) {
                     peerNickname = nickname
                 } else if let favorite = FavoritesPersistenceService.shared.getFavoriteStatus(for: peerPublicKey) {
                     peerNickname = favorite.peerNickname
@@ -1333,7 +1333,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         
         if let peerID = selectedPrivateChatPeer {
             // In private chat - send to the other person
-            if let peerNickname = meshService.getPeerNicknames()[peerID] {
+            if let peerNickname = meshService.peerNickname(peerID: peerID) {
                 // Only send screenshot notification if we have an established session
                 // This prevents triggering handshake requests for screenshot notifications
                 let sessionState = meshService.getNoiseSessionState(for: peerID)
@@ -1355,7 +1355,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 isRelay: false,
                 originalSender: nil,
                 isPrivate: true,
-                recipientNickname: meshService.getPeerNicknames()[peerID],
+                recipientNickname: meshService.peerNickname(peerID: peerID),
                 senderPeerID: meshService.myPeerID
             )
             var chats = privateChats
@@ -1413,7 +1413,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         var actualPeerID = peerID
         
         // Check if this peer ID exists in current nicknames
-        if meshService.getPeerNicknames()[peerID] == nil {
+        if meshService.peerNickname(peerID: peerID) == nil {
             // Peer not found with this ID, try to find by fingerprint or nickname
             if let oldNoiseKey = Data(hexString: peerID),
                let favoriteStatus = FavoritesPersistenceService.shared.getFavoriteStatus(for: oldNoiseKey) {
@@ -1435,7 +1435,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         if originalTransport == "nostr" {
             // Skip read receipts for Nostr messages - unnecessary complexity
             // The radical simplification plan says to accept occasional loss
-        } else if meshService.getPeerNicknames()[actualPeerID] != nil {
+        } else if meshService.peerNickname(peerID: actualPeerID) != nil {
             // Use mesh for connected peers (default behavior)
             messageRouter.sendReadReceipt(receipt, to: actualPeerID)
         } else {
@@ -3620,7 +3620,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     if let noiseKey = Data(hexString: recipientID),
                        let favoriteStatus = FavoritesPersistenceService.shared.getFavoriteStatus(for: noiseKey),
                        favoriteStatus.peerNostrPublicKey != nil,
-                       self.meshService.getPeerNicknames()[recipientID] == nil {
+                       self.meshService.peerNickname(peerID: recipientID) == nil {
                         originalTransport = "nostr"
                     }
                     
