@@ -956,6 +956,13 @@ struct ContentView: View {
                 if !isMeshConnected, let stable = viewModel.getNoiseKeyForShortID(privatePeerID) {
                     return stable
                 }
+            } else if privatePeerID.count == 64 {
+                // If we have a full Noise key and a corresponding short ID is currently mesh-connected, prefer short ID
+                if let short = viewModel.getShortIDForNoiseKey(privatePeerID) {
+                    if viewModel.meshService.isPeerConnected(short) || viewModel.connectedPeers.contains(short) {
+                        return short
+                    }
+                }
             }
             return privatePeerID
         }()

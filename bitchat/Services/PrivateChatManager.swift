@@ -19,6 +19,8 @@ class PrivateChatManager: ObservableObject {
     var sentReadReceipts: Set<String> = []  // Made accessible for ChatViewModel
     
     weak var meshService: Transport?
+    // Route acks/receipts via MessageRouter (chooses mesh or Nostr)
+    weak var messageRouter: MessageRouter?
     
     init(meshService: Transport? = nil) {
         self.meshService = meshService
@@ -91,8 +93,15 @@ class PrivateChatManager: ObservableObject {
             privateChats[senderPeerID] = []
         }
         
-        // Add message
-        privateChats[senderPeerID]?.append(message)
+        // Deduplicate by ID: replace existing message if present, else append
+        if let idx = privateChats[senderPeerID]?.firstIndex(where: { $0.id == message.id }) {
+            privateChats[senderPeerID]?[idx] = message
+        } else {
+            privateChats[senderPeerID]?.append(message)
+        }
+
+        // Sanitize chat to avoid duplicate IDs and sort by timestamp
+        sanitizeChat(for: senderPeerID)
         
         // Mark as unread if not in this chat
         if selectedPeer != senderPeerID {
@@ -108,6 +117,25 @@ class PrivateChatManager: ObservableObject {
             // Send read receipt if viewing this chat
             sendReadReceipt(for: message)
         }
+    }
+
+    /// Remove duplicate messages by ID and keep chronological order
+    func sanitizeChat(for peerID: String) {
+        guard let arr = privateChats[peerID] else { return }
+        var seen = Set<String>()
+        var deduped: [BitchatMessage] = []
+        for msg in arr.sorted(by: { $0.timestamp < $1.timestamp }) {
+            if !seen.contains(msg.id) {
+                seen.insert(msg.id)
+                deduped.append(msg)
+            } else {
+                // Replace previous with the latest occurrence (which is later in sort)
+                if let index = deduped.firstIndex(where: { $0.id == msg.id }) {
+                    deduped[index] = msg
+                }
+            }
+        }
+        privateChats[peerID] = deduped
     }
     
     /// Mark messages from a peer as read
@@ -183,7 +211,16 @@ class PrivateChatManager: ObservableObject {
             readerNickname: meshService?.myNickname ?? ""
         )
         
-        // Send through mesh service's read receipt method
-        meshService?.sendReadReceipt(receipt, to: senderPeerID)
+        // Route via MessageRouter to avoid handshakeRequired spam when session isn't established
+        if let router = messageRouter {
+            SecureLogger.log("PrivateChatManager: sending READ ack for \(message.id.prefix(8))… to \(senderPeerID.prefix(8))… via router",
+                            category: SecureLogger.session, level: .debug)
+            Task { @MainActor in
+                router.sendReadReceipt(receipt, to: senderPeerID)
+            }
+        } else {
+            // Fallback: preserve previous behavior
+            meshService?.sendReadReceipt(receipt, to: senderPeerID)
+        }
     }
 }
