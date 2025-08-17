@@ -282,16 +282,13 @@ class PeerManager: ObservableObject {
         self.favorites = favorites
         self.mutualFavorites = mutualFavorites
         
-        // Always log favorites debug info when there are favorites
+        // Log peer list summary sparingly at debug level
         if favoritesService.favorites.count > 0 {
             SecureLogger.log("📊 Peer list update: \(allPeers.count) total (\(connectedCount) connected, \(offlineCount) offline), \(favorites.count) favorites, \(mutualFavorites.count) mutual", 
-                            category: SecureLogger.session, level: .info)
-            
-            // Detailed peer status logging removed for brevity
+                            category: SecureLogger.session, level: .debug)
         } else if previousCount != allPeers.count {
-            // Only log non-favorite updates if count changed
             SecureLogger.log("✅ Updated peer list: \(allPeers.count) total peers", 
-                            category: SecureLogger.session, level: .info)
+                            category: SecureLogger.session, level: .debug)
         }
     }
     
