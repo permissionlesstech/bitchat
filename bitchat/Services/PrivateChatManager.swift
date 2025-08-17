@@ -53,7 +53,7 @@ class PrivateChatManager: ObservableObject {
     /// Send a private message
     func sendMessage(_ content: String, to peerID: String) {
         guard let meshService = meshService,
-              let peerNickname = meshService.getPeerNicknames()[peerID] else {
+              let peerNickname = meshService.peerNickname(peerID: peerID) else {
             return
         }
         

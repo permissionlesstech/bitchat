@@ -41,7 +41,7 @@ struct FingerprintView: View {
             
             VStack(alignment: .leading, spacing: 16) {
                 // Peer info
-                let peerNickname = viewModel.meshService.getPeerNicknames()[peerID] ?? "Unknown"
+                let peerNickname = viewModel.meshService.peerNickname(peerID: peerID) ?? "Unknown"
                 let encryptionStatus = viewModel.getEncryptionStatus(for: peerID)
                 
                 HStack {

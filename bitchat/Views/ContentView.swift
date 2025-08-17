@@ -970,7 +970,7 @@ struct ContentView: View {
         // Resolve peer object for header context (may be offline favorite)
         let peer = viewModel.getPeer(byID: headerPeerID)
         let privatePeerNick = peer?.displayName ?? 
-                              viewModel.meshService.getPeerNicknames()[headerPeerID] ?? 
+                              viewModel.meshService.peerNickname(peerID: headerPeerID) ??
                               FavoritesPersistenceService.shared.getFavoriteStatus(for: Data(hexString: headerPeerID) ?? Data())?.peerNickname ?? 
                               // getFavoriteStatusByNostrKey not implemented
                               // FavoritesPersistenceService.shared.getFavoriteStatusByNostrKey(privatePeerID)?.peerNickname ?? 
