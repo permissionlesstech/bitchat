@@ -485,7 +485,7 @@ class NoiseEncryptionService {
             // Attempt to rekey the session
             do {
                 try sessionManager.initiateRekey(for: peerID)
-                SecureLogger.log("Key rotation initiated for peer: \(peerID)", category: SecureLogger.security, level: .info)
+                SecureLogger.log("Key rotation initiated for peer: \(peerID)", category: SecureLogger.security, level: .debug)
                 
                 // Signal that handshake is needed
                 onHandshakeRequired?(peerID)

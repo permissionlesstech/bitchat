@@ -18,6 +18,7 @@ xcuserdata/
 ## compatibility with Xcode 3 and earlier (ignoring not required starting Xcode 4)
 build/
 DerivedData/
+.DerivedData/
 *.moved-aside
 *.pbxuser
 !default.pbxuser
@@ -65,3 +66,7 @@ __pycache__/
 ## Temporary files
 *.tmp
 *.temp
+
+# Local build results
+.Result*/
+.Result*.xcresult/

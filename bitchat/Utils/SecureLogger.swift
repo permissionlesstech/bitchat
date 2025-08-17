@@ -58,6 +58,16 @@ class SecureLogger {
         case error
         case fault
         
+        fileprivate var order: Int {
+            switch self {
+            case .debug: return 0
+            case .info: return 1
+            case .warning: return 2
+            case .error: return 3
+            case .fault: return 4
+            }
+        }
+        
         var osLogType: OSLogType {
             switch self {
             case .debug: return .debug
@@ -67,6 +77,24 @@ class SecureLogger {
             case .fault: return .fault
             }
         }
+    }
+
+    // MARK: - Global Threshold
+
+    /// Minimum level that will be logged. Defaults to .info. Override via env BITCHAT_LOG_LEVEL.
+    private static let minimumLevel: LogLevel = {
+        let env = ProcessInfo.processInfo.environment["BITCHAT_LOG_LEVEL"]?.lowercased()
+        switch env {
+        case "debug": return .debug
+        case "warning": return .warning
+        case "error": return .error
+        case "fault": return .fault
+        default: return .info
+        }
+    }()
+
+    private static func shouldLog(_ level: LogLevel) -> Bool {
+        return level.order >= minimumLevel.order
     }
     
     // MARK: - Security Event Types
@@ -99,6 +127,7 @@ class SecureLogger {
     /// Log a security event
     static func logSecurityEvent(_ event: SecurityEvent, level: LogLevel = .info, 
                                  file: String = #file, line: Int = #line, function: String = #function) {
+        guard shouldLog(level) else { return }
         let location = formatLocation(file: file, line: line, function: function)
         let message = "\(location) \(event.message)"
         
@@ -113,6 +142,7 @@ class SecureLogger {
     /// Log general messages with automatic sensitive data filtering
     static func log(_ message: String, category: OSLog = noise, level: LogLevel = .debug,
                     file: String = #file, line: Int = #line, function: String = #function) {
+        guard shouldLog(level) else { return }
         let location = formatLocation(file: file, line: line, function: function)
         let sanitized = sanitize("\(location) \(message)")
         
