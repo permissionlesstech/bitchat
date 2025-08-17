@@ -13,7 +13,7 @@ import CryptoKit
 
 /// Single source of truth for peer state, combining mesh connectivity and favorites
 @MainActor
-class UnifiedPeerService: ObservableObject {
+class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
     
     // MARK: - Published Properties
     
@@ -26,13 +26,13 @@ class UnifiedPeerService: ObservableObject {
     
     private var peerIndex: [String: BitchatPeer] = [:]
     private var fingerprintCache: [String: String] = [:]  // peerID -> fingerprint
-    private let meshService: SimplifiedBluetoothService
+    private let meshService: Transport
     private let favoritesService = FavoritesPersistenceService.shared
     private var cancellables = Set<AnyCancellable>()
     
     // MARK: - Initialization
     
-    init(meshService: SimplifiedBluetoothService) {
+    init(meshService: Transport) {
         self.meshService = meshService
         
         // Subscribe to changes from both services
@@ -47,14 +47,8 @@ class UnifiedPeerService: ObservableObject {
     // MARK: - Setup
     
     private func setupSubscriptions() {
-        // Subscribe to mesh peer updates
-        meshService.fullPeersPublisher
-            .combineLatest(favoritesService.$favorites)
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.updatePeers()
-            }
-            .store(in: &cancellables)
+        // Subscribe to mesh peer updates via delegate (preferred over publishers)
+        meshService.peerEventsDelegate = self
         
         // Also listen for favorite change notifications
         NotificationCenter.default.publisher(for: .favoriteStatusChanged)
@@ -64,11 +58,16 @@ class UnifiedPeerService: ObservableObject {
             }
             .store(in: &cancellables)
     }
+
+    // TransportPeerEventsDelegate
+    func didUpdatePeerSnapshots(_ peers: [TransportPeerSnapshot]) {
+        updatePeers()
+    }
     
     // MARK: - Core Update Logic
     
     private func updatePeers() {
-        let meshPeers = meshService.fullPeersPublisher.value
+        let meshPeers = meshService.currentPeerSnapshots()
         let favorites = favoritesService.favorites
         
         var enrichedPeers: [BitchatPeer] = []
@@ -76,11 +75,11 @@ class UnifiedPeerService: ObservableObject {
         var addedPeerIDs: Set<String> = []
         
         // Phase 1: Add all connected mesh peers
-        for (peerID, peerInfo) in meshPeers where peerInfo.isConnected {
+        for peerInfo in meshPeers where peerInfo.isConnected {
+            let peerID = peerInfo.id
             guard peerID != meshService.myPeerID else { continue }  // Never add self
             
             let peer = buildPeerFromMesh(
-                peerID: peerID,
                 peerInfo: peerInfo,
                 favorites: favorites
             )
@@ -162,12 +161,11 @@ class UnifiedPeerService: ObservableObject {
     // MARK: - Peer Building Helpers
     
     private func buildPeerFromMesh(
-        peerID: String,
-        peerInfo: SimplifiedBluetoothService.PeerInfoSnapshot,
+        peerInfo: TransportPeerSnapshot,
         favorites: [Data: FavoritesPersistenceService.FavoriteRelationship]
     ) -> BitchatPeer {
         var peer = BitchatPeer(
-            id: peerID,
+            id: peerInfo.id,
             noisePublicKey: peerInfo.noisePublicKey ?? Data(),
             nickname: peerInfo.nickname,
             lastSeen: peerInfo.lastSeen,
@@ -365,7 +363,7 @@ class UnifiedPeerService: ObservableObject {
         }
         
         // Try to get from mesh service
-        if let fingerprint = meshService.getPeerFingerprint(peerID) {
+        if let fingerprint = meshService.getFingerprint(for: peerID) {
             fingerprintCache[peerID] = fingerprint
             return fingerprint
         }

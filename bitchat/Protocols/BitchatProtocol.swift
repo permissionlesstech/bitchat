@@ -32,7 +32,7 @@
 /// 1. **Creation**: Messages are created with type, content, and metadata
 /// 2. **Encoding**: Converted to binary format with proper field ordering
 /// 3. **Fragmentation**: Split if larger than BLE MTU (512 bytes)
-/// 4. **Transmission**: Sent via SimplifiedBluetoothService
+/// 4. **Transmission**: Sent via BLEService
 /// 5. **Routing**: Relayed by intermediate nodes (TTL decrements)
 /// 6. **Reassembly**: Fragments collected and reassembled
 /// 7. **Decoding**: Binary data parsed back to message objects
@@ -461,6 +461,10 @@ protocol BitchatDelegate: AnyObject {
     func isFavorite(fingerprint: String) -> Bool
     
     func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus)
+
+    // Low-level events for better separation of concerns
+    func didReceiveNoisePayload(from peerID: String, type: NoisePayloadType, payload: Data, timestamp: Date)
+    func didReceivePublicMessage(from peerID: String, nickname: String, content: String, timestamp: Date)
 }
 
 // Provide default implementation to make it effectively optional
@@ -470,6 +474,14 @@ extension BitchatDelegate {
     }
     
     func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) {
+        // Default empty implementation
+    }
+
+    func didReceiveNoisePayload(from peerID: String, type: NoisePayloadType, payload: Data, timestamp: Date) {
+        // Default empty implementation
+    }
+
+    func didReceivePublicMessage(from peerID: String, nickname: String, content: String, timestamp: Date) {
         // Default empty implementation
     }
 }

@@ -24,7 +24,7 @@ final class PrivateChatE2ETests: XCTestCase {
         bob = createMockService(peerID: TestConstants.testPeerID2, nickname: TestConstants.testNickname2)
         charlie = createMockService(peerID: TestConstants.testPeerID3, nickname: TestConstants.testNickname3)
         
-        // Delivery tracking is now handled internally by SimplifiedBluetoothService
+        // Delivery tracking is now handled internally by BLEService
     }
     
     override func tearDown() {
@@ -92,13 +92,13 @@ final class PrivateChatE2ETests: XCTestCase {
     
     // MARK: - Delivery Acknowledgment Tests
     
-    // NOTE: DeliveryTracker has been removed in SimplifiedBluetoothService.
+    // NOTE: DeliveryTracker has been removed in BLEService.
     // Delivery tracking is now handled internally.
     
     
     // MARK: - Message Retry Tests
     
-    // NOTE: MessageRetryService has been removed in SimplifiedBluetoothService.
+    // NOTE: MessageRetryService has been removed in BLEService.
     // Retry logic is now handled internally.
     
     
