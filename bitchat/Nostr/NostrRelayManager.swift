@@ -57,7 +57,7 @@ class NostrRelayManager: ObservableObject {
     
     /// Connect to all configured relays
     func connect() {
-        SecureLogger.log("🌐 Connecting to \(relays.count) Nostr relays", category: SecureLogger.session, level: .debug)
+        SecureLogger.log("🌐 Connecting to \(relays.count) Nostr relays", category: SecureLogger.session, level: .info)
         for relay in relays {
             connectToRelay(relay.url)
         }
@@ -97,8 +97,8 @@ class NostrRelayManager: ObservableObject {
     ) {
         messageHandlers[id] = handler
         
-        SecureLogger.log("📡 Setting up subscription '\(id)' with filter - kinds: \(filter.kinds ?? []), since: \(filter.since ?? 0)", 
-                        category: SecureLogger.session, level: .debug)
+        SecureLogger.log("📡 Subscribing to Nostr filter id=\(id) kinds=\(filter.kinds ?? []) since=\(filter.since ?? 0)", 
+                        category: SecureLogger.session, level: .info)
         
         let req = NostrRequest.subscribe(id: id, filters: [filter])
         
