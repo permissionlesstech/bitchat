@@ -2240,7 +2240,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             DispatchQueue.main.async {
                 guard let self = self else { return }
 
-                SecureLogger.log("🔐 Authenticated: \(peerID)", category: SecureLogger.security, level: .info)
+                SecureLogger.log("🔐 Authenticated: \(peerID)", category: SecureLogger.security, level: .debug)
 
                 // Update encryption status
                 if self.verifiedFingerprints.contains(fingerprint) {
@@ -2734,7 +2734,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         
         if let relayManager = nostrRelayManager {
             relayManager.sendEvent(event)
-            SecureLogger.log("Sent Nostr message via relay", category: SecureLogger.session, level: .info)
+            SecureLogger.log("Sent Nostr message via relay", category: SecureLogger.session, level: .debug)
             
             // Update delivery status to sent for Nostr messages
             // Need to find which peerID (ephemeral or Noise key) contains this message
@@ -3370,7 +3370,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         // Try mesh first for connected peers
         if meshService.isPeerConnected(peerID) {
             meshService.sendFavoriteNotification(to: peerID, isFavorite: isFavorite)
-            SecureLogger.log("📤 Sent favorite notification via BLE to \(peerID)", category: SecureLogger.session, level: .info)
+            SecureLogger.log("📤 Sent favorite notification via BLE to \(peerID)", category: SecureLogger.session, level: .debug)
         } else if let key = noiseKey,
                   let favoriteStatus = FavoritesPersistenceService.shared.getFavoriteStatus(for: key),
                   let recipientNostrPubkey = favoriteStatus.peerNostrPublicKey {
@@ -3393,7 +3393,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             }
             if let relayManager = nostrRelayManager {
                 relayManager.sendEvent(event)
-                SecureLogger.log("📤 Sent favorite notification via Nostr to \(favoriteStatus.peerNickname)", category: SecureLogger.session, level: .info)
+                SecureLogger.log("📤 Sent favorite notification via Nostr to \(favoriteStatus.peerNickname)", category: SecureLogger.session, level: .debug)
             } else {
                 SecureLogger.log("❌ NostrRelayManager is nil - cannot send favorite notification", category: SecureLogger.session, level: .error)
             }
@@ -3537,7 +3537,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     /// Handle incoming private message
     @MainActor
     private func handlePrivateMessage(_ message: BitchatMessage) {
-        SecureLogger.log("📥 handlePrivateMessage called for message from \(message.sender)", category: SecureLogger.session, level: .info)
+        SecureLogger.log("📥 handlePrivateMessage called for message from \(message.sender)", category: SecureLogger.session, level: .debug)
         let senderPeerID = message.senderPeerID ?? getPeerIDForNickname(message.sender)
         
         guard let peerID = senderPeerID else { 

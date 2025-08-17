@@ -152,7 +152,7 @@ final class SimplifiedBluetoothService: NSObject {
         // This ensures we send pending messages only when session is truly established
         noiseService.onPeerAuthenticated = { [weak self] peerID, fingerprint in
             SecureLogger.log("🔐 Noise session authenticated with \(peerID), fingerprint: \(fingerprint.prefix(16))...", 
-                            category: SecureLogger.noise, level: .info)
+                            category: SecureLogger.noise, level: .debug)
             // Send any messages that were queued during handshake
             self?.messageQueue.async { [weak self] in
                 self?.sendPendingMessagesAfterHandshake(for: peerID)
@@ -341,7 +341,7 @@ final class SimplifiedBluetoothService: NSObject {
     
     func sendFavoriteNotification(to peerID: String, isFavorite: Bool) {
         SecureLogger.log("🔔 sendFavoriteNotification called - peerID: \(peerID), isFavorite: \(isFavorite)",
-                        category: SecureLogger.session, level: .info)
+                        category: SecureLogger.session, level: .debug)
         
         // Include Nostr public key in the notification
         var content = isFavorite ? "[FAVORITED]" : "[UNFAVORITED]"
@@ -350,11 +350,11 @@ final class SimplifiedBluetoothService: NSObject {
         if let myNostrIdentity = try? NostrIdentityBridge.getCurrentNostrIdentity() {
             content += ":" + myNostrIdentity.npub
             SecureLogger.log("📝 Sending favorite notification with Nostr npub: \(myNostrIdentity.npub)",
-                            category: SecureLogger.session, level: .info)
+                            category: SecureLogger.session, level: .debug)
         }
         
         SecureLogger.log("📤 Sending favorite notification to \(peerID): \(content)",
-                        category: SecureLogger.session, level: .info)
+                        category: SecureLogger.session, level: .debug)
         sendPrivateMessage(content, to: peerID, messageID: UUID().uuidString)
     }
     
@@ -366,7 +366,7 @@ final class SimplifiedBluetoothService: NSObject {
         }
         
         SecureLogger.log("📤 Sending READ receipt for message \(receipt.originalMessageID) to \(peerID)", 
-                        category: SecureLogger.session, level: .info)
+                        category: SecureLogger.session, level: .debug)
         
         // Create read receipt payload: [type byte] + [message ID]
         var receiptPayload = Data([NoisePayloadType.readReceipt.rawValue])
@@ -496,7 +496,7 @@ final class SimplifiedBluetoothService: NSObject {
     // MARK: - Private Message Handling
     
     private func sendPrivateMessage(_ content: String, to recipientID: String, messageID: String) {
-        SecureLogger.log("📨 Sending PM to \(recipientID): \(content.prefix(30))...", category: SecureLogger.session, level: .info)
+        SecureLogger.log("📨 Sending PM to \(recipientID): \(content.prefix(30))...", category: SecureLogger.session, level: .debug)
         
         // Check if we have an established Noise session
         if noiseService.hasEstablishedSession(with: recipientID) {
@@ -558,7 +558,7 @@ final class SimplifiedBluetoothService: NSObject {
             }
         } else {
             // Queue message for sending after handshake completes
-            SecureLogger.log("🤝 No session with \(recipientID), initiating handshake and queueing message", category: SecureLogger.session, level: .info)
+            SecureLogger.log("🤝 No session with \(recipientID), initiating handshake and queueing message", category: SecureLogger.session, level: .debug)
             
             // Queue the message (especially important for favorite notifications)
             collectionsQueue.sync(flags: .barrier) {
@@ -618,7 +618,7 @@ final class SimplifiedBluetoothService: NSObject {
         guard let messages = pendingMessages, !messages.isEmpty else { return }
         
         SecureLogger.log("📤 Sending \(messages.count) pending messages after handshake to \(peerID)", 
-                        category: SecureLogger.session, level: .info)
+                        category: SecureLogger.session, level: .debug)
         
         // Send each pending message directly (we know session is established)
         for (content, messageID) in messages {
@@ -650,7 +650,7 @@ final class SimplifiedBluetoothService: NSObject {
                 }
                 
                 SecureLogger.log("✅ Sent pending message \(messageID) to \(peerID) after handshake", 
-                                category: SecureLogger.session, level: .info)
+                                category: SecureLogger.session, level: .debug)
             } catch {
                 SecureLogger.log("Failed to send pending message after handshake: \(error)", 
                                 category: SecureLogger.noise, level: .error)
@@ -675,7 +675,7 @@ final class SimplifiedBluetoothService: NSObject {
         // Log encrypted and relayed packets for debugging
         if packet.type == MessageType.noiseEncrypted.rawValue {
             SecureLogger.log("📡 Encrypted packet to \(packet.recipientID?.hexEncodedString() ?? "unknown")",
-                            category: SecureLogger.session, level: .info)
+                            category: SecureLogger.session, level: .debug)
         } else if packet.ttl < messageTTL {
             // Relayed packet
         }
@@ -1042,11 +1042,11 @@ final class SimplifiedBluetoothService: NSObject {
             
             // Log connection status
             if existingPeer == nil {
-                SecureLogger.log("🆕 New peer: \(announcement.nickname)", category: SecureLogger.session, level: .info)
+                SecureLogger.log("🆕 New peer: \(announcement.nickname)", category: SecureLogger.session, level: .debug)
             } else if wasDisconnected {
-                SecureLogger.log("🔄 Peer \(announcement.nickname) reconnected", category: SecureLogger.session, level: .info)
+                SecureLogger.log("🔄 Peer \(announcement.nickname) reconnected", category: SecureLogger.session, level: .debug)
             } else if existingPeer?.nickname != announcement.nickname {
-                SecureLogger.log("🔄 Peer \(peerID) changed nickname: \(existingPeer?.nickname ?? "Unknown") -> \(announcement.nickname)", category: SecureLogger.session, level: .info)
+                SecureLogger.log("🔄 Peer \(peerID) changed nickname: \(existingPeer?.nickname ?? "Unknown") -> \(announcement.nickname)", category: SecureLogger.session, level: .debug)
             }
         }
         
@@ -1117,7 +1117,7 @@ final class SimplifiedBluetoothService: NSObject {
         }
         
         let senderNickname = peers[peerID]?.nickname ?? "Unknown"
-        SecureLogger.log("💬 [\(senderNickname)] TTL:\(packet.ttl): \(String(content.prefix(50)))\(content.count > 50 ? "..." : "")", category: SecureLogger.session, level: .info)
+        SecureLogger.log("💬 [\(senderNickname)] TTL:\(packet.ttl): \(String(content.prefix(50)))\(content.count > 50 ? "..." : "")", category: SecureLogger.session, level: .debug)
         
         // Parse mentions from the message content
         let mentions = parseMentions(from: content)
@@ -1231,7 +1231,7 @@ final class SimplifiedBluetoothService: NSObject {
                     mentions: mentions.isEmpty ? nil : mentions
                 )
                 
-                SecureLogger.log("🔓 Decrypted TLV PM from \(message.sender): \(messageContent.prefix(30))...", category: SecureLogger.session, level: .info)
+                SecureLogger.log("🔓 Decrypted TLV PM from \(message.sender): \(messageContent.prefix(30))...", category: SecureLogger.session, level: .debug)
                 
                 // Send on main thread
                 notifyUI { [weak self] in
@@ -1262,7 +1262,7 @@ final class SimplifiedBluetoothService: NSObject {
                 guard let messageID = String(data: payloadData, encoding: .utf8) else { return }
                 
                 SecureLogger.log("📖 Received READ receipt for message \(messageID) from \(peerID)", 
-                                category: SecureLogger.session, level: .info)
+                                category: SecureLogger.session, level: .debug)
                 
                 // Update read status
                 notifyUI { [weak self] in
@@ -1277,7 +1277,7 @@ final class SimplifiedBluetoothService: NSObject {
             // We received an encrypted message before establishing a session with this peer.
             // Trigger a handshake so future messages can be decrypted.
             SecureLogger.log("🔑 Encrypted message from \(peerID) without session; initiating handshake", 
-                            category: SecureLogger.noise, level: .info)
+                            category: SecureLogger.noise, level: .debug)
             if !noiseService.hasSession(with: peerID) {
                 initiateNoiseHandshake(with: peerID)
             }
@@ -1308,7 +1308,7 @@ final class SimplifiedBluetoothService: NSObject {
     // MARK: - Helper Functions
     
     private func sendLeave() {
-        SecureLogger.log("👋 Sending leave announcement", category: SecureLogger.session, level: .info)
+        SecureLogger.log("👋 Sending leave announcement", category: SecureLogger.session, level: .debug)
         let packet = BitchatPacket(
             type: MessageType.leave.rawValue,
             ttl: messageTTL,
@@ -1460,7 +1460,7 @@ final class SimplifiedBluetoothService: NSObject {
                     if !hasPeripheralConnection && !hasCentralConnection {
                         // Remove the peer completely (they'll be re-added when they reconnect)
                         SecureLogger.log("⏱️ Peer timed out (no packets for 20s): \(peerID) (\(peer.nickname))",
-                                       category: SecureLogger.session, level: .info)
+                                       category: SecureLogger.session, level: .debug)
                         peers.removeValue(forKey: peerID)
                         disconnectedPeers.append(peerID)
                     }
@@ -1584,7 +1584,7 @@ extension SimplifiedBluetoothService: CBCentralManagerDelegate {
         
         // Connect to the peripheral with options for faster connection
         SecureLogger.log("📱 Connect: \(advertisedName) [RSSI:\(rssiValue)]",
-                        category: SecureLogger.session, level: .info)
+                        category: SecureLogger.session, level: .debug)
         
         // Use connection options for faster reconnection
         let options: [String: Any] = [
@@ -1627,7 +1627,7 @@ extension SimplifiedBluetoothService: CBCentralManagerDelegate {
             )
         }
         
-        SecureLogger.log("✅ Connected: \(peripheral.name ?? "Unknown") [\(peripheralID)]", category: SecureLogger.session, level: .info)
+        SecureLogger.log("✅ Connected: \(peripheral.name ?? "Unknown") [\(peripheralID)]", category: SecureLogger.session, level: .debug)
         
         // Discover services
         peripheral.discoverServices([SimplifiedBluetoothService.serviceUUID])
@@ -1640,7 +1640,7 @@ extension SimplifiedBluetoothService: CBCentralManagerDelegate {
         let peerID = peripherals[peripheralID]?.peerID
         
         SecureLogger.log("📱 Disconnect: \(peerID ?? peripheralID)\(error != nil ? " (\(error!.localizedDescription))" : "")",
-                        category: SecureLogger.session, level: .info)
+                        category: SecureLogger.session, level: .debug)
         
         // Clean up references
         peripherals.removeValue(forKey: peripheralID)
@@ -1895,13 +1895,13 @@ extension SimplifiedBluetoothService: CBPeripheralManagerDelegate {
             return
         }
         
-        SecureLogger.log("✅ Service added successfully, starting advertising", category: SecureLogger.session, level: .info)
+        SecureLogger.log("✅ Service added successfully, starting advertising", category: SecureLogger.session, level: .debug)
         
         // Start advertising after service is confirmed added
         let adData = buildAdvertisementData()
         peripheral.startAdvertising(adData)
         
-        SecureLogger.log("📡 Started advertising (LocalName: \((adData[CBAdvertisementDataLocalNameKey] as? String) != nil ? "on" : "off"), ID: \(myPeerID.prefix(8))…)", category: SecureLogger.session, level: .info)
+        SecureLogger.log("📡 Started advertising (LocalName: \((adData[CBAdvertisementDataLocalNameKey] as? String) != nil ? "on" : "off"), ID: \(myPeerID.prefix(8))…)", category: SecureLogger.session, level: .debug)
     }
     
     func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didSubscribeTo characteristic: CBCharacteristic) {
@@ -1913,12 +1913,12 @@ extension SimplifiedBluetoothService: CBPeripheralManagerDelegate {
     }
     
     func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didUnsubscribeFrom characteristic: CBCharacteristic) {
-        SecureLogger.log("📤 Central unsubscribed: \(central.identifier.uuidString)", category: SecureLogger.session, level: .info)
+        SecureLogger.log("📤 Central unsubscribed: \(central.identifier.uuidString)", category: SecureLogger.session, level: .debug)
         subscribedCentrals.removeAll { $0.identifier == central.identifier }
         
         // Ensure we're still advertising for other devices to find us
         if peripheral.isAdvertising == false {
-            SecureLogger.log("📡 Restarting advertising after central unsubscribed", category: SecureLogger.session, level: .info)
+            SecureLogger.log("📡 Restarting advertising after central unsubscribed", category: SecureLogger.session, level: .debug)
             peripheral.startAdvertising(buildAdvertisementData())
         }
         
@@ -1948,7 +1948,7 @@ extension SimplifiedBluetoothService: CBPeripheralManagerDelegate {
     }
     
     func peripheralManagerIsReady(toUpdateSubscribers peripheral: CBPeripheralManager) {
-        SecureLogger.log("📤 Peripheral manager ready to send more notifications", category: SecureLogger.session, level: .info)
+        SecureLogger.log("📤 Peripheral manager ready to send more notifications", category: SecureLogger.session, level: .debug)
         
         // Retry pending notifications now that queue has space
         collectionsQueue.async(flags: .barrier) { [weak self] in
@@ -1995,7 +1995,7 @@ extension SimplifiedBluetoothService: CBPeripheralManagerDelegate {
     func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveWrite requests: [CBATTRequest]) {
         // Suppress logs for single write requests to reduce noise
         if requests.count > 1 {
-            SecureLogger.log("📥 Received \(requests.count) write requests from central", category: SecureLogger.session, level: .info)
+            SecureLogger.log("📥 Received \(requests.count) write requests from central", category: SecureLogger.session, level: .debug)
         }
         
         // IMPORTANT: Respond immediately to prevent timeouts!
@@ -2022,7 +2022,7 @@ extension SimplifiedBluetoothService: CBPeripheralManagerDelegate {
                 let senderID = dataToHexString(packet.senderID)
                 // Only log non-announce packets
                 if packet.type != MessageType.announce.rawValue {
-                    SecureLogger.log("📦 Decoded packet type: \(packet.type) from sender: \(senderID)", category: SecureLogger.session, level: .info)
+                    SecureLogger.log("📦 Decoded packet type: \(packet.type) from sender: \(senderID)", category: SecureLogger.session, level: .debug)
                 }
                 
                 // Store central in our list if not already there
