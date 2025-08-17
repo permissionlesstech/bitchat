@@ -1446,7 +1446,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         }
         
         // Send Nostr read ACKs if peer has Nostr capability
-        if let nostrPubkey = peerNostrPubkey {
+        if peerNostrPubkey != nil {
             // Check messages under both ephemeral peer ID and stable Noise key
             let messagesToAck = getPrivateChatMessages(for: peerID)
             
