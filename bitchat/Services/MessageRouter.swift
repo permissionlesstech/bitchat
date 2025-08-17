@@ -41,18 +41,18 @@ final class MessageRouter {
         let hasEstablished = mesh.getNoiseService().hasEstablishedSession(with: peerID)
         if hasMesh && hasEstablished {
             SecureLogger.log("Routing PM via mesh to \(peerID.prefix(8))… id=\(messageID.prefix(8))…",
-                            category: SecureLogger.session, level: .info)
+                            category: SecureLogger.session, level: .debug)
             mesh.sendPrivateMessage(content, to: peerID, recipientNickname: recipientNickname, messageID: messageID)
         } else if canSendViaNostr(peerID: peerID) {
             SecureLogger.log("Routing PM via Nostr to \(peerID.prefix(8))… id=\(messageID.prefix(8))…",
-                            category: SecureLogger.session, level: .info)
+                            category: SecureLogger.session, level: .debug)
             nostr.sendPrivateMessage(content, to: peerID, recipientNickname: recipientNickname, messageID: messageID)
         } else {
             // Queue for later (when mesh connects or Nostr mapping appears)
             if outbox[peerID] == nil { outbox[peerID] = [] }
             outbox[peerID]?.append((content, recipientNickname, messageID))
             SecureLogger.log("Queued PM for \(peerID.prefix(8))… (no mesh, no Nostr mapping) id=\(messageID.prefix(8))…",
-                            category: SecureLogger.session, level: .info)
+                            category: SecureLogger.session, level: .debug)
         }
     }
 
@@ -60,11 +60,11 @@ final class MessageRouter {
         // Prefer mesh only if a Noise session is established; else use Nostr to avoid handshakeRequired spam
         if mesh.isPeerConnected(peerID) && mesh.getNoiseService().hasEstablishedSession(with: peerID) {
             SecureLogger.log("Routing READ ack via mesh to \(peerID.prefix(8))… id=\(receipt.originalMessageID.prefix(8))…",
-                            category: SecureLogger.session, level: .info)
+                            category: SecureLogger.session, level: .debug)
             mesh.sendReadReceipt(receipt, to: peerID)
         } else {
             SecureLogger.log("Routing READ ack via Nostr to \(peerID.prefix(8))… id=\(receipt.originalMessageID.prefix(8))…",
-                            category: SecureLogger.session, level: .info)
+                            category: SecureLogger.session, level: .debug)
             nostr.sendReadReceipt(receipt, to: peerID)
         }
     }
@@ -98,16 +98,16 @@ final class MessageRouter {
     func flushOutbox(for peerID: String) {
         guard let queued = outbox[peerID], !queued.isEmpty else { return }
         SecureLogger.log("Flushing outbox for \(peerID.prefix(8))… count=\(queued.count)",
-                        category: SecureLogger.session, level: .info)
+                        category: SecureLogger.session, level: .debug)
         // Prefer mesh if connected; else try Nostr if mapping exists
         for (content, nickname, messageID) in queued {
             if mesh.isPeerConnected(peerID) {
                 SecureLogger.log("Outbox -> mesh for \(peerID.prefix(8))… id=\(messageID.prefix(8))…",
-                                category: SecureLogger.session, level: .info)
+                                category: SecureLogger.session, level: .debug)
                 mesh.sendPrivateMessage(content, to: peerID, recipientNickname: nickname, messageID: messageID)
             } else if canSendViaNostr(peerID: peerID) {
                 SecureLogger.log("Outbox -> Nostr for \(peerID.prefix(8))… id=\(messageID.prefix(8))…",
-                                category: SecureLogger.session, level: .info)
+                                category: SecureLogger.session, level: .debug)
                 nostr.sendPrivateMessage(content, to: peerID, recipientNickname: nickname, messageID: messageID)
             } else {
                 continue

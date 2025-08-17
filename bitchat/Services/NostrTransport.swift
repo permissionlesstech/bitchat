@@ -55,7 +55,7 @@ final class NostrTransport: Transport {
             guard let recipientNpub = recipientNostrPubkey else { return }
             guard let senderIdentity = try? NostrIdentityBridge.getCurrentNostrIdentity() else { return }
             SecureLogger.log("NostrTransport: preparing PM to \(recipientNpub.prefix(16))… for peerID \(peerID.prefix(8))… id=\(messageID.prefix(8))…",
-                            category: SecureLogger.session, level: .info)
+                            category: SecureLogger.session, level: .debug)
             // Convert recipient npub -> hex (x-only)
             let recipientHex: String
             do {
@@ -78,7 +78,7 @@ final class NostrTransport: Transport {
                 return
             }
             SecureLogger.log("NostrTransport: sending PM giftWrap id=\(event.id.prefix(16))…",
-                            category: SecureLogger.session, level: .info)
+                            category: SecureLogger.session, level: .debug)
             NostrRelayManager.shared.sendEvent(event)
         }
     }
@@ -111,7 +111,7 @@ final class NostrTransport: Transport {
             guard let recipientNpub = recipientNostrPubkey else { scheduleNextReadAck(); return }
             guard let senderIdentity = try? NostrIdentityBridge.getCurrentNostrIdentity() else { scheduleNextReadAck(); return }
             SecureLogger.log("NostrTransport: preparing READ ack for id=\(item.receipt.originalMessageID.prefix(8))… to \(recipientNpub.prefix(16))…",
-                            category: SecureLogger.session, level: .info)
+                            category: SecureLogger.session, level: .debug)
             // Convert recipient npub -> hex
             let recipientHex: String
             do {
@@ -128,7 +128,7 @@ final class NostrTransport: Transport {
                 scheduleNextReadAck(); return
             }
             SecureLogger.log("NostrTransport: sending READ ack giftWrap id=\(event.id.prefix(16))…",
-                            category: SecureLogger.session, level: .info)
+                            category: SecureLogger.session, level: .debug)
             NostrRelayManager.shared.sendEvent(event)
             scheduleNextReadAck()
         }
@@ -156,7 +156,7 @@ final class NostrTransport: Transport {
             guard let senderIdentity = try? NostrIdentityBridge.getCurrentNostrIdentity() else { return }
             let content = isFavorite ? "[FAVORITED]:\(senderIdentity.npub)" : "[UNFAVORITED]:\(senderIdentity.npub)"
             SecureLogger.log("NostrTransport: preparing FAVORITE(\(isFavorite)) to \(recipientNpub.prefix(16))…",
-                            category: SecureLogger.session, level: .info)
+                            category: SecureLogger.session, level: .debug)
             // Convert recipient npub -> hex
             let recipientHex: String
             do {
@@ -173,7 +173,7 @@ final class NostrTransport: Transport {
                 return
             }
             SecureLogger.log("NostrTransport: sending favorite giftWrap id=\(event.id.prefix(16))…",
-                            category: SecureLogger.session, level: .info)
+                            category: SecureLogger.session, level: .debug)
             NostrRelayManager.shared.sendEvent(event)
         }
     }

@@ -328,7 +328,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         // Initialize Nostr services
         Task { @MainActor in
             nostrRelayManager = NostrRelayManager.shared
-            SecureLogger.log("Initializing Nostr relay connections", category: SecureLogger.session, level: .info)
+            SecureLogger.log("Initializing Nostr relay connections", category: SecureLogger.session, level: .debug)
             nostrRelayManager?.connect()
             
             // Small delay to ensure read receipts are fully loaded
@@ -2443,7 +2443,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     // MARK: - Peer Connection Events
     
     func didConnectToPeer(_ peerID: String) {
-        SecureLogger.log("🤝 Peer connected: \(peerID)", category: SecureLogger.session, level: .info)
+        SecureLogger.log("🤝 Peer connected: \(peerID)", category: SecureLogger.session, level: .debug)
         
         // Handle all main actor work async
         Task { @MainActor in
@@ -2481,7 +2481,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     }
     
     func didDisconnectFromPeer(_ peerID: String) {
-        SecureLogger.log("👋 Peer disconnected: \(peerID)", category: SecureLogger.session, level: .info)
+        SecureLogger.log("👋 Peer disconnected: \(peerID)", category: SecureLogger.session, level: .debug)
         
         // Remove ephemeral session from identity manager
         SecureIdentityStateManager.shared.removeEphemeralSession(peerID: peerID)
@@ -2978,7 +2978,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
 
                 // Send delivery ack via Nostr embedded if not previously read and we know sender's Noise key
                 if !wasReadBefore, let key = actualSenderNoiseKey {
-                    SecureLogger.log("Sending DELIVERED ack for \(messageId.prefix(8))… via router", category: SecureLogger.session, level: .info)
+                    SecureLogger.log("Sending DELIVERED ack for \(messageId.prefix(8))… via router", category: SecureLogger.session, level: .debug)
                     messageRouter.sendDeliveryAck(messageId, to: key.hexEncodedString())
                 }
 
@@ -2992,7 +2992,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     }
                     if !sentReadReceipts.contains(messageId), let key = actualSenderNoiseKey {
                         let receipt = ReadReceipt(originalMessageID: messageId, readerID: meshService.myPeerID, readerNickname: nickname)
-                        SecureLogger.log("Viewing chat; sending READ ack for \(messageId.prefix(8))… via router", category: SecureLogger.session, level: .info)
+                        SecureLogger.log("Viewing chat; sending READ ack for \(messageId.prefix(8))… via router", category: SecureLogger.session, level: .debug)
                         messageRouter.sendReadReceipt(receipt, to: key.hexEncodedString())
                         sentReadReceipts.insert(messageId)
                     }

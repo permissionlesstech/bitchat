@@ -214,7 +214,7 @@ class PrivateChatManager: ObservableObject {
         // Route via MessageRouter to avoid handshakeRequired spam when session isn't established
         if let router = messageRouter {
             SecureLogger.log("PrivateChatManager: sending READ ack for \(message.id.prefix(8))… to \(senderPeerID.prefix(8))… via router",
-                            category: SecureLogger.session, level: .info)
+                            category: SecureLogger.session, level: .debug)
             Task { @MainActor in
                 router.sendReadReceipt(receipt, to: senderPeerID)
             }
