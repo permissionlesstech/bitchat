@@ -28,6 +28,14 @@ final class MessageRouter {
         }
     }
 
+    func sendDeliveryAck(_ messageID: String, to peerID: String) {
+        if mesh.isPeerConnected(peerID) {
+            mesh.sendDeliveryAck(for: messageID, to: peerID)
+        } else {
+            nostr.sendDeliveryAck(for: messageID, to: peerID)
+        }
+    }
+
     func sendFavoriteNotification(to peerID: String, isFavorite: Bool) {
         if mesh.isPeerConnected(peerID) {
             mesh.sendFavoriteNotification(to: peerID, isFavorite: isFavorite)

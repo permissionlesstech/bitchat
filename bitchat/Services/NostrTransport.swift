@@ -70,5 +70,15 @@ final class NostrTransport: Transport {
     }
 
     func sendBroadcastAnnounce() { /* no-op for Nostr */ }
-    func sendDeliveryAck(for messageID: String, to peerID: String) { /* BLE handles delivery ACKs */ }
+    func sendDeliveryAck(for messageID: String, to peerID: String) {
+        Task { @MainActor in
+            guard let noiseKey = Data(hexString: peerID),
+                  let fav = FavoritesPersistenceService.shared.getFavoriteStatus(for: noiseKey),
+                  let recipientNostrPubkey = fav.peerNostrPublicKey else { return }
+            guard let senderIdentity = try? NostrIdentityBridge.getCurrentNostrIdentity() else { return }
+            guard let ack = NostrEmbeddedBitChat.encodeAckForNostr(type: .delivered, messageID: messageID, recipientPeerID: peerID, senderPeerID: senderPeerID),
+                  let event = try? NostrProtocol.createPrivateMessage(content: ack, recipientPubkey: recipientNostrPubkey, senderIdentity: senderIdentity) else { return }
+            NostrRelayManager.shared.sendEvent(event)
+        }
+    }
 }
