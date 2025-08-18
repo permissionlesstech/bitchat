@@ -18,6 +18,7 @@ final class PrivateChatE2ETests: XCTestCase {
     
     override func setUp() {
         super.setUp()
+        MockBLEService.resetTestBus()
         
         // Create services
         alice = createMockService(peerID: TestConstants.testPeerID1, nickname: TestConstants.testNickname1)
@@ -80,12 +81,15 @@ final class PrivateChatE2ETests: XCTestCase {
             }
         }
         
-        // Alice sends private message to Bob only
-        alice.sendPrivateMessage(
-            TestConstants.testMessage1,
-            to: TestConstants.testPeerID2,
-            recipientNickname: TestConstants.testNickname2
-        )
+        // Small delay to ensure connections are registered before send
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            // Alice sends private message to Bob only
+            self.alice.sendPrivateMessage(
+                TestConstants.testMessage1,
+                to: TestConstants.testPeerID2,
+                recipientNickname: TestConstants.testNickname2
+            )
+        }
         
         wait(for: [bobExpectation, charlieExpectation], timeout: TestConstants.shortTimeout)
     }
@@ -270,58 +274,8 @@ final class PrivateChatE2ETests: XCTestCase {
     
     // NOTE: This test relied on MessageRetryService which has been removed
     
-    func testDuplicateAckPrevention() {
-        simulateConnection(alice, bob)
-        
-        let messageID = UUID().uuidString
-        var ackCount = 0
-        
-        alice.packetDeliveryHandler = { packet in
-            if packet.type == 0x03 {
-                ackCount += 1
-            }
-        }
-        
-        // Create message
-        let message = BitchatMessage(
-            id: messageID,
-            sender: TestConstants.testNickname1,
-            content: TestConstants.testMessage1,
-            timestamp: Date(),
-            isRelay: false,
-            originalSender: nil,
-            isPrivate: true,
-            recipientNickname: TestConstants.testNickname2,
-            senderPeerID: TestConstants.testPeerID1,
-            mentions: nil
-        )
-        
-        // Generate multiple ACKs for same message
-        // NOTE: DeliveryTracker has been removed - this test is no longer applicable
-        /*
-        for _ in 0..<3 {
-            if let ack = deliveryTracker.generateAck(
-                for: message,
-                myPeerID: TestConstants.testPeerID2,
-                myNickname: TestConstants.testNickname2,
-                hopCount: 1
-            ) {
-                let ackData = ack.encode()!
-                let ackPacket = TestHelpers.createTestPacket(
-                    type: 0x03,
-                    senderID: TestConstants.testPeerID2,
-                    recipientID: TestConstants.testPeerID1,
-                    payload: ackData
-                )
-                alice.simulateIncomingPacket(ackPacket)
-            }
-        }
-        */
-        
-        // Should only generate one ACK
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            XCTAssertEqual(ackCount, 1)
-        }
+    func testDuplicateAckPrevention() throws {
+        throw XCTSkip("DeliveryTracker/ACK flow removed; test not applicable")
     }
     
     // MARK: - Helper Methods
@@ -330,6 +284,7 @@ final class PrivateChatE2ETests: XCTestCase {
         let service = MockBluetoothMeshService()
         service.myPeerID = peerID
         service.mockNickname = nickname
+        service._testRegister()
         return service
     }
     
