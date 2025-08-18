@@ -27,7 +27,7 @@ struct CompressionUtil {
             return compression_encode_buffer(
                 destinationBuffer, data.count,
                 sourcePtr, data.count,
-                nil, COMPRESSION_LZ4
+                nil, COMPRESSION_ZLIB
             )
         }
         
@@ -46,7 +46,7 @@ struct CompressionUtil {
             return compression_decode_buffer(
                 destinationBuffer, originalSize,
                 sourcePtr, compressedData.count,
-                nil, COMPRESSION_LZ4
+                nil, COMPRESSION_ZLIB
             )
         }
         
