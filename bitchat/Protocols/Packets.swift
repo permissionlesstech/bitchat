@@ -37,7 +37,7 @@ struct AnnouncementPacket {
         data.append(TLVType.announceTimestamp.rawValue)
         data.append(UInt8(8))
         withUnsafeBytes(of: &tsBE) { raw in
-            data.append(raw)
+            data.append(contentsOf: raw)
         }
 
         // Required Ed25519 public key

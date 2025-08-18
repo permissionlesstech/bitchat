@@ -343,7 +343,7 @@ class NoiseEncryptionService {
         out.append(nickData.prefix(255))
         // timestamp
         var ts = timestampMs.bigEndian
-        withUnsafeBytes(of: &ts) { raw in out.append(raw) }
+        withUnsafeBytes(of: &ts) { raw in out.append(contentsOf: raw) }
         return out
     }
     
