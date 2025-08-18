@@ -209,16 +209,23 @@ struct BinaryProtocol {
     
     // Decode binary data to BitchatPacket
     static func decode(_ data: Data) -> BitchatPacket? {
-        // Remove padding first and create a defensive copy
-        let unpaddedData = MessagePadding.unpad(data)
-        
+        // Try decode as-is first (robust when padding wasn't applied)
+        if let pkt = decodeCore(data) { return pkt }
+        // If that fails, try after removing padding
+        let unpadded = MessagePadding.unpad(data)
+        if unpadded as NSData === data as NSData { return nil }
+        return decodeCore(unpadded)
+    }
+
+    // Core decoding implementation used by decode(_:) with and without padding removal
+    private static func decodeCore(_ raw: Data) -> BitchatPacket? {
         // Minimum size check: header + senderID
-        guard unpaddedData.count >= headerSize + senderIDSize else { 
+        guard raw.count >= headerSize + senderIDSize else { 
             return nil 
         }
         
         // Convert to array for safer indexed access
-        let dataArray = Array(unpaddedData)
+        let dataArray = Array(raw)
         var offset = 0
         
         // Header parsing with bounds checks

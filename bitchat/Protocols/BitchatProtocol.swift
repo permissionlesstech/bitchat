@@ -74,42 +74,27 @@ struct MessagePadding {
         guard data.count < targetSize else { return data }
         
         let paddingNeeded = targetSize - data.count
-        
-        // PKCS#7 only supports padding up to 255 bytes
-        // If we need more padding than that, don't pad - return original data
-        guard paddingNeeded <= 255 else { return data }
+        // Constrain to 255 to fit a single-byte pad length marker
+        guard paddingNeeded > 0 && paddingNeeded <= 255 else { return data }
         
         var padded = data
-        
-        // Standard PKCS#7 padding
-        var randomBytes = [UInt8](repeating: 0, count: paddingNeeded - 1)
-        _ = SecRandomCopyBytes(kSecRandomDefault, paddingNeeded - 1, &randomBytes)
-        padded.append(contentsOf: randomBytes)
-        padded.append(UInt8(paddingNeeded))
-        
+        // PKCS#7: All pad bytes are equal to the pad length
+        padded.append(contentsOf: Array(repeating: UInt8(paddingNeeded), count: paddingNeeded))
         return padded
     }
     
     // Remove padding from data
     static func unpad(_ data: Data) -> Data {
         guard !data.isEmpty else { return data }
-        
-        // Last byte tells us how much padding to remove
-        let lastIndex = data.count - 1
-        guard lastIndex >= 0 else { return data }
-        
-        let paddingLength = Int(data[lastIndex])
-        guard paddingLength > 0 && paddingLength <= data.count else { 
-            // No valid padding, return original data
-            return data 
-        }
-        
-        // Create a new Data object (not a subsequence) for thread safety
-        let unpaddedLength = data.count - paddingLength
-        guard unpaddedLength >= 0 else { return Data() }
-        
-        // Return a proper copy, not a subsequence
-        return Data(data.prefix(unpaddedLength))
+        let last = data.last!
+        let paddingLength = Int(last)
+        // Must have at least 1 pad byte and not exceed data length
+        guard paddingLength > 0 && paddingLength <= data.count else { return data }
+        // Verify PKCS#7: all last N bytes equal to pad length
+        let start = data.count - paddingLength
+        let tail = data[start...]
+        for b in tail { if b != last { return data } }
+        return Data(data[..<start])
     }
     
     // Find optimal block size for data
