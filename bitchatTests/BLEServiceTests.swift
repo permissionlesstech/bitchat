@@ -214,9 +214,11 @@ final class BLEServiceTests: XCTestCase {
     func testMessageDeliveryHandler() {
         let expectation = XCTestExpectation(description: "Delivery handler called")
         
-        service.messageDeliveryHandler = { message in
-            XCTAssertEqual(message.content, "Test delivery")
-            expectation.fulfill()
+        service.packetDeliveryHandler = { packet in
+            if let msg = BitchatMessage.fromBinaryPayload(packet.payload) {
+                XCTAssertEqual(msg.content, "Test delivery")
+                expectation.fulfill()
+            }
         }
         
         service.sendMessage("Test delivery")

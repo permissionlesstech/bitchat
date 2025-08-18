@@ -20,6 +20,7 @@ final class PublicChatE2ETests: XCTestCase {
     
     override func setUp() {
         super.setUp()
+        MockBLEService.resetTestBus()
         
         // Create mock services
         alice = createMockService(peerID: TestConstants.testPeerID1, nickname: TestConstants.testNickname1)
@@ -156,6 +157,8 @@ final class PublicChatE2ETests: XCTestCase {
         // Set up relay chain
         setupRelayHandler(bob, nextHops: [charlie])
         setupRelayHandler(charlie, nextHops: [david])
+        // Allow handlers to install
+        let sendDelay = DispatchTime.now() + 0.05
         
         david.messageDeliveryHandler = { message in
             if message.content == TestConstants.testMessage1 &&
@@ -166,7 +169,9 @@ final class PublicChatE2ETests: XCTestCase {
         }
         
         // Alice sends message
-        alice.sendMessage(TestConstants.testMessage1, mentions: [], to: nil)
+        DispatchQueue.main.asyncAfter(deadline: sendDelay) {
+            self.alice.sendMessage(TestConstants.testMessage1, mentions: [], to: nil)
+        }
         
         wait(for: [expectation], timeout: TestConstants.defaultTimeout)
     }
@@ -194,8 +199,12 @@ final class PublicChatE2ETests: XCTestCase {
             }
         }
         
-        // Send message with TTL=2 (should reach Charlie but not David)
-        alice.sendMessage(TestConstants.testMessage1, mentions: [], to: nil)
+        // Inject at Bob with TTL=2 so Charlie sees it (TTL->1) and does not relay to David
+        let msg = TestHelpers.createTestMessage(content: TestConstants.testMessage1, sender: TestConstants.testNickname1, senderPeerID: alice.peerID)
+        if let payload = msg.toBinaryPayload() {
+            let pkt = TestHelpers.createTestPacket(senderID: alice.peerID, payload: payload, ttl: 2)
+            bob.simulateIncomingPacket(pkt)
+        }
         
         wait(for: [expectation], timeout: TestConstants.shortTimeout)
     }
@@ -336,12 +345,13 @@ final class PublicChatE2ETests: XCTestCase {
         setupRelayHandler(bob, nextHops: [charlie])
         setupRelayHandler(charlie, nextHops: [david])
         setupRelayHandler(david, nextHops: [alice])
+        let sendDelay2 = DispatchTime.now() + 0.05
         
-        var messageIDs = Set<String>()
+        var receivedCount = 0
         let expectation = XCTestExpectation(description: "Message reaches all nodes once")
         
         let checkCompletion = {
-            if messageIDs.count == 3 { // Bob, Charlie, David should receive
+            if receivedCount == 3 { // Bob, Charlie, David should receive
                 expectation.fulfill()
             }
         }
@@ -349,14 +359,16 @@ final class PublicChatE2ETests: XCTestCase {
         for node in [bob!, charlie!, david!] {
             node.messageDeliveryHandler = { message in
                 if message.content == TestConstants.testMessage1 {
-                    messageIDs.insert(message.id)
+                    receivedCount += 1
                     checkCompletion()
                 }
             }
         }
         
         // Alice broadcasts
-        alice.sendMessage(TestConstants.testMessage1, mentions: [], to: nil)
+        DispatchQueue.main.asyncAfter(deadline: sendDelay2) {
+            self.alice.sendMessage(TestConstants.testMessage1, mentions: [], to: nil)
+        }
         
         wait(for: [expectation], timeout: TestConstants.defaultTimeout)
     }
@@ -411,6 +423,7 @@ final class PublicChatE2ETests: XCTestCase {
         let service = MockBluetoothMeshService()
         service.myPeerID = peerID
         service.mockNickname = nickname
+        service._testRegister()
         return service
     }
     

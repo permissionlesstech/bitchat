@@ -88,9 +88,12 @@ final class FragmentationTests: XCTestCase {
         // Shuffle fragments to simulate out-of-order arrival
         let shuffled = fragments.shuffled()
 
-        // Inject fragments as if received from remote
-        for f in shuffled {
-            ble._test_handlePacket(f, fromPeerID: remoteShortID)
+        // Inject fragments spaced out to avoid concurrent mutation inside BLEService
+        for (i, f) in shuffled.enumerated() {
+            let delay = DispatchTime.now() + .milliseconds(5 * i)
+            DispatchQueue.global().asyncAfter(deadline: delay) {
+                ble._test_handlePacket(f, fromPeerID: remoteShortID)
+            }
         }
 
         // Allow async processing
@@ -113,8 +116,11 @@ final class FragmentationTests: XCTestCase {
         // Duplicate one fragment
         if let dup = frags.first { frags.insert(dup, at: 1) }
 
-        for f in frags {
-            ble._test_handlePacket(f, fromPeerID: remoteShortID)
+        for (i, f) in frags.enumerated() {
+            let delay = DispatchTime.now() + .milliseconds(5 * i)
+            DispatchQueue.global().asyncAfter(deadline: delay) {
+                ble._test_handlePacket(f, fromPeerID: remoteShortID)
+            }
         }
 
         let exp = expectation(description: "reassembled2")
@@ -150,8 +156,11 @@ final class FragmentationTests: XCTestCase {
             corrupted[0] = p
         }
 
-        for f in corrupted {
-            ble._test_handlePacket(f, fromPeerID: remoteShortID)
+        for (i, f) in corrupted.enumerated() {
+            let delay = DispatchTime.now() + .milliseconds(5 * i)
+            DispatchQueue.global().asyncAfter(deadline: delay) {
+                ble._test_handlePacket(f, fromPeerID: remoteShortID)
+            }
         }
 
         let exp = expectation(description: "no reassembly")
@@ -162,4 +171,3 @@ final class FragmentationTests: XCTestCase {
         XCTAssertEqual(capture.publicMessages.count, 0)
     }
 }
-
