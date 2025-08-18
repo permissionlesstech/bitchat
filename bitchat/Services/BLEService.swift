@@ -1068,29 +1068,28 @@ final class BLEService: NSObject {
             isNewPeer = (existingPeer == nil)
             isReconnectedPeer = wasDisconnected
             
-            // Determine announce signature verification (if provided)
+            // Determine announce signature verification (required)
             var verified = false
             var verifiedEdKey: Data? = nil
-            if let edKey = announcement.ed25519PublicKey,
-               let sig = announcement.signature,
-               let ts = announcement.timestampMs {
-                // Enforce a simple freshness window (±5 minutes)
-                let nowMs = UInt64(Date().timeIntervalSince1970 * 1000)
-                let diff = (nowMs > ts) ? nowMs - ts : ts - nowMs
-                let withinWindow = diff <= 5 * 60 * 1000
-                if withinWindow {
-                    if noiseService.verifyAnnounceSignature(
-                        signature: sig,
-                        peerID: packet.senderID,
-                        noiseKey: announcement.publicKey,
-                        ed25519Key: edKey,
-                        nickname: announcement.nickname,
-                        timestampMs: ts,
-                        publicKey: edKey
-                    ) {
-                        verified = true
-                        verifiedEdKey = edKey
-                    }
+            let edKey = announcement.ed25519PublicKey
+            let sig = announcement.signature
+            let ts = announcement.timestampMs
+            // Enforce a simple freshness window (±5 minutes)
+            let nowMs = UInt64(Date().timeIntervalSince1970 * 1000)
+            let diff = (nowMs > ts) ? nowMs - ts : ts - nowMs
+            let withinWindow = diff <= 5 * 60 * 1000
+            if withinWindow {
+                if noiseService.verifyAnnounceSignature(
+                    signature: sig,
+                    peerID: packet.senderID,
+                    noiseKey: announcement.publicKey,
+                    ed25519Key: edKey,
+                    nickname: announcement.nickname,
+                    timestampMs: ts,
+                    publicKey: edKey
+                ) {
+                    verified = true
+                    verifiedEdKey = edKey
                 }
             }
 
@@ -1345,13 +1344,16 @@ final class BLEService: NSObject {
             tmp = String(tmp.dropFirst(2))
         }
         while senderIDData.count < 8 { senderIDData.append(0) }
-        let signature = noiseService.buildAnnounceSignature(
+        guard let signature = noiseService.buildAnnounceSignature(
             peerID: senderIDData,
             noiseKey: noisePub,
             ed25519Key: edPub,
             nickname: myNickname,
             timestampMs: tsMs
-        )
+        ) else {
+            SecureLogger.log("❌ Failed to sign announce", category: SecureLogger.security, level: .error)
+            return
+        }
 
         let announcement = AnnouncementPacket(
             nickname: myNickname,
