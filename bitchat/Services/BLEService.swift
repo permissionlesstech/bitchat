@@ -49,6 +49,8 @@ final class BLEService: NSObject {
         var nickname: String
         var isConnected: Bool
         var noisePublicKey: Data?
+        var ed25519PublicKey: Data? // For signed announces
+        var isVerifiedNickname: Bool
         var lastSeen: Date
     }
     private var peers: [String: PeerInfo] = [:]
@@ -1066,23 +1068,66 @@ final class BLEService: NSObject {
             isNewPeer = (existingPeer == nil)
             isReconnectedPeer = wasDisconnected
             
+            // Determine announce signature verification (if provided)
+            var verified = false
+            var verifiedEdKey: Data? = nil
+            if let edKey = announcement.ed25519PublicKey,
+               let sig = announcement.signature,
+               let ts = announcement.timestampMs {
+                // Enforce a simple freshness window (±5 minutes)
+                let nowMs = UInt64(Date().timeIntervalSince1970 * 1000)
+                let diff = (nowMs > ts) ? nowMs - ts : ts - nowMs
+                let withinWindow = diff <= 5 * 60 * 1000
+                if withinWindow {
+                    if noiseService.verifyAnnounceSignature(
+                        signature: sig,
+                        peerID: packet.senderID,
+                        noiseKey: announcement.publicKey,
+                        ed25519Key: edKey,
+                        nickname: announcement.nickname,
+                        timestampMs: ts,
+                        publicKey: edKey
+                    ) {
+                        verified = true
+                        verifiedEdKey = edKey
+                    }
+                }
+            }
+
+            // If existing peer has a different Ed25519 key, do not consider this verified
+            if let existing = existingPeer, let existingKey = existing.ed25519PublicKey, let newKey = verifiedEdKey, existingKey != newKey {
+                SecureLogger.log("⚠️ Announce key mismatch for \(peerID.prefix(8))… — keeping unverified", category: SecureLogger.security, level: .warning)
+                verified = false
+                verifiedEdKey = existingKey
+            }
+
+            // Require verified announce; ignore otherwise (no backward compatibility)
+            if !verified {
+                SecureLogger.log("❌ Ignoring unverified announce from \(peerID.prefix(8))…", category: SecureLogger.security, level: .warning)
+                return
+            }
+
             // Update or create peer info
             if let existing = existingPeer, existing.isConnected {
-                // Peer already connected, just update lastSeen to keep connection alive
+                // Update lastSeen and identity info
                 peers[peerID] = PeerInfo(
                     id: existing.id,
-                    nickname: announcement.nickname,  // Update nickname in case it changed
+                    nickname: announcement.nickname,
                     isConnected: true,
                     noisePublicKey: announcement.publicKey,
-                    lastSeen: Date()  // Update timestamp to prevent timeout
+                    ed25519PublicKey: verifiedEdKey,
+                    isVerifiedNickname: true,
+                    lastSeen: Date()
                 )
             } else {
                 // New peer or reconnecting peer
                 peers[peerID] = PeerInfo(
                     id: peerID,
                     nickname: announcement.nickname,
-                    isConnected: true,  // If we received their announce, we're connected
+                    isConnected: true,
                     noisePublicKey: announcement.publicKey,
+                    ed25519PublicKey: verifiedEdKey,
+                    isVerifiedNickname: true,
                     lastSeen: Date()
                 )
             }
@@ -1287,9 +1332,33 @@ final class BLEService: NSObject {
         
         // Reduced logging - only log errors, not every announce
         
+        // Prepare signed announce TLVs
+        let noisePub = noiseService.getStaticPublicKeyData()
+        let edPub = noiseService.getSigningPublicKeyData()
+        let tsMs = UInt64(Date().timeIntervalSince1970 * 1000)
+        // Build 8-byte senderID from hex myPeerID
+        var senderIDData = Data()
+        var tmp = myPeerID
+        while tmp.count >= 2 && senderIDData.count < 8 {
+            let hb = String(tmp.prefix(2))
+            if let b = UInt8(hb, radix: 16) { senderIDData.append(b) }
+            tmp = String(tmp.dropFirst(2))
+        }
+        while senderIDData.count < 8 { senderIDData.append(0) }
+        let signature = noiseService.buildAnnounceSignature(
+            peerID: senderIDData,
+            noiseKey: noisePub,
+            ed25519Key: edPub,
+            nickname: myNickname,
+            timestampMs: tsMs
+        )
+
         let announcement = AnnouncementPacket(
             nickname: myNickname,
-            publicKey: noiseService.getStaticPublicKeyData()
+            publicKey: noisePub,
+            ed25519PublicKey: edPub,
+            signature: signature,
+            timestampMs: tsMs
         )
         
         guard let payload = announcement.encode() else {
