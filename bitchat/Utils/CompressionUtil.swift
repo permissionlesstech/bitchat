@@ -13,7 +13,7 @@ struct CompressionUtil {
     // Compression threshold - don't compress if data is smaller than this
     static let compressionThreshold = 100 // bytes
     
-    // Compress data using LZ4 algorithm (fast compression/decompression)
+    // Compress data using zlib algorithm (most compatible)
     static func compress(_ data: Data) -> Data? {
         // Skip compression for small data
         guard data.count >= compressionThreshold else { return nil }
@@ -36,7 +36,7 @@ struct CompressionUtil {
         return Data(bytes: destinationBuffer, count: compressedSize)
     }
     
-    // Decompress LZ4 compressed data
+    // Decompress zlib compressed data
     static func decompress(_ compressedData: Data, originalSize: Int) -> Data? {
         let destinationBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: originalSize)
         defer { destinationBuffer.deallocate() }

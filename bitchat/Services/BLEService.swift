@@ -96,6 +96,9 @@ final class BLEService: NSObject {
     
     // Queue for notifications that failed due to full queue
     private var pendingNotifications: [(data: Data, centrals: [CBCentral]?)] = []
+
+    // Accumulate long write chunks per central until a full frame decodes
+    private var pendingWriteBuffers: [String: Data] = [:]
     
     // MARK: - Maintenance Timer
     
@@ -690,10 +693,12 @@ final class BLEService: NSObject {
     // MARK: - Packet Broadcasting
     
     private func broadcastPacket(_ packet: BitchatPacket) {
-        guard let data = packet.toBinaryData() else {
+        guard let rawData = packet.toBinaryData() else {
             SecureLogger.log("❌ Failed to convert packet to binary data", category: SecureLogger.session, level: .error)
             return
         }
+        // Avoid sending padded data over BLE to reduce truncation risk
+        let data = MessagePadding.unpad(rawData)
         
         // Only log broadcasts for non-announce packets
         // Log encrypted and relayed packets for debugging
@@ -795,6 +800,17 @@ final class BLEService: NSObject {
                              packet.type == MessageType.leave.rawValue ||
                              packet.type == MessageType.noiseHandshake.rawValue
         if isBroadcastType, let characteristic = characteristic, !subscribedCentrals.isEmpty {
+            // If value exceeds minimum allowed by connected centrals, handle per constraints
+            let minAllowed = subscribedCentrals.map { $0.maximumUpdateValueLength }.min() ?? 20
+            // Minimum BitChat frame = 13 (header) + 8 (senderID) = 21 bytes
+            if minAllowed < 21 {
+                // Cannot deliver any BitChat frame via notifications on this link; skip notify
+                SecureLogger.log("⚠️ Skipping notify: central max update length (\(minAllowed)) < 21", category: SecureLogger.session, level: .debug)
+            } else if data.count > minAllowed {
+                // Fragment via protocol
+                sendFragmentedPacket(packet)
+                return
+            }
             let success = peripheralManager?.updateValue(data, for: characteristic, onSubscribedCentrals: nil) ?? false
             if success {
                 sentToCentrals = subscribedCentrals.count
@@ -845,7 +861,9 @@ final class BLEService: NSObject {
     // MARK: - Fragmentation (Required for messages > BLE MTU)
     
     private func sendFragmentedPacket(_ packet: BitchatPacket) {
-        guard let fullData = packet.toBinaryData() else { return }
+        guard let encoded = packet.toBinaryData() else { return }
+        // Fragment the unpadded frame; each fragment will be encoded (and padded) independently
+        let fullData = MessagePadding.unpad(encoded)
         
         let fragmentID = Data((0..<8).map { _ in UInt8.random(in: 0...255) })
         let fragments = stride(from: 0, to: fullData.count, by: maxFragmentSize).map { offset in
@@ -881,23 +899,34 @@ final class BLEService: NSObject {
             return
         }
         
-        guard packet.payload.count > 13 else { return }
-        
+        // Minimum header: 8 bytes ID + 2 index + 2 total + 1 type
+        guard packet.payload.count >= 13 else { return }
+
+        let senderHex = packet.senderID.hexEncodedString()
         let fragmentID = packet.payload[0..<8].map { String(format: "%02x", $0) }.joined()
-        let index = Int(packet.payload[8..<10].withUnsafeBytes { $0.load(as: UInt16.self).bigEndian })
-        let total = Int(packet.payload[10..<12].withUnsafeBytes { $0.load(as: UInt16.self).bigEndian })
+        // Parse big-endian UInt16 safely without alignment assumptions
+        let idxHi = UInt16(packet.payload[8])
+        let idxLo = UInt16(packet.payload[9])
+        let index = Int((idxHi << 8) | idxLo)
+        let totHi = UInt16(packet.payload[10])
+        let totLo = UInt16(packet.payload[11])
+        let total = Int((totHi << 8) | totLo)
         let originalType = packet.payload[12]
-        let fragmentData = packet.payload[13...]
-        
+        let fragmentData = packet.payload.suffix(from: 13)
+
+        // Sanity checks
+        guard total > 0 && index >= 0 && index < total else { return }
+
         // Store fragment
-        if incomingFragments[fragmentID] == nil {
-            incomingFragments[fragmentID] = [:]
-            fragmentMetadata[fragmentID] = (originalType, total, Date())
+        let key = "\(senderHex):\(fragmentID)"
+        if incomingFragments[key] == nil {
+            incomingFragments[key] = [:]
+            fragmentMetadata[key] = (originalType, total, Date())
         }
-        incomingFragments[fragmentID]?[index] = Data(fragmentData)
-        
+        incomingFragments[key]?[index] = Data(fragmentData)
+
         // Check if complete
-        if let fragments = incomingFragments[fragmentID],
+        if let fragments = incomingFragments[key],
            fragments.count == total {
             // Reassemble
             var reassembled = Data()
@@ -907,23 +936,16 @@ final class BLEService: NSObject {
                 }
             }
             
-            // Process reassembled packet
-            if let metadata = fragmentMetadata[fragmentID] {
-                let reassembledPacket = BitchatPacket(
-                    type: metadata.type,
-                    senderID: packet.senderID,
-                    recipientID: packet.recipientID,
-                    timestamp: packet.timestamp,
-                    payload: reassembled,
-                    signature: packet.signature,
-                    ttl: packet.ttl > 0 ? packet.ttl - 1 : 0
-                )
-                handleReceivedPacket(reassembledPacket, from: peerID)
+            // Decode the original packet bytes we reassembled, so flags/compression are preserved
+            if let originalPacket = BinaryProtocol.decode(reassembled) {
+                handleReceivedPacket(originalPacket, from: peerID)
+            } else {
+                SecureLogger.log("❌ Failed to decode reassembled packet (type=\(originalType), total=\(total))", category: SecureLogger.session, level: .error)
             }
             
             // Cleanup
-            incomingFragments.removeValue(forKey: fragmentID)
-            fragmentMetadata.removeValue(forKey: fragmentID)
+            incomingFragments.removeValue(forKey: key)
+            fragmentMetadata.removeValue(forKey: key)
         }
     }
     
@@ -943,7 +965,8 @@ final class BLEService: NSObject {
         }
         
         // Efficient deduplication
-        if messageDeduplicator.isDuplicate(messageID) {
+        // Important: do not dedup fragment packets globally (each piece must pass)
+        if packet.type != MessageType.fragment.rawValue && messageDeduplicator.isDuplicate(messageID) {
             // Announce packets (type 1) are sent every 10 seconds for peer discovery
             // It's normal to see these as duplicates - don't log them to reduce noise
             if packet.type != MessageType.announce.rawValue {
@@ -1629,6 +1652,21 @@ extension BLEService: CBCentralManagerDelegate {
     }
 }
 
+#if DEBUG
+// Test-only helper to inject packets into the receive pipeline
+extension BLEService {
+    func _test_handlePacket(_ packet: BitchatPacket, fromPeerID: String) {
+        if DispatchQueue.getSpecific(key: messageQueueKey) != nil {
+            handleReceivedPacket(packet, from: fromPeerID)
+        } else {
+            messageQueue.async { [weak self] in
+                self?.handleReceivedPacket(packet, from: fromPeerID)
+            }
+        }
+    }
+}
+#endif
+
 // MARK: - CBPeripheralDelegate
 
 extension BLEService: CBPeripheralDelegate {
@@ -1942,52 +1980,67 @@ extension BLEService: CBPeripheralManagerDelegate {
             peripheral.respond(to: request, withResult: .success)
         }
         
-        // Process directly on main thread to avoid deadlocks (matches original implementation)
-        for request in requests {
-            guard let data = request.value, !data.isEmpty else {
-                SecureLogger.log("⚠️ Empty write request", category: SecureLogger.session, level: .warning)
-                continue
+        // Process writes. For long writes, CoreBluetooth may deliver multiple CBATTRequest values with offsets.
+        // Combine per-central request values by offset before decoding.
+        // Process directly on our message queue to match transport context
+        let grouped = Dictionary(grouping: requests, by: { $0.central.identifier.uuidString })
+        for (centralUUID, group) in grouped {
+            // Sort by offset ascending
+            let sorted = group.sorted { $0.offset < $1.offset }
+            let hasMultiple = sorted.count > 1 || (sorted.first?.offset ?? 0) > 0
+
+            // Always merge into a persistent per-central buffer to handle multi-callback long writes
+            var combined = pendingWriteBuffers[centralUUID] ?? Data()
+            var appendedBytes = 0
+            var offsets: [Int] = []
+            for r in sorted {
+                guard let chunk = r.value, !chunk.isEmpty else { continue }
+                offsets.append(r.offset)
+                let end = r.offset + chunk.count
+                if combined.count < end {
+                    combined.append(Data(repeating: 0, count: end - combined.count))
+                }
+                // Write chunk into the correct position (supports out-of-order and overlapping writes)
+                combined.replaceSubrange(r.offset..<end, with: chunk)
+                appendedBytes += chunk.count
             }
-            
-            // Suppress logs for announce packets to reduce noise
-            // Peek at packet type without full decode
-            if data.count > 0 && data[0] != MessageType.announce.rawValue {
-                SecureLogger.log("📥 Processing write from central: \(data.count) bytes", category: SecureLogger.session, level: .debug)
+            pendingWriteBuffers[centralUUID] = combined
+
+            // Peek type byte for debug: version is at 0, type at 1 when well-formed
+            if combined.count >= 2 {
+                let peekType = combined[1]
+                if peekType != MessageType.announce.rawValue {
+                    SecureLogger.log("📥 Accumulated write from central \(centralUUID): size=\(combined.count) (+\(appendedBytes)) bytes (type=\(peekType)), offsets=\(offsets)", category: SecureLogger.session, level: .debug)
+                }
             }
-            
-            if let packet = BinaryProtocol.decode(data) {
-                // Use the packet's senderID as the peer identifier
+
+            // Try decode the accumulated buffer
+            if let packet = BinaryProtocol.decode(combined) {
+                // Clear buffer on success
+                pendingWriteBuffers.removeValue(forKey: centralUUID)
                 let senderID = packet.senderID.hexEncodedString()
-                // Only log non-announce packets
                 if packet.type != MessageType.announce.rawValue {
-                    SecureLogger.log("📦 Decoded packet type: \(packet.type) from sender: \(senderID)", category: SecureLogger.session, level: .debug)
+                    SecureLogger.log("📦 Decoded (combined) packet type: \(packet.type) from sender: \(senderID)", category: SecureLogger.session, level: .debug)
                 }
-                
-                // Store central in our list if not already there
-                if !subscribedCentrals.contains(request.central) {
-                    subscribedCentrals.append(request.central)
+                if !subscribedCentrals.contains(sorted[0].central) {
+                    subscribedCentrals.append(sorted[0].central)
                 }
-                
-                let centralUUID = request.central.identifier.uuidString
-                
-                // Update mapping ONLY for announce packets that come directly from the peer (not relayed)
                 if packet.type == MessageType.announce.rawValue {
-                    // Only update mapping if this is a direct announce (TTL == messageTTL means not relayed)
-                    if packet.ttl == messageTTL {
-                        centralToPeerID[centralUUID] = senderID
-                        // Mapping update - direct announce from peer
-                    }
-                    // Process the announce packet regardless of whether we updated the mapping
+                    if packet.ttl == messageTTL { centralToPeerID[centralUUID] = senderID }
                     handleReceivedPacket(packet, from: senderID)
                 } else {
-                    // For non-announce packets, DO NOT update the mapping
-                    // These could be relayed packets from other peers in the mesh
-                    // The centralToPeerID mapping should only be set by announce packets
-                    // Always use the packet's original senderID
                     handleReceivedPacket(packet, from: senderID)
                 }
             } else {
-                SecureLogger.log("❌ Failed to decode packet from central, full data: \(data.map { String(format: "%02x", $0) }.joined(separator: " "))", category: SecureLogger.session, level: .error)
+                // If buffer grows suspiciously large, reset to avoid memory leak
+                if combined.count > 1_000_000 { // 1MB cap for safety
+                    pendingWriteBuffers.removeValue(forKey: centralUUID)
+                    SecureLogger.log("⚠️ Dropping oversized pending write buffer (\(combined.count) bytes) for central \(centralUUID)", category: SecureLogger.session, level: .warning)
+                }
+                // If this was a single short write and still failed, log the raw chunk for debugging
+                if !hasMultiple, let only = sorted.first, let raw = only.value {
+                    SecureLogger.log("❌ Failed to decode packet from central, full data: \(raw.map { String(format: "%02x", $0) }.joined(separator: " "))", category: SecureLogger.session, level: .error)
+                }
             }
         }
     }    

@@ -66,12 +66,13 @@ final class BLEServiceTests: XCTestCase {
     func testSendPublicMessage() {
         let expectation = XCTestExpectation(description: "Message sent")
         
-        service.delegate = MockBitchatDelegate { message in
+        let delegate = MockBitchatDelegate { message in
             XCTAssertEqual(message.content, "Hello, world!")
             XCTAssertEqual(message.sender, "TestUser")
             XCTAssertFalse(message.isPrivate)
             expectation.fulfill()
         }
+        service.delegate = delegate
         
         service.sendMessage("Hello, world!")
         
@@ -82,13 +83,14 @@ final class BLEServiceTests: XCTestCase {
     func testSendPrivateMessage() {
         let expectation = XCTestExpectation(description: "Private message sent")
         
-        service.delegate = MockBitchatDelegate { message in
+        let delegate = MockBitchatDelegate { message in
             XCTAssertEqual(message.content, "Secret message")
             XCTAssertEqual(message.sender, "TestUser")
             XCTAssertTrue(message.isPrivate)
             XCTAssertEqual(message.recipientNickname, "Bob")
             expectation.fulfill()
         }
+        service.delegate = delegate
         
         service.sendPrivateMessage("Secret message", to: "PEER5678", recipientNickname: "Bob", messageID: "MSG123")
         
@@ -99,11 +101,12 @@ final class BLEServiceTests: XCTestCase {
     func testSendMessageWithMentions() {
         let expectation = XCTestExpectation(description: "Message with mentions sent")
         
-        service.delegate = MockBitchatDelegate { message in
+        let delegate = MockBitchatDelegate { message in
             XCTAssertEqual(message.content, "@alice @bob check this out")
             XCTAssertEqual(message.mentions, ["alice", "bob"])
             expectation.fulfill()
         }
+        service.delegate = delegate
         
         service.sendMessage("@alice @bob check this out", mentions: ["alice", "bob"])
         
@@ -115,11 +118,12 @@ final class BLEServiceTests: XCTestCase {
     func testSimulateIncomingMessage() {
         let expectation = XCTestExpectation(description: "Message received")
         
-        service.delegate = MockBitchatDelegate { message in
+        let delegate = MockBitchatDelegate { message in
             XCTAssertEqual(message.content, "Incoming message")
             XCTAssertEqual(message.sender, "RemoteUser")
             expectation.fulfill()
         }
+        service.delegate = delegate
         
         let incomingMessage = BitchatMessage(
             id: "MSG456",
@@ -142,10 +146,11 @@ final class BLEServiceTests: XCTestCase {
     func testSimulateIncomingPacket() {
         let expectation = XCTestExpectation(description: "Packet processed")
         
-        service.delegate = MockBitchatDelegate { message in
+        let delegate = MockBitchatDelegate { message in
             XCTAssertEqual(message.content, "Packet message")
             expectation.fulfill()
         }
+        service.delegate = delegate
         
         let message = BitchatMessage(
             id: "MSG789",
@@ -209,9 +214,11 @@ final class BLEServiceTests: XCTestCase {
     func testMessageDeliveryHandler() {
         let expectation = XCTestExpectation(description: "Delivery handler called")
         
-        service.messageDeliveryHandler = { message in
-            XCTAssertEqual(message.content, "Test delivery")
-            expectation.fulfill()
+        service.packetDeliveryHandler = { packet in
+            if let msg = BitchatMessage.fromBinaryPayload(packet.payload) {
+                XCTAssertEqual(msg.content, "Test delivery")
+                expectation.fulfill()
+            }
         }
         
         service.sendMessage("Test delivery")
