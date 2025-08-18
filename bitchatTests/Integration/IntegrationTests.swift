@@ -365,7 +365,7 @@ final class IntegrationTests: XCTestCase {
                 } catch {
                     XCTFail("Handshake handling failed: \(error)")
                 }
-            } else if packet.type == 0x06 // noiseHandshakeResp was removed && packet.senderID.hexEncodedString() == TestConstants.testPeerID1 {
+            } else if packet.type == 0x06 && packet.senderID.hexEncodedString() == TestConstants.testPeerID1 { // noiseHandshakeResp was removed
                 // Final handshake message (message 3 in XX pattern)
                 handshakeExpectation.fulfill()
             }
@@ -539,18 +539,9 @@ final class IntegrationTests: XCTestCase {
                 do {
                     _ = try self.noiseManagers["Bob"]!.decrypt(packet.payload, from: TestConstants.testPeerID1)
                 } catch {
-                    // Decryption failed - send NACK
+                    // Decryption failed - send NACK (legacy test path)
                     nackSent = true
-                    let nack = ProtocolNack(
-                        originalPacketID: UUID().uuidString,
-                        senderID: TestConstants.testPeerID2,
-                        receiverID: TestConstants.testPeerID1,
-                        packetType: packet.type,
-                        reason: "Decryption failed - session out of sync",
-                        errorCode: .decryptionFailed
-                    )
-                    
-                    let nackData = nack.toBinaryData()
+                    let nackData = Data("NACK: decryption failed".utf8)
                     let nackPacket = TestHelpers.createTestPacket(
                         type: 0x08, // protocolNack was removed
                         payload: nackData
@@ -597,7 +588,7 @@ final class IntegrationTests: XCTestCase {
                 } catch {
                     XCTFail("Alice failed to initiate handshake: \(error)")
                 }
-            } else if packet.type == 0x06 // noiseHandshakeResp was removed {
+            } else if packet.type == 0x06 { // noiseHandshakeResp was removed
                 // Complete handshake
                 do {
                     let final = try self.noiseManagers["Alice"]!.handleIncomingHandshake(
@@ -633,7 +624,7 @@ final class IntegrationTests: XCTestCase {
         nodes["Bob"]!.packetDeliveryHandler = { packet in
             originalHandler?(packet)
             
-            if packet.type == MessageType.noiseHandshakeResp.rawValue && packet.senderID.hexEncodedString() == TestConstants.testPeerID1 {
+            if packet.type == 0x06 && packet.senderID.hexEncodedString() == TestConstants.testPeerID1 {
                 // Final handshake message received
                 do {
                     _ = try self.noiseManagers["Bob"]!.handleIncomingHandshake(

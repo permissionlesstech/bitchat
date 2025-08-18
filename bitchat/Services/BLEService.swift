@@ -861,7 +861,9 @@ final class BLEService: NSObject {
     // MARK: - Fragmentation (Required for messages > BLE MTU)
     
     private func sendFragmentedPacket(_ packet: BitchatPacket) {
-        guard let fullData = packet.toBinaryData() else { return }
+        guard let encoded = packet.toBinaryData() else { return }
+        // Fragment the unpadded frame; each fragment will be encoded (and padded) independently
+        let fullData = MessagePadding.unpad(encoded)
         
         let fragmentID = Data((0..<8).map { _ in UInt8.random(in: 0...255) })
         let fragments = stride(from: 0, to: fullData.count, by: maxFragmentSize).map { offset in

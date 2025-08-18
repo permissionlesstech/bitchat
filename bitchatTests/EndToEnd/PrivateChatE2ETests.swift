@@ -282,8 +282,8 @@ final class PrivateChatE2ETests: XCTestCase {
             }
         }
         
-        // Create message
-        let message = BitchatMessage(
+        // Create message (unused; keep for context)
+        _ = BitchatMessage(
             id: messageID,
             sender: TestConstants.testNickname1,
             content: TestConstants.testMessage1,

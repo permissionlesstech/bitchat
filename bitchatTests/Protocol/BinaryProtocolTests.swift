@@ -564,7 +564,7 @@ final class BinaryProtocolTests: XCTestCase {
         }
         
         // This should be exactly the minimum size and should decode without crashing
-        let minResult = BinaryProtocol.decode(minData)
+        _ = BinaryProtocol.decode(minData)
         // The important thing is no crash occurs - result might be nil or valid
         // We don't assert the result, just that no crash happens
     }
