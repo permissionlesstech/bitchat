@@ -115,10 +115,18 @@ final class BLEService: NSObject {
 
     func currentPeerSnapshots() -> [TransportPeerSnapshot] {
         collectionsQueue.sync {
-            peers.values.map { info in
-                TransportPeerSnapshot(
+            // Compute nickname collision counts for connected peers
+            let connected = peers.values.filter { $0.isConnected }
+            var counts: [String: Int] = [:]
+            for p in connected { counts[p.nickname, default: 0] += 1 }
+            return peers.values.map { info in
+                var display = info.nickname
+                if info.isConnected, (counts[info.nickname] ?? 0) > 1 {
+                    display += " #" + String(info.id.prefix(4))
+                }
+                return TransportPeerSnapshot(
                     id: info.id,
-                    nickname: info.nickname,
+                    nickname: display,
                     isConnected: info.isConnected,
                     noisePublicKey: info.noisePublicKey,
                     lastSeen: info.lastSeen
@@ -351,9 +359,21 @@ final class BLEService: NSObject {
 
     func getPeerNicknames() -> [String: String] {
         return collectionsQueue.sync {
-            Dictionary(uniqueKeysWithValues: peers.compactMap { (id, info) in
-                info.isConnected ? (id, info.nickname) : nil
-            })
+            // Only connected peers
+            let connected = peers.filter { $0.value.isConnected }
+            // Count collisions by nickname
+            var counts: [String: Int] = [:]
+            for (_, info) in connected { counts[info.nickname, default: 0] += 1 }
+            // Build map with suffix for collisions
+            var result: [String: String] = [:]
+            for (id, info) in connected {
+                var name = info.nickname
+                if (counts[info.nickname] ?? 0) > 1 {
+                    name += " #" + String(id.prefix(4))
+                }
+                result[id] = name
+            }
+            return result
         }
     }
     
@@ -1439,10 +1459,18 @@ final class BLEService: NSObject {
     // NEW: Publish peer snapshots to subscribers and notify Transport delegates
     private func publishFullPeerData() {
         let transportPeers: [TransportPeerSnapshot] = collectionsQueue.sync {
-            peers.values.map { info in
-                TransportPeerSnapshot(
+            // Compute nickname collision counts for connected peers
+            let connected = peers.values.filter { $0.isConnected }
+            var counts: [String: Int] = [:]
+            for p in connected { counts[p.nickname, default: 0] += 1 }
+            return peers.values.map { info in
+                var display = info.nickname
+                if info.isConnected, (counts[info.nickname] ?? 0) > 1 {
+                    display += " #" + String(info.id.prefix(4))
+                }
+                return TransportPeerSnapshot(
                     id: info.id,
-                    nickname: info.nickname,
+                    nickname: display,
                     isConnected: info.isConnected,
                     noisePublicKey: info.noisePublicKey,
                     lastSeen: info.lastSeen
