@@ -3728,7 +3728,7 @@ private func checkForMentions(_ message: BitchatMessage) {
     let isMentioned = (message.mentions?.contains { myTokens.contains($0) } ?? false)
 
     if isMentioned && message.sender != nickname {
-        SecureLogger.log("🔔 Mention from \ (message.sender)",
+        SecureLogger.log("🔔 Mention from \(message.sender)",
                        category: SecureLogger.session, level: .info)
         NotificationService.shared.sendMentionNotification(from: message.sender, message: message.content)
     }
