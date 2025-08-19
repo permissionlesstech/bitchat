@@ -92,7 +92,7 @@ struct LocationChannelsSheet: View {
     private var channelList: some View {
         List {
             // Mesh option first
-            channelRow(title: meshTitleWithCount(), subtitle: "bluetooth", isSelected: isMeshSelected) {
+            channelRow(title: meshTitleWithCount(), subtitle: "#bluetooth", isSelected: isMeshSelected) {
                 manager.select(ChannelID.mesh)
                 isPresented = false
             }
@@ -201,8 +201,17 @@ struct LocationChannelsSheet: View {
         Button(action: action) {
             HStack {
                 VStack(alignment: .leading) {
-                    Text(title)
-                        .font(.system(size: 14, design: .monospaced))
+                    // Render title with smaller font for trailing count in parentheses
+                    let parts = splitTitleAndCount(title)
+                    HStack(spacing: 4) {
+                        Text(parts.base)
+                            .font(.system(size: 14, design: .monospaced))
+                        if let count = parts.countSuffix, !count.isEmpty {
+                            Text(count)
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundColor(.secondary)
+                        }
+                    }
                     Text(subtitle)
                         .font(.system(size: 12, design: .monospaced))
                         .foregroundColor(.secondary)
@@ -220,6 +229,14 @@ struct LocationChannelsSheet: View {
         .buttonStyle(.plain)
     }
 
+    // Split a title like "#mesh (3 people)" into base and suffix "(3 people)"
+    private func splitTitleAndCount(_ s: String) -> (base: String, countSuffix: String?) {
+        guard let idx = s.lastIndex(of: "(") else { return (s, nil) }
+        let prefix = String(s[..<idx]).trimmingCharacters(in: .whitespaces)
+        let suffix = String(s[idx...])
+        return (prefix, suffix)
+    }
+
     // MARK: - Helpers for counts
     private func meshTitleWithCount() -> String {
         // Count currently connected mesh peers (excluding self)
@@ -229,7 +246,7 @@ struct LocationChannelsSheet: View {
             return acc
         }
         let noun = meshCount == 1 ? "person" : "people"
-        return "#mesh (\(meshCount) \(noun))"
+        return "mesh (\(meshCount) \(noun))"
     }
 
     private func geohashTitleWithCount(for channel: GeohashChannel) -> String {
