@@ -947,7 +947,7 @@ struct ContentView: View {
                         .font(.system(size: 12, design: .monospaced))
                         .accessibilityHidden(true)
                 }
-                .foregroundColor(isNostrOnly ? Color.purple : (meshPeerCount > 0 ? Color.blue : secondaryTextColor))
+                .foregroundColor(isNostrOnly ? Color.purple : (meshPeerCount > 0 ? Color.blue : Color.secondary))
             }
             .onTapGesture {
                 withAnimation(.easeInOut(duration: 0.2)) {
