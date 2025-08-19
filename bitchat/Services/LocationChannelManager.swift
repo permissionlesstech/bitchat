@@ -76,22 +76,16 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
 
     /// Begin periodic one-shot location refreshes while a selector UI is visible.
     func beginLiveRefresh(interval: TimeInterval = 5.0) {
-        endLiveRefresh()
+        // Prefer continuous updates with a significant distance filter rather than polling
         guard permissionState == .authorized else { return }
-        // Kick one immediately
-        requestOneShotLocation()
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
-            guard let self = self else { return }
-            if self.permissionState == .authorized {
-                self.requestOneShotLocation()
-            }
-        }
+        cl.desiredAccuracy = kCLLocationAccuracyHundredMeters
+        cl.distanceFilter = 250 // meters; only refresh on significant move
+        cl.startUpdatingLocation()
     }
 
     /// Stop periodic refreshes when selector UI is dismissed.
     func endLiveRefresh() {
-        refreshTimer?.invalidate()
-        refreshTimer = nil
+        cl.stopUpdatingLocation()
     }
 
     func select(_ channel: ChannelID) {

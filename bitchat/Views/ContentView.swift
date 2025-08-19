@@ -959,15 +959,16 @@ struct ContentView: View {
                         case .mesh:
                             return Color.blue
                         case .location:
-                            return Color.green
+                            return textColor
                         }
                     }()
                     Text(badgeText)
                         .font(.system(size: 14, design: .monospaced))
                         .foregroundColor(badgeColor)
                         .lineLimit(1)
-                        .truncationMode(.tail)
-                        .fixedSize(horizontal: true, vertical: false)
+                        .truncationMode(.head)
+                        .frame(minWidth: 44, maxWidth: 110, alignment: .trailing)
+                        .fixedSize(horizontal: false, vertical: false)
                         .accessibilityLabel("location channels")
                     #else
                     Text("#")

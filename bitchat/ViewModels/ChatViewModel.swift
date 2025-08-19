@@ -241,6 +241,12 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     // Messages are naturally ephemeral - no persistent storage
     // Persist mesh public timeline across channel switches
     private var meshTimeline: [BitchatMessage] = []
+    private let meshTimelineCap = 1337
+    #if os(iOS)
+    // Persist per-geohash public timelines across switches
+    private var geoTimelines: [String: [BitchatMessage]] = [:] // geohash -> messages
+    private let geoTimelineCap = 1337
+    #endif
     
     // MARK: - Message Delivery Tracking
     
@@ -4016,6 +4022,21 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             meshTimeline.append(finalMessage)
             trimMeshTimelineIfNeeded()
         }
+
+        // Persist geochat messages to per-geohash timeline (iOS-only)
+        #if os(iOS)
+        if isGeo && finalMessage.sender != "system" {
+            if let gh = currentGeohash {
+                var arr = geoTimelines[gh] ?? []
+                arr.append(finalMessage)
+                if arr.count > geoTimelineCap {
+                    let remove = arr.count - geoTimelineCap
+                    arr.removeFirst(remove)
+                }
+                geoTimelines[gh] = arr
+            }
+        }
+        #endif
 
         // Only add message to current timeline if it matches active channel or is system
         let isSystem = finalMessage.sender == "system"

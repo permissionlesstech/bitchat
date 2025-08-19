@@ -5,6 +5,8 @@ import UIKit
 struct LocationChannelsSheet: View {
     @Binding var isPresented: Bool
     @ObservedObject private var manager = LocationChannelManager.shared
+    @State private var customGeohash: String = ""
+    @State private var customError: String? = nil
 
     var body: some View {
         NavigationView {
@@ -93,6 +95,34 @@ struct LocationChannelsSheet: View {
                 }
             }
 
+            // Custom geohash teleport
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    TextField("#custom geohash", text: $customGeohash)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled(true)
+                        .font(.system(size: 14, design: .monospaced))
+                        .keyboardType(.asciiCapable)
+                    Button("join") {
+                        let gh = customGeohash.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().replacingOccurrences(of: "#", with: "")
+                        if validateGeohash(gh) {
+                            let level = levelForLength(gh.count)
+                            let ch = GeohashChannel(level: level, geohash: gh)
+                            manager.select(ChannelID.location(ch))
+                            isPresented = false
+                        } else {
+                            customError = "invalid geohash"
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+                if let err = customError {
+                    Text(err)
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundColor(.red)
+                }
+            }
+
             // Footer action inside the list
             if manager.permissionState == LocationChannelManager.PermissionState.authorized {
                 Button(action: {
@@ -146,6 +176,23 @@ struct LocationChannelsSheet: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    private func validateGeohash(_ s: String) -> Bool {
+        let allowed = Set("0123456789bcdefghjkmnpqrstuvwxyz")
+        guard !s.isEmpty, s.count <= 12 else { return false }
+        return s.allSatisfy { allowed.contains($0) }
+    }
+
+    private func levelForLength(_ len: Int) -> GeohashChannelLevel {
+        switch len {
+        case 0...2: return .country
+        case 3...4: return .region
+        case 5: return .city
+        case 6: return .neighborhood
+        case 7: return .block
+        default: return .street
+        }
     }
 }
 
