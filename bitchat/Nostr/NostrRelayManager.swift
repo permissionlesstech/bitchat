@@ -6,6 +6,11 @@ import Combine
 @MainActor
 class NostrRelayManager: ObservableObject {
     static let shared = NostrRelayManager()
+    // Track gift-wraps (kind 1059) we initiated so we can log OK acks at info
+    private(set) static var pendingGiftWrapIDs = Set<String>()
+    static func registerPendingGiftWrap(id: String) {
+        pendingGiftWrapIDs.insert(id)
+    }
     
     struct Relay: Identifiable {
         let id = UUID()
@@ -260,8 +265,8 @@ class NostrRelayManager: ObservableObject {
                         
                         let event = try NostrEvent(from: eventDict)
                         
-                        // Only log critical events
-                        if event.kind != 1059 {  // Don't log every gift wrap
+                        // Only log non-gift-wrap events to reduce noise
+                        if event.kind != 1059 {
                             SecureLogger.log("📥 Received Nostr event (kind: \(event.kind)) from relay: \(relayUrl)", 
                                             category: SecureLogger.session, level: .debug)
                         }
@@ -293,11 +298,13 @@ class NostrRelayManager: ObservableObject {
                        let success = array[2] as? Bool {
                         let reason = array.count >= 4 ? (array[3] as? String ?? "no reason given") : "no reason given"
                         if success {
-                            SecureLogger.log("✅ Event \(eventId.prefix(16))... accepted by relay: \(relayUrl)", 
+                            _ = Self.pendingGiftWrapIDs.remove(eventId)
+                            SecureLogger.log("✅ Event accepted id=\(eventId.prefix(16))... by relay: \(relayUrl)",
                                             category: SecureLogger.session, level: .debug)
                         } else {
-                            SecureLogger.log("📮 Event \(eventId) rejected by relay: \(reason)", 
-                                            category: SecureLogger.session, level: .error)
+                            let isGiftWrap = Self.pendingGiftWrapIDs.remove(eventId) != nil
+                            SecureLogger.log("📮 Event \(eventId.prefix(16))... rejected by relay: \(reason)", 
+                                            category: SecureLogger.session, level: isGiftWrap ? .warning : .error)
                         }
                     }
                     
@@ -540,6 +547,16 @@ struct NostrFilter: Encodable {
         filter.since = since?.timeIntervalSince1970.toInt()
         filter.tagFilters = ["p": [pubkey]]
         filter.limit = 100 // Add a reasonable limit
+        return filter
+    }
+
+    // For location channels: geohash-scoped ephemeral events (kind 20000)
+    static func geohashEphemeral(_ geohash: String, since: Date? = nil, limit: Int = 200) -> NostrFilter {
+        var filter = NostrFilter()
+        filter.kinds = [20000]
+        filter.since = since?.timeIntervalSince1970.toInt()
+        filter.tagFilters = ["g": [geohash]]
+        filter.limit = limit
         return filter
     }
 }

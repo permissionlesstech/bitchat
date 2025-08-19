@@ -4,7 +4,7 @@ import Foundation
 
 struct AnnouncementPacket {
     let nickname: String
-    let noisePublicKey: Data            // Noise static public key (Curve25519.KeyAgreement)  
+    let noisePublicKey: Data            // Noise static public key (Curve25519.KeyAgreement)
     let signingPublicKey: Data          // Ed25519 public key for signing
 
     private enum TLVType: UInt8 {

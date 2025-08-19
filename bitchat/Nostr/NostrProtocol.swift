@@ -97,6 +97,28 @@ struct NostrProtocol {
         
         return (content: rumor.content, senderPubkey: rumor.pubkey, timestamp: rumor.created_at)
     }
+
+    /// Create a geohash-scoped ephemeral public message (kind 20000)
+    static func createEphemeralGeohashEvent(
+        content: String,
+        geohash: String,
+        senderIdentity: NostrIdentity,
+        nickname: String? = nil
+    ) throws -> NostrEvent {
+        var tags = [["g", geohash]]
+        if let nickname = nickname, !nickname.isEmpty {
+            tags.append(["n", nickname])
+        }
+        let event = NostrEvent(
+            pubkey: senderIdentity.publicKeyHex,
+            createdAt: Date(),
+            kind: .ephemeralEvent,
+            tags: tags,
+            content: content
+        )
+        let signingKey = try senderIdentity.signingKey()
+        return try event.sign(with: signingKey)
+    }
     
     // MARK: - Private Methods
     

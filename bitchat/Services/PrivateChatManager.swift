@@ -25,6 +25,9 @@ class PrivateChatManager: ObservableObject {
     init(meshService: Transport? = nil) {
         self.meshService = meshService
     }
+
+    // Cap for messages stored per private chat
+    private let privateChatCap = 1337
     
     /// Start a private chat with a peer
     func startChat(with peerID: String) {
@@ -75,10 +78,14 @@ class PrivateChatManager: ObservableObject {
         )
         
         // Add to chat
-        if privateChats[peerID] == nil {
-            privateChats[peerID] = []
-        }
+        if privateChats[peerID] == nil { privateChats[peerID] = [] }
         privateChats[peerID]?.append(message)
+        // Enforce per-chat cap on local append
+        if var arr = privateChats[peerID], arr.count > privateChatCap {
+            let remove = arr.count - privateChatCap
+            arr.removeFirst(remove)
+            privateChats[peerID] = arr
+        }
         
         // Send via mesh service
         meshService.sendPrivateMessage(content, to: peerID, recipientNickname: peerNickname, messageID: messageID)
@@ -102,17 +109,25 @@ class PrivateChatManager: ObservableObject {
 
         // Sanitize chat to avoid duplicate IDs and sort by timestamp
         sanitizeChat(for: senderPeerID)
+        // Enforce cap after sanitize
+        if var arr = privateChats[senderPeerID], arr.count > privateChatCap {
+            let remove = arr.count - privateChatCap
+            arr.removeFirst(remove)
+            privateChats[senderPeerID] = arr
+        }
         
         // Mark as unread if not in this chat
         if selectedPeer != senderPeerID {
             unreadMessages.insert(senderPeerID)
             
-            // Send notification
-            NotificationService.shared.sendPrivateMessageNotification(
-                from: message.sender,
-                message: message.content,
-                peerID: senderPeerID
-            )
+            // Avoid notifying for messages already marked as read (dup/resubscribe cases)
+            if !sentReadReceipts.contains(message.id) {
+                NotificationService.shared.sendPrivateMessageNotification(
+                    from: message.sender,
+                    message: message.content,
+                    peerID: senderPeerID
+                )
+            }
         } else {
             // Send read receipt if viewing this chat
             sendReadReceipt(for: message)
