@@ -1179,12 +1179,24 @@ final class BLEService: NSObject {
             return
         }
         
+        // Enforce: only accept public messages from verified peers we know
+        guard let info = peers[peerID], info.isVerifiedNickname else {
+            SecureLogger.log("🚫 Dropping public message from unverified or unknown peer \(peerID.prefix(8))…", category: SecureLogger.security, level: .warning)
+            return
+        }
+
         guard let content = String(data: packet.payload, encoding: .utf8) else {
             SecureLogger.log("❌ Failed to decode message payload as UTF-8", category: SecureLogger.session, level: .error)
             return
         }
         
-        let senderNickname = peers[peerID]?.nickname ?? "Unknown"
+        // Resolve display nickname; if collisions exist, append short peerID suffix
+        var senderNickname = info.nickname
+        let hasCollision = peers.values.contains { $0.isConnected && $0.nickname == info.nickname && $0.id != peerID }
+        if hasCollision {
+            senderNickname += " #" + String(peerID.prefix(4))
+        }
+
         SecureLogger.log("💬 [\(senderNickname)] TTL:\(packet.ttl): \(String(content.prefix(50)))\(content.count > 50 ? "..." : "")", category: SecureLogger.session, level: .debug)
         
         let ts = Date(timeIntervalSince1970: Double(packet.timestamp) / 1000)
