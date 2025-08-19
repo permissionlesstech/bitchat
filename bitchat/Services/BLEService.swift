@@ -840,7 +840,6 @@ final class BLEService: NSObject {
                              packet.type == MessageType.noiseHandshake.rawValue
         // Snapshot centrals and mapping under collectionsQueue to avoid concurrent mutation
         let centralsSnapshot: [CBCentral] = collectionsQueue.sync { Array(subscribedCentrals) }
-        let centralMapSnapshot: [String: String] = collectionsQueue.sync { centralToPeerID }
         if isBroadcastType, let characteristic = characteristic, !centralsSnapshot.isEmpty {
             // If value exceeds minimum allowed by connected centrals, handle per constraints
             let minAllowed = centralsSnapshot.map { $0.maximumUpdateValueLength }.min() ?? 20
