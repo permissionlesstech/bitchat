@@ -20,12 +20,16 @@ struct LocationChannelsSheet: View {
                 Group {
                     switch manager.permissionState {
                     case LocationChannelManager.PermissionState.notDetermined:
-                        VStack(alignment: .leading, spacing: 8) {
-                            Button("enable location channels") {
-                                manager.enableLocationChannels()
-                            }
-                            .buttonStyle(.plain)
+                        Button(action: { manager.enableLocationChannels() }) {
+                            Text("get location and my geohash")
+                                .font(.system(size: 12, design: .monospaced))
+                                .foregroundColor(Color.green)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 6)
+                                .background(Color.green.opacity(0.12))
+                                .cornerRadius(6)
                         }
+                        .buttonStyle(.plain)
                     case LocationChannelManager.PermissionState.denied, LocationChannelManager.PermissionState.restricted:
                         VStack(alignment: .leading, spacing: 8) {
                             Text("location permission denied. enable in settings to use location channels.")
@@ -39,9 +43,11 @@ struct LocationChannelsSheet: View {
                             .buttonStyle(.plain)
                         }
                     case LocationChannelManager.PermissionState.authorized:
-                        channelList
+                        EmptyView()
                     }
                 }
+
+                channelList
                 Spacer()
             }
             .padding(.horizontal, 16)
@@ -85,9 +91,6 @@ struct LocationChannelsSheet: View {
                     channelRow(title: channel.level.displayName.lowercased(), subtitle: "#\(channel.geohash)", isSelected: isSelected(channel)) {
                         manager.select(ChannelID.location(channel))
                         isPresented = false
-                    }
-                    if channel.level == .country {
-                        Divider()
                     }
                 }
             } else {
@@ -147,7 +150,6 @@ struct LocationChannelsSheet: View {
                         .foregroundColor(.red)
                 }
             }
-            .listRowSeparator(.hidden)
 
             // Footer action inside the list
             if manager.permissionState == LocationChannelManager.PermissionState.authorized {
