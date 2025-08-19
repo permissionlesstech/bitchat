@@ -605,7 +605,7 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 0) {
                 // Header - match main toolbar height
                 HStack {
-                    Text("NETWORK")
+                    Text("PEOPLE")
                         .font(.system(size: 16, weight: .bold, design: .monospaced))
                         .foregroundColor(textColor)
                     Spacer()
@@ -621,54 +621,66 @@ struct ContentView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     // People section
                     VStack(alignment: .leading, spacing: 4) {
-                        // Show appropriate header based on context
-                        if !viewModel.allPeers.isEmpty {
-                            HStack(spacing: 4) {
-                                Image(systemName: "person.2.fill")
-                                    .font(.system(size: 10))
-                                    .accessibilityHidden(true)
-                                Text("PEOPLE")
-                                    .font(.system(size: 11, weight: .bold, design: .monospaced))
-                            }
-                            .foregroundColor(secondaryTextColor)
-                            .padding(.horizontal, 12)
-                            .padding(.top, 12)
-                        }
-                        
-                        if viewModel.allPeers.isEmpty {
-                            Text("nobody around...")
-                                .font(.system(size: 14, design: .monospaced))
-                                .foregroundColor(secondaryTextColor)
-                                .padding(.horizontal)
-                                .padding(.top, 12)
-                        } else {
-                            // Extract peer data for display
-                            let peerNicknames = viewModel.meshService.getPeerNicknames()
-                            
-                            // Show all peers (connected and favorites)
-                            // Pre-compute peer data outside ForEach to reduce overhead
-                            let peerData = viewModel.allPeers.map { peer in
-                                // Get current myPeerID for each peer to avoid stale values
-                                let currentMyPeerID = viewModel.meshService.myPeerID
-                                return PeerDisplayData(
-                                    id: peer.id,
-                                    displayName: peer.id == currentMyPeerID ? viewModel.nickname : peer.nickname,
-                                    isFavorite: peer.favoriteStatus?.isFavorite ?? false,
-                                    isMe: peer.id == currentMyPeerID,
-                                    hasUnreadMessages: viewModel.hasUnreadMessages(for: peer.id),
-                                    encryptionStatus: viewModel.getEncryptionStatus(for: peer.id),
-                                    connectionState: peer.connectionState,
-                                    isMutualFavorite: peer.favoriteStatus?.isMutual ?? false
-                                )
-                            }.sorted { (peer1: PeerDisplayData, peer2: PeerDisplayData) in
-                                // Sort: favorites first, then alphabetically by nickname
-                                if peer1.isFavorite != peer2.isFavorite {
-                                    return peer1.isFavorite
+                        #if os(iOS)
+                        switch locationManager.selectedChannel {
+                        case .location:
+                            if viewModel.geohashPeople.isEmpty {
+                                Text("nobody around...")
+                                    .font(.system(size: 14, design: .monospaced))
+                                    .foregroundColor(secondaryTextColor)
+                                    .padding(.horizontal)
+                                    .padding(.top, 12)
+                            } else {
+                                ForEach(viewModel.geohashPeople) { person in
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "person.fill")
+                                            .font(.system(size: 10))
+                                            .foregroundColor(textColor)
+                                        Text(person.displayName)
+                                            .font(.system(size: 14, design: .monospaced))
+                                            .foregroundColor(textColor)
+                                        Spacer()
+                                    }
+                                    .padding(.horizontal)
+                                    .padding(.vertical, 4)
                                 }
-                                return peer1.displayName < peer2.displayName
                             }
-                        
-                        ForEach(peerData) { peer in
+                        default:
+                            // Mesh peers list (original)
+                            if viewModel.allPeers.isEmpty {
+                                Text("nobody around...")
+                                    .font(.system(size: 14, design: .monospaced))
+                                    .foregroundColor(secondaryTextColor)
+                                    .padding(.horizontal)
+                                    .padding(.top, 12)
+                            } else {
+                                // Extract peer data for display
+                                let peerNicknames = viewModel.meshService.getPeerNicknames()
+                                
+                                // Show all peers (connected and favorites)
+                                // Pre-compute peer data outside ForEach to reduce overhead
+                                let peerData = viewModel.allPeers.map { peer in
+                                    // Get current myPeerID for each peer to avoid stale values
+                                    let currentMyPeerID = viewModel.meshService.myPeerID
+                                    return PeerDisplayData(
+                                        id: peer.id,
+                                        displayName: peer.id == currentMyPeerID ? viewModel.nickname : peer.nickname,
+                                        isFavorite: peer.favoriteStatus?.isFavorite ?? false,
+                                        isMe: peer.id == currentMyPeerID,
+                                        hasUnreadMessages: viewModel.hasUnreadMessages(for: peer.id),
+                                        encryptionStatus: viewModel.getEncryptionStatus(for: peer.id),
+                                        connectionState: peer.connectionState,
+                                        isMutualFavorite: peer.favoriteStatus?.isMutual ?? false
+                                    )
+                                }.sorted { (peer1: PeerDisplayData, peer2: PeerDisplayData) in
+                                    // Sort: favorites first, then alphabetically by nickname
+                                    if peer1.isFavorite != peer2.isFavorite {
+                                        return peer1.isFavorite
+                                    }
+                                    return peer1.displayName < peer2.displayName
+                                }
+                            
+                            ForEach(peerData) { peer in
                             HStack(spacing: 4) {
                                 // Signal strength indicator or unread message icon
                                 if peer.isMe {
@@ -782,6 +794,9 @@ struct ContentView: View {
                             }
                         }
                         }
+                        // Close switch
+                        }
+                        #endif
                     }
                 }
                 .id(viewModel.allPeers.map { "\($0.id)-\($0.isConnected)" }.joined())
@@ -871,6 +886,26 @@ struct ContentView: View {
         return (name, "")
     }
     
+    #if os(iOS)
+    // Compute channel-aware people count and color for toolbar
+    private func channelPeopleCountAndColor() -> (Int, Color) {
+        switch locationManager.selectedChannel {
+        case .location:
+            let n = viewModel.geohashPeople.count
+            return (n, n > 0 ? Color.green : Color.secondary)
+        case .mesh:
+            let counts = viewModel.allPeers.reduce(into: (others: 0, mesh: 0)) { counts, peer in
+                guard peer.id != viewModel.meshService.myPeerID else { return }
+                let isMeshConnected = peer.isConnected
+                if isMeshConnected { counts.mesh += 1; counts.others += 1 }
+                else if peer.isMutualFavorite { counts.others += 1 }
+            }
+            let color: Color = counts.mesh > 0 ? Color.blue : Color.secondary
+            return (counts.others, color)
+        }
+    }
+    #endif
+
     
     private var mainHeaderView: some View {
         HStack(spacing: 0) {
@@ -923,24 +958,21 @@ struct ContentView: View {
                         .accessibilityLabel("Unread private messages")
                 }
 
-                // Single pass to count both metrics
+                // People count depends on active channel
+                #if os(iOS)
+                let cc = channelPeopleCountAndColor()
+                let otherPeersCount = cc.0
+                let countColor = cc.1
+                #else
                 let peerCounts = viewModel.allPeers.reduce(into: (others: 0, mesh: 0)) { counts, peer in
                     guard peer.id != viewModel.meshService.myPeerID else { return }
-                    
                     let isMeshConnected = peer.isConnected
-                    if isMeshConnected {
-                        counts.mesh += 1
-                        counts.others += 1
-                    } else if peer.isMutualFavorite {
-                        counts.others += 1
-                    }
+                    if isMeshConnected { counts.mesh += 1; counts.others += 1 }
+                    else if peer.isMutualFavorite { counts.others += 1 }
                 }
-                
                 let otherPeersCount = peerCounts.others
-                let meshPeerCount = peerCounts.mesh
-                
-                // Purple only if we have peers but none are reachable via mesh (only via Nostr)
-                let isNostrOnly = otherPeersCount > 0 && meshPeerCount == 0
+                let countColor: Color = (peerCounts.mesh > 0) ? Color.blue : Color.secondary
+                #endif
                 
                 // Location channels button '#'
                 #if os(iOS)
@@ -959,7 +991,7 @@ struct ContentView: View {
                         case .mesh:
                             return Color.blue
                         case .location:
-                            return textColor
+                            return Color.green
                         }
                     }()
                     Text(badgeText)
@@ -990,7 +1022,7 @@ struct ContentView: View {
                         .font(.system(size: 12, design: .monospaced))
                         .accessibilityHidden(true)
                 }
-                .foregroundColor(isNostrOnly ? Color.purple : (meshPeerCount > 0 ? Color.blue : Color.secondary))
+                .foregroundColor(countColor)
             }
             .onTapGesture {
                 withAnimation(.easeInOut(duration: 0.2)) {

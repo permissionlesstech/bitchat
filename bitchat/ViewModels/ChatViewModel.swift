@@ -250,6 +250,10 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     private var lastPublicActivityAt: [String: Date] = [:]   // channelKey -> last activity time
     private var lastPublicActivityNotifyAt: [String: Date] = [:]
     private let channelInactivityThreshold: TimeInterval = 9 * 60
+    // Geohash participants (per geohash: pubkey -> lastSeen)
+    private var geoParticipants: [String: [String: Date]] = [:]
+    @Published private(set) var geohashPeople: [GeoPerson] = []
+    private var geoParticipantsTimer: Timer? = nil
     #endif
     
     // MARK: - Message Delivery Tracking
@@ -539,6 +543,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             switchLocationChannel(to: activeChannel)
             return
         }
+        // Ensure participant decay timer is running
+        startGeoParticipantsTimer()
         // Unsubscribe + resubscribe
         NostrRelayManager.shared.unsubscribe(id: subID)
         let filter = NostrFilter.geohashEphemeral(ch.geohash, since: Date().addingTimeInterval(-3600), limit: 200)
@@ -554,6 +560,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 let nick = nickTag[1]
                 self.geoNicknames[event.pubkey.lowercased()] = nick
             }
+            // Update participants last-seen for this pubkey
+            self.recordGeoParticipant(pubkeyHex: event.pubkey)
             let senderName = self.displayNameForNostrPubkey(event.pubkey)
             let content = event.content
             let timestamp = Date(timeIntervalSince1970: TimeInterval(event.created_at))
@@ -980,6 +988,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                             nickname: self.nickname
                         )
                         NostrRelayManager.shared.sendEvent(event)
+                        // Track ourselves as active participant
+                        self.recordGeoParticipant(pubkeyHex: identity.publicKeyHex)
                     } catch {
                         SecureLogger.log("❌ Failed to send geohash message: \(error)", category: SecureLogger.session, level: .error)
                         self.addSystemMessage("failed to send to location channel")
@@ -1006,6 +1016,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         switch channel {
         case .mesh:
             messages = meshTimeline
+            stopGeoParticipantsTimer()
+            geohashPeople = []
         case .location(let ch):
             messages = geoTimelines[ch.geohash] ?? []
         }
@@ -1017,11 +1029,13 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         currentGeohash = nil
         // Reset nickname cache for geochat participants
         geoNicknames.removeAll()
+        geohashPeople = []
         
         guard case .location(let ch) = channel else { return }
         currentGeohash = ch.geohash
         let subID = "geo-\(ch.geohash)"
         geoSubscriptionID = subID
+        startGeoParticipantsTimer()
         let filter = NostrFilter.geohashEphemeral(ch.geohash, since: Date().addingTimeInterval(-3600), limit: 200)
         NostrRelayManager.shared.subscribe(filter: filter, id: subID) { [weak self] event in
             guard let self = self else { return }
@@ -1041,6 +1055,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 let nick = nickTag[1]
                 self.geoNicknames[event.pubkey.lowercased()] = nick
             }
+            // Update participants last-seen for this pubkey
+            self.recordGeoParticipant(pubkeyHex: event.pubkey)
             
             let senderName = self.displayNameForNostrPubkey(event.pubkey)
             let content = event.content
@@ -1065,6 +1081,54 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             }
         }
     }
+
+    // MARK: - Geohash Participants (iOS)
+    #if os(iOS)
+    struct GeoPerson: Identifiable, Equatable {
+        let id: String        // pubkey hex (lowercased)
+        let displayName: String
+        let lastSeen: Date
+    }
+
+    private func recordGeoParticipant(pubkeyHex: String) {
+        guard let gh = currentGeohash else { return }
+        let key = pubkeyHex.lowercased()
+        var map = geoParticipants[gh] ?? [:]
+        map[key] = Date()
+        geoParticipants[gh] = map
+        refreshGeohashPeople()
+    }
+
+    private func refreshGeohashPeople() {
+        guard let gh = currentGeohash else { geohashPeople = []; return }
+        let cutoff = Date().addingTimeInterval(-5 * 60)
+        var map = geoParticipants[gh] ?? [:]
+        // Prune expired entries
+        map = map.filter { $0.value >= cutoff }
+        geoParticipants[gh] = map
+        // Build display list
+        let people = map
+            .map { (pub, seen) in
+                GeoPerson(id: pub, displayName: displayNameForNostrPubkey(pub), lastSeen: seen)
+            }
+            .sorted { $0.lastSeen > $1.lastSeen }
+        geohashPeople = people
+    }
+
+    private func startGeoParticipantsTimer() {
+        stopGeoParticipantsTimer()
+        geoParticipantsTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.refreshGeohashPeople()
+            }
+        }
+    }
+
+    private func stopGeoParticipantsTimer() {
+        geoParticipantsTimer?.invalidate()
+        geoParticipantsTimer = nil
+    }
+    #endif
 
     private func displayNameForNostrPubkey(_ pubkeyHex: String) -> String {
         let suffix = String(pubkeyHex.suffix(4))
