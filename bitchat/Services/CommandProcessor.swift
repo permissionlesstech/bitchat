@@ -139,7 +139,7 @@ class CommandProcessor {
             // In public chat: send to mesh and also add a local system echo so sender sees it immediately
             meshService?.sendMessage(emoteContent, mentions: [])
             let publicEcho = "\(emoji) \(myNickname) \(action) \(nickname)\(suffix)"
-            chatViewModel?.addSystemMessage(publicEcho)
+            chatViewModel?.addPublicSystemMessage(publicEcho)
         }
         
         return .handled

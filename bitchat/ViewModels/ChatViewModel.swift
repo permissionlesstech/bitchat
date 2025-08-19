@@ -2882,6 +2882,13 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         )
         messages.append(systemMessage)
     }
+
+    /// Public helper to add a system message to the public chat timeline
+    @MainActor
+    func addPublicSystemMessage(_ content: String) {
+        addSystemMessage(content)
+        objectWillChange.send()
+    }
     
     // MARK: - Simplified Nostr Integration (Inlined from MessageRouter)
     
