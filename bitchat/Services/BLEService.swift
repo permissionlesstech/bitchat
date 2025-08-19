@@ -259,16 +259,17 @@ final class BLEService: NSObject {
     // MARK: - Helper Functions for Peripheral Management
     
     private func getConnectedPeripherals() -> [CBPeripheral] {
-        return peripherals.values
-            .filter { $0.isConnected }
-            .map { $0.peripheral }
+        let snapshot: [PeripheralState] = collectionsQueue.sync { peripherals.values.filter { $0.isConnected } }
+        return snapshot.map { $0.peripheral }
     }
     
     private func getPeripheral(for peerID: String) -> CBPeripheral? {
-        guard let uuid = peerToPeripheralUUID[peerID],
-              let state = peripherals[uuid],
-              state.isConnected else { return nil }
-        return state.peripheral
+        return collectionsQueue.sync {
+            guard let uuid = peerToPeripheralUUID[peerID],
+                  let state = peripherals[uuid],
+                  state.isConnected else { return nil }
+            return state.peripheral
+        }
     }
     
     // MARK: - Core Public API
@@ -338,7 +339,8 @@ final class BLEService: NSObject {
         peripheralManager?.stopAdvertising()
         
         // Disconnect all peripherals
-        for state in peripherals.values {
+        let allStates: [PeripheralState] = collectionsQueue.sync { Array(peripherals.values) }
+        for state in allStates {
             centralManager?.cancelPeripheralConnection(state.peripheral)
         }
     }
@@ -886,8 +888,10 @@ final class BLEService: NSObject {
         guard peripheral.state == .connected else { return }
         
         let peripheralUUID = peripheral.identifier.uuidString
-        guard let state = peripherals[peripheralUUID],
-              let characteristic = state.characteristic else { return }
+        let characteristic: CBCharacteristic? = collectionsQueue.sync {
+            peripherals[peripheralUUID]?.characteristic
+        }
+        guard let characteristic = characteristic else { return }
         
         // Fire-and-forget principle: always use .withoutResponse for speed
         // CoreBluetooth will handle fragmentation at L2CAP layer

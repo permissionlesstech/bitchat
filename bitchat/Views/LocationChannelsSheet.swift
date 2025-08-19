@@ -158,7 +158,7 @@ struct LocationChannelsSheet: View {
                         UIApplication.shared.open(url)
                     }
                 }) {
-                    Text("remove location permission")
+                    Text("remove location access")
                         .font(.system(size: 12, design: .monospaced))
                         .foregroundColor(Color(red: 0.75, green: 0.1, blue: 0.1))
                         .frame(maxWidth: .infinity)
