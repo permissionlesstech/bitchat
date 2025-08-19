@@ -246,6 +246,10 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     // Persist per-geohash public timelines across switches
     private var geoTimelines: [String: [BitchatMessage]] = [:] // geohash -> messages
     private let geoTimelineCap = 1337
+    // Channel activity tracking for background nudges
+    private var lastPublicActivityAt: [String: Date] = [:]   // channelKey -> last activity time
+    private var lastPublicActivityNotifyAt: [String: Date] = [:]
+    private let channelInactivityThreshold: TimeInterval = 9 * 60
     #endif
     
     // MARK: - Message Delivery Tracking
@@ -929,11 +933,20 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             
             // Add to main messages immediately for user feedback
             messages.append(message)
-            // Persist to mesh timeline if posting in mesh
+            // Persist to channel-specific timelines
             #if os(iOS)
-            if case .mesh = activeChannel {
+            switch activeChannel {
+            case .mesh:
                 meshTimeline.append(message)
                 trimMeshTimelineIfNeeded()
+            case .location(let ch):
+                var arr = geoTimelines[ch.geohash] ?? []
+                arr.append(message)
+                if arr.count > geoTimelineCap {
+                    let remove = arr.count - geoTimelineCap
+                    arr.removeFirst(remove)
+                }
+                geoTimelines[ch.geohash] = arr
             }
             #else
             meshTimeline.append(message)
@@ -943,6 +956,16 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             
             // Force immediate UI update for user's own messages
             objectWillChange.send()
+
+            // Update channel activity time on send
+            #if os(iOS)
+            switch activeChannel {
+            case .mesh:
+                lastPublicActivityAt["mesh"] = Date()
+            case .location(let ch):
+                lastPublicActivityAt["geo:\(ch.geohash)"] = Date()
+            }
+            #endif
             
             #if os(iOS)
             if case .location(let ch) = activeChannel {
@@ -1923,12 +1946,36 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     // MARK: - Autocomplete
     
     func updateAutocomplete(for text: String, cursorPosition: Int) {
-        // Get peer nicknames but exclude self
-        let allPeers = meshService.getPeerNicknames().values
-        let peers = allPeers.filter { $0 != meshService.myNickname }
+        // Build candidate list based on active channel
+        let peerCandidates: [String] = {
+            #if os(iOS)
+            switch activeChannel {
+            case .mesh:
+                let values = meshService.getPeerNicknames().values
+                return Array(values.filter { $0 != meshService.myNickname })
+            case .location(let ch):
+                // From geochash participants we have seen via Nostr events
+                var tokens = Set<String>()
+                for (pubkey, nick) in geoNicknames {
+                    let suffix = String(pubkey.suffix(4))
+                    tokens.insert("\(nick)#\(suffix)")
+                }
+                // Optionally exclude self nick#abcd from suggestions
+                if let id = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
+                    let myToken = nickname + "#" + String(id.publicKeyHex.suffix(4))
+                    tokens.remove(myToken)
+                }
+                return Array(tokens)
+            }
+            #else
+            let values = meshService.getPeerNicknames().values
+            return Array(values.filter { $0 != meshService.myNickname })
+            #endif
+        }()
+
         let (suggestions, range) = autocompleteService.getSuggestions(
             for: text,
-            peers: Array(peers),
+            peers: peerCandidates,
             cursorPosition: cursorPosition
         )
         
@@ -4048,6 +4095,30 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         }()
 
         guard channelMatches else { return }
+
+        // Background nudge: notify on new activity after inactivity threshold in current channel
+        #if os(iOS)
+        if UIApplication.shared.applicationState != .active {
+            let channelKey: String = {
+                switch activeChannel {
+                case .mesh: return "mesh"
+                case .location(let ch): return "geo:\(ch.geohash)"
+                }
+            }()
+            let now = Date()
+            if let last = lastPublicActivityAt[channelKey], now.timeIntervalSince(last) >= channelInactivityThreshold {
+                // Optional: simple cooldown to avoid duplicate bursts
+                let lastNotified = lastPublicActivityNotifyAt[channelKey] ?? .distantPast
+                if now.timeIntervalSince(lastNotified) >= 60 {
+                    let title = activeChannelDisplayName()
+                    let body = "new activity"
+                    NotificationService.shared.sendLocalNotification(title: title, body: body, identifier: "channel-activity-\(channelKey)-\(now.timeIntervalSince1970)")
+                    lastPublicActivityNotifyAt[channelKey] = now
+                }
+            }
+            lastPublicActivityAt[channelKey] = now
+        }
+        #endif
 
         // Check if this is our own message being echoed back (avoid dup)
         if finalMessage.sender != nickname && finalMessage.sender != "system" {

@@ -21,7 +21,7 @@ struct LocationChannelsSheet: View {
                     switch manager.permissionState {
                     case LocationChannelManager.PermissionState.notDetermined:
                         Button(action: { manager.enableLocationChannels() }) {
-                            Text("get location and my geohash")
+                            Text("get location and my geohashes")
                                 .font(.system(size: 12, design: .monospaced))
                                 .foregroundColor(Color.green)
                                 .frame(maxWidth: .infinity)

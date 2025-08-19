@@ -97,7 +97,8 @@ class CommandProcessor {
         if let peerID = chatViewModel?.selectedPrivateChatPeer {
             chatViewModel?.privateChats[peerID]?.removeAll()
         } else {
-            chatViewModel?.messages.removeAll()
+            // Clear visible and persistent public timeline for current channel
+            chatViewModel?.clearCurrentPublicTimeline()
         }
         return .handled
     }
