@@ -42,8 +42,6 @@ struct AnnouncementPacket {
         var nickname: String?
         var noisePublicKey: Data?
         var signingPublicKey: Data?
-        var noisePublicKey: Data?
-        var signingPublicKey: Data?
 
         while offset + 2 <= data.count {
             let typeRaw = data[offset]
