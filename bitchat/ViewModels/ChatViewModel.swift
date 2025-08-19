@@ -1776,16 +1776,27 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         let primaryColor = isDark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
         
         if message.sender != "system" {
-            // Sender (at the beginning)
-            let sender = AttributedString("<@\(message.sender)> ")
+            // Sender (at the beginning) with light-gray suffix styling if present
+            let (baseName, suffix) = splitSuffix(from: message.sender)
             var senderStyle = AttributeContainer()
-            
             // Use consistent color for all senders
             senderStyle.foregroundColor = primaryColor
             // Bold the user's own nickname
             let fontWeight: Font.Weight = message.sender == nickname ? .bold : .medium
             senderStyle.font = .system(size: 14, weight: fontWeight, design: .monospaced)
-            result.append(sender.mergingAttributes(senderStyle))
+
+            // Prefix "<@"
+            result.append(AttributedString("<@").mergingAttributes(senderStyle))
+            // Base name
+            result.append(AttributedString(baseName).mergingAttributes(senderStyle))
+            // Optional suffix (light gray)
+            if !suffix.isEmpty {
+                var suffixStyle = senderStyle
+                suffixStyle.foregroundColor = Color.secondary
+                result.append(AttributedString(suffix).mergingAttributes(suffixStyle))
+            }
+            // Suffix "> "
+            result.append(AttributedString("> ").mergingAttributes(senderStyle))
             
             // Process content with hashtags and mentions
             let content = message.content
@@ -1892,6 +1903,19 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         message.setCachedFormattedText(result, isDark: isDark)
         
         return result
+    }
+
+    // Split a nickname into base and a '#abcd' suffix if present
+    private func splitSuffix(from name: String) -> (String, String) {
+        guard name.count >= 5 else { return (name, "") }
+        let suffix = String(name.suffix(5))
+        if suffix.first == "#", suffix.dropFirst().allSatisfy({ c in
+            ("0"..."9").contains(String(c)) || ("a"..."f").contains(String(c)) || ("A"..."F").contains(String(c))
+        }) {
+            let base = String(name.dropLast(5))
+            return (base, suffix)
+        }
+        return (name, "")
     }
     
     func formatMessage(_ message: BitchatMessage, colorScheme: ColorScheme) -> AttributedString {

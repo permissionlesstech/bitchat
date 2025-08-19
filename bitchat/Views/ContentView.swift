@@ -719,9 +719,18 @@ struct ContentView: View {
                                         Spacer()
                                     }
                                 } else {
-                                    Text(peer.displayName)
-                                        .font(.system(size: 14, design: .monospaced))
-                                        .foregroundColor(peer.isFavorite || peerNicknames[peer.id] != nil ? textColor : secondaryTextColor)
+                                    // Render nickname with light-gray '#abcd' suffix if present
+                                    let parts = splitNameSuffix(peer.displayName)
+                                    HStack(spacing: 0) {
+                                        Text(parts.base)
+                                            .font(.system(size: 14, design: .monospaced))
+                                            .foregroundColor(peer.isFavorite || peerNicknames[peer.id] != nil ? textColor : secondaryTextColor)
+                                        if !parts.suffix.isEmpty {
+                                            Text(parts.suffix)
+                                                .font(.system(size: 14, design: .monospaced))
+                                                .foregroundColor(Color.secondary)
+                                        }
+                                    }
                                     
                                     // Encryption status icon (after peer name)
                                     if let icon = peer.encryptionStatus.icon {
@@ -843,6 +852,19 @@ struct ContentView: View {
             .background(backgroundColor)
             .foregroundColor(textColor)
         }
+    }
+
+    // Split a name into base and a '#abcd' suffix if present
+    private func splitNameSuffix(_ name: String) -> (base: String, suffix: String) {
+        guard name.count >= 5 else { return (name, "") }
+        let suffix = String(name.suffix(5))
+        if suffix.first == "#", suffix.dropFirst().allSatisfy({ c in
+            ("0"..."9").contains(String(c)) || ("a"..."f").contains(String(c)) || ("A"..."F").contains(String(c))
+        }) {
+            let base = String(name.dropLast(5))
+            return (base, suffix)
+        }
+        return (name, "")
     }
     
     
