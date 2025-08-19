@@ -751,12 +751,20 @@ final class BLEService: NSObject {
             var sentEncrypted = false
             
             // Check routing availability (only log if there's an issue)
-            let hasPeripheral = peerToPeripheralUUID[recipientPeerID] != nil
-            let hasCentral = centralToPeerID.values.contains(recipientPeerID)
+            let (hasPeripheral, hasCentral) = collectionsQueue.sync {
+                let hp = peerToPeripheralUUID[recipientPeerID] != nil
+                let hc = centralToPeerID.values.contains(recipientPeerID)
+                return (hp, hc)
+            }
             
             // Try to send directly to the specific peer as peripheral first
-            if let peripheralUUID = peerToPeripheralUUID[recipientPeerID],
-               let state = peripherals[peripheralUUID],
+            var stateTuple: (String, PeripheralState)? = nil
+            collectionsQueue.sync {
+                if let uuid = peerToPeripheralUUID[recipientPeerID], let st = peripherals[uuid] {
+                    stateTuple = (uuid, st)
+                }
+            }
+            if let (_, state) = stateTuple,
                state.isConnected,
                let characteristic = state.characteristic {
                 state.peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
@@ -811,7 +819,8 @@ final class BLEService: NSObject {
         
         // 1. First try sending as central via writes to connected peripherals
         // This is the preferred path when we have direct peripheral connections
-        for state in peripherals.values where state.isConnected {
+        let connectedPeripheralStates: [PeripheralState] = collectionsQueue.sync { peripherals.values.filter { $0.isConnected } }
+        for state in connectedPeripheralStates {
                 if let characteristic = state.characteristic {
                 state.peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
                 sentToPeripherals += 1
