@@ -58,7 +58,10 @@ struct LocationChannelsSheet: View {
             if manager.permissionState == LocationChannelManager.PermissionState.authorized {
                 manager.refreshChannels()
             }
+            // Begin periodic refresh while sheet is open
+            manager.beginLiveRefresh()
         }
+        .onDisappear { manager.endLiveRefresh() }
         .onChange(of: manager.permissionState) { newValue in
             if newValue == LocationChannelManager.PermissionState.authorized {
                 manager.refreshChannels()
@@ -77,7 +80,7 @@ struct LocationChannelsSheet: View {
             // Nearby options
             if !manager.availableChannels.isEmpty {
                 ForEach(manager.availableChannels) { channel in
-                    channelRow(title: "#\(channel.level.displayName.lowercased())", subtitle: channel.geohash, isSelected: isSelected(channel)) {
+                    channelRow(title: channel.level.displayName.lowercased(), subtitle: "#\(channel.geohash)", isSelected: isSelected(channel)) {
                         manager.select(ChannelID.location(channel))
                         isPresented = false
                     }

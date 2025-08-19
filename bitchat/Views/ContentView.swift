@@ -951,7 +951,7 @@ struct ContentView: View {
                         case .mesh:
                             return "#mesh"
                         case .location(let ch):
-                            return "#\(ch.level.displayName.lowercased())"
+                            return "#\(ch.geohash)"
                         }
                     }()
                     let badgeColor: Color = {

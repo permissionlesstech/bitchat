@@ -18,6 +18,7 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
 
     private let cl = CLLocationManager()
     private var lastLocation: CLLocation?
+    private var refreshTimer: Timer?
     private let userDefaultsKey = "locationChannel.selected"
 
     // Published state for UI bindings
@@ -71,6 +72,26 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
         if permissionState == .authorized {
             requestOneShotLocation()
         }
+    }
+
+    /// Begin periodic one-shot location refreshes while a selector UI is visible.
+    func beginLiveRefresh(interval: TimeInterval = 5.0) {
+        endLiveRefresh()
+        guard permissionState == .authorized else { return }
+        // Kick one immediately
+        requestOneShotLocation()
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            if self.permissionState == .authorized {
+                self.requestOneShotLocation()
+            }
+        }
+    }
+
+    /// Stop periodic refreshes when selector UI is dismissed.
+    func endLiveRefresh() {
+        refreshTimer?.invalidate()
+        refreshTimer = nil
     }
 
     func select(_ channel: ChannelID) {
