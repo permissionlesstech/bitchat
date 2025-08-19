@@ -1804,7 +1804,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             let content = message.content
             
             let hashtagPattern = "#([a-zA-Z0-9_]+)"
-            let mentionPattern = "@([\\p{L}0-9_]+)"
+            // Allow optional '#abcd' suffix in mentions
+            let mentionPattern = "@([\\p{L}0-9_]+(?:#[a-fA-F0-9]{4})?)"
             
             let hashtagRegex = try? NSRegularExpression(pattern: hashtagPattern, options: [])
             let mentionRegex = try? NSRegularExpression(pattern: mentionPattern, options: [])
@@ -1816,15 +1817,20 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             let mentionMatches = mentionRegex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
             let urlMatches = detector?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
             
-            // Combine and sort matches
+            // Combine and sort matches, excluding hashtags/URLs overlapping mentions
+            let mentionRanges = mentionMatches.map { $0.range(at: 0) }
+            func overlapsMention(_ r: NSRange) -> Bool {
+                for mr in mentionRanges { if NSIntersectionRange(r, mr).length > 0 { return true } }
+                return false
+            }
             var allMatches: [(range: NSRange, type: String)] = []
-            for match in hashtagMatches {
+            for match in hashtagMatches where !overlapsMention(match.range(at: 0)) {
                 allMatches.append((match.range(at: 0), "hashtag"))
             }
             for match in mentionMatches {
                 allMatches.append((match.range(at: 0), "mention"))
             }
-            for match in urlMatches {
+            for match in urlMatches where !overlapsMention(match.range) {
                 allMatches.append((match.range, "url"))
             }
             allMatches.sort { $0.range.location < $1.range.location }
@@ -3708,19 +3714,27 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     }
     
     /// Check for mentions and send notifications
-    private func checkForMentions(_ message: BitchatMessage) {
-        let isMentioned = message.mentions?.contains(nickname) ?? false
-        
-        // Mention check: \(isMentioned ? "mentioned" : "not mentioned")
-        
-        if isMentioned && message.sender != nickname {
-            SecureLogger.log("🔔 Mention from \(message.sender)", 
-                           category: SecureLogger.session, level: .info)
-            NotificationService.shared.sendMentionNotification(from: message.sender, message: message.content)
-        }
-    }
     
-    /// Send haptic feedback for special messages (iOS only)
+private func checkForMentions(_ message: BitchatMessage) {
+    // Determine our acceptable mention token. If any connected peer shares our nickname,
+    // require the disambiguated form '<nickname>#<peerIDprefix>' to trigger.
+    var myTokens: Set<String> = [nickname]
+    let meshPeers = meshService.getPeerNicknames()
+    let collisions = meshPeers.values.filter { $0.hasPrefix(nickname + "#") }
+    if !collisions.isEmpty {
+        let suffix = "#" + String(meshService.myPeerID.prefix(4))
+        myTokens = [nickname + suffix]
+    }
+    let isMentioned = (message.mentions?.contains { myTokens.contains($0) } ?? false)
+
+    if isMentioned && message.sender != nickname {
+        SecureLogger.log("🔔 Mention from \ (message.sender)",
+                       category: SecureLogger.session, level: .info)
+        NotificationService.shared.sendMentionNotification(from: message.sender, message: message.content)
+    }
+}
+
+/// Send haptic feedback for special messages (iOS only)
     private func sendHapticFeedback(for message: BitchatMessage) {
         #if os(iOS)
         guard UIApplication.shared.applicationState == .active else { return }
