@@ -73,6 +73,14 @@
 		1D9674FA5F998503831DC281 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A08E03AA0C63E97C91749AEC /* ContentView.swift */; };
 		1F48A8CEEE9399D1EBD08F0C /* OptimizedBloomFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB043CA5EEB9AC8B07D61E97 /* OptimizedBloomFilter.swift */; };
 		31D147471B9F4E2815352DDA /* LinkPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AC141774F6671FCDC347DC7 /* LinkPreviewView.swift */; };
+		37FFE4402E54265C009DB4CB /* NewContact.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37FFE43F2E54265C009DB4CB /* NewContact.swift */; };
+		37FFE4412E54265C009DB4CB /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37FFE43E2E54265C009DB4CB /* ChatView.swift */; };
+		37FFE4422E54265C009DB4CB /* NewContact.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37FFE43F2E54265C009DB4CB /* NewContact.swift */; };
+		37FFE4432E54265C009DB4CB /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37FFE43E2E54265C009DB4CB /* ChatView.swift */; };
+		37FFE4462E54266D009DB4CB /* ContentView 2.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37FFE4452E54266D009DB4CB /* ContentView 2.swift */; };
+		37FFE4472E54266D009DB4CB /* CircleApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37FFE4442E54266D009DB4CB /* CircleApp.swift */; };
+		37FFE4482E54266D009DB4CB /* ContentView 2.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37FFE4452E54266D009DB4CB /* ContentView 2.swift */; };
+		37FFE4492E54266D009DB4CB /* CircleApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37FFE4442E54266D009DB4CB /* CircleApp.swift */; };
 		4B747085D07A1BCE0F5BA612 /* BinaryProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2136C3E22D02D4A8DBE7EAB /* BinaryProtocol.swift */; };
 		5D95F2BFBE257A1225998389 /* BatteryOptimizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED176FF3B274E35C2D827894 /* BatteryOptimizer.swift */; };
 		61C81ED5F679D5E973EE0C07 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3448F84BF86A42A3CC4A9379 /* NotificationService.swift */; };
@@ -178,6 +186,10 @@
 		32F149C43D1915831B60FE09 /* CompressionUtil.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompressionUtil.swift; sourceTree = "<group>"; };
 		3448F84BF86A42A3CC4A9379 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
 		3668EEBB42FD4A24D5D83B7B /* bitchatShareExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = bitchatShareExtension.entitlements; sourceTree = "<group>"; };
+		37FFE43E2E54265C009DB4CB /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
+		37FFE43F2E54265C009DB4CB /* NewContact.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewContact.swift; sourceTree = "<group>"; };
+		37FFE4442E54266D009DB4CB /* CircleApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CircleApp.swift; sourceTree = "<group>"; };
+		37FFE4452E54266D009DB4CB /* ContentView 2.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ContentView 2.swift"; sourceTree = "<group>"; };
 		3A556661F74B7D5AE2F0521B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		3A69677D382F1C3D5ED03F7D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		527EB217EFDFAD4CF1C91F07 /* bitchat.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = bitchat.entitlements; sourceTree = "<group>"; };
@@ -399,7 +411,11 @@
 		A55126E93155456CAA8D6656 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				37FFE4442E54266D009DB4CB /* CircleApp.swift */,
+				37FFE4452E54266D009DB4CB /* ContentView 2.swift */,
 				04B6BA532E203D6C0090FE39 /* FingerprintView.swift */,
+				37FFE43E2E54265C009DB4CB /* ChatView.swift */,
+				37FFE43F2E54265C009DB4CB /* NewContact.swift */,
 				763E0DBA9492A654FC0CDCB9 /* AppInfoView.swift */,
 				A08E03AA0C63E97C91749AEC /* ContentView.swift */,
 				9AC141774F6671FCDC347DC7 /* LinkPreviewView.swift */,
@@ -635,6 +651,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				AD11E46940D742AEAF547EB2 /* AppInfoView.swift in Sources */,
+				37FFE4462E54266D009DB4CB /* ContentView 2.swift in Sources */,
+				37FFE4472E54266D009DB4CB /* CircleApp.swift in Sources */,
+				37FFE4402E54265C009DB4CB /* NewContact.swift in Sources */,
+				37FFE4412E54265C009DB4CB /* ChatView.swift in Sources */,
 				C0A80BA73EC1A372B9338E3C /* BatteryOptimizer.swift in Sources */,
 				4B747085D07A1BCE0F5BA612 /* BinaryProtocol.swift in Sources */,
 				6E7761E21C99F28AE2F9BE5F /* BitchatApp.swift in Sources */,
@@ -677,6 +697,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				ABAF130D88561F4A646F0430 /* AppInfoView.swift in Sources */,
+				37FFE4482E54266D009DB4CB /* ContentView 2.swift in Sources */,
+				37FFE4492E54266D009DB4CB /* CircleApp.swift in Sources */,
+				37FFE4422E54265C009DB4CB /* NewContact.swift in Sources */,
+				37FFE4432E54265C009DB4CB /* ChatView.swift in Sources */,
 				5D95F2BFBE257A1225998389 /* BatteryOptimizer.swift in Sources */,
 				F455F011B3B648ADA233F998 /* BinaryProtocol.swift in Sources */,
 				10E68BB889356219189E38EC /* BitchatApp.swift in Sources */,
