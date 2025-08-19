@@ -124,10 +124,22 @@ class CommandProcessor {
                 meshService?.sendPrivateMessage(personalMessage, to: targetPeerID, 
                                                recipientNickname: peerNickname, 
                                                messageID: UUID().uuidString)
+                // Also add a local system message so the sender sees a natural-language confirmation
+                let pastAction: String = {
+                    switch action {
+                    case "hugs": return "hugged"
+                    case "slaps": return "slapped"
+                    default: return action.hasSuffix("e") ? action + "d" : action + "ed"
+                    }
+                }()
+                let localText = "\(emoji) you \(pastAction) \(nickname)\(suffix)"
+                chatViewModel?.addLocalPrivateSystemMessage(localText, to: targetPeerID)
             }
         } else {
-            // In public chat
+            // In public chat: send to mesh and also add a local system echo so sender sees it immediately
             meshService?.sendMessage(emoteContent, mentions: [])
+            let publicEcho = "\(emoji) \(myNickname) \(action) \(nickname)\(suffix)"
+            chatViewModel?.addPublicSystemMessage(publicEcho)
         }
         
         return .handled
