@@ -4,17 +4,13 @@ import Foundation
 
 struct AnnouncementPacket {
     let nickname: String
-    let publicKey: Data                 // Noise static public key (Curve25519.KeyAgreement)
-    let ed25519PublicKey: Data         // Ed25519 public key for signing
-    let signature: Data                // Ed25519 signature over canonical binding
-    let timestampMs: UInt64            // Announce timestamp (ms since epoch)
+    let noisePublicKey: Data            // Noise static public key (Curve25519.KeyAgreement)
+    let signingPublicKey: Data          // Ed25519 public key for signing
 
     private enum TLVType: UInt8 {
         case nickname = 0x01
         case noisePublicKey = 0x02
-        case ed25519PublicKey = 0x03
-        case announceSignature = 0x04
-        case announceTimestamp = 0x05 // 8-byte UInt64, big-endian
+        case signingPublicKey = 0x03
     }
 
     func encode() -> Data? {
@@ -27,30 +23,16 @@ struct AnnouncementPacket {
         data.append(nicknameData)
 
         // TLV for noise public key
-        guard publicKey.count <= 255 else { return nil }
+        guard noisePublicKey.count <= 255 else { return nil }
         data.append(TLVType.noisePublicKey.rawValue)
-        data.append(UInt8(publicKey.count))
-        data.append(publicKey)
+        data.append(UInt8(noisePublicKey.count))
+        data.append(noisePublicKey)
 
-        // Required timestamp (8 bytes)
-        var tsBE = timestampMs.bigEndian
-        data.append(TLVType.announceTimestamp.rawValue)
-        data.append(UInt8(8))
-        withUnsafeBytes(of: &tsBE) { raw in
-            data.append(contentsOf: raw)
-        }
-
-        // Required Ed25519 public key
-        guard ed25519PublicKey.count <= 255 else { return nil }
-        data.append(TLVType.ed25519PublicKey.rawValue)
-        data.append(UInt8(ed25519PublicKey.count))
-        data.append(ed25519PublicKey)
-
-        // Required signature
-        guard signature.count <= 255 else { return nil }
-        data.append(TLVType.announceSignature.rawValue)
-        data.append(UInt8(signature.count))
-        data.append(signature)
+        // TLV for signing public key
+        guard signingPublicKey.count <= 255 else { return nil }
+        data.append(TLVType.signingPublicKey.rawValue)
+        data.append(UInt8(signingPublicKey.count))
+        data.append(signingPublicKey)
 
         return data
     }
@@ -58,10 +40,10 @@ struct AnnouncementPacket {
     static func decode(from data: Data) -> AnnouncementPacket? {
         var offset = 0
         var nickname: String?
-        var publicKey: Data?
-        var ed25519PublicKey: Data?
-        var signature: Data?
-        var timestampMs: UInt64?
+        var noisePublicKey: Data?
+        var signingPublicKey: Data?
+        var noisePublicKey: Data?
+        var signingPublicKey: Data?
 
         while offset + 2 <= data.count {
             let typeRaw = data[offset]
@@ -78,17 +60,9 @@ struct AnnouncementPacket {
                 case .nickname:
                     nickname = String(data: value, encoding: .utf8)
                 case .noisePublicKey:
-                    publicKey = Data(value)
-                case .ed25519PublicKey:
-                    ed25519PublicKey = Data(value)
-                case .announceSignature:
-                    signature = Data(value)
-                case .announceTimestamp:
-                    if value.count == 8 {
-                        timestampMs = value.reduce(UInt64(0)) { acc, byte in
-                            (acc << 8) | UInt64(byte)
-                        }
-                    }
+                    noisePublicKey = Data(value)
+                case .signingPublicKey:
+                    signingPublicKey = Data(value)
                 }
             } else {
                 // Unknown TLV; skip (tolerant decoder for forward compatibility)
@@ -96,13 +70,11 @@ struct AnnouncementPacket {
             }
         }
 
-        guard let nickname = nickname, let publicKey = publicKey, let ed = ed25519PublicKey, let sig = signature, let ts = timestampMs else { return nil }
+        guard let nickname = nickname, let noisePublicKey = noisePublicKey, let signingPublicKey = signingPublicKey else { return nil }
         return AnnouncementPacket(
             nickname: nickname,
-            publicKey: publicKey,
-            ed25519PublicKey: ed,
-            signature: sig,
-            timestampMs: ts
+            noisePublicKey: noisePublicKey,
+            signingPublicKey: signingPublicKey
         )
     }
 }

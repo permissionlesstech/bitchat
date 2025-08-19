@@ -3735,7 +3735,6 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         addSystemMessage(content)
         objectWillChange.send()
     }
-
     // Send a public message without adding a local user echo.
     // Used for emotes where we want a local system-style confirmation instead.
     @MainActor

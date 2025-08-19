@@ -15,7 +15,7 @@ final class BLEService: NSObject {
     // MARK: - Constants
     
     #if DEBUG
-    static let serviceUUID = CBUUID(string: "F47B5E2D-4A9E-4C5A-9B3F-8E1D2C3A4B9A") // testnet
+    static let serviceUUID = CBUUID(string: "F47B5E2D-4A9E-4C5A-9B3F-8E1D2C3A4B5A") // testnet
     #else
     static let serviceUUID = CBUUID(string: "F47B5E2D-4A9E-4C5A-9B3F-8E1D2C3A4B5C") // mainnet
     #endif
@@ -49,7 +49,7 @@ final class BLEService: NSObject {
         var nickname: String
         var isConnected: Bool
         var noisePublicKey: Data?
-        var ed25519PublicKey: Data? // For signed announces
+        var signingPublicKey: Data?
         var isVerifiedNickname: Bool
         var lastSeen: Date
     }
@@ -259,17 +259,16 @@ final class BLEService: NSObject {
     // MARK: - Helper Functions for Peripheral Management
     
     private func getConnectedPeripherals() -> [CBPeripheral] {
-        let snapshot: [PeripheralState] = collectionsQueue.sync { peripherals.values.filter { $0.isConnected } }
-        return snapshot.map { $0.peripheral }
+        return peripherals.values
+            .filter { $0.isConnected }
+            .map { $0.peripheral }
     }
     
     private func getPeripheral(for peerID: String) -> CBPeripheral? {
-        return collectionsQueue.sync {
-            guard let uuid = peerToPeripheralUUID[peerID],
-                  let state = peripherals[uuid],
-                  state.isConnected else { return nil }
-            return state.peripheral
-        }
+        guard let uuid = peerToPeripheralUUID[peerID],
+              let state = peripherals[uuid],
+              state.isConnected else { return nil }
+        return state.peripheral
     }
     
     // MARK: - Core Public API
@@ -339,8 +338,7 @@ final class BLEService: NSObject {
         peripheralManager?.stopAdvertising()
         
         // Disconnect all peripherals
-        let allStates: [PeripheralState] = collectionsQueue.sync { Array(peripherals.values) }
-        for state in allStates {
+        for state in peripherals.values {
             centralManager?.cancelPeripheralConnection(state.peripheral)
         }
     }
@@ -753,20 +751,12 @@ final class BLEService: NSObject {
             var sentEncrypted = false
             
             // Check routing availability (only log if there's an issue)
-            let (hasPeripheral, hasCentral) = collectionsQueue.sync {
-                let hp = peerToPeripheralUUID[recipientPeerID] != nil
-                let hc = centralToPeerID.values.contains(recipientPeerID)
-                return (hp, hc)
-            }
+            let hasPeripheral = peerToPeripheralUUID[recipientPeerID] != nil
+            let hasCentral = centralToPeerID.values.contains(recipientPeerID)
             
             // Try to send directly to the specific peer as peripheral first
-            var stateTuple: (String, PeripheralState)? = nil
-            collectionsQueue.sync {
-                if let uuid = peerToPeripheralUUID[recipientPeerID], let st = peripherals[uuid] {
-                    stateTuple = (uuid, st)
-                }
-            }
-            if let (_, state) = stateTuple,
+            if let peripheralUUID = peerToPeripheralUUID[recipientPeerID],
+               let state = peripherals[peripheralUUID],
                state.isConnected,
                let characteristic = state.characteristic {
                 state.peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
@@ -821,9 +811,7 @@ final class BLEService: NSObject {
         
         // 1. First try sending as central via writes to connected peripherals
         // This is the preferred path when we have direct peripheral connections
-        let peripheralStatesSnapshot: [PeripheralState] = collectionsQueue.sync { Array(peripherals.values) }
-        let connectedPeripheralStates = peripheralStatesSnapshot.filter { $0.isConnected }
-        for state in connectedPeripheralStates {
+        for state in peripherals.values where state.isConnected {
                 if let characteristic = state.characteristic {
                 state.peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
                 sentToPeripherals += 1
@@ -838,11 +826,9 @@ final class BLEService: NSObject {
                              packet.type == MessageType.message.rawValue ||
                              packet.type == MessageType.leave.rawValue ||
                              packet.type == MessageType.noiseHandshake.rawValue
-        // Snapshot centrals and mapping under collectionsQueue to avoid concurrent mutation
-        let centralsSnapshot: [CBCentral] = collectionsQueue.sync { Array(subscribedCentrals) }
-        if isBroadcastType, let characteristic = characteristic, !centralsSnapshot.isEmpty {
+        if isBroadcastType, let characteristic = characteristic, !subscribedCentrals.isEmpty {
             // If value exceeds minimum allowed by connected centrals, handle per constraints
-            let minAllowed = centralsSnapshot.map { $0.maximumUpdateValueLength }.min() ?? 20
+            let minAllowed = subscribedCentrals.map { $0.maximumUpdateValueLength }.min() ?? 20
             // Minimum BitChat frame = 13 (header) + 8 (senderID) = 21 bytes
             if minAllowed < 21 {
                 // Cannot deliver any BitChat frame via notifications on this link; skip notify
@@ -854,7 +840,7 @@ final class BLEService: NSObject {
             }
             let success = peripheralManager?.updateValue(data, for: characteristic, onSubscribedCentrals: nil) ?? false
             if success {
-                sentToCentrals = centralsSnapshot.count
+                sentToCentrals = subscribedCentrals.count
                 if packet.type == MessageType.message.rawValue {
                     // Broadcast message sent
                 } else if packet.type == MessageType.noiseHandshake.rawValue {
@@ -891,8 +877,8 @@ final class BLEService: NSObject {
         guard peripheral.state == .connected else { return }
         
         let peripheralUUID = peripheral.identifier.uuidString
-        let characteristic: CBCharacteristic? = collectionsQueue.sync { peripherals[peripheralUUID]?.characteristic }
-        guard let characteristic = characteristic else { return }
+        guard let state = peripherals[peripheralUUID],
+              let characteristic = state.characteristic else { return }
         
         // Fire-and-forget principle: always use .withoutResponse for speed
         // CoreBluetooth will handle fragmentation at L2CAP layer
@@ -1069,14 +1055,12 @@ final class BLEService: NSObject {
             return
         }
         
-        // Verify that the sender's derived ID from the announced public key matches the packet senderID
+        // Verify that the sender's derived ID from the announced noise public key matches the packet senderID
         // This helps detect relayed or spoofed announces. Only warn in release; assert in debug.
-        let derivedFromKey = PeerIDUtils.derivePeerID(fromPublicKey: announcement.publicKey)
+        let derivedFromKey = PeerIDUtils.derivePeerID(fromPublicKey: announcement.noisePublicKey)
         if derivedFromKey != peerID {
             SecureLogger.log("⚠️ Announce sender mismatch: derived \(derivedFromKey.prefix(8))… vs packet \(peerID.prefix(8))…", category: SecureLogger.security, level: .warning)
-            #if DEBUG
-            assertionFailure("Announce senderID does not match key-derived ID")
-            #endif
+
         }
         
         // Don't add ourselves as a peer
@@ -1107,36 +1091,20 @@ final class BLEService: NSObject {
             isNewPeer = (existingPeer == nil)
             isReconnectedPeer = wasDisconnected
             
-            // Determine announce signature verification (required)
+            // Verify packet signature using the announced signing public key
             var verified = false
-            var verifiedEdKey: Data? = nil
-            let edKey = announcement.ed25519PublicKey
-            let sig = announcement.signature
-            let ts = announcement.timestampMs
-            // Enforce a simple freshness window (±5 minutes)
-            let nowMs = UInt64(Date().timeIntervalSince1970 * 1000)
-            let diff = (nowMs > ts) ? nowMs - ts : ts - nowMs
-            let withinWindow = diff <= 5 * 60 * 1000
-            if withinWindow {
-                if noiseService.verifyAnnounceSignature(
-                    signature: sig,
-                    peerID: packet.senderID,
-                    noiseKey: announcement.publicKey,
-                    ed25519Key: edKey,
-                    nickname: announcement.nickname,
-                    timestampMs: ts,
-                    publicKey: edKey
-                ) {
-                    verified = true
-                    verifiedEdKey = edKey
+            if packet.signature != nil {
+                // Verify that the packet was signed by the signing private key corresponding to the announced signing public key
+                verified = noiseService.verifyPacketSignature(packet, publicKey: announcement.signingPublicKey)
+                if !verified {
+                    SecureLogger.log("⚠️ Signature verification for announce failed \(peerID.prefix(8))", category: SecureLogger.security, level: .warning)
                 }
             }
 
-            // If existing peer has a different Ed25519 key, do not consider this verified
-            if let existing = existingPeer, let existingKey = existing.ed25519PublicKey, let newKey = verifiedEdKey, existingKey != newKey {
+            // If existing peer has a different noise public key, do not consider this verified
+            if let existing = existingPeer, let existingKey = existing.noisePublicKey, existingKey != announcement.noisePublicKey {
                 SecureLogger.log("⚠️ Announce key mismatch for \(peerID.prefix(8))… — keeping unverified", category: SecureLogger.security, level: .warning)
                 verified = false
-                verifiedEdKey = existingKey
             }
 
             // Require verified announce; ignore otherwise (no backward compatibility)
@@ -1152,8 +1120,8 @@ final class BLEService: NSObject {
                     id: existing.id,
                     nickname: announcement.nickname,
                     isConnected: true,
-                    noisePublicKey: announcement.publicKey,
-                    ed25519PublicKey: verifiedEdKey,
+                    noisePublicKey: announcement.noisePublicKey,
+                    signingPublicKey: announcement.signingPublicKey,
                     isVerifiedNickname: true,
                     lastSeen: Date()
                 )
@@ -1163,8 +1131,8 @@ final class BLEService: NSObject {
                     id: peerID,
                     nickname: announcement.nickname,
                     isConnected: true,
-                    noisePublicKey: announcement.publicKey,
-                    ed25519PublicKey: verifiedEdKey,
+                    noisePublicKey: announcement.noisePublicKey,
+                    signingPublicKey: announcement.signingPublicKey,
                     isVerifiedNickname: true,
                     lastSeen: Date()
                 )
@@ -1379,36 +1347,14 @@ final class BLEService: NSObject {
         
         // Reduced logging - only log errors, not every announce
         
-        // Prepare signed announce TLVs
-        let noisePub = noiseService.getStaticPublicKeyData()
-        let edPub = noiseService.getSigningPublicKeyData()
-        let tsMs = UInt64(Date().timeIntervalSince1970 * 1000)
-        // Build 8-byte senderID from hex myPeerID
-        var senderIDData = Data()
-        var tmp = myPeerID
-        while tmp.count >= 2 && senderIDData.count < 8 {
-            let hb = String(tmp.prefix(2))
-            if let b = UInt8(hb, radix: 16) { senderIDData.append(b) }
-            tmp = String(tmp.dropFirst(2))
-        }
-        while senderIDData.count < 8 { senderIDData.append(0) }
-        guard let signature = noiseService.buildAnnounceSignature(
-            peerID: senderIDData,
-            noiseKey: noisePub,
-            ed25519Key: edPub,
-            nickname: myNickname,
-            timestampMs: tsMs
-        ) else {
-            SecureLogger.log("❌ Failed to sign announce", category: SecureLogger.security, level: .error)
-            return
-        }
-
+        // Create announce payload with both noise and signing public keys
+        let noisePub = noiseService.getStaticPublicKeyData()  // For noise handshakes and peer identification
+        let signingPub = noiseService.getSigningPublicKeyData()  // For signature verification
+        
         let announcement = AnnouncementPacket(
             nickname: myNickname,
-            publicKey: noisePub,
-            ed25519PublicKey: edPub,
-            signature: signature,
-            timestampMs: tsMs
+            noisePublicKey: noisePub,
+            signingPublicKey: signingPub
         )
         
         guard let payload = announcement.encode() else {
@@ -1416,19 +1362,29 @@ final class BLEService: NSObject {
             return
         }
         
+        // Create packet with signature using the noise private key
         let packet = BitchatPacket(
             type: MessageType.announce.rawValue,
-            ttl: messageTTL,
-            senderID: myPeerID,
-            payload: payload
+            senderID: Data(hexString: myPeerID) ?? Data(),
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: payload,
+            signature: nil, // Will be set by signPacket below
+            ttl: messageTTL
         )
+        
+        // Sign the packet using the noise private key
+        guard let signedPacket = noiseService.signPacket(packet) else {
+            SecureLogger.log("❌ Failed to sign announce packet", category: SecureLogger.security, level: .error)
+            return
+        }
         
         // Call directly if on messageQueue, otherwise dispatch
         if DispatchQueue.getSpecific(key: messageQueueKey) != nil {
-            broadcastPacket(packet)
+            broadcastPacket(signedPacket)
         } else {
             messageQueue.async { [weak self] in
-                self?.broadcastPacket(packet)
+                self?.broadcastPacket(signedPacket)
             }
         }
     }
@@ -2026,9 +1982,7 @@ extension BLEService: CBPeripheralManagerDelegate {
     
     func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didSubscribeTo characteristic: CBCharacteristic) {
         SecureLogger.log("📥 Central subscribed: \(central.identifier.uuidString)", category: SecureLogger.session, level: .debug)
-        collectionsQueue.async(flags: .barrier) { [weak self] in
-            self?.subscribedCentrals.append(central)
-        }
+        subscribedCentrals.append(central)
         // Send announce to the newly subscribed central after a delay to avoid overwhelming
         // Sending announce to new subscriber
         sendAnnounce(forceSend: true)
@@ -2036,9 +1990,7 @@ extension BLEService: CBPeripheralManagerDelegate {
     
     func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didUnsubscribeFrom characteristic: CBCharacteristic) {
         SecureLogger.log("📤 Central unsubscribed: \(central.identifier.uuidString)", category: SecureLogger.session, level: .debug)
-        collectionsQueue.async(flags: .barrier) { [weak self] in
-            self?.subscribedCentrals.removeAll { $0.identifier == central.identifier }
-        }
+        subscribedCentrals.removeAll { $0.identifier == central.identifier }
         
         // Ensure we're still advertising for other devices to find us
         if peripheral.isAdvertising == false {
