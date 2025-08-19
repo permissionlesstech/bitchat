@@ -728,7 +728,7 @@ struct ContentView: View {
                                         if !parts.suffix.isEmpty {
                                             Text(parts.suffix)
                                                 .font(.system(size: 14, design: .monospaced))
-                                                .foregroundColor(Color.secondary)
+                                                .foregroundColor(Color.secondary.opacity(0.6))
                                         }
                                     }
                                     

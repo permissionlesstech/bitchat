@@ -1794,7 +1794,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             // Optional suffix (light gray)
             if !suffix.isEmpty {
                 var suffixStyle = senderStyle
-                suffixStyle.foregroundColor = Color.secondary
+                suffixStyle.foregroundColor = Color.secondary.opacity(0.6)
                 result.append(AttributedString(suffix).mergingAttributes(suffixStyle))
             }
             // Suffix "> "
