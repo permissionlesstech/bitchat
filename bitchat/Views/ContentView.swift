@@ -1191,17 +1191,17 @@ struct ContentView: View {
                             
                             Text("\(privatePeerNick)")
                                 .font(.system(size: 16, weight: .medium, design: .monospaced))
-                                .foregroundColor(textColor)
-                            
-                            // Dynamic encryption status icon
-                            let encryptionStatus = viewModel.getEncryptionStatus(for: headerPeerID)
-                            if let icon = encryptionStatus.icon {
-                                Image(systemName: icon)
-                                    .font(.system(size: 14))
-                                    .foregroundColor(encryptionStatus == .noiseVerified ? textColor : 
-                                                   encryptionStatus == .noiseSecured ? textColor :
-                                                   Color.red)
-                                    .accessibilityLabel("Encryption status: \(encryptionStatus == .noiseVerified ? "verified" : encryptionStatus == .noiseSecured ? "secured" : "not encrypted")")
+                                .foregroundColor(textColor)                            // Dynamic encryption status icon (hide for geohash DMs)
+                            if !privatePeerID.hasPrefix("nostr_") {
+                                let encryptionStatus = viewModel.getEncryptionStatus(for: headerPeerID)
+                                if let icon = encryptionStatus.icon {
+                                    Image(systemName: icon)
+                                        .font(.system(size: 14))
+                                        .foregroundColor(encryptionStatus == .noiseVerified ? textColor : 
+                                                       encryptionStatus == .noiseSecured ? textColor :
+                                                       Color.red)
+                                        .accessibilityLabel("Encryption status: \(encryptionStatus == .noiseVerified ? "verified" : encryptionStatus == .noiseSecured ? "secured" : "not encrypted")")
+                                }
                             }
                         }
                         .accessibilityLabel("Private chat with \(privatePeerNick)")
@@ -1238,9 +1238,9 @@ struct ContentView: View {
                                     .foregroundColor(viewModel.isFavorite(peerID: headerPeerID) ? Color.yellow : textColor)
                             }
                             .buttonStyle(.plain)
+                            .accessibilityLabel(viewModel.isFavorite(peerID: privatePeerID) ? "Remove from favorites" : "Add to favorites")
+                            .accessibilityHint("Double tap to toggle favorite status")
                         }
-                        .accessibilityLabel(viewModel.isFavorite(peerID: privatePeerID) ? "Remove from favorites" : "Add to favorites")
-                        .accessibilityHint("Double tap to toggle favorite status")
                     }
                 }
                 .frame(height: 44)
