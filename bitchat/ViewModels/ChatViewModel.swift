@@ -897,6 +897,25 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             addSystemMessage("Cannot send message to \(recipientNickname ?? "user") - peer is not reachable via mesh or Nostr.")
         }
     }
+
+    /// Add a local system message to a private chat (no network send)
+    @MainActor
+    func addLocalPrivateSystemMessage(_ content: String, to peerID: String) {
+        let systemMessage = BitchatMessage(
+            sender: "system",
+            content: content,
+            timestamp: Date(),
+            isRelay: false,
+            originalSender: nil,
+            isPrivate: true,
+            recipientNickname: meshService.peerNickname(peerID: peerID),
+            senderPeerID: meshService.myPeerID
+        )
+        if privateChats[peerID] == nil { privateChats[peerID] = [] }
+        privateChats[peerID]?.append(systemMessage)
+        trimPrivateChatMessagesIfNeeded(for: peerID)
+        objectWillChange.send()
+    }
     
     // MARK: - Bluetooth State Management
     

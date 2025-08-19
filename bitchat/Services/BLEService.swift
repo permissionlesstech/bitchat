@@ -1199,10 +1199,6 @@ final class BLEService: NSObject {
     // Mention parsing moved to ChatViewModel
     
     private func handleMessage(_ packet: BitchatPacket, from peerID: String) {
-        // Don't process our own messages
-        if peerID == myPeerID {
-            return
-        }
         
         // Enforce: only accept public messages from verified peers we know
         guard let info = peers[peerID], info.isVerifiedNickname else {
