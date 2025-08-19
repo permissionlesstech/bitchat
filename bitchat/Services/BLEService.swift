@@ -119,6 +119,8 @@ final class BLEService: NSObject {
             let connected = peers.values.filter { $0.isConnected }
             var counts: [String: Int] = [:]
             for p in connected { counts[p.nickname, default: 0] += 1 }
+            // Include our own nickname in collision counts so remote matching ours gets suffixed
+            counts[myNickname, default: 0] += 1
             return peers.values.map { info in
                 var display = info.nickname
                 if info.isConnected, (counts[info.nickname] ?? 0) > 1 {
@@ -361,9 +363,10 @@ final class BLEService: NSObject {
         return collectionsQueue.sync {
             // Only connected peers
             let connected = peers.filter { $0.value.isConnected }
-            // Count collisions by nickname
+            // Count collisions by nickname (include our own nickname)
             var counts: [String: Int] = [:]
             for (_, info) in connected { counts[info.nickname, default: 0] += 1 }
+            counts[myNickname, default: 0] += 1
             // Build map with suffix for collisions
             var result: [String: String] = [:]
             for (id, info) in connected {
@@ -1212,7 +1215,8 @@ final class BLEService: NSObject {
         
         // Resolve display nickname; if collisions exist, append short peerID suffix
         var senderNickname = info.nickname
-        let hasCollision = peers.values.contains { $0.isConnected && $0.nickname == info.nickname && $0.id != peerID }
+        // Treat a collision if another connected peer shares the nickname OR our own nickname matches
+        let hasCollision = peers.values.contains { $0.isConnected && $0.nickname == info.nickname && $0.id != peerID } || (myNickname == info.nickname)
         if hasCollision {
             senderNickname += " #" + String(peerID.prefix(4))
         }
@@ -1463,6 +1467,7 @@ final class BLEService: NSObject {
             let connected = peers.values.filter { $0.isConnected }
             var counts: [String: Int] = [:]
             for p in connected { counts[p.nickname, default: 0] += 1 }
+            counts[myNickname, default: 0] += 1
             return peers.values.map { info in
                 var display = info.nickname
                 if info.isConnected, (counts[info.nickname] ?? 0) > 1 {
