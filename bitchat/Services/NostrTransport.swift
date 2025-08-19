@@ -213,4 +213,23 @@ final class NostrTransport: Transport {
             NostrRelayManager.shared.sendEvent(event)
         }
     }
+
+    // MARK: - Geohash DMs (per-geohash identity)
+    func sendPrivateMessageGeohash(content: String, toRecipientHex recipientHex: String, from identity: NostrIdentity, messageID: String) {
+        Task { @MainActor in
+            guard !recipientHex.isEmpty else { return }
+            // Build embedded BitChat packet without recipient peer ID
+            guard let embedded = NostrEmbeddedBitChat.encodePMForNostrNoRecipient(content: content, messageID: messageID, senderPeerID: senderPeerID) else {
+                SecureLogger.log("NostrTransport: failed to embed geohash PM packet", category: SecureLogger.session, level: .error)
+                return
+            }
+            guard let event = try? NostrProtocol.createPrivateMessage(content: embedded, recipientPubkey: recipientHex, senderIdentity: identity) else {
+                SecureLogger.log("NostrTransport: failed to build Nostr event for geohash PM", category: SecureLogger.session, level: .error)
+                return
+            }
+            SecureLogger.log("NostrTransport: sending geohash PM giftWrap id=\(event.id.prefix(16))…",
+                            category: SecureLogger.session, level: .debug)
+            NostrRelayManager.shared.sendEvent(event)
+        }
+    }
 }

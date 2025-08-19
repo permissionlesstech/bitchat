@@ -210,6 +210,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     #if os(iOS)
     @Published private var activeChannel: ChannelID = .mesh
     private var geoSubscriptionID: String? = nil
+    private var geoDmSubscriptionID: String? = nil
     private var currentGeohash: String? = nil
     private var geoNicknames: [String: String] = [:] // pubkeyHex(lowercased) -> nickname
     #endif
@@ -586,9 +587,59 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 self.sendHapticFeedback(for: msg)
             }
         }
+        // Resubscribe geohash DMs for this identity
+        if let dmSub = geoDmSubscriptionID { NostrRelayManager.shared.unsubscribe(id: dmSub); geoDmSubscriptionID = nil }
+        do {
+            let id = try NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash)
+            let dmSub = "geo-dm-\(ch.geohash)"
+            geoDmSubscriptionID = dmSub
+            let dmFilter = NostrFilter.giftWrapsFor(pubkey: id.publicKeyHex, since: Date().addingTimeInterval(-86400))
+            NostrRelayManager.shared.subscribe(filter: dmFilter, id: dmSub) { [weak self] giftWrap in
+                guard let self = self else { return }
+                if self.processedNostrEvents.contains(giftWrap.id) { return }
+                self.recordProcessedEvent(giftWrap.id)
+                guard let (content, senderPubkey, rumorTs) = try? NostrProtocol.decryptPrivateMessage(giftWrap: giftWrap, recipientIdentity: id) else { return }
+                guard content.hasPrefix("bitchat1:") else { return }
+                guard let packetData = Self.base64URLDecode(String(content.dropFirst("bitchat1:".count))),
+                      let packet = BitchatPacket.from(packetData) else { return }
+                guard packet.type == MessageType.noiseEncrypted.rawValue else { return }
+                guard let noisePayload = NoisePayload.decode(packet.payload) else { return }
+                let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(rumorTs))
+                let convKey = "nostr_" + String(senderPubkey.prefix(16))
+                self.nostrKeyMapping[convKey] = senderPubkey
+                if case .privateMessage = noisePayload.type, let pm = PrivateMessagePacket.decode(from: noisePayload.data) {
+                    let messageId = pm.messageID
+                    if self.privateChats[convKey]?.contains(where: { $0.id == messageId }) == true { return }
+                    for (_, arr) in self.privateChats { if arr.contains(where: { $0.id == messageId }) { return } }
+                    let senderName = self.displayNameForNostrPubkey(senderPubkey)
+                    let isViewing = (self.selectedPrivateChatPeer == convKey)
+                    let wasReadBefore = self.sentReadReceipts.contains(messageId)
+                    let isRecentMessage = Date().timeIntervalSince(messageTimestamp) < 30
+                    let shouldMarkUnread = !wasReadBefore && !isViewing && isRecentMessage
+                    let msg = BitchatMessage(
+                        id: messageId,
+                        sender: senderName,
+                        content: pm.content,
+                        timestamp: messageTimestamp,
+                        isRelay: false,
+                        originalSender: nil,
+                        isPrivate: true,
+                        recipientNickname: self.nickname,
+                        senderPeerID: convKey,
+                        mentions: nil,
+                        deliveryStatus: .delivered(to: self.nickname, at: Date())
+                    )
+                    if self.privateChats[convKey] == nil { self.privateChats[convKey] = [] }
+                    self.privateChats[convKey]?.append(msg)
+                    self.trimPrivateChatMessagesIfNeeded(for: convKey)
+                    if shouldMarkUnread { self.unreadPrivateMessages.insert(convKey) }
+                    self.objectWillChange.send()
+                }
+            }
+        } catch { }
     }
     #endif
-    
+
     // MARK: - Nickname Management
     
     private func loadNickname() {
@@ -1028,6 +1079,10 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             NostrRelayManager.shared.unsubscribe(id: sub)
             geoSubscriptionID = nil
         }
+        if let dmSub = geoDmSubscriptionID {
+            NostrRelayManager.shared.unsubscribe(id: dmSub)
+            geoDmSubscriptionID = nil
+        }
         currentGeohash = nil
         // Reset nickname cache for geochat participants
         geoNicknames.removeAll()
@@ -1057,6 +1112,11 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 let nick = nickTag[1]
                 self.geoNicknames[event.pubkey.lowercased()] = nick
             }
+            // Store mapping for geohash DM initiation
+            let key16 = "nostr_" + String(event.pubkey.prefix(16))
+            self.nostrKeyMapping[key16] = event.pubkey
+            let key8 = "nostr:" + String(event.pubkey.prefix(8))
+            self.nostrKeyMapping[key8] = event.pubkey
             // Update participants last-seen for this pubkey
             self.recordGeoParticipant(pubkeyHex: event.pubkey)
             
@@ -1081,6 +1141,65 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 self.checkForMentions(msg)
                 self.sendHapticFeedback(for: msg)
             }
+        }
+
+        // Subscribe to Nostr gift wraps (DMs) for this geohash identity
+        do {
+            let id = try NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash)
+            let dmSub = "geo-dm-\(ch.geohash)"
+            geoDmSubscriptionID = dmSub
+            let dmFilter = NostrFilter.giftWrapsFor(pubkey: id.publicKeyHex, since: Date().addingTimeInterval(-86400))
+            NostrRelayManager.shared.subscribe(filter: dmFilter, id: dmSub) { [weak self] giftWrap in
+                guard let self = self else { return }
+                // Dedup basic
+                if self.processedNostrEvents.contains(giftWrap.id) { return }
+                self.recordProcessedEvent(giftWrap.id)
+                // Decrypt with per-geohash identity
+                guard let (content, senderPubkey, rumorTs) = try? NostrProtocol.decryptPrivateMessage(giftWrap: giftWrap, recipientIdentity: id) else { return }
+                guard content.hasPrefix("bitchat1:") else { return }
+                guard let packetData = Self.base64URLDecode(String(content.dropFirst("bitchat1:".count))),
+                      let packet = BitchatPacket.from(packetData) else { return }
+                guard packet.type == MessageType.noiseEncrypted.rawValue else { return }
+                guard let noisePayload = NoisePayload.decode(packet.payload) else { return }
+                let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(rumorTs))
+                let convKey = "nostr_" + String(senderPubkey.prefix(16))
+                self.nostrKeyMapping[convKey] = senderPubkey
+                switch noisePayload.type {
+                case .privateMessage:
+                    guard let pm = PrivateMessagePacket.decode(from: noisePayload.data) else { return }
+                    let messageId = pm.messageID
+                    // Duplicate check
+                    if self.privateChats[convKey]?.contains(where: { $0.id == messageId }) == true { return }
+                    for (_, arr) in self.privateChats { if arr.contains(where: { $0.id == messageId }) { return } }
+                    let senderName = self.displayNameForNostrPubkey(senderPubkey)
+                    let isViewing = (self.selectedPrivateChatPeer == convKey)
+                    let wasReadBefore = self.sentReadReceipts.contains(messageId)
+                    let isRecentMessage = Date().timeIntervalSince(messageTimestamp) < 30
+                    let shouldMarkUnread = !wasReadBefore && !isViewing && isRecentMessage
+                    let msg = BitchatMessage(
+                        id: messageId,
+                        sender: senderName,
+                        content: pm.content,
+                        timestamp: messageTimestamp,
+                        isRelay: false,
+                        originalSender: nil,
+                        isPrivate: true,
+                        recipientNickname: self.nickname,
+                        senderPeerID: convKey,
+                        mentions: nil,
+                        deliveryStatus: .delivered(to: self.nickname, at: Date())
+                    )
+                    if self.privateChats[convKey] == nil { self.privateChats[convKey] = [] }
+                    self.privateChats[convKey]?.append(msg)
+                    self.trimPrivateChatMessagesIfNeeded(for: convKey)
+                    if shouldMarkUnread { self.unreadPrivateMessages.insert(convKey) }
+                    self.objectWillChange.send()
+                default:
+                    break
+                }
+            }
+        } catch {
+            // ignore
         }
     }
 
@@ -1245,6 +1364,58 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     func sendPrivateMessage(_ content: String, to peerID: String) {
         guard !content.isEmpty else { return }
         
+        // Geohash DM routing: conversation keys start with "nostr_"
+        #if os(iOS)
+        if peerID.hasPrefix("nostr_") {
+            guard case .location(let ch) = activeChannel else {
+                addSystemMessage("cannot send: not in a location channel")
+                return
+            }
+            let messageID = UUID().uuidString
+            // Local echo in the DM thread
+            let message = BitchatMessage(
+                id: messageID,
+                sender: nickname,
+                content: content,
+                timestamp: Date(),
+                isRelay: false,
+                originalSender: nil,
+                isPrivate: true,
+                recipientNickname: nickname,
+                senderPeerID: meshService.myPeerID,
+                mentions: nil,
+                deliveryStatus: .sending
+            )
+            if privateChats[peerID] == nil { privateChats[peerID] = [] }
+            privateChats[peerID]?.append(message)
+            trimPrivateChatMessagesIfNeeded(for: peerID)
+            objectWillChange.send()
+
+            // Resolve recipient hex from mapping
+            guard let recipientHex = nostrKeyMapping[peerID] else {
+                if let msgIdx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
+                    privateChats[peerID]?[msgIdx].deliveryStatus = .failed(reason: "unknown recipient")
+                }
+                return
+            }
+            // Send via Nostr using per-geohash identity
+            do {
+                let id = try NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash)
+                let nostrTransport = NostrTransport()
+                nostrTransport.senderPeerID = meshService.myPeerID
+                nostrTransport.sendPrivateMessageGeohash(content: content, toRecipientHex: recipientHex, from: id, messageID: messageID)
+                if let msgIdx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
+                    privateChats[peerID]?[msgIdx].deliveryStatus = .sent
+                }
+            } catch {
+                if let idx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
+                    privateChats[peerID]?[idx].deliveryStatus = .failed(reason: "send error")
+                }
+            }
+            return
+        }
+        #endif
+
         // Check if blocked
         if unifiedPeerService.isBlocked(peerID) {
             let nickname = meshService.peerNickname(peerID: peerID) ?? "user"
@@ -1310,6 +1481,20 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         }
     }
 
+    #if os(iOS)
+    // MARK: - Geohash DMs initiation
+    @MainActor
+    func startGeohashDM(withPubkeyHex hex: String) {
+        let convKey = "nostr_" + String(hex.prefix(16))
+        nostrKeyMapping[convKey] = hex
+        selectedPrivateChatPeer = convKey
+    }
+
+    @MainActor
+    func fullNostrHex(forSenderPeerID senderID: String) -> String? {
+        return nostrKeyMapping[senderID]
+    }
+    #endif
     /// Add a local system message to a private chat (no network send)
     @MainActor
     func addLocalPrivateSystemMessage(_ content: String, to peerID: String) {

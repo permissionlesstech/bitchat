@@ -206,7 +206,17 @@ struct ContentView: View {
         ) {
             Button("private message") {
                 if let peerID = selectedMessageSenderID {
+                    #if os(iOS)
+                    if peerID.hasPrefix("nostr:") {
+                        if let full = viewModel.fullNostrHex(forSenderPeerID: peerID) {
+                            viewModel.startGeohashDM(withPubkeyHex: full)
+                        }
+                    } else {
+                        viewModel.startPrivateChat(with: peerID)
+                    }
+                    #else
                     viewModel.startPrivateChat(with: peerID)
+                    #endif
                     withAnimation(.easeInOut(duration: 0.2)) {
                         showSidebar = false
                         sidebarDragOffset = 0
