@@ -1130,6 +1130,17 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     }
     #endif
 
+    // MARK: - Public helpers (iOS)
+    #if os(iOS)
+    /// Returns the current participant count for a specific geohash, using the 5-minute activity window.
+    @MainActor
+    func geohashParticipantCount(for geohash: String) -> Int {
+        let cutoff = Date().addingTimeInterval(-5 * 60)
+        let map = geoParticipants[geohash] ?? [:]
+        return map.values.filter { $0 >= cutoff }.count
+    }
+    #endif
+
     private func displayNameForNostrPubkey(_ pubkeyHex: String) -> String {
         let suffix = String(pubkeyHex.suffix(4))
         // If this is our per-geohash identity, use our nickname

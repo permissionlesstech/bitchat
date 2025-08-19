@@ -5,6 +5,7 @@ import UIKit
 struct LocationChannelsSheet: View {
     @Binding var isPresented: Bool
     @ObservedObject private var manager = LocationChannelManager.shared
+    @EnvironmentObject var viewModel: ChatViewModel
     @State private var customGeohash: String = ""
     @State private var customError: String? = nil
 
@@ -80,7 +81,7 @@ struct LocationChannelsSheet: View {
     private var channelList: some View {
         List {
             // Mesh option first
-            channelRow(title: "#mesh", subtitle: "bluetooth", isSelected: isMeshSelected) {
+            channelRow(title: meshTitleWithCount(), subtitle: "bluetooth", isSelected: isMeshSelected) {
                 manager.select(ChannelID.mesh)
                 isPresented = false
             }
@@ -88,7 +89,7 @@ struct LocationChannelsSheet: View {
             // Nearby options
             if !manager.availableChannels.isEmpty {
                 ForEach(manager.availableChannels) { channel in
-                    channelRow(title: channel.level.displayName.lowercased(), subtitle: "#\(channel.geohash)", isSelected: isSelected(channel)) {
+                    channelRow(title: geohashTitleWithCount(for: channel), subtitle: "#\(channel.geohash)", isSelected: isSelected(channel)) {
                         manager.select(ChannelID.location(channel))
                         isPresented = false
                     }
@@ -206,6 +207,23 @@ struct LocationChannelsSheet: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    // MARK: - Helpers for counts
+    private func meshTitleWithCount() -> String {
+        // Count currently connected mesh peers (excluding self)
+        let myID = viewModel.meshService.myPeerID
+        let meshCount = viewModel.allPeers.reduce(0) { acc, peer in
+            if peer.id != myID && peer.isConnected { return acc + 1 }
+            return acc
+        }
+        return "#mesh (\(meshCount))"
+    }
+
+    private func geohashTitleWithCount(for channel: GeohashChannel) -> String {
+        // Use ViewModel's 5-minute activity counts; may be 0 for non-selected channels
+        let count = viewModel.geohashParticipantCount(for: channel.geohash)
+        return "\(channel.level.displayName.lowercased()) (\(count))"
     }
 
     private func validateGeohash(_ s: String) -> Bool {
