@@ -86,6 +86,9 @@ struct LocationChannelsSheet: View {
                         manager.select(ChannelID.location(channel))
                         isPresented = false
                     }
+                    if channel.level == .country {
+                        Divider()
+                    }
                 }
             } else {
                 HStack {
@@ -97,7 +100,7 @@ struct LocationChannelsSheet: View {
 
             // Custom geohash teleport
             VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 8) {
+                HStack(spacing: 2) {
                     Text("#")
                         .font(.system(size: 14, design: .monospaced))
                         .foregroundColor(.secondary)
@@ -106,6 +109,19 @@ struct LocationChannelsSheet: View {
                         .autocorrectionDisabled(true)
                         .font(.system(size: 14, design: .monospaced))
                         .keyboardType(.asciiCapable)
+                        .onChange(of: customGeohash) { newValue in
+                            // Allow only geohash base32 characters, strip '#', limit length
+                            let allowed = Set("0123456789bcdefghjkmnpqrstuvwxyz")
+                            let filtered = newValue
+                                .lowercased()
+                                .replacingOccurrences(of: "#", with: "")
+                                .filter { allowed.contains($0) }
+                            if filtered.count > 12 {
+                                customGeohash = String(filtered.prefix(12))
+                            } else if filtered != newValue {
+                                customGeohash = filtered
+                            }
+                        }
                     let normalized = customGeohash.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().replacingOccurrences(of: "#", with: "")
                     let isValid = validateGeohash(normalized)
                     Button("teleport") {
