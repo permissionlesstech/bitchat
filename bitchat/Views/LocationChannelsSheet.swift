@@ -97,25 +97,33 @@ struct LocationChannelsSheet: View {
 
             // Custom geohash teleport
             VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    TextField("#geohash", text: $customGeohash)
+                HStack(spacing: 8) {
+                    Text("#")
+                        .font(.system(size: 14, design: .monospaced))
+                        .foregroundColor(.secondary)
+                    TextField("geohash", text: $customGeohash)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled(true)
                         .font(.system(size: 14, design: .monospaced))
                         .keyboardType(.asciiCapable)
+                    let normalized = customGeohash.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().replacingOccurrences(of: "#", with: "")
+                    let isValid = validateGeohash(normalized)
                     Button("teleport") {
-                        let gh = customGeohash.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().replacingOccurrences(of: "#", with: "")
-                        if validateGeohash(gh) {
-                            let level = levelForLength(gh.count)
-                            let ch = GeohashChannel(level: level, geohash: gh)
-                            manager.select(ChannelID.location(ch))
-                            isPresented = false
-                        } else {
-                            customError = "invalid geohash"
-                        }
+                        let gh = normalized
+                        guard isValid else { customError = "invalid geohash"; return }
+                        let level = levelForLength(gh.count)
+                        let ch = GeohashChannel(level: level, geohash: gh)
+                        manager.select(ChannelID.location(ch))
+                        isPresented = false
                     }
                     .buttonStyle(.plain)
                     .font(.system(size: 14, design: .monospaced))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.secondary.opacity(0.12))
+                    .cornerRadius(6)
+                    .opacity(isValid ? 1.0 : 0.4)
+                    .disabled(!isValid)
                 }
                 if let err = customError {
                     Text(err)
@@ -123,6 +131,7 @@ struct LocationChannelsSheet: View {
                         .foregroundColor(.red)
                 }
             }
+            .listRowSeparator(.hidden)
 
             // Footer action inside the list
             if manager.permissionState == LocationChannelManager.PermissionState.authorized {
@@ -131,14 +140,16 @@ struct LocationChannelsSheet: View {
                         UIApplication.shared.open(url)
                     }
                 }) {
-                    HStack {
-                        Text("remove location permission")
-                            .font(.system(size: 14, design: .monospaced))
-                            .foregroundColor(Color(red: 0.75, green: 0.1, blue: 0.1))
-                        Spacer()
-                    }
+                    Text("remove location permission")
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundColor(Color(red: 0.75, green: 0.1, blue: 0.1))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                        .background(Color.red.opacity(0.08))
+                        .cornerRadius(6)
                 }
                 .buttonStyle(.plain)
+                .listRowSeparator(.hidden)
             }
         }
         .listStyle(.plain)
