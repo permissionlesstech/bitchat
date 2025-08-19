@@ -99,6 +99,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     private var hasNotifiedNetworkAvailable = false
     private var recentlySeenPeers: Set<String> = []
     private var lastNetworkNotificationTime = Date.distantPast
+    private var networkResetTimer: Timer? = nil
+    private let networkResetGraceSeconds: TimeInterval = 60 // avoid refiring on brief drops/reconnects
     @Published var nickname: String = "" {
         didSet {
             // Trim whitespace whenever nickname is set
@@ -2584,6 +2586,9 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             
             // Smart notification logic for "bitchatters nearby"
             if !peers.isEmpty {
+                // Cancel any pending reset if peers are back
+                self.networkResetTimer?.invalidate()
+                self.networkResetTimer = nil
                 // Only count mesh peers (actually connected via Bluetooth)
                 let meshPeers = peers.filter { peerID in
                     self.meshService.isPeerConnected(peerID)
@@ -2608,9 +2613,16 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                                    category: SecureLogger.session, level: .info)
                 }
             } else {
-                // No peers - reset tracking
-                self.hasNotifiedNetworkAvailable = false
-                self.recentlySeenPeers.removeAll()
+                // No peers - schedule a graceful reset to avoid refiring on brief drops
+                if self.networkResetTimer == nil {
+                    self.networkResetTimer = Timer.scheduledTimer(withTimeInterval: self.networkResetGraceSeconds, repeats: false) { [weak self] _ in
+                        guard let self = self else { return }
+                        self.hasNotifiedNetworkAvailable = false
+                        self.recentlySeenPeers.removeAll()
+                        self.networkResetTimer = nil
+                        SecureLogger.log("⏳ Mesh empty for \(Int(self.networkResetGraceSeconds))s — reset network notification state", category: SecureLogger.session, level: .debug)
+                    }
+                }
             }
             
             // Register ephemeral sessions for all connected peers
