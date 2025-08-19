@@ -49,7 +49,6 @@ final class BLEService: NSObject {
         var nickname: String
         var isConnected: Bool
         var noisePublicKey: Data?
-        var ed25519PublicKey: Data? // For signed announces
         var isVerifiedNickname: Bool
         var lastSeen: Date
     }
@@ -1093,36 +1092,17 @@ final class BLEService: NSObject {
             isNewPeer = (existingPeer == nil)
             isReconnectedPeer = wasDisconnected
             
-            // Determine announce signature verification (required)
+            // Verify packet signature using the announced noise public key
             var verified = false
-            var verifiedEdKey: Data? = nil
-            let edKey = announcement.ed25519PublicKey
-            let sig = announcement.signature
-            let ts = announcement.timestampMs
-            // Enforce a simple freshness window (±5 minutes)
-            let nowMs = UInt64(Date().timeIntervalSince1970 * 1000)
-            let diff = (nowMs > ts) ? nowMs - ts : ts - nowMs
-            let withinWindow = diff <= 5 * 60 * 1000
-            if withinWindow {
-                if noiseService.verifyAnnounceSignature(
-                    signature: sig,
-                    peerID: packet.senderID,
-                    noiseKey: announcement.publicKey,
-                    ed25519Key: edKey,
-                    nickname: announcement.nickname,
-                    timestampMs: ts,
-                    publicKey: edKey
-                ) {
-                    verified = true
-                    verifiedEdKey = edKey
-                }
+            if packet.signature != nil {
+                // Verify that the packet was signed by the noise private key corresponding to the announced public key
+                verified = noiseService.verifyPacketSignature(packet, publicKey: announcement.publicKey)
             }
 
-            // If existing peer has a different Ed25519 key, do not consider this verified
-            if let existing = existingPeer, let existingKey = existing.ed25519PublicKey, let newKey = verifiedEdKey, existingKey != newKey {
+            // If existing peer has a different noise public key, do not consider this verified
+            if let existing = existingPeer, let existingKey = existing.noisePublicKey, existingKey != announcement.publicKey {
                 SecureLogger.log("⚠️ Announce key mismatch for \(peerID.prefix(8))… — keeping unverified", category: SecureLogger.security, level: .warning)
                 verified = false
-                verifiedEdKey = existingKey
             }
 
             // Require verified announce; ignore otherwise (no backward compatibility)
@@ -1139,7 +1119,6 @@ final class BLEService: NSObject {
                     nickname: announcement.nickname,
                     isConnected: true,
                     noisePublicKey: announcement.publicKey,
-                    ed25519PublicKey: verifiedEdKey,
                     isVerifiedNickname: true,
                     lastSeen: Date()
                 )
@@ -1150,7 +1129,6 @@ final class BLEService: NSObject {
                     nickname: announcement.nickname,
                     isConnected: true,
                     noisePublicKey: announcement.publicKey,
-                    ed25519PublicKey: verifiedEdKey,
                     isVerifiedNickname: true,
                     lastSeen: Date()
                 )
@@ -1365,36 +1343,12 @@ final class BLEService: NSObject {
         
         // Reduced logging - only log errors, not every announce
         
-        // Prepare signed announce TLVs
+        // Create simplified announce payload with only noise public key
         let noisePub = noiseService.getStaticPublicKeyData()
-        let edPub = noiseService.getSigningPublicKeyData()
-        let tsMs = UInt64(Date().timeIntervalSince1970 * 1000)
-        // Build 8-byte senderID from hex myPeerID
-        var senderIDData = Data()
-        var tmp = myPeerID
-        while tmp.count >= 2 && senderIDData.count < 8 {
-            let hb = String(tmp.prefix(2))
-            if let b = UInt8(hb, radix: 16) { senderIDData.append(b) }
-            tmp = String(tmp.dropFirst(2))
-        }
-        while senderIDData.count < 8 { senderIDData.append(0) }
-        guard let signature = noiseService.buildAnnounceSignature(
-            peerID: senderIDData,
-            noiseKey: noisePub,
-            ed25519Key: edPub,
-            nickname: myNickname,
-            timestampMs: tsMs
-        ) else {
-            SecureLogger.log("❌ Failed to sign announce", category: SecureLogger.security, level: .error)
-            return
-        }
-
+        
         let announcement = AnnouncementPacket(
             nickname: myNickname,
-            publicKey: noisePub,
-            ed25519PublicKey: edPub,
-            signature: signature,
-            timestampMs: tsMs
+            publicKey: noisePub
         )
         
         guard let payload = announcement.encode() else {
@@ -1402,19 +1356,29 @@ final class BLEService: NSObject {
             return
         }
         
+        // Create packet with signature using the noise private key
         let packet = BitchatPacket(
             type: MessageType.announce.rawValue,
-            ttl: messageTTL,
-            senderID: myPeerID,
-            payload: payload
+            senderID: Data(hexString: myPeerID) ?? Data(),
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: payload,
+            signature: nil, // Will be set by signPacket below
+            ttl: messageTTL
         )
+        
+        // Sign the packet using the noise private key
+        guard let signedPacket = noiseService.signPacket(packet) else {
+            SecureLogger.log("❌ Failed to sign announce packet", category: SecureLogger.security, level: .error)
+            return
+        }
         
         // Call directly if on messageQueue, otherwise dispatch
         if DispatchQueue.getSpecific(key: messageQueueKey) != nil {
-            broadcastPacket(packet)
+            broadcastPacket(signedPacket)
         } else {
             messageQueue.async { [weak self] in
-                self?.broadcastPacket(packet)
+                self?.broadcastPacket(signedPacket)
             }
         }
     }

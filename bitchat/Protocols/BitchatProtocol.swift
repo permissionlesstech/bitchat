@@ -192,7 +192,7 @@ struct BitchatPacket: Codable {
     let recipientID: Data?
     let timestamp: UInt64
     let payload: Data
-    let signature: Data?
+    var signature: Data?
     var ttl: UInt8
     
     init(type: UInt8, senderID: Data, recipientID: Data?, timestamp: UInt64, payload: Data, signature: Data?, ttl: UInt8) {
@@ -234,6 +234,21 @@ struct BitchatPacket: Codable {
     
     func toBinaryData() -> Data? {
         BinaryProtocol.encode(self)
+    }
+    
+    /// Create binary representation for signing (without signature field)
+    func toBinaryDataForSigning() -> Data? {
+        // Create a copy without signature for signing
+        let unsignedPacket = BitchatPacket(
+            type: type,
+            senderID: senderID,
+            recipientID: recipientID,
+            timestamp: timestamp,
+            payload: payload,
+            signature: nil, // Remove signature for signing
+            ttl: ttl
+        )
+        return BinaryProtocol.encode(unsignedPacket)
     }
     
     static func from(_ data: Data) -> BitchatPacket? {
