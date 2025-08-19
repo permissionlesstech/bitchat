@@ -100,7 +100,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     private var recentlySeenPeers: Set<String> = []
     private var lastNetworkNotificationTime = Date.distantPast
     private var networkResetTimer: Timer? = nil
-    private let networkResetGraceSeconds: TimeInterval = 60 // avoid refiring on brief drops/reconnects
+    private let networkResetGraceSeconds: TimeInterval = 600 // 10 minutes; avoid refiring on short drops/reconnects
     @Published var nickname: String = "" {
         didSet {
             // Trim whitespace whenever nickname is set
@@ -2636,14 +2636,11 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 // Check if we have new mesh peers we haven't seen recently
                 let currentPeerSet = Set(meshPeers)
                 let newPeers = currentPeerSet.subtracting(self.recentlySeenPeers)
-                let timeSinceLastNotification = Date().timeIntervalSince(self.lastNetworkNotificationTime)
-                
                 // Send notification if:
                 // 1. We have mesh peers (not just Nostr-only)
-                // 2. There are new peers we haven't seen
-                // 3. Either it's been more than 5 minutes since last notification OR we haven't notified yet
-                if meshPeers.count > 0 && !newPeers.isEmpty && 
-                   (timeSinceLastNotification > 300 || !self.hasNotifiedNetworkAvailable) {
+                // 2. There are new peers we haven't seen (rising-edge)
+                // 3. We haven't already notified since the last sustained-empty period
+                if meshPeers.count > 0 && !newPeers.isEmpty && !self.hasNotifiedNetworkAvailable {
                     self.hasNotifiedNetworkAvailable = true
                     self.lastNetworkNotificationTime = Date()
                     self.recentlySeenPeers = currentPeerSet
