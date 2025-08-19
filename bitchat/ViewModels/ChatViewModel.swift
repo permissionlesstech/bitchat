@@ -1855,20 +1855,34 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     
                     // Add styled match
                     let matchText = String(content[nsRange])
-                    var matchStyle = AttributeContainer()
-                    matchStyle.font = .system(size: 14, weight: .semibold, design: .monospaced)
-                    
-                    if type == "hashtag" {
-                        matchStyle.foregroundColor = Color.blue
-                        matchStyle.underlineStyle = .single
-                    } else if type == "mention" {
-                        matchStyle.foregroundColor = Color.orange
-                    } else if type == "url" {
-                        matchStyle.foregroundColor = Color.blue
-                        matchStyle.underlineStyle = .single
+                    if type == "mention" {
+                        // Split optional '#abcd' suffix and color suffix light grey
+                        let (mBase, mSuffix) = splitSuffix(from: matchText.replacingOccurrences(of: "@", with: ""))
+                        var mentionStyle = AttributeContainer()
+                        mentionStyle.font = .system(size: 14, weight: .semibold, design: .monospaced)
+                        mentionStyle.foregroundColor = Color.orange
+                        // Emit '@'
+                        result.append(AttributedString("@").mergingAttributes(mentionStyle))
+                        // Base name in orange
+                        result.append(AttributedString(mBase).mergingAttributes(mentionStyle))
+                        // Suffix in light grey
+                        if !mSuffix.isEmpty {
+                            var grey = mentionStyle
+                            grey.foregroundColor = Color.secondary.opacity(0.6)
+                            result.append(AttributedString(mSuffix).mergingAttributes(grey))
+                        }
+                    } else {
+                        var matchStyle = AttributeContainer()
+                        matchStyle.font = .system(size: 14, weight: .semibold, design: .monospaced)
+                        if type == "hashtag" {
+                            matchStyle.foregroundColor = Color.blue
+                            matchStyle.underlineStyle = .single
+                        } else if type == "url" {
+                            matchStyle.foregroundColor = Color.blue
+                            matchStyle.underlineStyle = .single
+                        }
+                        result.append(AttributedString(matchText).mergingAttributes(matchStyle))
                     }
-                    
-                    result.append(AttributedString(matchText).mergingAttributes(matchStyle))
                     lastEnd = nsRange.upperBound
                 }
             }
@@ -2727,19 +2741,23 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     }
     
     private func parseMentions(from content: String) -> [String] {
-        let pattern = "@([\\p{L}0-9_]+)"
+        // Allow optional disambiguation suffix '#abcd' for duplicate nicknames
+        let pattern = "@([\\p{L}0-9_]+(?:#[a-fA-F0-9]{4})?)"
         let regex = try? NSRegularExpression(pattern: pattern, options: [])
         let matches = regex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
         
         var mentions: [String] = []
         let peerNicknames = meshService.getPeerNicknames()
-        let allNicknames = Set(peerNicknames.values).union([nickname]) // Include self
+        // Compose the valid mention tokens based on current peers (already suffixed where needed)
+        var validTokens = Set(peerNicknames.values)
+        // Always allow mentioning self by base nickname
+        validTokens.insert(nickname)
         
         for match in matches {
             if let range = Range(match.range(at: 1), in: content) {
                 let mentionedName = String(content[range])
-                // Only include if it's a valid nickname
-                if allNicknames.contains(mentionedName) {
+                // Only include if it's a current valid token (base or suffixed)
+                if validTokens.contains(mentionedName) {
                     mentions.append(mentionedName)
                 }
             }
