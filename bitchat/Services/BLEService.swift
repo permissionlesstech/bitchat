@@ -61,6 +61,8 @@ final class BLEService: NSObject {
     // 5. Fragment Reassembly (necessary for messages > MTU)
     private var incomingFragments: [String: [Int: Data]] = [:]
     private var fragmentMetadata: [String: (type: UInt8, total: Int, timestamp: Date)] = [:]
+    // Backoff for peripherals that recently timed out connecting
+    private var recentConnectTimeouts: [String: Date] = [:] // Peripheral UUID -> last timeout
     
     // Simple announce throttling
     private var lastAnnounceSent = Date.distantPast
@@ -1579,6 +1581,10 @@ final class BLEService: NSObject {
                 fragmentMetadata.removeValue(forKey: fragmentID)
             }
         }
+
+        // Clean old connection timeout backoff entries (> 2 minutes)
+        let timeoutCutoff = now.addingTimeInterval(-120)
+        recentConnectTimeouts = recentConnectTimeouts.filter { $0.value >= timeoutCutoff }
     }
 }
 
@@ -1615,9 +1621,13 @@ extension BLEService: CBCentralManagerDelegate {
     
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) {
         let peripheralID = peripheral.identifier.uuidString
-        let advertisedName = advertisementData[CBAdvertisementDataLocalNameKey] as? String ?? "Unknown"
+        let advertisedName = advertisementData[CBAdvertisementDataLocalNameKey] as? String ?? (peripheralID.prefix(6) + "…")
+        let isConnectable = (advertisementData[CBAdvertisementDataIsConnectable] as? NSNumber)?.boolValue ?? true
         let rssiValue = RSSI.intValue
         
+        // Skip if peripheral is not connectable (per advertisement data)
+        guard isConnectable else { return }
+
         // Skip if signal too weak - prevents connection attempts at extreme range
         guard rssiValue > -90 else {
             // Too far away, don't attempt connection
@@ -1639,6 +1649,11 @@ extension BLEService: CBCentralManagerDelegate {
             }
         }
         
+        // Backoff if this peripheral recently timed out connection within the last 15 seconds
+        if let lastTimeout = recentConnectTimeouts[peripheralID], Date().timeIntervalSince(lastTimeout) < 15 {
+            return
+        }
+
         // Check peripheral state - but cancel if stale
         if peripheral.state == .connecting || peripheral.state == .connected {
             // iOS might have stale state - force disconnect and retry
@@ -1673,18 +1688,19 @@ extension BLEService: CBCentralManagerDelegate {
         ]
         central.connect(peripheral, options: options)
         
-        // Set a timeout for the connection attempt
+        // Set a timeout for the connection attempt (slightly longer for reliability)
         // Use BLE queue to mutate BLE-related state consistently
-        bleQueue.asyncAfter(deadline: .now() + 5.0) { [weak self] in
+        bleQueue.asyncAfter(deadline: .now() + 8.0) { [weak self] in
             guard let self = self,
                   let state = self.peripherals[peripheralID],
                   state.isConnecting && !state.isConnected else { return }
             
             // Connection timed out - cancel it
             SecureLogger.log("⏱️ Timeout: \(advertisedName)",
-                            category: SecureLogger.session, level: .warning)
+                            category: SecureLogger.session, level: .debug)
             central.cancelPeripheralConnection(peripheral)
             self.peripherals[peripheralID] = nil
+            self.recentConnectTimeouts[peripheralID] = Date()
         }
     }
     
