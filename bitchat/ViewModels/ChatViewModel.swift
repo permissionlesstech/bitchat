@@ -202,6 +202,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     private var nostrRelayManager: NostrRelayManager?
     // PeerManager replaced by UnifiedPeerService
     private var processedNostrEvents = Set<String>()  // Simple deduplication
+    private var processedNostrEventOrder: [String] = []
+    private let maxProcessedNostrEvents = 2000
     private let userDefaults = UserDefaults.standard
     private let nicknameKey = "bitchat.nickname"
     // Location channel state
@@ -237,6 +239,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     @Published var bluetoothState: CBManagerState = .unknown
     
     // Messages are naturally ephemeral - no persistent storage
+    // Persist mesh public timeline across channel switches
+    private var meshTimeline: [BitchatMessage] = []
     
     // MARK: - Message Delivery Tracking
     
@@ -393,6 +397,19 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 }
             
             self.cancellables.insert(cancellable)
+
+            // Resubscribe geohash on relay reconnect
+            if let relayMgr = self.nostrRelayManager {
+                relayMgr.$isConnected
+                    .receive(on: DispatchQueue.main)
+                    .sink { [weak self] connected in
+                        guard let self = self else { return }
+                        if connected {
+                            self.resubscribeCurrentGeohash()
+                        }
+                    }
+                    .store(in: &self.cancellables)
+            }
         }
 
         // Set up Noise encryption callbacks
@@ -466,6 +483,17 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             name: UIApplication.didBecomeActiveNotification,
             object: nil
         )
+        // Resubscribe geohash on app foreground
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self = self else { return }
+            #if os(iOS)
+            self.resubscribeCurrentGeohash()
+            #endif
+        }
         
         // Add screenshot detection for iOS
         NotificationCenter.default.addObserver(
@@ -497,6 +525,56 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         // Force immediate save
         userDefaults.synchronize()
     }
+
+    #if os(iOS)
+    // Resubscribe to the active geohash channel without clearing timeline
+    @MainActor
+    private func resubscribeCurrentGeohash() {
+        guard case .location(let ch) = activeChannel else { return }
+        guard let subID = geoSubscriptionID else {
+            // No existing subscription; set it up
+            switchLocationChannel(to: activeChannel)
+            return
+        }
+        // Unsubscribe + resubscribe
+        NostrRelayManager.shared.unsubscribe(id: subID)
+        let filter = NostrFilter.geohashEphemeral(ch.geohash, since: Date().addingTimeInterval(-3600), limit: 200)
+        NostrRelayManager.shared.subscribe(filter: filter, id: subID) { [weak self] event in
+            guard let self = self else { return }
+            guard event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue else { return }
+            if self.processedNostrEvents.contains(event.id) { return }
+            self.processedNostrEvents.insert(event.id)
+            if let gh = self.currentGeohash,
+               let myGeoIdentity = try? NostrIdentityBridge.deriveIdentity(forGeohash: gh),
+               myGeoIdentity.publicKeyHex.lowercased() == event.pubkey.lowercased() { return }
+            if let nickTag = event.tags.first(where: { $0.first == "n" }), nickTag.count >= 2 {
+                let nick = nickTag[1]
+                self.geoNicknames[event.pubkey.lowercased()] = nick
+            }
+            let senderName = self.displayNameForNostrPubkey(event.pubkey)
+            let content = event.content
+            let timestamp = Date(timeIntervalSince1970: TimeInterval(event.created_at))
+            let mentions = self.parseMentions(from: content)
+            let msg = BitchatMessage(
+                id: event.id,
+                sender: senderName,
+                content: content,
+                timestamp: timestamp,
+                isRelay: false,
+                originalSender: nil,
+                isPrivate: false,
+                recipientNickname: nil,
+                senderPeerID: "nostr:\(event.pubkey.prefix(8))",
+                mentions: mentions.isEmpty ? nil : mentions
+            )
+            Task { @MainActor in
+                self.handlePublicMessage(msg)
+                self.checkForMentions(msg)
+                self.sendHapticFeedback(for: msg)
+            }
+        }
+    }
+    #endif
     
     // MARK: - Nickname Management
     
@@ -826,13 +904,16 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             // Add message to local display
             #if os(iOS)
             var displaySender = nickname
+            var localSenderPeerID = meshService.myPeerID
             if case .location(let ch) = activeChannel,
                let myGeoIdentity = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
                 let suffix = String(myGeoIdentity.publicKeyHex.suffix(4))
                 displaySender = nickname + "#" + suffix
+                localSenderPeerID = "nostr:\(myGeoIdentity.publicKeyHex.prefix(8))"
             }
             #else
             let displaySender = nickname
+            let localSenderPeerID = meshService.myPeerID
             #endif
 
             let message = BitchatMessage(
@@ -843,12 +924,20 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 originalSender: nil,
                 isPrivate: false,
                 recipientNickname: nil,
-                senderPeerID: meshService.myPeerID,
+                senderPeerID: localSenderPeerID,
                 mentions: mentions.isEmpty ? nil : mentions
             )
             
             // Add to main messages immediately for user feedback
             messages.append(message)
+            // Persist to mesh timeline if posting in mesh
+            #if os(iOS)
+            if case .mesh = activeChannel {
+                meshTimeline.append(message)
+            }
+            #else
+            meshTimeline.append(message)
+            #endif
             trimMessagesIfNeeded()
             
             // Force immediate UI update for user's own messages
@@ -887,8 +976,15 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     @MainActor
     private func switchLocationChannel(to channel: ChannelID) {
         activeChannel = channel
-        // Clear current public timeline to show only messages relevant to the new channel
-        messages.removeAll()
+        // Reset deduplication set and optionally hydrate timeline for mesh
+        processedNostrEvents.removeAll()
+        processedNostrEventOrder.removeAll()
+        switch channel {
+        case .mesh:
+            messages = meshTimeline
+        case .location:
+            messages.removeAll()
+        }
         // Unsubscribe previous
         if let sub = geoSubscriptionID {
             NostrRelayManager.shared.unsubscribe(id: sub)
@@ -909,7 +1005,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             guard event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue else { return }
             // Deduplicate
             if self.processedNostrEvents.contains(event.id) { return }
-            self.processedNostrEvents.insert(event.id)
+            self.recordProcessedEvent(event.id)
             // Skip our own events (we already locally echoed)
             if let gh = self.currentGeohash,
                let myGeoIdentity = try? NostrIdentityBridge.deriveIdentity(forGeohash: gh),
@@ -960,6 +1056,21 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         }
         // Otherwise, anonymous with collision-resistant suffix
         return "anon#\(suffix)"
+    }
+
+    // Dedup helper with small memory cap
+    private func recordProcessedEvent(_ id: String) {
+        processedNostrEvents.insert(id)
+        processedNostrEventOrder.append(id)
+        if processedNostrEventOrder.count > maxProcessedNostrEvents {
+            let overflow = processedNostrEventOrder.count - maxProcessedNostrEvents
+            for _ in 0..<overflow {
+                if let old = processedNostrEventOrder.first {
+                    processedNostrEventOrder.removeFirst()
+                    processedNostrEvents.remove(old)
+                }
+            }
+        }
     }
     #endif
     
@@ -3890,32 +4001,49 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     /// Handle incoming public message
     private func handlePublicMessage(_ message: BitchatMessage) {
         let finalMessage = processActionMessage(message)
-        
-        // Check if this is our own message being echoed back
+
+        // Classify origin: geochat if senderPeerID starts with 'nostr:', else mesh (or system)
+        let isGeo = finalMessage.senderPeerID?.hasPrefix("nostr:") == true
+
+        // Persist mesh messages to mesh timeline always
+        if !isGeo && finalMessage.sender != "system" {
+            meshTimeline.append(finalMessage)
+            trimMessagesIfNeeded()
+        }
+
+        // Only add message to current timeline if it matches active channel or is system
+        let isSystem = finalMessage.sender == "system"
+        let channelMatches: Bool = {
+            switch activeChannel {
+            case .mesh: return !isGeo || isSystem
+            case .location: return isGeo || isSystem
+            }
+        }()
+
+        guard channelMatches else { return }
+
+        // Check if this is our own message being echoed back (avoid dup)
         if finalMessage.sender != nickname && finalMessage.sender != "system" {
-            // Skip empty messages
             if !finalMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 addMessage(finalMessage)
             }
-        } else if finalMessage.sender != "system" {
+            return
+        }
+
+        if finalMessage.sender != "system" {
             // Check for duplicates
             let messageExists = messages.contains { existingMsg in
-                if existingMsg.id == finalMessage.id {
-                    return true
-                }
-                if existingMsg.content == finalMessage.content && 
-                   existingMsg.sender == finalMessage.sender {
+                if existingMsg.id == finalMessage.id { return true }
+                if existingMsg.content == finalMessage.content && existingMsg.sender == finalMessage.sender {
                     let timeDiff = abs(existingMsg.timestamp.timeIntervalSince(finalMessage.timestamp))
                     return timeDiff < 1.0
                 }
                 return false
             }
-            
             if !messageExists && !finalMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 addMessage(finalMessage)
             }
         } else {
-            // System message
             if !finalMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 addMessage(finalMessage)
             }
