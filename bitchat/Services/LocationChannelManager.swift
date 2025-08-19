@@ -79,7 +79,7 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
         // Prefer continuous updates with a significant distance filter rather than polling
         guard permissionState == .authorized else { return }
         cl.desiredAccuracy = kCLLocationAccuracyHundredMeters
-        cl.distanceFilter = 250 // meters; only refresh on significant move
+        cl.distanceFilter = 21 // meters; update on small moves
         cl.startUpdatingLocation()
     }
 

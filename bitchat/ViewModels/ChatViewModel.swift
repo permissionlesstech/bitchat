@@ -978,7 +978,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     private func switchLocationChannel(to channel: ChannelID) {
         activeChannel = channel
         // Reset deduplication set and optionally hydrate timeline for mesh
-        processedNostrEvents.removeAll()
+        processedNostrE
+        vents.removeAll()
         processedNostrEventOrder.removeAll()
         switch channel {
         case .mesh:
