@@ -229,9 +229,9 @@ struct LocationChannelsSheet: View {
         .buttonStyle(.plain)
     }
 
-    // Split a title like "#mesh (3 people)" into base and suffix "(3 people)"
+    // Split a title like "#mesh [3 people]" into base and suffix "[3 people]"
     private func splitTitleAndCount(_ s: String) -> (base: String, countSuffix: String?) {
-        guard let idx = s.lastIndex(of: "(") else { return (s, nil) }
+        guard let idx = s.lastIndex(of: "[") else { return (s, nil) }
         let prefix = String(s[..<idx]).trimmingCharacters(in: .whitespaces)
         let suffix = String(s[idx...])
         return (prefix, suffix)
@@ -246,14 +246,14 @@ struct LocationChannelsSheet: View {
             return acc
         }
         let noun = meshCount == 1 ? "person" : "people"
-        return "mesh (\(meshCount) \(noun))"
+        return "#mesh [\(meshCount) \(noun)]"
     }
 
     private func geohashTitleWithCount(for channel: GeohashChannel) -> String {
         // Use ViewModel's 5-minute activity counts; may be 0 for non-selected channels
         let count = viewModel.geohashParticipantCount(for: channel.geohash)
         let noun = count == 1 ? "person" : "people"
-        return "\(channel.level.displayName.lowercased()) (\(count) \(noun))"
+        return "\(channel.level.displayName.lowercased()) [\(count) \(noun)]"
     }
 
     private func validateGeohash(_ s: String) -> Bool {
