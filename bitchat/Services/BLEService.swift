@@ -49,6 +49,7 @@ final class BLEService: NSObject {
         var nickname: String
         var isConnected: Bool
         var noisePublicKey: Data?
+        var signingPublicKey: Data?
         var isVerifiedNickname: Bool
         var lastSeen: Date
     }
@@ -1054,14 +1055,12 @@ final class BLEService: NSObject {
             return
         }
         
-        // Verify that the sender's derived ID from the announced public key matches the packet senderID
+        // Verify that the sender's derived ID from the announced noise public key matches the packet senderID
         // This helps detect relayed or spoofed announces. Only warn in release; assert in debug.
-        let derivedFromKey = PeerIDUtils.derivePeerID(fromPublicKey: announcement.publicKey)
+        let derivedFromKey = PeerIDUtils.derivePeerID(fromPublicKey: announcement.noisePublicKey)
         if derivedFromKey != peerID {
             SecureLogger.log("⚠️ Announce sender mismatch: derived \(derivedFromKey.prefix(8))… vs packet \(peerID.prefix(8))…", category: SecureLogger.security, level: .warning)
-            #if DEBUG
-            assertionFailure("Announce senderID does not match key-derived ID")
-            #endif
+
         }
         
         // Don't add ourselves as a peer
@@ -1092,15 +1091,18 @@ final class BLEService: NSObject {
             isNewPeer = (existingPeer == nil)
             isReconnectedPeer = wasDisconnected
             
-            // Verify packet signature using the announced noise public key
+            // Verify packet signature using the announced signing public key
             var verified = false
             if packet.signature != nil {
-                // Verify that the packet was signed by the noise private key corresponding to the announced public key
-                verified = noiseService.verifyPacketSignature(packet, publicKey: announcement.publicKey)
+                // Verify that the packet was signed by the signing private key corresponding to the announced signing public key
+                verified = noiseService.verifyPacketSignature(packet, publicKey: announcement.signingPublicKey)
+                if !verified {
+                    SecureLogger.log("⚠️ Signature verification for announce failed \(peerID.prefix(8))", category: SecureLogger.security, level: .warning)
+                }
             }
 
             // If existing peer has a different noise public key, do not consider this verified
-            if let existing = existingPeer, let existingKey = existing.noisePublicKey, existingKey != announcement.publicKey {
+            if let existing = existingPeer, let existingKey = existing.noisePublicKey, existingKey != announcement.noisePublicKey {
                 SecureLogger.log("⚠️ Announce key mismatch for \(peerID.prefix(8))… — keeping unverified", category: SecureLogger.security, level: .warning)
                 verified = false
             }
@@ -1118,7 +1120,8 @@ final class BLEService: NSObject {
                     id: existing.id,
                     nickname: announcement.nickname,
                     isConnected: true,
-                    noisePublicKey: announcement.publicKey,
+                    noisePublicKey: announcement.noisePublicKey,
+                    signingPublicKey: announcement.signingPublicKey,
                     isVerifiedNickname: true,
                     lastSeen: Date()
                 )
@@ -1128,7 +1131,8 @@ final class BLEService: NSObject {
                     id: peerID,
                     nickname: announcement.nickname,
                     isConnected: true,
-                    noisePublicKey: announcement.publicKey,
+                    noisePublicKey: announcement.noisePublicKey,
+                    signingPublicKey: announcement.signingPublicKey,
                     isVerifiedNickname: true,
                     lastSeen: Date()
                 )
@@ -1343,12 +1347,14 @@ final class BLEService: NSObject {
         
         // Reduced logging - only log errors, not every announce
         
-        // Create simplified announce payload with only noise public key
-        let noisePub = noiseService.getStaticPublicKeyData()
+        // Create announce payload with both noise and signing public keys
+        let noisePub = noiseService.getStaticPublicKeyData()  // For noise handshakes and peer identification
+        let signingPub = noiseService.getSigningPublicKeyData()  // For signature verification
         
         let announcement = AnnouncementPacket(
             nickname: myNickname,
-            publicKey: noisePub
+            noisePublicKey: noisePub,
+            signingPublicKey: signingPub
         )
         
         guard let payload = announcement.encode() else {

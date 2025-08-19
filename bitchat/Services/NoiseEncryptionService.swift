@@ -324,10 +324,8 @@ class NoiseEncryptionService {
         }
         
         // Create canonical packet bytes for verification (without signature)
-        var packetForVerification = packet
-        packetForVerification.signature = nil
         
-        guard let packetData = packetForVerification.toBinaryDataForSigning() else {
+        guard let packetData = packet.toBinaryDataForSigning() else {
             return false
         }
         
