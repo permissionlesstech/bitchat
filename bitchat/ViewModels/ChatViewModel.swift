@@ -632,9 +632,16 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     if self.privateChats[convKey] == nil { self.privateChats[convKey] = [] }
                     self.privateChats[convKey]?.append(msg)
                     self.trimPrivateChatMessagesIfNeeded(for: convKey)
-                    if shouldMarkUnread { self.unreadPrivateMessages.insert(convKey) }
-                    self.objectWillChange.send()
-                }
+                        if shouldMarkUnread { self.unreadPrivateMessages.insert(convKey) }
+                        if !isViewing {
+                            NotificationService.shared.sendPrivateMessageNotification(
+                                from: senderName,
+                                message: pm.content,
+                                peerID: convKey
+                            )
+                        }
+                        self.objectWillChange.send()
+                    }
             }
         } catch { }
     }
@@ -1193,6 +1200,14 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     self.privateChats[convKey]?.append(msg)
                     self.trimPrivateChatMessagesIfNeeded(for: convKey)
                     if shouldMarkUnread { self.unreadPrivateMessages.insert(convKey) }
+                    // Notify if not viewing
+                    if !isViewing {
+                        NotificationService.shared.sendPrivateMessageNotification(
+                            from: senderName,
+                            message: pm.content,
+                            peerID: convKey
+                        )
+                    }
                     self.objectWillChange.send()
                 default:
                     break
@@ -2164,6 +2179,23 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     
     @MainActor
     func getPeerIDForNickname(_ nickname: String) -> String? {
+        #if os(iOS)
+        // When in a geohash channel, allow resolving by geohash participant nickname
+        switch LocationChannelManager.shared.selectedChannel {
+        case .location:
+            let base: String = {
+                if let hashIndex = nickname.firstIndex(of: "#") { return String(nickname[..<hashIndex]) }
+                return nickname
+            }().lowercased()
+            // Try exact match against cached geoNicknames (pubkey -> nickname)
+            if let pub = geoNicknames.first(where: { (_, nick) in nick.lowercased() == base })?.key {
+                let convKey = "nostr_" + String(pub.prefix(16))
+                nostrKeyMapping[convKey] = pub
+                return convKey
+            }
+        default: break
+        }
+        #endif
         return unifiedPeerService.getPeerID(for: nickname)
     }
     

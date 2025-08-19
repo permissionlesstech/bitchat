@@ -641,18 +641,43 @@ struct ContentView: View {
                                     .padding(.horizontal)
                                     .padding(.top, 12)
                             } else {
-                                ForEach(viewModel.geohashPeople) { person in
+                                // Show 'you' at top and bold
+                                let myHex: String? = {
+                                    if case .location(let ch) = locationManager.selectedChannel,
+                                       let id = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
+                                        return id.publicKeyHex.lowercased()
+                                    }
+                                    return nil
+                                }()
+                                let ordered = viewModel.geohashPeople.sorted { a, b in
+                                    if let me = myHex {
+                                        if a.id == me && b.id != me { return true }
+                                        if b.id == me && a.id != me { return false }
+                                    }
+                                    return a.lastSeen > b.lastSeen
+                                }
+                                ForEach(ordered) { person in
                                     HStack(spacing: 4) {
                                         Image(systemName: "person.fill")
                                             .font(.system(size: 10))
                                             .foregroundColor(textColor)
-                                        Text(person.displayName)
+                                        Text(person.displayName + (person.id == myHex ? " (you)" : ""))
                                             .font(.system(size: 14, design: .monospaced))
+                                            .fontWeight(person.id == myHex ? .bold : .regular)
                                             .foregroundColor(textColor)
                                         Spacer()
                                     }
                                     .padding(.horizontal)
                                     .padding(.vertical, 4)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        // Open DM with this participant
+                                        viewModel.startGeohashDM(withPubkeyHex: person.id)
+                                        withAnimation(.easeInOut(duration: 0.2)) {
+                                            showSidebar = false
+                                            sidebarDragOffset = 0
+                                        }
+                                    }
                                 }
                             }
                         default:
