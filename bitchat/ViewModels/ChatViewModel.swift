@@ -1207,14 +1207,18 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     if isViewing {
                         nostrTransport.sendReadReceiptGeohash(messageId, toRecipientHex: senderPubkey, from: id)
                     }
-                    // Notify if not viewing
+                    // Notify only when app is backgrounded and not viewing
+                    #if os(iOS)
                     if !isViewing {
-                        NotificationService.shared.sendPrivateMessageNotification(
-                            from: senderName,
-                            message: pm.content,
-                            peerID: convKey
-                        )
+                        if UIApplication.shared.applicationState != .active {
+                            NotificationService.shared.sendPrivateMessageNotification(
+                                from: senderName,
+                                message: pm.content,
+                                peerID: convKey
+                            )
+                        }
                     }
+                    #endif
                     self.objectWillChange.send()
                 default:
                     // Handle delivered/read receipts for our sent messages
