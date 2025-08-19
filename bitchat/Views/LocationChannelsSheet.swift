@@ -217,13 +217,15 @@ struct LocationChannelsSheet: View {
             if peer.id != myID && peer.isConnected { return acc + 1 }
             return acc
         }
-        return "#mesh (\(meshCount))"
+        let noun = meshCount == 1 ? "person" : "people"
+        return "#mesh (\(meshCount) \(noun))"
     }
 
     private func geohashTitleWithCount(for channel: GeohashChannel) -> String {
         // Use ViewModel's 5-minute activity counts; may be 0 for non-selected channels
         let count = viewModel.geohashParticipantCount(for: channel.geohash)
-        return "\(channel.level.displayName.lowercased()) (\(count))"
+        let noun = count == 1 ? "person" : "people"
+        return "\(channel.level.displayName.lowercased()) (\(count) \(noun))"
     }
 
     private func validateGeohash(_ s: String) -> Bool {
