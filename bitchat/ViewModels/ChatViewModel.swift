@@ -405,7 +405,9 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     .sink { [weak self] connected in
                         guard let self = self else { return }
                         if connected {
-                            self.resubscribeCurrentGeohash()
+                            Task { @MainActor in
+                                self.resubscribeCurrentGeohash()
+                            }
                         }
                     }
                     .store(in: &self.cancellables)
@@ -484,16 +486,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             object: nil
         )
         // Resubscribe geohash on app foreground
-        NotificationCenter.default.addObserver(
-            forName: UIApplication.didBecomeActiveNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            guard let self = self else { return }
-            #if os(iOS)
-            self.resubscribeCurrentGeohash()
-            #endif
-        }
+        // Resubscribe handled via appDidBecomeActive selector
         
         // Add screenshot detection for iOS
         NotificationCenter.default.addObserver(
@@ -1595,6 +1588,10 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 self.markPrivateMessagesAsRead(from: peerID)
             }
         }
+        // Also resubscribe the current geohash channel if active
+        #if os(iOS)
+        resubscribeCurrentGeohash()
+        #endif
     }
     
     @MainActor
