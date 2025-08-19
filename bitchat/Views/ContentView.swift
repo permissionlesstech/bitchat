@@ -658,23 +658,23 @@ struct ContentView: View {
                                 }
                                 ForEach(ordered) { person in
                                     HStack(spacing: 4) {
-                                        Image(systemName: "person.fill")
-                                            .font(.system(size: 10))
-                                            .foregroundColor(textColor)
+                                        // Unread indicator matches mesh behavior
+                                        let convKey = "nostr_" + String(person.id.prefix(16))
+                                        if viewModel.unreadPrivateMessages.contains(convKey) {
+                                            Image(systemName: "envelope.fill")
+                                                .font(.system(size: 12))
+                                                .foregroundColor(Color.orange)
+                                                .accessibilityLabel("Unread message from \(person.displayName)")
+                                        } else {
+                                            Image(systemName: "person.fill")
+                                                .font(.system(size: 10))
+                                                .foregroundColor(textColor)
+                                        }
                                         Text(person.displayName + (person.id == myHex ? " (you)" : ""))
                                             .font(.system(size: 14, design: .monospaced))
                                             .fontWeight(person.id == myHex ? .bold : .regular)
                                             .foregroundColor(textColor)
                                         Spacer()
-                                        Button(action: {
-                                            if person.id != myHex { viewModel.startGeohashDM(withPubkeyHex: person.id) }
-                                            withAnimation(.easeInOut(duration: 0.2)) { showSidebar = false; sidebarDragOffset = 0 }
-                                        }) {
-                                            Image(systemName: "envelope")
-                                                .font(.system(size: 12))
-                                                .foregroundColor(person.id == myHex ? Color.secondary : textColor)
-                                        }
-                                        .buttonStyle(.plain)
                                     }
                                     .padding(.horizontal)
                                     .padding(.vertical, 4)

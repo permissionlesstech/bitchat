@@ -295,6 +295,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     
     // Track processed Nostr ACKs to avoid duplicate processing
     private var processedNostrAcks: Set<String> = []  // "messageId:ackType:senderPubkey" format
+    // Track which GeoDM messages we've already sent a delivery ACK for (by messageID)
+    private var sentGeoDeliveryAcks: Set<String> = []
     
     // Track app startup phase to prevent marking old messages as unread
     private var isStartupPhase = true
@@ -415,7 +417,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             
             self.cancellables.insert(cancellable)
 
-            // Resubscribe geohash on relay reconnect
+            // Resubscribe geohash on relay reconnect (iOS only)
+            #if os(iOS)
             if let relayMgr = self.nostrRelayManager {
                 relayMgr.$isConnected
                     .receive(on: DispatchQueue.main)
@@ -429,6 +432,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     }
                     .store(in: &self.cancellables)
             }
+            #endif
         }
 
         // Set up Noise encryption callbacks
@@ -607,12 +611,23 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(rumorTs))
                 let convKey = "nostr_" + String(senderPubkey.prefix(16))
                 self.nostrKeyMapping[convKey] = senderPubkey
-                if case .privateMessage = noisePayload.type, let pm = PrivateMessagePacket.decode(from: noisePayload.data) {
+                switch noisePayload.type {
+                case .privateMessage:
+                    guard let pm = PrivateMessagePacket.decode(from: noisePayload.data) else { return }
                     let messageId = pm.messageID
+                    // Send delivery ACK immediately (once per message ID)
+                    if !self.sentGeoDeliveryAcks.contains(messageId) {
+                        let nt = NostrTransport()
+                        nt.senderPeerID = self.meshService.myPeerID
+                        nt.sendDeliveryAckGeohash(for: messageId, toRecipientHex: senderPubkey, from: id)
+                        self.sentGeoDeliveryAcks.insert(messageId)
+                    }
+                    // Dedup storage
                     if self.privateChats[convKey]?.contains(where: { $0.id == messageId }) == true { return }
                     for (_, arr) in self.privateChats { if arr.contains(where: { $0.id == messageId }) { return } }
                     let senderName = self.displayNameForNostrPubkey(senderPubkey)
                     let isViewing = (self.selectedPrivateChatPeer == convKey)
+                    // pared back: omit view-state log
                     let wasReadBefore = self.sentReadReceipts.contains(messageId)
                     let isRecentMessage = Date().timeIntervalSince(messageTimestamp) < 30
                     let shouldMarkUnread = !wasReadBefore && !isViewing && isRecentMessage
@@ -632,16 +647,53 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     if self.privateChats[convKey] == nil { self.privateChats[convKey] = [] }
                     self.privateChats[convKey]?.append(msg)
                     self.trimPrivateChatMessagesIfNeeded(for: convKey)
-                        if shouldMarkUnread { self.unreadPrivateMessages.insert(convKey) }
-                        if !isViewing {
+                    if shouldMarkUnread { self.unreadPrivateMessages.insert(convKey) }
+                    if isViewing {
+                        // pared back: omit pre-send READ log
+                        if !wasReadBefore {
+                            let nt = NostrTransport()
+                            nt.senderPeerID = self.meshService.myPeerID
+                            nt.sendReadReceiptGeohash(messageId, toRecipientHex: senderPubkey, from: id)
+                            self.sentReadReceipts.insert(messageId)
+                        }
+                    } else {
+                        // Optionally notify if app backgrounded and message is truly unread
+                        #if os(iOS)
+                        if shouldMarkUnread && UIApplication.shared.applicationState != .active {
                             NotificationService.shared.sendPrivateMessageNotification(
                                 from: senderName,
                                 message: pm.content,
                                 peerID: convKey
                             )
                         }
-                        self.objectWillChange.send()
+                        #endif
                     }
+                    self.objectWillChange.send()
+                case .delivered:
+                    if let messageID = String(data: noisePayload.data, encoding: .utf8) {
+                        if let idx = self.privateChats[convKey]?.firstIndex(where: { $0.id == messageID }) {
+                            self.privateChats[convKey]?[idx].deliveryStatus = .delivered(to: self.displayNameForNostrPubkey(senderPubkey), at: Date())
+                            self.objectWillChange.send()
+                            SecureLogger.log("GeoDM: recv DELIVERED for mid=\(messageID.prefix(8))… from=\(senderPubkey.prefix(8))…",
+                                            category: SecureLogger.session, level: .info)
+                        } else {
+                            SecureLogger.log("GeoDM: delivered ack for unknown mid=\(messageID.prefix(8))… conv=\(convKey)",
+                                            category: SecureLogger.session, level: .warning)
+                        }
+                    }
+                case .readReceipt:
+                    if let messageID = String(data: noisePayload.data, encoding: .utf8) {
+                        if let idx = self.privateChats[convKey]?.firstIndex(where: { $0.id == messageID }) {
+                            self.privateChats[convKey]?[idx].deliveryStatus = .read(by: self.displayNameForNostrPubkey(senderPubkey), at: Date())
+                            self.objectWillChange.send()
+                            SecureLogger.log("GeoDM: recv READ for mid=\(messageID.prefix(8))… from=\(senderPubkey.prefix(8))…",
+                                            category: SecureLogger.session, level: .info)
+                        } else {
+                            SecureLogger.log("GeoDM: read ack for unknown mid=\(messageID.prefix(8))… conv=\(convKey)",
+                                            category: SecureLogger.session, level: .warning)
+                        }
+                    }
+                }
             }
         } catch { }
     }
@@ -1155,6 +1207,9 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             let id = try NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash)
             let dmSub = "geo-dm-\(ch.geohash)"
             geoDmSubscriptionID = dmSub
+            // pared back logging: subscribe debug only
+            SecureLogger.log("GeoDM: subscribing DMs pub=\(id.publicKeyHex.prefix(8))… sub=\(dmSub)",
+                            category: SecureLogger.session, level: .debug)
             let dmFilter = NostrFilter.giftWrapsFor(pubkey: id.publicKeyHex, since: Date().addingTimeInterval(-86400))
             NostrRelayManager.shared.subscribe(filter: dmFilter, id: dmSub) { [weak self] giftWrap in
                 guard let self = self else { return }
@@ -1162,7 +1217,13 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 if self.processedNostrEvents.contains(giftWrap.id) { return }
                 self.recordProcessedEvent(giftWrap.id)
                 // Decrypt with per-geohash identity
-                guard let (content, senderPubkey, rumorTs) = try? NostrProtocol.decryptPrivateMessage(giftWrap: giftWrap, recipientIdentity: id) else { return }
+                guard let (content, senderPubkey, rumorTs) = try? NostrProtocol.decryptPrivateMessage(giftWrap: giftWrap, recipientIdentity: id) else {
+                    SecureLogger.log("GeoDM: failed decrypt giftWrap id=\(giftWrap.id.prefix(8))…",
+                                    category: SecureLogger.session, level: .warning)
+                    return
+                }
+                SecureLogger.log("GeoDM: decrypted gift-wrap id=\(giftWrap.id.prefix(16))... from=\(senderPubkey.prefix(8))...",
+                                category: SecureLogger.session, level: .debug)
                 guard content.hasPrefix("bitchat1:") else { return }
                 guard let packetData = Self.base64URLDecode(String(content.dropFirst("bitchat1:".count))),
                       let packet = BitchatPacket.from(packetData) else { return }
@@ -1175,6 +1236,16 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 case .privateMessage:
                     guard let pm = PrivateMessagePacket.decode(from: noisePayload.data) else { return }
                     let messageId = pm.messageID
+                    SecureLogger.log("GeoDM: recv PM <- sender=\(senderPubkey.prefix(8))… mid=\(messageId.prefix(8))…",
+                                    category: SecureLogger.session, level: .info)
+                    // Send delivery ACK immediately (even if duplicate), once per messageID
+                    if !self.sentGeoDeliveryAcks.contains(messageId) {
+                        let nostrTransport = NostrTransport()
+                        nostrTransport.senderPeerID = self.meshService.myPeerID
+                    // pared back: omit pre-send log
+                        nostrTransport.sendDeliveryAckGeohash(for: messageId, toRecipientHex: senderPubkey, from: id)
+                        self.sentGeoDeliveryAcks.insert(messageId)
+                    }
                     // Duplicate check
                     if self.privateChats[convKey]?.contains(where: { $0.id == messageId }) == true { return }
                     for (_, arr) in self.privateChats { if arr.contains(where: { $0.id == messageId }) { return } }
@@ -1200,22 +1271,28 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     self.privateChats[convKey]?.append(msg)
                     self.trimPrivateChatMessagesIfNeeded(for: convKey)
                     if shouldMarkUnread { self.unreadPrivateMessages.insert(convKey) }
-                    // Send delivery/read ACKs back via geohash identity
-                    let nostrTransport = NostrTransport()
-                    nostrTransport.senderPeerID = self.meshService.myPeerID
-                    nostrTransport.sendDeliveryAckGeohash(for: messageId, toRecipientHex: senderPubkey, from: id)
+                    // Send READ if viewing this conversation
                     if isViewing {
-                        nostrTransport.sendReadReceiptGeohash(messageId, toRecipientHex: senderPubkey, from: id)
+                        // pared back: omit pre-send READ log
+                        if !wasReadBefore {
+                            let nostrTransport = NostrTransport()
+                            nostrTransport.senderPeerID = self.meshService.myPeerID
+                            nostrTransport.sendReadReceiptGeohash(messageId, toRecipientHex: senderPubkey, from: id)
+                            self.sentReadReceipts.insert(messageId)
+                        }
+                    } else {
+                        // pared back: omit defer READ log
                     }
-                    // Notify only when app is backgrounded and not viewing
+                    // Notify only when app is backgrounded and not viewing, and only if not already read
                     #if os(iOS)
-                    if !isViewing {
+                    if !isViewing && shouldMarkUnread {
                         if UIApplication.shared.applicationState != .active {
                             NotificationService.shared.sendPrivateMessageNotification(
                                 from: senderName,
                                 message: pm.content,
                                 peerID: convKey
                             )
+                            // pared back: omit notification log
                         }
                     }
                     #endif
@@ -1224,16 +1301,28 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     // Handle delivered/read receipts for our sent messages
                     switch noisePayload.type {
                     case .delivered:
-                        if let messageID = String(data: noisePayload.data, encoding: .utf8),
-                           let idx = self.privateChats[convKey]?.firstIndex(where: { $0.id == messageID }) {
-                            self.privateChats[convKey]?[idx].deliveryStatus = .delivered(to: self.displayNameForNostrPubkey(senderPubkey), at: Date())
-                            self.objectWillChange.send()
+                        if let messageID = String(data: noisePayload.data, encoding: .utf8) {
+                            if let idx = self.privateChats[convKey]?.firstIndex(where: { $0.id == messageID }) {
+                                self.privateChats[convKey]?[idx].deliveryStatus = .delivered(to: self.displayNameForNostrPubkey(senderPubkey), at: Date())
+                                self.objectWillChange.send()
+                                SecureLogger.log("GeoDM: recv DELIVERED for mid=\(messageID.prefix(8))… from=\(senderPubkey.prefix(8))…",
+                                                category: SecureLogger.session, level: .info)
+                            } else {
+                                SecureLogger.log("GeoDM: delivered ack for unknown mid=\(messageID.prefix(8))… conv=\(convKey)",
+                                                category: SecureLogger.session, level: .warning)
+                            }
                         }
                     case .readReceipt:
-                        if let messageID = String(data: noisePayload.data, encoding: .utf8),
-                           let idx = self.privateChats[convKey]?.firstIndex(where: { $0.id == messageID }) {
-                            self.privateChats[convKey]?[idx].deliveryStatus = .read(by: self.displayNameForNostrPubkey(senderPubkey), at: Date())
-                            self.objectWillChange.send()
+                        if let messageID = String(data: noisePayload.data, encoding: .utf8) {
+                            if let idx = self.privateChats[convKey]?.firstIndex(where: { $0.id == messageID }) {
+                                self.privateChats[convKey]?[idx].deliveryStatus = .read(by: self.displayNameForNostrPubkey(senderPubkey), at: Date())
+                                self.objectWillChange.send()
+                                SecureLogger.log("GeoDM: recv READ for mid=\(messageID.prefix(8))… from=\(senderPubkey.prefix(8))…",
+                                                category: SecureLogger.session, level: .info)
+                            } else {
+                                SecureLogger.log("GeoDM: read ack for unknown mid=\(messageID.prefix(8))… conv=\(convKey)",
+                                                category: SecureLogger.session, level: .warning)
+                            }
                         }
                     default:
                         break
@@ -1450,6 +1539,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     }
                     return
                 }
+                SecureLogger.log("GeoDM: local send mid=\(messageID.prefix(8))… to=\(recipientHex.prefix(8))… conv=\(peerID)",
+                                category: SecureLogger.session, level: .debug)
                 let nostrTransport = NostrTransport()
                 nostrTransport.senderPeerID = meshService.myPeerID
                 nostrTransport.sendPrivateMessageGeohash(content: content, toRecipientHex: recipientHex, from: id, messageID: messageID)
@@ -1784,13 +1875,18 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             }
         }
         
-        // Trigger handshake if needed
-        let sessionState = meshService.getNoiseSessionState(for: peerID)
-        switch sessionState {
-        case .none, .failed:
-            meshService.triggerHandshake(with: peerID)
-        default:
-            break
+        // Trigger handshake if needed (mesh peers only). Skip for Nostr geohash conv keys.
+        if !peerID.hasPrefix("nostr_") && !peerID.hasPrefix("nostr:") {
+            let sessionState = meshService.getNoiseSessionState(for: peerID)
+            switch sessionState {
+            case .none, .failed:
+                meshService.triggerHandshake(with: peerID)
+            default:
+                break
+            }
+        } else {
+            SecureLogger.log("GeoDM: skipping mesh handshake for virtual peerID=\(peerID)",
+                            category: SecureLogger.session, level: .debug)
         }
         
         // Delegate to private chat manager but add already-acked messages first
@@ -2131,6 +2227,27 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     func markPrivateMessagesAsRead(from peerID: String) {
         privateChatManager.markAsRead(from: peerID)
         
+        // Handle GeoDM (nostr_*) read receipts directly via per-geohash identity
+        #if os(iOS)
+        if peerID.hasPrefix("nostr_"),
+           let recipientHex = nostrKeyMapping[peerID],
+           case .location(let ch) = LocationChannelManager.shared.selectedChannel,
+           let id = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
+            let messages = privateChats[peerID] ?? []
+            for message in messages where message.senderPeerID == peerID && !message.isRelay {
+                if !sentReadReceipts.contains(message.id) {
+                    SecureLogger.log("GeoDM: sending READ for mid=\(message.id.prefix(8))… to=\(recipientHex.prefix(8))…",
+                                    category: SecureLogger.session, level: .debug)
+                    let nostrTransport = NostrTransport()
+                    nostrTransport.senderPeerID = meshService.myPeerID
+                    nostrTransport.sendReadReceiptGeohash(message.id, toRecipientHex: recipientHex, from: id)
+                    sentReadReceipts.insert(message.id)
+                }
+            }
+            return
+        }
+        #endif
+
         // Get the peer's Noise key to check for Nostr messages
         var noiseKeyHex: String? = nil
         var peerNostrPubkey: String? = nil
@@ -4429,15 +4546,17 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         updatePrivateChatPeerIfNeeded()
         
         // Handle notifications and read receipts
-        // Check if we should send notification
+        // Check if we should send notification (only for truly unread and recent messages)
         if selectedPrivateChatPeer != peerID {
             unreadPrivateMessages.insert(peerID)
-            
-            NotificationService.shared.sendPrivateMessageNotification(
-                from: message.sender,
-                message: message.content,
-                peerID: peerID
-            )
+            // Avoid notifying for messages that have been marked read already (resubscribe/dup cases)
+            if !sentReadReceipts.contains(message.id) {
+                NotificationService.shared.sendPrivateMessageNotification(
+                    from: message.sender,
+                    message: message.content,
+                    peerID: peerID
+                )
+            }
         } else {
             // User is viewing this chat - no notification needed
             unreadPrivateMessages.remove(peerID)
@@ -4508,10 +4627,15 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         // Only add message to current timeline if it matches active channel or is system
         let isSystem = finalMessage.sender == "system"
         let channelMatches: Bool = {
+            #if os(iOS)
             switch activeChannel {
             case .mesh: return !isGeo || isSystem
             case .location: return isGeo || isSystem
             }
+            #else
+            // On non-iOS builds, we don't have location channels; accept all
+            return true
+            #endif
         }()
 
         guard channelMatches else { return }

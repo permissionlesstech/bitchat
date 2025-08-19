@@ -120,12 +120,14 @@ class PrivateChatManager: ObservableObject {
         if selectedPeer != senderPeerID {
             unreadMessages.insert(senderPeerID)
             
-            // Send notification
-            NotificationService.shared.sendPrivateMessageNotification(
-                from: message.sender,
-                message: message.content,
-                peerID: senderPeerID
-            )
+            // Avoid notifying for messages already marked as read (dup/resubscribe cases)
+            if !sentReadReceipts.contains(message.id) {
+                NotificationService.shared.sendPrivateMessageNotification(
+                    from: message.sender,
+                    message: message.content,
+                    peerID: senderPeerID
+                )
+            }
         } else {
             // Send read receipt if viewing this chat
             sendReadReceipt(for: message)
