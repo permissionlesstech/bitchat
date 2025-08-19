@@ -1082,6 +1082,20 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         return "anon#\(suffix)"
     }
 
+    // Helper: display name for current active channel (for notifications)
+    private func activeChannelDisplayName() -> String {
+        #if os(iOS)
+        switch activeChannel {
+        case .mesh:
+            return "#mesh"
+        case .location(let ch):
+            return "#\(ch.geohash)"
+        }
+        #else
+        return "#mesh"
+        #endif
+    }
+
     // Dedup helper with small memory cap
     private func recordProcessedEvent(_ id: String) {
         processedNostrEvents.insert(id)
@@ -2497,6 +2511,24 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             let removeCount = meshTimeline.count - meshTimelineCap
             meshTimeline.removeFirst(removeCount)
         }
+    }
+
+    // Clear the current public channel's timeline (visible + persistent buffer)
+    @MainActor
+    func clearCurrentPublicTimeline() {
+        #if os(iOS)
+        switch activeChannel {
+        case .mesh:
+            messages.removeAll()
+            meshTimeline.removeAll()
+        case .location(let ch):
+            messages.removeAll()
+            geoTimelines[ch.geohash] = []
+        }
+        #else
+        messages.removeAll()
+        meshTimeline.removeAll()
+        #endif
     }
     
     private func trimPrivateChatMessagesIfNeeded(for peerID: String) {
@@ -4111,7 +4143,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 let lastNotified = lastPublicActivityNotifyAt[channelKey] ?? .distantPast
                 if now.timeIntervalSince(lastNotified) >= 60 {
                     let title = activeChannelDisplayName()
-                    let body = "new activity"
+                    let body = "new chats!"
                     NotificationService.shared.sendLocalNotification(title: title, body: body, identifier: "channel-activity-\(channelKey)-\(now.timeIntervalSince1970)")
                     lastPublicActivityNotifyAt[channelKey] = now
                 }
