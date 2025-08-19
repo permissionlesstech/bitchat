@@ -85,6 +85,11 @@ public class GroupPersistenceService: ObservableObject {
         }
     }
     
+    /// Get all groups
+    func getAllGroups() -> [BitchatGroup] {
+        return Array(groups.values)
+    }
+    
     /// Update group information
     func updateGroup(_ group: BitchatGroup) {
         groups[group.id] = group

@@ -372,8 +372,8 @@ struct ContentView: View {
                                                 .fixedSize(horizontal: false, vertical: true)
                                                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                                            // Delivery status (private, self)
-                                            if message.isPrivate && isOutgoing, let status = message.deliveryStatus {
+                                            // Delivery status (private and group messages, self)
+                                            if isOutgoing, let status = message.deliveryStatus {
                                                 DeliveryStatusView(status: status, colorScheme: colorScheme)
                                                     .padding(.leading, 2)
                                             }
@@ -988,6 +988,14 @@ struct ContentView: View {
                                         Image(systemName: "envelope.fill")
                                             .font(.system(size: 10))
                                             .foregroundColor(Color.orange)
+                                    }
+                                    
+                                    // Pending messages indicator
+                                    if let pendingCount = viewModel.getPendingMessageCount(for: group.id), pendingCount > 0 {
+                                        Image(systemName: "clock")
+                                            .font(.system(size: 10))
+                                            .foregroundColor(Color.yellow)
+                                            .help("\(pendingCount) message(s) pending delivery")
                                     }
                                     
                                     Spacer()
