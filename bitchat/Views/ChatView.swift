@@ -124,11 +124,15 @@ struct ChatsView: View {
             Button("Join Circle") {}
         }
         .sheet(isPresented: $isNewView) {
-            NewContact()
-                .presentationDetents([.fraction(0.999)])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(24)
-                .interactiveDismissDisabled(false)
+            if #available(iOS 16.4, *) {
+                NewContact()
+                    .presentationDetents([.fraction(0.999)])
+                    .presentationDragIndicator(.visible)
+                    .presentationCornerRadius(24)
+                    .interactiveDismissDisabled(false)
+            } else {
+                // Fallback on earlier versions
+            }
         }
     }
 
