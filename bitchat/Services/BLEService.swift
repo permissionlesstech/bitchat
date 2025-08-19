@@ -821,7 +821,8 @@ final class BLEService: NSObject {
         
         // 1. First try sending as central via writes to connected peripherals
         // This is the preferred path when we have direct peripheral connections
-        let connectedPeripheralStates: [PeripheralState] = collectionsQueue.sync { peripherals.values.filter { $0.isConnected } }
+        let peripheralStatesSnapshot: [PeripheralState] = collectionsQueue.sync { Array(peripherals.values) }
+        let connectedPeripheralStates = peripheralStatesSnapshot.filter { $0.isConnected }
         for state in connectedPeripheralStates {
                 if let characteristic = state.characteristic {
                 state.peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
@@ -837,9 +838,12 @@ final class BLEService: NSObject {
                              packet.type == MessageType.message.rawValue ||
                              packet.type == MessageType.leave.rawValue ||
                              packet.type == MessageType.noiseHandshake.rawValue
-        if isBroadcastType, let characteristic = characteristic, !subscribedCentrals.isEmpty {
+        // Snapshot centrals and mapping under collectionsQueue to avoid concurrent mutation
+        let centralsSnapshot: [CBCentral] = collectionsQueue.sync { Array(subscribedCentrals) }
+        let centralMapSnapshot: [String: String] = collectionsQueue.sync { centralToPeerID }
+        if isBroadcastType, let characteristic = characteristic, !centralsSnapshot.isEmpty {
             // If value exceeds minimum allowed by connected centrals, handle per constraints
-            let minAllowed = subscribedCentrals.map { $0.maximumUpdateValueLength }.min() ?? 20
+            let minAllowed = centralsSnapshot.map { $0.maximumUpdateValueLength }.min() ?? 20
             // Minimum BitChat frame = 13 (header) + 8 (senderID) = 21 bytes
             if minAllowed < 21 {
                 // Cannot deliver any BitChat frame via notifications on this link; skip notify
@@ -851,7 +855,7 @@ final class BLEService: NSObject {
             }
             let success = peripheralManager?.updateValue(data, for: characteristic, onSubscribedCentrals: nil) ?? false
             if success {
-                sentToCentrals = subscribedCentrals.count
+                sentToCentrals = centralsSnapshot.count
                 if packet.type == MessageType.message.rawValue {
                     // Broadcast message sent
                 } else if packet.type == MessageType.noiseHandshake.rawValue {
@@ -888,9 +892,7 @@ final class BLEService: NSObject {
         guard peripheral.state == .connected else { return }
         
         let peripheralUUID = peripheral.identifier.uuidString
-        let characteristic: CBCharacteristic? = collectionsQueue.sync {
-            peripherals[peripheralUUID]?.characteristic
-        }
+        let characteristic: CBCharacteristic? = collectionsQueue.sync { peripherals[peripheralUUID]?.characteristic }
         guard let characteristic = characteristic else { return }
         
         // Fire-and-forget principle: always use .withoutResponse for speed
@@ -2025,7 +2027,9 @@ extension BLEService: CBPeripheralManagerDelegate {
     
     func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didSubscribeTo characteristic: CBCharacteristic) {
         SecureLogger.log("📥 Central subscribed: \(central.identifier.uuidString)", category: SecureLogger.session, level: .debug)
-        subscribedCentrals.append(central)
+        collectionsQueue.async(flags: .barrier) { [weak self] in
+            self?.subscribedCentrals.append(central)
+        }
         // Send announce to the newly subscribed central after a delay to avoid overwhelming
         // Sending announce to new subscriber
         sendAnnounce(forceSend: true)
@@ -2033,7 +2037,9 @@ extension BLEService: CBPeripheralManagerDelegate {
     
     func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didUnsubscribeFrom characteristic: CBCharacteristic) {
         SecureLogger.log("📤 Central unsubscribed: \(central.identifier.uuidString)", category: SecureLogger.session, level: .debug)
-        subscribedCentrals.removeAll { $0.identifier == central.identifier }
+        collectionsQueue.async(flags: .barrier) { [weak self] in
+            self?.subscribedCentrals.removeAll { $0.identifier == central.identifier }
+        }
         
         // Ensure we're still advertising for other devices to find us
         if peripheral.isAdvertising == false {
