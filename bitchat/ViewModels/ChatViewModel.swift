@@ -2750,8 +2750,10 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         let peerNicknames = meshService.getPeerNicknames()
         // Compose the valid mention tokens based on current peers (already suffixed where needed)
         var validTokens = Set(peerNicknames.values)
-        // Always allow mentioning self by base nickname
+        // Always allow mentioning self by base nickname and suffixed disambiguator
         validTokens.insert(nickname)
+        let selfSuffixToken = nickname + "#" + String(meshService.myPeerID.prefix(4))
+        validTokens.insert(selfSuffixToken)
         
         for match in matches {
             if let range = Range(match.range(at: 1), in: content) {
