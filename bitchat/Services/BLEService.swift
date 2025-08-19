@@ -124,7 +124,7 @@ final class BLEService: NSObject {
             return peers.values.map { info in
                 var display = info.nickname
                 if info.isConnected, (counts[info.nickname] ?? 0) > 1 {
-                    display += " #" + String(info.id.prefix(4))
+                    display += "#" + String(info.id.prefix(4))
                 }
                 return TransportPeerSnapshot(
                     id: info.id,
@@ -372,7 +372,7 @@ final class BLEService: NSObject {
             for (id, info) in connected {
                 var name = info.nickname
                 if (counts[info.nickname] ?? 0) > 1 {
-                    name += " #" + String(id.prefix(4))
+                    name += "#" + String(id.prefix(4))
                 }
                 result[id] = name
             }
@@ -1218,7 +1218,7 @@ final class BLEService: NSObject {
         // Treat a collision if another connected peer shares the nickname OR our own nickname matches
         let hasCollision = peers.values.contains { $0.isConnected && $0.nickname == info.nickname && $0.id != peerID } || (myNickname == info.nickname)
         if hasCollision {
-            senderNickname += " #" + String(peerID.prefix(4))
+            senderNickname += "#" + String(peerID.prefix(4))
         }
 
         SecureLogger.log("💬 [\(senderNickname)] TTL:\(packet.ttl): \(String(content.prefix(50)))\(content.count > 50 ? "..." : "")", category: SecureLogger.session, level: .debug)
@@ -1471,7 +1471,7 @@ final class BLEService: NSObject {
             return peers.values.map { info in
                 var display = info.nickname
                 if info.isConnected, (counts[info.nickname] ?? 0) > 1 {
-                    display += " #" + String(info.id.prefix(4))
+                    display += "#" + String(info.id.prefix(4))
                 }
                 return TransportPeerSnapshot(
                     id: info.id,
