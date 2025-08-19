@@ -61,7 +61,7 @@ struct LocationChannelsSheet: View {
                 }
             }
         }
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.large])
         .onAppear {
             // Refresh channels when opening
             if manager.permissionState == LocationChannelManager.PermissionState.authorized {
