@@ -1674,7 +1674,8 @@ extension BLEService: CBCentralManagerDelegate {
         central.connect(peripheral, options: options)
         
         // Set a timeout for the connection attempt
-        DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak self] in
+        // Use BLE queue to mutate BLE-related state consistently
+        bleQueue.asyncAfter(deadline: .now() + 5.0) { [weak self] in
             guard let self = self,
                   let state = self.peripherals[peripheralID],
                   state.isConnecting && !state.isConnected else { return }
@@ -1738,7 +1739,7 @@ extension BLEService: CBCentralManagerDelegate {
         if centralManager?.state == .poweredOn {
             // Stop and restart scanning to ensure we get fresh discovery events
             centralManager?.stopScan()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            bleQueue.asyncAfter(deadline: .now() + 0.1) { [weak self] in
                 self?.startScanning()
             }
         }
