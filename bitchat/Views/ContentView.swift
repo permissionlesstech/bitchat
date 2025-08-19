@@ -967,7 +967,7 @@ struct ContentView: View {
                         .foregroundColor(badgeColor)
                         .lineLimit(1)
                         .truncationMode(.head)
-                        .frame(minWidth: 44, maxWidth: 110, alignment: .trailing)
+                        .frame(minWidth: 60, maxWidth: 160, alignment: .trailing)
                         .fixedSize(horizontal: false, vertical: false)
                         .accessibilityLabel("location channels")
                     #else
@@ -978,7 +978,7 @@ struct ContentView: View {
                     #endif
                 }
                 .buttonStyle(.plain)
-                .padding(.trailing, 12)
+                .padding(.trailing, 6)
                 #endif
 
                 HStack(spacing: 4) {

@@ -98,12 +98,12 @@ struct LocationChannelsSheet: View {
             // Custom geohash teleport
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    TextField("#custom geohash", text: $customGeohash)
+                    TextField("#geohash", text: $customGeohash)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled(true)
                         .font(.system(size: 14, design: .monospaced))
                         .keyboardType(.asciiCapable)
-                    Button("join") {
+                    Button("teleport") {
                         let gh = customGeohash.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().replacingOccurrences(of: "#", with: "")
                         if validateGeohash(gh) {
                             let level = levelForLength(gh.count)
@@ -115,6 +115,7 @@ struct LocationChannelsSheet: View {
                         }
                     }
                     .buttonStyle(.plain)
+                    .font(.system(size: 14, design: .monospaced))
                 }
                 if let err = customError {
                     Text(err)
