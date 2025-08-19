@@ -965,6 +965,9 @@ struct ContentView: View {
                     Text(badgeText)
                         .font(.system(size: 14, design: .monospaced))
                         .foregroundColor(badgeColor)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .fixedSize(horizontal: true, vertical: false)
                         .accessibilityLabel("location channels")
                     #else
                     Text("#")

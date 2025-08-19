@@ -927,9 +927,11 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             #if os(iOS)
             if case .mesh = activeChannel {
                 meshTimeline.append(message)
+                trimMeshTimelineIfNeeded()
             }
             #else
             meshTimeline.append(message)
+            trimMeshTimelineIfNeeded()
             #endif
             trimMessagesIfNeeded()
             
@@ -975,8 +977,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         switch channel {
         case .mesh:
             messages = meshTimeline
-        case .location:
-            messages.removeAll()
+        case .location(let ch):
+            messages = geoTimelines[ch.geohash] ?? []
         }
         // Unsubscribe previous
         if let sub = geoSubscriptionID {
@@ -2436,6 +2438,13 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             messages.removeFirst(removeCount)
         }
     }
+
+    private func trimMeshTimelineIfNeeded() {
+        if meshTimeline.count > meshTimelineCap {
+            let removeCount = meshTimeline.count - meshTimelineCap
+            meshTimeline.removeFirst(removeCount)
+        }
+    }
     
     private func trimPrivateChatMessagesIfNeeded(for peerID: String) {
         // Handled by PrivateChatManager
@@ -2455,7 +2464,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     private func addPrivateMessage(_ message: BitchatMessage, for peerID: String) {
         // Deprecated - messages are now added directly in didReceiveMessage to avoid double processing
     }
-    
+
     // Update encryption status in appropriate places, not during view updates
     @MainActor
     private func updateEncryptionStatus(for peerID: String) {
@@ -4005,7 +4014,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         // Persist mesh messages to mesh timeline always
         if !isGeo && finalMessage.sender != "system" {
             meshTimeline.append(finalMessage)
-            trimMessagesIfNeeded()
+            trimMeshTimelineIfNeeded()
         }
 
         // Only add message to current timeline if it matches active channel or is system
