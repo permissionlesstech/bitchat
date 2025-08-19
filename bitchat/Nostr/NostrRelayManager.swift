@@ -542,6 +542,16 @@ struct NostrFilter: Encodable {
         filter.limit = 100 // Add a reasonable limit
         return filter
     }
+
+    // For location channels: geohash-scoped ephemeral events (kind 20000)
+    static func geohashEphemeral(_ geohash: String, since: Date? = nil, limit: Int = 200) -> NostrFilter {
+        var filter = NostrFilter()
+        filter.kinds = [20000]
+        filter.since = since?.timeIntervalSince1970.toInt()
+        filter.tagFilters = ["g": [geohash]]
+        filter.limit = limit
+        return filter
+    }
 }
 
 // Dynamic coding key for tag filters

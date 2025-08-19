@@ -58,6 +58,9 @@ struct ContentView: View {
     // MARK: - Properties
     
     @EnvironmentObject var viewModel: ChatViewModel
+    #if os(iOS)
+    @ObservedObject private var locationManager = LocationChannelManager.shared
+    #endif
     @State private var messageText = ""
     @State private var textFieldSelection: NSRange? = nil
     @FocusState private var isTextFieldFocused: Bool
@@ -77,6 +80,7 @@ struct ContentView: View {
     @State private var lastScrollTime: Date = .distantPast
     @State private var scrollThrottleTimer: Timer?
     @State private var autocompleteDebounceTimer: Timer?
+    @State private var showLocationChannelsSheet = false
     
     // MARK: - Computed Properties
     
@@ -918,7 +922,7 @@ struct ContentView: View {
                         .foregroundColor(Color.orange)
                         .accessibilityLabel("Unread private messages")
                 }
-                
+
                 // Single pass to count both metrics
                 let peerCounts = viewModel.allPeers.reduce(into: (others: 0, mesh: 0)) { counts, peer in
                     guard peer.id != viewModel.meshService.myPeerID else { return }
@@ -938,6 +942,41 @@ struct ContentView: View {
                 // Purple only if we have peers but none are reachable via mesh (only via Nostr)
                 let isNostrOnly = otherPeersCount > 0 && meshPeerCount == 0
                 
+                // Location channels button '#'
+                #if os(iOS)
+                Button(action: { showLocationChannelsSheet = true }) {
+                    #if os(iOS)
+                    let badgeText: String = {
+                        switch locationManager.selectedChannel {
+                        case .mesh:
+                            return "#mesh"
+                        case .location(let ch):
+                            return "#\(ch.level.displayName.lowercased())"
+                        }
+                    }()
+                    let badgeColor: Color = {
+                        switch locationManager.selectedChannel {
+                        case .mesh:
+                            return Color.blue
+                        case .location:
+                            return Color.green
+                        }
+                    }()
+                    Text(badgeText)
+                        .font(.system(size: 14, design: .monospaced))
+                        .foregroundColor(badgeColor)
+                        .accessibilityLabel("location channels")
+                    #else
+                    Text("#")
+                        .font(.system(size: 14, design: .monospaced))
+                        .foregroundColor(secondaryTextColor)
+                        .accessibilityLabel("location channels")
+                    #endif
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, 12)
+                #endif
+
                 HStack(spacing: 4) {
                     // People icon with count
                     Image(systemName: "person.2.fill")
@@ -958,6 +997,11 @@ struct ContentView: View {
         }
         .frame(height: 44)
         .padding(.horizontal, 12)
+        #if os(iOS)
+        .sheet(isPresented: $showLocationChannelsSheet) {
+            LocationChannelsSheet(isPresented: $showLocationChannelsSheet)
+        }
+        #endif
         .background(backgroundColor.opacity(0.95))
     }
     
@@ -1115,7 +1159,7 @@ struct ContentView: View {
 
 // MARK: - Helper Views
 
-// Helper view for rendering message content with clickable hashtags
+// Helper view for rendering message content (plain, no hashtag/mention formatting)
 struct MessageContentView: View {
     let message: BitchatMessage
     let viewModel: ChatViewModel
@@ -1123,106 +1167,15 @@ struct MessageContentView: View {
     let isMentioned: Bool
     
     var body: some View {
-        let content = message.content
-        let hashtagPattern = "#([a-zA-Z0-9_]+)"
-        let mentionPattern = "@([a-zA-Z0-9_]+)"
-        
-        let hashtagRegex = try? NSRegularExpression(pattern: hashtagPattern, options: [])
-        let mentionRegex = try? NSRegularExpression(pattern: mentionPattern, options: [])
-        
-        let hashtagMatches = hashtagRegex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
-        let mentionMatches = mentionRegex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
-        
-        // Combine all matches and sort by location
-        var allMatches: [(range: NSRange, type: String)] = []
-        for match in hashtagMatches {
-            allMatches.append((match.range(at: 0), "hashtag"))
-        }
-        for match in mentionMatches {
-            allMatches.append((match.range(at: 0), "mention"))
-        }
-        allMatches.sort { $0.range.location < $1.range.location }
-        
-        // Build the text as a concatenated Text view for natural wrapping
-        let segments = buildTextSegments()
-        var result = Text("")
-        
-        for segment in segments {
-            if segment.type == "hashtag" {
-                // Note: We can't have clickable links in concatenated Text, so hashtags won't be clickable
-                result = result + Text(segment.text)
-                    .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                    .foregroundColor(Color.blue)
-                    .underline()
-            } else if segment.type == "mention" {
-                result = result + Text(segment.text)
-                    .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                    .foregroundColor(Color.orange)
-            } else {
-                result = result + Text(segment.text)
-                    .font(.system(size: 14, design: .monospaced))
-                    .fontWeight(isMentioned ? .bold : .regular)
-            }
-        }
-        
-        return result
+        Text(message.content)
+            .font(.system(size: 14, design: .monospaced))
+            .fontWeight(isMentioned ? .bold : .regular)
             .textSelection(.enabled)
     }
     
     // MARK: - Helper Methods
     
-    private func buildTextSegments() -> [(text: String, type: String)] {
-        var segments: [(text: String, type: String)] = []
-        let content = message.content
-        var lastEnd = content.startIndex
-        
-        let hashtagPattern = "#([a-zA-Z0-9_]+)"
-        let mentionPattern = "@([a-zA-Z0-9_]+)"
-        
-        let hashtagRegex = try? NSRegularExpression(pattern: hashtagPattern, options: [])
-        let mentionRegex = try? NSRegularExpression(pattern: mentionPattern, options: [])
-        
-        let hashtagMatches = hashtagRegex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
-        let mentionMatches = mentionRegex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
-        
-        // Combine all matches and sort by location
-        var allMatches: [(range: NSRange, type: String)] = []
-        for match in hashtagMatches {
-            allMatches.append((match.range(at: 0), "hashtag"))
-        }
-        for match in mentionMatches {
-            allMatches.append((match.range(at: 0), "mention"))
-        }
-        allMatches.sort { $0.range.location < $1.range.location }
-        
-        for (matchRange, matchType) in allMatches {
-            if let range = Range(matchRange, in: content) {
-                // Add text before the match
-                if lastEnd < range.lowerBound {
-                    let beforeText = String(content[lastEnd..<range.lowerBound])
-                    if !beforeText.isEmpty {
-                        segments.append((beforeText, "text"))
-                    }
-                }
-                
-                // Add the match
-                let matchText = String(content[range])
-                segments.append((matchText, matchType))
-                
-                lastEnd = range.upperBound
-            }
-        }
-        
-        // Add any remaining text
-        if lastEnd < content.endIndex {
-            let remainingText = String(content[lastEnd...])
-            if !remainingText.isEmpty {
-                segments.append((remainingText, "text"))
-            }
-        }
-        
-        return segments
-    }
+    // buildTextSegments removed: content is rendered plain.
 }
 
 // Delivery status indicator view

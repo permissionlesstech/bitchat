@@ -107,41 +107,75 @@ class CommandProcessor {
         guard !targetName.isEmpty else {
             return .error(message: "usage: /\(action) <nickname>")
         }
-        
-        let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
-        
-        guard let targetPeerID = chatViewModel?.getPeerIDForNickname(nickname),
-              let myNickname = chatViewModel?.nickname else {
-            return .error(message: "cannot \(action) \(nickname): not found")
+
+        // Normalize nickname input: strip leading '@' and optional '#abcd' discriminator
+        let raw = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
+        let baseNickname: String = {
+            if let hashIndex = raw.firstIndex(of: "#") { return String(raw[..<hashIndex]) }
+            return raw
+        }()
+
+        guard let myNickname = chatViewModel?.nickname else {
+            return .error(message: "cannot \(action) \(baseNickname): not ready")
         }
-        
-        let emoteContent = "* \(emoji) \(myNickname) \(action) \(nickname)\(suffix) *"
-        
-        if chatViewModel?.selectedPrivateChatPeer != nil {
-            // In private chat
-            if let peerNickname = meshService?.peerNickname(peerID: targetPeerID) {
-                let personalMessage = "* \(emoji) \(myNickname) \(action) you\(suffix) *"
-                meshService?.sendPrivateMessage(personalMessage, to: targetPeerID, 
-                                               recipientNickname: peerNickname, 
-                                               messageID: UUID().uuidString)
-                // Also add a local system message so the sender sees a natural-language confirmation
-                let pastAction: String = {
-                    switch action {
-                    case "hugs": return "hugged"
-                    case "slaps": return "slapped"
-                    default: return action.hasSuffix("e") ? action + "d" : action + "ed"
+
+        // Public channel emote: no need to resolve peer, just broadcast without local echo
+        if chatViewModel?.selectedPrivateChatPeer == nil {
+            // Compute sender display (with discriminator in location channels)
+            let senderDisplay: String = {
+                #if os(iOS)
+                switch LocationChannelManager.shared.selectedChannel {
+                case .location(let ch):
+                    if let id = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
+                        let d = String(id.publicKeyHex.suffix(4))
+                        return myNickname + "#" + d
                     }
-                }()
-                let localText = "\(emoji) you \(pastAction) \(nickname)\(suffix)"
-                chatViewModel?.addLocalPrivateSystemMessage(localText, to: targetPeerID)
-            }
-        } else {
-            // In public chat: send to mesh and also add a local system echo so sender sees it immediately
-            meshService?.sendMessage(emoteContent, mentions: [])
-            let publicEcho = "\(emoji) \(myNickname) \(action) \(nickname)\(suffix)"
-            chatViewModel?.addPublicSystemMessage(publicEcho)
+                    return myNickname
+                default:
+                    return myNickname
+                }
+                #else
+                return myNickname
+                #endif
+            }()
+
+            // Normalize target: strip leading '@' for clean display
+            let targetDisplay = raw.hasPrefix("@") ? String(raw.dropFirst()) : raw
+            // Broadcast content (wrapped with * ... * so receivers convert to system style; includes emoji)
+            let publicText = "* \(emoji) \(senderDisplay) \(action) \(targetDisplay)\(suffix) *"
+            chatViewModel?.sendPublicRaw(publicText)
+
+            // Local system confirmation for the sender
+            let pastAction: String = {
+                switch action {
+                case "hugs": return "hugged"
+                case "slaps": return "slapped"
+                default: return action.hasSuffix("e") ? action + "d" : action + "ed"
+                }
+            }()
+            chatViewModel?.addPublicSystemMessage("\(emoji) you \(pastAction) \(targetDisplay)")
+            return .handled
         }
-        
+
+        // Private chat emote: resolve peer and send a direct message
+        guard let targetPeerID = chatViewModel?.getPeerIDForNickname(baseNickname) else {
+            return .error(message: "cannot \(action) \(baseNickname): not found")
+        }
+        if let peerNickname = meshService?.peerNickname(peerID: targetPeerID) {
+            let personalMessage = "* \(emoji) \(myNickname) \(action) you\(suffix) *"
+            meshService?.sendPrivateMessage(personalMessage, to: targetPeerID,
+                                           recipientNickname: peerNickname,
+                                           messageID: UUID().uuidString)
+            let pastAction: String = {
+                switch action {
+                case "hugs": return "hugged"
+                case "slaps": return "slapped"
+                default: return action.hasSuffix("e") ? action + "d" : action + "ed"
+                }
+            }()
+            let localText = "\(emoji) you \(pastAction) \(raw)\(suffix)"
+            chatViewModel?.addLocalPrivateSystemMessage(localText, to: targetPeerID)
+        }
         return .handled
     }
     

@@ -204,6 +204,13 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     private var processedNostrEvents = Set<String>()  // Simple deduplication
     private let userDefaults = UserDefaults.standard
     private let nicknameKey = "bitchat.nickname"
+    // Location channel state
+    #if os(iOS)
+    @Published private var activeChannel: ChannelID = .mesh
+    private var geoSubscriptionID: String? = nil
+    private var currentGeohash: String? = nil
+    private var geoNicknames: [String: String] = [:] // pubkeyHex(lowercased) -> nickname
+    #endif
     
     // MARK: - Caches
     
@@ -387,9 +394,26 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             
             self.cancellables.insert(cancellable)
         }
-        
+
         // Set up Noise encryption callbacks
         setupNoiseCallbacks()
+
+        #if os(iOS)
+        // Observe location channel selection
+        LocationChannelManager.shared.$selectedChannel
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] channel in
+                guard let self = self else { return }
+                Task { @MainActor in
+                    self.switchLocationChannel(to: channel)
+                }
+            }
+            .store(in: &cancellables)
+        // Initialize with current selection
+        Task { @MainActor in
+            self.switchLocationChannel(to: LocationChannelManager.shared.selectedChannel)
+        }
+        #endif
         
         // Request notification permission
         NotificationService.shared.requestAuthorization()
@@ -800,8 +824,19 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             let mentions = parseMentions(from: content)
             
             // Add message to local display
+            #if os(iOS)
+            var displaySender = nickname
+            if case .location(let ch) = activeChannel,
+               let myGeoIdentity = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
+                let suffix = String(myGeoIdentity.publicKeyHex.suffix(4))
+                displaySender = nickname + "#" + suffix
+            }
+            #else
+            let displaySender = nickname
+            #endif
+
             let message = BitchatMessage(
-                sender: nickname,
+                sender: displaySender,
                 content: content,
                 timestamp: Date(),
                 isRelay: false,
@@ -819,10 +854,114 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             // Force immediate UI update for user's own messages
             objectWillChange.send()
             
-            // Send via mesh with mentions
+            #if os(iOS)
+            if case .location(let ch) = activeChannel {
+                // Send to geohash channel via Nostr ephemeral
+                Task { @MainActor in
+                    do {
+                        let identity = try NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash)
+                        let event = try NostrProtocol.createEphemeralGeohashEvent(
+                            content: content,
+                            geohash: ch.geohash,
+                            senderIdentity: identity,
+                            nickname: self.nickname
+                        )
+                        NostrRelayManager.shared.sendEvent(event)
+                    } catch {
+                        SecureLogger.log("❌ Failed to send geohash message: \(error)", category: SecureLogger.session, level: .error)
+                        self.addSystemMessage("failed to send to location channel")
+                    }
+                }
+            } else {
+                // Send via mesh with mentions
+                meshService.sendMessage(content, mentions: mentions)
+            }
+            #else
+            // Send via mesh with mentions (non-iOS)
             meshService.sendMessage(content, mentions: mentions)
+            #endif
         }
     }
+
+    #if os(iOS)
+    @MainActor
+    private func switchLocationChannel(to channel: ChannelID) {
+        activeChannel = channel
+        // Clear current public timeline to show only messages relevant to the new channel
+        messages.removeAll()
+        // Unsubscribe previous
+        if let sub = geoSubscriptionID {
+            NostrRelayManager.shared.unsubscribe(id: sub)
+            geoSubscriptionID = nil
+        }
+        currentGeohash = nil
+        // Reset nickname cache for geochat participants
+        geoNicknames.removeAll()
+        
+        guard case .location(let ch) = channel else { return }
+        currentGeohash = ch.geohash
+        let subID = "geo-\(ch.geohash)"
+        geoSubscriptionID = subID
+        let filter = NostrFilter.geohashEphemeral(ch.geohash, since: Date().addingTimeInterval(-3600), limit: 200)
+        NostrRelayManager.shared.subscribe(filter: filter, id: subID) { [weak self] event in
+            guard let self = self else { return }
+            // Only handle ephemeral kind 20000 with matching tag
+            guard event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue else { return }
+            // Deduplicate
+            if self.processedNostrEvents.contains(event.id) { return }
+            self.processedNostrEvents.insert(event.id)
+            // Skip our own events (we already locally echoed)
+            if let gh = self.currentGeohash,
+               let myGeoIdentity = try? NostrIdentityBridge.deriveIdentity(forGeohash: gh),
+               myGeoIdentity.publicKeyHex.lowercased() == event.pubkey.lowercased() {
+                return
+            }
+            // Cache nickname from tag if present
+            if let nickTag = event.tags.first(where: { $0.first == "n" }), nickTag.count >= 2 {
+                let nick = nickTag[1]
+                self.geoNicknames[event.pubkey.lowercased()] = nick
+            }
+            
+            let senderName = self.displayNameForNostrPubkey(event.pubkey)
+            let content = event.content
+            let timestamp = Date(timeIntervalSince1970: TimeInterval(event.created_at))
+            let mentions = self.parseMentions(from: content)
+            let msg = BitchatMessage(
+                id: event.id,
+                sender: senderName,
+                content: content,
+                timestamp: timestamp,
+                isRelay: false,
+                originalSender: nil,
+                isPrivate: false,
+                recipientNickname: nil,
+                senderPeerID: "nostr:\(event.pubkey.prefix(8))",
+                mentions: mentions.isEmpty ? nil : mentions
+            )
+            Task { @MainActor in
+                self.handlePublicMessage(msg)
+                self.checkForMentions(msg)
+                self.sendHapticFeedback(for: msg)
+            }
+        }
+    }
+
+    private func displayNameForNostrPubkey(_ pubkeyHex: String) -> String {
+        let suffix = String(pubkeyHex.suffix(4))
+        // If this is our per-geohash identity, use our nickname
+        if let gh = currentGeohash, let myGeoIdentity = try? NostrIdentityBridge.deriveIdentity(forGeohash: gh) {
+            if myGeoIdentity.publicKeyHex.lowercased() == pubkeyHex.lowercased() {
+                return nickname + "#" + suffix
+            }
+        }
+        // If we have a known nickname tag for this pubkey, use it
+        if let nick = geoNicknames[pubkeyHex.lowercased()], !nick.isEmpty {
+            return nick + "#" + suffix
+        }
+        // Otherwise, anonymous with collision-resistant suffix
+        return "anon#\(suffix)"
+    }
+    #endif
     
     /// Sends an encrypted private message to a specific peer.
     /// - Parameters:
@@ -2889,6 +3028,33 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         addSystemMessage(content)
         objectWillChange.send()
     }
+
+    // Send a public message without adding a local user echo.
+    // Used for emotes where we want a local system-style confirmation instead.
+    @MainActor
+    func sendPublicRaw(_ content: String) {
+        #if os(iOS)
+        if case .location(let ch) = activeChannel {
+            Task { @MainActor in
+                do {
+                    let identity = try NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash)
+                    let event = try NostrProtocol.createEphemeralGeohashEvent(
+                        content: content,
+                        geohash: ch.geohash,
+                        senderIdentity: identity,
+                        nickname: self.nickname
+                    )
+                    NostrRelayManager.shared.sendEvent(event)
+                } catch {
+                    SecureLogger.log("❌ Failed to send geohash raw message: \(error)", category: SecureLogger.session, level: .error)
+                }
+            }
+            return
+        }
+        #endif
+        // Default: send over mesh
+        meshService.sendMessage(content, mentions: [])
+    }
     
     // MARK: - Simplified Nostr Integration (Inlined from MessageRouter)
     
@@ -3782,13 +3948,25 @@ private func checkForMentions(_ message: BitchatMessage) {
         #if os(iOS)
         guard UIApplication.shared.applicationState == .active else { return }
         
-        let isHugForMe = message.content.contains("🫂") && 
-                         (message.content.contains("hugs \(nickname)") ||
-                          message.content.contains("hugs you"))
-        
-        let isSlapForMe = message.content.contains("🐟") && 
-                          (message.content.contains("slaps \(nickname) around") ||
-                           message.content.contains("slaps you around"))
+        // Build acceptable target tokens: base nickname and, if in a location channel, nickname with '#abcd'
+        var tokens: [String] = [nickname]
+        #if os(iOS)
+        switch activeChannel {
+        case .location(let ch):
+            if let id = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
+                let d = String(id.publicKeyHex.suffix(4))
+                tokens.append(nickname + "#" + d)
+            }
+        default:
+            break
+        }
+        #endif
+
+        let hugsMe = tokens.contains { message.content.contains("hugs \($0)") } || message.content.contains("hugs you")
+        let slapsMe = tokens.contains { message.content.contains("slaps \($0) around") } || message.content.contains("slaps you around")
+
+        let isHugForMe = message.content.contains("🫂") && hugsMe
+        let isSlapForMe = message.content.contains("🐟") && slapsMe
         
         if isHugForMe && message.sender != nickname {
             // Long warm haptic for hugs
