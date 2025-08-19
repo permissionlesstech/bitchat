@@ -297,6 +297,44 @@ class NoiseEncryptionService {
         }
     }
     
+    // MARK: - Packet Signing/Verification
+    
+    /// Sign a BitchatPacket using the noise private key
+    func signPacket(_ packet: BitchatPacket) -> BitchatPacket? {
+        // Create canonical packet bytes for signing
+        guard let packetData = packet.toBinaryDataForSigning() else {
+            return nil
+        }
+        
+        // Sign with the noise private key (converted to Ed25519 for signing)
+        guard let signature = signData(packetData) else {
+            return nil
+        }
+        
+        // Return new packet with signature
+        var signedPacket = packet
+        signedPacket.signature = signature
+        return signedPacket
+    }
+    
+    /// Verify a BitchatPacket signature using the provided public key
+    func verifyPacketSignature(_ packet: BitchatPacket, publicKey: Data) -> Bool {
+        guard let signature = packet.signature else {
+            return false
+        }
+        
+        // Create canonical packet bytes for verification (without signature)
+        
+        guard let packetData = packet.toBinaryDataForSigning() else {
+            return false
+        }
+        
+        // For noise public keys, we need to derive the Ed25519 key for verification
+        // This assumes the noise key can be used for Ed25519 signing
+        return verifySignature(signature, for: packetData, publicKey: publicKey)
+    }
+
+    
     // MARK: - Handshake Management
     
     /// Initiate a Noise handshake with a peer

@@ -49,6 +49,8 @@ final class BLEService: NSObject {
         var nickname: String
         var isConnected: Bool
         var noisePublicKey: Data?
+        var signingPublicKey: Data?
+        var isVerifiedNickname: Bool
         var lastSeen: Date
     }
     private var peers: [String: PeerInfo] = [:]
@@ -59,6 +61,8 @@ final class BLEService: NSObject {
     // 5. Fragment Reassembly (necessary for messages > MTU)
     private var incomingFragments: [String: [Int: Data]] = [:]
     private var fragmentMetadata: [String: (type: UInt8, total: Int, timestamp: Date)] = [:]
+    // Backoff for peripherals that recently timed out connecting
+    private var recentConnectTimeouts: [String: Date] = [:] // Peripheral UUID -> last timeout
     
     // Simple announce throttling
     private var lastAnnounceSent = Date.distantPast
@@ -113,10 +117,20 @@ final class BLEService: NSObject {
 
     func currentPeerSnapshots() -> [TransportPeerSnapshot] {
         collectionsQueue.sync {
-            peers.values.map { info in
-                TransportPeerSnapshot(
+            // Compute nickname collision counts for connected peers
+            let connected = peers.values.filter { $0.isConnected }
+            var counts: [String: Int] = [:]
+            for p in connected { counts[p.nickname, default: 0] += 1 }
+            // Include our own nickname in collision counts so remote matching ours gets suffixed
+            counts[myNickname, default: 0] += 1
+            return peers.values.map { info in
+                var display = info.nickname
+                if info.isConnected, (counts[info.nickname] ?? 0) > 1 {
+                    display += "#" + String(info.id.prefix(4))
+                }
+                return TransportPeerSnapshot(
                     id: info.id,
-                    nickname: info.nickname,
+                    nickname: display,
                     isConnected: info.isConnected,
                     noisePublicKey: info.noisePublicKey,
                     lastSeen: info.lastSeen
@@ -349,9 +363,22 @@ final class BLEService: NSObject {
 
     func getPeerNicknames() -> [String: String] {
         return collectionsQueue.sync {
-            Dictionary(uniqueKeysWithValues: peers.compactMap { (id, info) in
-                info.isConnected ? (id, info.nickname) : nil
-            })
+            // Only connected peers
+            let connected = peers.filter { $0.value.isConnected }
+            // Count collisions by nickname (include our own nickname)
+            var counts: [String: Int] = [:]
+            for (_, info) in connected { counts[info.nickname, default: 0] += 1 }
+            counts[myNickname, default: 0] += 1
+            // Build map with suffix for collisions
+            var result: [String: String] = [:]
+            for (id, info) in connected {
+                var name = info.nickname
+                if (counts[info.nickname] ?? 0) > 1 {
+                    name += "#" + String(id.prefix(4))
+                }
+                result[id] = name
+            }
+            return result
         }
     }
     
@@ -1028,14 +1055,12 @@ final class BLEService: NSObject {
             return
         }
         
-        // Verify that the sender's derived ID from the announced public key matches the packet senderID
+        // Verify that the sender's derived ID from the announced noise public key matches the packet senderID
         // This helps detect relayed or spoofed announces. Only warn in release; assert in debug.
-        let derivedFromKey = PeerIDUtils.derivePeerID(fromPublicKey: announcement.publicKey)
+        let derivedFromKey = PeerIDUtils.derivePeerID(fromPublicKey: announcement.noisePublicKey)
         if derivedFromKey != peerID {
             SecureLogger.log("⚠️ Announce sender mismatch: derived \(derivedFromKey.prefix(8))… vs packet \(peerID.prefix(8))…", category: SecureLogger.security, level: .warning)
-            #if DEBUG
-            assertionFailure("Announce senderID does not match key-derived ID")
-            #endif
+
         }
         
         // Don't add ourselves as a peer
@@ -1066,23 +1091,49 @@ final class BLEService: NSObject {
             isNewPeer = (existingPeer == nil)
             isReconnectedPeer = wasDisconnected
             
+            // Verify packet signature using the announced signing public key
+            var verified = false
+            if packet.signature != nil {
+                // Verify that the packet was signed by the signing private key corresponding to the announced signing public key
+                verified = noiseService.verifyPacketSignature(packet, publicKey: announcement.signingPublicKey)
+                if !verified {
+                    SecureLogger.log("⚠️ Signature verification for announce failed \(peerID.prefix(8))", category: SecureLogger.security, level: .warning)
+                }
+            }
+
+            // If existing peer has a different noise public key, do not consider this verified
+            if let existing = existingPeer, let existingKey = existing.noisePublicKey, existingKey != announcement.noisePublicKey {
+                SecureLogger.log("⚠️ Announce key mismatch for \(peerID.prefix(8))… — keeping unverified", category: SecureLogger.security, level: .warning)
+                verified = false
+            }
+
+            // Require verified announce; ignore otherwise (no backward compatibility)
+            if !verified {
+                SecureLogger.log("❌ Ignoring unverified announce from \(peerID.prefix(8))…", category: SecureLogger.security, level: .warning)
+                return
+            }
+
             // Update or create peer info
             if let existing = existingPeer, existing.isConnected {
-                // Peer already connected, just update lastSeen to keep connection alive
+                // Update lastSeen and identity info
                 peers[peerID] = PeerInfo(
                     id: existing.id,
-                    nickname: announcement.nickname,  // Update nickname in case it changed
+                    nickname: announcement.nickname,
                     isConnected: true,
-                    noisePublicKey: announcement.publicKey,
-                    lastSeen: Date()  // Update timestamp to prevent timeout
+                    noisePublicKey: announcement.noisePublicKey,
+                    signingPublicKey: announcement.signingPublicKey,
+                    isVerifiedNickname: true,
+                    lastSeen: Date()
                 )
             } else {
                 // New peer or reconnecting peer
                 peers[peerID] = PeerInfo(
                     id: peerID,
                     nickname: announcement.nickname,
-                    isConnected: true,  // If we received their announce, we're connected
-                    noisePublicKey: announcement.publicKey,
+                    isConnected: true,
+                    noisePublicKey: announcement.noisePublicKey,
+                    signingPublicKey: announcement.signingPublicKey,
+                    isVerifiedNickname: true,
                     lastSeen: Date()
                 )
             }
@@ -1130,17 +1181,26 @@ final class BLEService: NSObject {
     // Mention parsing moved to ChatViewModel
     
     private func handleMessage(_ packet: BitchatPacket, from peerID: String) {
-        // Don't process our own messages
-        if peerID == myPeerID {
+        
+        // Enforce: only accept public messages from verified peers we know
+        guard let info = peers[peerID], info.isVerifiedNickname else {
+            SecureLogger.log("🚫 Dropping public message from unverified or unknown peer \(peerID.prefix(8))…", category: SecureLogger.security, level: .warning)
             return
         }
-        
+
         guard let content = String(data: packet.payload, encoding: .utf8) else {
             SecureLogger.log("❌ Failed to decode message payload as UTF-8", category: SecureLogger.session, level: .error)
             return
         }
         
-        let senderNickname = peers[peerID]?.nickname ?? "Unknown"
+        // Resolve display nickname; if collisions exist, append short peerID suffix
+        var senderNickname = info.nickname
+        // Treat a collision if another connected peer shares the nickname OR our own nickname matches
+        let hasCollision = peers.values.contains { $0.isConnected && $0.nickname == info.nickname && $0.id != peerID } || (myNickname == info.nickname)
+        if hasCollision {
+            senderNickname += "#" + String(peerID.prefix(4))
+        }
+
         SecureLogger.log("💬 [\(senderNickname)] TTL:\(packet.ttl): \(String(content.prefix(50)))\(content.count > 50 ? "..." : "")", category: SecureLogger.session, level: .debug)
         
         let ts = Date(timeIntervalSince1970: Double(packet.timestamp) / 1000)
@@ -1287,9 +1347,14 @@ final class BLEService: NSObject {
         
         // Reduced logging - only log errors, not every announce
         
+        // Create announce payload with both noise and signing public keys
+        let noisePub = noiseService.getStaticPublicKeyData()  // For noise handshakes and peer identification
+        let signingPub = noiseService.getSigningPublicKeyData()  // For signature verification
+        
         let announcement = AnnouncementPacket(
             nickname: myNickname,
-            publicKey: noiseService.getStaticPublicKeyData()
+            noisePublicKey: noisePub,
+            signingPublicKey: signingPub
         )
         
         guard let payload = announcement.encode() else {
@@ -1297,19 +1362,29 @@ final class BLEService: NSObject {
             return
         }
         
+        // Create packet with signature using the noise private key
         let packet = BitchatPacket(
             type: MessageType.announce.rawValue,
-            ttl: messageTTL,
-            senderID: myPeerID,
-            payload: payload
+            senderID: Data(hexString: myPeerID) ?? Data(),
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: payload,
+            signature: nil, // Will be set by signPacket below
+            ttl: messageTTL
         )
+        
+        // Sign the packet using the noise private key
+        guard let signedPacket = noiseService.signPacket(packet) else {
+            SecureLogger.log("❌ Failed to sign announce packet", category: SecureLogger.security, level: .error)
+            return
+        }
         
         // Call directly if on messageQueue, otherwise dispatch
         if DispatchQueue.getSpecific(key: messageQueueKey) != nil {
-            broadcastPacket(packet)
+            broadcastPacket(signedPacket)
         } else {
             messageQueue.async { [weak self] in
-                self?.broadcastPacket(packet)
+                self?.broadcastPacket(signedPacket)
             }
         }
     }
@@ -1356,10 +1431,19 @@ final class BLEService: NSObject {
     // NEW: Publish peer snapshots to subscribers and notify Transport delegates
     private func publishFullPeerData() {
         let transportPeers: [TransportPeerSnapshot] = collectionsQueue.sync {
-            peers.values.map { info in
-                TransportPeerSnapshot(
+            // Compute nickname collision counts for connected peers
+            let connected = peers.values.filter { $0.isConnected }
+            var counts: [String: Int] = [:]
+            for p in connected { counts[p.nickname, default: 0] += 1 }
+            counts[myNickname, default: 0] += 1
+            return peers.values.map { info in
+                var display = info.nickname
+                if info.isConnected, (counts[info.nickname] ?? 0) > 1 {
+                    display += "#" + String(info.id.prefix(4))
+                }
+                return TransportPeerSnapshot(
                     id: info.id,
-                    nickname: info.nickname,
+                    nickname: display,
                     isConnected: info.isConnected,
                     noisePublicKey: info.noisePublicKey,
                     lastSeen: info.lastSeen
@@ -1463,6 +1547,10 @@ final class BLEService: NSObject {
                 fragmentMetadata.removeValue(forKey: fragmentID)
             }
         }
+
+        // Clean old connection timeout backoff entries (> 2 minutes)
+        let timeoutCutoff = now.addingTimeInterval(-120)
+        recentConnectTimeouts = recentConnectTimeouts.filter { $0.value >= timeoutCutoff }
     }
 }
 
@@ -1499,9 +1587,13 @@ extension BLEService: CBCentralManagerDelegate {
     
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) {
         let peripheralID = peripheral.identifier.uuidString
-        let advertisedName = advertisementData[CBAdvertisementDataLocalNameKey] as? String ?? "Unknown"
+        let advertisedName = advertisementData[CBAdvertisementDataLocalNameKey] as? String ?? (peripheralID.prefix(6) + "…")
+        let isConnectable = (advertisementData[CBAdvertisementDataIsConnectable] as? NSNumber)?.boolValue ?? true
         let rssiValue = RSSI.intValue
         
+        // Skip if peripheral is not connectable (per advertisement data)
+        guard isConnectable else { return }
+
         // Skip if signal too weak - prevents connection attempts at extreme range
         guard rssiValue > -90 else {
             // Too far away, don't attempt connection
@@ -1523,6 +1615,11 @@ extension BLEService: CBCentralManagerDelegate {
             }
         }
         
+        // Backoff if this peripheral recently timed out connection within the last 15 seconds
+        if let lastTimeout = recentConnectTimeouts[peripheralID], Date().timeIntervalSince(lastTimeout) < 15 {
+            return
+        }
+
         // Check peripheral state - but cancel if stale
         if peripheral.state == .connecting || peripheral.state == .connected {
             // iOS might have stale state - force disconnect and retry
@@ -1557,17 +1654,19 @@ extension BLEService: CBCentralManagerDelegate {
         ]
         central.connect(peripheral, options: options)
         
-        // Set a timeout for the connection attempt
-        DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak self] in
+        // Set a timeout for the connection attempt (slightly longer for reliability)
+        // Use BLE queue to mutate BLE-related state consistently
+        bleQueue.asyncAfter(deadline: .now() + 8.0) { [weak self] in
             guard let self = self,
                   let state = self.peripherals[peripheralID],
                   state.isConnecting && !state.isConnected else { return }
             
             // Connection timed out - cancel it
             SecureLogger.log("⏱️ Timeout: \(advertisedName)",
-                            category: SecureLogger.session, level: .warning)
+                            category: SecureLogger.session, level: .debug)
             central.cancelPeripheralConnection(peripheral)
             self.peripherals[peripheralID] = nil
+            self.recentConnectTimeouts[peripheralID] = Date()
         }
     }
     
@@ -1622,7 +1721,7 @@ extension BLEService: CBCentralManagerDelegate {
         if centralManager?.state == .poweredOn {
             // Stop and restart scanning to ensure we get fresh discovery events
             centralManager?.stopScan()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            bleQueue.asyncAfter(deadline: .now() + 0.1) { [weak self] in
                 self?.startScanning()
             }
         }

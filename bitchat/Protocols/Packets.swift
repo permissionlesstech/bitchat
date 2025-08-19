@@ -4,11 +4,13 @@ import Foundation
 
 struct AnnouncementPacket {
     let nickname: String
-    let publicKey: Data
+    let noisePublicKey: Data            // Noise static public key (Curve25519.KeyAgreement)  
+    let signingPublicKey: Data          // Ed25519 public key for signing
 
     private enum TLVType: UInt8 {
         case nickname = 0x01
         case noisePublicKey = 0x02
+        case signingPublicKey = 0x03
     }
 
     func encode() -> Data? {
@@ -20,11 +22,17 @@ struct AnnouncementPacket {
         data.append(UInt8(nicknameData.count))
         data.append(nicknameData)
 
-        // TLV for public key
-        guard publicKey.count <= 255 else { return nil }
+        // TLV for noise public key
+        guard noisePublicKey.count <= 255 else { return nil }
         data.append(TLVType.noisePublicKey.rawValue)
-        data.append(UInt8(publicKey.count))
-        data.append(publicKey)
+        data.append(UInt8(noisePublicKey.count))
+        data.append(noisePublicKey)
+
+        // TLV for signing public key
+        guard signingPublicKey.count <= 255 else { return nil }
+        data.append(TLVType.signingPublicKey.rawValue)
+        data.append(UInt8(signingPublicKey.count))
+        data.append(signingPublicKey)
 
         return data
     }
@@ -32,12 +40,12 @@ struct AnnouncementPacket {
     static func decode(from data: Data) -> AnnouncementPacket? {
         var offset = 0
         var nickname: String?
-        var publicKey: Data?
+        var noisePublicKey: Data?
+        var signingPublicKey: Data?
 
         while offset + 2 <= data.count {
-            guard let type = TLVType(rawValue: data[offset]) else { return nil }
+            let typeRaw = data[offset]
             offset += 1
-
             let length = Int(data[offset])
             offset += 1
 
@@ -45,16 +53,27 @@ struct AnnouncementPacket {
             let value = data[offset..<offset + length]
             offset += length
 
-            switch type {
-            case .nickname:
-                nickname = String(data: value, encoding: .utf8)
-            case .noisePublicKey:
-                publicKey = Data(value)
+            if let type = TLVType(rawValue: typeRaw) {
+                switch type {
+                case .nickname:
+                    nickname = String(data: value, encoding: .utf8)
+                case .noisePublicKey:
+                    noisePublicKey = Data(value)
+                case .signingPublicKey:
+                    signingPublicKey = Data(value)
+                }
+            } else {
+                // Unknown TLV; skip (tolerant decoder for forward compatibility)
+                continue
             }
         }
 
-        guard let nickname = nickname, let publicKey = publicKey else { return nil }
-        return AnnouncementPacket(nickname: nickname, publicKey: publicKey)
+        guard let nickname = nickname, let noisePublicKey = noisePublicKey, let signingPublicKey = signingPublicKey else { return nil }
+        return AnnouncementPacket(
+            nickname: nickname,
+            noisePublicKey: noisePublicKey,
+            signingPublicKey: signingPublicKey
+        )
     }
 }
 
@@ -113,4 +132,3 @@ struct PrivateMessagePacket {
         return PrivateMessagePacket(messageID: messageID, content: content)
     }
 }
-

@@ -99,6 +99,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     private var hasNotifiedNetworkAvailable = false
     private var recentlySeenPeers: Set<String> = []
     private var lastNetworkNotificationTime = Date.distantPast
+    private var networkResetTimer: Timer? = nil
+    private let networkResetGraceSeconds: TimeInterval = 600 // 10 minutes; avoid refiring on short drops/reconnects
     @Published var nickname: String = "" {
         didSet {
             // Trim whitespace whenever nickname is set
@@ -894,6 +896,25 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             }
             addSystemMessage("Cannot send message to \(recipientNickname ?? "user") - peer is not reachable via mesh or Nostr.")
         }
+    }
+
+    /// Add a local system message to a private chat (no network send)
+    @MainActor
+    func addLocalPrivateSystemMessage(_ content: String, to peerID: String) {
+        let systemMessage = BitchatMessage(
+            sender: "system",
+            content: content,
+            timestamp: Date(),
+            isRelay: false,
+            originalSender: nil,
+            isPrivate: true,
+            recipientNickname: meshService.peerNickname(peerID: peerID),
+            senderPeerID: meshService.myPeerID
+        )
+        if privateChats[peerID] == nil { privateChats[peerID] = [] }
+        privateChats[peerID]?.append(systemMessage)
+        trimPrivateChatMessagesIfNeeded(for: peerID)
+        objectWillChange.send()
     }
     
     // MARK: - Bluetooth State Management
@@ -1776,22 +1797,34 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         let primaryColor = isDark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
         
         if message.sender != "system" {
-            // Sender (at the beginning)
-            let sender = AttributedString("<@\(message.sender)> ")
+            // Sender (at the beginning) with light-gray suffix styling if present
+            let (baseName, suffix) = splitSuffix(from: message.sender)
             var senderStyle = AttributeContainer()
-            
             // Use consistent color for all senders
             senderStyle.foregroundColor = primaryColor
             // Bold the user's own nickname
             let fontWeight: Font.Weight = message.sender == nickname ? .bold : .medium
             senderStyle.font = .system(size: 14, weight: fontWeight, design: .monospaced)
-            result.append(sender.mergingAttributes(senderStyle))
+
+            // Prefix "<@"
+            result.append(AttributedString("<@").mergingAttributes(senderStyle))
+            // Base name
+            result.append(AttributedString(baseName).mergingAttributes(senderStyle))
+            // Optional suffix (light gray)
+            if !suffix.isEmpty {
+                var suffixStyle = senderStyle
+                suffixStyle.foregroundColor = Color.secondary.opacity(0.6)
+                result.append(AttributedString(suffix).mergingAttributes(suffixStyle))
+            }
+            // Suffix "> "
+            result.append(AttributedString("> ").mergingAttributes(senderStyle))
             
             // Process content with hashtags and mentions
             let content = message.content
             
             let hashtagPattern = "#([a-zA-Z0-9_]+)"
-            let mentionPattern = "@([\\p{L}0-9_]+)"
+            // Allow optional '#abcd' suffix in mentions
+            let mentionPattern = "@([\\p{L}0-9_]+(?:#[a-fA-F0-9]{4})?)"
             
             let hashtagRegex = try? NSRegularExpression(pattern: hashtagPattern, options: [])
             let mentionRegex = try? NSRegularExpression(pattern: mentionPattern, options: [])
@@ -1803,15 +1836,20 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             let mentionMatches = mentionRegex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
             let urlMatches = detector?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
             
-            // Combine and sort matches
+            // Combine and sort matches, excluding hashtags/URLs overlapping mentions
+            let mentionRanges = mentionMatches.map { $0.range(at: 0) }
+            func overlapsMention(_ r: NSRange) -> Bool {
+                for mr in mentionRanges { if NSIntersectionRange(r, mr).length > 0 { return true } }
+                return false
+            }
             var allMatches: [(range: NSRange, type: String)] = []
-            for match in hashtagMatches {
+            for match in hashtagMatches where !overlapsMention(match.range(at: 0)) {
                 allMatches.append((match.range(at: 0), "hashtag"))
             }
             for match in mentionMatches {
                 allMatches.append((match.range(at: 0), "mention"))
             }
-            for match in urlMatches {
+            for match in urlMatches where !overlapsMention(match.range) {
                 allMatches.append((match.range, "url"))
             }
             allMatches.sort { $0.range.location < $1.range.location }
@@ -1836,20 +1874,34 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     
                     // Add styled match
                     let matchText = String(content[nsRange])
-                    var matchStyle = AttributeContainer()
-                    matchStyle.font = .system(size: 14, weight: .semibold, design: .monospaced)
-                    
-                    if type == "hashtag" {
-                        matchStyle.foregroundColor = Color.blue
-                        matchStyle.underlineStyle = .single
-                    } else if type == "mention" {
-                        matchStyle.foregroundColor = Color.orange
-                    } else if type == "url" {
-                        matchStyle.foregroundColor = Color.blue
-                        matchStyle.underlineStyle = .single
+                    if type == "mention" {
+                        // Split optional '#abcd' suffix and color suffix light grey
+                        let (mBase, mSuffix) = splitSuffix(from: matchText.replacingOccurrences(of: "@", with: ""))
+                        var mentionStyle = AttributeContainer()
+                        mentionStyle.font = .system(size: 14, weight: .semibold, design: .monospaced)
+                        mentionStyle.foregroundColor = Color.orange
+                        // Emit '@'
+                        result.append(AttributedString("@").mergingAttributes(mentionStyle))
+                        // Base name in orange
+                        result.append(AttributedString(mBase).mergingAttributes(mentionStyle))
+                        // Suffix in light grey
+                        if !mSuffix.isEmpty {
+                            var grey = mentionStyle
+                            grey.foregroundColor = Color.secondary.opacity(0.6)
+                            result.append(AttributedString(mSuffix).mergingAttributes(grey))
+                        }
+                    } else {
+                        var matchStyle = AttributeContainer()
+                        matchStyle.font = .system(size: 14, weight: .semibold, design: .monospaced)
+                        if type == "hashtag" {
+                            matchStyle.foregroundColor = Color.blue
+                            matchStyle.underlineStyle = .single
+                        } else if type == "url" {
+                            matchStyle.foregroundColor = Color.blue
+                            matchStyle.underlineStyle = .single
+                        }
+                        result.append(AttributedString(matchText).mergingAttributes(matchStyle))
                     }
-                    
-                    result.append(AttributedString(matchText).mergingAttributes(matchStyle))
                     lastEnd = nsRange.upperBound
                 }
             }
@@ -1892,6 +1944,19 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         message.setCachedFormattedText(result, isDark: isDark)
         
         return result
+    }
+
+    // Split a nickname into base and a '#abcd' suffix if present
+    private func splitSuffix(from name: String) -> (String, String) {
+        guard name.count >= 5 else { return (name, "") }
+        let suffix = String(name.suffix(5))
+        if suffix.first == "#", suffix.dropFirst().allSatisfy({ c in
+            ("0"..."9").contains(String(c)) || ("a"..."f").contains(String(c)) || ("A"..."F").contains(String(c))
+        }) {
+            let base = String(name.dropLast(5))
+            return (base, suffix)
+        }
+        return (name, "")
     }
     
     func formatMessage(_ message: BitchatMessage, colorScheme: ColorScheme) -> AttributedString {
@@ -2560,6 +2625,9 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             
             // Smart notification logic for "bitchatters nearby"
             if !peers.isEmpty {
+                // Cancel any pending reset if peers are back
+                self.networkResetTimer?.invalidate()
+                self.networkResetTimer = nil
                 // Only count mesh peers (actually connected via Bluetooth)
                 let meshPeers = peers.filter { peerID in
                     self.meshService.isPeerConnected(peerID)
@@ -2568,14 +2636,11 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 // Check if we have new mesh peers we haven't seen recently
                 let currentPeerSet = Set(meshPeers)
                 let newPeers = currentPeerSet.subtracting(self.recentlySeenPeers)
-                let timeSinceLastNotification = Date().timeIntervalSince(self.lastNetworkNotificationTime)
-                
                 // Send notification if:
                 // 1. We have mesh peers (not just Nostr-only)
-                // 2. There are new peers we haven't seen
-                // 3. Either it's been more than 5 minutes since last notification OR we haven't notified yet
-                if meshPeers.count > 0 && !newPeers.isEmpty && 
-                   (timeSinceLastNotification > 300 || !self.hasNotifiedNetworkAvailable) {
+                // 2. There are new peers we haven't seen (rising-edge)
+                // 3. We haven't already notified since the last sustained-empty period
+                if meshPeers.count > 0 && !newPeers.isEmpty && !self.hasNotifiedNetworkAvailable {
                     self.hasNotifiedNetworkAvailable = true
                     self.lastNetworkNotificationTime = Date()
                     self.recentlySeenPeers = currentPeerSet
@@ -2584,9 +2649,16 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                                    category: SecureLogger.session, level: .info)
                 }
             } else {
-                // No peers - reset tracking
-                self.hasNotifiedNetworkAvailable = false
-                self.recentlySeenPeers.removeAll()
+                // No peers - schedule a graceful reset to avoid refiring on brief drops
+                if self.networkResetTimer == nil {
+                    self.networkResetTimer = Timer.scheduledTimer(withTimeInterval: self.networkResetGraceSeconds, repeats: false) { [weak self] _ in
+                        guard let self = self else { return }
+                        self.hasNotifiedNetworkAvailable = false
+                        self.recentlySeenPeers.removeAll()
+                        self.networkResetTimer = nil
+                        SecureLogger.log("⏳ Mesh empty for \(Int(self.networkResetGraceSeconds))s — reset network notification state", category: SecureLogger.session, level: .debug)
+                    }
+                }
             }
             
             // Register ephemeral sessions for all connected peers
@@ -2685,19 +2757,25 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     }
     
     private func parseMentions(from content: String) -> [String] {
-        let pattern = "@([\\p{L}0-9_]+)"
+        // Allow optional disambiguation suffix '#abcd' for duplicate nicknames
+        let pattern = "@([\\p{L}0-9_]+(?:#[a-fA-F0-9]{4})?)"
         let regex = try? NSRegularExpression(pattern: pattern, options: [])
         let matches = regex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
         
         var mentions: [String] = []
         let peerNicknames = meshService.getPeerNicknames()
-        let allNicknames = Set(peerNicknames.values).union([nickname]) // Include self
+        // Compose the valid mention tokens based on current peers (already suffixed where needed)
+        var validTokens = Set(peerNicknames.values)
+        // Always allow mentioning self by base nickname and suffixed disambiguator
+        validTokens.insert(nickname)
+        let selfSuffixToken = nickname + "#" + String(meshService.myPeerID.prefix(4))
+        validTokens.insert(selfSuffixToken)
         
         for match in matches {
             if let range = Range(match.range(at: 1), in: content) {
                 let mentionedName = String(content[range])
-                // Only include if it's a valid nickname
-                if allNicknames.contains(mentionedName) {
+                // Only include if it's a current valid token (base or suffixed)
+                if validTokens.contains(mentionedName) {
                     mentions.append(mentionedName)
                 }
             }
@@ -2803,6 +2881,13 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             isRelay: false
         )
         messages.append(systemMessage)
+    }
+
+    /// Public helper to add a system message to the public chat timeline
+    @MainActor
+    func addPublicSystemMessage(_ content: String) {
+        addSystemMessage(content)
+        objectWillChange.send()
     }
     
     // MARK: - Simplified Nostr Integration (Inlined from MessageRouter)
@@ -3672,19 +3757,27 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     }
     
     /// Check for mentions and send notifications
-    private func checkForMentions(_ message: BitchatMessage) {
-        let isMentioned = message.mentions?.contains(nickname) ?? false
-        
-        // Mention check: \(isMentioned ? "mentioned" : "not mentioned")
-        
-        if isMentioned && message.sender != nickname {
-            SecureLogger.log("🔔 Mention from \(message.sender)", 
-                           category: SecureLogger.session, level: .info)
-            NotificationService.shared.sendMentionNotification(from: message.sender, message: message.content)
-        }
-    }
     
-    /// Send haptic feedback for special messages (iOS only)
+private func checkForMentions(_ message: BitchatMessage) {
+    // Determine our acceptable mention token. If any connected peer shares our nickname,
+    // require the disambiguated form '<nickname>#<peerIDprefix>' to trigger.
+    var myTokens: Set<String> = [nickname]
+    let meshPeers = meshService.getPeerNicknames()
+    let collisions = meshPeers.values.filter { $0.hasPrefix(nickname + "#") }
+    if !collisions.isEmpty {
+        let suffix = "#" + String(meshService.myPeerID.prefix(4))
+        myTokens = [nickname + suffix]
+    }
+    let isMentioned = (message.mentions?.contains { myTokens.contains($0) } ?? false)
+
+    if isMentioned && message.sender != nickname {
+        SecureLogger.log("🔔 Mention from \(message.sender)",
+                       category: SecureLogger.session, level: .info)
+        NotificationService.shared.sendMentionNotification(from: message.sender, message: message.content)
+    }
+}
+
+/// Send haptic feedback for special messages (iOS only)
     private func sendHapticFeedback(for message: BitchatMessage) {
         #if os(iOS)
         guard UIApplication.shared.applicationState == .active else { return }
