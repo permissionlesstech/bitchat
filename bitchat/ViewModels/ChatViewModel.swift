@@ -1200,6 +1200,13 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     self.privateChats[convKey]?.append(msg)
                     self.trimPrivateChatMessagesIfNeeded(for: convKey)
                     if shouldMarkUnread { self.unreadPrivateMessages.insert(convKey) }
+                    // Send delivery/read ACKs back via geohash identity
+                    let nostrTransport = NostrTransport()
+                    nostrTransport.senderPeerID = self.meshService.myPeerID
+                    nostrTransport.sendDeliveryAckGeohash(for: messageId, toRecipientHex: senderPubkey, from: id)
+                    if isViewing {
+                        nostrTransport.sendReadReceiptGeohash(messageId, toRecipientHex: senderPubkey, from: id)
+                    }
                     // Notify if not viewing
                     if !isViewing {
                         NotificationService.shared.sendPrivateMessageNotification(
@@ -1210,7 +1217,23 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     }
                     self.objectWillChange.send()
                 default:
-                    break
+                    // Handle delivered/read receipts for our sent messages
+                    switch noisePayload.type {
+                    case .delivered:
+                        if let messageID = String(data: noisePayload.data, encoding: .utf8),
+                           let idx = self.privateChats[convKey]?.firstIndex(where: { $0.id == messageID }) {
+                            self.privateChats[convKey]?[idx].deliveryStatus = .delivered(to: self.displayNameForNostrPubkey(senderPubkey), at: Date())
+                            self.objectWillChange.send()
+                        }
+                    case .readReceipt:
+                        if let messageID = String(data: noisePayload.data, encoding: .utf8),
+                           let idx = self.privateChats[convKey]?.firstIndex(where: { $0.id == messageID }) {
+                            self.privateChats[convKey]?[idx].deliveryStatus = .read(by: self.displayNameForNostrPubkey(senderPubkey), at: Date())
+                            self.objectWillChange.send()
+                        }
+                    default:
+                        break
+                    }
                 }
             }
         } catch {
@@ -1416,6 +1439,13 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             // Send via Nostr using per-geohash identity
             do {
                 let id = try NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash)
+                // Prevent messaging ourselves
+                if recipientHex.lowercased() == id.publicKeyHex.lowercased() {
+                    if let idx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
+                        privateChats[peerID]?[idx].deliveryStatus = .failed(reason: "cannot message yourself")
+                    }
+                    return
+                }
                 let nostrTransport = NostrTransport()
                 nostrTransport.senderPeerID = meshService.myPeerID
                 nostrTransport.sendPrivateMessageGeohash(content: content, toRecipientHex: recipientHex, from: id, messageID: messageID)
@@ -1508,6 +1538,19 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     @MainActor
     func fullNostrHex(forSenderPeerID senderID: String) -> String? {
         return nostrKeyMapping[senderID]
+    }
+
+    @MainActor
+    func geohashDisplayName(for convKey: String) -> String {
+        guard let full = nostrKeyMapping[convKey] else {
+            let suffix = String(convKey.suffix(4))
+            return "anon#\(suffix)"
+        }
+        let suffix = String(full.suffix(4))
+        if let nick = geoNicknames[full.lowercased()], !nick.isEmpty {
+            return nick + "#" + suffix
+        }
+        return "anon#\(suffix)"
     }
     #endif
     /// Add a local system message to a private chat (no network send)

@@ -666,16 +666,27 @@ struct ContentView: View {
                                             .fontWeight(person.id == myHex ? .bold : .regular)
                                             .foregroundColor(textColor)
                                         Spacer()
+                                        Button(action: {
+                                            if person.id != myHex { viewModel.startGeohashDM(withPubkeyHex: person.id) }
+                                            withAnimation(.easeInOut(duration: 0.2)) { showSidebar = false; sidebarDragOffset = 0 }
+                                        }) {
+                                            Image(systemName: "envelope")
+                                                .font(.system(size: 12))
+                                                .foregroundColor(person.id == myHex ? Color.secondary : textColor)
+                                        }
+                                        .buttonStyle(.plain)
                                     }
                                     .padding(.horizontal)
                                     .padding(.vertical, 4)
                                     .contentShape(Rectangle())
                                     .onTapGesture {
-                                        // Open DM with this participant
-                                        viewModel.startGeohashDM(withPubkeyHex: person.id)
-                                        withAnimation(.easeInOut(duration: 0.2)) {
-                                            showSidebar = false
-                                            sidebarDragOffset = 0
+                                        // Open DM with this participant (not for self)
+                                        if person.id != myHex {
+                                            viewModel.startGeohashDM(withPubkeyHex: person.id)
+                                            withAnimation(.easeInOut(duration: 0.2)) {
+                                                showSidebar = false
+                                                sidebarDragOffset = 0
+                                            }
                                         }
                                     }
                                 }
@@ -1106,12 +1117,21 @@ struct ContentView: View {
         
         // Resolve peer object for header context (may be offline favorite)
         let peer = viewModel.getPeer(byID: headerPeerID)
-        let privatePeerNick = peer?.displayName ?? 
-                              viewModel.meshService.peerNickname(peerID: headerPeerID) ??
-                              FavoritesPersistenceService.shared.getFavoriteStatus(for: Data(hexString: headerPeerID) ?? Data())?.peerNickname ?? 
-                              // getFavoriteStatusByNostrKey not implemented
-                              // FavoritesPersistenceService.shared.getFavoriteStatusByNostrKey(privatePeerID)?.peerNickname ?? 
-                              "Unknown"
+        let privatePeerNick: String = {
+            if privatePeerID.hasPrefix("nostr_") {
+                #if os(iOS)
+                // Build geohash DM header: "#<ghash>/@name#abcd"
+                if case .location(let ch) = locationManager.selectedChannel {
+                    let disp = viewModel.geohashDisplayName(for: privatePeerID)
+                    return "#\(ch.geohash)/@\(disp)"
+                }
+                #endif
+            }
+            return peer?.displayName ?? 
+                   viewModel.meshService.peerNickname(peerID: headerPeerID) ??
+                   FavoritesPersistenceService.shared.getFavoriteStatus(for: Data(hexString: headerPeerID) ?? Data())?.peerNickname ?? 
+                   "Unknown"
+        }()
         let isNostrAvailable: Bool = {
             guard let connectionState = peer?.connectionState else { 
                 // Check if we can reach this peer via Nostr even if not in allPeers
@@ -1208,15 +1228,17 @@ struct ContentView: View {
                         
                         Spacer()
                         
-                        // Favorite button
-                        Button(action: {
-                            viewModel.toggleFavorite(peerID: headerPeerID)
-                        }) {
-                            Image(systemName: viewModel.isFavorite(peerID: headerPeerID) ? "star.fill" : "star")
-                                .font(.system(size: 16))
-                                .foregroundColor(viewModel.isFavorite(peerID: headerPeerID) ? Color.yellow : textColor)
+                        // Favorite button (hidden for geohash DMs)
+                        if !(privatePeerID.hasPrefix("nostr_")) {
+                            Button(action: {
+                                viewModel.toggleFavorite(peerID: headerPeerID)
+                            }) {
+                                Image(systemName: viewModel.isFavorite(peerID: headerPeerID) ? "star.fill" : "star")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(viewModel.isFavorite(peerID: headerPeerID) ? Color.yellow : textColor)
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                         .accessibilityLabel(viewModel.isFavorite(peerID: privatePeerID) ? "Remove from favorites" : "Add to favorites")
                         .accessibilityHint("Double tap to toggle favorite status")
                     }
