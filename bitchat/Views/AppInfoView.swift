@@ -19,7 +19,7 @@ struct AppInfoView: View {
     // MARK: - Constants
     private enum Strings {
         static let appName = "bitchat"
-        static let tagline = "mesh sidegroupchat"
+        static let tagline = "sidegroupchat"
         
         enum Features {
             static let title = "FEATURES"
@@ -28,7 +28,7 @@ struct AppInfoView: View {
             static let extendedRange = ("antenna.radiowaves.left.and.right", "extended range", "messages relay through peers, going the distance")
             static let mentions = ("at", "mentions", "use @nickname to notify specific people")
             static let favorites = ("star.fill", "favorites", "get notified when your favorite people join")
-            static let mutualFavorites = ("globe", "mutual favorites", "private message each other via nostr when out of mesh range")
+            static let geohash = ("number", "local channels", "geohash channels to chat with people in nearby regions over decentralized anonymous relays")
         }
         
         enum Privacy {
@@ -42,10 +42,11 @@ struct AppInfoView: View {
             static let title = "HOW TO USE"
             static let instructions = [
                 "• set your nickname by tapping it",
-                "• swipe left for sidebar",
-                "• tap a peer to start a private chat",
-                "• use @nickname to mention someone",
-                "• triple-tap chat to clear"
+                "• tap #mesh to change channels",
+                "• tap people icon for sidebar",
+                "• tap a peer's name to start a DM",
+                "• triple-tap chat to clear",
+                "• type / for commands"
             ]
         }
         
@@ -131,9 +132,9 @@ struct AppInfoView: View {
                           title: Strings.Features.favorites.1,
                           description: Strings.Features.favorites.2)
                 
-                FeatureRow(icon: Strings.Features.mutualFavorites.0,
-                          title: Strings.Features.mutualFavorites.1,
-                          description: Strings.Features.mutualFavorites.2)
+                FeatureRow(icon: Strings.Features.geohash.0,
+                          title: Strings.Features.geohash.1,
+                          description: Strings.Features.geohash.2)
                 
                 FeatureRow(icon: Strings.Features.mentions.0,
                           title: Strings.Features.mentions.1,

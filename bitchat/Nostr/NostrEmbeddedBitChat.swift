@@ -53,6 +53,49 @@ struct NostrEmbeddedBitChat {
         return "bitchat1:" + base64URLEncode(data)
     }
 
+    /// Build a `bitchat1:` ACK (delivered/read) without an embedded recipient peer ID (geohash DMs).
+    static func encodeAckForNostrNoRecipient(type: NoisePayloadType, messageID: String, senderPeerID: String) -> String? {
+        guard type == .delivered || type == .readReceipt else { return nil }
+
+        var payload = Data([type.rawValue])
+        payload.append(Data(messageID.utf8))
+
+        let packet = BitchatPacket(
+            type: MessageType.noiseEncrypted.rawValue,
+            senderID: Data(hexString: senderPeerID) ?? Data(),
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: payload,
+            signature: nil,
+            ttl: 7
+        )
+
+        guard let data = packet.toBinaryData() else { return nil }
+        return "bitchat1:" + base64URLEncode(data)
+    }
+
+    /// Build a `bitchat1:` payload without an embedded recipient peer ID (used for geohash DMs).
+    static func encodePMForNostrNoRecipient(content: String, messageID: String, senderPeerID: String) -> String? {
+        let pm = PrivateMessagePacket(messageID: messageID, content: content)
+        guard let tlv = pm.encode() else { return nil }
+
+        var payload = Data([NoisePayloadType.privateMessage.rawValue])
+        payload.append(tlv)
+
+        let packet = BitchatPacket(
+            type: MessageType.noiseEncrypted.rawValue,
+            senderID: Data(hexString: senderPeerID) ?? Data(),
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: payload,
+            signature: nil,
+            ttl: 7
+        )
+
+        guard let data = packet.toBinaryData() else { return nil }
+        return "bitchat1:" + base64URLEncode(data)
+    }
+
     private static func normalizeRecipientPeerID(_ recipientPeerID: String) -> String {
         if let maybeData = Data(hexString: recipientPeerID) {
             if maybeData.count == 32 {

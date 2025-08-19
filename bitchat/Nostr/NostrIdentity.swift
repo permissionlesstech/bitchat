@@ -1,6 +1,7 @@
 import Foundation
 import CryptoKit
 import P256K
+import Security
 
 // Keychain helper for secure storage
 struct KeychainHelper {
@@ -104,6 +105,7 @@ struct NostrIdentity: Codable {
 struct NostrIdentityBridge {
     private static let keychainService = "chat.bitchat.nostr"
     private static let currentIdentityKey = "nostr-current-identity"
+    private static let deviceSeedKey = "nostr-device-seed"
     
     /// Get or create the current Nostr identity
     static func getCurrentNostrIdentity() throws -> NostrIdentity? {
@@ -145,10 +147,61 @@ struct NostrIdentityBridge {
     static func clearAllAssociations() {
         // Delete current Nostr identity
         KeychainHelper.delete(key: currentIdentityKey, service: keychainService)
+        KeychainHelper.delete(key: deviceSeedKey, service: keychainService)
         
         // Note: We can't efficiently delete all noise-nostr associations 
         // without tracking them, but they'll be orphaned and eventually cleaned up
         // The important part is deleting the current identity so a new one is generated
+    }
+
+    // MARK: - Per-Geohash Identities (Location Channels)
+
+    /// Returns a stable device seed used to derive unlinkable per-geohash identities.
+    /// Stored only on device keychain.
+    private static func getOrCreateDeviceSeed() -> Data {
+        if let existing = KeychainHelper.load(key: deviceSeedKey, service: keychainService) {
+            return existing
+        }
+        var seed = Data(count: 32)
+        _ = seed.withUnsafeMutableBytes { ptr in
+            SecRandomCopyBytes(kSecRandomDefault, 32, ptr.baseAddress!)
+        }
+        KeychainHelper.save(key: deviceSeedKey, data: seed, service: keychainService)
+        return seed
+    }
+
+    /// Derive a deterministic, unlinkable Nostr identity for a given geohash.
+    /// Uses HMAC-SHA256(deviceSeed, geohash) as private key material, with fallback rehashing
+    /// if the candidate is not a valid secp256k1 private key.
+    static func deriveIdentity(forGeohash geohash: String) throws -> NostrIdentity {
+        let seed = getOrCreateDeviceSeed()
+        guard let msg = geohash.data(using: .utf8) else {
+            throw NSError(domain: "NostrIdentity", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid geohash string"])
+        }
+
+        func candidateKey(iteration: UInt32) -> Data {
+            var input = Data(msg)
+            var iterBE = iteration.bigEndian
+            withUnsafeBytes(of: &iterBE) { bytes in
+                input.append(contentsOf: bytes)
+            }
+            let code = CryptoKit.HMAC<CryptoKit.SHA256>.authenticationCode(for: input, using: SymmetricKey(data: seed))
+            return Data(code)
+        }
+
+        // Try a few iterations to ensure a valid key can be formed
+        for i in 0..<10 {
+            let keyData = candidateKey(iteration: UInt32(i))
+            if let identity = try? NostrIdentity(privateKeyData: keyData) {
+                return identity
+            }
+        }
+        // As a final fallback, hash the seed+msg and try again
+        var combined = Data()
+        combined.append(seed)
+        combined.append(msg)
+        let fallback = Data(CryptoKit.SHA256.hash(data: combined))
+        return try NostrIdentity(privateKeyData: fallback)
     }
 }
 
