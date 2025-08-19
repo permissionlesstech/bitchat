@@ -254,6 +254,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     private var geoParticipants: [String: [String: Date]] = [:]
     @Published private(set) var geohashPeople: [GeoPerson] = []
     private var geoParticipantsTimer: Timer? = nil
+    // Sampling subscriptions for multiple geohashes (when channel sheet is open)
+    private var geoSamplingSubs: [String: String] = [:] // subID -> geohash
     #endif
     
     // MARK: - Message Delivery Tracking
@@ -1099,6 +1101,17 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         refreshGeohashPeople()
     }
 
+    private func recordGeoParticipant(pubkeyHex: String, geohash: String) {
+        let key = pubkeyHex.lowercased()
+        var map = geoParticipants[geohash] ?? [:]
+        map[key] = Date()
+        geoParticipants[geohash] = map
+        // Only refresh list if this geohash is currently selected
+        if currentGeohash == geohash {
+            refreshGeohashPeople()
+        }
+    }
+
     private func refreshGeohashPeople() {
         guard let gh = currentGeohash else { geohashPeople = []; return }
         let cutoff = Date().addingTimeInterval(-5 * 60)
@@ -1138,6 +1151,42 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         let cutoff = Date().addingTimeInterval(-5 * 60)
         let map = geoParticipants[geohash] ?? [:]
         return map.values.filter { $0 >= cutoff }.count
+    }
+
+    /// Begin sampling multiple geohashes (used by channel sheet) without changing active channel.
+    @MainActor
+    func beginGeohashSampling(for geohashes: [String]) {
+        // Determine which to add and which to remove
+        let desired = Set(geohashes)
+        let current = Set(geoSamplingSubs.values)
+        let toAdd = desired.subtracting(current)
+        let toRemove = current.subtracting(desired)
+
+        // Unsubscribe removed
+        for (subID, gh) in geoSamplingSubs where toRemove.contains(gh) {
+            NostrRelayManager.shared.unsubscribe(id: subID)
+            geoSamplingSubs.removeValue(forKey: subID)
+        }
+
+        // Subscribe new
+        for gh in toAdd {
+            let subID = "geo-sample-\(gh)"
+            geoSamplingSubs[subID] = gh
+            let filter = NostrFilter.geohashEphemeral(gh, since: Date().addingTimeInterval(-300), limit: 100)
+            NostrRelayManager.shared.subscribe(filter: filter, id: subID) { [weak self] event in
+                guard let self = self else { return }
+                guard event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue else { return }
+                // Update participants for this specific geohash
+                self.recordGeoParticipant(pubkeyHex: event.pubkey, geohash: gh)
+            }
+        }
+    }
+
+    /// Stop sampling all extra geohashes.
+    @MainActor
+    func endGeohashSampling() {
+        for subID in geoSamplingSubs.keys { NostrRelayManager.shared.unsubscribe(id: subID) }
+        geoSamplingSubs.removeAll()
     }
     #endif
 

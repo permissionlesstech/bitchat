@@ -69,12 +69,23 @@ struct LocationChannelsSheet: View {
             }
             // Begin periodic refresh while sheet is open
             manager.beginLiveRefresh()
+            // Begin multi-channel sampling for counts
+            let ghs = manager.availableChannels.map { $0.geohash }
+            viewModel.beginGeohashSampling(for: ghs)
         }
-        .onDisappear { manager.endLiveRefresh() }
+        .onDisappear {
+            manager.endLiveRefresh()
+            viewModel.endGeohashSampling()
+        }
         .onChange(of: manager.permissionState) { newValue in
             if newValue == LocationChannelManager.PermissionState.authorized {
                 manager.refreshChannels()
             }
+        }
+        .onChange(of: manager.availableChannels) { newValue in
+            // Keep sampling list in sync with available channels as they refresh live
+            let ghs = newValue.map { $0.geohash }
+            viewModel.beginGeohashSampling(for: ghs)
         }
     }
 
