@@ -632,8 +632,7 @@ struct ContentView: View {
                     // People section
                     VStack(alignment: .leading, spacing: 4) {
                         #if os(iOS)
-                        switch locationManager.selectedChannel {
-                        case .location:
+                        if case .location = locationManager.selectedChannel {
                             if viewModel.geohashPeople.isEmpty {
                                 Text("nobody around...")
                                     .font(.system(size: 14, design: .monospaced))
@@ -691,8 +690,8 @@ struct ContentView: View {
                                     }
                                 }
                             }
-                        default:
-                            // Mesh peers list (original)
+                        } else {
+                            // Mesh peers list (original on iOS when not in a location channel)
                             if viewModel.allPeers.isEmpty {
                                 Text("nobody around...")
                                     .font(.system(size: 14, design: .monospaced))
@@ -768,9 +767,93 @@ struct ContentView: View {
                                                 .foregroundColor(Color.secondary.opacity(0.3))
                                                 .accessibilityLabel("Offline")
                                         }
+                            }
+                        }
+                        #else
+                        // macOS: always show mesh peers list
+                        if viewModel.allPeers.isEmpty {
+                            Text("nobody around...")
+                                .font(.system(size: 14, design: .monospaced))
+                                .foregroundColor(secondaryTextColor)
+                                .padding(.horizontal)
+                                .padding(.top, 12)
+                        } else {
+                            let peerNicknames = viewModel.meshService.getPeerNicknames()
+                            let peerData = viewModel.allPeers.map { peer in
+                                let currentMyPeerID = viewModel.meshService.myPeerID
+                                return PeerDisplayData(
+                                    id: peer.id,
+                                    displayName: peer.id == currentMyPeerID ? viewModel.nickname : peer.nickname,
+                                    isFavorite: peer.favoriteStatus?.isFavorite ?? false,
+                                    isMe: peer.id == currentMyPeerID,
+                                    hasUnreadMessages: viewModel.hasUnreadMessages(for: peer.id),
+                                    encryptionStatus: viewModel.getEncryptionStatus(for: peer.id),
+                                    connectionState: peer.connectionState,
+                                    isMutualFavorite: peer.favoriteStatus?.isMutual ?? false
+                                )
+                            }.sorted { (peer1: PeerDisplayData, peer2: PeerDisplayData) in
+                                if peer1.isFavorite != peer2.isFavorite {
+                                    return peer1.isFavorite
+                                }
+                                return peer1.displayName < peer2.displayName
+                            }
+                            ForEach(peerData) { peer in
+                                HStack(spacing: 4) {
+                                    if peer.isMe {
+                                        Image(systemName: "person.fill")
+                                            .font(.system(size: 10))
+                                            .foregroundColor(textColor)
+                                    } else if peer.hasUnreadMessages {
+                                        Image(systemName: "envelope.fill")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(Color.orange)
+                                    } else {
+                                        switch peer.connectionState {
+                                        case .bluetoothConnected:
+                                            Image(systemName: "dot.radiowaves.left.and.right")
+                                                .font(.system(size: 10))
+                                                .foregroundColor(textColor)
+                                        case .nostrAvailable:
+                                            Image(systemName: "globe")
+                                                .font(.system(size: 10))
+                                                .foregroundColor(.purple)
+                                        case .offline:
+                                            if peer.isFavorite {
+                                                Image(systemName: "moon.fill")
+                                                    .font(.system(size: 10))
+                                                    .foregroundColor(.gray)
+                                            } else {
+                                                Image(systemName: "person")
+                                                    .font(.system(size: 10))
+                                                    .foregroundColor(.gray)
+                                            }
+                                        }
+                                    }
+                                    Text(peer.displayName)
+                                        .font(.system(size: 14, design: .monospaced))
+                                        .foregroundColor(textColor)
+                                    if peer.isMutualFavorite {
+                                        Image(systemName: "heart.fill")
+                                            .font(.system(size: 10))
+                                            .foregroundColor(.red)
+                                    }
+                                    Spacer()
+                                }
+                                .padding(.horizontal)
+                                .padding(.vertical, 4)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    if !peer.isMe {
+                                        viewModel.beginPrivateChat(with: peer.id)
+                                        withAnimation(.easeInOut(duration: 0.2)) {
+                                            showSidebar = false
+                                            sidebarDragOffset = 0
+                                        }
                                     }
                                 }
-                                
+                            }
+                        }
+                        #endif
                                 // Peer name
                                 if peer.isMe {
                                     HStack {
