@@ -117,7 +117,7 @@ struct BinaryProtocol {
     }
     
     // Encode BitchatPacket to binary format
-    static func encode(_ packet: BitchatPacket) -> Data? {
+    static func encode(_ packet: BitchatPacket, padding: Bool = true) -> Data? {
         var data = Data()
         
         
@@ -200,11 +200,14 @@ struct BinaryProtocol {
         
         
         // Apply padding to standard block sizes for traffic analysis resistance
-        let optimalSize = MessagePadding.optimalBlockSize(for: data.count)
-        let paddedData = MessagePadding.pad(data, toSize: optimalSize)
-        
-        
-        return paddedData
+        if padding {
+            let optimalSize = MessagePadding.optimalBlockSize(for: data.count)
+            let paddedData = MessagePadding.pad(data, toSize: optimalSize)
+            return paddedData
+        } else {
+            // Caller explicitly requested no padding (e.g., BLE write path)
+            return data
+        }
     }
     
     // Decode binary data to BitchatPacket

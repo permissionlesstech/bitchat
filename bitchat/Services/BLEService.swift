@@ -308,7 +308,7 @@ final class BLEService: NSObject {
         )
         
         // Send immediately to all connected peers
-        if let data = leavePacket.toBinaryData() {
+        if let data = leavePacket.toBinaryData(padding: false) {
             // Send to peripherals we're connected to as central
             for state in peripherals.values where state.isConnected {
                 if let characteristic = state.characteristic {
@@ -724,12 +724,10 @@ final class BLEService: NSObject {
     // MARK: - Packet Broadcasting
     
     private func broadcastPacket(_ packet: BitchatPacket) {
-        guard let rawData = packet.toBinaryData() else {
+        guard let data = packet.toBinaryData(padding: false) else {
             SecureLogger.log("❌ Failed to convert packet to binary data", category: SecureLogger.session, level: .error)
             return
         }
-        // Avoid sending padded data over BLE to reduce truncation risk
-        let data = MessagePadding.unpad(rawData)
         
         // Only log broadcasts for non-announce packets
         // Log encrypted and relayed packets for debugging
@@ -893,9 +891,8 @@ final class BLEService: NSObject {
     // MARK: - Fragmentation (Required for messages > BLE MTU)
     
     private func sendFragmentedPacket(_ packet: BitchatPacket) {
-        guard let encoded = packet.toBinaryData() else { return }
-        // Fragment the unpadded frame; each fragment will be encoded (and padded) independently
-        let fullData = MessagePadding.unpad(encoded)
+        guard let fullData = packet.toBinaryData(padding: false) else { return }
+        // Fragment the unpadded frame; each fragment will be encoded independently
         
         let fragmentID = Data((0..<8).map { _ in UInt8.random(in: 0...255) })
         let fragments = stride(from: 0, to: fullData.count, by: maxFragmentSize).map { offset in
