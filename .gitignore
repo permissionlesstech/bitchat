@@ -53,7 +53,6 @@ iOSInjectionProject/
 ## Xcode project
 *.xcodeproj/project.xcworkspace/
 *.xcodeproj/xcshareddata/
-*.xcodeproj/project.pbxproj
 
 ## Python
 __pycache__/
