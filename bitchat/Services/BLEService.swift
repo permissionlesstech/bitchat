@@ -539,13 +539,7 @@ final class BLEService: NSObject {
         }
     }
     
-    func getPeers() -> [String: String] {
-        collectionsQueue.sync {
-            Dictionary(uniqueKeysWithValues: peers.compactMap { (id, info) in
-                info.isConnected ? (id, info.nickname) : nil
-            })
-        }
-    }
+    // Removed unused getPeers(): use getPeerNicknames() from Transport
     
     // MARK: - Private Message Handling
     
