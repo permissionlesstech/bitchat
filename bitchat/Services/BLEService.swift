@@ -777,255 +777,130 @@ final class BLEService: NSObject {
     // MARK: - Packet Broadcasting
     
     private func broadcastPacket(_ packet: BitchatPacket) {
-        // Balanced privacy: pad sensitive payloads (Noise handshake/encrypted),
-        // keep public/announce/leave unpadded to reduce airtime.
-        let padForBLE: Bool = {
-            if let t = MessageType(rawValue: packet.type) {
-                switch t {
-                case .noiseEncrypted, .noiseHandshake:
-                    return true
-                default:
-                    return false
-                }
-            }
-            return false
-        }()
-
+        // Encode once using a small per-type padding policy, then delegate by type
+        let padForBLE = padPolicy(for: packet.type)
         guard let data = packet.toBinaryData(padding: padForBLE) else {
             SecureLogger.log("❌ Failed to convert packet to binary data", category: SecureLogger.session, level: .error)
             return
         }
-        
-        // Only log broadcasts for non-announce packets
-        // Log encrypted and relayed packets for debugging
         if packet.type == MessageType.noiseEncrypted.rawValue {
-            SecureLogger.log("📡 Encrypted packet to \(packet.recipientID?.hexEncodedString() ?? "unknown")",
-                            category: SecureLogger.session, level: .debug)
-        } else if packet.ttl < messageTTL {
-            // Relayed packet
-        }
-        
-        // Check if application-level fragmentation needed for large messages
-        // (CoreBluetooth only handles ATT-level fragmentation for single writes)
-        if data.count > 512 && packet.type != MessageType.fragment.rawValue {
-            sendFragmentedPacket(packet, pad: padForBLE)
+            sendEncrypted(packet, data: data, pad: padForBLE)
             return
         }
-        
-        // For private encrypted messages (not handshakes), try direct route first.
-        // If unavailable, conservatively flood to all neighbors while keeping recipientID set.
-        // Handshakes need broader delivery to establish encryption
-        if packet.type == MessageType.noiseEncrypted.rawValue,
-           let recipientID = packet.recipientID {
-            let recipientPeerID = recipientID.hexEncodedString()
-            var sentEncrypted = false
-            
-            // Check routing availability (was used for logging; direct attempts follow)
+        sendGenericBroadcast(packet, data: data, pad: padForBLE)
+    }
 
-            // Compute link limits and fragment if needed (directed only)
-            var peripheralMaxLen: Int?
-            if let perUUID = (DispatchQueue.getSpecific(key: bleQueueKey) != nil) ? peerToPeripheralUUID[recipientPeerID] : bleQueue.sync(execute: { peerToPeripheralUUID[recipientPeerID] }) {
-                if let state = (DispatchQueue.getSpecific(key: bleQueueKey) != nil) ? peripherals[perUUID] : bleQueue.sync(execute: { peripherals[perUUID] }) {
-                    peripheralMaxLen = state.peripheral.maximumWriteValueLength(for: .withoutResponse)
-                }
+    // MARK: - Broadcast helpers (single responsibility)
+    private func padPolicy(for type: UInt8) -> Bool {
+        switch MessageType(rawValue: type) {
+        case .noiseEncrypted, .noiseHandshake:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func sendEncrypted(_ packet: BitchatPacket, data: Data, pad: Bool) {
+        guard let recipientID = packet.recipientID else { return }
+        let recipientPeerID = recipientID.hexEncodedString()
+        var sentEncrypted = false
+
+        // Per-link limits for the specific peer
+        var peripheralMaxLen: Int?
+        if let perUUID = (DispatchQueue.getSpecific(key: bleQueueKey) != nil) ? peerToPeripheralUUID[recipientPeerID] : bleQueue.sync(execute: { peerToPeripheralUUID[recipientPeerID] }) {
+            if let state = (DispatchQueue.getSpecific(key: bleQueueKey) != nil) ? peripherals[perUUID] : bleQueue.sync(execute: { peripherals[perUUID] }) {
+                peripheralMaxLen = state.peripheral.maximumWriteValueLength(for: .withoutResponse)
             }
-            var centralMaxLen: Int?
-            do {
-                let (centrals, mapping) = snapshotSubscribedCentrals()
-                if let central = centrals.first(where: { mapping[$0.identifier.uuidString] == recipientPeerID }) {
-                    centralMaxLen = central.maximumUpdateValueLength
-                }
+        }
+        var centralMaxLen: Int?
+        do {
+            let (centrals, mapping) = snapshotSubscribedCentrals()
+            if let central = centrals.first(where: { mapping[$0.identifier.uuidString] == recipientPeerID }) {
+                centralMaxLen = central.maximumUpdateValueLength
             }
-            if let pm = peripheralMaxLen, data.count > pm {
-                let overhead = 13 + 8 + 8 + 13
-                let chunk = max(64, pm - overhead)
-                sendFragmentedPacket(packet, pad: padForBLE, maxChunk: chunk, directedOnlyPeer: recipientPeerID)
-                return
-            }
-            if let cm = centralMaxLen, data.count > cm {
-                let overhead = 13 + 8 + 8 + 13
-                let chunk = max(64, cm - overhead)
-                sendFragmentedPacket(packet, pad: padForBLE, maxChunk: chunk, directedOnlyPeer: recipientPeerID)
-                return
-            }
-            
-            // Try to send directly to the specific peer as peripheral first
-            if let peripheralUUID = (DispatchQueue.getSpecific(key: bleQueueKey) != nil) ? peerToPeripheralUUID[recipientPeerID] : bleQueue.sync(execute: { peerToPeripheralUUID[recipientPeerID] }),
-               let state = (DispatchQueue.getSpecific(key: bleQueueKey) != nil) ? peripherals[peripheralUUID] : bleQueue.sync(execute: { peripherals[peripheralUUID] }),
-               state.isConnected,
-               let characteristic = state.characteristic {
-                state.peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
-                // Successfully routed via peripheral
-                sentEncrypted = true
-            }
-            
-            // Also try notification if peer is connected as central (dual-role support)
-            if let characteristic = characteristic {
-                // Find the specific central for this peer
-                let (centrals, mapping) = snapshotSubscribedCentrals()
-                for central in centrals {
-                    if mapping[central.identifier.uuidString] == recipientPeerID {
-                        let success = peripheralManager?.updateValue(data, for: characteristic, onSubscribedCentrals: [central]) ?? false
-                        if success {
-                            // Successfully routed via central notification
-                            sentEncrypted = true
-                        } else {
-                            // Queue for retry when notification queue has space
-                            collectionsQueue.async(flags: .barrier) { [weak self] in
-                                guard let self = self else { return }
-                                // Limit queue size to prevent memory issues
-                                if self.pendingNotifications.count < 20 {
-                                    self.pendingNotifications.append((data: data, centrals: [central]))
-                                    SecureLogger.log("📋 Queued encrypted packet for retry (notification queue full)", 
-                                                   category: SecureLogger.session, level: .debug)
-                                } else {
-                                    SecureLogger.log("⚠️ Pending notification queue full, dropping packet", 
-                                                   category: SecureLogger.session, level: .warning)
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                // Do NOT broadcast encrypted messages to all centrals
-                // Encrypted messages must only go to the intended recipient
-            }
-            
-            if !sentEncrypted {
-                // Direct route failed or unavailable: fallback to flood with directed recipient.
-                // Use link-aware fragmentation based on the smallest write/notify capacity.
-                var minCentralWriteLen: Int?
-                let states = snapshotPeripheralStates()
-                for s in states where s.isConnected {
-                    let m = s.peripheral.maximumWriteValueLength(for: .withoutResponse)
-                    minCentralWriteLen = minCentralWriteLen.map { min($0, m) } ?? m
-                }
-                var snapshotCentrals: [CBCentral] = []
-                if let _ = characteristic {
-                    let (centrals, _) = snapshotSubscribedCentrals()
-                    snapshotCentrals = centrals
-                }
-                var minNotifyLen: Int?
-                if !snapshotCentrals.isEmpty {
-                    minNotifyLen = snapshotCentrals.map { $0.maximumUpdateValueLength }.min()
-                }
-                if let minLen = [minCentralWriteLen, minNotifyLen].compactMap({ $0 }).min(), data.count > minLen {
-                    let overhead = 13 + 8 + 8 + 13
-                    let chunk = max(64, minLen - overhead)
-                    sendFragmentedPacket(packet, pad: padForBLE, maxChunk: chunk, directedOnlyPeer: nil)
-                } else {
-                    // Send to all connected peripherals
-                    for s in states where s.isConnected {
-                        if let ch = s.characteristic {
-                            s.peripheral.writeValue(data, for: ch, type: .withoutResponse)
-                        }
-                    }
-                    // Notify all subscribed centrals
-                    if let ch = characteristic {
-                        _ = peripheralManager?.updateValue(data, for: ch, onSubscribedCentrals: nil)
-                    }
-                }
-            }
-            // Whether direct or flooded, do not continue into broadcast path
+        }
+        if let pm = peripheralMaxLen, data.count > pm {
+            let overhead = 13 + 8 + 8 + 13
+            let chunk = max(64, pm - overhead)
+            sendFragmentedPacket(packet, pad: pad, maxChunk: chunk, directedOnlyPeer: recipientPeerID)
             return
         }
-        
-        // For broadcast messages, use link-aware routing
-        // This ensures announces can be sent before peer ID mappings are established
-        var sentToPeripherals = 0
-        var sentToCentrals = 0
-        
-        // Snapshot state to avoid concurrent mutations
+        if let cm = centralMaxLen, data.count > cm {
+            let overhead = 13 + 8 + 8 + 13
+            let chunk = max(64, cm - overhead)
+            sendFragmentedPacket(packet, pad: pad, maxChunk: chunk, directedOnlyPeer: recipientPeerID)
+            return
+        }
+
+        // Direct write via peripheral link
+        if let peripheralUUID = (DispatchQueue.getSpecific(key: bleQueueKey) != nil) ? peerToPeripheralUUID[recipientPeerID] : bleQueue.sync(execute: { peerToPeripheralUUID[recipientPeerID] }),
+           let state = (DispatchQueue.getSpecific(key: bleQueueKey) != nil) ? peripherals[peripheralUUID] : bleQueue.sync(execute: { peripherals[peripheralUUID] }),
+           state.isConnected,
+           let characteristic = state.characteristic {
+            state.peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
+            sentEncrypted = true
+        }
+
+        // Notify via central link (dual-role)
+        if let characteristic = characteristic, !sentEncrypted {
+            let (centrals, mapping) = snapshotSubscribedCentrals()
+            for central in centrals where mapping[central.identifier.uuidString] == recipientPeerID {
+                let success = peripheralManager?.updateValue(data, for: characteristic, onSubscribedCentrals: [central]) ?? false
+                if success { sentEncrypted = true; break }
+                collectionsQueue.async(flags: .barrier) { [weak self] in
+                    guard let self = self else { return }
+                    if self.pendingNotifications.count < 20 {
+                        self.pendingNotifications.append((data: data, centrals: [central]))
+                        SecureLogger.log("📋 Queued encrypted packet for retry (notification queue full)", category: SecureLogger.session, level: .debug)
+                    }
+                }
+            }
+        }
+
+        if !sentEncrypted {
+            // Flood as last resort with recipient set; link aware
+            sendOnAllLinks(packet: packet, data: data, pad: pad, directedOnlyPeer: recipientPeerID)
+        }
+    }
+
+    private func sendGenericBroadcast(_ packet: BitchatPacket, data: Data, pad: Bool) {
+        sendOnAllLinks(packet: packet, data: data, pad: pad, directedOnlyPeer: nil)
+    }
+
+    private func sendOnAllLinks(packet: BitchatPacket, data: Data, pad: Bool, directedOnlyPeer: String?) {
         let states = snapshotPeripheralStates()
         var minCentralWriteLen: Int?
         for s in states where s.isConnected {
             let m = s.peripheral.maximumWriteValueLength(for: .withoutResponse)
             minCentralWriteLen = minCentralWriteLen.map { min($0, m) } ?? m
         }
-        
-        // 2. Also send via notifications to subscribed centrals
-        // This ensures all connected peers receive the message regardless of their connection role
-        // Broadcast message types that should go to all peers
-        // Include handshakes since they need to reach peers to establish encryption
-        let isBroadcastType = packet.type == MessageType.announce.rawValue ||
-                             packet.type == MessageType.message.rawValue ||
-                             packet.type == MessageType.leave.rawValue ||
-                             packet.type == MessageType.noiseHandshake.rawValue
         var snapshotCentrals: [CBCentral] = []
-        if isBroadcastType, let _ = characteristic {
+        if let _ = characteristic {
             let (centrals, _) = snapshotSubscribedCentrals()
             snapshotCentrals = centrals
         }
-        // If any path (central writes or notifications) requires smaller packets, fragment once conservatively
         var minNotifyLen: Int?
         if !snapshotCentrals.isEmpty {
             minNotifyLen = snapshotCentrals.map { $0.maximumUpdateValueLength }.min()
         }
-        if let minLen = [minCentralWriteLen, minNotifyLen].compactMap({ $0 }).min(),
-           data.count > minLen,
-           packet.type != MessageType.fragment.rawValue {
-            let overhead = 13 /*header*/ + 8 /*sender*/ + 0 /*recipient*/ + 13 /*fragment*/
+        // Avoid re-fragmenting fragment packets
+        if packet.type != MessageType.fragment.rawValue,
+           let minLen = [minCentralWriteLen, minNotifyLen].compactMap({ $0 }).min(),
+           data.count > minLen {
+            let overhead = 13 + 8 + 8 + 13
             let chunk = max(64, minLen - overhead)
-            sendFragmentedPacket(packet, pad: padForBLE, maxChunk: chunk, directedOnlyPeer: nil)
+            sendFragmentedPacket(packet, pad: pad, maxChunk: chunk, directedOnlyPeer: directedOnlyPeer)
             return
         }
-
-        // 1. First try sending as central via writes to connected peripherals
-        // This is the preferred path when we have direct peripheral connections
-        for state in states where state.isConnected {
-            if let characteristic = state.characteristic {
-                state.peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
-                sentToPeripherals += 1
+        // Writes to connected peripherals
+        for s in states where s.isConnected {
+            if let ch = s.characteristic {
+                s.peripheral.writeValue(data, for: ch, type: .withoutResponse)
             }
         }
-
-        // 2. Also send via notifications to subscribed centrals
-        if isBroadcastType, let characteristic = characteristic, !snapshotCentrals.isEmpty {
-            // If value exceeds minimum allowed by connected centrals, handle per constraints
-            let minAllowed = snapshotCentrals.map { $0.maximumUpdateValueLength }.min() ?? 20
-            // Minimum BitChat frame = 13 (header) + 8 (senderID) = 21 bytes
-            if minAllowed < 21 {
-                // Cannot deliver any BitChat frame via notifications on this link; skip notify
-                SecureLogger.log("⚠️ Skipping notify: central max update length (\(minAllowed)) < 21", category: SecureLogger.session, level: .debug)
-            } else if data.count > minAllowed {
-                // Fragment via protocol (preserve chosen padding for BLE)
-                let overhead = 13 /*header*/ + 8 /*sender*/ + 0 /*recipient*/ + 13 /*fragment*/
-                let chunk = max(64, minAllowed - overhead)
-                sendFragmentedPacket(packet, pad: padForBLE, maxChunk: chunk, directedOnlyPeer: nil)
-                return
-            }
-            let success = peripheralManager?.updateValue(data, for: characteristic, onSubscribedCentrals: nil) ?? false
-            if success {
-                sentToCentrals = snapshotCentrals.count
-                if packet.type == MessageType.message.rawValue {
-                    // Broadcast message sent
-                } else if packet.type == MessageType.noiseHandshake.rawValue {
-                    // Handshake broadcast to centrals
-                }
-            } else {
-                // Notification queue full - queue for retry on handshake and announce packets
-                if packet.type == MessageType.noiseHandshake.rawValue || packet.type == MessageType.announce.rawValue {
-                    collectionsQueue.async(flags: .barrier) { [weak self] in
-                        guard let self = self else { return }
-                        if self.pendingNotifications.count < 20 {
-                            self.pendingNotifications.append((data: data, centrals: nil))
-                            let kind = packet.type == MessageType.announce.rawValue ? "announce" : "handshake"
-                            SecureLogger.log("📋 Queued \(kind) packet for retry (notification queue full)", 
-                                           category: SecureLogger.session, level: .debug)
-                        }
-                    }
-                } else {
-                    SecureLogger.log("⚠️ Notification queue full for packet type \(packet.type)", 
-                                   category: SecureLogger.session, level: .warning)
-                }
-            }
-        }
-        
-        let totalSent = sentToPeripherals + sentToCentrals
-        if totalSent == 0 {
-            // No peers to send to - this is normal when isolated
-        } else {
-            // Broadcast sent
+        // Notify all subscribed centrals
+        if let ch = characteristic {
+            _ = peripheralManager?.updateValue(data, for: ch, onSubscribedCentrals: nil)
         }
     }
     
