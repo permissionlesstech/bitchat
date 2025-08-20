@@ -106,7 +106,7 @@ final class BLEService: NSObject {
     
     // MARK: - Maintenance Timer
     
-    private weak var maintenanceTimer: Timer?  // Single timer for all maintenance tasks
+    private var maintenanceTimer: DispatchSourceTimer?  // Single timer for all maintenance tasks
     private var maintenanceCounter = 0  // Track maintenance cycles
     
     // MARK: - Peer snapshots publisher (non-UI convenience)
@@ -206,10 +206,14 @@ final class BLEService: NSObject {
         centralManager = CBCentralManager(delegate: self, queue: bleQueue)
         peripheralManager = CBPeripheralManager(delegate: self, queue: bleQueue)
         
-        // Single maintenance timer for all periodic tasks
-        maintenanceTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
+        // Single maintenance timer for all periodic tasks (dispatch-based for determinism)
+        let timer = DispatchSource.makeTimerSource(queue: bleQueue)
+        timer.schedule(deadline: .now() + 10.0, repeating: 10.0, leeway: .seconds(1))
+        timer.setEventHandler { [weak self] in
             self?.performMaintenance()
         }
+        timer.resume()
+        maintenanceTimer = timer
         
         // Publish initial empty state
         publishFullPeerData()
@@ -224,7 +228,7 @@ final class BLEService: NSObject {
     // No advertising policy to set; we never include Local Name in adverts.
     
     deinit {
-        maintenanceTimer?.invalidate()
+        maintenanceTimer?.cancel()
         centralManager?.stopScan()
         peripheralManager?.stopAdvertising()
         #if os(iOS)
@@ -331,7 +335,7 @@ final class BLEService: NSObject {
         }
         
         // Stop timer
-        maintenanceTimer?.invalidate()
+        maintenanceTimer?.cancel()
         maintenanceTimer = nil
         
         centralManager?.stopScan()
