@@ -718,12 +718,10 @@ final class BLEService: NSObject {
     // MARK: - Packet Broadcasting
     
     private func broadcastPacket(_ packet: BitchatPacket) {
-        guard let rawData = packet.toBinaryData() else {
+        guard let data = packet.toBinaryData() else {
             SecureLogger.log("❌ Failed to convert packet to binary data", category: SecureLogger.session, level: .error)
             return
         }
-        // Avoid sending padded data over BLE to reduce truncation risk
-        let data = MessagePadding.unpad(rawData)
         
         // Only log broadcasts for non-announce packets
         // Log encrypted and relayed packets for debugging
