@@ -19,18 +19,23 @@ struct MeshPeerList: View {
             } else {
                 let peerNicknames = viewModel.meshService.getPeerNicknames()
                 let myPeerID = viewModel.meshService.myPeerID
-                let peers = viewModel.allPeers.map { peer -> (peer: BitchatPeer, isMe: Bool, hasUnread: Bool, enc: EncryptionStatus) in
-                    (peer, peer.id == myPeerID, viewModel.hasUnreadMessages(for: peer.id), viewModel.getEncryptionStatus(for: peer.id))
-                }.sorted { lhs, rhs in
-                    if (lhs.peer.favoriteStatus?.isFavorite ?? false) != (rhs.peer.favoriteStatus?.isFavorite ?? false) {
-                        return lhs.peer.favoriteStatus?.isFavorite ?? false
-                    }
-                    let lhsName = lhs.peer.id == myPeerID ? viewModel.nickname : lhs.peer.nickname
-                    let rhsName = rhs.peer.id == myPeerID ? viewModel.nickname : rhs.peer.nickname
+                let mapped: [(peer: BitchatPeer, isMe: Bool, hasUnread: Bool, enc: EncryptionStatus)] = viewModel.allPeers.map { peer in
+                    let isMe = peer.id == myPeerID
+                    let hasUnread = viewModel.hasUnreadMessages(for: peer.id)
+                    let enc = viewModel.getEncryptionStatus(for: peer.id)
+                    return (peer, isMe, hasUnread, enc)
+                }
+                let peers = mapped.sorted { lhs, rhs in
+                    let lFav = lhs.peer.favoriteStatus?.isFavorite ?? false
+                    let rFav = rhs.peer.favoriteStatus?.isFavorite ?? false
+                    if lFav != rFav { return lFav }
+                    let lhsName = lhs.isMe ? viewModel.nickname : lhs.peer.nickname
+                    let rhsName = rhs.isMe ? viewModel.nickname : rhs.peer.nickname
                     return lhsName < rhsName
                 }
 
-                ForEach(peers, id: \.(peer.id)) { item in
+                ForEach(0..<peers.count, id: \.self) { idx in
+                    let item = peers[idx]
                     let peer = item.peer
                     let isMe = item.isMe
                     let hasUnread = item.hasUnread
@@ -78,6 +83,7 @@ struct MeshPeerList: View {
                     }
                     .padding(.horizontal)
                     .padding(.vertical, 4)
+                    .padding(.top, idx == 0 ? 6 : 0)
                     .contentShape(Rectangle())
                     .onTapGesture { if !isMe { onTapPeer(peer.id) } }
                     .onTapGesture(count: 2) { if !isMe { onShowFingerprint(peer.id) } }
@@ -86,4 +92,3 @@ struct MeshPeerList: View {
         }
     }
 }
-

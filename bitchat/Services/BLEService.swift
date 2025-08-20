@@ -927,7 +927,9 @@ final class BLEService: NSObject {
         if !snapshotCentrals.isEmpty {
             minNotifyLen = snapshotCentrals.map { $0.maximumUpdateValueLength }.min()
         }
-        if let minLen = [minCentralWriteLen, minNotifyLen].compactMap({ $0 }).min(), data.count > minLen {
+        if let minLen = [minCentralWriteLen, minNotifyLen].compactMap({ $0 }).min(),
+           data.count > minLen,
+           packet.type != MessageType.fragment.rawValue {
             let overhead = 13 /*header*/ + 8 /*sender*/ + 0 /*recipient*/ + 13 /*fragment*/
             let chunk = max(64, minLen - overhead)
             sendFragmentedPacket(packet, pad: padForBLE, maxChunk: chunk, directedOnlyPeer: nil)

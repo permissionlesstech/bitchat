@@ -647,7 +647,7 @@ struct ContentView: View {
                                          textColor: textColor,
                                          secondaryTextColor: secondaryTextColor,
                                          onTapPeer: { peerID in
-                                             viewModel.beginPrivateChat(with: peerID)
+                                             viewModel.startPrivateChat(with: peerID)
                                              withAnimation(.easeInOut(duration: 0.2)) {
                                                  showSidebar = false
                                                  sidebarDragOffset = 0
@@ -665,7 +665,7 @@ struct ContentView: View {
                                      textColor: textColor,
                                      secondaryTextColor: secondaryTextColor,
                                      onTapPeer: { peerID in
-                                         viewModel.beginPrivateChat(with: peerID)
+                                         viewModel.startPrivateChat(with: peerID)
                                          withAnimation(.easeInOut(duration: 0.2)) {
                                              showSidebar = false
                                              sidebarDragOffset = 0
@@ -783,7 +783,9 @@ struct ContentView: View {
                 if isMeshConnected { counts.mesh += 1; counts.others += 1 }
                 else if peer.isMutualFavorite { counts.others += 1 }
             }
-            let color: Color = counts.mesh > 0 ? Color.blue : Color.secondary
+            // Slightly darker blue for better contrast
+            let meshBlue = Color(red: 0.0, green: 0.35, blue: 0.85)
+            let color: Color = counts.mesh > 0 ? meshBlue : Color.secondary
             return (counts.others, color)
         }
     }
@@ -854,7 +856,9 @@ struct ContentView: View {
                     else if peer.isMutualFavorite { counts.others += 1 }
                 }
                 let otherPeersCount = peerCounts.others
-                let countColor: Color = (peerCounts.mesh > 0) ? Color.blue : Color.secondary
+                // Slightly darker blue for better contrast
+                let meshBlue = Color(red: 0.0, green: 0.35, blue: 0.85)
+                let countColor: Color = (peerCounts.mesh > 0) ? meshBlue : Color.secondary
                 #endif
                 
                 // Location channels button '#'
@@ -872,7 +876,8 @@ struct ContentView: View {
                     let badgeColor: Color = {
                         switch locationManager.selectedChannel {
                         case .mesh:
-                            return Color.blue
+                            // Slightly darker blue to match count icon
+                            return Color(red: 0.0, green: 0.35, blue: 0.85)
                         case .location:
                             // Standard green to avoid overly bright appearance in light mode
                             return (colorScheme == .dark) ? Color.green : Color(red: 0, green: 0.5, blue: 0)
