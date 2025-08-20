@@ -25,6 +25,9 @@ final class BLEService: NSObject {
     private let defaultFragmentSize = 469 // ~512 MTU minus protocol overhead
     private let maxMessageLength = 10_000
     private let messageTTL: UInt8 = 7
+    // Flood/battery controls
+    private let maxInFlightAssemblies = 128 // cap concurrent fragment assemblies
+    private let highDegreeThreshold = 6 // for adaptive TTL/probabilistic relays
     
     // MARK: - Core State (5 Essential Collections)
     
@@ -83,7 +86,7 @@ final class BLEService: NSObject {
     // MARK: - Identity
     
     var myPeerID: String = ""
-    var myNickname: String = "Anonymous"
+    var myNickname: String = "anon"
     private let noiseService = NoiseEncryptionService()
 
     // MARK: - Advertising Privacy
@@ -107,6 +110,8 @@ final class BLEService: NSObject {
     private var pendingWriteBuffers: [String: Data] = [:]
     // Relay jitter scheduling to reduce redundant floods
     private var scheduledRelays: [String: DispatchWorkItem] = [:]
+    // Track short-lived traffic bursts to adapt announces/scanning under load
+    private var recentPacketTimestamps: [Date] = []
     
     // MARK: - Maintenance Timer
     
@@ -807,16 +812,15 @@ final class BLEService: NSObject {
             return
         }
         
-        // For private encrypted messages (not handshakes), send to specific peer only
+        // For private encrypted messages (not handshakes), try direct route first.
+        // If unavailable, conservatively flood to all neighbors while keeping recipientID set.
         // Handshakes need broader delivery to establish encryption
         if packet.type == MessageType.noiseEncrypted.rawValue,
            let recipientID = packet.recipientID {
             let recipientPeerID = recipientID.hexEncodedString()
             var sentEncrypted = false
             
-            // Check routing availability (only log if there's an issue)
-            let hasPeripheral = (DispatchQueue.getSpecific(key: bleQueueKey) != nil) ? (peerToPeripheralUUID[recipientPeerID] != nil) : bleQueue.sync { peerToPeripheralUUID[recipientPeerID] != nil }
-            let hasCentral = (DispatchQueue.getSpecific(key: bleQueueKey) != nil) ? (centralToPeerID.values.contains(recipientPeerID)) : bleQueue.sync { centralToPeerID.values.contains(recipientPeerID) }
+            // Check routing availability (was used for logging; direct attempts follow)
 
             // Compute link limits and fragment if needed (directed only)
             var peripheralMaxLen: Int?
@@ -888,11 +892,41 @@ final class BLEService: NSObject {
             }
             
             if !sentEncrypted {
-                // Log detailed routing failure for debugging
-                SecureLogger.log("⚠️ Failed to route encrypted message to \(recipientPeerID) - peripheral=\(hasPeripheral) central=\(hasCentral)",
-                               category: SecureLogger.session, level: .warning)
+                // Direct route failed or unavailable: fallback to flood with directed recipient.
+                // Use link-aware fragmentation based on the smallest write/notify capacity.
+                var minCentralWriteLen: Int?
+                let states = snapshotPeripheralStates()
+                for s in states where s.isConnected {
+                    let m = s.peripheral.maximumWriteValueLength(for: .withoutResponse)
+                    minCentralWriteLen = minCentralWriteLen.map { min($0, m) } ?? m
+                }
+                var snapshotCentrals: [CBCentral] = []
+                if let _ = characteristic {
+                    let (centrals, _) = snapshotSubscribedCentrals()
+                    snapshotCentrals = centrals
+                }
+                var minNotifyLen: Int?
+                if !snapshotCentrals.isEmpty {
+                    minNotifyLen = snapshotCentrals.map { $0.maximumUpdateValueLength }.min()
+                }
+                if let minLen = [minCentralWriteLen, minNotifyLen].compactMap({ $0 }).min(), data.count > minLen {
+                    let overhead = 13 + 8 + 8 + 13
+                    let chunk = max(64, minLen - overhead)
+                    sendFragmentedPacket(packet, pad: padForBLE, maxChunk: chunk, directedOnlyPeer: nil)
+                } else {
+                    // Send to all connected peripherals
+                    for s in states where s.isConnected {
+                        if let ch = s.characteristic {
+                            s.peripheral.writeValue(data, for: ch, type: .withoutResponse)
+                        }
+                    }
+                    // Notify all subscribed centrals
+                    if let ch = characteristic {
+                        _ = peripheralManager?.updateValue(data, for: ch, onSubscribedCentrals: nil)
+                    }
+                }
             }
-            
+            // Whether direct or flooded, do not continue into broadcast path
             return
         }
         
@@ -1020,7 +1054,21 @@ final class BLEService: NSObject {
         let fragments = stride(from: 0, to: fullData.count, by: safeChunk).map { offset in
             Data(fullData[offset..<min(offset + safeChunk, fullData.count)])
         }
-        
+        // Lightweight pacing to reduce floods and allow BLE buffers to drain
+        // Also briefly pause scanning during long fragment trains to save battery
+        let totalFragments = fragments.count
+        if totalFragments > 4 {
+            bleQueue.async { [weak self] in
+                guard let self = self, let c = self.centralManager, c.state == .poweredOn else { return }
+                if c.isScanning { c.stopScan() }
+                // Resume scanning after we expect last fragment to be sent
+                let expectedMs = min(2000, totalFragments * 8) // ~8ms per fragment
+                self.bleQueue.asyncAfter(deadline: .now() + .milliseconds(expectedMs)) { [weak self] in
+                    self?.startScanning()
+                }
+            }
+        }
+
         for (index, fragment) in fragments.enumerated() {
             var payload = Data()
             payload.append(fragmentID)
@@ -1044,9 +1092,11 @@ final class BLEService: NSObject {
                 signature: nil,
                 ttl: packet.ttl
             )
-            
-            // Send immediately (should be on messageQueue already)
-            broadcastPacket(fragmentPacket)
+            // Pace fragments with small jitter to avoid bursts
+            let delayMs = index * 6 // ~6ms spacing per fragment
+            messageQueue.asyncAfter(deadline: .now() + .milliseconds(delayMs)) { [weak self] in
+                self?.broadcastPacket(fragmentPacket)
+            }
         }
     }
     
@@ -1077,6 +1127,14 @@ final class BLEService: NSObject {
         // Store fragment
         let key = "\(senderHex):\(fragmentID)"
         if incomingFragments[key] == nil {
+            // Cap in-flight assemblies to prevent memory/battery blowups
+            if incomingFragments.count >= maxInFlightAssemblies {
+                // Evict the oldest assembly by timestamp
+                if let oldest = fragmentMetadata.min(by: { $0.value.timestamp < $1.value.timestamp })?.key {
+                    incomingFragments.removeValue(forKey: oldest)
+                    fragmentMetadata.removeValue(forKey: oldest)
+                }
+            }
             incomingFragments[key] = [:]
             fragmentMetadata[key] = (originalType, total, Date())
         }
@@ -1141,7 +1199,20 @@ final class BLEService: NSObject {
         
         // Update peer info without verbose logging - update the peer we received from, not the original sender
         updatePeerLastSeen(peerID)
-        
+
+        // Track recent traffic timestamps for adaptive behavior
+        collectionsQueue.async(flags: .barrier) { [weak self] in
+            guard let self = self else { return }
+            let now = Date()
+            self.recentPacketTimestamps.append(now)
+            // keep last 100 timestamps within 30s window
+            let cutoff = now.addingTimeInterval(-30)
+            if self.recentPacketTimestamps.count > 100 {
+                self.recentPacketTimestamps.removeFirst(self.recentPacketTimestamps.count - 100)
+            }
+            self.recentPacketTimestamps.removeAll { $0 < cutoff }
+        }
+
         
         // Process by type
         switch MessageType(rawValue: packet.type) {
@@ -1173,11 +1244,30 @@ final class BLEService: NSObject {
         // BUT: Don't relay private encrypted messages (they have a specific recipient)
         // and don't relay directed fragments (recipient set)
         let shouldRelay = packet.ttl > 1 &&
-                         senderID != myPeerID &&
-                         packet.type != MessageType.noiseEncrypted.rawValue &&
-                         !(packet.type == MessageType.fragment.rawValue && packet.recipientID != nil)
+                         senderID != myPeerID
         
         if shouldRelay {
+            // Probabilistic forwarding to reduce floods in dense graphs
+            let degree = collectionsQueue.sync { peers.values.filter { $0.isConnected }.count }
+            // base probabilities depending on degree
+            let baseProb: Double = {
+                switch degree {
+                case 0...2: return 1.0
+                case 3...4: return 0.9
+                case 5...6: return 0.7
+                case 7...9: return 0.55
+                default: return 0.45
+                }
+            }()
+            // Handshakes are less critical to flood; reduce further in dense nets
+            let isHandshake = packet.type == MessageType.noiseHandshake.rawValue
+            let prob = isHandshake ? max(0.3, baseProb - 0.2) : baseProb
+            if Double.random(in: 0...1) > prob {
+                // Drop relay to conserve airtime
+                return
+            }
+            // Adaptive TTL cap: limit spread in dense networks
+            let ttlCap: UInt8 = degree >= highDegreeThreshold ? 3 : 5
             // Add short random jitter; cancel if the same message is seen again during the wait
             let delayMs = Int.random(in: 20...80)
             let work = DispatchWorkItem { [weak self] in
@@ -1187,7 +1277,8 @@ final class BLEService: NSObject {
                     _ = self?.scheduledRelays.removeValue(forKey: messageID)
                 }
                 var relayPacket = packet
-                relayPacket.ttl -= 1
+                let newTTL = max(1, min(relayPacket.ttl, ttlCap))
+                relayPacket.ttl = newTTL - 1
                 self.broadcastPacket(relayPacket)
             }
             // Track the scheduled relay so duplicates can cancel it
@@ -1622,8 +1713,10 @@ final class BLEService: NSObject {
             // Discovery mode: keep frequent announces (~10s)
             if elapsed >= 10.0 { sendAnnounce(forceSend: true) }
         } else {
-            // Connected mode: announce every 30–60s with jitter
-            let target = 45.0 + Double.random(in: -7.5...7.5)
+            // Connected mode: announce less often; much less in dense networks
+            let base = connectedCount >= 6 ? 90.0 : 45.0
+            let jitter = connectedCount >= 6 ? 20.0 : 7.5
+            let target = base + Double.random(in: -jitter...jitter)
             if elapsed >= target { sendAnnounce(forceSend: true) }
         }
         
@@ -1745,6 +1838,14 @@ final class BLEService: NSObject {
                 // Start with scanning ON; we'll turn OFF after onDuration
                 if !central.isScanning { startScanning() }
                 dutyActive = true
+                // Adjust duty cycle under dense networks to save battery
+                if connectedCount >= 6 {
+                    dutyOnDuration = 3
+                    dutyOffDuration = 15
+                } else {
+                    dutyOnDuration = 5
+                    dutyOffDuration = 10
+                }
                 t.schedule(deadline: .now() + dutyOnDuration, repeating: dutyOnDuration + dutyOffDuration)
                 t.setEventHandler { [weak self] in
                     guard let self = self, let c = self.centralManager else { return }
