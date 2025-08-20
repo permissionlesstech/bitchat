@@ -632,7 +632,8 @@ struct ContentView: View {
                     // People section
                     VStack(alignment: .leading, spacing: 4) {
                         #if os(iOS)
-                        if case .location = locationManager.selectedChannel {
+                        switch locationManager.selectedChannel {
+                        case .location:
                             if viewModel.geohashPeople.isEmpty {
                                 Text("nobody around...")
                                     .font(.system(size: 14, design: .monospaced))
@@ -690,8 +691,8 @@ struct ContentView: View {
                                     }
                                 }
                             }
-                        } else {
-                            // Mesh peers list (original on iOS when not in a location channel)
+                        default:
+                            // Mesh peers list (original)
                             if viewModel.allPeers.isEmpty {
                                 Text("nobody around...")
                                     .font(.system(size: 14, design: .monospaced))
@@ -767,10 +768,82 @@ struct ContentView: View {
                                                 .foregroundColor(Color.secondary.opacity(0.3))
                                                 .accessibilityLabel("Offline")
                                         }
+                                    }
+                                }
+                                
+                                // Peer name
+                                if peer.isMe {
+                                    HStack {
+                                        Text(peer.displayName + " (you)")
+                                            .font(.system(size: 14, design: .monospaced))
+                                            .foregroundColor(textColor)
+                                        
+                                        Spacer()
+                                    }
+                                } else {
+                                    // Render nickname with light-gray '#abcd' suffix if present
+                                    let parts = splitNameSuffix(peer.displayName)
+                                    HStack(spacing: 0) {
+                                        Text(parts.base)
+                                            .font(.system(size: 14, design: .monospaced))
+                                            .foregroundColor(peer.isFavorite || peerNicknames[peer.id] != nil ? textColor : secondaryTextColor)
+                                        if !parts.suffix.isEmpty {
+                                            Text(parts.suffix)
+                                                .font(.system(size: 14, design: .monospaced))
+                                                .foregroundColor(Color.secondary.opacity(0.6))
+                                        }
+                                    }
+                                    
+                                    // Encryption status icon (after peer name)
+                                    if let icon = peer.encryptionStatus.icon {
+                                        Image(systemName: icon)
+                                            .font(.system(size: 10))
+                                            .foregroundColor(peer.encryptionStatus == .noiseVerified ? textColor : 
+                                                           peer.encryptionStatus == .noiseSecured ? textColor :
+                                                           peer.encryptionStatus == .noiseHandshaking ? Color.orange :
+                                                           Color.red)
+                                            .accessibilityLabel("Encryption: \(peer.encryptionStatus == .noiseVerified ? "verified" : peer.encryptionStatus == .noiseSecured ? "secured" : peer.encryptionStatus == .noiseHandshaking ? "establishing" : "none")")
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    // Favorite star
+                                    Button(action: {
+                                        viewModel.toggleFavorite(peerID: peer.id)
+                                    }) {
+                                        Image(systemName: peer.isFavorite ? "star.fill" : "star")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(peer.isFavorite ? Color.yellow : secondaryTextColor)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityLabel(peer.isFavorite ? "Remove \(peer.displayName) from favorites" : "Add \(peer.displayName) to favorites")
+                                }
+                            }
+                            .padding(.horizontal)
+                            .padding(.vertical, 4)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                if !peer.isMe {
+                                    // Allow tapping on any peer (connected or offline favorite)
+                                    viewModel.startPrivateChat(with: peer.id)
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        showSidebar = false
+                                        sidebarDragOffset = 0
+                                    }
+                                }
+                            }
+                            .onTapGesture(count: 2) {
+                                if !peer.isMe {
+                                    // Show fingerprint on double tap
+                                    viewModel.showFingerprint(for: peer.id)
+                                }
                             }
                         }
+                        }
+                        // Close switch
+                        }
                         #else
-                        // macOS: always show mesh peers list
+                        // macOS: show mesh peers list
                         if viewModel.allPeers.isEmpty {
                             Text("nobody around...")
                                 .font(.system(size: 14, design: .monospaced))
@@ -852,78 +925,6 @@ struct ContentView: View {
                                     }
                                 }
                             }
-                        }
-                        #endif
-                                // Peer name
-                                if peer.isMe {
-                                    HStack {
-                                        Text(peer.displayName + " (you)")
-                                            .font(.system(size: 14, design: .monospaced))
-                                            .foregroundColor(textColor)
-                                        
-                                        Spacer()
-                                    }
-                                } else {
-                                    // Render nickname with light-gray '#abcd' suffix if present
-                                    let parts = splitNameSuffix(peer.displayName)
-                                    HStack(spacing: 0) {
-                                        Text(parts.base)
-                                            .font(.system(size: 14, design: .monospaced))
-                                            .foregroundColor(peer.isFavorite || peerNicknames[peer.id] != nil ? textColor : secondaryTextColor)
-                                        if !parts.suffix.isEmpty {
-                                            Text(parts.suffix)
-                                                .font(.system(size: 14, design: .monospaced))
-                                                .foregroundColor(Color.secondary.opacity(0.6))
-                                        }
-                                    }
-                                    
-                                    // Encryption status icon (after peer name)
-                                    if let icon = peer.encryptionStatus.icon {
-                                        Image(systemName: icon)
-                                            .font(.system(size: 10))
-                                            .foregroundColor(peer.encryptionStatus == .noiseVerified ? textColor : 
-                                                           peer.encryptionStatus == .noiseSecured ? textColor :
-                                                           peer.encryptionStatus == .noiseHandshaking ? Color.orange :
-                                                           Color.red)
-                                            .accessibilityLabel("Encryption: \(peer.encryptionStatus == .noiseVerified ? "verified" : peer.encryptionStatus == .noiseSecured ? "secured" : peer.encryptionStatus == .noiseHandshaking ? "establishing" : "none")")
-                                    }
-                                    
-                                    Spacer()
-                                    
-                                    // Favorite star
-                                    Button(action: {
-                                        viewModel.toggleFavorite(peerID: peer.id)
-                                    }) {
-                                        Image(systemName: peer.isFavorite ? "star.fill" : "star")
-                                            .font(.system(size: 12))
-                                            .foregroundColor(peer.isFavorite ? Color.yellow : secondaryTextColor)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .accessibilityLabel(peer.isFavorite ? "Remove \(peer.displayName) from favorites" : "Add \(peer.displayName) to favorites")
-                                }
-                            }
-                            .padding(.horizontal)
-                            .padding(.vertical, 4)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                if !peer.isMe {
-                                    // Allow tapping on any peer (connected or offline favorite)
-                                    viewModel.startPrivateChat(with: peer.id)
-                                    withAnimation(.easeInOut(duration: 0.2)) {
-                                        showSidebar = false
-                                        sidebarDragOffset = 0
-                                    }
-                                }
-                            }
-                            .onTapGesture(count: 2) {
-                                if !peer.isMe {
-                                    // Show fingerprint on double tap
-                                    viewModel.showFingerprint(for: peer.id)
-                                }
-                            }
-                        }
-                        }
-                        // Close switch
                         }
                         #endif
                     }
