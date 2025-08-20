@@ -529,6 +529,10 @@ final class BLEService: NSObject {
                     senderID: self.myPeerID,
                     payload: Data(content.utf8)
                 )
+                // Pre-mark our own broadcast as processed to avoid handling relayed self copy
+                let senderHex = packet.senderID.hexEncodedString()
+                let dedupID = "\(senderHex)-\(packet.timestamp)-\(packet.type)"
+                self.messageDeduplicator.markProcessed(dedupID)
                 // Call synchronously since we're already on background queue
                 self.broadcastPacket(packet)
             }
@@ -1181,6 +1185,8 @@ final class BLEService: NSObject {
     // Mention parsing moved to ChatViewModel
     
     private func handleMessage(_ packet: BitchatPacket, from peerID: String) {
+        // Ignore self-origin public messages that may be seen again via relay
+        if peerID == myPeerID { return }
         
         // Enforce: only accept public messages from verified peers we know
         guard let info = peers[peerID], info.isVerifiedNickname else {
