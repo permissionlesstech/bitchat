@@ -52,7 +52,6 @@ iOSInjectionProject/
 
 ## Xcode project
 *.xcodeproj/project.xcworkspace/
-*.xcodeproj/xcshareddata/
 
 ## Python
 __pycache__/
