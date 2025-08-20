@@ -6,14 +6,12 @@ final class LocationChannelsTests: XCTestCase {
         // Sanity: known coords (Statue of Liberty approx)
         let lat = 40.6892
         let lon = -74.0445
-        let street = Geohash.encode(latitude: lat, longitude: lon, precision: GeohashChannelLevel.street.precision)
         let block = Geohash.encode(latitude: lat, longitude: lon, precision: GeohashChannelLevel.block.precision)
         let neighborhood = Geohash.encode(latitude: lat, longitude: lon, precision: GeohashChannelLevel.neighborhood.precision)
         let city = Geohash.encode(latitude: lat, longitude: lon, precision: GeohashChannelLevel.city.precision)
         let region = Geohash.encode(latitude: lat, longitude: lon, precision: GeohashChannelLevel.region.precision)
         let country = Geohash.encode(latitude: lat, longitude: lon, precision: GeohashChannelLevel.country.precision)
         
-        XCTAssertEqual(street.count, 8)
         XCTAssertEqual(block.count, 7)
         XCTAssertEqual(neighborhood.count, 6)
         XCTAssertEqual(city.count, 5)
@@ -21,7 +19,6 @@ final class LocationChannelsTests: XCTestCase {
         XCTAssertEqual(country.count, 2)
         
         // All prefixes must match progressively
-        XCTAssertTrue(street.hasPrefix(block))
         XCTAssertTrue(block.hasPrefix(neighborhood))
         XCTAssertTrue(neighborhood.hasPrefix(city))
         XCTAssertTrue(city.hasPrefix(region))

@@ -93,7 +93,7 @@ struct LocationChannelsSheet: View {
     private var channelList: some View {
         List {
             // Mesh option first
-            channelRow(title: meshTitleWithCount(), subtitle: "#bluetooth", isSelected: isMeshSelected) {
+            channelRow(title: meshTitleWithCount(), subtitlePrefix: "#bluetooth • \(bluetoothRangeString())", isSelected: isMeshSelected, titleColor: standardBlue, titleBold: meshCount() > 0) {
                 manager.select(ChannelID.mesh)
                 isPresented = false
             }
@@ -101,7 +101,12 @@ struct LocationChannelsSheet: View {
             // Nearby options
             if !manager.availableChannels.isEmpty {
                 ForEach(manager.availableChannels) { channel in
-                    channelRow(title: geohashTitleWithCount(for: channel), subtitle: "#\(channel.geohash)", isSelected: isSelected(channel)) {
+                    let coverage = coverageString(forPrecision: channel.geohash.count)
+                    let nameBase = locationName(for: channel.level)
+                    let namePart = nameBase.map { formattedNamePrefix(for: channel.level) + $0 }
+                    let subtitlePrefix = "#\(channel.geohash) • \(coverage)"
+                    let highlight = viewModel.geohashParticipantCount(for: channel.geohash) > 0
+                    channelRow(title: geohashTitleWithCount(for: channel), subtitlePrefix: subtitlePrefix, subtitleName: namePart, subtitleNameBold: highlight, isSelected: isSelected(channel), titleBold: highlight) {
                         manager.select(ChannelID.location(channel))
                         isPresented = false
                     }
@@ -198,7 +203,7 @@ struct LocationChannelsSheet: View {
         return false
     }
 
-    private func channelRow(title: String, subtitle: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+    private func channelRow(title: String, subtitlePrefix: String, subtitleName: String? = nil, subtitleNameBold: Bool = false, isSelected: Bool, titleColor: Color? = nil, titleBold: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack {
                 VStack(alignment: .leading) {
@@ -207,15 +212,28 @@ struct LocationChannelsSheet: View {
                     HStack(spacing: 4) {
                         Text(parts.base)
                             .font(.system(size: 14, design: .monospaced))
+                            .fontWeight(titleBold ? .bold : .regular)
+                            .foregroundColor(titleColor ?? Color.primary)
                         if let count = parts.countSuffix, !count.isEmpty {
                             Text(count)
                                 .font(.system(size: 11, design: .monospaced))
                                 .foregroundColor(.secondary)
                         }
                     }
-                    Text(subtitle)
-                        .font(.system(size: 12, design: .monospaced))
-                        .foregroundColor(.secondary)
+                    HStack(spacing: 0) {
+                        Text(subtitlePrefix)
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundColor(.secondary)
+                        if let name = subtitleName {
+                            Text(" • ")
+                                .font(.system(size: 12, design: .monospaced))
+                                .foregroundColor(.secondary)
+                            Text(name)
+                                .font(.system(size: 12, design: .monospaced))
+                                .fontWeight(subtitleNameBold ? .bold : .regular)
+                                .foregroundColor(.secondary)
+                        }
+                    }
                 }
                 Spacer()
                 if isSelected {
@@ -241,13 +259,17 @@ struct LocationChannelsSheet: View {
     // MARK: - Helpers for counts
     private func meshTitleWithCount() -> String {
         // Count currently connected mesh peers (excluding self)
+        let meshCount = meshCount()
+        let noun = meshCount == 1 ? "person" : "people"
+        return "mesh [\(meshCount) \(noun)]"
+    }
+
+    private func meshCount() -> Int {
         let myID = viewModel.meshService.myPeerID
-        let meshCount = viewModel.allPeers.reduce(0) { acc, peer in
+        return viewModel.allPeers.reduce(0) { acc, peer in
             if peer.id != myID && peer.isConnected { return acc + 1 }
             return acc
         }
-        let noun = meshCount == 1 ? "person" : "people"
-        return "#mesh [\(meshCount) \(noun)]"
     }
 
     private func geohashTitleWithCount(for channel: GeohashChannel) -> String {
@@ -270,7 +292,7 @@ struct LocationChannelsSheet: View {
         case 5: return .city
         case 6: return .neighborhood
         case 7: return .block
-        default: return .street
+        default: return .block
         }
     }
 }
@@ -279,6 +301,81 @@ struct LocationChannelsSheet: View {
 extension LocationChannelsSheet {
     private var standardGreen: Color {
         (colorScheme == .dark) ? Color.green : Color(red: 0, green: 0.5, blue: 0)
+    }
+    private var standardBlue: Color {
+        Color(red: 0.0, green: 0.478, blue: 1.0)
+    }
+}
+
+// MARK: - Coverage helpers
+extension LocationChannelsSheet {
+    private func coverageString(forPrecision len: Int) -> String {
+        // Approximate max cell dimension at equator for a given geohash length.
+        // Values sourced from common geohash dimension tables.
+        let maxMeters: Double = {
+            switch len {
+            case 2: return 1_250_000
+            case 3: return 156_000
+            case 4: return 39_100
+            case 5: return 4_890
+            case 6: return 1_220
+            case 7: return 153
+            case 8: return 38.2
+            case 9: return 4.77
+            case 10: return 1.19
+            default:
+                if len <= 1 { return 5_000_000 }
+                // For >10, scale down conservatively by ~1/4 each char
+                let over = len - 10
+                return 1.19 * pow(0.25, Double(over))
+            }
+        }()
+
+        let usesMetric: Bool = {
+            if #available(iOS 16.0, *) {
+                return Locale.current.measurementSystem == .metric
+            } else {
+                return Locale.current.usesMetricSystem
+            }
+        }()
+        if usesMetric {
+            let km = maxMeters / 1000.0
+            return "~\(formatDistance(km)) km"
+        } else {
+            let miles = maxMeters / 1609.344
+            return "~\(formatDistance(miles)) mi"
+        }
+    }
+
+    private func formatDistance(_ value: Double) -> String {
+        if value >= 100 { return String(format: "%.0f", value.rounded()) }
+        if value >= 10 { return String(format: "%.1f", value) }
+        return String(format: "%.1f", value)
+    }
+
+    private func bluetoothRangeString() -> String {
+        let usesMetric: Bool = {
+            if #available(iOS 16.0, *) {
+                return Locale.current.measurementSystem == .metric
+            } else {
+                return Locale.current.usesMetricSystem
+            }
+        }()
+        // Approximate Bluetooth LE range for typical mobile devices; environment dependent
+        return usesMetric ? "~10–50 m" : "~30–160 ft"
+    }
+
+    private func locationName(for level: GeohashChannelLevel) -> String? {
+        manager.locationNames[level]
+    }
+
+    private func formattedNamePrefix(for level: GeohashChannelLevel) -> String {
+        switch level {
+        case .country:
+            return ""
+        default:
+            return "~"
+        }
     }
 }
 
