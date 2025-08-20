@@ -25,7 +25,7 @@ enum GeohashChannelLevel: CaseIterable, Codable, Equatable {
         switch self {
         case .street: return "Street"
         case .block: return "Block"
-        case .neighborhood: return "'hood"
+        case .neighborhood: return "Neighborhood"
         case .city: return "City"
         case .region: return "Region"
         case .country: return "Country"
