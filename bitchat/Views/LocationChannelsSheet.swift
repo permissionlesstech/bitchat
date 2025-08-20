@@ -93,7 +93,7 @@ struct LocationChannelsSheet: View {
     private var channelList: some View {
         List {
             // Mesh option first
-            channelRow(title: meshTitleWithCount(), subtitle: "#bluetooth", isSelected: isMeshSelected, titleColor: standardBlue) {
+            channelRow(title: meshTitleWithCount(), subtitle: "#bluetooth • \(bluetoothRangeString())", isSelected: isMeshSelected, titleColor: standardBlue) {
                 manager.select(ChannelID.mesh)
                 isPresented = false
             }
@@ -334,6 +334,18 @@ extension LocationChannelsSheet {
         if value >= 100 { return String(format: "%.0f", value.rounded()) }
         if value >= 10 { return String(format: "%.1f", value) }
         return String(format: "%.1f", value)
+    }
+
+    private func bluetoothRangeString() -> String {
+        let usesMetric: Bool = {
+            if #available(iOS 16.0, *) {
+                return Locale.current.measurementSystem == .metric
+            } else {
+                return Locale.current.usesMetricSystem
+            }
+        }()
+        // Approximate Bluetooth LE range for typical mobile devices; environment dependent
+        return usesMetric ? "~10–50 m" : "~30–160 ft"
     }
 
     private func locationName(for level: GeohashChannelLevel) -> String? {
