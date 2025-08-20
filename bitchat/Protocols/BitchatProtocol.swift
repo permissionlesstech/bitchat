@@ -232,8 +232,13 @@ struct BitchatPacket: Codable {
         BinaryProtocol.encode(self)
     }
     
+    func toBinaryData(padding: Bool = true) -> Data? {
+        BinaryProtocol.encode(self, padding: padding)
+    }
+
+    // Backward-compatible helper (defaults to padded encoding)
     func toBinaryData() -> Data? {
-        BinaryProtocol.encode(self)
+        toBinaryData(padding: true)
     }
     
     /// Create binary representation for signing (without signature and TTL fields)
