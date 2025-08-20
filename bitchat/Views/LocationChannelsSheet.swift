@@ -93,7 +93,7 @@ struct LocationChannelsSheet: View {
     private var channelList: some View {
         List {
             // Mesh option first
-            channelRow(title: meshTitleWithCount(), subtitle: "#bluetooth • \(bluetoothRangeString())", isSelected: isMeshSelected, titleColor: standardBlue) {
+            channelRow(title: meshTitleWithCount(), subtitlePrefix: "#bluetooth • \(bluetoothRangeString())", isSelected: isMeshSelected, titleColor: standardBlue) {
                 manager.select(ChannelID.mesh)
                 isPresented = false
             }
@@ -102,10 +102,11 @@ struct LocationChannelsSheet: View {
             if !manager.availableChannels.isEmpty {
                 ForEach(manager.availableChannels) { channel in
                     let coverage = coverageString(forPrecision: channel.geohash.count)
-                    let name = locationName(for: channel.level)
-                    let namePart = name.map { formattedNamePrefix(for: channel.level) + $0 }
-                    let subtitle = ["#\(channel.geohash)", coverage, namePart].compactMap { $0 }.joined(separator: " • ")
-                    channelRow(title: geohashTitleWithCount(for: channel), subtitle: subtitle, isSelected: isSelected(channel)) {
+                    let nameBase = locationName(for: channel.level)
+                    let namePart = nameBase.map { formattedNamePrefix(for: channel.level) + $0 }
+                    let subtitlePrefix = "#\(channel.geohash) • \(coverage)"
+                    let highlight = viewModel.geohashParticipantCount(for: channel.geohash) > 0
+                    channelRow(title: geohashTitleWithCount(for: channel), subtitlePrefix: subtitlePrefix, subtitleName: namePart, subtitleNameBold: highlight, isSelected: isSelected(channel)) {
                         manager.select(ChannelID.location(channel))
                         isPresented = false
                     }
@@ -202,7 +203,7 @@ struct LocationChannelsSheet: View {
         return false
     }
 
-    private func channelRow(title: String, subtitle: String, isSelected: Bool, titleColor: Color? = nil, action: @escaping () -> Void) -> some View {
+    private func channelRow(title: String, subtitlePrefix: String, subtitleName: String? = nil, subtitleNameBold: Bool = false, isSelected: Bool, titleColor: Color? = nil, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack {
                 VStack(alignment: .leading) {
@@ -218,9 +219,20 @@ struct LocationChannelsSheet: View {
                                 .foregroundColor(.secondary)
                         }
                     }
-                    Text(subtitle)
-                        .font(.system(size: 12, design: .monospaced))
-                        .foregroundColor(.secondary)
+                    HStack(spacing: 0) {
+                        Text(subtitlePrefix)
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundColor(.secondary)
+                        if let name = subtitleName {
+                            Text(" • ")
+                                .font(.system(size: 12, design: .monospaced))
+                                .foregroundColor(.secondary)
+                            Text(name)
+                                .font(.system(size: 12, design: .monospaced))
+                                .fontWeight(subtitleNameBold ? .bold : .regular)
+                                .foregroundColor(.secondary)
+                        }
+                    }
                 }
                 Spacer()
                 if isSelected {
