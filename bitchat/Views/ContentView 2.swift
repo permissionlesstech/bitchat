@@ -6,19 +6,18 @@
 //
 import SwiftUI
 
-// MARK: - Main App Entry
 struct Homepage: View {
     init() {
         let tabBarAppearance = UITabBarAppearance()
         tabBarAppearance.configureWithOpaqueBackground()
-        tabBarAppearance.backgroundColor = UIColor(Color.brandOrange)
+        tabBarAppearance.backgroundColor = UIColor(Color.brandPrimary)
 
      
         tabBarAppearance.stackedLayoutAppearance.normal.iconColor = UIColor(
             Color.white
-        ).withAlphaComponent(0.4)
+        ).withAlphaComponent(0.6)
         tabBarAppearance.stackedLayoutAppearance.normal.titleTextAttributes = [
-            .foregroundColor: UIColor(Color.white).withAlphaComponent(0.4)
+            .foregroundColor: UIColor(Color.white).withAlphaComponent(0.6)
         ]
 
    
@@ -42,30 +41,17 @@ struct Homepage: View {
                         .renderingMode(.template)
                     Text("Chats")
                 }
-            Text("Alerts")
+            Text("Profile")
                 .tabItem {
-                    Image("location")
-                        .renderingMode(.template)
-                    Text("location")
-                }
-            Text("Circles")
-                .tabItem {
-                    Image("person")
-                        .renderingMode(.template)
-                    Text("Person")
-                }
-            Text("Contacts")
-                .tabItem {
-                    Image("profile")
+                    Image("personalcard")
                         .renderingMode(.template)
                     Text("Profile")
                 }
         }
-        .tint(.brandOrange)
+        .tint(.brandPrimary)
     }
 }
 
-// MARK: - Preview
 #Preview {
     Homepage()
 }
