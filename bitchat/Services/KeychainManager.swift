@@ -79,38 +79,44 @@ class KeychainManager {
         // Delete any existing item first to ensure clean state
         _ = delete(forKey: key)
         
-        // Build query with all necessary attributes for sandboxed apps
-        var query: [String: Any] = [
+        // Build base query
+        var base: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key,
             kSecValueData as String: data,
             kSecAttrService as String: service,
-            // Important for sandboxed apps: make it accessible when unlocked
-            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlocked
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlocked,
+            kSecAttrLabel as String: "bitchat-\(key)"
         ]
-        
-        // Add a label for easier debugging
-        query[kSecAttrLabel as String] = "bitchat-\(key)"
-        
-        // Always use app group when available for consistent behavior
-        // This ensures keychain items are properly isolated to our app
-        query[kSecAttrAccessGroup as String] = appGroup
-        
-        // For sandboxed macOS apps, we need to ensure the item is NOT synchronized
         #if os(macOS)
-        query[kSecAttrSynchronizable as String] = false
+        base[kSecAttrSynchronizable as String] = false
         #endif
-        
-        let status = SecItemAdd(query as CFDictionary, nil)
-        
-        if status == errSecSuccess {
-            return true
-        } else if status == -34018 {
+
+        // Try with access group where it is expected to work (iOS app builds)
+        var triedWithoutGroup = false
+        func attempt(addAccessGroup: Bool) -> OSStatus {
+            var query = base
+            if addAccessGroup { query[kSecAttrAccessGroup as String] = appGroup }
+            return SecItemAdd(query as CFDictionary, nil)
+        }
+
+        #if os(iOS)
+        var status = attempt(addAccessGroup: true)
+        if status == -34018 { // Missing entitlement, retry without access group
+            triedWithoutGroup = true
+            status = attempt(addAccessGroup: false)
+        }
+        #else
+        // On macOS dev/simulator default to no access group to avoid -34018
+        let status = attempt(addAccessGroup: false)
+        #endif
+
+        if status == errSecSuccess { return true }
+        if status == -34018 && !triedWithoutGroup {
             SecureLogger.logError(NSError(domain: "Keychain", code: -34018), context: "Missing keychain entitlement", category: SecureLogger.keychain)
         } else if status != errSecDuplicateItem {
             SecureLogger.logError(NSError(domain: "Keychain", code: Int(status)), context: "Error saving to keychain", category: SecureLogger.keychain)
         }
-        
         return false
     }
     
@@ -120,41 +126,56 @@ class KeychainManager {
     }
     
     private func retrieveData(forKey key: String) -> Data? {
-        var query: [String: Any] = [
+        // Base query
+        var base: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key,
             kSecAttrService as String: service,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne
         ]
-        
-        // Always use app group for consistent behavior
-        query[kSecAttrAccessGroup as String] = appGroup
-        
+
         var result: AnyObject?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-        
-        if status == errSecSuccess {
-            return result as? Data
-        } else if status == -34018 {
+        func attempt(withAccessGroup: Bool) -> OSStatus {
+            var q = base
+            if withAccessGroup { q[kSecAttrAccessGroup as String] = appGroup }
+            return SecItemCopyMatching(q as CFDictionary, &result)
+        }
+
+        #if os(iOS)
+        var status = attempt(withAccessGroup: true)
+        if status == -34018 { status = attempt(withAccessGroup: false) }
+        #else
+        let status = attempt(withAccessGroup: false)
+        #endif
+
+        if status == errSecSuccess { return result as? Data }
+        if status == -34018 {
             SecureLogger.logError(NSError(domain: "Keychain", code: -34018), context: "Missing keychain entitlement", category: SecureLogger.keychain)
         }
-        
         return nil
     }
     
     private func delete(forKey key: String) -> Bool {
-        // Build basic query
-        var query: [String: Any] = [
+        // Base delete query
+        var base: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key,
             kSecAttrService as String: service
         ]
-        
-        // Always use app group for consistent behavior
-        query[kSecAttrAccessGroup as String] = appGroup
-        
-        let status = SecItemDelete(query as CFDictionary)
+
+        func attempt(withAccessGroup: Bool) -> OSStatus {
+            var q = base
+            if withAccessGroup { q[kSecAttrAccessGroup as String] = appGroup }
+            return SecItemDelete(q as CFDictionary)
+        }
+
+        #if os(iOS)
+        var status = attempt(withAccessGroup: true)
+        if status == -34018 { status = attempt(withAccessGroup: false) }
+        #else
+        let status = attempt(withAccessGroup: false)
+        #endif
         return status == errSecSuccess || status == errSecItemNotFound
     }
     
