@@ -345,7 +345,7 @@ extension LocationChannelsSheet {
         case .country:
             return ""
         default:
-            return "around "
+            return "~"
         }
     }
 }
