@@ -125,6 +125,9 @@ final class BLEService: NSObject {
         let discoveredAt: Date
     }
     private var connectionCandidates: [ConnectionCandidate] = []
+    private var failureCounts: [String: Int] = [:] // Peripheral UUID -> failures
+    private var lastIsolatedAt: Date? = nil
+    private var dynamicRSSIThreshold: Int = -90
 
     // MARK: - Adaptive scanning duty-cycle
     private var scanDutyTimer: DispatchSourceTimer?
@@ -1632,6 +1635,7 @@ final class BLEService: NSObject {
         
         // Update scanning duty-cycle based on connectivity
         updateScanningDutyCycle(connectedCount: connectedCount)
+        updateRSSIThreshold(connectedCount: connectedCount)
         
         // Every 20 seconds (2 cycles): Check peer connectivity
         if maintenanceCounter % 2 == 0 {
@@ -1763,6 +1767,36 @@ final class BLEService: NSObject {
             if !central.isScanning { startScanning() }
         }
     }
+
+    private func updateRSSIThreshold(connectedCount: Int) {
+        // Adjust RSSI threshold based on connectivity, candidate pressure, and failures
+        if connectedCount == 0 {
+            // Isolated: relax floor slowly to hunt for distant nodes
+            if lastIsolatedAt == nil { lastIsolatedAt = Date() }
+            let iso = lastIsolatedAt ?? Date()
+            let elapsed = Date().timeIntervalSince(iso)
+            if elapsed > 60 {
+                dynamicRSSIThreshold = -92
+            } else {
+                dynamicRSSIThreshold = -90
+            }
+            return
+        }
+        lastIsolatedAt = nil
+        // Base threshold when connected
+        var threshold = -90
+        // If we're at budget or queue is large, prefer closer peers
+        let linkCount = peripherals.values.filter { $0.isConnected || $0.isConnecting }.count
+        if linkCount >= maxCentralLinks || connectionCandidates.count > 20 {
+            threshold = -85
+        }
+        // If we have many recent timeouts, raise further
+        let recentTimeouts = recentConnectTimeouts.filter { Date().timeIntervalSince($0.value) < 60 }.count
+        if recentTimeouts >= 3 {
+            threshold = max(threshold, -80)
+        }
+        dynamicRSSIThreshold = threshold
+    }
 }
 
 // MARK: - CBCentralManagerDelegate
@@ -1805,9 +1839,15 @@ extension BLEService: CBCentralManagerDelegate {
         // Skip if peripheral is not connectable (per advertisement data)
         guard isConnectable else { return }
 
-        // Skip if signal too weak - prevents connection attempts at extreme range
-        guard rssiValue > -90 else {
-            // Too far away, don't attempt connection
+        // Skip immediate connect if signal too weak for current conditions; enqueue instead
+        if rssiValue <= dynamicRSSIThreshold {
+            connectionCandidates.append(ConnectionCandidate(peripheral: peripheral, rssi: rssiValue, name: String(advertisedName), isConnectable: isConnectable, discoveredAt: Date()))
+            // Keep list tidy
+            connectionCandidates.sort { (a, b) in
+                if a.rssi != b.rssi { return a.rssi > b.rssi }
+                return a.discoveredAt < b.discoveredAt
+            }
+            if connectionCandidates.count > 100 { connectionCandidates.removeLast(connectionCandidates.count - 100) }
             return
         }
         
@@ -1847,13 +1887,13 @@ extension BLEService: CBCentralManagerDelegate {
                 return // Already connected or connecting
             }
             
-            // Add backoff for reconnection attempts
-            if let lastAttempt = state.lastConnectionAttempt {
-                let timeSinceLastAttempt = Date().timeIntervalSince(lastAttempt)
-                if timeSinceLastAttempt < 2.0 {
-                    return // Wait at least 2 seconds between connection attempts
-                }
+        // Add backoff for reconnection attempts
+        if let lastAttempt = state.lastConnectionAttempt {
+            let timeSinceLastAttempt = Date().timeIntervalSince(lastAttempt)
+            if timeSinceLastAttempt < 2.0 {
+                return // Wait at least 2 seconds between connection attempts
             }
+        }
         }
         
         // Backoff if this peripheral recently timed out connection within the last 15 seconds
@@ -1906,15 +1946,16 @@ extension BLEService: CBCentralManagerDelegate {
             // Connection timed out - cancel it
             SecureLogger.log("⏱️ Timeout: \(advertisedName)",
                             category: SecureLogger.session, level: .debug)
-            central.cancelPeripheralConnection(peripheral)
-            self.peripherals[peripheralID] = nil
-            self.recentConnectTimeouts[peripheralID] = Date()
-            // Try next candidate if any
-            self.tryConnectFromQueue()
+        central.cancelPeripheralConnection(peripheral)
+        self.peripherals[peripheralID] = nil
+        self.recentConnectTimeouts[peripheralID] = Date()
+        self.failureCounts[peripheralID, default: 0] += 1
+        // Try next candidate if any
+        self.tryConnectFromQueue()
         }
     }
     
-    func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
+func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
         let peripheralID = peripheral.identifier.uuidString
         
         // Update state to connected
@@ -1933,6 +1974,10 @@ extension BLEService: CBCentralManagerDelegate {
             )
         }
         
+        // Reset backoff state on success
+        failureCounts[peripheralID] = 0
+        recentConnectTimeouts.removeValue(forKey: peripheralID)
+
         SecureLogger.log("✅ Connected: \(peripheral.name ?? "Unknown") [\(peripheralID)]", category: SecureLogger.session, level: .debug)
         
         // Discover services
@@ -1994,6 +2039,7 @@ extension BLEService: CBCentralManagerDelegate {
         peripherals.removeValue(forKey: peripheralID)
         
         SecureLogger.log("❌ Failed to connect to peripheral: \(peripheral.name ?? "Unknown") [\(peripheralID)] - Error: \(error?.localizedDescription ?? "Unknown")", category: SecureLogger.session, level: .error)
+        failureCounts[peripheralID, default: 0] += 1
         // Try next candidate
         bleQueue.async { [weak self] in self?.tryConnectFromQueue() }
     }
@@ -2012,14 +2058,21 @@ extension BLEService {
             bleQueue.asyncAfter(deadline: .now() + delay) { [weak self] in self?.tryConnectFromQueue() }
             return
         }
-        // Pull best candidate
+        // Pull best candidate by composite score
         guard !connectionCandidates.isEmpty else { return }
-        // Prefer connectable and strongest signal
-        connectionCandidates.sort { (a, b) in
-            if a.isConnectable != b.isConnectable { return a.isConnectable && !b.isConnectable }
-            if a.rssi != b.rssi { return a.rssi > b.rssi }
-            return a.discoveredAt < b.discoveredAt
+        // compute score: connectable> RSSI > recency, with backoff penalty
+        func score(_ c: ConnectionCandidate) -> Int {
+            let uuid = c.peripheral.identifier.uuidString
+            // Penalty if recently timed out (exponential)
+            let fails = failureCounts[uuid] ?? 0
+            let penalty = min(20, (1 << min(4, fails))) // 1,2,4,8,16 cap 16-20
+            let timeoutRecent = recentConnectTimeouts[uuid]
+            let timeoutBias = (timeoutRecent != nil && Date().timeIntervalSince(timeoutRecent!) < 60) ? 10 : 0
+            let base = (c.isConnectable ? 1000 : 0) + (c.rssi + 100) * 2
+            let rec = -Int(Date().timeIntervalSince(c.discoveredAt) * 10)
+            return base + rec - penalty - timeoutBias
         }
+        connectionCandidates.sort { score($0) > score($1) }
         let candidate = connectionCandidates.removeFirst()
         guard candidate.isConnectable else { return }
         let peripheral = candidate.peripheral
