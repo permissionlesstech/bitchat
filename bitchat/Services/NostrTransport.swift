@@ -197,7 +197,7 @@ final class NostrTransport: Transport {
             guard let recipientNpub = recipientNostrPubkey else { return }
             guard let senderIdentity = try? NostrIdentityBridge.getCurrentNostrIdentity() else { return }
             SecureLogger.log("NostrTransport: preparing DELIVERED ack for id=\(messageID.prefix(8))… to \(recipientNpub.prefix(16))…",
-                            category: SecureLogger.session, level: .info)
+                            category: SecureLogger.session, level: .debug)
             let recipientHex: String
             do {
                 let (hrp, data) = try Bech32.decode(recipientNpub)
@@ -213,7 +213,7 @@ final class NostrTransport: Transport {
                 return
             }
             SecureLogger.log("NostrTransport: sending DELIVERED ack giftWrap id=\(event.id.prefix(16))…",
-                            category: SecureLogger.session, level: .info)
+                            category: SecureLogger.session, level: .debug)
             NostrRelayManager.shared.sendEvent(event)
         }
     }

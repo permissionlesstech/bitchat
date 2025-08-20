@@ -45,7 +45,7 @@
 ///
 /// ## Compression Strategy
 /// - Automatic compression for payloads > 256 bytes
-/// - LZ4 algorithm for speed over ratio
+/// - zlib compression for broad compatibility on Apple platforms
 /// - Original size stored for decompression
 /// - Flag bit indicates compressed payload
 ///
