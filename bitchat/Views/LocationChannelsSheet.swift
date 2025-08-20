@@ -93,7 +93,7 @@ struct LocationChannelsSheet: View {
     private var channelList: some View {
         List {
             // Mesh option first
-            channelRow(title: meshTitleWithCount(), subtitlePrefix: "#bluetooth • \(bluetoothRangeString())", isSelected: isMeshSelected, titleColor: standardBlue) {
+            channelRow(title: meshTitleWithCount(), subtitlePrefix: "#bluetooth • \(bluetoothRangeString())", isSelected: isMeshSelected, titleColor: standardBlue, titleBold: meshCount() > 0) {
                 manager.select(ChannelID.mesh)
                 isPresented = false
             }
@@ -106,7 +106,7 @@ struct LocationChannelsSheet: View {
                     let namePart = nameBase.map { formattedNamePrefix(for: channel.level) + $0 }
                     let subtitlePrefix = "#\(channel.geohash) • \(coverage)"
                     let highlight = viewModel.geohashParticipantCount(for: channel.geohash) > 0
-                    channelRow(title: geohashTitleWithCount(for: channel), subtitlePrefix: subtitlePrefix, subtitleName: namePart, subtitleNameBold: highlight, isSelected: isSelected(channel)) {
+                    channelRow(title: geohashTitleWithCount(for: channel), subtitlePrefix: subtitlePrefix, subtitleName: namePart, subtitleNameBold: highlight, isSelected: isSelected(channel), titleBold: highlight) {
                         manager.select(ChannelID.location(channel))
                         isPresented = false
                     }
@@ -203,7 +203,7 @@ struct LocationChannelsSheet: View {
         return false
     }
 
-    private func channelRow(title: String, subtitlePrefix: String, subtitleName: String? = nil, subtitleNameBold: Bool = false, isSelected: Bool, titleColor: Color? = nil, action: @escaping () -> Void) -> some View {
+    private func channelRow(title: String, subtitlePrefix: String, subtitleName: String? = nil, subtitleNameBold: Bool = false, isSelected: Bool, titleColor: Color? = nil, titleBold: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack {
                 VStack(alignment: .leading) {
@@ -212,6 +212,7 @@ struct LocationChannelsSheet: View {
                     HStack(spacing: 4) {
                         Text(parts.base)
                             .font(.system(size: 14, design: .monospaced))
+                            .fontWeight(titleBold ? .bold : .regular)
                             .foregroundColor(titleColor ?? Color.primary)
                         if let count = parts.countSuffix, !count.isEmpty {
                             Text(count)
@@ -258,13 +259,17 @@ struct LocationChannelsSheet: View {
     // MARK: - Helpers for counts
     private func meshTitleWithCount() -> String {
         // Count currently connected mesh peers (excluding self)
+        let meshCount = meshCount()
+        let noun = meshCount == 1 ? "person" : "people"
+        return "mesh [\(meshCount) \(noun)]"
+    }
+
+    private func meshCount() -> Int {
         let myID = viewModel.meshService.myPeerID
-        let meshCount = viewModel.allPeers.reduce(0) { acc, peer in
+        return viewModel.allPeers.reduce(0) { acc, peer in
             if peer.id != myID && peer.isConnected { return acc + 1 }
             return acc
         }
-        let noun = meshCount == 1 ? "person" : "people"
-        return "mesh [\(meshCount) \(noun)]"
     }
 
     private func geohashTitleWithCount(for channel: GeohashChannel) -> String {
