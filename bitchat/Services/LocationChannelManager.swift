@@ -79,15 +79,20 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
 
     /// Begin periodic one-shot location refreshes while a selector UI is visible.
     func beginLiveRefresh(interval: TimeInterval = 5.0) {
-        // Prefer continuous updates with a significant distance filter rather than polling
         guard permissionState == .authorized else { return }
-        cl.desiredAccuracy = kCLLocationAccuracyHundredMeters
-        cl.distanceFilter = 21 // meters; update on small moves
-        cl.startUpdatingLocation()
+        // Switch to a lightweight periodic one-shot request (polling) while the sheet is open
+        refreshTimer?.invalidate()
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+            self?.requestOneShotLocation()
+        }
+        // Kick off immediately
+        requestOneShotLocation()
     }
 
     /// Stop periodic refreshes when selector UI is dismissed.
     func endLiveRefresh() {
+        refreshTimer?.invalidate()
+        refreshTimer = nil
         cl.stopUpdatingLocation()
     }
 
