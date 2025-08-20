@@ -2,7 +2,6 @@ import Foundation
 
 /// Levels of location channels mapped to geohash precisions.
 enum GeohashChannelLevel: CaseIterable, Codable, Equatable {
-    case street
     case block
     case neighborhood
     case city
@@ -12,7 +11,6 @@ enum GeohashChannelLevel: CaseIterable, Codable, Equatable {
     /// Geohash length used for this level.
     var precision: Int {
         switch self {
-        case .street: return 8
         case .block: return 7
         case .neighborhood: return 6
         case .city: return 5
@@ -23,7 +21,6 @@ enum GeohashChannelLevel: CaseIterable, Codable, Equatable {
 
     var displayName: String {
         switch self {
-        case .street: return "Street"
         case .block: return "Block"
         case .neighborhood: return "Neighborhood"
         case .city: return "City"
@@ -68,4 +65,3 @@ enum ChannelID: Equatable, Codable {
         }
     }
 }
-
