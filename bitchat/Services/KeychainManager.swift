@@ -127,7 +127,7 @@ class KeychainManager {
     
     private func retrieveData(forKey key: String) -> Data? {
         // Base query
-        var base: [String: Any] = [
+        let base: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key,
             kSecAttrService as String: service,
@@ -158,7 +158,7 @@ class KeychainManager {
     
     private func delete(forKey key: String) -> Bool {
         // Base delete query
-        var base: [String: Any] = [
+        let base: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key,
             kSecAttrService as String: service

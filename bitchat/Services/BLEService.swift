@@ -21,7 +21,8 @@ final class BLEService: NSObject {
     #endif
     static let characteristicUUID = CBUUID(string: "A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D")
     
-    private let maxFragmentSize = 469 // 512 MTU - headers
+    // Default per-fragment chunk size when link limits are unknown
+    private let defaultFragmentSize = 469 // ~512 MTU minus protocol overhead
     private let maxMessageLength = 10_000
     private let messageTTL: UInt8 = 7
     
@@ -94,6 +95,7 @@ final class BLEService: NSObject {
     private let collectionsQueue = DispatchQueue(label: "mesh.collections", attributes: .concurrent)
     private let messageQueueKey = DispatchSpecificKey<Void>()
     private let bleQueue = DispatchQueue(label: "mesh.bluetooth", qos: .userInitiated)
+    private let bleQueueKey = DispatchSpecificKey<Void>()
     
     // Queue for messages pending handshake completion
     private var pendingMessagesAfterHandshake: [String: [(content: String, messageID: String)]] = [:]
@@ -103,11 +105,49 @@ final class BLEService: NSObject {
 
     // Accumulate long write chunks per central until a full frame decodes
     private var pendingWriteBuffers: [String: Data] = [:]
+    // Relay jitter scheduling to reduce redundant floods
+    private var scheduledRelays: [String: DispatchWorkItem] = [:]
     
     // MARK: - Maintenance Timer
     
     private var maintenanceTimer: DispatchSourceTimer?  // Single timer for all maintenance tasks
     private var maintenanceCounter = 0  // Track maintenance cycles
+
+    // MARK: - Connection budget & scheduling (central role)
+    private let maxCentralLinks = 6
+    private let connectRateLimitInterval: TimeInterval = 0.5
+    private var lastGlobalConnectAttempt: Date = .distantPast
+    private struct ConnectionCandidate {
+        let peripheral: CBPeripheral
+        let rssi: Int
+        let name: String
+        let isConnectable: Bool
+        let discoveredAt: Date
+    }
+    private var connectionCandidates: [ConnectionCandidate] = []
+
+    // MARK: - Adaptive scanning duty-cycle
+    private var scanDutyTimer: DispatchSourceTimer?
+    private var dutyEnabled: Bool = true
+    private var dutyOnDuration: TimeInterval = 5
+    private var dutyOffDuration: TimeInterval = 10
+    private var dutyActive: Bool = false
+
+    // MARK: - Link capability snapshots (thread-safe via bleQueue)
+    private func snapshotPeripheralStates() -> [PeripheralState] {
+        if DispatchQueue.getSpecific(key: bleQueueKey) != nil {
+            return Array(peripherals.values)
+        } else {
+            return bleQueue.sync { Array(peripherals.values) }
+        }
+    }
+    private func snapshotSubscribedCentrals() -> ([CBCentral], [String: String]) {
+        if DispatchQueue.getSpecific(key: bleQueueKey) != nil {
+            return (self.subscribedCentrals, self.centralToPeerID)
+        } else {
+            return bleQueue.sync { (self.subscribedCentrals, self.centralToPeerID) }
+        }
+    }
     
     // MARK: - Peer snapshots publisher (non-UI convenience)
     private let peerSnapshotSubject = PassthroughSubject<[TransportPeerSnapshot], Never>()
@@ -201,6 +241,9 @@ final class BLEService: NSObject {
         )
         #endif
         
+        // Tag BLE queue for re-entrancy detection
+        bleQueue.setSpecific(key: bleQueueKey, value: ())
+
         // Initialize BLE on background queue to prevent main thread blocking
         // This prevents app freezes during BLE operations
         centralManager = CBCentralManager(delegate: self, queue: bleQueue)
@@ -229,6 +272,8 @@ final class BLEService: NSObject {
     
     deinit {
         maintenanceTimer?.cancel()
+        scanDutyTimer?.cancel()
+        scanDutyTimer = nil
         centralManager?.stopScan()
         peripheralManager?.stopAdvertising()
         #if os(iOS)
@@ -337,6 +382,8 @@ final class BLEService: NSObject {
         // Stop timer
         maintenanceTimer?.cancel()
         maintenanceTimer = nil
+        scanDutyTimer?.cancel()
+        scanDutyTimer = nil
         
         centralManager?.stopScan()
         peripheralManager?.stopAdvertising()
@@ -765,12 +812,39 @@ final class BLEService: NSObject {
             var sentEncrypted = false
             
             // Check routing availability (only log if there's an issue)
-            let hasPeripheral = peerToPeripheralUUID[recipientPeerID] != nil
-            let hasCentral = centralToPeerID.values.contains(recipientPeerID)
+            let hasPeripheral = (DispatchQueue.getSpecific(key: bleQueueKey) != nil) ? (peerToPeripheralUUID[recipientPeerID] != nil) : bleQueue.sync { peerToPeripheralUUID[recipientPeerID] != nil }
+            let hasCentral = (DispatchQueue.getSpecific(key: bleQueueKey) != nil) ? (centralToPeerID.values.contains(recipientPeerID)) : bleQueue.sync { centralToPeerID.values.contains(recipientPeerID) }
+
+            // Compute link limits and fragment if needed (directed only)
+            var peripheralMaxLen: Int?
+            if let perUUID = (DispatchQueue.getSpecific(key: bleQueueKey) != nil) ? peerToPeripheralUUID[recipientPeerID] : bleQueue.sync(execute: { peerToPeripheralUUID[recipientPeerID] }) {
+                if let state = (DispatchQueue.getSpecific(key: bleQueueKey) != nil) ? peripherals[perUUID] : bleQueue.sync(execute: { peripherals[perUUID] }) {
+                    peripheralMaxLen = state.peripheral.maximumWriteValueLength(for: .withoutResponse)
+                }
+            }
+            var centralMaxLen: Int?
+            do {
+                let (centrals, mapping) = snapshotSubscribedCentrals()
+                if let central = centrals.first(where: { mapping[$0.identifier.uuidString] == recipientPeerID }) {
+                    centralMaxLen = central.maximumUpdateValueLength
+                }
+            }
+            if let pm = peripheralMaxLen, data.count > pm {
+                let overhead = 13 + 8 + 8 + 13
+                let chunk = max(64, pm - overhead)
+                sendFragmentedPacket(packet, pad: padForBLE, maxChunk: chunk, directedOnlyPeer: recipientPeerID)
+                return
+            }
+            if let cm = centralMaxLen, data.count > cm {
+                let overhead = 13 + 8 + 8 + 13
+                let chunk = max(64, cm - overhead)
+                sendFragmentedPacket(packet, pad: padForBLE, maxChunk: chunk, directedOnlyPeer: recipientPeerID)
+                return
+            }
             
             // Try to send directly to the specific peer as peripheral first
-            if let peripheralUUID = peerToPeripheralUUID[recipientPeerID],
-               let state = peripherals[peripheralUUID],
+            if let peripheralUUID = (DispatchQueue.getSpecific(key: bleQueueKey) != nil) ? peerToPeripheralUUID[recipientPeerID] : bleQueue.sync(execute: { peerToPeripheralUUID[recipientPeerID] }),
+               let state = (DispatchQueue.getSpecific(key: bleQueueKey) != nil) ? peripherals[peripheralUUID] : bleQueue.sync(execute: { peripherals[peripheralUUID] }),
                state.isConnected,
                let characteristic = state.characteristic {
                 state.peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
@@ -781,8 +855,9 @@ final class BLEService: NSObject {
             // Also try notification if peer is connected as central (dual-role support)
             if let characteristic = characteristic {
                 // Find the specific central for this peer
-                for central in subscribedCentrals {
-                    if centralToPeerID[central.identifier.uuidString] == recipientPeerID {
+                let (centrals, mapping) = snapshotSubscribedCentrals()
+                for central in centrals {
+                    if mapping[central.identifier.uuidString] == recipientPeerID {
                         let success = peripheralManager?.updateValue(data, for: characteristic, onSubscribedCentrals: [central]) ?? false
                         if success {
                             // Successfully routed via central notification
@@ -818,18 +893,17 @@ final class BLEService: NSObject {
             return
         }
         
-        // For broadcast messages, use the original simple routing
+        // For broadcast messages, use link-aware routing
         // This ensures announces can be sent before peer ID mappings are established
         var sentToPeripherals = 0
         var sentToCentrals = 0
         
-        // 1. First try sending as central via writes to connected peripherals
-        // This is the preferred path when we have direct peripheral connections
-        for state in peripherals.values where state.isConnected {
-                if let characteristic = state.characteristic {
-                state.peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
-                sentToPeripherals += 1
-            }
+        // Snapshot state to avoid concurrent mutations
+        let states = snapshotPeripheralStates()
+        var minCentralWriteLen: Int?
+        for s in states where s.isConnected {
+            let m = s.peripheral.maximumWriteValueLength(for: .withoutResponse)
+            minCentralWriteLen = minCentralWriteLen.map { min($0, m) } ?? m
         }
         
         // 2. Also send via notifications to subscribed centrals
@@ -840,21 +914,50 @@ final class BLEService: NSObject {
                              packet.type == MessageType.message.rawValue ||
                              packet.type == MessageType.leave.rawValue ||
                              packet.type == MessageType.noiseHandshake.rawValue
-        if isBroadcastType, let characteristic = characteristic, !subscribedCentrals.isEmpty {
+        var snapshotCentrals: [CBCentral] = []
+        if isBroadcastType, let _ = characteristic {
+            let (centrals, _) = snapshotSubscribedCentrals()
+            snapshotCentrals = centrals
+        }
+        // If any path (central writes or notifications) requires smaller packets, fragment once conservatively
+        var minNotifyLen: Int?
+        if !snapshotCentrals.isEmpty {
+            minNotifyLen = snapshotCentrals.map { $0.maximumUpdateValueLength }.min()
+        }
+        if let minLen = [minCentralWriteLen, minNotifyLen].compactMap({ $0 }).min(), data.count > minLen {
+            let overhead = 13 /*header*/ + 8 /*sender*/ + 0 /*recipient*/ + 13 /*fragment*/
+            let chunk = max(64, minLen - overhead)
+            sendFragmentedPacket(packet, pad: padForBLE, maxChunk: chunk, directedOnlyPeer: nil)
+            return
+        }
+
+        // 1. First try sending as central via writes to connected peripherals
+        // This is the preferred path when we have direct peripheral connections
+        for state in states where state.isConnected {
+            if let characteristic = state.characteristic {
+                state.peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
+                sentToPeripherals += 1
+            }
+        }
+
+        // 2. Also send via notifications to subscribed centrals
+        if isBroadcastType, let characteristic = characteristic, !snapshotCentrals.isEmpty {
             // If value exceeds minimum allowed by connected centrals, handle per constraints
-            let minAllowed = subscribedCentrals.map { $0.maximumUpdateValueLength }.min() ?? 20
+            let minAllowed = snapshotCentrals.map { $0.maximumUpdateValueLength }.min() ?? 20
             // Minimum BitChat frame = 13 (header) + 8 (senderID) = 21 bytes
             if minAllowed < 21 {
                 // Cannot deliver any BitChat frame via notifications on this link; skip notify
                 SecureLogger.log("⚠️ Skipping notify: central max update length (\(minAllowed)) < 21", category: SecureLogger.session, level: .debug)
             } else if data.count > minAllowed {
                 // Fragment via protocol (preserve chosen padding for BLE)
-                sendFragmentedPacket(packet, pad: padForBLE)
+                let overhead = 13 /*header*/ + 8 /*sender*/ + 0 /*recipient*/ + 13 /*fragment*/
+                let chunk = max(64, minAllowed - overhead)
+                sendFragmentedPacket(packet, pad: padForBLE, maxChunk: chunk, directedOnlyPeer: nil)
                 return
             }
             let success = peripheralManager?.updateValue(data, for: characteristic, onSubscribedCentrals: nil) ?? false
             if success {
-                sentToCentrals = subscribedCentrals.count
+                sentToCentrals = snapshotCentrals.count
                 if packet.type == MessageType.message.rawValue {
                     // Broadcast message sent
                 } else if packet.type == MessageType.noiseHandshake.rawValue {
@@ -902,13 +1005,15 @@ final class BLEService: NSObject {
     
     // MARK: - Fragmentation (Required for messages > BLE MTU)
     
-    private func sendFragmentedPacket(_ packet: BitchatPacket, pad: Bool) {
+    private func sendFragmentedPacket(_ packet: BitchatPacket, pad: Bool, maxChunk: Int? = nil, directedOnlyPeer: String? = nil) {
         guard let fullData = packet.toBinaryData(padding: pad) else { return }
         // Fragment the unpadded frame; each fragment will be encoded independently
         
         let fragmentID = Data((0..<8).map { _ in UInt8.random(in: 0...255) })
-        let fragments = stride(from: 0, to: fullData.count, by: maxFragmentSize).map { offset in
-            Data(fullData[offset..<min(offset + maxFragmentSize, fullData.count)])
+        let chunk = maxChunk ?? defaultFragmentSize
+        let safeChunk = max(64, chunk)
+        let fragments = stride(from: 0, to: fullData.count, by: safeChunk).map { offset in
+            Data(fullData[offset..<min(offset + safeChunk, fullData.count)])
         }
         
         for (index, fragment) in fragments.enumerated() {
@@ -919,10 +1024,16 @@ final class BLEService: NSObject {
             payload.append(packet.type)
             payload.append(fragment)
             
+            // Choose recipient for the fragment: directed override if provided
+            let fragmentRecipient: Data? = {
+                if let only = directedOnlyPeer { return Data(hexString: only) }
+                return packet.recipientID
+            }()
+
             let fragmentPacket = BitchatPacket(
                 type: MessageType.fragment.rawValue,
                 senderID: packet.senderID,
-                recipientID: packet.recipientID,
+                recipientID: fragmentRecipient,
                 timestamp: packet.timestamp,
                 payload: payload,
                 signature: nil,
@@ -1014,6 +1125,12 @@ final class BLEService: NSObject {
                 SecureLogger.log("⚠️ Duplicate packet ignored: \(messageID)", 
                                 category: SecureLogger.session, level: .debug)
             }
+            // Cancel any pending relay for this message (arrived via another neighbor)
+            collectionsQueue.async(flags: .barrier) { [weak self] in
+                if let task = self?.scheduledRelays.removeValue(forKey: messageID) {
+                    task.cancel()
+                }
+            }
             return // Duplicate ignored
         }
         
@@ -1049,17 +1166,30 @@ final class BLEService: NSObject {
         // Relay if TTL > 1 and we're not the original sender
         // Do this asynchronously to avoid blocking and potential loops
         // BUT: Don't relay private encrypted messages (they have a specific recipient)
+        // and don't relay directed fragments (recipient set)
         let shouldRelay = packet.ttl > 1 &&
                          senderID != myPeerID &&
-                         packet.type != MessageType.noiseEncrypted.rawValue
+                         packet.type != MessageType.noiseEncrypted.rawValue &&
+                         !(packet.type == MessageType.fragment.rawValue && packet.recipientID != nil)
         
         if shouldRelay {
-            messageQueue.async { [weak self] in
+            // Add short random jitter; cancel if the same message is seen again during the wait
+            let delayMs = Int.random(in: 20...80)
+            let work = DispatchWorkItem { [weak self] in
+                guard let self = self else { return }
+                // Remove scheduled task before executing
+                self.collectionsQueue.async(flags: .barrier) { [weak self] in
+                    _ = self?.scheduledRelays.removeValue(forKey: messageID)
+                }
                 var relayPacket = packet
                 relayPacket.ttl -= 1
-                // Relaying packet
-                self?.broadcastPacket(relayPacket)
+                self.broadcastPacket(relayPacket)
             }
+            // Track the scheduled relay so duplicates can cancel it
+            collectionsQueue.async(flags: .barrier) { [weak self] in
+                self?.scheduledRelays[messageID] = work
+            }
+            messageQueue.asyncAfter(deadline: .now() + .milliseconds(delayMs), execute: work)
         }
     }
     
@@ -1479,8 +1609,18 @@ final class BLEService: NSObject {
     private func performMaintenance() {
         maintenanceCounter += 1
         
-        // Always: Send keep-alive announce (every 10 seconds)
-        sendAnnounce(forceSend: true)
+        // Adaptive announce: reduce frequency when we have connected peers
+        let now = Date()
+        let connectedCount = collectionsQueue.sync { peers.values.filter { $0.isConnected }.count }
+        let elapsed = now.timeIntervalSince(lastAnnounceSent)
+        if connectedCount == 0 {
+            // Discovery mode: keep frequent announces (~10s)
+            if elapsed >= 10.0 { sendAnnounce(forceSend: true) }
+        } else {
+            // Connected mode: announce every 30–60s with jitter
+            let target = 45.0 + Double.random(in: -7.5...7.5)
+            if elapsed >= target { sendAnnounce(forceSend: true) }
+        }
         
         // If we have no peers, ensure we're scanning and advertising
         if peers.isEmpty {
@@ -1489,6 +1629,9 @@ final class BLEService: NSObject {
                 pm.startAdvertising(buildAdvertisementData())
             }
         }
+        
+        // Update scanning duty-cycle based on connectivity
+        updateScanningDutyCycle(connectedCount: connectedCount)
         
         // Every 20 seconds (2 cycles): Check peer connectivity
         if maintenanceCounter % 2 == 0 {
@@ -1567,6 +1710,58 @@ final class BLEService: NSObject {
         // Clean old connection timeout backoff entries (> 2 minutes)
         let timeoutCutoff = now.addingTimeInterval(-120)
         recentConnectTimeouts = recentConnectTimeouts.filter { $0.value >= timeoutCutoff }
+
+        // Clean up stale scheduled relays that somehow persisted (> 2s)
+        collectionsQueue.async(flags: .barrier) { [weak self] in
+            guard let self = self else { return }
+            if !self.scheduledRelays.isEmpty {
+                // Nothing to compare times to; just cap the size defensively
+                if self.scheduledRelays.count > 512 {
+                    self.scheduledRelays.removeAll()
+                }
+            }
+        }
+    }
+
+    private func updateScanningDutyCycle(connectedCount: Int) {
+        guard let central = centralManager, central.state == .poweredOn else { return }
+        // Duty cycle only when app is active and at least one peer connected
+        #if os(iOS)
+        let active = isAppActive
+        #else
+        let active = true
+        #endif
+        let shouldDuty = dutyEnabled && active && connectedCount > 0
+        if shouldDuty {
+            if scanDutyTimer == nil {
+                // Start timer to toggle scanning on/off
+                let t = DispatchSource.makeTimerSource(queue: bleQueue)
+                // Start with scanning ON; we'll turn OFF after onDuration
+                if !central.isScanning { startScanning() }
+                dutyActive = true
+                t.schedule(deadline: .now() + dutyOnDuration, repeating: dutyOnDuration + dutyOffDuration)
+                t.setEventHandler { [weak self] in
+                    guard let self = self, let c = self.centralManager else { return }
+                    if self.dutyActive {
+                        // Turn OFF scanning for offDuration
+                        if c.isScanning { c.stopScan() }
+                        self.dutyActive = false
+                        // Schedule turning back ON after offDuration
+                        self.bleQueue.asyncAfter(deadline: .now() + self.dutyOffDuration) {
+                            if self.centralManager?.state == .poweredOn { self.startScanning() }
+                            self.dutyActive = true
+                        }
+                    }
+                }
+                t.resume()
+                scanDutyTimer = t
+            }
+        } else {
+            // Cancel duty cycle and ensure scanning is ON for discovery
+            scanDutyTimer?.cancel()
+            scanDutyTimer = nil
+            if !central.isScanning { startScanning() }
+        }
     }
 }
 
@@ -1616,6 +1811,36 @@ extension BLEService: CBCentralManagerDelegate {
             return
         }
         
+        // Budget: limit simultaneous central links (connected + connecting)
+        let currentCentralLinks = peripherals.values.filter { $0.isConnected || $0.isConnecting }.count
+        if currentCentralLinks >= maxCentralLinks {
+            // Enqueue as candidate; we'll attempt later as slots open
+            connectionCandidates.append(ConnectionCandidate(peripheral: peripheral, rssi: rssiValue, name: String(advertisedName), isConnectable: isConnectable, discoveredAt: Date()))
+            // Keep candidate list tidy: prefer stronger RSSI, then recency; cap list
+            connectionCandidates.sort { (a, b) in
+                if a.rssi != b.rssi { return a.rssi > b.rssi }
+                return a.discoveredAt < b.discoveredAt
+            }
+            if connectionCandidates.count > 100 { connectionCandidates.removeLast(connectionCandidates.count - 100) }
+            return
+        }
+
+        // Rate limit global connect attempts
+        let sinceLast = Date().timeIntervalSince(lastGlobalConnectAttempt)
+        if sinceLast < connectRateLimitInterval {
+            connectionCandidates.append(ConnectionCandidate(peripheral: peripheral, rssi: rssiValue, name: String(advertisedName), isConnectable: isConnectable, discoveredAt: Date()))
+            connectionCandidates.sort { (a, b) in
+                if a.rssi != b.rssi { return a.rssi > b.rssi }
+                return a.discoveredAt < b.discoveredAt
+            }
+            // Schedule a deferred attempt after rate-limit interval
+            let delay = connectRateLimitInterval - sinceLast + 0.05
+            bleQueue.asyncAfter(deadline: .now() + delay) { [weak self] in
+                self?.tryConnectFromQueue()
+            }
+            return
+        }
+
         // Check if we already have this peripheral
         if let state = peripherals[peripheralID] {
             if state.isConnected || state.isConnecting {
@@ -1669,6 +1894,7 @@ extension BLEService: CBCentralManagerDelegate {
             CBConnectPeripheralOptionNotifyOnNotificationKey: true
         ]
         central.connect(peripheral, options: options)
+        lastGlobalConnectAttempt = Date()
         
         // Set a timeout for the connection attempt (slightly longer for reliability)
         // Use BLE queue to mutate BLE-related state consistently
@@ -1683,6 +1909,8 @@ extension BLEService: CBCentralManagerDelegate {
             central.cancelPeripheralConnection(peripheral)
             self.peripherals[peripheralID] = nil
             self.recentConnectTimeouts[peripheralID] = Date()
+            // Try next candidate if any
+            self.tryConnectFromQueue()
         }
     }
     
@@ -1741,6 +1969,8 @@ extension BLEService: CBCentralManagerDelegate {
                 self?.startScanning()
             }
         }
+        // Attempt to fill freed slot from queue
+        bleQueue.async { [weak self] in self?.tryConnectFromQueue() }
         
         // Notify delegate about disconnection on main thread
         notifyUI { [weak self] in
@@ -1764,6 +1994,59 @@ extension BLEService: CBCentralManagerDelegate {
         peripherals.removeValue(forKey: peripheralID)
         
         SecureLogger.log("❌ Failed to connect to peripheral: \(peripheral.name ?? "Unknown") [\(peripheralID)] - Error: \(error?.localizedDescription ?? "Unknown")", category: SecureLogger.session, level: .error)
+        // Try next candidate
+        bleQueue.async { [weak self] in self?.tryConnectFromQueue() }
+    }
+}
+
+// MARK: - Connection scheduling helpers
+extension BLEService {
+    private func tryConnectFromQueue() {
+        guard let central = centralManager, central.state == .poweredOn else { return }
+        // Check budget and rate limit
+        let current = peripherals.values.filter { $0.isConnected || $0.isConnecting }.count
+        guard current < maxCentralLinks else { return }
+        let delta = Date().timeIntervalSince(lastGlobalConnectAttempt)
+        guard delta >= connectRateLimitInterval else {
+            let delay = connectRateLimitInterval - delta + 0.05
+            bleQueue.asyncAfter(deadline: .now() + delay) { [weak self] in self?.tryConnectFromQueue() }
+            return
+        }
+        // Pull best candidate
+        guard !connectionCandidates.isEmpty else { return }
+        // Prefer connectable and strongest signal
+        connectionCandidates.sort { (a, b) in
+            if a.isConnectable != b.isConnectable { return a.isConnectable && !b.isConnectable }
+            if a.rssi != b.rssi { return a.rssi > b.rssi }
+            return a.discoveredAt < b.discoveredAt
+        }
+        let candidate = connectionCandidates.removeFirst()
+        guard candidate.isConnectable else { return }
+        let peripheral = candidate.peripheral
+        let peripheralID = peripheral.identifier.uuidString
+        if peripherals[peripheralID]?.isConnected == true || peripherals[peripheralID]?.isConnecting == true {
+            // Already in progress; skip
+            bleQueue.async { [weak self] in self?.tryConnectFromQueue() }
+            return
+        }
+        // Initiate connection
+        peripherals[peripheralID] = PeripheralState(
+            peripheral: peripheral,
+            characteristic: nil,
+            peerID: nil,
+            isConnecting: true,
+            isConnected: false,
+            lastConnectionAttempt: Date()
+        )
+        peripheral.delegate = self
+        let options: [String: Any] = [
+            CBConnectPeripheralOptionNotifyOnConnectionKey: true,
+            CBConnectPeripheralOptionNotifyOnDisconnectionKey: true,
+            CBConnectPeripheralOptionNotifyOnNotificationKey: true
+        ]
+        central.connect(peripheral, options: options)
+        lastGlobalConnectAttempt = Date()
+        SecureLogger.log("⏩ Queue connect: \(candidate.name) [RSSI:\(candidate.rssi)]", category: SecureLogger.session, level: .debug)
     }
 }
 
