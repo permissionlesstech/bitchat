@@ -106,7 +106,7 @@ final class BLEService: NSObject {
     
     // MARK: - Maintenance Timer
     
-    private weak var maintenanceTimer: Timer?  // Single timer for all maintenance tasks
+    private var maintenanceTimer: DispatchSourceTimer?  // Single timer for all maintenance tasks
     private var maintenanceCounter = 0  // Track maintenance cycles
     
     // MARK: - Peer snapshots publisher (non-UI convenience)
@@ -206,10 +206,14 @@ final class BLEService: NSObject {
         centralManager = CBCentralManager(delegate: self, queue: bleQueue)
         peripheralManager = CBPeripheralManager(delegate: self, queue: bleQueue)
         
-        // Single maintenance timer for all periodic tasks
-        maintenanceTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
+        // Single maintenance timer for all periodic tasks (dispatch-based for determinism)
+        let timer = DispatchSource.makeTimerSource(queue: bleQueue)
+        timer.schedule(deadline: .now() + 10.0, repeating: 10.0, leeway: .seconds(1))
+        timer.setEventHandler { [weak self] in
             self?.performMaintenance()
         }
+        timer.resume()
+        maintenanceTimer = timer
         
         // Publish initial empty state
         publishFullPeerData()
@@ -224,7 +228,7 @@ final class BLEService: NSObject {
     // No advertising policy to set; we never include Local Name in adverts.
     
     deinit {
-        maintenanceTimer?.invalidate()
+        maintenanceTimer?.cancel()
         centralManager?.stopScan()
         peripheralManager?.stopAdvertising()
         #if os(iOS)
@@ -308,7 +312,7 @@ final class BLEService: NSObject {
         )
         
         // Send immediately to all connected peers
-        if let data = leavePacket.toBinaryData() {
+        if let data = leavePacket.toBinaryData(padding: false) {
             // Send to peripherals we're connected to as central
             for state in peripherals.values where state.isConnected {
                 if let characteristic = state.characteristic {
@@ -331,7 +335,7 @@ final class BLEService: NSObject {
         }
         
         // Stop timer
-        maintenanceTimer?.invalidate()
+        maintenanceTimer?.cancel()
         maintenanceTimer = nil
         
         centralManager?.stopScan()
@@ -718,12 +722,24 @@ final class BLEService: NSObject {
     // MARK: - Packet Broadcasting
     
     private func broadcastPacket(_ packet: BitchatPacket) {
-        guard let rawData = packet.toBinaryData() else {
+        // Balanced privacy: pad sensitive payloads (Noise handshake/encrypted),
+        // keep public/announce/leave unpadded to reduce airtime.
+        let padForBLE: Bool = {
+            if let t = MessageType(rawValue: packet.type) {
+                switch t {
+                case .noiseEncrypted, .noiseHandshake:
+                    return true
+                default:
+                    return false
+                }
+            }
+            return false
+        }()
+
+        guard let data = packet.toBinaryData(padding: padForBLE) else {
             SecureLogger.log("❌ Failed to convert packet to binary data", category: SecureLogger.session, level: .error)
             return
         }
-        // Avoid sending padded data over BLE to reduce truncation risk
-        let data = MessagePadding.unpad(rawData)
         
         // Only log broadcasts for non-announce packets
         // Log encrypted and relayed packets for debugging
@@ -737,7 +753,7 @@ final class BLEService: NSObject {
         // Check if application-level fragmentation needed for large messages
         // (CoreBluetooth only handles ATT-level fragmentation for single writes)
         if data.count > 512 && packet.type != MessageType.fragment.rawValue {
-            sendFragmentedPacket(packet)
+            sendFragmentedPacket(packet, pad: padForBLE)
             return
         }
         
@@ -832,8 +848,8 @@ final class BLEService: NSObject {
                 // Cannot deliver any BitChat frame via notifications on this link; skip notify
                 SecureLogger.log("⚠️ Skipping notify: central max update length (\(minAllowed)) < 21", category: SecureLogger.session, level: .debug)
             } else if data.count > minAllowed {
-                // Fragment via protocol
-                sendFragmentedPacket(packet)
+                // Fragment via protocol (preserve chosen padding for BLE)
+                sendFragmentedPacket(packet, pad: padForBLE)
                 return
             }
             let success = peripheralManager?.updateValue(data, for: characteristic, onSubscribedCentrals: nil) ?? false
@@ -886,10 +902,9 @@ final class BLEService: NSObject {
     
     // MARK: - Fragmentation (Required for messages > BLE MTU)
     
-    private func sendFragmentedPacket(_ packet: BitchatPacket) {
-        guard let encoded = packet.toBinaryData() else { return }
-        // Fragment the unpadded frame; each fragment will be encoded (and padded) independently
-        let fullData = MessagePadding.unpad(encoded)
+    private func sendFragmentedPacket(_ packet: BitchatPacket, pad: Bool) {
+        guard let fullData = packet.toBinaryData(padding: pad) else { return }
+        // Fragment the unpadded frame; each fragment will be encoded independently
         
         let fragmentID = Data((0..<8).map { _ in UInt8.random(in: 0...255) })
         let fragments = stride(from: 0, to: fullData.count, by: maxFragmentSize).map { offset in

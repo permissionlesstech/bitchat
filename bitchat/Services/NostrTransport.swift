@@ -37,7 +37,11 @@ final class NostrTransport: Transport {
     func getFingerprint(for peerID: String) -> String? { nil }
     func getNoiseSessionState(for peerID: String) -> LazyHandshakeState { .none }
     func triggerHandshake(with peerID: String) { /* no-op */ }
-    func getNoiseService() -> NoiseEncryptionService { NoiseEncryptionService() }
+    // Nostr does not use Noise sessions here; return a cached placeholder to avoid reallocation
+    private static var cachedNoiseService: NoiseEncryptionService = {
+        NoiseEncryptionService()
+    }()
+    func getNoiseService() -> NoiseEncryptionService { Self.cachedNoiseService }
 
     // Public broadcast not supported over Nostr here
     func sendMessage(_ content: String, mentions: [String]) { /* no-op */ }
@@ -193,7 +197,7 @@ final class NostrTransport: Transport {
             guard let recipientNpub = recipientNostrPubkey else { return }
             guard let senderIdentity = try? NostrIdentityBridge.getCurrentNostrIdentity() else { return }
             SecureLogger.log("NostrTransport: preparing DELIVERED ack for id=\(messageID.prefix(8))… to \(recipientNpub.prefix(16))…",
-                            category: SecureLogger.session, level: .info)
+                            category: SecureLogger.session, level: .debug)
             let recipientHex: String
             do {
                 let (hrp, data) = try Bech32.decode(recipientNpub)
@@ -209,7 +213,7 @@ final class NostrTransport: Transport {
                 return
             }
             SecureLogger.log("NostrTransport: sending DELIVERED ack giftWrap id=\(event.id.prefix(16))…",
-                            category: SecureLogger.session, level: .info)
+                            category: SecureLogger.session, level: .debug)
             NostrRelayManager.shared.sendEvent(event)
         }
     }
