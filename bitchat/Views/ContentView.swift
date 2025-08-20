@@ -938,7 +938,9 @@ struct ContentView: View {
         switch locationManager.selectedChannel {
         case .location:
             let n = viewModel.geohashPeople.count
-            return (n, n > 0 ? Color.green : Color.secondary)
+            // Use standard green (dark: system green; light: custom darker green)
+            let standardGreen = (colorScheme == .dark) ? Color.green : Color(red: 0, green: 0.5, blue: 0)
+            return (n, n > 0 ? standardGreen : Color.secondary)
         case .mesh:
             let counts = viewModel.allPeers.reduce(into: (others: 0, mesh: 0)) { counts, peer in
                 guard peer.id != viewModel.meshService.myPeerID else { return }
@@ -1037,7 +1039,8 @@ struct ContentView: View {
                         case .mesh:
                             return Color.blue
                         case .location:
-                            return Color.green
+                            // Standard green to avoid overly bright appearance in light mode
+                            return (colorScheme == .dark) ? Color.green : Color(red: 0, green: 0.5, blue: 0)
                         }
                     }()
                     Text(badgeText)
