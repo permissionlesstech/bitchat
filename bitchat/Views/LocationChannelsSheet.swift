@@ -252,7 +252,7 @@ struct LocationChannelsSheet: View {
             return acc
         }
         let noun = meshCount == 1 ? "person" : "people"
-        return "#mesh [\(meshCount) \(noun)]"
+        return "mesh [\(meshCount) \(noun)]"
     }
 
     private func geohashTitleWithCount(for channel: GeohashChannel) -> String {
