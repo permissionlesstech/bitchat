@@ -1,0 +1,94 @@
+import SwiftUI
+
+struct MeshPeerList: View {
+    @ObservedObject var viewModel: ChatViewModel
+    let textColor: Color
+    let secondaryTextColor: Color
+    let onTapPeer: (String) -> Void
+    let onToggleFavorite: (String) -> Void
+    let onShowFingerprint: (String) -> Void
+
+    var body: some View {
+        Group {
+            if viewModel.allPeers.isEmpty {
+                Text("nobody around...")
+                    .font(.system(size: 14, design: .monospaced))
+                    .foregroundColor(secondaryTextColor)
+                    .padding(.horizontal)
+                    .padding(.top, 12)
+            } else {
+                let peerNicknames = viewModel.meshService.getPeerNicknames()
+                let myPeerID = viewModel.meshService.myPeerID
+                let mapped: [(peer: BitchatPeer, isMe: Bool, hasUnread: Bool, enc: EncryptionStatus)] = viewModel.allPeers.map { peer in
+                    let isMe = peer.id == myPeerID
+                    let hasUnread = viewModel.hasUnreadMessages(for: peer.id)
+                    let enc = viewModel.getEncryptionStatus(for: peer.id)
+                    return (peer, isMe, hasUnread, enc)
+                }
+                let peers = mapped.sorted { lhs, rhs in
+                    let lFav = lhs.peer.favoriteStatus?.isFavorite ?? false
+                    let rFav = rhs.peer.favoriteStatus?.isFavorite ?? false
+                    if lFav != rFav { return lFav }
+                    let lhsName = lhs.isMe ? viewModel.nickname : lhs.peer.nickname
+                    let rhsName = rhs.isMe ? viewModel.nickname : rhs.peer.nickname
+                    return lhsName < rhsName
+                }
+
+                ForEach(0..<peers.count, id: \.self) { idx in
+                    let item = peers[idx]
+                    let peer = item.peer
+                    let isMe = item.isMe
+                    let hasUnread = item.hasUnread
+                    HStack(spacing: 4) {
+                        if isMe {
+                            Image(systemName: "person.fill").font(.system(size: 10)).foregroundColor(textColor)
+                        } else if hasUnread {
+                            Image(systemName: "envelope.fill").font(.system(size: 12)).foregroundColor(.orange)
+                        } else {
+                            switch peer.connectionState {
+                            case .bluetoothConnected:
+                                Image(systemName: "dot.radiowaves.left.and.right").font(.system(size: 10)).foregroundColor(textColor)
+                            case .nostrAvailable:
+                                Image(systemName: "globe").font(.system(size: 10)).foregroundColor(.purple)
+                            case .offline:
+                                if peer.favoriteStatus?.isFavorite ?? false {
+                                    Image(systemName: "moon.fill").font(.system(size: 10)).foregroundColor(.gray)
+                                } else {
+                                    Image(systemName: "person").font(.system(size: 10)).foregroundColor(.gray)
+                                }
+                            }
+                        }
+
+                        let displayName = isMe ? viewModel.nickname : peer.nickname
+                        Text(displayName)
+                            .font(.system(size: 14, design: .monospaced))
+                            .foregroundColor((peer.favoriteStatus?.isFavorite ?? false) || peerNicknames[peer.id] != nil ? textColor : secondaryTextColor)
+
+                        if let icon = item.enc.icon, !isMe {
+                            Image(systemName: icon)
+                                .font(.system(size: 10))
+                                .foregroundColor(item.enc == .noiseVerified || item.enc == .noiseSecured ? textColor : (item.enc == .noiseHandshaking ? .orange : .red))
+                        }
+
+                        Spacer()
+
+                        if !isMe {
+                            Button(action: { onToggleFavorite(peer.id) }) {
+                                Image(systemName: (peer.favoriteStatus?.isFavorite ?? false) ? "star.fill" : "star")
+                                    .font(.system(size: 12))
+                                    .foregroundColor((peer.favoriteStatus?.isFavorite ?? false) ? .yellow : secondaryTextColor)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal)
+                    .padding(.vertical, 4)
+                    .padding(.top, idx == 0 ? 6 : 0)
+                    .contentShape(Rectangle())
+                    .onTapGesture { if !isMe { onTapPeer(peer.id) } }
+                    .onTapGesture(count: 2) { if !isMe { onShowFingerprint(peer.id) } }
+                }
+            }
+        }
+    }
+}
