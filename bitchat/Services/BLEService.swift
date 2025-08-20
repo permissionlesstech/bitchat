@@ -66,7 +66,7 @@ final class BLEService: NSObject {
     
     // Simple announce throttling
     private var lastAnnounceSent = Date.distantPast
-    private let announceMinInterval: TimeInterval = 0.5
+    private let announceMinInterval: TimeInterval = 1.0
     
     // Application state tracking (thread-safe)
     #if os(iOS)
@@ -851,13 +851,14 @@ final class BLEService: NSObject {
                     // Handshake broadcast to centrals
                 }
             } else {
-                // Notification queue full - queue for retry on handshake packets
-                if packet.type == MessageType.noiseHandshake.rawValue {
+                // Notification queue full - queue for retry on handshake and announce packets
+                if packet.type == MessageType.noiseHandshake.rawValue || packet.type == MessageType.announce.rawValue {
                     collectionsQueue.async(flags: .barrier) { [weak self] in
                         guard let self = self else { return }
                         if self.pendingNotifications.count < 20 {
                             self.pendingNotifications.append((data: data, centrals: nil))
-                            SecureLogger.log("📋 Queued handshake packet for retry (notification queue full)", 
+                            let kind = packet.type == MessageType.announce.rawValue ? "announce" : "handshake"
+                            SecureLogger.log("📋 Queued \(kind) packet for retry (notification queue full)", 
                                            category: SecureLogger.session, level: .debug)
                         }
                     }
@@ -1343,7 +1344,7 @@ final class BLEService: NSObject {
         let timeSinceLastAnnounce = now.timeIntervalSince(lastAnnounceSent)
         
         // Even forced sends should respect a minimum interval to avoid overwhelming BLE
-        let minInterval = forceSend ? 0.1 : announceMinInterval  // Reduced from 0.2 for faster reconnection
+        let minInterval = forceSend ? 0.2 : announceMinInterval
         
         if timeSinceLastAnnounce < minInterval {
             // Skipping announce (rate limited)
@@ -1989,9 +1990,10 @@ extension BLEService: CBPeripheralManagerDelegate {
     func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didSubscribeTo characteristic: CBCharacteristic) {
         SecureLogger.log("📥 Central subscribed: \(central.identifier.uuidString)", category: SecureLogger.session, level: .debug)
         subscribedCentrals.append(central)
-        // Send announce to the newly subscribed central after a delay to avoid overwhelming
-        // Sending announce to new subscriber
-        sendAnnounce(forceSend: true)
+        // Send announce to the newly subscribed central after a small delay to avoid overwhelming
+        messageQueue.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+            self?.sendAnnounce(forceSend: true)
+        }
     }
     
     func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didUnsubscribeFrom characteristic: CBCharacteristic) {
