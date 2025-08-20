@@ -6,6 +6,48 @@ import CryptoKit
 import UIKit
 #endif
 
+// MARK: - Relay Controller (decision logic extracted)
+private struct RelayDecision {
+    let shouldRelay: Bool
+    let newTTL: UInt8
+    let delayMs: Int
+}
+
+private struct RelayController {
+    static func decide(ttl: UInt8,
+                       senderIsSelf: Bool,
+                       isEncrypted: Bool,
+                       isDirectedFragment: Bool,
+                       isHandshake: Bool,
+                       degree: Int,
+                       highDegreeThreshold: Int) -> RelayDecision {
+        // Base suppression
+        if ttl <= 1 || senderIsSelf {
+            return RelayDecision(shouldRelay: false, newTTL: ttl, delayMs: 0)
+        }
+        // Probability by degree
+        let baseProb: Double
+        switch degree {
+        case 0...2: baseProb = 1.0
+        case 3...4: baseProb = 0.9
+        case 5...6: baseProb = 0.7
+        case 7...9: baseProb = 0.55
+        default:    baseProb = 0.45
+        }
+        var prob = baseProb
+        if isHandshake { prob = max(0.3, baseProb - 0.2) }
+        // Sample decision
+        let shouldRelay = Double.random(in: 0...1) <= prob
+        // TTL clamping in dense graphs
+        let ttlCap: UInt8 = degree >= highDegreeThreshold ? 3 : 5
+        let clamped = max(1, min(ttl, ttlCap))
+        let newTTL = clamped &- 1 // safe decrement
+        // Jitter
+        let delayMs = Int.random(in: 20...80)
+        return RelayDecision(shouldRelay: shouldRelay, newTTL: newTTL, delayMs: delayMs)
+    }
+}
+
 /// BLEService — Bluetooth Mesh Transport
 /// - Emits events exclusively via `BitchatDelegate` for UI.
 /// - ChatViewModel must consume delegate callbacks (`didReceivePublicMessage`, `didReceiveNoisePayload`).
@@ -1115,36 +1157,19 @@ final class BLEService: NSObject {
         }
         
         // Relay if TTL > 1 and we're not the original sender
-        // Do this asynchronously to avoid blocking and potential loops
-        // BUT: Don't relay private encrypted messages (they have a specific recipient)
-        // and don't relay directed fragments (recipient set)
-        let shouldRelay = packet.ttl > 1 &&
-                         senderID != myPeerID
-        
-        if shouldRelay {
-            // Probabilistic forwarding to reduce floods in dense graphs
+        // Relay decision and scheduling (extracted via RelayController)
+        do {
             let degree = collectionsQueue.sync { peers.values.filter { $0.isConnected }.count }
-            // base probabilities depending on degree
-            let baseProb: Double = {
-                switch degree {
-                case 0...2: return 1.0
-                case 3...4: return 0.9
-                case 5...6: return 0.7
-                case 7...9: return 0.55
-                default: return 0.45
-                }
-            }()
-            // Handshakes are less critical to flood; reduce further in dense nets
-            let isHandshake = packet.type == MessageType.noiseHandshake.rawValue
-            let prob = isHandshake ? max(0.3, baseProb - 0.2) : baseProb
-            if Double.random(in: 0...1) > prob {
-                // Drop relay to conserve airtime
-                return
-            }
-            // Adaptive TTL cap: limit spread in dense networks
-            let ttlCap: UInt8 = degree >= highDegreeThreshold ? 3 : 5
-            // Add short random jitter; cancel if the same message is seen again during the wait
-            let delayMs = Int.random(in: 20...80)
+            let decision = RelayController.decide(
+                ttl: packet.ttl,
+                senderIsSelf: senderID == myPeerID,
+                isEncrypted: packet.type == MessageType.noiseEncrypted.rawValue,
+                isDirectedFragment: packet.type == MessageType.fragment.rawValue && packet.recipientID != nil,
+                isHandshake: packet.type == MessageType.noiseHandshake.rawValue,
+                degree: degree,
+                highDegreeThreshold: highDegreeThreshold
+            )
+            guard decision.shouldRelay else { return }
             let work = DispatchWorkItem { [weak self] in
                 guard let self = self else { return }
                 // Remove scheduled task before executing
@@ -1152,15 +1177,14 @@ final class BLEService: NSObject {
                     _ = self?.scheduledRelays.removeValue(forKey: messageID)
                 }
                 var relayPacket = packet
-                let newTTL = max(1, min(relayPacket.ttl, ttlCap))
-                relayPacket.ttl = newTTL - 1
+                relayPacket.ttl = decision.newTTL
                 self.broadcastPacket(relayPacket)
             }
             // Track the scheduled relay so duplicates can cancel it
             collectionsQueue.async(flags: .barrier) { [weak self] in
                 self?.scheduledRelays[messageID] = work
             }
-            messageQueue.asyncAfter(deadline: .now() + .milliseconds(delayMs), execute: work)
+            messageQueue.asyncAfter(deadline: .now() + .milliseconds(decision.delayMs), execute: work)
         }
     }
     
