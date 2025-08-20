@@ -81,17 +81,8 @@ struct InputValidator {
     
     // MARK: - Protocol Field Validation
     
-    /// Validates message type is within valid range
-    static func validateMessageType(_ type: UInt8) -> Bool {
-        // Check against known message types
-        let validTypes: Set<UInt8> = [
-            0x01, 0x03, 0x04, 0x05, 0x06, 0x07, 0x0A, 0x0B, 0x0C,
-            0x10, 0x11, 0x12, 0x13,
-            0x20, 0x21, 0x22, 0x23, 0x24, 0x25,
-            0x30, 0x31
-        ]
-        return validTypes.contains(type)
-    }
+    // Note: Message type validation is performed closer to decoding using
+    // MessageType/NoisePayloadType enums; keeping validator free of stale lists.
     
     /// Validates hop count is reasonable
     static func validateHopCount(_ hopCount: UInt8) -> Bool {
