@@ -7,7 +7,7 @@
 import SwiftUI
 
 // MARK: - Main App Entry
-struct ContentView: View {
+struct ContentView2: View {
     init() {
         let tabBarAppearance = UITabBarAppearance()
         tabBarAppearance.configureWithOpaqueBackground()
@@ -67,5 +67,5 @@ struct ContentView: View {
 
 // MARK: - Preview
 #Preview {
-    ContentView()
+    ContentView2()
 }

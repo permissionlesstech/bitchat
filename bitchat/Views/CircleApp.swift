@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-@main
+//@main
 struct CircleApp: App {
     var body: some Scene {
         WindowGroup {
