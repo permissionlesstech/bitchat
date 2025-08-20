@@ -136,8 +136,8 @@ class CommandProcessor {
                 chatViewModel?.addLocalPrivateSystemMessage(localText, to: targetPeerID)
             }
         } else {
-            // In public chat: send to mesh and also add a local system echo so sender sees it immediately
-            meshService?.sendMessage(emoteContent, mentions: [])
+            // In public chat: send to active public channel (mesh or geohash)
+            chatViewModel?.sendPublicRaw(emoteContent)
             let publicEcho = "\(emoji) \(myNickname) \(action) \(nickname)\(suffix)"
             chatViewModel?.addPublicSystemMessage(publicEcho)
         }
