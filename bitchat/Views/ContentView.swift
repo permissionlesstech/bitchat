@@ -783,8 +783,8 @@ struct ContentView: View {
                 if isMeshConnected { counts.mesh += 1; counts.others += 1 }
                 else if peer.isMutualFavorite { counts.others += 1 }
             }
-            // Slightly darker blue for better contrast
-            let meshBlue = Color(red: 0.0, green: 0.35, blue: 0.85)
+            // Darker, more neutral blue (less purple hue)
+            let meshBlue = Color(hue: 0.60, saturation: 0.85, brightness: 0.82)
             let color: Color = counts.mesh > 0 ? meshBlue : Color.secondary
             return (counts.others, color)
         }
@@ -856,8 +856,8 @@ struct ContentView: View {
                     else if peer.isMutualFavorite { counts.others += 1 }
                 }
                 let otherPeersCount = peerCounts.others
-                // Slightly darker blue for better contrast
-                let meshBlue = Color(red: 0.0, green: 0.35, blue: 0.85)
+                // Darker, more neutral blue (less purple hue)
+                let meshBlue = Color(hue: 0.60, saturation: 0.85, brightness: 0.82)
                 let countColor: Color = (peerCounts.mesh > 0) ? meshBlue : Color.secondary
                 #endif
                 
@@ -876,8 +876,8 @@ struct ContentView: View {
                     let badgeColor: Color = {
                         switch locationManager.selectedChannel {
                         case .mesh:
-                            // Slightly darker blue to match count icon
-                            return Color(red: 0.0, green: 0.35, blue: 0.85)
+                            // Darker, more neutral blue (less purple hue)
+                            return Color(hue: 0.60, saturation: 0.85, brightness: 0.82)
                         case .location:
                             // Standard green to avoid overly bright appearance in light mode
                             return (colorScheme == .dark) ? Color.green : Color(red: 0, green: 0.5, blue: 0)
