@@ -44,8 +44,8 @@ struct BitchatApp: App {
                 .onChange(of: scenePhase) { newPhase in
                     switch newPhase {
                     case .background:
-                        // Send leave message when going to background
-                        chatViewModel.meshService.stopServices()
+                        // Keep BLE mesh running in background; BLEService adapts scanning automatically
+                        break
                     case .active:
                         // Restart services when becoming active
                         chatViewModel.meshService.startServices()
