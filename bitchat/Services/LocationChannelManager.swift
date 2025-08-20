@@ -17,14 +17,17 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
     }
 
     private let cl = CLLocationManager()
+    private let geocoder = CLGeocoder()
     private var lastLocation: CLLocation?
     private var refreshTimer: Timer?
     private let userDefaultsKey = "locationChannel.selected"
+    private var isGeocoding: Bool = false
 
     // Published state for UI bindings
     @Published private(set) var permissionState: PermissionState = .notDetermined
     @Published private(set) var availableChannels: [GeohashChannel] = []
     @Published private(set) var selectedChannel: ChannelID = .mesh
+    @Published private(set) var locationNames: [GeohashChannelLevel: String] = [:]
 
     private override init() {
         super.init()
@@ -76,15 +79,20 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
 
     /// Begin periodic one-shot location refreshes while a selector UI is visible.
     func beginLiveRefresh(interval: TimeInterval = 5.0) {
-        // Prefer continuous updates with a significant distance filter rather than polling
         guard permissionState == .authorized else { return }
-        cl.desiredAccuracy = kCLLocationAccuracyHundredMeters
-        cl.distanceFilter = 21 // meters; update on small moves
-        cl.startUpdatingLocation()
+        // Switch to a lightweight periodic one-shot request (polling) while the sheet is open
+        refreshTimer?.invalidate()
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+            self?.requestOneShotLocation()
+        }
+        // Kick off immediately
+        requestOneShotLocation()
     }
 
     /// Stop periodic refreshes when selector UI is dismissed.
     func endLiveRefresh() {
+        refreshTimer?.invalidate()
+        refreshTimer = nil
         cl.stopUpdatingLocation()
     }
 
@@ -123,6 +131,7 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
         guard let loc = locations.last else { return }
         lastLocation = loc
         computeChannels(from: loc.coordinate)
+        reverseGeocodeIfNeeded(location: loc)
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
@@ -152,6 +161,55 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
             result.append(GeohashChannel(level: level, geohash: gh))
         }
         Task { @MainActor in self.availableChannels = result }
+    }
+
+    private func reverseGeocodeIfNeeded(location: CLLocation) {
+        // Always cancel previous to keep latest fresh while user moves
+        geocoder.cancelGeocode()
+        isGeocoding = true
+        geocoder.reverseGeocodeLocation(location) { [weak self] placemarks, error in
+            guard let self = self else { return }
+            self.isGeocoding = false
+            if let pm = placemarks?.first {
+                let names = self.namesByLevel(from: pm)
+                Task { @MainActor in self.locationNames = names }
+            }
+        }
+    }
+
+    private func namesByLevel(from pm: CLPlacemark) -> [GeohashChannelLevel: String] {
+        var dict: [GeohashChannelLevel: String] = [:]
+        // Country
+        if let country = pm.country, !country.isEmpty {
+            dict[.country] = country
+        }
+        // Region (state/province or county)
+        if let admin = pm.administrativeArea, !admin.isEmpty {
+            dict[.region] = admin
+        } else if let subAdmin = pm.subAdministrativeArea, !subAdmin.isEmpty {
+            dict[.region] = subAdmin
+        }
+        // City (locality)
+        if let locality = pm.locality, !locality.isEmpty {
+            dict[.city] = locality
+        } else if let subAdmin = pm.subAdministrativeArea, !subAdmin.isEmpty {
+            dict[.city] = subAdmin
+        } else if let admin = pm.administrativeArea, !admin.isEmpty {
+            dict[.city] = admin
+        }
+        // Neighborhood
+        if let subLocality = pm.subLocality, !subLocality.isEmpty {
+            dict[.neighborhood] = subLocality
+        } else if let locality = pm.locality, !locality.isEmpty {
+            dict[.neighborhood] = locality
+        }
+        // Block: reuse neighborhood/locality granularity without exposing street level
+        if let subLocality = pm.subLocality, !subLocality.isEmpty {
+            dict[.block] = subLocality
+        } else if let locality = pm.locality, !locality.isEmpty {
+            dict[.block] = locality
+        }
+        return dict
     }
 }
 
