@@ -6,6 +6,7 @@ struct LocationChannelsSheet: View {
     @Binding var isPresented: Bool
     @ObservedObject private var manager = LocationChannelManager.shared
     @EnvironmentObject var viewModel: ChatViewModel
+    @Environment(\.colorScheme) var colorScheme
     @State private var customGeohash: String = ""
     @State private var customError: String? = nil
 
@@ -24,10 +25,10 @@ struct LocationChannelsSheet: View {
                         Button(action: { manager.enableLocationChannels() }) {
                             Text("get location and my geohashes")
                                 .font(.system(size: 12, design: .monospaced))
-                                .foregroundColor(Color.green)
+                                .foregroundColor(standardGreen)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 6)
-                                .background(Color.green.opacity(0.12))
+                                .background(standardGreen.opacity(0.12))
                                 .cornerRadius(6)
                         }
                         .buttonStyle(.plain)
@@ -220,7 +221,7 @@ struct LocationChannelsSheet: View {
                 if isSelected {
                     Text("✔︎")
                         .font(.system(size: 16, design: .monospaced))
-                        .foregroundColor(.green)
+                        .foregroundColor(standardGreen)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -271,6 +272,13 @@ struct LocationChannelsSheet: View {
         case 7: return .block
         default: return .street
         }
+    }
+}
+
+// MARK: - Standardized Colors
+extension LocationChannelsSheet {
+    private var standardGreen: Color {
+        (colorScheme == .dark) ? Color.green : Color(red: 0, green: 0.5, blue: 0)
     }
 }
 
