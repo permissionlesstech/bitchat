@@ -86,7 +86,7 @@ struct AppInfoView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("DONE") {
+                    Button("close") {
                         dismiss()
                     }
                     .foregroundColor(textColor)
