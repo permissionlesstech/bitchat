@@ -1133,6 +1133,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             messages = meshTimeline
             stopGeoParticipantsTimer()
             geohashPeople = []
+            teleportedGeo.removeAll()
         case .location(let ch):
             messages = geoTimelines[ch.geohash] ?? []
         }
@@ -1152,6 +1153,16 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         
         guard case .location(let ch) = channel else { return }
         currentGeohash = ch.geohash
+        // Ensure self appears immediately in the people list; mark teleported state if applicable
+        if let id = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
+            self.recordGeoParticipant(pubkeyHex: id.publicKeyHex)
+            #if os(iOS)
+            if LocationChannelManager.shared.teleported {
+                teleportedGeo.insert(id.publicKeyHex.lowercased())
+                objectWillChange.send()
+            }
+            #endif
+        }
         let subID = "geo-\(ch.geohash)"
         geoSubscriptionID = subID
         startGeoParticipantsTimer()
