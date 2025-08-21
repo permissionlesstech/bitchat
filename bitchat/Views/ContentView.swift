@@ -834,16 +834,9 @@ struct ContentView: View {
             
             Spacer()
             
-            // People counter with unread indicator
-            HStack(spacing: 4) {
-                if viewModel.hasAnyUnreadMessages {
-                    Image(systemName: "envelope.fill")
-                        .font(.system(size: 12))
-                        .foregroundColor(Color.orange)
-                        .accessibilityLabel("Unread private messages")
-                }
-
-                // People count depends on active channel
+            // Channel badge + dynamic spacing + people counter
+            HStack(spacing: 10) {
+                // Channel selector with optional unread icon immediately to its left
                 #if os(iOS)
                 let cc = channelPeopleCountAndColor()
                 let otherPeersCount = cc.0
@@ -864,42 +857,36 @@ struct ContentView: View {
                 // Location channels button '#'
                 #if os(iOS)
                 Button(action: { showLocationChannelsSheet = true }) {
-                    #if os(iOS)
                     let badgeText: String = {
                         switch locationManager.selectedChannel {
-                        case .mesh:
-                            return "#mesh"
-                        case .location(let ch):
-                            return "#\(ch.geohash)"
+                        case .mesh: return "#mesh"
+                        case .location(let ch): return "#\(ch.geohash)"
                         }
                     }()
                     let badgeColor: Color = {
                         switch locationManager.selectedChannel {
                         case .mesh:
-                            // Darker, more neutral blue (less purple hue)
                             return Color(hue: 0.60, saturation: 0.85, brightness: 0.82)
                         case .location:
-                            // Standard green to avoid overly bright appearance in light mode
                             return (colorScheme == .dark) ? Color.green : Color(red: 0, green: 0.5, blue: 0)
                         }
                     }()
-                    Text(badgeText)
-                        .font(.system(size: 14, design: .monospaced))
-                        .foregroundColor(badgeColor)
-                        .lineLimit(1)
-                        .truncationMode(.head)
-                        .frame(minWidth: 60, maxWidth: 160, alignment: .trailing)
-                        .fixedSize(horizontal: false, vertical: false)
-                        .accessibilityLabel("location channels")
-                    #else
-                    Text("#")
-                        .font(.system(size: 14, design: .monospaced))
-                        .foregroundColor(secondaryTextColor)
-                        .accessibilityLabel("location channels")
-                    #endif
+                    HStack(spacing: 6) {
+                        if viewModel.hasAnyUnreadMessages {
+                            Image(systemName: "envelope.fill")
+                                .font(.system(size: 12))
+                                .foregroundColor(Color.orange)
+                                .accessibilityLabel("Unread private messages")
+                        }
+                        Text(badgeText)
+                            .font(.system(size: 14, design: .monospaced))
+                            .foregroundColor(badgeColor)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .accessibilityLabel("location channels")
+                    }
                 }
                 .buttonStyle(.plain)
-                .padding(.trailing, 6)
                 #endif
 
                 HStack(spacing: 4) {

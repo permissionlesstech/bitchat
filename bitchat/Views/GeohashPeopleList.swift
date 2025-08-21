@@ -30,6 +30,7 @@ struct GeohashPeopleList: View {
                     }
                     return a.lastSeen > b.lastSeen
                 }
+                let firstID = ordered.first?.id
                 ForEach(ordered) { person in
                     HStack(spacing: 4) {
                         let convKey = "nostr_" + String(person.id.prefix(16))
@@ -69,6 +70,7 @@ struct GeohashPeopleList: View {
                     }
                     .padding(.horizontal)
                     .padding(.vertical, 4)
+                    .padding(.top, person.id == firstID ? 10 : 0)
                     .contentShape(Rectangle())
                     .onTapGesture {
                         if person.id != myHex {

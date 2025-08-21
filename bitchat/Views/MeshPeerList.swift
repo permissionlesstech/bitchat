@@ -93,7 +93,7 @@ struct MeshPeerList: View {
                     }
                     .padding(.horizontal)
                     .padding(.vertical, 4)
-                    .padding(.top, idx == 0 ? 6 : 0)
+                    .padding(.top, idx == 0 ? 10 : 0)
                     .contentShape(Rectangle())
                     .onTapGesture { if !isMe { onTapPeer(peer.id) } }
                     .onTapGesture(count: 2) { if !isMe { onShowFingerprint(peer.id) } }
