@@ -73,6 +73,9 @@ struct ContentView: View {
     @State private var showMessageActions = false
     @State private var selectedMessageSender: String?
     @State private var selectedMessageSenderID: String?
+    @State private var showGroupChatList = false
+    @State private var showGroupChat = false
+    @State private var selectedGroup: GroupChat?
     @FocusState private var isNicknameFieldFocused: Bool
     @State private var lastScrollTime: Date = .distantPast
     @State private var scrollThrottleTimer: Timer?
@@ -193,6 +196,16 @@ struct ContentView: View {
         )) {
             if let peerID = viewModel.showingFingerprintFor {
                 FingerprintView(viewModel: viewModel, peerID: peerID)
+            }
+        }
+        .sheet(isPresented: $showGroupChatList) {
+            GroupChatListView()
+                .environmentObject(viewModel)
+        }
+        .fullScreenCover(isPresented: $showGroupChat) {
+            if let group = selectedGroup {
+                GroupChatView(group: group)
+                    .environmentObject(viewModel)
             }
         }
         .confirmationDialog(
@@ -631,6 +644,108 @@ struct ContentView: View {
             // Rooms and People list
             ScrollView {
                 VStack(alignment: .leading, spacing: 6) {
+                    // Group Chats section
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "person.3.fill")
+                                .font(.system(size: 10))
+                                .accessibilityHidden(true)
+                            Text("GROUPS")
+                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            
+                            Spacer()
+                            
+                            // Group invitations badge
+                            if viewModel.pendingInvitationsCount > 0 {
+                                Text("\(viewModel.pendingInvitationsCount)")
+                                    .font(.caption2)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 4)
+                                    .padding(.vertical, 2)
+                                    .background(Color.red)
+                                    .cornerRadius(8)
+                            }
+                        }
+                        .foregroundColor(secondaryTextColor)
+                        .padding(.horizontal, 12)
+                        .padding(.top, 12)
+                        
+                        // "View Groups" button
+                        Button(action: {
+                            showGroupChatList = true
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showSidebar = false
+                                sidebarDragOffset = 0
+                            }
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "list.bullet")
+                                    .font(.system(size: 12))
+                                
+                                Text("View All Groups")
+                                    .font(.system(size: 14, design: .monospaced))
+                                
+                                Spacer()
+                                
+                                if viewModel.totalGroupUnreadCount > 0 {
+                                    Text("\(viewModel.totalGroupUnreadCount)")
+                                        .font(.caption2)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 4)
+                                        .padding(.vertical, 2)
+                                        .background(Color.red)
+                                        .cornerRadius(8)
+                                }
+                            }
+                            .foregroundColor(textColor)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                        }
+                        
+                        // Recent group chats (show top 3)
+                        if !viewModel.groupChats.isEmpty {
+                            ForEach(Array(viewModel.groupChats.prefix(3)), id: \.id) { group in
+                                HStack(spacing: 4) {
+                                    // Status indicator
+                                    Text(group.statusIndicator)
+                                        .font(.system(size: 12))
+                                        .accessibilityLabel(group.statusText)
+                                    
+                                    // Group name
+                                    Text(group.displayName)
+                                        .font(.system(size: 14, design: .monospaced))
+                                        .foregroundColor(group.onlineMembers.isEmpty ? secondaryTextColor : textColor)
+                                    
+                                    Spacer()
+                                    
+                                    // Unread count
+                                    if group.unreadCount > 0 {
+                                        Text("\(group.unreadCount)")
+                                            .font(.caption2)
+                                            .fontWeight(.bold)
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 4)
+                                            .padding(.vertical, 2)
+                                            .background(Color.red)
+                                            .cornerRadius(8)
+                                    }
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 6)
+                                .onTapGesture {
+                                    selectedGroup = group
+                                    showGroupChat = true
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        showSidebar = false
+                                        sidebarDragOffset = 0
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
                     // Persistent Private Chats section
                     VStack(alignment: .leading, spacing: 4) {
                         if !viewModel.persistentChats.isEmpty {

@@ -125,6 +125,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     private let messageRouter: MessageRouter
     private let privateChatManager: PrivateChatManager
     private let persistentPrivateChatManager: PersistentPrivateChatManager?
+    private let groupChatManager: GroupChatManager
     private let unifiedPeerService: UnifiedPeerService
     private let autocompleteService: AutocompleteService
     
@@ -185,6 +186,34 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     /// Check if there are any unread messages (including from temporary Nostr peer IDs)
     var hasAnyUnreadMessages: Bool {
         !unreadPrivateMessages.isEmpty
+    }
+    
+    // MARK: - Group Chat Properties
+    
+    /// Get all group chats
+    var groupChats: [GroupChat] {
+        return groupChatManager.getAllGroups()
+    }
+    
+    /// Get currently selected group chat
+    var selectedGroupChat: GroupChat? {
+        guard let groupID = groupChatManager.selectedGroupID else { return nil }
+        return groupChatManager.getGroup(groupID: groupID)
+    }
+    
+    /// Get total unread count from group chats
+    var totalGroupUnreadCount: Int {
+        return groupChatManager.groupChats.values.reduce(0) { $0 + $1.unreadCount }
+    }
+    
+    /// Access to group chat manager (for UI)
+    var groupChatManagerPublic: GroupChatManager {
+        return groupChatManager
+    }
+    
+    /// Get pending group invitations count
+    var pendingInvitationsCount: Int {
+        return groupChatManager.pendingInvitations.count
     }
     
     // Missing properties that were removed during refactoring
@@ -327,12 +356,14 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         self.commandProcessor = CommandProcessor()
         self.privateChatManager = PrivateChatManager(meshService: meshService)
         self.persistentPrivateChatManager = PersistentPrivateChatManager(meshService: meshService)
+        self.groupChatManager = GroupChatManager(meshService: meshService)
         self.unifiedPeerService = UnifiedPeerService(meshService: meshService)
         let nostrTransport = NostrTransport()
         self.messageRouter = MessageRouter(mesh: meshService, nostr: nostrTransport)
         // Route receipts from PrivateChatManager through MessageRouter
         self.privateChatManager.messageRouter = self.messageRouter
         self.persistentPrivateChatManager?.messageRouter = self.messageRouter
+        self.groupChatManager.messageRouter = self.messageRouter
         self.autocompleteService = AutocompleteService()
         
         // Wire up dependencies
@@ -837,6 +868,96 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             
             print("📥 Added missing message \(sync.messageID) from \(peerID)")
         }
+    }
+    
+    // MARK: - Group Message Handlers
+    
+    private func handleGroupMessage(from peerID: String, payload: Data, timestamp: Date) {
+        // Decode group message data
+        Task { @MainActor in
+            do {
+                let messageData = try JSONSerialization.jsonObject(with: payload) as? [String: Any]
+                guard let groupID = messageData?["groupID"] as? String,
+                      let messageID = messageData?["messageID"] as? String,
+                      let content = messageData?["content"] as? String else {
+                    print("❌ Invalid group message format from \(peerID)")
+                    return
+                }
+                
+                let senderName = unifiedPeerService.getPeer(by: peerID)?.nickname ?? "Unknown"
+                let mentions = parseMentions(from: content)
+                
+                let message = BitchatMessage(
+                    id: messageID,
+                    sender: senderName,
+                    content: content,
+                    timestamp: timestamp,
+                    isRelay: false,
+                    originalSender: nil,
+                    isPrivate: false,
+                    recipientNickname: nil,
+                    senderPeerID: peerID,
+                    mentions: mentions.isEmpty ? nil : mentions
+                )
+                
+                guard let fingerprint = meshService.getFingerprint(for: peerID) else { return }
+                didReceiveGroupMessage(message, groupID: groupID, from: peerID)
+                
+            } catch {
+                print("❌ Failed to decode group message from \(peerID): \(error)")
+            }
+        }
+    }
+    
+    private func handleGroupInvitation(from peerID: String, payload: Data) {
+        do {
+            let invitation = try JSONDecoder().decode(GroupInvitation.self, from: payload)
+            didReceiveGroupInvitation(invitation, from: peerID)
+        } catch {
+            print("❌ Failed to decode group invitation from \(peerID): \(error)")
+        }
+    }
+    
+    private func handleGroupInviteResponse(from peerID: String, payload: Data) {
+        do {
+            let responseData = try JSONSerialization.jsonObject(with: payload) as? [String: Any]
+            guard let invitationID = responseData?["invitationID"] as? String,
+                  let accepted = responseData?["accepted"] as? Bool else {
+                print("❌ Invalid group invite response format from \(peerID)")
+                return
+            }
+            
+            didReceiveGroupInviteResponse(invitationID: invitationID, accepted: accepted, from: peerID)
+        } catch {
+            print("❌ Failed to decode group invite response from \(peerID): \(error)")
+        }
+    }
+    
+    private func handleGroupMemberUpdate(from peerID: String, payload: Data) {
+        do {
+            let memberUpdate = try JSONDecoder().decode(GroupMemberUpdate.self, from: payload)
+            // We would need the group ID to process this properly
+            // For now, log it
+            print("📥 Received group member update from \(peerID): \(memberUpdate.type)")
+        } catch {
+            print("❌ Failed to decode group member update from \(peerID): \(error)")
+        }
+    }
+    
+    private func handleGroupInfoUpdate(from peerID: String, payload: Data) {
+        do {
+            let infoUpdate = try JSONDecoder().decode(GroupInfoUpdate.self, from: payload)
+            // We would need the group ID to process this properly
+            // For now, log it
+            print("📥 Received group info update from \(peerID): \(infoUpdate.type)")
+        } catch {
+            print("❌ Failed to decode group info update from \(peerID): \(error)")
+        }
+    }
+    
+    private func handleGroupKeyExchange(from peerID: String, payload: Data) {
+        // Future implementation for group encryption key exchange
+        print("📥 Received group key exchange from \(peerID) (not implemented)")
     }
     
     // MARK: - Favorites Management
@@ -1497,6 +1618,77 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     
     // MARK: - Nostr Message Handling
     
+    // MARK: - Group Chat Methods
+    
+    /// Create a new group chat
+    @MainActor
+    func createGroup(name: String, description: String? = nil, isPrivate: Bool = false) -> GroupChat? {
+        guard let fingerprint = getCurrentUserFingerprint() else { return nil }
+        return groupChatManager.createGroup(name: name, description: description, isPrivate: isPrivate, creatorFingerprint: fingerprint)
+    }
+    
+    /// Join a group chat
+    @MainActor
+    func joinGroup(_ groupID: String) {
+        groupChatManager.joinGroup(groupID)
+    }
+    
+    /// Leave current group chat
+    @MainActor
+    func leaveCurrentGroup() {
+        groupChatManager.leaveCurrentGroup()
+    }
+    
+    /// Send message to current group
+    @MainActor
+    func sendGroupMessage(_ content: String) {
+        guard let groupID = groupChatManager.selectedGroupID,
+              let fingerprint = getCurrentUserFingerprint() else { return }
+        
+        groupChatManager.sendMessage(
+            content,
+            to: groupID,
+            senderPeerID: meshService.myPeerID,
+            senderNickname: nickname,
+            senderFingerprint: fingerprint
+        )
+    }
+    
+    /// Send group invitation
+    @MainActor
+    func sendGroupInvitation(groupID: String, to peerID: String) -> Bool {
+        guard let fingerprint = getCurrentUserFingerprint(),
+              let targetFingerprint = meshService.getFingerprint(for: peerID),
+              let targetNickname = meshService.peerNickname(peerID: peerID) else { return false }
+        
+        return groupChatManager.sendInvitation(
+            groupID: groupID,
+            to: targetFingerprint,
+            nickname: targetNickname,
+            from: fingerprint
+        )
+    }
+    
+    /// Accept group invitation
+    @MainActor
+    func acceptGroupInvitation(_ invitationID: String) -> Bool {
+        guard let fingerprint = getCurrentUserFingerprint() else { return false }
+        return groupChatManager.acceptInvitation(invitationID, userFingerprint: fingerprint)
+    }
+    
+    /// Decline group invitation
+    @MainActor
+    func declineGroupInvitation(_ invitationID: String) -> Bool {
+        return groupChatManager.declineInvitation(invitationID)
+    }
+    
+    /// Get current user's fingerprint
+    private func getCurrentUserFingerprint() -> String? {
+        // This would typically come from the identity/encryption service
+        // For now, we'll use the mesh service's peer ID as a placeholder
+        return meshService.getFingerprint(for: meshService.myPeerID)
+    }
+
     @MainActor
     @objc private func handleNostrMessage(_ notification: Notification) {
         guard let message = notification.userInfo?["message"] as? BitchatMessage else { return }
@@ -2787,6 +2979,25 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 
             case .historySync:
                 handleHistorySync(from: peerID, syncData: payload)
+                
+            // Group chat message types
+            case .groupMessage:
+                handleGroupMessage(from: peerID, payload: payload, timestamp: timestamp)
+                
+            case .groupInvitation:
+                handleGroupInvitation(from: peerID, payload: payload)
+                
+            case .groupInviteResponse:
+                handleGroupInviteResponse(from: peerID, payload: payload)
+                
+            case .groupMemberUpdate:
+                handleGroupMemberUpdate(from: peerID, payload: payload)
+                
+            case .groupInfoUpdate:
+                handleGroupInfoUpdate(from: peerID, payload: payload)
+                
+            case .groupKeyExchange:
+                handleGroupKeyExchange(from: peerID, payload: payload)
             }
         }
     }
@@ -2844,6 +3055,12 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             if let peer = unifiedPeerService.getPeer(by: peerID) {
                 let noiseKeyHex = peer.noisePublicKey.hexEncodedString()
                 shortIDToNoiseKey[peerID] = noiseKeyHex
+            }
+            
+            // Update group chat member status
+            if let fingerprint = meshService.getFingerprint(for: peerID),
+               let nickname = meshService.peerNickname(peerID: peerID) {
+                groupChatManager.peerCameOnline(peerID: peerID, fingerprint: fingerprint, nickname: nickname)
             }
 
             // Flush any queued messages for this peer via router
@@ -2916,6 +3133,9 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 }
             }
         }
+        
+        // Update group chat member status
+        groupChatManager.peerWentOffline(peerID: peerID)
         
         // Disconnection messages removed to reduce chat noise
     }
@@ -3167,6 +3387,94 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         
     }
     
+    // MARK: - Group Chat Delegate Methods
+    
+    func didReceiveGroupMessage(_ message: BitchatMessage, groupID: String, from peerID: String) {
+        Task { @MainActor in
+            guard let fingerprint = meshService.getFingerprint(for: peerID) else { return }
+            groupChatManager.handleIncomingGroupMessage(message, from: fingerprint, groupID: groupID)
+            
+            // Trigger UI update
+            objectWillChange.send()
+        }
+    }
+    
+    func didReceiveGroupInvitation(_ invitation: GroupInvitation, from peerID: String) {
+        Task { @MainActor in
+            groupChatManager.handleIncomingInvitation(invitation)
+            
+            // Trigger UI update
+            objectWillChange.send()
+            
+            // Show notification for new invitation
+            addSystemMessage("📧 New group invitation: \(invitation.groupName)")
+        }
+    }
+    
+    func didReceiveGroupInviteResponse(invitationID: String, accepted: Bool, from peerID: String) {
+        Task { @MainActor in
+            if accepted {
+                addSystemMessage("✅ Group invitation accepted")
+            } else {
+                addSystemMessage("❌ Group invitation declined")
+            }
+            
+            // Trigger UI update
+            objectWillChange.send()
+        }
+    }
+    
+    func didReceiveGroupMemberUpdate(groupID: String, memberUpdate: GroupMemberUpdate, from peerID: String) {
+        Task { @MainActor in
+            guard let group = groupChatManager.getGroup(groupID: groupID) else { return }
+            
+            let updateMessage = formatMemberUpdateMessage(memberUpdate, in: group)
+            addSystemMessage(updateMessage)
+            
+            // Trigger UI update
+            objectWillChange.send()
+        }
+    }
+    
+    func didReceiveGroupInfoUpdate(groupID: String, infoUpdate: GroupInfoUpdate, from peerID: String) {
+        Task { @MainActor in
+            guard let group = groupChatManager.getGroup(groupID: groupID) else { return }
+            
+            let updateMessage = formatInfoUpdateMessage(infoUpdate, in: group)
+            addSystemMessage(updateMessage)
+            
+            // Trigger UI update
+            objectWillChange.send()
+        }
+    }
+    
+    // Helper functions for formatting update messages
+    private func formatMemberUpdateMessage(_ update: GroupMemberUpdate, in group: GroupChat) -> String {
+        switch update.type {
+        case .joined:
+            return "👋 \(update.memberNickname) joined the group"
+        case .left:
+            return "👋 \(update.memberNickname) left the group"
+        case .promoted:
+            return "⭐ \(update.memberNickname) was promoted to admin"
+        case .demoted:
+            return "⭐ \(update.memberNickname) is no longer an admin"
+        case .kicked:
+            return "🚫 \(update.memberNickname) was removed from the group"
+        }
+    }
+    
+    private func formatInfoUpdateMessage(_ update: GroupInfoUpdate, in group: GroupChat) -> String {
+        switch update.type {
+        case .nameChanged:
+            return "✏️ Group name changed to '\(update.newValue)'"
+        case .descriptionChanged:
+            return "✏️ Group description updated"
+        case .privacyChanged:
+            return "🔒 Group privacy settings changed"
+        }
+    }
+    
     // MARK: - Helper for System Messages
     private func addSystemMessage(_ content: String, timestamp: Date = Date()) {
         let systemMessage = BitchatMessage(
@@ -3415,6 +3723,25 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 
             case .historySync:
                 handleHistorySync(from: targetPeerID, syncData: noisePayload.data)
+                
+            // Group chat message types
+            case .groupMessage:
+                handleGroupMessage(from: targetPeerID, payload: noisePayload.data, timestamp: messageTimestamp)
+                
+            case .groupInvitation:
+                handleGroupInvitation(from: targetPeerID, payload: noisePayload.data)
+                
+            case .groupInviteResponse:
+                handleGroupInviteResponse(from: targetPeerID, payload: noisePayload.data)
+                
+            case .groupMemberUpdate:
+                handleGroupMemberUpdate(from: targetPeerID, payload: noisePayload.data)
+                
+            case .groupInfoUpdate:
+                handleGroupInfoUpdate(from: targetPeerID, payload: noisePayload.data)
+                
+            case .groupKeyExchange:
+                handleGroupKeyExchange(from: targetPeerID, payload: noisePayload.data)
             }
             
         } catch {

@@ -1269,6 +1269,36 @@ final class BLEService: NSObject {
                 notifyUI { [weak self] in
                     self?.delegate?.didReceiveNoisePayload(from: peerID, type: .readReceipt, payload: Data(payloadData), timestamp: ts)
                 }
+            case .groupMessage:
+                let ts = Date(timeIntervalSince1970: Double(packet.timestamp) / 1000)
+                notifyUI { [weak self] in
+                    self?.delegate?.didReceiveNoisePayload(from: peerID, type: .groupMessage, payload: Data(payloadData), timestamp: ts)
+                }
+            case .groupInvitation:
+                let ts = Date(timeIntervalSince1970: Double(packet.timestamp) / 1000)
+                notifyUI { [weak self] in
+                    self?.delegate?.didReceiveNoisePayload(from: peerID, type: .groupInvitation, payload: Data(payloadData), timestamp: ts)
+                }
+            case .groupInviteResponse:
+                let ts = Date(timeIntervalSince1970: Double(packet.timestamp) / 1000)
+                notifyUI { [weak self] in
+                    self?.delegate?.didReceiveNoisePayload(from: peerID, type: .groupInviteResponse, payload: Data(payloadData), timestamp: ts)
+                }
+            case .groupMemberUpdate:
+                let ts = Date(timeIntervalSince1970: Double(packet.timestamp) / 1000)
+                notifyUI { [weak self] in
+                    self?.delegate?.didReceiveNoisePayload(from: peerID, type: .groupMemberUpdate, payload: Data(payloadData), timestamp: ts)
+                }
+            case .groupInfoUpdate:
+                let ts = Date(timeIntervalSince1970: Double(packet.timestamp) / 1000)
+                notifyUI { [weak self] in
+                    self?.delegate?.didReceiveNoisePayload(from: peerID, type: .groupInfoUpdate, payload: Data(payloadData), timestamp: ts)
+                }
+            case .groupKeyExchange:
+                let ts = Date(timeIntervalSince1970: Double(packet.timestamp) / 1000)
+                notifyUI { [weak self] in
+                    self?.delegate?.didReceiveNoisePayload(from: peerID, type: .groupKeyExchange, payload: Data(payloadData), timestamp: ts)
+                }
             default:
                 SecureLogger.log("⚠️ Unknown noise payload type: \(payloadType)", category: SecureLogger.noise, level: .warning)
             }
@@ -1507,6 +1537,79 @@ final class BLEService: NSObject {
                 incomingFragments.removeValue(forKey: fragmentID)
                 fragmentMetadata.removeValue(forKey: fragmentID)
             }
+        }
+    }
+    
+    // MARK: - Group Messaging (Transport Protocol)
+    
+    func sendGroupMessage(_ content: String, to groupID: String, mentions: [String]) {
+        // For now, group messages are handled by the GroupChatManager
+        // which sends individual private messages to each group member
+        // This method is here for Transport protocol conformance
+        SecureLogger.log("📨 Group message send requested for group \(groupID.prefix(8))...", 
+                        category: SecureLogger.session, level: .debug)
+    }
+    
+    func sendGroupInvitation(_ invitation: GroupInvitation, to peerID: String) {
+        // Encode invitation as JSON and send as private message
+        do {
+            let invitationData = try JSONEncoder().encode(invitation)
+            let payload = NoisePayload(type: .groupInvitation, data: invitationData)
+            sendNoiseEncryptedPayload(payload.encode(), to: peerID)
+            SecureLogger.log("📤 Sent group invitation for \(invitation.groupName) to \(peerID.prefix(8))...", 
+                            category: SecureLogger.session, level: .debug)
+        } catch {
+            SecureLogger.log("❌ Failed to encode group invitation: \(error)", 
+                            category: SecureLogger.session, level: .error)
+        }
+    }
+    
+    func sendGroupInviteResponse(invitationID: String, accepted: Bool, to peerID: String) {
+        // Create response payload
+        let responseData = [
+            "invitationID": invitationID,
+            "accepted": accepted
+        ] as [String : Any]
+        
+        do {
+            let data = try JSONSerialization.data(withJSONObject: responseData)
+            let payload = NoisePayload(type: .groupInviteResponse, data: data)
+            sendNoiseEncryptedPayload(payload.encode(), to: peerID)
+            SecureLogger.log("📤 Sent group invite response (accepted: \(accepted)) to \(peerID.prefix(8))...", 
+                            category: SecureLogger.session, level: .debug)
+        } catch {
+            SecureLogger.log("❌ Failed to encode group invite response: \(error)", 
+                            category: SecureLogger.session, level: .error)
+        }
+    }
+    
+    func sendGroupMemberUpdate(_ update: GroupMemberUpdate, to groupID: String) {
+        // Encode member update and send to all group members
+        // This would be handled by GroupChatManager which knows the group members
+        do {
+            let updateData = try JSONEncoder().encode(update)
+            let payload = NoisePayload(type: .groupMemberUpdate, data: updateData)
+            SecureLogger.log("📤 Group member update for group \(groupID.prefix(8))...", 
+                            category: SecureLogger.session, level: .debug)
+            // GroupChatManager will handle sending to individual members
+        } catch {
+            SecureLogger.log("❌ Failed to encode group member update: \(error)", 
+                            category: SecureLogger.session, level: .error)
+        }
+    }
+    
+    func sendGroupInfoUpdate(_ update: GroupInfoUpdate, to groupID: String) {
+        // Encode info update and send to all group members
+        // This would be handled by GroupChatManager which knows the group members
+        do {
+            let updateData = try JSONEncoder().encode(update)
+            let payload = NoisePayload(type: .groupInfoUpdate, data: updateData)
+            SecureLogger.log("📤 Group info update for group \(groupID.prefix(8))...", 
+                            category: SecureLogger.session, level: .debug)
+            // GroupChatManager will handle sending to individual members
+        } catch {
+            SecureLogger.log("❌ Failed to encode group info update: \(error)", 
+                            category: SecureLogger.session, level: .error)
         }
     }
 }

@@ -25,6 +25,14 @@
 		14646DF32E55849600D93BD0 /* PersistentPrivateChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14646DF12E55849600D93BD0 /* PersistentPrivateChat.swift */; };
 		14646DF52E5584A700D93BD0 /* PersistentPrivateChatManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14646DF42E5584A700D93BD0 /* PersistentPrivateChatManager.swift */; };
 		14646DF62E5584A700D93BD0 /* PersistentPrivateChatManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14646DF42E5584A700D93BD0 /* PersistentPrivateChatManager.swift */; };
+		14F012312E56C83200EA67B3 /* GroupChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14F012302E56C83200EA67B3 /* GroupChat.swift */; };
+		14F012322E56C83200EA67B3 /* GroupChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14F012302E56C83200EA67B3 /* GroupChat.swift */; };
+		14F012342E56C84000EA67B3 /* GroupChatManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14F012332E56C84000EA67B3 /* GroupChatManager.swift */; };
+		14F012352E56C84000EA67B3 /* GroupChatManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14F012332E56C84000EA67B3 /* GroupChatManager.swift */; };
+		14F012372E56C85000EA67B3 /* GroupChatListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14F012362E56C85000EA67B3 /* GroupChatListView.swift */; };
+		14F012382E56C85000EA67B3 /* GroupChatListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14F012362E56C85000EA67B3 /* GroupChatListView.swift */; };
+		14F0123A2E56C85D00EA67B3 /* GroupChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14F012392E56C85D00EA67B3 /* GroupChatView.swift */; };
+		14F0123B2E56C85D00EA67B3 /* GroupChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14F012392E56C85D00EA67B3 /* GroupChatView.swift */; };
 		17901751FD8010AFC8E750F2 /* bitchatShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 61F92EBA29C47C0FCC482F1F /* bitchatShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		1BD3295CA4D57C93C0A6522C /* FragmentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F2899A34E217B55CA551A29 /* FragmentationTests.swift */; };
 		1D9674FA5F998503831DC281 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A08E03AA0C63E97C91749AEC /* ContentView.swift */; };
@@ -182,6 +190,10 @@
 		14646DEE2E557B0C00D93BD0 /* HistoryRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryRequest.swift; sourceTree = "<group>"; };
 		14646DF12E55849600D93BD0 /* PersistentPrivateChat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistentPrivateChat.swift; sourceTree = "<group>"; };
 		14646DF42E5584A700D93BD0 /* PersistentPrivateChatManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistentPrivateChatManager.swift; sourceTree = "<group>"; };
+		14F012302E56C83200EA67B3 /* GroupChat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupChat.swift; sourceTree = "<group>"; };
+		14F012332E56C84000EA67B3 /* GroupChatManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupChatManager.swift; sourceTree = "<group>"; };
+		14F012362E56C85000EA67B3 /* GroupChatListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupChatListView.swift; sourceTree = "<group>"; };
+		14F012392E56C85D00EA67B3 /* GroupChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupChatView.swift; sourceTree = "<group>"; };
 		1B4809E690DE48B9AEE36279 /* NostrTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NostrTransport.swift; sourceTree = "<group>"; };
 		229F17B68CFF7AB1BC91C847 /* BitchatProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitchatProtocol.swift; sourceTree = "<group>"; };
 		2C82877869239E1E02FF9A88 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
@@ -269,6 +281,7 @@
 		0575DCBD15C7C719ADDCB67E /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				14F012302E56C83200EA67B3 /* GroupChat.swift */,
 				14646DF12E55849600D93BD0 /* PersistentPrivateChat.swift */,
 				11186E29A064E8D210880E1B /* BitchatPeer.swift */,
 			);
@@ -406,6 +419,8 @@
 		A55126E93155456CAA8D6656 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				14F012392E56C85D00EA67B3 /* GroupChatView.swift */,
+				14F012362E56C85000EA67B3 /* GroupChatListView.swift */,
 				763E0DBA9492A654FC0CDCB9 /* AppInfoView.swift */,
 				A08E03AA0C63E97C91749AEC /* ContentView.swift */,
 				9195CDC7EB236AFBC9A4D41A /* FingerprintView.swift */,
@@ -474,6 +489,7 @@
 		D98A3186D7E4C72E35BDF7FE /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				14F012332E56C84000EA67B3 /* GroupChatManager.swift */,
 				14646DE82E55760800D93BD0 /* ChatHistorySyncService.swift */,
 				14646DE52E5571B900D93BD0 /* MessagePersistenceService.swift */,
 				C39BB75BC8C2A36039F00613 /* AutocompleteService.swift */,
@@ -710,6 +726,7 @@
 				6775EF2B889D38C1919239C4 /* BLEService.swift in Sources */,
 				9B51E9B63A3EA59B1A7874BD /* BinaryEncodingUtils.swift in Sources */,
 				4B747085D07A1BCE0F5BA612 /* BinaryProtocol.swift in Sources */,
+				14F012372E56C85000EA67B3 /* GroupChatListView.swift in Sources */,
 				6E7761E21C99F28AE2F9BE5F /* BitchatApp.swift in Sources */,
 				84E3F9B64FB7FB4A140BD0A8 /* BitchatPeer.swift in Sources */,
 				923027D6F2F417AFA2488127 /* BitchatProtocol.swift in Sources */,
@@ -726,6 +743,7 @@
 				C79EE1C154773EFF8267B895 /* MessageDeduplicator.swift in Sources */,
 				EC5DD95163C59DF82C7AAE6B /* MessageRouter.swift in Sources */,
 				501BC56B1A08C0327A09AAF1 /* NoiseEncryptionService.swift in Sources */,
+				14F0123A2E56C85D00EA67B3 /* GroupChatView.swift in Sources */,
 				AFF33EF44626EF0579D17EB1 /* NoiseHandshakeCoordinator.swift in Sources */,
 				14646DF02E557B0C00D93BD0 /* HistoryRequest.swift in Sources */,
 				8C1AB0F2D48207E0755DA91A /* NoiseProtocol.swift in Sources */,
@@ -746,7 +764,9 @@
 				E2DCF7817344F1CCDB8B7B2F /* SecureIdentityStateManager.swift in Sources */,
 				D111988977C3BC246AB27FA4 /* SecureLogger.swift in Sources */,
 				14646DE62E5571B900D93BD0 /* MessagePersistenceService.swift in Sources */,
+				14F012342E56C84000EA67B3 /* GroupChatManager.swift in Sources */,
 				20216EA81EFDC3632F8DB19F /* Transport.swift in Sources */,
+				14F012312E56C83200EA67B3 /* GroupChat.swift in Sources */,
 				C06685965753B4F8A3120998 /* UnifiedPeerService.swift in Sources */,
 				14646DEA2E55760800D93BD0 /* ChatHistorySyncService.swift in Sources */,
 			);
@@ -761,6 +781,7 @@
 				6A30AA6E36BEF48DAD666523 /* BLEService.swift in Sources */,
 				AFB6AEFCABBE97441CB3102B /* BinaryEncodingUtils.swift in Sources */,
 				F455F011B3B648ADA233F998 /* BinaryProtocol.swift in Sources */,
+				14F012382E56C85000EA67B3 /* GroupChatListView.swift in Sources */,
 				10E68BB889356219189E38EC /* BitchatApp.swift in Sources */,
 				84D13329AB7EE1D65A37438A /* BitchatPeer.swift in Sources */,
 				6DE056E1EE9850E9FBF50157 /* BitchatProtocol.swift in Sources */,
@@ -777,6 +798,7 @@
 				44AD79B0EBD4678690E3DEB6 /* MessageDeduplicator.swift in Sources */,
 				65A68CE8842A98D9C655E0AA /* MessageRouter.swift in Sources */,
 				5EE49E150BBF0488E7473687 /* NoiseEncryptionService.swift in Sources */,
+				14F0123B2E56C85D00EA67B3 /* GroupChatView.swift in Sources */,
 				6D0D4A0B1D8B659DCBAE7C9C /* NoiseHandshakeCoordinator.swift in Sources */,
 				14646DEF2E557B0C00D93BD0 /* HistoryRequest.swift in Sources */,
 				A7187D48B07C6857DE01D0ED /* NoiseProtocol.swift in Sources */,
@@ -797,7 +819,9 @@
 				68C4BE564735F6E7915274A2 /* SecureIdentityStateManager.swift in Sources */,
 				EC5241969D2550B97629EBD0 /* SecureLogger.swift in Sources */,
 				14646DE72E5571B900D93BD0 /* MessagePersistenceService.swift in Sources */,
+				14F012352E56C84000EA67B3 /* GroupChatManager.swift in Sources */,
 				778592DC0729708A653D6B9A /* Transport.swift in Sources */,
+				14F012322E56C83200EA67B3 /* GroupChat.swift in Sources */,
 				438E81C9D07DABC9D6B86AD7 /* UnifiedPeerService.swift in Sources */,
 				14646DE92E55760800D93BD0 /* ChatHistorySyncService.swift in Sources */,
 			);

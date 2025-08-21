@@ -47,6 +47,13 @@ protocol Transport: AnyObject {
     func sendBroadcastAnnounce()
     func sendDeliveryAck(for messageID: String, to peerID: String)
     func sendNoiseEncryptedPayload(_ encryptedData: Data, to peerID: String)
+    
+    // Group messaging
+    func sendGroupMessage(_ content: String, to groupID: String, mentions: [String])
+    func sendGroupInvitation(_ invitation: GroupInvitation, to peerID: String)
+    func sendGroupInviteResponse(invitationID: String, accepted: Bool, to peerID: String)
+    func sendGroupMemberUpdate(_ update: GroupMemberUpdate, to groupID: String)
+    func sendGroupInfoUpdate(_ update: GroupInfoUpdate, to groupID: String)
 
     // Peer snapshots (for non-UI services)
     var peerSnapshotPublisher: AnyPublisher<[TransportPeerSnapshot], Never> { get }

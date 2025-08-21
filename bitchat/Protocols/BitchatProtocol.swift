@@ -161,6 +161,14 @@ enum NoisePayloadType: UInt8 {
     case historyResponse = 0x05     // Response with chat history
     case historySync = 0x06         // Sync missing messages
     
+    // Group chat messages
+    case groupMessage = 0x10        // Group chat message
+    case groupInvitation = 0x11     // Group invitation
+    case groupInviteResponse = 0x12 // Response to invitation
+    case groupMemberUpdate = 0x13   // Member joined/left/promoted
+    case groupInfoUpdate = 0x14     // Group name/description changed
+    case groupKeyExchange = 0x15    // Group encryption key exchange
+    
     var description: String {
         switch self {
         case .privateMessage: return "privateMessage"
@@ -169,6 +177,12 @@ enum NoisePayloadType: UInt8 {
         case .historyRequest: return "historyRequest"
         case .historyResponse: return "historyResponse"
         case .historySync: return "historySync"
+        case .groupMessage: return "groupMessage"
+        case .groupInvitation: return "groupInvitation"
+        case .groupInviteResponse: return "groupInviteResponse"
+        case .groupMemberUpdate: return "groupMemberUpdate"
+        case .groupInfoUpdate: return "groupInfoUpdate"
+        case .groupKeyExchange: return "groupKeyExchange"
         }
     }
 }
@@ -458,6 +472,13 @@ protocol BitchatDelegate: AnyObject {
     // Low-level events for better separation of concerns
     func didReceiveNoisePayload(from peerID: String, type: NoisePayloadType, payload: Data, timestamp: Date)
     func didReceivePublicMessage(from peerID: String, nickname: String, content: String, timestamp: Date)
+    
+    // Group chat events
+    func didReceiveGroupMessage(_ message: BitchatMessage, groupID: String, from peerID: String)
+    func didReceiveGroupInvitation(_ invitation: GroupInvitation, from peerID: String)
+    func didReceiveGroupInviteResponse(invitationID: String, accepted: Bool, from peerID: String)
+    func didReceiveGroupMemberUpdate(groupID: String, memberUpdate: GroupMemberUpdate, from peerID: String)
+    func didReceiveGroupInfoUpdate(groupID: String, infoUpdate: GroupInfoUpdate, from peerID: String)
 }
 
 // Provide default implementation to make it effectively optional
@@ -477,9 +498,82 @@ extension BitchatDelegate {
     func didReceivePublicMessage(from peerID: String, nickname: String, content: String, timestamp: Date) {
         // Default empty implementation
     }
+    
+    // Group chat default implementations
+    func didReceiveGroupMessage(_ message: BitchatMessage, groupID: String, from peerID: String) {
+        // Default empty implementation
+    }
+    
+    func didReceiveGroupInvitation(_ invitation: GroupInvitation, from peerID: String) {
+        // Default empty implementation
+    }
+    
+    func didReceiveGroupInviteResponse(invitationID: String, accepted: Bool, from peerID: String) {
+        // Default empty implementation
+    }
+    
+    func didReceiveGroupMemberUpdate(groupID: String, memberUpdate: GroupMemberUpdate, from peerID: String) {
+        // Default empty implementation
+    }
+    
+    func didReceiveGroupInfoUpdate(groupID: String, infoUpdate: GroupInfoUpdate, from peerID: String) {
+        // Default empty implementation
+    }
 }
 
 // MARK: - Noise Payload Helpers
+
+// MARK: - Group Message Update Structures
+
+/// Group member update information
+struct GroupMemberUpdate: Codable {
+    let type: MemberUpdateType
+    let memberFingerprint: String
+    let memberNickname: String
+    let performedBy: String // Fingerprint of who performed the action
+    let timestamp: Date
+    
+    init(type: MemberUpdateType, memberFingerprint: String, memberNickname: String, performedBy: String) {
+        self.type = type
+        self.memberFingerprint = memberFingerprint
+        self.memberNickname = memberNickname
+        self.performedBy = performedBy
+        self.timestamp = Date()
+    }
+}
+
+/// Type of member update
+enum MemberUpdateType: String, Codable {
+    case joined = "joined"
+    case left = "left"
+    case promoted = "promoted"
+    case demoted = "demoted"
+    case kicked = "kicked"
+}
+
+/// Group info update information
+struct GroupInfoUpdate: Codable {
+    let type: InfoUpdateType
+    let newValue: String
+    let oldValue: String?
+    let performedBy: String // Fingerprint of who performed the action
+    let timestamp: Date
+    
+    init(type: InfoUpdateType, newValue: String, oldValue: String? = nil, performedBy: String) {
+        self.type = type
+        self.newValue = newValue
+        self.oldValue = oldValue
+        self.performedBy = performedBy
+        self.timestamp = Date()
+    }
+}
+
+/// Type of info update
+enum InfoUpdateType: String, Codable {
+    case nameChanged = "nameChanged"
+    case descriptionChanged = "descriptionChanged"
+    case privacyChanged = "privacyChanged"
+}
 
 /// Helper to create typed Noise payloads
 struct NoisePayload {

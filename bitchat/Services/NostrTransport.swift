@@ -221,4 +221,38 @@ final class NostrTransport: Transport {
     func sendNoiseEncryptedPayload(_ encryptedData: Data, to peerID: String) {
         // Not implemented for Nostr transport - only BLE supports Noise encryption
     }
+    
+    // MARK: - Group Messaging (Transport Protocol)
+    
+    func sendGroupMessage(_ content: String, to groupID: String, mentions: [String]) {
+        // Group messaging over Nostr not implemented yet
+        // This would require group coordination over Nostr relays
+        SecureLogger.log("📨 Group message over Nostr not implemented (groupID: \(groupID.prefix(8))...)", 
+                        category: SecureLogger.session, level: .debug)
+    }
+    
+    func sendGroupInvitation(_ invitation: GroupInvitation, to peerID: String) {
+        // Group invitations over Nostr not implemented yet
+        // This would use gift wraps to send invitations
+        SecureLogger.log("📤 Group invitation over Nostr not implemented (to: \(peerID.prefix(8))...)", 
+                        category: SecureLogger.session, level: .debug)
+    }
+    
+    func sendGroupInviteResponse(invitationID: String, accepted: Bool, to peerID: String) {
+        // Group invite responses over Nostr not implemented yet
+        SecureLogger.log("📤 Group invite response over Nostr not implemented (accepted: \(accepted))", 
+                        category: SecureLogger.session, level: .debug)
+    }
+    
+    func sendGroupMemberUpdate(_ update: GroupMemberUpdate, to groupID: String) {
+        // Group member updates over Nostr not implemented yet
+        SecureLogger.log("📤 Group member update over Nostr not implemented (groupID: \(groupID.prefix(8))...)", 
+                        category: SecureLogger.session, level: .debug)
+    }
+    
+    func sendGroupInfoUpdate(_ update: GroupInfoUpdate, to groupID: String) {
+        // Group info updates over Nostr not implemented yet
+        SecureLogger.log("📤 Group info update over Nostr not implemented (groupID: \(groupID.prefix(8))...)", 
+                        category: SecureLogger.session, level: .debug)
+    }
 }
