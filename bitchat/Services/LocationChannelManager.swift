@@ -27,6 +27,8 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
     @Published private(set) var permissionState: PermissionState = .notDetermined
     @Published private(set) var availableChannels: [GeohashChannel] = []
     @Published private(set) var selectedChannel: ChannelID = .mesh
+    // True when the current location channel was selected via manual teleport
+    @Published var teleported: Bool = false
     @Published private(set) var locationNames: [GeohashChannelLevel: String] = [:]
 
     private override init() {

@@ -107,6 +107,8 @@ struct LocationChannelsSheet: View {
                     let subtitlePrefix = "#\(channel.geohash) • \(coverage)"
                     let highlight = viewModel.geohashParticipantCount(for: channel.geohash) > 0
                     channelRow(title: geohashTitleWithCount(for: channel), subtitlePrefix: subtitlePrefix, subtitleName: namePart, isSelected: isSelected(channel), titleBold: highlight) {
+                        // Selecting a suggested nearby channel is not a teleport
+                        manager.teleported = false
                         manager.select(ChannelID.location(channel))
                         isPresented = false
                     }
@@ -150,6 +152,8 @@ struct LocationChannelsSheet: View {
                         guard isValid else { customError = "invalid geohash"; return }
                         let level = levelForLength(gh.count)
                         let ch = GeohashChannel(level: level, geohash: gh)
+                        // Mark this selection as a manual teleport
+                        manager.teleported = true
                         manager.select(ChannelID.location(ch))
                         isPresented = false
                     }

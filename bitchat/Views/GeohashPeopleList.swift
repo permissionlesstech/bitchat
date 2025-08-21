@@ -36,7 +36,15 @@ struct GeohashPeopleList: View {
                         if viewModel.unreadPrivateMessages.contains(convKey) {
                             Image(systemName: "envelope.fill").font(.system(size: 12)).foregroundColor(.orange)
                         } else {
-                            Image(systemName: "person.fill").font(.system(size: 10)).foregroundColor(textColor)
+                            // For the local user, use a different face icon when teleported
+                            let isMe = (person.id == myHex)
+                            #if os(iOS)
+                            let teleported = LocationChannelManager.shared.teleported
+                            #else
+                            let teleported = false
+                            #endif
+                            let icon = (isMe && teleported) ? "face.dashed" : "face.smiling"
+                            Image(systemName: icon).font(.system(size: 12)).foregroundColor(textColor)
                         }
                         let (base, suffix) = splitSuffix(from: person.displayName)
                         let isMe = person.id == myHex
