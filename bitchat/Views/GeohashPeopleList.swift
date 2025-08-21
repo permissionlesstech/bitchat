@@ -38,10 +38,24 @@ struct GeohashPeopleList: View {
                         } else {
                             Image(systemName: "person.fill").font(.system(size: 10)).foregroundColor(textColor)
                         }
-                        Text(person.displayName + (person.id == myHex ? " (you)" : ""))
-                            .font(.system(size: 14, design: .monospaced))
-                            .fontWeight(person.id == myHex ? .bold : .regular)
-                            .foregroundColor(textColor)
+                        let (base, suffix) = splitSuffix(from: person.displayName)
+                        let isMe = person.id == myHex
+                        HStack(spacing: 0) {
+                            Text(base)
+                                .font(.system(size: 14, design: .monospaced))
+                                .fontWeight(isMe ? .bold : .regular)
+                                .foregroundColor(textColor)
+                            if !suffix.isEmpty {
+                                Text(suffix)
+                                    .font(.system(size: 14, design: .monospaced))
+                                    .foregroundColor(Color.secondary.opacity(0.6))
+                            }
+                            if isMe {
+                                Text(" (you)")
+                                    .font(.system(size: 14, design: .monospaced))
+                                    .foregroundColor(textColor)
+                            }
+                        }
                         Spacer()
                     }
                     .padding(.horizontal)
@@ -60,3 +74,17 @@ struct GeohashPeopleList: View {
 }
 #endif
 
+// Helper to split a trailing #abcd suffix
+#if os(iOS)
+private func splitSuffix(from name: String) -> (String, String) {
+    guard name.count >= 5 else { return (name, "") }
+    let suffix = String(name.suffix(5))
+    if suffix.first == "#", suffix.dropFirst().allSatisfy({ c in
+        ("0"..."9").contains(String(c)) || ("a"..."f").contains(String(c)) || ("A"..."F").contains(String(c))
+    }) {
+        let base = String(name.dropLast(5))
+        return (base, suffix)
+    }
+    return (name, "")
+}
+#endif
