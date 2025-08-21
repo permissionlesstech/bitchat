@@ -2631,9 +2631,26 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     }
     
     func formatMessageAsText(_ message: BitchatMessage, colorScheme: ColorScheme) -> AttributedString {
-        // Check cache first
+        // Determine if this message was sent by self (mesh, geo, or DM)
+        let isSelf: Bool = {
+            if let spid = message.senderPeerID {
+                #if os(iOS)
+                if case .location(let ch) = activeChannel, spid.hasPrefix("nostr:") {
+                    if let myGeo = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
+                        return spid == "nostr:\(myGeo.publicKeyHex.prefix(8))"
+                    }
+                }
+                #endif
+                return spid == meshService.myPeerID
+            }
+            // Fallback by nickname
+            if message.sender == nickname { return true }
+            if message.sender.hasPrefix(nickname + "#") { return true }
+            return false
+        }()
+        // Check cache first (key includes dark mode + self flag)
         let isDark = colorScheme == .dark
-        if let cachedText = message.getCachedFormattedText(isDark: isDark) {
+        if let cachedText = message.getCachedFormattedText(isDark: isDark, isSelf: isSelf) {
             return cachedText
         }
         
@@ -2649,7 +2666,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             // Use consistent color for all senders
             senderStyle.foregroundColor = primaryColor
             // Bold the user's own nickname
-            let fontWeight: Font.Weight = message.sender == nickname ? .bold : .medium
+            let fontWeight: Font.Weight = isSelf ? .bold : .medium
             senderStyle.font = .system(size: 14, weight: fontWeight, design: .monospaced)
 
             // Prefix "<@"
@@ -2711,7 +2728,9 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     if !beforeText.isEmpty {
                         var beforeStyle = AttributeContainer()
                         beforeStyle.foregroundColor = primaryColor
-                        beforeStyle.font = .system(size: 14, design: .monospaced)
+                        beforeStyle.font = isSelf
+                            ? .system(size: 14, weight: .bold, design: .monospaced)
+                            : .system(size: 14, design: .monospaced)
                         if isMentioned {
                             beforeStyle.font = beforeStyle.font?.bold()
                         }
@@ -2724,7 +2743,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                         // Split optional '#abcd' suffix and color suffix light grey
                         let (mBase, mSuffix) = splitSuffix(from: matchText.replacingOccurrences(of: "@", with: ""))
                         var mentionStyle = AttributeContainer()
-                        mentionStyle.font = .system(size: 14, weight: .semibold, design: .monospaced)
+                        mentionStyle.font = .system(size: 14, weight: isSelf ? .bold : .semibold, design: .monospaced)
                         mentionStyle.foregroundColor = Color.orange
                         // Emit '@'
                         result.append(AttributedString("@").mergingAttributes(mentionStyle))
@@ -2738,7 +2757,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                         }
                     } else {
                         var matchStyle = AttributeContainer()
-                        matchStyle.font = .system(size: 14, weight: .semibold, design: .monospaced)
+                        matchStyle.font = .system(size: 14, weight: isSelf ? .bold : .semibold, design: .monospaced)
                         if type == "hashtag" {
                             matchStyle.foregroundColor = Color.blue
                             matchStyle.underlineStyle = .single
@@ -2757,7 +2776,9 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 let remainingText = String(content[lastEnd...])
                 var remainingStyle = AttributeContainer()
                 remainingStyle.foregroundColor = primaryColor
-                remainingStyle.font = .system(size: 14, design: .monospaced)
+                remainingStyle.font = isSelf
+                    ? .system(size: 14, weight: .bold, design: .monospaced)
+                    : .system(size: 14, design: .monospaced)
                 if isMentioned {
                     remainingStyle.font = remainingStyle.font?.bold()
                 }
@@ -2787,7 +2808,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         }
         
         // Cache the formatted text
-        message.setCachedFormattedText(result, isDark: isDark)
+        message.setCachedFormattedText(result, isDark: isDark, isSelf: isSelf)
         
         return result
     }
