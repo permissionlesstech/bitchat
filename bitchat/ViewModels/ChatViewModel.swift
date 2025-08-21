@@ -2658,13 +2658,14 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         var result = AttributedString()
         
         let primaryColor = isDark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
+        let baseColor: Color = isSelf ? .orange : primaryColor
         
         if message.sender != "system" {
             // Sender (at the beginning) with light-gray suffix styling if present
             let (baseName, suffix) = splitSuffix(from: message.sender)
             var senderStyle = AttributeContainer()
             // Use consistent color for all senders
-            senderStyle.foregroundColor = primaryColor
+            senderStyle.foregroundColor = baseColor
             // Bold the user's own nickname
             let fontWeight: Font.Weight = isSelf ? .bold : .medium
             senderStyle.font = .system(size: 14, weight: fontWeight, design: .monospaced)
@@ -2727,7 +2728,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     let beforeText = String(content[lastEnd..<nsRange.lowerBound])
                     if !beforeText.isEmpty {
                         var beforeStyle = AttributeContainer()
-                        beforeStyle.foregroundColor = primaryColor
+                        beforeStyle.foregroundColor = baseColor
                         beforeStyle.font = isSelf
                             ? .system(size: 14, weight: .bold, design: .monospaced)
                             : .system(size: 14, design: .monospaced)
@@ -2744,7 +2745,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                         let (mBase, mSuffix) = splitSuffix(from: matchText.replacingOccurrences(of: "@", with: ""))
                         var mentionStyle = AttributeContainer()
                         mentionStyle.font = .system(size: 14, weight: isSelf ? .bold : .semibold, design: .monospaced)
-                        mentionStyle.foregroundColor = Color.orange
+                        mentionStyle.foregroundColor = .orange
                         // Emit '@'
                         result.append(AttributedString("@").mergingAttributes(mentionStyle))
                         // Base name in orange
@@ -2758,11 +2759,12 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     } else {
                         var matchStyle = AttributeContainer()
                         matchStyle.font = .system(size: 14, weight: isSelf ? .bold : .semibold, design: .monospaced)
+                        // Self messages use orange for all tokens; others keep blue for links/hashtags
                         if type == "hashtag" {
-                            matchStyle.foregroundColor = Color.blue
+                            matchStyle.foregroundColor = isSelf ? .orange : .blue
                             matchStyle.underlineStyle = .single
                         } else if type == "url" {
-                            matchStyle.foregroundColor = Color.blue
+                            matchStyle.foregroundColor = isSelf ? .orange : .blue
                             matchStyle.underlineStyle = .single
                         }
                         result.append(AttributedString(matchText).mergingAttributes(matchStyle))
@@ -2775,7 +2777,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             if lastEnd < content.endIndex {
                 let remainingText = String(content[lastEnd...])
                 var remainingStyle = AttributeContainer()
-                remainingStyle.foregroundColor = primaryColor
+                remainingStyle.foregroundColor = baseColor
                 remainingStyle.font = isSelf
                     ? .system(size: 14, weight: .bold, design: .monospaced)
                     : .system(size: 14, design: .monospaced)
