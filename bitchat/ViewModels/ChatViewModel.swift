@@ -1099,7 +1099,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                             content: content,
                             geohash: ch.geohash,
                             senderIdentity: identity,
-                            nickname: self.nickname
+                            nickname: self.nickname,
+                            teleported: LocationChannelManager.shared.teleported
                         )
                         NostrRelayManager.shared.sendEvent(event)
                         // Track ourselves as active participant
@@ -1347,20 +1348,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         } catch {
             // ignore
         }
-        // Announce presence with optional teleported tag (non-intrusive, empty content)
-        do {
-            let id = try NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash)
-            let event = try NostrProtocol.createEphemeralGeohashEvent(
-                content: "",
-                geohash: ch.geohash,
-                senderIdentity: id,
-                nickname: self.nickname,
-                teleported: LocationChannelManager.shared.teleported
-            )
-            NostrRelayManager.shared.sendEvent(event)
-        } catch {
-            // best-effort presence; ignore failures
-        }
+        // Presence announcement removed; we will tag actual chat events instead
     }
 
     // MARK: - Geohash Participants (iOS)
@@ -2189,7 +2177,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                             content: screenshotMessage,
                             geohash: ch.geohash,
                             senderIdentity: identity,
-                            nickname: self.nickname
+                            nickname: self.nickname,
+                            teleported: LocationChannelManager.shared.teleported
                         )
                         NostrRelayManager.shared.sendEvent(event)
                         // Track ourselves as active participant
@@ -3843,7 +3832,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                         content: content,
                         geohash: ch.geohash,
                         senderIdentity: identity,
-                        nickname: self.nickname
+                        nickname: self.nickname,
+                        teleported: LocationChannelManager.shared.teleported
                     )
                     NostrRelayManager.shared.sendEvent(event)
                 } catch {
