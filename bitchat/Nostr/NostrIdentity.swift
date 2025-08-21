@@ -5,13 +5,16 @@ import Security
 
 // Keychain helper for secure storage
 struct KeychainHelper {
-    static func save(key: String, data: Data, service: String) {
-        let query: [String: Any] = [
+    static func save(key: String, data: Data, service: String, accessible: CFString? = nil) {
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: key,
             kSecValueData as String: data
         ]
+        if let accessible = accessible {
+            query[kSecAttrAccessible as String] = accessible
+        }
         
         SecItemDelete(query as CFDictionary)
         SecItemAdd(query as CFDictionary, nil)
@@ -106,6 +109,8 @@ struct NostrIdentityBridge {
     private static let keychainService = "chat.bitchat.nostr"
     private static let currentIdentityKey = "nostr-current-identity"
     private static let deviceSeedKey = "nostr-device-seed"
+    // In-memory cache to avoid transient keychain access issues
+    private static var deviceSeedCache: Data?
     
     /// Get or create the current Nostr identity
     static func getCurrentNostrIdentity() throws -> NostrIdentity? {
@@ -159,14 +164,20 @@ struct NostrIdentityBridge {
     /// Returns a stable device seed used to derive unlinkable per-geohash identities.
     /// Stored only on device keychain.
     private static func getOrCreateDeviceSeed() -> Data {
+        if let cached = deviceSeedCache { return cached }
         if let existing = KeychainHelper.load(key: deviceSeedKey, service: keychainService) {
+            // Migrate to AfterFirstUnlockThisDeviceOnly for stability during lock
+            KeychainHelper.save(key: deviceSeedKey, data: existing, service: keychainService, accessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly)
+            deviceSeedCache = existing
             return existing
         }
         var seed = Data(count: 32)
         _ = seed.withUnsafeMutableBytes { ptr in
             SecRandomCopyBytes(kSecRandomDefault, 32, ptr.baseAddress!)
         }
-        KeychainHelper.save(key: deviceSeedKey, data: seed, service: keychainService)
+        // Ensure availability after first unlock to prevent unintended rotation when locked
+        KeychainHelper.save(key: deviceSeedKey, data: seed, service: keychainService, accessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly)
+        deviceSeedCache = seed
         return seed
     }
 
