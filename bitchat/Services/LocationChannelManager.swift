@@ -162,7 +162,17 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
             let gh = Geohash.encode(latitude: coord.latitude, longitude: coord.longitude, precision: level.precision)
             result.append(GeohashChannel(level: level, geohash: gh))
         }
-        Task { @MainActor in self.availableChannels = result }
+        Task { @MainActor in
+            self.availableChannels = result
+            // Recompute teleported status based on current location vs selected channel
+            switch self.selectedChannel {
+            case .mesh:
+                self.teleported = false
+            case .location(let ch):
+                let currentGH = Geohash.encode(latitude: coord.latitude, longitude: coord.longitude, precision: ch.level.precision)
+                self.teleported = (currentGH != ch.geohash)
+            }
+        }
     }
 
     private func reverseGeocodeIfNeeded(location: CLLocation) {

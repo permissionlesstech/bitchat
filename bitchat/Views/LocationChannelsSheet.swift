@@ -147,7 +147,7 @@ struct LocationChannelsSheet: View {
                         }
                     let normalized = customGeohash.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().replacingOccurrences(of: "#", with: "")
                     let isValid = validateGeohash(normalized)
-                    Button("teleport") {
+                    Button(action: {
                         let gh = normalized
                         guard isValid else { customError = "invalid geohash"; return }
                         let level = levelForLength(gh.count)
@@ -156,6 +156,13 @@ struct LocationChannelsSheet: View {
                         manager.teleported = true
                         manager.select(ChannelID.location(ch))
                         isPresented = false
+                    }) {
+                        HStack(spacing: 6) {
+                            Text("teleport")
+                                .font(.system(size: 14, design: .monospaced))
+                            Image(systemName: "face.dashed")
+                                .font(.system(size: 14))
+                        }
                     }
                     .buttonStyle(.plain)
                     .font(.system(size: 14, design: .monospaced))
