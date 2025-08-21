@@ -2743,12 +2743,30 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     if type == "mention" {
                         // Split optional '#abcd' suffix and color suffix light grey
                         let (mBase, mSuffix) = splitSuffix(from: matchText.replacingOccurrences(of: "@", with: ""))
+                        // Determine if this mention targets me (resolves with optional suffix per active channel)
+                        let mySuffix: String? = {
+                            #if os(iOS)
+                            if case .location(let ch) = activeChannel, let id = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
+                                return String(id.publicKeyHex.suffix(4))
+                            }
+                            #endif
+                            return String(meshService.myPeerID.prefix(4))
+                        }()
+                        let isMentionToMe: Bool = {
+                            if mBase == nickname {
+                                if let suf = mySuffix, !mSuffix.isEmpty {
+                                    return mSuffix == "#\(suf)"
+                                }
+                                return mSuffix.isEmpty
+                            }
+                            return false
+                        }()
                         var mentionStyle = AttributeContainer()
                         mentionStyle.font = .system(size: 14, weight: isSelf ? .bold : .semibold, design: .monospaced)
-                        mentionStyle.foregroundColor = .orange
+                        mentionStyle.foregroundColor = isMentionToMe ? .orange : primaryColor
                         // Emit '@'
                         result.append(AttributedString("@").mergingAttributes(mentionStyle))
-                        // Base name in orange
+                        // Base name
                         result.append(AttributedString(mBase).mergingAttributes(mentionStyle))
                         // Suffix in light grey
                         if !mSuffix.isEmpty {
