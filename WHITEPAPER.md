@@ -98,7 +98,7 @@ While the Noise handshake cryptographically authenticates a peer's key, it doesn
 ### 4.2. Favorites and Blocking
 
 To improve the user experience and provide control over interactions, the protocol supports:
-*   **Favorites:** Users can mark trusted or frequently contacted peers as "favorites." This is a local designation that can be used by the application to prioritize notifications or display peers more prominently.
+*   **Favorites:** Users can mark trusted or frequently contacted peers as "favorites". This is a local designation that can be used by the application to prioritize notifications or display peers more prominently.
 *   **Blocking:** Users can block peers. When a peer is blocked, the application will discard any incoming packets from that peer's fingerprint at the earliest possible stage, effectively silencing them without notifying the blocked peer.
 
 ---
