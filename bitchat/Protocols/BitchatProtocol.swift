@@ -410,12 +410,12 @@ class BitchatMessage: Codable {
     // Cached formatted text (not included in Codable)
     private var _cachedFormattedText: [String: AttributedString] = [:]
     
-    func getCachedFormattedText(isDark: Bool) -> AttributedString? {
-        return _cachedFormattedText["\(isDark)"]
+    func getCachedFormattedText(isDark: Bool, isSelf: Bool) -> AttributedString? {
+        return _cachedFormattedText["\(isDark)-\(isSelf)"]
     }
     
-    func setCachedFormattedText(_ text: AttributedString, isDark: Bool) {
-        _cachedFormattedText["\(isDark)"] = text
+    func setCachedFormattedText(_ text: AttributedString, isDark: Bool, isSelf: Bool) {
+        _cachedFormattedText["\(isDark)-\(isSelf)"] = text
     }
     
     // Codable implementation
