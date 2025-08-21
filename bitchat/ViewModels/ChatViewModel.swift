@@ -255,6 +255,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     private var geoParticipants: [String: [String: Date]] = [:]
     @Published private(set) var geohashPeople: [GeoPerson] = []
     private var geoParticipantsTimer: Timer? = nil
+    // Participants who indicated they teleported (by tag in their events)
+    @Published private(set) var teleportedGeo: Set<String> = []  // lowercased pubkey hex
     // Sampling subscriptions for multiple geohashes (when channel sheet is open)
     private var geoSamplingSubs: [String: String] = [:] // subID -> geohash
     #endif
@@ -1160,6 +1162,14 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             // Deduplicate
             if self.processedNostrEvents.contains(event.id) { return }
             self.recordProcessedEvent(event.id)
+            // Track teleport tag for participants
+            if let teleTag = event.tags.first(where: { $0.first == "t" }), teleTag.count >= 2, teleTag[1] == "teleport" {
+                let key = event.pubkey.lowercased()
+                if !self.teleportedGeo.contains(key) {
+                    self.teleportedGeo.insert(key)
+                    DispatchQueue.main.async { [weak self] in self?.objectWillChange.send() }
+                }
+            }
             // Skip our own events (we already locally echoed)
             if let gh = self.currentGeohash,
                let myGeoIdentity = try? NostrIdentityBridge.deriveIdentity(forGeohash: gh),
@@ -1181,6 +1191,11 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             
             let senderName = self.displayNameForNostrPubkey(event.pubkey)
             let content = event.content
+            // If this is a teleport presence event (no content), don't add to timeline
+            if let teleTag = event.tags.first(where: { $0.first == "t" }), teleTag.count >= 2, teleTag[1] == "teleport",
+               content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return
+            }
             let timestamp = Date(timeIntervalSince1970: TimeInterval(event.created_at))
             let mentions = self.parseMentions(from: content)
             let msg = BitchatMessage(
@@ -1331,6 +1346,20 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             }
         } catch {
             // ignore
+        }
+        // Announce presence with optional teleported tag (non-intrusive, empty content)
+        do {
+            let id = try NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash)
+            let event = try NostrProtocol.createEphemeralGeohashEvent(
+                content: "",
+                geohash: ch.geohash,
+                senderIdentity: id,
+                nickname: self.nickname,
+                teleported: LocationChannelManager.shared.teleported
+            )
+            NostrRelayManager.shared.sendEvent(event)
+        } catch {
+            // best-effort presence; ignore failures
         }
     }
 
