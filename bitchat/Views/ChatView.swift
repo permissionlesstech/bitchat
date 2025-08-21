@@ -4,6 +4,7 @@
 //
 //  Created by Wentao Guo on 14/08/25.
 //
+
 import SwiftUI
 struct ChatsView: View {
     let sample: [ChatItem] = [
@@ -60,7 +61,6 @@ struct ChatsView: View {
             }
         }
     }
-
 }
 
 #Preview {
