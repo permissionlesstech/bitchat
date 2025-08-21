@@ -106,7 +106,7 @@ struct LocationChannelsSheet: View {
                     let namePart = nameBase.map { formattedNamePrefix(for: channel.level) + $0 }
                     let subtitlePrefix = "#\(channel.geohash) • \(coverage)"
                     let highlight = viewModel.geohashParticipantCount(for: channel.geohash) > 0
-                    channelRow(title: geohashTitleWithCount(for: channel), subtitlePrefix: subtitlePrefix, subtitleName: namePart, subtitleNameBold: highlight, isSelected: isSelected(channel), titleBold: highlight) {
+                    channelRow(title: geohashTitleWithCount(for: channel), subtitlePrefix: subtitlePrefix, subtitleName: namePart, isSelected: isSelected(channel), titleBold: highlight) {
                         manager.select(ChannelID.location(channel))
                         isPresented = false
                     }
