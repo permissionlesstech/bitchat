@@ -836,7 +836,7 @@ struct ContentView: View {
             
             // Channel badge + dynamic spacing + people counter
             HStack(spacing: 10) {
-                // Channel selector with optional unread icon immediately to its left
+                // Unread icon immediately to the left of the channel badge (independent from channel button)
                 #if os(iOS)
                 let cc = channelPeopleCountAndColor()
                 let otherPeersCount = cc.0
@@ -854,8 +854,15 @@ struct ContentView: View {
                 let countColor: Color = (peerCounts.mesh > 0) ? meshBlue : Color.secondary
                 #endif
                 
-                // Location channels button '#'
+                // Unread indicator
                 #if os(iOS)
+                if viewModel.hasAnyUnreadMessages {
+                    Image(systemName: "envelope.fill")
+                        .font(.system(size: 12))
+                        .foregroundColor(Color.orange)
+                        .accessibilityLabel("Unread private messages")
+                }
+                // Location channels button '#'
                 Button(action: { showLocationChannelsSheet = true }) {
                     let badgeText: String = {
                         switch locationManager.selectedChannel {
@@ -871,21 +878,13 @@ struct ContentView: View {
                             return (colorScheme == .dark) ? Color.green : Color(red: 0, green: 0.5, blue: 0)
                         }
                     }()
-                    HStack(spacing: 6) {
-                        if viewModel.hasAnyUnreadMessages {
-                            Image(systemName: "envelope.fill")
-                                .font(.system(size: 12))
-                                .foregroundColor(Color.orange)
-                                .accessibilityLabel("Unread private messages")
-                        }
-                        Text(badgeText)
-                            .font(.system(size: 14, design: .monospaced))
-                            .foregroundColor(badgeColor)
-                            .lineLimit(1)
-                            .fixedSize(horizontal: true, vertical: false)
-                            .layoutPriority(2)
-                            .accessibilityLabel("location channels")
-                    }
+                    Text(badgeText)
+                        .font(.system(size: 14, design: .monospaced))
+                        .foregroundColor(badgeColor)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .layoutPriority(2)
+                        .accessibilityLabel("location channels")
                 }
                 .buttonStyle(.plain)
                 #endif
