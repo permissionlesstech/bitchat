@@ -150,6 +150,27 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     var hasAnyUnreadMessages: Bool {
         !unreadPrivateMessages.isEmpty
     }
+
+    /// Open the most relevant private chat when tapping the toolbar unread icon.
+    /// Prefers the most recently active unread conversation, otherwise the most recent PM.
+    @MainActor
+    func openMostRelevantPrivateChat() {
+        // Pick most recent unread by last message timestamp
+        let unreadSorted = unreadPrivateMessages
+            .map { ($0, privateChats[$0]?.last?.timestamp ?? Date.distantPast) }
+            .sorted { $0.1 > $1.1 }
+        if let target = unreadSorted.first?.0 {
+            startPrivateChat(with: target)
+            return
+        }
+        // Otherwise pick most recent private chat overall
+        let recent = privateChats
+            .map { (id: $0.key, ts: $0.value.last?.timestamp ?? Date.distantPast) }
+            .sorted { $0.ts > $1.ts }
+        if let target = recent.first?.id {
+            startPrivateChat(with: target)
+        }
+    }
     
     // Missing properties that were removed during refactoring
     private var peerIDToPublicKeyFingerprint: [String: String] = [:]
@@ -255,6 +276,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     private var geoParticipants: [String: [String: Date]] = [:]
     @Published private(set) var geohashPeople: [GeoPerson] = []
     private var geoParticipantsTimer: Timer? = nil
+    // Participants who indicated they teleported (by tag in their events)
+    @Published private(set) var teleportedGeo: Set<String> = []  // lowercased pubkey hex
     // Sampling subscriptions for multiple geohashes (when channel sheet is open)
     private var geoSamplingSubs: [String: String] = [:] // subID -> geohash
     #endif
@@ -1097,7 +1120,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                             content: content,
                             geohash: ch.geohash,
                             senderIdentity: identity,
-                            nickname: self.nickname
+                            nickname: self.nickname,
+                            teleported: LocationChannelManager.shared.teleported
                         )
                         NostrRelayManager.shared.sendEvent(event)
                         // Track ourselves as active participant
@@ -1130,6 +1154,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             messages = meshTimeline
             stopGeoParticipantsTimer()
             geohashPeople = []
+            teleportedGeo.removeAll()
         case .location(let ch):
             messages = geoTimelines[ch.geohash] ?? []
         }
@@ -1149,6 +1174,16 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         
         guard case .location(let ch) = channel else { return }
         currentGeohash = ch.geohash
+        // Ensure self appears immediately in the people list; mark teleported state if applicable
+        if let id = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
+            self.recordGeoParticipant(pubkeyHex: id.publicKeyHex)
+            #if os(iOS)
+            if LocationChannelManager.shared.teleported {
+                teleportedGeo.insert(id.publicKeyHex.lowercased())
+                objectWillChange.send()
+            }
+            #endif
+        }
         let subID = "geo-\(ch.geohash)"
         geoSubscriptionID = subID
         startGeoParticipantsTimer()
@@ -1160,6 +1195,14 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             // Deduplicate
             if self.processedNostrEvents.contains(event.id) { return }
             self.recordProcessedEvent(event.id)
+            // Track teleport tag for participants
+            if let teleTag = event.tags.first(where: { $0.first == "t" }), teleTag.count >= 2, teleTag[1] == "teleport" {
+                let key = event.pubkey.lowercased()
+                if !self.teleportedGeo.contains(key) {
+                    self.teleportedGeo.insert(key)
+                    DispatchQueue.main.async { [weak self] in self?.objectWillChange.send() }
+                }
+            }
             // Skip our own events (we already locally echoed)
             if let gh = self.currentGeohash,
                let myGeoIdentity = try? NostrIdentityBridge.deriveIdentity(forGeohash: gh),
@@ -1181,6 +1224,11 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             
             let senderName = self.displayNameForNostrPubkey(event.pubkey)
             let content = event.content
+            // If this is a teleport presence event (no content), don't add to timeline
+            if let teleTag = event.tags.first(where: { $0.first == "t" }), teleTag.count >= 2, teleTag[1] == "teleport",
+               content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return
+            }
             let timestamp = Date(timeIntervalSince1970: TimeInterval(event.created_at))
             let mentions = self.parseMentions(from: content)
             let msg = BitchatMessage(
@@ -1332,6 +1380,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         } catch {
             // ignore
         }
+        // Presence announcement removed; we will tag actual chat events instead
     }
 
     // MARK: - Geohash Participants (iOS)
@@ -2160,7 +2209,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                             content: screenshotMessage,
                             geohash: ch.geohash,
                             senderIdentity: identity,
-                            nickname: self.nickname
+                            nickname: self.nickname,
+                            teleported: LocationChannelManager.shared.teleported
                         )
                         NostrRelayManager.shared.sendEvent(event)
                         // Track ourselves as active participant
@@ -2674,10 +2724,10 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             result.append(AttributedString("<@").mergingAttributes(senderStyle))
             // Base name
             result.append(AttributedString(baseName).mergingAttributes(senderStyle))
-            // Optional suffix (light gray)
+            // Optional suffix in lighter variant of the base color (green or orange for self)
             if !suffix.isEmpty {
                 var suffixStyle = senderStyle
-                suffixStyle.foregroundColor = Color.secondary.opacity(0.6)
+                suffixStyle.foregroundColor = baseColor.opacity(0.6)
                 result.append(AttributedString(suffix).mergingAttributes(suffixStyle))
             }
             // Suffix "> "
@@ -2763,16 +2813,17 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                         }()
                         var mentionStyle = AttributeContainer()
                         mentionStyle.font = .system(size: 14, weight: isSelf ? .bold : .semibold, design: .monospaced)
-                        mentionStyle.foregroundColor = isMentionToMe ? .orange : primaryColor
+                        let mentionColor: Color = isMentionToMe ? .orange : primaryColor
+                        mentionStyle.foregroundColor = mentionColor
                         // Emit '@'
                         result.append(AttributedString("@").mergingAttributes(mentionStyle))
                         // Base name
                         result.append(AttributedString(mBase).mergingAttributes(mentionStyle))
                         // Suffix in light grey
                         if !mSuffix.isEmpty {
-                            var grey = mentionStyle
-                            grey.foregroundColor = Color.secondary.opacity(0.6)
-                            result.append(AttributedString(mSuffix).mergingAttributes(grey))
+                            var light = mentionStyle
+                            light.foregroundColor = mentionColor.opacity(0.6)
+                            result.append(AttributedString(mSuffix).mergingAttributes(light))
                         }
                     } else {
                         var matchStyle = AttributeContainer()
@@ -3814,7 +3865,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                         content: content,
                         geohash: ch.geohash,
                         senderIdentity: identity,
-                        nickname: self.nickname
+                        nickname: self.nickname,
+                        teleported: LocationChannelManager.shared.teleported
                     )
                     NostrRelayManager.shared.sendEvent(event)
                 } catch {
