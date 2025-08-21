@@ -857,10 +857,13 @@ struct ContentView: View {
                 // Unread indicator
                 #if os(iOS)
                 if viewModel.hasAnyUnreadMessages {
-                    Image(systemName: "envelope.fill")
-                        .font(.system(size: 12))
-                        .foregroundColor(Color.orange)
-                        .accessibilityLabel("Unread private messages")
+                    Button(action: { viewModel.openMostRelevantPrivateChat() }) {
+                        Image(systemName: "envelope.fill")
+                            .font(.system(size: 12))
+                            .foregroundColor(Color.orange)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Open unread private chat")
                 }
                 // Location channels button '#'
                 Button(action: { showLocationChannelsSheet = true }) {

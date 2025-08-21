@@ -150,6 +150,27 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     var hasAnyUnreadMessages: Bool {
         !unreadPrivateMessages.isEmpty
     }
+
+    /// Open the most relevant private chat when tapping the toolbar unread icon.
+    /// Prefers the most recently active unread conversation, otherwise the most recent PM.
+    @MainActor
+    func openMostRelevantPrivateChat() {
+        // Pick most recent unread by last message timestamp
+        let unreadSorted = unreadPrivateMessages
+            .map { ($0, privateChats[$0]?.last?.timestamp ?? Date.distantPast) }
+            .sorted { $0.1 > $1.1 }
+        if let target = unreadSorted.first?.0 {
+            startPrivateChat(with: target)
+            return
+        }
+        // Otherwise pick most recent private chat overall
+        let recent = privateChats
+            .map { (id: $0.key, ts: $0.value.last?.timestamp ?? Date.distantPast) }
+            .sorted { $0.ts > $1.ts }
+        if let target = recent.first?.id {
+            startPrivateChat(with: target)
+        }
+    }
     
     // Missing properties that were removed during refactoring
     private var peerIDToPublicKeyFingerprint: [String: String] = [:]
