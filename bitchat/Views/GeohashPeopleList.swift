@@ -54,9 +54,10 @@ struct GeohashPeopleList: View {
                                 .fontWeight(isMe ? .bold : .regular)
                                 .foregroundColor(textColor)
                             if !suffix.isEmpty {
+                                let suffixColor = isMe ? Color.orange.opacity(0.6) : textColor.opacity(0.6)
                                 Text(suffix)
                                     .font(.system(size: 14, design: .monospaced))
-                                    .foregroundColor(Color.secondary.opacity(0.6))
+                                    .foregroundColor(suffixColor)
                             }
                             if isMe {
                                 Text(" (you)")

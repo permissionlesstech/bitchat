@@ -60,9 +60,19 @@ struct MeshPeerList: View {
                         }
 
                         let displayName = isMe ? viewModel.nickname : peer.nickname
-                        Text(displayName)
-                            .font(.system(size: 14, design: .monospaced))
-                            .foregroundColor((peer.favoriteStatus?.isFavorite ?? false) || peerNicknames[peer.id] != nil ? textColor : secondaryTextColor)
+                        let (base, suffix) = splitSuffix(from: displayName)
+                        let baseColor = ((peer.favoriteStatus?.isFavorite ?? false) || peerNicknames[peer.id] != nil) ? textColor : secondaryTextColor
+                        HStack(spacing: 0) {
+                            Text(base)
+                                .font(.system(size: 14, design: .monospaced))
+                                .foregroundColor(baseColor)
+                            if !suffix.isEmpty {
+                                let suffixColor = isMe ? Color.orange.opacity(0.6) : baseColor.opacity(0.6)
+                                Text(suffix)
+                                    .font(.system(size: 14, design: .monospaced))
+                                    .foregroundColor(suffixColor)
+                            }
+                        }
 
                         if let icon = item.enc.icon, !isMe {
                             Image(systemName: icon)
@@ -91,4 +101,17 @@ struct MeshPeerList: View {
             }
         }
     }
+}
+
+// Helper to split a trailing #abcd suffix
+private func splitSuffix(from name: String) -> (String, String) {
+    guard name.count >= 5 else { return (name, "") }
+    let suffix = String(name.suffix(5))
+    if suffix.first == "#", suffix.dropFirst().allSatisfy({ c in
+        ("0"..."9").contains(String(c)) || ("a"..."f").contains(String(c)) || ("A"..."F").contains(String(c))
+    }) {
+        let base = String(name.dropLast(5))
+        return (base, suffix)
+    }
+    return (name, "")
 }
