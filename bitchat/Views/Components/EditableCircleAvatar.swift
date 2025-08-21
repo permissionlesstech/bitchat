@@ -11,7 +11,7 @@ struct EditableCircleAvatar: View {
     var image: Image? = nil
     var diameter: CGFloat = 84
     var onEdit: () -> Void = {}
-    var color: Color = Color.blue
+    @Binding var color: Color
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
@@ -42,5 +42,5 @@ struct EditableCircleAvatar: View {
 }
 
 #Preview {
-    EditableCircleAvatar()
+    EditableCircleAvatar(color: .constant(.blue))
 }

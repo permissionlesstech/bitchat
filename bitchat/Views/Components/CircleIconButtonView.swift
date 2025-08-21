@@ -10,9 +10,9 @@ import SwiftUI
 struct CircleIconButtonView: View {
     var systemIcon: String = "plus"
     var diameter: CGFloat = 44
-    var action: () -> Void = {}
     var accessibilityLabel: String? = "Creates a new group"
     var accessibilityText: String? = "Add"
+    var action: () -> Void = {}
     
     var body: some View {
         Button(action: action) {

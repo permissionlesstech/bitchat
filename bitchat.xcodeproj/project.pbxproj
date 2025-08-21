@@ -75,6 +75,8 @@
 		31D147471B9F4E2815352DDA /* LinkPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AC141774F6671FCDC347DC7 /* LinkPreviewView.swift */; };
 		375158A22E55EA09000DBA7C /* ChatRoomView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 375158A12E55EA09000DBA7C /* ChatRoomView.swift */; };
 		375158A32E55EA09000DBA7C /* ChatRoomView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 375158A12E55EA09000DBA7C /* ChatRoomView.swift */; };
+		375158B72E5765A2000DBA7C /* CreateCircleDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = 375158B62E5765A2000DBA7C /* CreateCircleDraft.swift */; };
+		375158B82E5765A2000DBA7C /* CreateCircleDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = 375158B62E5765A2000DBA7C /* CreateCircleDraft.swift */; };
 		37548C0A2E54D0790060AB1C /* NearbyProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37548C092E54D0790060AB1C /* NearbyProfile.swift */; };
 		37548C0B2E54D0790060AB1C /* NearbyProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37548C092E54D0790060AB1C /* NearbyProfile.swift */; };
 		37548C162E5521F40060AB1C /* ChatItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37548C152E5521F40060AB1C /* ChatItem.swift */; };
@@ -193,6 +195,7 @@
 		3448F84BF86A42A3CC4A9379 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
 		3668EEBB42FD4A24D5D83B7B /* bitchatShareExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = bitchatShareExtension.entitlements; sourceTree = "<group>"; };
 		375158A12E55EA09000DBA7C /* ChatRoomView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatRoomView.swift; sourceTree = "<group>"; };
+		375158B62E5765A2000DBA7C /* CreateCircleDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateCircleDraft.swift; sourceTree = "<group>"; };
 		37548C092E54D0790060AB1C /* NearbyProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NearbyProfile.swift; sourceTree = "<group>"; };
 		37548C152E5521F40060AB1C /* ChatItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatItem.swift; sourceTree = "<group>"; };
 		37FFE43E2E54265C009DB4CB /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
@@ -377,6 +380,7 @@
 			isa = PBXGroup;
 			children = (
 				E6B8F7B7D55092C2540A7996 /* ChatViewModel.swift */,
+				375158B62E5765A2000DBA7C /* CreateCircleDraft.swift */,
 			);
 			path = ViewModels;
 			sourceTree = "<group>";
@@ -675,6 +679,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				375158B72E5765A2000DBA7C /* CreateCircleDraft.swift in Sources */,
 				AD11E46940D742AEAF547EB2 /* AppInfoView.swift in Sources */,
 				37FFE4462E54266D009DB4CB /* ContentView 2.swift in Sources */,
 				37FFE4472E54266D009DB4CB /* CircleApp.swift in Sources */,
@@ -724,6 +729,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				375158B82E5765A2000DBA7C /* CreateCircleDraft.swift in Sources */,
 				ABAF130D88561F4A646F0430 /* AppInfoView.swift in Sources */,
 				37FFE4482E54266D009DB4CB /* ContentView 2.swift in Sources */,
 				37FFE4492E54266D009DB4CB /* CircleApp.swift in Sources */,

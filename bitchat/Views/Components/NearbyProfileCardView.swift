@@ -32,7 +32,7 @@ struct NearbyProfileCardView: View {
                 }
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("\(profile.name). \(profile.team)")
+            .accessibilityLabel("\(profile.name)")
             .accessibilityHint("Opens \(profile.name)'s profile")
             .accessibilityAddTraits(.isButton)
         } else {
@@ -41,7 +41,7 @@ struct NearbyProfileCardView: View {
                 labels
             }
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("\(profile.name). \(profile.team)")
+            .accessibilityLabel("\(profile.name)")
         }
     }
     
@@ -78,10 +78,6 @@ struct NearbyProfileCardView: View {
             Text(profile.name)
                 .font(.subheadline)
                 .foregroundStyle(.primary)
-                .lineLimit(1)
-            Text(profile.team)
-                .font(.footnote)
-                .foregroundStyle(.brandPrimary)
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity)
