@@ -45,15 +45,17 @@ struct GeohashPeopleList: View {
                             let teleported = false
                             #endif
                             let icon = teleported ? "face.dashed" : "face.smiling"
-                            Image(systemName: icon).font(.system(size: 12)).foregroundColor(textColor)
+                            let rowColor: Color = isMe ? .orange : textColor
+                            Image(systemName: icon).font(.system(size: 12)).foregroundColor(rowColor)
                         }
                         let (base, suffix) = splitSuffix(from: person.displayName)
                         let isMe = person.id == myHex
                         HStack(spacing: 0) {
+                            let rowColor: Color = isMe ? .orange : textColor
                             Text(base)
                                 .font(.system(size: 14, design: .monospaced))
                                 .fontWeight(isMe ? .bold : .regular)
-                                .foregroundColor(textColor)
+                                .foregroundColor(rowColor)
                             if !suffix.isEmpty {
                                 let suffixColor = isMe ? Color.orange.opacity(0.6) : textColor.opacity(0.6)
                                 Text(suffix)
@@ -63,7 +65,7 @@ struct GeohashPeopleList: View {
                             if isMe {
                                 Text(" (you)")
                                     .font(.system(size: 14, design: .monospaced))
-                                    .foregroundColor(textColor)
+                                    .foregroundColor(rowColor)
                             }
                         }
                         Spacer()
