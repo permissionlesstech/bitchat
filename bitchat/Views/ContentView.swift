@@ -834,16 +834,9 @@ struct ContentView: View {
             
             Spacer()
             
-            // People counter with unread indicator
-            HStack(spacing: 4) {
-                if viewModel.hasAnyUnreadMessages {
-                    Image(systemName: "envelope.fill")
-                        .font(.system(size: 12))
-                        .foregroundColor(Color.orange)
-                        .accessibilityLabel("Unread private messages")
-                }
-
-                // People count depends on active channel
+            // Channel badge + dynamic spacing + people counter
+            HStack(spacing: 10) {
+                // Unread icon immediately to the left of the channel badge (independent from channel button)
                 #if os(iOS)
                 let cc = channelPeopleCountAndColor()
                 let otherPeersCount = cc.0
@@ -861,25 +854,30 @@ struct ContentView: View {
                 let countColor: Color = (peerCounts.mesh > 0) ? meshBlue : Color.secondary
                 #endif
                 
-                // Location channels button '#'
+                // Unread indicator
                 #if os(iOS)
+                if viewModel.hasAnyUnreadMessages {
+                    Button(action: { viewModel.openMostRelevantPrivateChat() }) {
+                        Image(systemName: "envelope.fill")
+                            .font(.system(size: 12))
+                            .foregroundColor(Color.orange)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Open unread private chat")
+                }
+                // Location channels button '#'
                 Button(action: { showLocationChannelsSheet = true }) {
-                    #if os(iOS)
                     let badgeText: String = {
                         switch locationManager.selectedChannel {
-                        case .mesh:
-                            return "#mesh"
-                        case .location(let ch):
-                            return "#\(ch.geohash)"
+                        case .mesh: return "#mesh"
+                        case .location(let ch): return "#\(ch.geohash)"
                         }
                     }()
                     let badgeColor: Color = {
                         switch locationManager.selectedChannel {
                         case .mesh:
-                            // Darker, more neutral blue (less purple hue)
                             return Color(hue: 0.60, saturation: 0.85, brightness: 0.82)
                         case .location:
-                            // Standard green to avoid overly bright appearance in light mode
                             return (colorScheme == .dark) ? Color.green : Color(red: 0, green: 0.5, blue: 0)
                         }
                     }()
@@ -887,19 +885,11 @@ struct ContentView: View {
                         .font(.system(size: 14, design: .monospaced))
                         .foregroundColor(badgeColor)
                         .lineLimit(1)
-                        .truncationMode(.head)
-                        .frame(minWidth: 60, maxWidth: 160, alignment: .trailing)
-                        .fixedSize(horizontal: false, vertical: false)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .layoutPriority(2)
                         .accessibilityLabel("location channels")
-                    #else
-                    Text("#")
-                        .font(.system(size: 14, design: .monospaced))
-                        .foregroundColor(secondaryTextColor)
-                        .accessibilityLabel("location channels")
-                    #endif
                 }
                 .buttonStyle(.plain)
-                .padding(.trailing, 6)
                 #endif
 
                 HStack(spacing: 4) {
