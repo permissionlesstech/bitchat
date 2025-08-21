@@ -95,6 +95,12 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     
     @Published var messages: [BitchatMessage] = []
     private let maxMessages = 1337 // Maximum messages before oldest are removed
+    
+    // Message persistence service
+    private let messagePersistenceService = MessagePersistenceService.shared
+    
+    // Chat history synchronization service
+    private let chatHistorySyncService = ChatHistorySyncService.shared
     @Published var isConnected = false
     private var hasNotifiedNetworkAvailable = false
     private var recentlySeenPeers: Set<String> = []
@@ -118,6 +124,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     private let commandProcessor: CommandProcessor
     private let messageRouter: MessageRouter
     private let privateChatManager: PrivateChatManager
+    private let persistentPrivateChatManager: PersistentPrivateChatManager?
     private let unifiedPeerService: UnifiedPeerService
     private let autocompleteService: AutocompleteService
     
@@ -132,16 +139,47 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     var selectedPrivateChatPeer: String? { 
         get { privateChatManager.selectedPeer }
         set { 
+            // Save current private messages before switching
+            if privateChatManager.selectedPeer != nil && newValue != privateChatManager.selectedPeer {
+                savePrivateMessages()
+            }
+            
             if let peer = newValue {
-                privateChatManager.startChat(with: peer)
+                Task { @MainActor in
+                    startPrivateChat(with: peer)
+                }
             } else {
-                privateChatManager.endChat()
+                endPrivateChat()
             }
         }
     }
     var unreadPrivateMessages: Set<String> { 
         get { privateChatManager.unreadMessages }
         set { privateChatManager.unreadMessages = newValue }
+    }
+    
+    // MARK: - Persistent Private Chat Properties
+    
+    /// Get all persistent private chats
+    var persistentChats: [PersistentPrivateChat] {
+        return persistentPrivateChatManager?.getAllChats() ?? []
+    }
+    
+    /// Get currently selected persistent chat
+    var selectedPersistentChat: PersistentPrivateChat? {
+        guard let manager = persistentPrivateChatManager,
+              let fingerprint = manager.selectedChatFingerprint else { return nil }
+        return manager.getChat(fingerprint: fingerprint)
+    }
+    
+    /// Get total unread count from persistent chats
+    var totalUnreadCount: Int {
+        return persistentPrivateChatManager?.persistentChats.values.reduce(0) { $0 + $1.unreadCount } ?? 0
+    }
+    
+    /// Access to persistent private chat manager (for UI)
+    var persistentChatManager: PersistentPrivateChatManager? {
+        return persistentPrivateChatManager
     }
     
     /// Check if there are any unread messages (including from temporary Nostr peer IDs)
@@ -288,11 +326,13 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         // Initialize services
         self.commandProcessor = CommandProcessor()
         self.privateChatManager = PrivateChatManager(meshService: meshService)
+        self.persistentPrivateChatManager = PersistentPrivateChatManager(meshService: meshService)
         self.unifiedPeerService = UnifiedPeerService(meshService: meshService)
         let nostrTransport = NostrTransport()
         self.messageRouter = MessageRouter(mesh: meshService, nostr: nostrTransport)
         // Route receipts from PrivateChatManager through MessageRouter
         self.privateChatManager.messageRouter = self.messageRouter
+        self.persistentPrivateChatManager?.messageRouter = self.messageRouter
         self.autocompleteService = AutocompleteService()
         
         // Wire up dependencies
@@ -304,10 +344,18 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 self?.objectWillChange.send()
             }
             .store(in: &cancellables)
+        
+        // Subscribe to privateChats changes to trigger UI updates
+        privateChatManager.$privateChats
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
         self.commandProcessor.meshService = meshService
         
         loadNickname()
         loadVerifiedFingerprints()
+        loadPersistedMessages()
         meshService.delegate = self
         
         // Log startup info
@@ -505,6 +553,292 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         saveNickname()
     }
     
+    // MARK: - Message Persistence
+    
+    /// Load persisted messages from storage
+    private func loadPersistedMessages() {
+        // Load public messages
+        let publicMessages = messagePersistenceService.loadPublicMessages()
+        messages = publicMessages
+        
+        // Load private messages
+        let privateMessages = messagePersistenceService.loadPrivateMessages()
+        privateChatManager.privateChats = privateMessages
+        
+        // Debug logging
+        print("📱 Loaded \(publicMessages.count) public messages and \(privateMessages.count) private chats")
+        for (peerID, messages) in privateMessages {
+            print("📱 Private chat with \(peerID): \(messages.count) messages")
+        }
+    }
+    
+    /// Save current messages to persistent storage
+    func saveMessages() {
+        // Save public messages
+        messagePersistenceService.savePublicMessages(messages)
+        
+        // Save private messages
+        messagePersistenceService.savePrivateMessages(privateChats)
+    }
+    
+    /// Save messages after private chat modifications
+    func savePrivateMessages() {
+        print("💾 Saving private messages: \(privateChats.count) chats")
+        for (peerID, messages) in privateChats {
+            print("💾 Saving private chat with \(peerID): \(messages.count) messages")
+        }
+        messagePersistenceService.savePrivateMessages(privateChats)
+    }
+    
+    // MARK: - Persistent Private Chat Management
+    
+    /// Start a persistent chat with a peer using their fingerprint
+    func startPersistentChat(with fingerprint: String) {
+        persistentPrivateChatManager?.startChat(with: fingerprint)
+        
+        // Update legacy selection for compatibility
+        if let peerID = persistentPrivateChatManager?.getCurrentPeerID(for: fingerprint) {
+            selectedPrivateChatPeer = peerID
+        }
+        
+        print("🔵 Started persistent chat (\(fingerprint.prefix(8)))")
+    }
+    
+    /// Send message in persistent chat
+    func sendPersistentMessage(_ content: String, to fingerprint: String) {
+        persistentPrivateChatManager?.sendMessage(
+            content,
+            to: fingerprint,
+            senderPeerID: meshService.myPeerID,
+            senderNickname: nickname
+        )
+        
+        print("📨 Sent message to persistent chat (\(fingerprint.prefix(8)))")
+    }
+    
+    /// Handle peer coming online - update persistent chats
+    func handlePeerOnline(peerID: String, fingerprint: String, nickname: String) {
+        persistentPrivateChatManager?.peerCameOnline(
+            peerID: peerID,
+            fingerprint: fingerprint,
+            nickname: nickname
+        )
+        
+        print("🟢 Updated persistent chat - peer online: \(nickname)")
+    }
+    
+    /// Handle peer going offline - update persistent chats
+    func handlePeerOffline(peerID: String) {
+        persistentPrivateChatManager?.peerWentOffline(peerID: peerID)
+        
+        print("⚫ Updated persistent chat - peer offline")
+    }
+    
+    /// Get or create persistent chat for a peer
+    func getOrCreatePersistentChat(fingerprint: String, peerNickname: String, peerID: String? = nil) -> PersistentPrivateChat? {
+        return persistentPrivateChatManager?.getOrCreateChat(
+            fingerprint: fingerprint,
+            peerNickname: peerNickname,
+            peerID: peerID
+        )
+    }
+    
+    /// Delete a persistent chat permanently
+    func deletePersistentChat(fingerprint: String) {
+        persistentPrivateChatManager?.deleteChat(fingerprint: fingerprint)
+        
+        print("🗑️ Deleted persistent chat (\(fingerprint.prefix(8)))")
+    }
+    
+    // MARK: - Chat History Synchronization
+    
+    /// Request chat history from a peer when starting a private chat
+    func requestChatHistory(from peerID: String) {
+        // Don't request if sync is already in progress
+        guard !chatHistorySyncService.isSyncInProgress(for: peerID) else {
+            print("Chat history sync already in progress for \(peerID)")
+            return
+        }
+        
+        // Don't request if we don't have a Noise session established
+        guard meshService.getNoiseService().hasEstablishedSession(with: peerID) else {
+            print("No Noise session established with \(peerID), cannot request history")
+            return
+        }
+        
+        // Create history request
+        let lastMessageID = privateChats[peerID]?.last?.id
+        let request = HistoryRequest(lastMessageID: lastMessageID)
+        
+        // Store request for response matching
+        chatHistorySyncService.storePendingRequest(request, for: peerID)
+        
+        // Mark sync as in progress
+        chatHistorySyncService.startSync(for: peerID)
+        
+        // Encode and send request
+        if let requestData = chatHistorySyncService.encodeHistoryRequest(request) {
+            // Send via Noise encrypted channel
+            meshService.getNoiseService().sendEncryptedPayload(
+                type: .historyRequest,
+                payload: requestData,
+                to: peerID
+            )
+            
+            print("📥 Requested chat history from \(peerID)")
+        }
+    }
+    
+    /// Handle incoming chat history request
+    func handleHistoryRequest(from peerID: String, requestData: Data) {
+        guard let request = chatHistorySyncService.decodeHistoryRequest(from: requestData) else {
+            print("Failed to decode history request from \(peerID)")
+            return
+        }
+        
+        print("📥 Received history request from \(peerID)")
+        
+        // Get our messages for this peer
+        let ourMessages = privateChats[peerID] ?? []
+        
+        // Filter messages based on lastMessageID if provided
+        var messagesToSend = ourMessages
+        if let lastMessageID = request.lastMessageID {
+            if let lastIndex = ourMessages.lastIndex(where: { $0.id == lastMessageID }) {
+                messagesToSend = Array(ourMessages.suffix(from: lastIndex + 1))
+            }
+        }
+        
+        // Limit messages to prevent large payloads (max 50 messages per response)
+        let limitedMessages = Array(messagesToSend.suffix(50))
+        let hasMore = messagesToSend.count > 50
+        
+        // Create response
+        let response = HistoryResponse(
+            requestID: request.requestID,
+            messages: limitedMessages,
+            hasMore: hasMore
+        )
+        
+        // Encode and send response
+        if let responseData = chatHistorySyncService.encodeHistoryResponse(response) {
+            meshService.getNoiseService().sendEncryptedPayload(
+                type: .historyResponse,
+                payload: responseData,
+                to: peerID
+            )
+            
+            print("📤 Sent \(limitedMessages.count) messages to \(peerID)")
+        }
+    }
+    
+    /// Handle incoming chat history response
+    func handleHistoryResponse(from peerID: String, responseData: Data) {
+        guard let response = chatHistorySyncService.decodeHistoryResponse(from: responseData) else {
+            print("Failed to decode history response from \(peerID)")
+            return
+        }
+        
+        print("📥 Received \(response.messages.count) messages from \(peerID)")
+        
+        // Get our current messages
+        let ourMessages = privateChats[peerID] ?? []
+        
+        // Find missing messages
+        let missingMessages = chatHistorySyncService.findMissingMessages(
+            local: ourMessages,
+            remote: response.messages
+        )
+        
+        // Add missing messages to our chat
+        if !missingMessages.isEmpty {
+            if privateChats[peerID] == nil {
+                privateChats[peerID] = []
+            }
+            
+            for message in missingMessages {
+                privateChats[peerID]?.append(message)
+            }
+            
+            // Sort by timestamp
+            privateChats[peerID]?.sort { $0.timestamp < $1.timestamp }
+            
+            // Save updated messages
+            savePrivateMessages()
+            
+            print("📥 Added \(missingMessages.count) missing messages from \(peerID)")
+        }
+        
+        // If there are more messages to sync, request them
+        if response.hasMore {
+            let nextRequest = HistoryRequest(lastMessageID: response.messages.last?.id)
+            chatHistorySyncService.storePendingRequest(nextRequest, for: peerID)
+            
+            if let requestData = chatHistorySyncService.encodeHistoryRequest(nextRequest) {
+                meshService.getNoiseService().sendEncryptedPayload(
+                    type: .historyRequest,
+                    payload: requestData,
+                    to: peerID
+                )
+                
+                print("📥 Requesting more messages from \(peerID)")
+            }
+        } else {
+            // Sync completed
+            chatHistorySyncService.endSync(for: peerID)
+            print("✅ Chat history sync completed with \(peerID)")
+        }
+    }
+    
+    /// Send missing messages to a peer
+    func sendMissingMessages(to peerID: String) {
+        // Get our messages
+        let ourMessages = privateChats[peerID] ?? []
+        
+        // For now, we'll send all messages (in a real implementation, 
+        // we'd compare with what the peer has)
+        for message in ourMessages {
+            let sync = HistorySync(messageID: message.id, message: message)
+            
+            if let syncData = chatHistorySyncService.encodeHistorySync(sync) {
+                meshService.getNoiseService().sendEncryptedPayload(
+                    type: .historySync,
+                    payload: syncData,
+                    to: peerID
+                )
+            }
+        }
+        
+        print("📤 Sent \(ourMessages.count) messages to \(peerID)")
+    }
+    
+    /// Handle incoming individual message sync
+    func handleHistorySync(from peerID: String, syncData: Data) {
+        guard let sync = chatHistorySyncService.decodeHistorySync(from: syncData) else {
+            print("Failed to decode history sync from \(peerID)")
+            return
+        }
+        
+        // Check if we already have this message
+        let ourMessages = privateChats[peerID] ?? []
+        let messageExists = ourMessages.contains { $0.id == sync.messageID }
+        
+        if !messageExists {
+            // Add the message
+            if privateChats[peerID] == nil {
+                privateChats[peerID] = []
+            }
+            
+            privateChats[peerID]?.append(sync.message)
+            privateChats[peerID]?.sort { $0.timestamp < $1.timestamp }
+            
+            // Save updated messages
+            savePrivateMessages()
+            
+            print("📥 Added missing message \(sync.messageID) from \(peerID)")
+        }
+    }
+    
     // MARK: - Favorites Management
     
     // MARK: - Blocked Users Management (Delegated to PeerStateManager)
@@ -652,22 +986,25 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         // Check if we have a claimed nickname for this peer
         let peerNicknames = meshService.getPeerNicknames()
         if let nickname = peerNicknames[peerID], nickname != "Unknown" && nickname != "anon\(peerID.prefix(4))" {
-            // Update or create social identity with the claimed nickname
-            if var identity = SecureIdentityStateManager.shared.getSocialIdentity(for: fingerprintStr) {
-                identity.claimedNickname = nickname
-                SecureIdentityStateManager.shared.updateSocialIdentity(identity)
-            } else {
-                let newIdentity = SocialIdentity(
-                    fingerprint: fingerprintStr,
-                    localPetname: nil,
-                    claimedNickname: nickname,
-                    trustLevel: .casual,
-                    isFavorite: false,
-                    isBlocked: false,
-                    notes: nil
-                )
-                SecureIdentityStateManager.shared.updateSocialIdentity(newIdentity)
-            }
+                    // Update persistent chat manager with peer online status
+        handlePeerOnline(peerID: peerID, fingerprint: fingerprintStr, nickname: nickname)
+        
+        // Update or create social identity with the claimed nickname
+        if var identity = SecureIdentityStateManager.shared.getSocialIdentity(for: fingerprintStr) {
+            identity.claimedNickname = nickname
+            SecureIdentityStateManager.shared.updateSocialIdentity(identity)
+        } else {
+            let newIdentity = SocialIdentity(
+                fingerprint: fingerprintStr,
+                localPetname: nil,
+                claimedNickname: nickname,
+                trustLevel: .casual,
+                isFavorite: false,
+                isBlocked: false,
+                notes: nil
+            )
+            SecureIdentityStateManager.shared.updateSocialIdentity(newIdentity)
+        }
         }
         
         // Check if this peer is the one we're in a private chat with
@@ -877,6 +1214,9 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         privateChats[peerID]?.append(message)
         trimPrivateChatMessagesIfNeeded(for: peerID)
         
+        // Save private messages after adding new message
+        savePrivateMessages()
+        
         // Trigger UI update for sent message
         objectWillChange.send()
         
@@ -1009,6 +1349,9 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     // Sort by timestamp
                     privateChats[peerID]?.sort { $0.timestamp < $1.timestamp }
                     
+                    // Save private messages after consolidation
+                    savePrivateMessages()
+                    
                     // Only transfer unread status if there are actual recent unread messages
                     if hasActualUnreadMessages {
                         unreadPrivateMessages.insert(peerID)
@@ -1139,9 +1482,15 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         // Also mark messages as read for Nostr ACKs
         // This ensures read receipts are sent even for consolidated messages
         markPrivateMessagesAsRead(from: peerID)
+        
+        // Request chat history synchronization
+        requestChatHistory(from: peerID)
     }
     
     func endPrivateChat() {
+        // Save private messages before ending the chat
+        savePrivateMessages()
+        
         selectedPrivateChatPeer = nil
         selectedPrivateChatFingerprint = nil
     }
@@ -1383,12 +1732,17 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     }
     
     @objc private func appWillResignActive() {
+        // Save messages before app goes to background
+        saveMessages()
         userDefaults.synchronize()
     }
     
     @objc func applicationWillTerminate() {
         // Send leave message to all peers
         meshService.stopServices()
+        
+        // Save messages before app terminates
+        saveMessages()
         
         // Force save any pending identity changes (verifications, favorites, etc)
         SecureIdentityStateManager.shared.forceSave()
@@ -1557,6 +1911,12 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         messages.removeAll()
         privateChatManager.privateChats.removeAll()
         privateChatManager.unreadMessages.removeAll()
+        
+        // Clear persisted messages
+        messagePersistenceService.clearAllMessages()
+        
+        // Clear persistent private chats
+        persistentPrivateChatManager?.clearAllChats()
         
         // Delete all keychain data (including Noise and Nostr keys)
         _ = KeychainManager.shared.deleteAllKeychainData()
@@ -2138,6 +2498,9 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         messages.append(message)
         messages.sort { $0.timestamp < $1.timestamp }
         trimMessagesIfNeeded()
+        
+        // Save messages after adding new message
+        saveMessages()
     }
     
     private func addPrivateMessage(_ message: BitchatMessage, for peerID: String) {
@@ -2414,6 +2777,16 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                         objectWillChange.send()
                     }
                 }
+                
+            // Chat history synchronization
+            case .historyRequest:
+                handleHistoryRequest(from: peerID, requestData: payload)
+                
+            case .historyResponse:
+                handleHistoryResponse(from: peerID, responseData: payload)
+                
+            case .historySync:
+                handleHistorySync(from: peerID, syncData: payload)
             }
         }
     }
@@ -3032,6 +3405,16 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     privateChats[targetPeerID]?[idx].deliveryStatus = .read(by: peerName, at: Date())
                     objectWillChange.send()
                 }
+                
+            // Chat history synchronization
+            case .historyRequest:
+                handleHistoryRequest(from: targetPeerID, requestData: noisePayload.data)
+                
+            case .historyResponse:
+                handleHistoryResponse(from: targetPeerID, responseData: noisePayload.data)
+                
+            case .historySync:
+                handleHistorySync(from: targetPeerID, syncData: noisePayload.data)
             }
             
         } catch {
@@ -3574,6 +3957,9 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         chats[peerID]?.append(messageToStore)
         privateChats = chats
         trimPrivateChatMessagesIfNeeded(for: peerID)
+        
+        // Save private messages after adding incoming message
+        savePrivateMessages()
         
         // Trigger UI update
         objectWillChange.send()

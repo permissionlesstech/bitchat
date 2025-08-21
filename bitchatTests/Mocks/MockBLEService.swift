@@ -275,6 +275,10 @@ class MockBLEService: NSObject {
         return NoiseEncryptionService()
     }
     
+    func setMeshService(_ service: Transport?) {
+        // Mock implementation
+    }
+    
     func getFingerprint(for peerID: String) -> String? {
         return nil
     }
@@ -348,6 +352,10 @@ class MockBLEService: NSObject {
     
     func sendPrivateMessage(_ content: String, to recipientPeerID: String, recipientNickname: String, messageID: String? = nil) {
         sendPrivateMessage(content, to: recipientPeerID, recipientNickname: recipientNickname, messageID: messageID ?? UUID().uuidString)
+    }
+    
+    func sendNoiseEncryptedPayload(_ encryptedData: Data, to peerID: String) {
+        // Mock implementation
     }
 }
 

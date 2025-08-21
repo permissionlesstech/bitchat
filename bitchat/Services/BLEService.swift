@@ -161,6 +161,9 @@ final class BLEService: NSObject {
             }
         }
         
+        // Set mesh service reference in noise service
+        noiseService.setMeshService(self)
+        
         // Set up application state tracking (iOS only)
         #if os(iOS)
         // Check initial state on main thread
@@ -473,6 +476,10 @@ final class BLEService: NSObject {
         return noiseService
     }
     
+    func setMeshService(_ service: Transport?) {
+        // Not needed for BLEService as it is the mesh service itself
+    }
+    
     func getFingerprint(for peerID: String) -> String? {
         return getPeerFingerprint(peerID)
     }
@@ -596,6 +603,44 @@ final class BLEService: NSObject {
             // Notify delegate that message is pending
             notifyUI { [weak self] in
                 self?.delegate?.didUpdateMessageDeliveryStatus(messageID, status: .sending)
+            }
+        }
+    }
+    
+    /// Send encrypted Noise payload to a specific peer
+    func sendNoiseEncryptedPayload(_ encryptedData: Data, to peerID: String) {
+        // Convert peerID to Data
+        var recipientData = Data()
+        var tempID = peerID
+        while tempID.count >= 2 {
+            let hexByte = String(tempID.prefix(2))
+            if let byte = UInt8(hexByte, radix: 16) {
+                recipientData.append(byte)
+            }
+            tempID = String(tempID.dropFirst(2))
+        }
+        if tempID.count == 1 {
+            if let byte = UInt8(tempID, radix: 16) {
+                recipientData.append(byte)
+            }
+        }
+        
+        let packet = BitchatPacket(
+            type: MessageType.noiseEncrypted.rawValue,
+            senderID: Data(hexString: myPeerID) ?? Data(),
+            recipientID: recipientData,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: encryptedData,
+            signature: nil,
+            ttl: messageTTL
+        )
+        
+        // Send the packet
+        if DispatchQueue.getSpecific(key: messageQueueKey) != nil {
+            broadcastPacket(packet)
+        } else {
+            messageQueue.async { [weak self] in
+                self?.broadcastPacket(packet)
             }
         }
     }

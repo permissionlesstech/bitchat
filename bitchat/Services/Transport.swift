@@ -37,6 +37,7 @@ protocol Transport: AnyObject {
     func getNoiseSessionState(for peerID: String) -> LazyHandshakeState
     func triggerHandshake(with peerID: String)
     func getNoiseService() -> NoiseEncryptionService
+    func setMeshService(_ service: Transport?)
 
     // Messaging
     func sendMessage(_ content: String, mentions: [String])
@@ -45,6 +46,7 @@ protocol Transport: AnyObject {
     func sendFavoriteNotification(to peerID: String, isFavorite: Bool)
     func sendBroadcastAnnounce()
     func sendDeliveryAck(for messageID: String, to peerID: String)
+    func sendNoiseEncryptedPayload(_ encryptedData: Data, to peerID: String)
 
     // Peer snapshots (for non-UI services)
     var peerSnapshotPublisher: AnyPublisher<[TransportPeerSnapshot], Never> { get }

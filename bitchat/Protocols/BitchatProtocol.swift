@@ -156,11 +156,19 @@ enum NoisePayloadType: UInt8 {
     case readReceipt = 0x02         // Message was read
     case delivered = 0x03           // Message was delivered
     
+    // Chat history synchronization
+    case historyRequest = 0x04      // Request chat history from peer
+    case historyResponse = 0x05     // Response with chat history
+    case historySync = 0x06         // Sync missing messages
+    
     var description: String {
         switch self {
         case .privateMessage: return "privateMessage"
         case .readReceipt: return "readReceipt"
         case .delivered: return "delivered"
+        case .historyRequest: return "historyRequest"
+        case .historyResponse: return "historyResponse"
+        case .historySync: return "historySync"
         }
     }
 }

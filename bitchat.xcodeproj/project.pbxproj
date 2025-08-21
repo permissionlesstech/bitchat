@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 63;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -15,6 +15,16 @@
 		10E68BB889356219189E38EC /* BitchatApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF625BB3AD919322C01A46B2 /* BitchatApp.swift */; };
 		117F3B1B7D3D372F459DD998 /* NostrTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B4809E690DE48B9AEE36279 /* NostrTransport.swift */; };
 		132DF1E24B4E9C7DCDAD4376 /* FingerprintView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9195CDC7EB236AFBC9A4D41A /* FingerprintView.swift */; };
+		14646DE62E5571B900D93BD0 /* MessagePersistenceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14646DE52E5571B900D93BD0 /* MessagePersistenceService.swift */; };
+		14646DE72E5571B900D93BD0 /* MessagePersistenceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14646DE52E5571B900D93BD0 /* MessagePersistenceService.swift */; };
+		14646DE92E55760800D93BD0 /* ChatHistorySyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14646DE82E55760800D93BD0 /* ChatHistorySyncService.swift */; };
+		14646DEA2E55760800D93BD0 /* ChatHistorySyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14646DE82E55760800D93BD0 /* ChatHistorySyncService.swift */; };
+		14646DEF2E557B0C00D93BD0 /* HistoryRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14646DEE2E557B0C00D93BD0 /* HistoryRequest.swift */; };
+		14646DF02E557B0C00D93BD0 /* HistoryRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14646DEE2E557B0C00D93BD0 /* HistoryRequest.swift */; };
+		14646DF22E55849600D93BD0 /* PersistentPrivateChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14646DF12E55849600D93BD0 /* PersistentPrivateChat.swift */; };
+		14646DF32E55849600D93BD0 /* PersistentPrivateChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14646DF12E55849600D93BD0 /* PersistentPrivateChat.swift */; };
+		14646DF52E5584A700D93BD0 /* PersistentPrivateChatManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14646DF42E5584A700D93BD0 /* PersistentPrivateChatManager.swift */; };
+		14646DF62E5584A700D93BD0 /* PersistentPrivateChatManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14646DF42E5584A700D93BD0 /* PersistentPrivateChatManager.swift */; };
 		17901751FD8010AFC8E750F2 /* bitchatShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 61F92EBA29C47C0FCC482F1F /* bitchatShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		1BD3295CA4D57C93C0A6522C /* FragmentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F2899A34E217B55CA551A29 /* FragmentationTests.swift */; };
 		1D9674FA5F998503831DC281 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A08E03AA0C63E97C91749AEC /* ContentView.swift */; };
@@ -167,6 +177,11 @@
 		0B3CC6FA298729906109F61B /* BinaryProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BinaryProtocolTests.swift; sourceTree = "<group>"; };
 		11186E29A064E8D210880E1B /* BitchatPeer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitchatPeer.swift; sourceTree = "<group>"; };
 		136696FC4436A02D98CE6A77 /* KeychainManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainManager.swift; sourceTree = "<group>"; };
+		14646DE52E5571B900D93BD0 /* MessagePersistenceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessagePersistenceService.swift; sourceTree = "<group>"; };
+		14646DE82E55760800D93BD0 /* ChatHistorySyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatHistorySyncService.swift; sourceTree = "<group>"; };
+		14646DEE2E557B0C00D93BD0 /* HistoryRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryRequest.swift; sourceTree = "<group>"; };
+		14646DF12E55849600D93BD0 /* PersistentPrivateChat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistentPrivateChat.swift; sourceTree = "<group>"; };
+		14646DF42E5584A700D93BD0 /* PersistentPrivateChatManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistentPrivateChatManager.swift; sourceTree = "<group>"; };
 		1B4809E690DE48B9AEE36279 /* NostrTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NostrTransport.swift; sourceTree = "<group>"; };
 		229F17B68CFF7AB1BC91C847 /* BitchatProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitchatProtocol.swift; sourceTree = "<group>"; };
 		2C82877869239E1E02FF9A88 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
@@ -192,15 +207,15 @@
 		5BC5AB43F4A8FB62C935CD74 /* IntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntegrationTests.swift; sourceTree = "<group>"; };
 		5C5190B5C75639CA5ECFEF16 /* Packets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Packets.swift; sourceTree = "<group>"; };
 		5F8043995007F0D84438EDD9 /* NostrIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NostrIdentity.swift; sourceTree = "<group>"; };
-		61F92EBA29C47C0FCC482F1F /* bitchatShareExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = bitchatShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		61F92EBA29C47C0FCC482F1F /* bitchatShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = bitchatShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		763E0DBA9492A654FC0CDCB9 /* AppInfoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppInfoView.swift; sourceTree = "<group>"; };
 		78595178957244CBDF7E79B6 /* NostrRelayManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NostrRelayManager.swift; sourceTree = "<group>"; };
 		8A262EDDC04B7D7B5E31F321 /* PrivateChatE2ETests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivateChatE2ETests.swift; sourceTree = "<group>"; };
-		8F3A7C058C2C8E1A06C8CF8B /* bitchat_macOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = bitchat_macOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		8F3A7C058C2C8E1A06C8CF8B /* bitchat.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = bitchat.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		90CB7A5CD1D1A521CD31F380 /* InputValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputValidator.swift; sourceTree = "<group>"; };
 		9195CDC7EB236AFBC9A4D41A /* FingerprintView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FingerprintView.swift; sourceTree = "<group>"; };
 		95F16C3A4A5621C74461D8D3 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
-		96D0D41CA19EE5A772AA8434 /* bitchat_iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = bitchat_iOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		96D0D41CA19EE5A772AA8434 /* bitchat.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = bitchat.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9AB6BE4ABD7F5088E9865E56 /* NoiseSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoiseSession.swift; sourceTree = "<group>"; };
 		9AC141774F6671FCDC347DC7 /* LinkPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkPreviewView.swift; sourceTree = "<group>"; };
 		9E7C4CA419510D61C4FE47B2 /* PrivateChatManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivateChatManager.swift; sourceTree = "<group>"; };
@@ -209,7 +224,7 @@
 		A3A1756A6D49A9B037F31A23 /* NostrEmbeddedBitChat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NostrEmbeddedBitChat.swift; sourceTree = "<group>"; };
 		B0BF581F9D98C90EA9867BCF /* MessageDeduplicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageDeduplicator.swift; sourceTree = "<group>"; };
 		B1D6A89B36A3D31E590B94E5 /* NoiseHandshakeCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoiseHandshakeCoordinator.swift; sourceTree = "<group>"; };
-		C0DB1DE27F0AAB5092663E8E /* bitchatTests_iOS.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = bitchatTests_iOS.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C0DB1DE27F0AAB5092663E8E /* bitchatTests_iOS.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = bitchatTests_iOS.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C1B378C16594575FCC7F9C75 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		C272F137CE00FC5A96E0CC06 /* NostrProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NostrProtocolTests.swift; sourceTree = "<group>"; };
 		C27328EE574221395B2B8E87 /* MockBluetoothMeshService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockBluetoothMeshService.swift; sourceTree = "<group>"; };
@@ -254,6 +269,7 @@
 		0575DCBD15C7C719ADDCB67E /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				14646DF12E55849600D93BD0 /* PersistentPrivateChat.swift */,
 				11186E29A064E8D210880E1B /* BitchatPeer.swift */,
 			);
 			path = Models;
@@ -368,8 +384,8 @@
 		9F37F9F2C353B58AC809E93B /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				96D0D41CA19EE5A772AA8434 /* bitchat_iOS.app */,
-				8F3A7C058C2C8E1A06C8CF8B /* bitchat_macOS.app */,
+				96D0D41CA19EE5A772AA8434 /* bitchat.app */,
+				8F3A7C058C2C8E1A06C8CF8B /* bitchat.app */,
 				61F92EBA29C47C0FCC482F1F /* bitchatShareExtension.appex */,
 				C0DB1DE27F0AAB5092663E8E /* bitchatTests_iOS.xctest */,
 				03C57F452B55FD0FD8F51421 /* bitchatTests_macOS.xctest */,
@@ -401,6 +417,7 @@
 		ADD53BCDA233C02E53458926 /* Protocols */ = {
 			isa = PBXGroup;
 			children = (
+				14646DEE2E557B0C00D93BD0 /* HistoryRequest.swift */,
 				5318B743C64628A125261163 /* BinaryEncodingUtils.swift */,
 				A2136C3E22D02D4A8DBE7EAB /* BinaryProtocol.swift */,
 				229F17B68CFF7AB1BC91C847 /* BitchatProtocol.swift */,
@@ -457,6 +474,8 @@
 		D98A3186D7E4C72E35BDF7FE /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				14646DE82E55760800D93BD0 /* ChatHistorySyncService.swift */,
+				14646DE52E5571B900D93BD0 /* MessagePersistenceService.swift */,
 				C39BB75BC8C2A36039F00613 /* AutocompleteService.swift */,
 				D7229DDDE75E1FC21DE3947B /* BLEService.swift */,
 				DB10107B2A552E56B94C0AA4 /* CommandProcessor.swift */,
@@ -466,6 +485,7 @@
 				394E8A1AC76EFAE352075BE9 /* NoiseEncryptionService.swift */,
 				1B4809E690DE48B9AEE36279 /* NostrTransport.swift */,
 				3448F84BF86A42A3CC4A9379 /* NotificationService.swift */,
+				14646DF42E5584A700D93BD0 /* PersistentPrivateChatManager.swift */,
 				9E7C4CA419510D61C4FE47B2 /* PrivateChatManager.swift */,
 				556018DFA405705E5B00E982 /* Transport.swift */,
 				D90CBA19E19728938700953D /* UnifiedPeerService.swift */,
@@ -504,7 +524,7 @@
 				B1D9136AA0083366353BFA2F /* P256K */,
 			);
 			productName = bitchat_macOS;
-			productReference = 8F3A7C058C2C8E1A06C8CF8B /* bitchat_macOS.app */;
+			productReference = 8F3A7C058C2C8E1A06C8CF8B /* bitchat.app */;
 			productType = "com.apple.product-type.application";
 		};
 		47FF23248747DD7CB666CB91 /* bitchatTests_macOS */ = {
@@ -581,7 +601,7 @@
 				4EB6BA1B8464F1EA38F4E286 /* P256K */,
 			);
 			productName = bitchat_iOS;
-			productReference = 96D0D41CA19EE5A772AA8434 /* bitchat_iOS.app */;
+			productReference = 96D0D41CA19EE5A772AA8434 /* bitchat.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -594,23 +614,18 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					0576A29205865664C0937536 = {
-						DevelopmentTeam = L3N5LHJD5Y;
 						ProvisioningStyle = Automatic;
 					};
 					47FF23248747DD7CB666CB91 = {
-						DevelopmentTeam = L3N5LHJD5Y;
 						ProvisioningStyle = Automatic;
 					};
 					57CA17A36A2532A6CFF367BB = {
-						DevelopmentTeam = L3N5LHJD5Y;
 						ProvisioningStyle = Automatic;
 					};
 					6CB97DF2EA57234CB3E563B8 = {
-						DevelopmentTeam = L3N5LHJD5Y;
 						ProvisioningStyle = Automatic;
 					};
 					AF077EA0474EDEDE2C72716C = {
-						DevelopmentTeam = L3N5LHJD5Y;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -628,7 +643,6 @@
 			packageReferences = (
 				B8C407587481BBB190741C93 /* XCRemoteSwiftPackageReference "swift-secp256k1" */,
 			);
-			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -713,6 +727,7 @@
 				EC5DD95163C59DF82C7AAE6B /* MessageRouter.swift in Sources */,
 				501BC56B1A08C0327A09AAF1 /* NoiseEncryptionService.swift in Sources */,
 				AFF33EF44626EF0579D17EB1 /* NoiseHandshakeCoordinator.swift in Sources */,
+				14646DF02E557B0C00D93BD0 /* HistoryRequest.swift in Sources */,
 				8C1AB0F2D48207E0755DA91A /* NoiseProtocol.swift in Sources */,
 				D691938B4029A04CC905FDC8 /* NoiseSecurityConsiderations.swift in Sources */,
 				8A14ADADF5CD7A79919CB655 /* NoiseSession.swift in Sources */,
@@ -721,15 +736,19 @@
 				FBC409E105493C491531B59A /* NostrProtocol.swift in Sources */,
 				6A85FC357ACD85DBD9020845 /* NostrRelayManager.swift in Sources */,
 				E70F5AF3077C98B2E6A064E6 /* NostrTransport.swift in Sources */,
+				14646DF22E55849600D93BD0 /* PersistentPrivateChat.swift in Sources */,
 				749D8CF8A362B6CD0786782D /* NotificationService.swift in Sources */,
 				73F49A7476E8063041EA37E5 /* Packets.swift in Sources */,
 				A1A32ACB18165DD04A5EC540 /* PeerID.swift in Sources */,
 				C6FBF0255E9D2DD0402CCE77 /* PeerIDResolver.swift in Sources */,
+				14646DF52E5584A700D93BD0 /* PersistentPrivateChatManager.swift in Sources */,
 				026A4104B2B4588A88283DB5 /* PrivateChatManager.swift in Sources */,
 				E2DCF7817344F1CCDB8B7B2F /* SecureIdentityStateManager.swift in Sources */,
 				D111988977C3BC246AB27FA4 /* SecureLogger.swift in Sources */,
+				14646DE62E5571B900D93BD0 /* MessagePersistenceService.swift in Sources */,
 				20216EA81EFDC3632F8DB19F /* Transport.swift in Sources */,
 				C06685965753B4F8A3120998 /* UnifiedPeerService.swift in Sources */,
+				14646DEA2E55760800D93BD0 /* ChatHistorySyncService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -759,6 +778,7 @@
 				65A68CE8842A98D9C655E0AA /* MessageRouter.swift in Sources */,
 				5EE49E150BBF0488E7473687 /* NoiseEncryptionService.swift in Sources */,
 				6D0D4A0B1D8B659DCBAE7C9C /* NoiseHandshakeCoordinator.swift in Sources */,
+				14646DEF2E557B0C00D93BD0 /* HistoryRequest.swift in Sources */,
 				A7187D48B07C6857DE01D0ED /* NoiseProtocol.swift in Sources */,
 				9CCF09F7527EC681A13FC246 /* NoiseSecurityConsiderations.swift in Sources */,
 				92D1CF17DF88EA298F6E5E8E /* NoiseSession.swift in Sources */,
@@ -767,15 +787,19 @@
 				F06732B1719EE13C5D09CE77 /* NostrProtocol.swift in Sources */,
 				BCD0EBACD82AF5E55C2CB2B9 /* NostrRelayManager.swift in Sources */,
 				117F3B1B7D3D372F459DD998 /* NostrTransport.swift in Sources */,
+				14646DF32E55849600D93BD0 /* PersistentPrivateChat.swift in Sources */,
 				61C81ED5F679D5E973EE0C07 /* NotificationService.swift in Sources */,
 				C0B3B48DD5EA86906AFC58FD /* Packets.swift in Sources */,
 				EC4532B00C7B9F78B9D488DE /* PeerID.swift in Sources */,
 				33F91269305DEBFBC87489C9 /* PeerIDResolver.swift in Sources */,
+				14646DF62E5584A700D93BD0 /* PersistentPrivateChatManager.swift in Sources */,
 				85A86060AD95600D56FDF5BC /* PrivateChatManager.swift in Sources */,
 				68C4BE564735F6E7915274A2 /* SecureIdentityStateManager.swift in Sources */,
 				EC5241969D2550B97629EBD0 /* SecureLogger.swift in Sources */,
+				14646DE72E5571B900D93BD0 /* MessagePersistenceService.swift in Sources */,
 				778592DC0729708A653D6B9A /* Transport.swift in Sources */,
 				438E81C9D07DABC9D6B86AD7 /* UnifiedPeerService.swift in Sources */,
+				14646DE92E55760800D93BD0 /* ChatHistorySyncService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -847,7 +871,7 @@
 				CODE_SIGNING_ALLOWED = YES;
 				CODE_SIGNING_REQUIRED = YES;
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = L3N5LHJD5Y;
+				DEVELOPMENT_TEAM = 7RQ9DQUGKZ;
 				INFOPLIST_FILE = bitchatTests/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -855,7 +879,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.waluyajuangh.chat.bitchat.tests;
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -870,7 +894,7 @@
 				CODE_SIGNING_ALLOWED = YES;
 				CODE_SIGNING_REQUIRED = YES;
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = L3N5LHJD5Y;
+				DEVELOPMENT_TEAM = 7RQ9DQUGKZ;
 				INFOPLIST_FILE = bitchatTests/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -878,7 +902,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.waluyajuangh.chat.bitchat.tests;
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -894,7 +918,7 @@
 				CODE_SIGNING_REQUIRED = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				DEVELOPMENT_TEAM = L3N5LHJD5Y;
+				DEVELOPMENT_TEAM = 7RQ9DQUGKZ;
 				INFOPLIST_FILE = bitchatTests/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -902,7 +926,7 @@
 					"@loader_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.waluyajuangh.chat.bitchat.tests;
 				SDKROOT = macosx;
 				SWIFT_VERSION = 5.0;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/bitchat.app/Contents/MacOS/bitchat";
@@ -917,7 +941,7 @@
 				CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION = YES;
 				CODE_SIGN_ENTITLEMENTS = bitchatShareExtension/bitchatShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = L3N5LHJD5Y;
+				DEVELOPMENT_TEAM = 7RQ9DQUGKZ;
 				INFOPLIST_FILE = bitchatShareExtension/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -925,7 +949,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat.ShareExtension;
+				PRODUCT_BUNDLE_IDENTIFIER = com.waluyajuangh.chat.bitchat.ShareExtension;
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -942,7 +966,7 @@
 				CODE_SIGN_ENTITLEMENTS = bitchat/bitchat.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = L3N5LHJD5Y;
+				DEVELOPMENT_TEAM = 7RQ9DQUGKZ;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = bitchat/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
@@ -950,7 +974,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat;
+				PRODUCT_BUNDLE_IDENTIFIER = com.waluyajuangh.chat.bitchat;
 				PRODUCT_NAME = bitchat;
 				SDKROOT = iphoneos;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = YES;
@@ -967,7 +991,7 @@
 				CODE_SIGNING_REQUIRED = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				DEVELOPMENT_TEAM = L3N5LHJD5Y;
+				DEVELOPMENT_TEAM = 7RQ9DQUGKZ;
 				INFOPLIST_FILE = bitchatTests/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -975,7 +999,7 @@
 					"@loader_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.waluyajuangh.chat.bitchat.tests;
 				SDKROOT = macosx;
 				SWIFT_VERSION = 5.0;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/bitchat.app/Contents/MacOS/bitchat";
@@ -992,7 +1016,7 @@
 				CODE_SIGN_ENTITLEMENTS = bitchat/bitchat.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = L3N5LHJD5Y;
+				DEVELOPMENT_TEAM = 7RQ9DQUGKZ;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = bitchat/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
@@ -1000,7 +1024,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat;
+				PRODUCT_BUNDLE_IDENTIFIER = com.waluyajuangh.chat.bitchat;
 				PRODUCT_NAME = bitchat;
 				SDKROOT = iphoneos;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = YES;
@@ -1019,7 +1043,7 @@
 				CODE_SIGN_ENTITLEMENTS = "bitchat/bitchat-macOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				DEVELOPMENT_TEAM = L3N5LHJD5Y;
+				DEVELOPMENT_TEAM = 7RQ9DQUGKZ;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = bitchat/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1027,7 +1051,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat;
+				PRODUCT_BUNDLE_IDENTIFIER = com.waluyajuangh.chat.bitchat;
 				PRODUCT_NAME = bitchat;
 				SDKROOT = macosx;
 				SWIFT_VERSION = 5.0;
@@ -1102,7 +1126,7 @@
 				CODE_SIGN_ENTITLEMENTS = "bitchat/bitchat-macOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				DEVELOPMENT_TEAM = L3N5LHJD5Y;
+				DEVELOPMENT_TEAM = 7RQ9DQUGKZ;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = bitchat/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1110,7 +1134,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat;
+				PRODUCT_BUNDLE_IDENTIFIER = com.waluyajuangh.chat.bitchat;
 				PRODUCT_NAME = bitchat;
 				SDKROOT = macosx;
 				SWIFT_VERSION = 5.0;
@@ -1190,7 +1214,7 @@
 				CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION = YES;
 				CODE_SIGN_ENTITLEMENTS = bitchatShareExtension/bitchatShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = L3N5LHJD5Y;
+				DEVELOPMENT_TEAM = 7RQ9DQUGKZ;
 				INFOPLIST_FILE = bitchatShareExtension/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1198,7 +1222,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat.ShareExtension;
+				PRODUCT_BUNDLE_IDENTIFIER = com.waluyajuangh.chat.bitchat.ShareExtension;
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";

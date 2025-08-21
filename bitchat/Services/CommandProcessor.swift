@@ -96,8 +96,12 @@ class CommandProcessor {
     private func handleClear() -> CommandResult {
         if let peerID = chatViewModel?.selectedPrivateChatPeer {
             chatViewModel?.privateChats[peerID]?.removeAll()
+            // Save private messages after clearing
+            chatViewModel?.savePrivateMessages()
         } else {
             chatViewModel?.messages.removeAll()
+            // Save public messages after clearing
+            chatViewModel?.saveMessages()
         }
         return .handled
     }

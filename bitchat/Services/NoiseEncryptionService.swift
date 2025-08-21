@@ -165,6 +165,9 @@ class NoiseEncryptionService {
     private var onPeerAuthenticatedHandlers: [((String, String) -> Void)] = [] // Array of handlers for peer authentication
     var onHandshakeRequired: ((String) -> Void)? // peerID needs handshake
     
+    // Transport layer reference
+    weak var meshService: Transport?
+    
     // Add a handler for peer authentication
     func addOnPeerAuthenticatedHandler(_ handler: @escaping (String, String) -> Void) {
         serviceQueue.async(flags: .barrier) { [weak self] in
@@ -180,6 +183,11 @@ class NoiseEncryptionService {
                 addOnPeerAuthenticatedHandler(handler)
             }
         }
+    }
+    
+    /// Set the transport layer reference
+    func setMeshService(_ service: Transport?) {
+        meshService = service
     }
     
     init() {
@@ -404,6 +412,25 @@ class NoiseEncryptionService {
         }
         
         return try sessionManager.decrypt(data, from: peerID)
+    }
+    
+    /// Send encrypted payload with specific type to a peer
+    func sendEncryptedPayload(type: NoisePayloadType, payload: Data, to peerID: String) {
+        // Create payload with type header
+        var fullPayload = Data()
+        fullPayload.append(type.rawValue)
+        fullPayload.append(payload)
+        
+        do {
+            // Encrypt the payload
+            let encryptedData = try encrypt(fullPayload, for: peerID)
+            
+            // Send via mesh service
+            meshService?.sendNoiseEncryptedPayload(encryptedData, to: peerID)
+            
+        } catch {
+            print("Failed to send encrypted payload to \(peerID): \(error)")
+        }
     }
     
     // MARK: - Peer Management

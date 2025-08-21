@@ -38,6 +38,10 @@ final class NostrTransport: Transport {
     func getNoiseSessionState(for peerID: String) -> LazyHandshakeState { .none }
     func triggerHandshake(with peerID: String) { /* no-op */ }
     func getNoiseService() -> NoiseEncryptionService { NoiseEncryptionService() }
+    
+    func setMeshService(_ service: Transport?) {
+        // Not needed for Nostr transport
+    }
 
     // Public broadcast not supported over Nostr here
     func sendMessage(_ content: String, mentions: [String]) { /* no-op */ }
@@ -212,5 +216,9 @@ final class NostrTransport: Transport {
                             category: SecureLogger.session, level: .info)
             NostrRelayManager.shared.sendEvent(event)
         }
+    }
+    
+    func sendNoiseEncryptedPayload(_ encryptedData: Data, to peerID: String) {
+        // Not implemented for Nostr transport - only BLE supports Noise encryption
     }
 }
