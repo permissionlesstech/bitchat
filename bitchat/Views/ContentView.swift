@@ -882,7 +882,8 @@ struct ContentView: View {
                             .font(.system(size: 14, design: .monospaced))
                             .foregroundColor(badgeColor)
                             .lineLimit(1)
-                            .truncationMode(.middle)
+                            .fixedSize(horizontal: true, vertical: false)
+                            .layoutPriority(2)
                             .accessibilityLabel("location channels")
                     }
                 }
