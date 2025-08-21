@@ -30,36 +30,49 @@ struct GeohashPeopleList: View {
                     }
                     return a.lastSeen > b.lastSeen
                 }
+                let firstID = ordered.first?.id
                 ForEach(ordered) { person in
                     HStack(spacing: 4) {
                         let convKey = "nostr_" + String(person.id.prefix(16))
                         if viewModel.unreadPrivateMessages.contains(convKey) {
                             Image(systemName: "envelope.fill").font(.system(size: 12)).foregroundColor(.orange)
                         } else {
-                            Image(systemName: "person.fill").font(.system(size: 10)).foregroundColor(textColor)
+                            // For the local user, use a different face icon when teleported
+                            let isMe = (person.id == myHex)
+                            #if os(iOS)
+                            let teleported = isMe ? LocationChannelManager.shared.teleported : viewModel.teleportedGeo.contains(person.id.lowercased())
+                            #else
+                            let teleported = false
+                            #endif
+                            let icon = teleported ? "face.dashed" : "face.smiling"
+                            let rowColor: Color = isMe ? .orange : textColor
+                            Image(systemName: icon).font(.system(size: 12)).foregroundColor(rowColor)
                         }
                         let (base, suffix) = splitSuffix(from: person.displayName)
                         let isMe = person.id == myHex
                         HStack(spacing: 0) {
+                            let rowColor: Color = isMe ? .orange : textColor
                             Text(base)
                                 .font(.system(size: 14, design: .monospaced))
                                 .fontWeight(isMe ? .bold : .regular)
-                                .foregroundColor(textColor)
+                                .foregroundColor(rowColor)
                             if !suffix.isEmpty {
+                                let suffixColor = isMe ? Color.orange.opacity(0.6) : textColor.opacity(0.6)
                                 Text(suffix)
                                     .font(.system(size: 14, design: .monospaced))
-                                    .foregroundColor(Color.secondary.opacity(0.6))
+                                    .foregroundColor(suffixColor)
                             }
                             if isMe {
                                 Text(" (you)")
                                     .font(.system(size: 14, design: .monospaced))
-                                    .foregroundColor(textColor)
+                                    .foregroundColor(rowColor)
                             }
                         }
                         Spacer()
                     }
                     .padding(.horizontal)
                     .padding(.vertical, 4)
+                    .padding(.top, person.id == firstID ? 10 : 0)
                     .contentShape(Rectangle())
                     .onTapGesture {
                         if person.id != myHex {

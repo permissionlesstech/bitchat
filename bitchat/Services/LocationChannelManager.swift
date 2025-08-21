@@ -27,6 +27,8 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
     @Published private(set) var permissionState: PermissionState = .notDetermined
     @Published private(set) var availableChannels: [GeohashChannel] = []
     @Published private(set) var selectedChannel: ChannelID = .mesh
+    // True when the current location channel was selected via manual teleport
+    @Published var teleported: Bool = false
     @Published private(set) var locationNames: [GeohashChannelLevel: String] = [:]
 
     private override init() {
@@ -160,7 +162,17 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
             let gh = Geohash.encode(latitude: coord.latitude, longitude: coord.longitude, precision: level.precision)
             result.append(GeohashChannel(level: level, geohash: gh))
         }
-        Task { @MainActor in self.availableChannels = result }
+        Task { @MainActor in
+            self.availableChannels = result
+            // Recompute teleported status based on current location vs selected channel
+            switch self.selectedChannel {
+            case .mesh:
+                self.teleported = false
+            case .location(let ch):
+                let currentGH = Geohash.encode(latitude: coord.latitude, longitude: coord.longitude, precision: ch.level.precision)
+                self.teleported = (currentGH != ch.geohash)
+            }
+        }
     }
 
     private func reverseGeocodeIfNeeded(location: CLLocation) {
