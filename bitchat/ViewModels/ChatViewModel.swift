@@ -2703,10 +2703,10 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             result.append(AttributedString("<@").mergingAttributes(senderStyle))
             // Base name
             result.append(AttributedString(baseName).mergingAttributes(senderStyle))
-            // Optional suffix (light gray)
+            // Optional suffix in lighter variant of the base color (green or orange for self)
             if !suffix.isEmpty {
                 var suffixStyle = senderStyle
-                suffixStyle.foregroundColor = Color.secondary.opacity(0.6)
+                suffixStyle.foregroundColor = baseColor.opacity(0.6)
                 result.append(AttributedString(suffix).mergingAttributes(suffixStyle))
             }
             // Suffix "> "
@@ -2792,16 +2792,17 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                         }()
                         var mentionStyle = AttributeContainer()
                         mentionStyle.font = .system(size: 14, weight: isSelf ? .bold : .semibold, design: .monospaced)
-                        mentionStyle.foregroundColor = isMentionToMe ? .orange : primaryColor
+                        let mentionColor: Color = isMentionToMe ? .orange : primaryColor
+                        mentionStyle.foregroundColor = mentionColor
                         // Emit '@'
                         result.append(AttributedString("@").mergingAttributes(mentionStyle))
                         // Base name
                         result.append(AttributedString(mBase).mergingAttributes(mentionStyle))
                         // Suffix in light grey
                         if !mSuffix.isEmpty {
-                            var grey = mentionStyle
-                            grey.foregroundColor = Color.secondary.opacity(0.6)
-                            result.append(AttributedString(mSuffix).mergingAttributes(grey))
+                            var light = mentionStyle
+                            light.foregroundColor = mentionColor.opacity(0.6)
+                            result.append(AttributedString(mSuffix).mergingAttributes(light))
                         }
                     } else {
                         var matchStyle = AttributeContainer()
