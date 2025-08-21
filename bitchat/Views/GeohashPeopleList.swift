@@ -43,7 +43,7 @@ struct GeohashPeopleList: View {
                             #else
                             let teleported = false
                             #endif
-                            let icon = (isMe && teleported) ? "face.dashed" : "face.smiling"
+                            let icon = teleported ? "face.dashed" : "face.smiling"
                             Image(systemName: icon).font(.system(size: 12)).foregroundColor(textColor)
                         }
                         let (base, suffix) = splitSuffix(from: person.displayName)
