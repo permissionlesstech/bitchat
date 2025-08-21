@@ -2147,9 +2147,34 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             trimPrivateChatMessagesIfNeeded(for: peerID)
             
         } else {
-            // In public chat - send to everyone
+            // In public chat - send to active public channel
+            #if os(iOS)
+            switch activeChannel {
+            case .mesh:
+                meshService.sendMessage(screenshotMessage, mentions: [])
+            case .location(let ch):
+                Task { @MainActor in
+                    do {
+                        let identity = try NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash)
+                        let event = try NostrProtocol.createEphemeralGeohashEvent(
+                            content: screenshotMessage,
+                            geohash: ch.geohash,
+                            senderIdentity: identity,
+                            nickname: self.nickname
+                        )
+                        NostrRelayManager.shared.sendEvent(event)
+                        // Track ourselves as active participant
+                        self.recordGeoParticipant(pubkeyHex: identity.publicKeyHex)
+                    } catch {
+                        SecureLogger.log("❌ Failed to send geohash screenshot message: \(error)", category: SecureLogger.session, level: .error)
+                        self.addSystemMessage("failed to send to location channel")
+                    }
+                }
+            }
+            #else
             meshService.sendMessage(screenshotMessage, mentions: [])
-            
+            #endif
+
             // Show local notification immediately as system message
             let localNotification = BitchatMessage(
                 sender: "system",
