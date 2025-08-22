@@ -1126,6 +1126,11 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                         NostrRelayManager.shared.sendEvent(event)
                         // Track ourselves as active participant
                         self.recordGeoParticipant(pubkeyHex: identity.publicKeyHex)
+                        // If we tagged this as teleported, also mark our pubkey in teleportedGeo for UI
+                        if LocationChannelManager.shared.teleported {
+                            let key = identity.publicKeyHex.lowercased()
+                            self.teleportedGeo = self.teleportedGeo.union([key])
+                        }
                     } catch {
                         SecureLogger.log("❌ Failed to send geohash message: \(error)", category: SecureLogger.session, level: .error)
                         self.addSystemMessage("failed to send to location channel")
@@ -1196,7 +1201,20 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             if self.processedNostrEvents.contains(event.id) { return }
             self.recordProcessedEvent(event.id)
             // Track teleport tag for participants
-            if let teleTag = event.tags.first(where: { $0.first == "t" }), teleTag.count >= 2, teleTag[1] == "teleport" {
+            // Detect teleport tag robustly: accept ["t","teleport"], ["t"], ["teleport"], or boolean-like values
+            let hasTeleportTag: Bool = {
+                for tag in event.tags {
+                    guard let key = tag.first?.lowercased() else { continue }
+                    if key == "t" || key == "teleport" { return true }
+                    // Some clients may encode as ["t","1"] or ["t","true"]
+                    if key == "t", tag.dropFirst().contains(where: { v in
+                        let lv = v.lowercased()
+                        return lv == "teleport" || lv == "1" || lv == "true"
+                    }) { return true }
+                }
+                return false
+            }()
+            if hasTeleportTag {
                 let key = event.pubkey.lowercased()
                 Task { @MainActor in
                     self.teleportedGeo = self.teleportedGeo.union([key])
