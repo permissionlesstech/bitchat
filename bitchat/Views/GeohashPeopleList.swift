@@ -83,6 +83,18 @@ struct GeohashPeopleList: View {
                             onTapPerson()
                         }
                     }
+                    .contextMenu {
+                        if let me = myHex, person.id == me {
+                            EmptyView()
+                        } else {
+                            let blocked = viewModel.isGeohashUserBlocked(pubkeyHexLowercased: person.id)
+                            if blocked {
+                                Button("Unblock") { viewModel.unblockGeohashUser(pubkeyHexLowercased: person.id, displayName: person.displayName) }
+                            } else {
+                                Button("Block") { viewModel.blockGeohashUser(pubkeyHexLowercased: person.id, displayName: person.displayName) }
+                            }
+                        }
+                    }
                 }
             }
         }

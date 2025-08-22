@@ -654,19 +654,23 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     let wasReadBefore = self.sentReadReceipts.contains(messageId)
                     let isRecentMessage = Date().timeIntervalSince(messageTimestamp) < 30
                     let shouldMarkUnread = !wasReadBefore && !isViewing && isRecentMessage
-                    let msg = BitchatMessage(
-                        id: messageId,
-                        sender: senderName,
-                        content: pm.content,
-                        timestamp: messageTimestamp,
-                        isRelay: false,
-                        originalSender: nil,
-                        isPrivate: true,
-                        recipientNickname: self.nickname,
-                        senderPeerID: convKey,
-                        mentions: nil,
-                        deliveryStatus: .delivered(to: self.nickname, at: Date())
-                    )
+                let msg = BitchatMessage(
+                    id: messageId,
+                    sender: senderName,
+                    content: pm.content,
+                    timestamp: messageTimestamp,
+                    isRelay: false,
+                    originalSender: nil,
+                    isPrivate: true,
+                    recipientNickname: self.nickname,
+                    senderPeerID: convKey,
+                    mentions: nil,
+                    deliveryStatus: .delivered(to: self.nickname, at: Date())
+                )
+                    // Respect geohash blocks
+                    if SecureIdentityStateManager.shared.isNostrBlocked(pubkeyHexLowercased: senderPubkey) {
+                        return
+                    }
                     if self.privateChats[convKey] == nil { self.privateChats[convKey] = [] }
                     self.privateChats[convKey]?.append(msg)
                     self.trimPrivateChatMessagesIfNeeded(for: convKey)
@@ -1490,6 +1494,22 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         let cutoff = Date().addingTimeInterval(-5 * 60)
         let map = geoParticipants[geohash] ?? [:]
         return map.values.filter { $0 >= cutoff }.count
+    }
+
+    // Geohash block helpers
+    @MainActor
+    func isGeohashUserBlocked(pubkeyHexLowercased: String) -> Bool {
+        return SecureIdentityStateManager.shared.isNostrBlocked(pubkeyHexLowercased: pubkeyHexLowercased)
+    }
+    @MainActor
+    func blockGeohashUser(pubkeyHexLowercased: String, displayName: String) {
+        SecureIdentityStateManager.shared.setNostrBlocked(pubkeyHexLowercased, isBlocked: true)
+        addSystemMessage("blocked \(displayName) in geohash chats")
+    }
+    @MainActor
+    func unblockGeohashUser(pubkeyHexLowercased: String, displayName: String) {
+        SecureIdentityStateManager.shared.setNostrBlocked(pubkeyHexLowercased, isBlocked: false)
+        addSystemMessage("unblocked \(displayName) in geohash chats")
     }
 
     /// Begin sampling multiple geohashes (used by channel sheet) without changing active channel.
@@ -4906,6 +4926,9 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     /// Handle incoming public message
     private func handlePublicMessage(_ message: BitchatMessage) {
         let finalMessage = processActionMessage(message)
+
+        // Drop if sender is blocked (covers geohash via Nostr pubkey mapping)
+        if isMessageBlocked(finalMessage) { return }
 
         // Classify origin: geochat if senderPeerID starts with 'nostr:', else mesh (or system)
         let isGeo = finalMessage.senderPeerID?.hasPrefix("nostr:") == true
