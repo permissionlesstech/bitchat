@@ -517,8 +517,16 @@ struct ContentView: View {
             }
             .onChange(of: viewModel.messages.count) { _ in
                 if privatePeer == nil && !viewModel.messages.isEmpty {
-                    // Only autoscroll when user is at/near bottom
-                    guard isAtBottom.wrappedValue else { return }
+                    // If the newest message is from me, always scroll to bottom
+                    let lastMsg = viewModel.messages.last!
+                    let isFromSelf = (lastMsg.sender == viewModel.nickname) || lastMsg.sender.hasPrefix(viewModel.nickname + "#")
+                    if !isFromSelf {
+                        // Only autoscroll when user is at/near bottom
+                        guard isAtBottom.wrappedValue else { return }
+                    } else {
+                        // Ensure we consider ourselves at bottom for subsequent messages
+                        isAtBottom.wrappedValue = true
+                    }
                     // Throttle scroll animations to prevent excessive UI updates
                     let now = Date()
                     if now.timeIntervalSince(lastScrollTime) > 0.5 {
@@ -565,8 +573,15 @@ struct ContentView: View {
                 if let peerID = privatePeer,
                    let messages = viewModel.privateChats[peerID],
                    !messages.isEmpty {
-                    // Only autoscroll when user is at/near bottom
-                    guard isAtBottom.wrappedValue else { return }
+                    // If the newest private message is from me, always scroll
+                    let lastMsg = messages.last!
+                    let isFromSelf = (lastMsg.sender == viewModel.nickname) || lastMsg.sender.hasPrefix(viewModel.nickname + "#")
+                    if !isFromSelf {
+                        // Only autoscroll when user is at/near bottom
+                        guard isAtBottom.wrappedValue else { return }
+                    } else {
+                        isAtBottom.wrappedValue = true
+                    }
                     // Same throttling for private chats
                     let now = Date()
                     if now.timeIntervalSince(lastScrollTime) > 0.5 {
