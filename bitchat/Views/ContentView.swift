@@ -394,7 +394,7 @@ struct ContentView: View {
                                                 }
                                             }
                                         }
-                                        .padding(.top, 4)
+                                        .padding(.top, 6)
                                         .padding(.leading, 2)
                                     }
                                 }
@@ -1332,14 +1332,14 @@ private struct PaymentChipView: View {
                 Text(label)
                     .font(.system(size: 12, weight: .semibold, design: .monospaced))
             }
-            .padding(.vertical, 4)
-            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .padding(.horizontal, 12)
             .background(
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: 12)
                     .fill(bgColor)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: 12)
                     .stroke(border, lineWidth: 1)
             )
             .foregroundColor(fgColor)
