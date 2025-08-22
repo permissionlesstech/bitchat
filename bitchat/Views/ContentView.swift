@@ -34,21 +34,17 @@ struct LazyLinkPreviewView: View {
     @State private var isVisible = false
     
     var body: some View {
-        GeometryReader { geometry in
+        Group {
             if isVisible {
                 LinkPreviewView(url: url, title: title)
             } else {
-                // Placeholder while not visible
                 RoundedRectangle(cornerRadius: 10)
                     .fill(Color.gray.opacity(0.1))
                     .frame(height: 80)
-                    .onAppear {
-                        // Only load when view appears on screen
-                        isVisible = true
-                    }
             }
         }
         .frame(height: 80)
+        .onAppear { isVisible = true }
     }
 }
 
@@ -83,6 +79,7 @@ struct ContentView: View {
     @State private var scrollThrottleTimer: Timer?
     @State private var autocompleteDebounceTimer: Timer?
     @State private var showLocationChannelsSheet = false
+    @State private var expandedMessageIDs: Set<String> = []
     
     // MARK: - Computed Properties
     
@@ -291,8 +288,22 @@ struct ContentView: View {
                     
                     // Implement windowing - show last 100 messages for performance
                     let windowedMessages = messages.suffix(100)
+
+                    // Build stable UI IDs with a context key to avoid ID collisions when switching channels
+                    #if os(iOS)
+                    let contextKey: String = {
+                        switch locationManager.selectedChannel {
+                        case .mesh: return "mesh"
+                        case .location(let ch): return "geo:\(ch.geohash)"
+                        }
+                    }()
+                    #else
+                    let contextKey: String = "mesh"
+                    #endif
+                    let items = windowedMessages.map { (uiID: "\(contextKey)|\($0.id)", message: $0) }
                     
-                    ForEach(windowedMessages, id: \.id) { message in
+                    ForEach(items, id: \.uiID) { item in
+                        let message = item.message
                         VStack(alignment: .leading, spacing: 0) {
                             // Check if current user is mentioned
                             
@@ -307,9 +318,12 @@ struct ContentView: View {
                                 VStack(alignment: .leading, spacing: 0) {
                                     HStack(alignment: .top, spacing: 0) {
                                         // Single text view for natural wrapping
+                                        let isLong = message.content.count > 2000 || message.content.hasVeryLongToken(threshold: 512)
+                                        let isExpanded = expandedMessageIDs.contains(message.id)
                                         Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme))
                                             .textSelection(.enabled)
                                             .fixedSize(horizontal: false, vertical: true)
+                                            .lineLimit(isLong && !isExpanded ? 30 : nil)
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                         
                                         // Delivery status indicator for private messages
@@ -320,6 +334,18 @@ struct ContentView: View {
                                         }
                                     }
                                     
+                                    // Expand/Collapse for very long messages
+                                    if (message.content.count > 2000 || message.content.hasVeryLongToken(threshold: 512)) {
+                                        let isExpanded = expandedMessageIDs.contains(message.id)
+                                        Button(isExpanded ? "Show less" : "Show more") {
+                                            if isExpanded { expandedMessageIDs.remove(message.id) }
+                                            else { expandedMessageIDs.insert(message.id) }
+                                        }
+                                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                        .foregroundColor(Color.blue)
+                                        .padding(.top, 4)
+                                    }
+
                                     // Check for plain URLs
                                     let urls = message.content.extractURLs()
                                     if !urls.isEmpty {
@@ -334,7 +360,7 @@ struct ContentView: View {
                                 }
                             }
                         }
-                        .id(message.id)
+                        .id(item.uiID)
                         .onAppear {
                             // Track if last item is visible to enable auto-scroll only when near bottom
                             if message.id == windowedMessages.last?.id {
@@ -377,6 +403,78 @@ struct ContentView: View {
                 // Triple-tap to clear current chat
                 viewModel.sendMessage("/clear")
             }
+            .onAppear {
+                // Force scroll to bottom when opening a chat view
+                let targetID: String? = {
+                    if let peer = privatePeer,
+                       let last = viewModel.getPrivateChatMessages(for: peer).suffix(100).last?.id {
+                        return "dm:\(peer)|\(last)"
+                    }
+                    #if os(iOS)
+                    let contextKey: String = {
+                        switch locationManager.selectedChannel {
+                        case .mesh: return "mesh"
+                        case .location(let ch): return "geo:\(ch.geohash)"
+                        }
+                    }()
+                    #else
+                    let contextKey: String = "mesh"
+                    #endif
+                    if let last = viewModel.messages.suffix(100).last?.id { return "\(contextKey)|\(last)" }
+                    return nil
+                }()
+                isAtBottom.wrappedValue = true
+                DispatchQueue.main.async {
+                    if let target = targetID { proxy.scrollTo(target, anchor: .bottom) }
+                }
+                // Second pass after a brief delay to handle late layout
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    let targetID2: String? = {
+                        if let peer = privatePeer,
+                           let last = viewModel.getPrivateChatMessages(for: peer).suffix(100).last?.id {
+                            return "dm:\(peer)|\(last)"
+                        }
+                        #if os(iOS)
+                        let contextKey: String = {
+                            switch locationManager.selectedChannel {
+                            case .mesh: return "mesh"
+                            case .location(let ch): return "geo:\(ch.geohash)"
+                            }
+                        }()
+                        #else
+                        let contextKey: String = "mesh"
+                        #endif
+                        if let last = viewModel.messages.suffix(100).last?.id { return "\(contextKey)|\(last)" }
+                        return nil
+                    }()
+                    if let t2 = targetID2 { proxy.scrollTo(t2, anchor: .bottom) }
+                }
+            }
+            .onChange(of: privatePeer) { _ in
+                // When switching to a different private chat, jump to bottom
+                let targetID: String? = {
+                    if let peer = privatePeer,
+                       let last = viewModel.getPrivateChatMessages(for: peer).suffix(100).last?.id {
+                        return "dm:\(peer)|\(last)"
+                    }
+                    #if os(iOS)
+                    let contextKey: String = {
+                        switch locationManager.selectedChannel {
+                        case .mesh: return "mesh"
+                        case .location(let ch): return "geo:\(ch.geohash)"
+                        }
+                    }()
+                    #else
+                    let contextKey: String = "mesh"
+                    #endif
+                    if let last = viewModel.messages.suffix(100).last?.id { return "\(contextKey)|\(last)" }
+                    return nil
+                }()
+                isAtBottom.wrappedValue = true
+                DispatchQueue.main.async {
+                    if let target = targetID { proxy.scrollTo(target, anchor: .bottom) }
+                }
+            }
             .onChange(of: viewModel.messages.count) { _ in
                 if privatePeer == nil && !viewModel.messages.isEmpty {
                     // Only autoscroll when user is at/near bottom
@@ -386,13 +484,39 @@ struct ContentView: View {
                     if now.timeIntervalSince(lastScrollTime) > 0.5 {
                         // Immediate scroll if enough time has passed
                         lastScrollTime = now
-                        proxy.scrollTo(viewModel.messages.suffix(100).last?.id, anchor: .bottom)
+                        #if os(iOS)
+                        let contextKey: String = {
+                            switch locationManager.selectedChannel {
+                            case .mesh: return "mesh"
+                            case .location(let ch): return "geo:\(ch.geohash)"
+                            }
+                        }()
+                        #else
+                        let contextKey: String = "mesh"
+                        #endif
+                        let target = viewModel.messages.suffix(100).last.map { "\(contextKey)|\($0.id)" }
+                        DispatchQueue.main.async {
+                            if let target = target { proxy.scrollTo(target, anchor: .bottom) }
+                        }
                     } else {
                         // Schedule a delayed scroll
                         scrollThrottleTimer?.invalidate()
                         scrollThrottleTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
                             lastScrollTime = Date()
-                            proxy.scrollTo(viewModel.messages.suffix(100).last?.id, anchor: .bottom)
+                            #if os(iOS)
+                            let contextKey: String = {
+                                switch locationManager.selectedChannel {
+                                case .mesh: return "mesh"
+                                case .location(let ch): return "geo:\(ch.geohash)"
+                                }
+                            }()
+                            #else
+                            let contextKey: String = "mesh"
+                            #endif
+                            let target = viewModel.messages.suffix(100).last.map { "\(contextKey)|\($0.id)" }
+                            DispatchQueue.main.async {
+                                if let target = target { proxy.scrollTo(target, anchor: .bottom) }
+                            }
                         }
                     }
                 }
@@ -407,12 +531,20 @@ struct ContentView: View {
                     let now = Date()
                     if now.timeIntervalSince(lastScrollTime) > 0.5 {
                         lastScrollTime = now
-                        proxy.scrollTo(messages.suffix(100).last?.id, anchor: .bottom)
+                        let contextKey = "dm:\(peerID)"
+                        let target = messages.suffix(100).last.map { "\(contextKey)|\($0.id)" }
+                        DispatchQueue.main.async {
+                            if let target = target { proxy.scrollTo(target, anchor: .bottom) }
+                        }
                     } else {
                         scrollThrottleTimer?.invalidate()
                         scrollThrottleTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
                             lastScrollTime = Date()
-                            proxy.scrollTo(messages.suffix(100).last?.id, anchor: .bottom)
+                            let contextKey = "dm:\(peerID)"
+                            let target = messages.suffix(100).last.map { "\(contextKey)|\($0.id)" }
+                            DispatchQueue.main.async {
+                                if let target = target { proxy.scrollTo(target, anchor: .bottom) }
+                            }
                         }
                     }
                 }

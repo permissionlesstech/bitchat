@@ -2776,15 +2776,24 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             // Process content with hashtags and mentions
             let content = message.content
             
-            let hashtagPattern = "#([a-zA-Z0-9_]+)"
-            // Allow optional '#abcd' suffix in mentions
-            let mentionPattern = "@([\\p{L}0-9_]+(?:#[a-fA-F0-9]{4})?)"
-            
-            let hashtagRegex = try? NSRegularExpression(pattern: hashtagPattern, options: [])
-            let mentionRegex = try? NSRegularExpression(pattern: mentionPattern, options: [])
-            
-            // Use NSDataDetector for URL detection
-            let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
+            // For extremely long content, render as plain text to avoid heavy regex/layout work
+            if content.count > 4000 || content.hasVeryLongToken(threshold: 1024) {
+                var plainStyle = AttributeContainer()
+                plainStyle.foregroundColor = baseColor
+                plainStyle.font = isSelf
+                    ? .system(size: 14, weight: .bold, design: .monospaced)
+                    : .system(size: 14, design: .monospaced)
+                result.append(AttributedString(content).mergingAttributes(plainStyle))
+            } else {
+                let hashtagPattern = "#([a-zA-Z0-9_]+)"
+                // Allow optional '#abcd' suffix in mentions
+                let mentionPattern = "@([\\p{L}0-9_]+(?:#[a-fA-F0-9]{4})?)"
+                
+                let hashtagRegex = try? NSRegularExpression(pattern: hashtagPattern, options: [])
+                let mentionRegex = try? NSRegularExpression(pattern: mentionPattern, options: [])
+                
+                // Use NSDataDetector for URL detection
+                let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
             
             let hashtagMatches = hashtagRegex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
             let mentionMatches = mentionRegex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
@@ -2902,6 +2911,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     remainingStyle.font = remainingStyle.font?.bold()
                 }
                 result.append(AttributedString(remainingText).mergingAttributes(remainingStyle))
+            }
             }
             
             // Add timestamp at the end (smaller, light grey)
