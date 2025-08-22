@@ -31,10 +31,23 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<false/>
+		<key>NSAllowsArbitraryLoadsForMedia</key>
+		<false/>
+		<key>NSAllowsArbitraryLoadsInWebContent</key>
+		<false/>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users.</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
 	<string>bitchat uses Bluetooth to discover and connect with other bitchat users nearby.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>bitchat uses local network access to discover and connect with other bitchat users on your network.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>bluetooth-central</string>
@@ -54,18 +67,5 @@
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 	</array>
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsArbitraryLoads</key>
-		<false/>
-		<key>NSAllowsArbitraryLoadsForMedia</key>
-		<false/>
-		<key>NSAllowsArbitraryLoadsInWebContent</key>
-		<false/>
-		<key>NSAllowsLocalNetworking</key>
-		<true/>
-	</dict>
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>bitchat uses local network access to discover and connect with other bitchat users on your network.</string>
 </dict>
 </plist>

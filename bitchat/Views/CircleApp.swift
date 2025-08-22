@@ -5,13 +5,13 @@
 //  Created by Wentao Guo on 14/08/25.
 //
 
-import SwiftUI
-
+//import SwiftUI
+//
 //@main
-struct CircleApp: App {
-    var body: some Scene {
-        WindowGroup {
-            ContentView()
-        }
-    }
-}
+//struct CircleApp: App {
+//    var body: some Scene {
+//        WindowGroup {
+//            ContentView()
+//        }
+//    }
+//}
