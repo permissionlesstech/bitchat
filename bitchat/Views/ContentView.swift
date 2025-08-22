@@ -354,11 +354,15 @@ struct ContentView: View {
                                 showMessageActions = true
                             }
                         }
-                        .onLongPressGesture(minimumDuration: 0.35) {
-                            // Quick @mention: prefill input with @nick#abcd
-                            if message.sender != "system" && message.sender != viewModel.nickname {
-                                messageText = "@\(message.sender) "
-                                isTextFieldFocused = true
+                        .contextMenu {
+                            Button("Copy message") {
+                                #if os(iOS)
+                                UIPasteboard.general.string = message.content
+                                #else
+                                let pb = NSPasteboard.general
+                                pb.clearContents()
+                                pb.setString(message.content, forType: .string)
+                                #endif
                             }
                         }
                         .padding(.horizontal, 12)
