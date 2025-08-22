@@ -2707,7 +2707,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         var result = AttributedString()
         
         let primaryColor = isDark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
-        let baseColor: Color = isSelf ? .orange : primaryColor
+        let baseColor: Color = isSelf ? .orange : peerColor(for: message, isDark: isDark)
         
         if message.sender != "system" {
             // Sender (at the beginning) with light-gray suffix styling if present
@@ -2812,7 +2812,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                         }()
                         var mentionStyle = AttributeContainer()
                         mentionStyle.font = .system(size: 14, weight: isSelf ? .bold : .semibold, design: .monospaced)
-                        let mentionColor: Color = isMentionToMe ? .orange : primaryColor
+                        let mentionColor: Color = isMentionToMe ? .orange : baseColor
                         mentionStyle.foregroundColor = mentionColor
                         // Emit '@'
                         result.append(AttributedString("@").mergingAttributes(mentionStyle))
@@ -3133,6 +3133,45 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             let removeCount = messages.count - maxMessages
             messages.removeFirst(removeCount)
         }
+    }
+
+    // MARK: - Per-Peer Colors
+    private var peerColorCache: [String: Color] = [:]
+
+    private func djb2(_ s: String) -> UInt64 {
+        var hash: UInt64 = 5381
+        for b in s.utf8 { hash = ((hash << 5) &+ hash) &+ UInt64(b) }
+        return hash
+    }
+
+    private func colorForPeerSeed(_ seed: String, isDark: Bool) -> Color {
+        if let cached = peerColorCache[seed] { return cached }
+        var hue = Double(djb2(seed) % 360) / 360.0
+        // Avoid orange (~30°) reserved for self
+        let orange = 30.0 / 360.0
+        if abs(hue - orange) < 0.05 { hue = fmod(hue + 0.12, 1.0) }
+        let saturation: Double = isDark ? 0.80 : 0.70
+        let brightness: Double = isDark ? 0.75 : 0.45
+        let c = Color(hue: hue, saturation: saturation, brightness: brightness)
+        peerColorCache[seed] = c
+        return c
+    }
+
+    private func peerColor(for message: BitchatMessage, isDark: Bool) -> Color {
+        var seed: String
+        if let spid = message.senderPeerID {
+            if spid.hasPrefix("nostr:") || spid.hasPrefix("nostr_") {
+                let full = nostrKeyMapping[spid]?.lowercased() ?? spid.lowercased()
+                seed = "nostr:" + full
+            } else if spid.count == 16, let full = getNoiseKeyForShortID(spid)?.lowercased() {
+                seed = "noise:" + full
+            } else {
+                seed = spid.lowercased()
+            }
+        } else {
+            seed = message.sender.lowercased()
+        }
+        return colorForPeerSeed(seed, isDark: isDark)
     }
 
     private func trimMeshTimelineIfNeeded() {
