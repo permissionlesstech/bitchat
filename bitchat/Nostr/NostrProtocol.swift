@@ -59,10 +59,11 @@ struct NostrProtocol {
     }
     
     /// Decrypt a received NIP-17 message
+    /// Returns the content, sender pubkey, and the actual message timestamp (not the randomized gift wrap timestamp)
     static func decryptPrivateMessage(
         giftWrap: NostrEvent,
         recipientIdentity: NostrIdentity
-    ) throws -> (content: String, senderPubkey: String) {
+    ) throws -> (content: String, senderPubkey: String, timestamp: Int) {
         
         // Starting decryption
         
@@ -94,7 +95,33 @@ struct NostrProtocol {
             throw error
         }
         
-        return (content: rumor.content, senderPubkey: rumor.pubkey)
+        return (content: rumor.content, senderPubkey: rumor.pubkey, timestamp: rumor.created_at)
+    }
+
+    /// Create a geohash-scoped ephemeral public message (kind 20000)
+    static func createEphemeralGeohashEvent(
+        content: String,
+        geohash: String,
+        senderIdentity: NostrIdentity,
+        nickname: String? = nil,
+        teleported: Bool = false
+    ) throws -> NostrEvent {
+        var tags = [["g", geohash]]
+        if let nickname = nickname, !nickname.isEmpty {
+            tags.append(["n", nickname])
+        }
+        if teleported {
+            tags.append(["t", "teleport"])
+        }
+        let event = NostrEvent(
+            pubkey: senderIdentity.publicKeyHex,
+            createdAt: Date(),
+            kind: .ephemeralEvent,
+            tags: tags,
+            content: content
+        )
+        let signingKey = try senderIdentity.signingKey()
+        return try event.sign(with: signingKey)
     }
     
     // MARK: - Private Methods
@@ -438,8 +465,9 @@ struct NostrProtocol {
     
     private static func randomizedTimestamp() -> Date {
         // Add random offset to current time for privacy
-        // TEMPORARY: Reduced range to debug timestamp issue
-        let offset = TimeInterval.random(in: -60...60) // +/- 1 minute (was +/- 15 minutes)
+        // This prevents timing correlation attacks while the actual message timestamp
+        // is preserved in the encrypted rumor
+        let offset = TimeInterval.random(in: -900...900) // +/- 15 minutes
         let now = Date()
         let randomized = now.addingTimeInterval(offset)
         

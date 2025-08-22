@@ -6,6 +6,11 @@ import Combine
 @MainActor
 class NostrRelayManager: ObservableObject {
     static let shared = NostrRelayManager()
+    // Track gift-wraps (kind 1059) we initiated so we can log OK acks at info
+    private(set) static var pendingGiftWrapIDs = Set<String>()
+    static func registerPendingGiftWrap(id: String) {
+        pendingGiftWrapIDs.insert(id)
+    }
     
     struct Relay: Identifiable {
         let id = UUID()
@@ -23,6 +28,7 @@ class NostrRelayManager: ObservableObject {
     // Default relay list (can be customized)
     private static let defaultRelays = [
         "wss://relay.damus.io",
+        "wss://nos.lol",
         "wss://relay.primal.net",
         "wss://offchain.pub",
         "wss://nostr21.com"
@@ -57,6 +63,7 @@ class NostrRelayManager: ObservableObject {
     
     /// Connect to all configured relays
     func connect() {
+        SecureLogger.log("🌐 Connecting to \(relays.count) Nostr relays", category: SecureLogger.session, level: .debug)
         for relay in relays {
             connectToRelay(relay.url)
         }
@@ -96,6 +103,9 @@ class NostrRelayManager: ObservableObject {
     ) {
         messageHandlers[id] = handler
         
+        SecureLogger.log("📡 Subscribing to Nostr filter id=\(id) kinds=\(filter.kinds ?? []) since=\(filter.since ?? 0)", 
+                        category: SecureLogger.session, level: .debug)
+        
         let req = NostrRequest.subscribe(id: id, filters: [filter])
         
         do {
@@ -107,9 +117,8 @@ class NostrRelayManager: ObservableObject {
                 return 
             }
             
-            // Sending subscription to relays
-            // Filter JSON prepared
-            // Full filter JSON logged
+            // SecureLogger.log("📋 Subscription filter JSON: \(messageString.prefix(200))...", 
+            //                 category: SecureLogger.session, level: .debug)
             
             // Send subscription to all connected relays
             for (relayUrl, connection) in connections {
@@ -118,6 +127,8 @@ class NostrRelayManager: ObservableObject {
                         SecureLogger.log("❌ Failed to send subscription to \(relayUrl): \(error)", 
                                         category: SecureLogger.session, level: .error)
                     } else {
+                        // SecureLogger.log("✅ Subscription '\(id)' sent to relay: \(relayUrl)", 
+                        //                 category: SecureLogger.session, level: .debug)
                         // Subscription sent successfully
                         Task { @MainActor in
                             var subs = self.subscriptions[relayUrl] ?? Set<String>()
@@ -188,10 +199,11 @@ class NostrRelayManager: ObservableObject {
         task.sendPing { [weak self] error in
             DispatchQueue.main.async {
                 if error == nil {
-                    // Successfully connected to Nostr relay
+                    SecureLogger.log("✅ Connected to Nostr relay: \(urlString)", 
+                                   category: SecureLogger.session, level: .debug)
                     self?.updateRelayStatus(urlString, isConnected: true)
                 } else {
-                    SecureLogger.log("Failed to connect to Nostr relay \(urlString): \(error?.localizedDescription ?? "Unknown error")", 
+                    SecureLogger.log("❌ Failed to connect to Nostr relay \(urlString): \(error?.localizedDescription ?? "Unknown error")", 
                                    category: SecureLogger.session, level: .error)
                     self?.updateRelayStatus(urlString, isConnected: false, error: error)
                     // Trigger disconnection handler for proper backoff
@@ -254,7 +266,11 @@ class NostrRelayManager: ObservableObject {
                         
                         let event = try NostrEvent(from: eventDict)
                         
-                        // Processing event
+                        // Only log non-gift-wrap events to reduce noise
+                        if event.kind != 1059 {
+                            SecureLogger.log("📥 Received Nostr event (kind: \(event.kind)) from relay: \(relayUrl)", 
+                                            category: SecureLogger.session, level: .debug)
+                        }
                         
                         DispatchQueue.main.async {
                             // Update relay stats
@@ -282,9 +298,14 @@ class NostrRelayManager: ObservableObject {
                        let eventId = array[1] as? String,
                        let success = array[2] as? Bool {
                         let reason = array.count >= 4 ? (array[3] as? String ?? "no reason given") : "no reason given"
-                        if !success {
-                            SecureLogger.log("📮 Event \(eventId) rejected by relay: \(reason)", 
-                                            category: SecureLogger.session, level: .error)
+                        if success {
+                            _ = Self.pendingGiftWrapIDs.remove(eventId)
+                            SecureLogger.log("✅ Event accepted id=\(eventId.prefix(16))... by relay: \(relayUrl)",
+                                            category: SecureLogger.session, level: .debug)
+                        } else {
+                            let isGiftWrap = Self.pendingGiftWrapIDs.remove(eventId) != nil
+                            SecureLogger.log("📮 Event \(eventId.prefix(16))... rejected by relay: \(reason)", 
+                                            category: SecureLogger.session, level: isGiftWrap ? .warning : .error)
                         }
                     }
                     
@@ -311,8 +332,8 @@ class NostrRelayManager: ObservableObject {
             let data = try encoder.encode(req)
             let message = String(data: data, encoding: .utf8) ?? ""
             
-            // Sending event to relay
-            // Event JSON prepared
+            SecureLogger.log("📤 Sending Nostr event (kind: \(event.kind)) to relay: \(relayUrl)", 
+                            category: SecureLogger.session, level: .debug)
             
             connection.send(.string(message)) { [weak self] error in
                 DispatchQueue.main.async {
@@ -320,6 +341,8 @@ class NostrRelayManager: ObservableObject {
                         SecureLogger.log("❌ Failed to send event to \(relayUrl): \(error)", 
                                         category: SecureLogger.session, level: .error)
                     } else {
+                        // SecureLogger.log("✅ Event sent to relay: \(relayUrl)", 
+                        //                 category: SecureLogger.session, level: .debug)
                         // Update relay stats
                         if let index = self?.relays.firstIndex(where: { $0.url == relayUrl }) {
                             self?.relays[index].messagesSent += 1
@@ -525,6 +548,16 @@ struct NostrFilter: Encodable {
         filter.since = since?.timeIntervalSince1970.toInt()
         filter.tagFilters = ["p": [pubkey]]
         filter.limit = 100 // Add a reasonable limit
+        return filter
+    }
+
+    // For location channels: geohash-scoped ephemeral events (kind 20000)
+    static func geohashEphemeral(_ geohash: String, since: Date? = nil, limit: Int = 200) -> NostrFilter {
+        var filter = NostrFilter()
+        filter.kinds = [20000]
+        filter.since = since?.timeIntervalSince1970.toInt()
+        filter.tagFilters = ["g": [geohash]]
+        filter.limit = limit
         return filter
     }
 }

@@ -58,6 +58,9 @@ struct ContentView: View {
     // MARK: - Properties
     
     @EnvironmentObject var viewModel: ChatViewModel
+    #if os(iOS)
+    @ObservedObject private var locationManager = LocationChannelManager.shared
+    #endif
     @State private var messageText = ""
     @State private var textFieldSelection: NSRange? = nil
     @FocusState private var isTextFieldFocused: Bool
@@ -73,10 +76,14 @@ struct ContentView: View {
     @State private var showMessageActions = false
     @State private var selectedMessageSender: String?
     @State private var selectedMessageSenderID: String?
+    @State private var showGroupChatList = false
+    @State private var showGroupChat = false
+    @State private var selectedGroup: GroupChat?
     @FocusState private var isNicknameFieldFocused: Bool
     @State private var lastScrollTime: Date = .distantPast
     @State private var scrollThrottleTimer: Timer?
     @State private var autocompleteDebounceTimer: Timer?
+    @State private var showLocationChannelsSheet = false
     
     // MARK: - Computed Properties
     
@@ -195,6 +202,16 @@ struct ContentView: View {
                 FingerprintView(viewModel: viewModel, peerID: peerID)
             }
         }
+        .sheet(isPresented: $showGroupChatList) {
+            GroupChatListView()
+                .environmentObject(viewModel)
+        }
+        .fullScreenCover(isPresented: $showGroupChat) {
+            if let group = selectedGroup {
+                GroupChatView(group: group)
+                    .environmentObject(viewModel)
+            }
+        }
         .confirmationDialog(
             selectedMessageSender.map { "@\($0)" } ?? "Actions",
             isPresented: $showMessageActions,
@@ -202,7 +219,17 @@ struct ContentView: View {
         ) {
             Button("private message") {
                 if let peerID = selectedMessageSenderID {
+                    #if os(iOS)
+                    if peerID.hasPrefix("nostr:") {
+                        if let full = viewModel.fullNostrHex(forSenderPeerID: peerID) {
+                            viewModel.startGeohashDM(withPubkeyHex: full)
+                        }
+                    } else {
+                        viewModel.startPrivateChat(with: peerID)
+                    }
+                    #else
                     viewModel.startPrivateChat(with: peerID)
+                    #endif
                     withAnimation(.easeInOut(duration: 0.2)) {
                         showSidebar = false
                         sidebarDragOffset = 0
@@ -258,15 +285,22 @@ struct ContentView: View {
                     // Extract messages based on context (private or public chat)
                     let messages: [BitchatMessage] = {
                         if let privatePeer = privatePeer {
+                            // Check if this is a persistent chat first
+                            if let fingerprint = viewModel.getFingerprint(for: privatePeer),
+                               let persistentChat = viewModel.persistentChatManager?.getChat(fingerprint: fingerprint) {
+                                return persistentChat.messages
+                            } else {
+                                // Fallback to legacy private chat
                             let msgs = viewModel.getPrivateChatMessages(for: privatePeer)
                             return msgs
+                            }
                         } else {
                             return viewModel.messages
                         }
                     }()
                     
                     // Implement windowing - show last 100 messages for performance
-                    let windowedMessages = messages.suffix(100)
+                    let windowedMessages = messages
                     
                     ForEach(windowedMessages, id: \.id) { message in
                         VStack(alignment: .leading, spacing: 0) {
@@ -397,7 +431,7 @@ struct ContentView: View {
                             _ = viewModel.completeNickname(suggestion, in: &messageText)
                         }) {
                             HStack {
-                                Text("@\(suggestion)")
+                                Text(suggestion)
                                     .font(.system(size: 11, design: .monospaced))
                                     .foregroundColor(textColor)
                                     .fontWeight(.medium)
@@ -426,10 +460,13 @@ struct ContentView: View {
                     let commandInfo: [(commands: [String], syntax: String?, description: String)] = [
                         (["/block"], "[nickname]", "block or list blocked peers"),
                         (["/clear"], nil, "clear chat messages"),
+                        (["/fav"], "<nickname>", "add to favorites"),
+                        (["/help"], nil, "show this help"),
                         (["/hug"], "<nickname>", "send someone a warm hug"),
                         (["/m", "/msg"], "<nickname> [message]", "send private message"),
                         (["/slap"], "<nickname>", "slap someone with a trout"),
                         (["/unblock"], "<nickname>", "unblock a peer"),
+                        (["/unfav"], "<nickname>", "remove from favorites"),
                         (["/w"], nil, "see who's online")
                     ]
                     
@@ -512,10 +549,13 @@ struct ContentView: View {
                         let commandDescriptions = [
                             ("/block", "block or list blocked peers"),
                             ("/clear", "clear chat messages"),
+                            ("/fav", "add to favorites"),
+                            ("/help", "show this help"),
                             ("/hug", "send someone a warm hug"),
                             ("/m", "send private message"),
                             ("/slap", "slap someone with a trout"),
                             ("/unblock", "unblock a peer"),
+                            ("/unfav", "remove from favorites"),
                             ("/w", "see who's online")
                         ]
                         
@@ -579,7 +619,16 @@ struct ContentView: View {
     // MARK: - Actions
     
     private func sendMessage() {
+        // Check if we're in a persistent chat context
+        if let privatePeer = viewModel.selectedPrivateChatPeer,
+           let fingerprint = viewModel.getFingerprint(for: privatePeer),
+           viewModel.persistentChatManager?.getChat(fingerprint: fingerprint) != nil {
+            // Send via persistent chat
+            viewModel.sendPersistentMessage(messageText, to: fingerprint)
+        } else {
+            // Send via legacy system
         viewModel.sendMessage(messageText)
+        }
         messageText = ""
     }
     
@@ -595,7 +644,7 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 0) {
                 // Header - match main toolbar height
                 HStack {
-                    Text("NETWORK")
+                    Text("PEOPLE")
                         .font(.system(size: 16, weight: .bold, design: .monospaced))
                         .foregroundColor(textColor)
                     Spacer()
@@ -609,160 +658,283 @@ struct ContentView: View {
             // Rooms and People list
             ScrollView {
                 VStack(alignment: .leading, spacing: 6) {
-                    // People section
+                    // Group Chats section
                     VStack(alignment: .leading, spacing: 4) {
-                        // Show appropriate header based on context
-                        if !viewModel.allPeers.isEmpty {
-                            HStack(spacing: 4) {
-                                Image(systemName: "person.2.fill")
-                                    .font(.system(size: 10))
-                                    .accessibilityHidden(true)
-                                Text("PEOPLE")
-                                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+
+                        HStack(spacing: 4) {
+                            Image(systemName: "person.3.fill")
+                                .font(.system(size: 10))
+                                .accessibilityHidden(true)
+                            Text("GROUPS")
+                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            
+                            Spacer()
+                            
+                            // Group invitations badge
+                            if viewModel.pendingInvitationsCount > 0 {
+                                Text("\(viewModel.pendingInvitationsCount)")
+                                    .font(.caption2)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 4)
+                                    .padding(.vertical, 2)
+                                    .background(Color.red)
+                                    .cornerRadius(8)
                             }
-                            .foregroundColor(secondaryTextColor)
+                        }
+                        .foregroundColor(secondaryTextColor)
+                        .padding(.horizontal, 12)
+                        .padding(.top, 12)
+                        
+                        // "View Groups" button
+                        Button(action: {
+                            showGroupChatList = true
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showSidebar = false
+                                sidebarDragOffset = 0
+                            }
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "list.bullet")
+                                    .font(.system(size: 12))
+                                
+                                Text("View All Groups")
+                                    .font(.system(size: 14, design: .monospaced))
+                                
+                                Spacer()
+                                
+                                if viewModel.totalGroupUnreadCount > 0 {
+                                    Text("\(viewModel.totalGroupUnreadCount)")
+                                        .font(.caption2)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 4)
+                                        .padding(.vertical, 2)
+                                        .background(Color.red)
+                                        .cornerRadius(8)
+                                }
+                            }
+                            .foregroundColor(textColor)
                             .padding(.horizontal, 12)
-                            .padding(.top, 12)
+                            .padding(.vertical, 8)
                         }
                         
-                        if viewModel.allPeers.isEmpty {
-                            Text("nobody around...")
-                                .font(.system(size: 14, design: .monospaced))
-                                .foregroundColor(secondaryTextColor)
-                                .padding(.horizontal)
-                                .padding(.top, 12)
-                        } else {
-                            // Extract peer data for display
-                            let peerNicknames = viewModel.meshService.getPeerNicknames()
-                            
-                            // Show all peers (connected and favorites)
-                            // Pre-compute peer data outside ForEach to reduce overhead
-                            let peerData = viewModel.allPeers.map { peer in
-                                // Get current myPeerID for each peer to avoid stale values
-                                let currentMyPeerID = viewModel.meshService.myPeerID
-                                return PeerDisplayData(
-                                    id: peer.id,
-                                    displayName: peer.id == currentMyPeerID ? viewModel.nickname : peer.nickname,
-                                    isFavorite: peer.favoriteStatus?.isFavorite ?? false,
-                                    isMe: peer.id == currentMyPeerID,
-                                    hasUnreadMessages: viewModel.unreadPrivateMessages.contains(peer.id),
-                                    encryptionStatus: viewModel.getEncryptionStatus(for: peer.id),
-                                    connectionState: peer.connectionState,
-                                    isMutualFavorite: peer.favoriteStatus?.isMutual ?? false
-                                )
-                            }.sorted { (peer1: PeerDisplayData, peer2: PeerDisplayData) in
-                                // Sort: favorites first, then alphabetically by nickname
-                                if peer1.isFavorite != peer2.isFavorite {
-                                    return peer1.isFavorite
-                                }
-                                return peer1.displayName < peer2.displayName
-                            }
-                        
-                        ForEach(peerData) { peer in
-                            HStack(spacing: 4) {
-                                // Signal strength indicator or unread message icon
-                                if peer.isMe {
-                                    Image(systemName: "person.fill")
-                                        .font(.system(size: 10))
-                                        .foregroundColor(textColor)
-                                        .accessibilityLabel("You")
-                                } else if peer.hasUnreadMessages {
-                                    Image(systemName: "envelope.fill")
+                        // Recent group chats (show top 3)
+                        if !viewModel.groupChats.isEmpty {
+                            ForEach(Array(viewModel.groupChats.prefix(3)), id: \.id) { group in
+                                HStack(spacing: 4) {
+                                    // Status indicator
+                                    Text(group.statusIndicator)
                                         .font(.system(size: 12))
-                                        .foregroundColor(Color.orange)
-                                        .accessibilityLabel("Unread message from \(peer.displayName)")
-                                } else {
-                                    // Connection state indicator
-                                    switch peer.connectionState {
-                                    case .bluetoothConnected:
-                                        // Radio icon for mesh connection
-                                        Image(systemName: "dot.radiowaves.left.and.right")
-                                            .font(.system(size: 10))
-                                            .foregroundColor(textColor)
-                                            .accessibilityLabel("Connected via mesh")
-                                    case .nostrAvailable:
-                                        // Purple globe for mutual favorites reachable via Nostr
-                                        Image(systemName: "globe")
-                                            .font(.system(size: 10))
-                                            .foregroundColor(.purple)
-                                            .accessibilityLabel("Available via Nostr")
-                                    case .offline:
-                                        if peer.isFavorite {
-                                            // Crescent moon for non-mutual favorites
-                                            Image(systemName: "moon.fill")
-                                                .font(.system(size: 10))
-                                                .foregroundColor(Color.secondary.opacity(0.5))
-                                                .accessibilityLabel("Favorite - Offline")
-                                        } else {
-                                            // Offline indicator for non-favorites (shouldn't happen since we only show favorites when offline)
-                                            Image(systemName: "circle")
-                                                .font(.system(size: 8))
-                                                .foregroundColor(Color.secondary.opacity(0.3))
-                                                .accessibilityLabel("Offline")
-                                        }
-                                    }
-                                }
-                                
-                                // Peer name
-                                if peer.isMe {
-                                    HStack {
-                                        Text(peer.displayName + " (you)")
-                                            .font(.system(size: 14, design: .monospaced))
-                                            .foregroundColor(textColor)
-                                        
-                                        Spacer()
-                                    }
-                                } else {
-                                    Text(peer.displayName)
-                                        .font(.system(size: 14, design: .monospaced))
-                                        .foregroundColor(peer.isFavorite || peerNicknames[peer.id] != nil ? textColor : secondaryTextColor)
+                                        .accessibilityLabel(group.statusText)
                                     
-                                    // Encryption status icon (after peer name)
-                                    if let icon = peer.encryptionStatus.icon {
-                                        Image(systemName: icon)
-                                            .font(.system(size: 10))
-                                            .foregroundColor(peer.encryptionStatus == .noiseVerified ? textColor : 
-                                                           peer.encryptionStatus == .noiseSecured ? textColor :
-                                                           peer.encryptionStatus == .noiseHandshaking ? Color.orange :
-                                                           Color.red)
-                                            .accessibilityLabel("Encryption: \(peer.encryptionStatus == .noiseVerified ? "verified" : peer.encryptionStatus == .noiseSecured ? "secured" : peer.encryptionStatus == .noiseHandshaking ? "establishing" : "none")")
-                                    }
+                                    // Group name
+                                    Text(group.displayName)
+                                        .font(.system(size: 14, design: .monospaced))
+                                        .foregroundColor(group.onlineMembers.isEmpty ? secondaryTextColor : textColor)
                                     
                                     Spacer()
                                     
-                                    // Favorite star
-                                    Button(action: {
-                                        viewModel.toggleFavorite(peerID: peer.id)
-                                    }) {
-                                        Image(systemName: peer.isFavorite ? "star.fill" : "star")
-                                            .font(.system(size: 12))
-                                            .foregroundColor(peer.isFavorite ? Color.yellow : secondaryTextColor)
+                                    // Unread count
+                                    if group.unreadCount > 0 {
+                                        Text("\(group.unreadCount)")
+                                            .font(.caption2)
+                                            .fontWeight(.bold)
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 4)
+                                            .padding(.vertical, 2)
+                                            .background(Color.red)
+                                            .cornerRadius(8)
                                     }
-                                    .buttonStyle(.plain)
-                                    .accessibilityLabel(peer.isFavorite ? "Remove \(peer.displayName) from favorites" : "Add \(peer.displayName) to favorites")
                                 }
-                            }
-                            .padding(.horizontal)
-                            .padding(.vertical, 4)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                if !peer.isMe {
-                                    // Allow tapping on any peer (connected or offline favorite)
-                                    viewModel.startPrivateChat(with: peer.id)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 6)
+                                .onTapGesture {
+                                    selectedGroup = group
+                                    showGroupChat = true
                                     withAnimation(.easeInOut(duration: 0.2)) {
                                         showSidebar = false
                                         sidebarDragOffset = 0
                                     }
                                 }
                             }
-                            .onTapGesture(count: 2) {
-                                if !peer.isMe {
-                                    // Show fingerprint on double tap
-                                    viewModel.showFingerprint(for: peer.id)
+                        }
+                    }
+                    
+                    // Persistent Private Chats section
+                    VStack(alignment: .leading, spacing: 4) {
+                        if !viewModel.persistentChats.isEmpty {
+                            HStack(spacing: 4) {
+                                Image(systemName: "message.fill")
+                                    .font(.system(size: 10))
+                                    .accessibilityHidden(true)
+                                Text("CHATS")
+                                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            }
+                            .foregroundColor(secondaryTextColor)
+                            .padding(.horizontal, 12)
+                            .padding(.top, 12)
+                            
+                            ForEach(viewModel.persistentChats, id: \.id) { chat in
+                                HStack(spacing: 4) {
+                                    // Status indicator
+                                    Text(chat.statusIndicator)
+                                        .font(.system(size: 12))
+                                        .accessibilityLabel(chat.statusText)
+                                    
+                                    // Chat name
+                                    Text(chat.displayName)
+                                        .font(.system(size: 14, design: .monospaced))
+                                        .foregroundColor(chat.isOnline ? textColor : secondaryTextColor)
+                                    
+                                    Spacer()
+                                    
+                                    // Unread count
+                                    if chat.unreadCount > 0 {
+                                        Text("\(chat.unreadCount)")
+                                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 2)
+                                            .background(Color.red)
+                                            .clipShape(Capsule())
+                                    }
+                                    
+                                    // Pending messages indicator
+                                    if !chat.pendingMessages.isEmpty {
+                                        Text("📤")
+                                            .font(.system(size: 10))
+                                            .accessibilityLabel("\(chat.pendingMessages.count) pending messages")
+                                    }
+                                }
+                                .padding(.horizontal)
+                                .padding(.vertical, 4)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    viewModel.startPersistentChat(with: chat.fingerprint)
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        showSidebar = false
+                                        sidebarDragOffset = 0
+                                    }
+                                }
+                                .contextMenu {
+                                    Button("Delete Chat", role: .destructive) {
+                                        viewModel.deletePersistentChat(fingerprint: chat.fingerprint)
+                                    }
                                 }
                             }
                         }
+                    }
+                    
+                    // People section - split into contacted and discovered
+                    VStack(alignment: .leading, spacing: 4) {
+                        // Extract peer data for display
+                        let peerNicknames = viewModel.meshService.getPeerNicknames()
+                        
+                        // Pre-compute peer data outside ForEach to reduce overhead
+                        let allPeerData = viewModel.allPeers.map { peer in
+                            // Get current myPeerID for each peer to avoid stale values
+                            let currentMyPeerID = viewModel.meshService.myPeerID
+                            return PeerDisplayData(
+                                id: peer.id,
+                                displayName: peer.id == currentMyPeerID ? viewModel.nickname : peer.nickname,
+                                isFavorite: peer.favoriteStatus?.isFavorite ?? false,
+                                isMe: peer.id == currentMyPeerID,
+                                hasUnreadMessages: viewModel.hasUnreadMessages(for: peer.id),
+                                encryptionStatus: viewModel.getEncryptionStatus(for: peer.id),
+                                connectionState: peer.connectionState,
+                                isMutualFavorite: peer.favoriteStatus?.isMutual ?? false
+                            )
                         }
+                        
+                        // Separate into contacted and discovered peers
+                        let contactedPeers = allPeerData.filter { peer in
+                            guard !peer.isMe else { return false }
+                            // Check if we have a persistent chat with this peer
+                            if let fingerprint = viewModel.getFingerprint(for: peer.id),
+                               viewModel.persistentChatManager?.getChat(fingerprint: fingerprint) != nil {
+                                return true
+                            }
+                            // Also include favorites as "contacted"
+                            return peer.isFavorite
+                        }.sorted { (peer1, peer2) in
+                            // Sort contacted: favorites first, then alphabetically
+                            if peer1.isFavorite != peer2.isFavorite {
+                                return peer1.isFavorite
+                            }
+                            return peer1.displayName < peer2.displayName
+                        }
+                        
+                        let discoveredPeers = allPeerData.filter { peer in
+                            guard !peer.isMe else { return false }
+                            // Only show if not contacted and online
+                            let isContacted = contactedPeers.contains { $0.id == peer.id }
+                            return !isContacted && peer.connectionState == .bluetoothConnected
+                        }.sorted { $0.displayName < $1.displayName }
+                        
+                        // Show DISCOVERED section only if there are discovered peers
+                        if !discoveredPeers.isEmpty {
+                            HStack(spacing: 4) {
+                                Image(systemName: "antenna.radiowaves.left.and.right")
+                                    .font(.system(size: 10))
+                                    .accessibilityHidden(true)
+                                Text("DISCOVERED")
+                                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            }
+                            .foregroundColor(secondaryTextColor)
+                            .padding(.horizontal, 12)
+                            .padding(.top, 12)
+                            
+                            ForEach(discoveredPeers) { peer in
+                                peerRowView(peer: peer, peerNicknames: peerNicknames, isDiscovered: true)
+                            }
+                        }
+                        
+                        // Show CONTACTS section if there are contacted peers
+                        if !contactedPeers.isEmpty {
+                            HStack(spacing: 4) {
+                                Image(systemName: "person.2.fill")
+                                    .font(.system(size: 10))
+                                    .accessibilityHidden(true)
+                                Text("CONTACTS")
+                                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            }
+                            .foregroundColor(secondaryTextColor)
+                            .padding(.horizontal, 12)
+                            .padding(.top, contactedPeers.isEmpty ? 12 : 8)
+                            
+                            ForEach(contactedPeers) { peer in
+                                peerRowView(peer: peer, peerNicknames: peerNicknames, isDiscovered: false)
+                            }
+                        }
+                        
+                        // Show empty state only if no peers at all
+                        if contactedPeers.isEmpty && discoveredPeers.isEmpty {
+                            Text("nobody around...")
+                                .font(.system(size: 14, design: .monospaced))
+                                .foregroundColor(secondaryTextColor)
+                                .padding(.horizontal)
+                                .padding(.top, 12)
+
+                        }
+                        #else
+                        MeshPeerList(viewModel: viewModel,
+                                     textColor: textColor,
+                                     secondaryTextColor: secondaryTextColor,
+                                     onTapPeer: { peerID in
+                                         viewModel.startPrivateChat(with: peerID)
+                                         withAnimation(.easeInOut(duration: 0.2)) {
+                                             showSidebar = false
+                                             sidebarDragOffset = 0
+                                         }
+                                     },
+                                     onToggleFavorite: { peerID in
+                                         viewModel.toggleFavorite(peerID: peerID)
+                                     },
+                                     onShowFingerprint: { peerID in
+                                         viewModel.showFingerprint(for: peerID)
+                                     })
+                        #endif
                     }
                 }
                 .id(viewModel.allPeers.map { "\($0.id)-\($0.isConnected)" }.joined())
@@ -771,6 +943,119 @@ struct ContentView: View {
             Spacer()
         }
         .background(backgroundColor)
+        }
+    }
+    
+    // MARK: - Helper Methods
+    
+    @ViewBuilder
+    private func peerRowView(peer: PeerDisplayData, peerNicknames: [String: String], isDiscovered: Bool) -> some View {
+        HStack(spacing: 4) {
+            // Signal strength indicator or unread message icon
+            if peer.isMe {
+                Image(systemName: "person.fill")
+                    .font(.system(size: 10))
+                    .foregroundColor(textColor)
+                    .accessibilityLabel("You")
+            } else if peer.hasUnreadMessages {
+                Image(systemName: "envelope.fill")
+                    .font(.system(size: 12))
+                    .foregroundColor(Color.orange)
+                    .accessibilityLabel("Unread message from \(peer.displayName)")
+                        } else {
+                // Connection state indicator
+                switch peer.connectionState {
+                case .bluetoothConnected:
+                    // Radio icon for mesh connection
+                    Image(systemName: "dot.radiowaves.left.and.right")
+                        .font(.system(size: 10))
+                        .foregroundColor(textColor)
+                        .accessibilityLabel("Connected via mesh")
+                case .nostrAvailable:
+                    // Purple globe for mutual favorites reachable via Nostr
+                    Image(systemName: "globe")
+                        .font(.system(size: 10))
+                        .foregroundColor(.purple)
+                        .accessibilityLabel("Available via Nostr")
+                case .offline:
+                    if peer.isFavorite {
+                        // Crescent moon for non-mutual favorites
+                        Image(systemName: "moon.fill")
+                            .font(.system(size: 10))
+                            .foregroundColor(Color.secondary.opacity(0.5))
+                            .accessibilityLabel("Favorite - Offline")
+                    } else {
+                        // Offline indicator for non-favorites (shouldn't happen since we only show favorites when offline)
+                        Image(systemName: "circle")
+                            .font(.system(size: 8))
+                            .foregroundColor(Color.secondary.opacity(0.3))
+                            .accessibilityLabel("Offline")
+                    }
+                }
+            }
+            
+            // Peer name with visual distinction for discovered vs contacted
+            Text(peer.displayName)
+                .font(.system(size: 14, design: .monospaced))
+                .foregroundColor(
+                    isDiscovered ? 
+                        secondaryTextColor.opacity(0.8) : // Dimmer for discovered
+                        (peer.isFavorite || peerNicknames[peer.id] != nil ? textColor : secondaryTextColor)
+                )
+            
+            // Encryption status icon (after peer name)
+            if let icon = peer.encryptionStatus.icon {
+                Image(systemName: icon)
+                    .font(.system(size: 10))
+                    .foregroundColor(peer.encryptionStatus == .noiseVerified ? textColor : 
+                                   peer.encryptionStatus == .noiseSecured ? textColor :
+                                   peer.encryptionStatus == .noiseHandshaking ? Color.orange :
+                                   Color.red)
+                    .accessibilityLabel("Encryption: \(peer.encryptionStatus == .noiseVerified ? "verified" : peer.encryptionStatus == .noiseSecured ? "secured" : peer.encryptionStatus == .noiseHandshaking ? "establishing" : "none")")
+            }
+            
+            Spacer()
+            
+            // Show "NEW" badge for discovered peers
+            if isDiscovered {
+                Text("NEW")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(Color.blue)
+                    .clipShape(Capsule())
+            }
+            
+            // Favorite star (only show for contacted peers or allow adding for discovered)
+            Button(action: {
+                viewModel.toggleFavorite(peerID: peer.id)
+            }) {
+                Image(systemName: peer.isFavorite ? "star.fill" : "star")
+                    .font(.system(size: 12))
+                    .foregroundColor(peer.isFavorite ? Color.yellow : secondaryTextColor)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(peer.isFavorite ? "Remove \(peer.displayName) from favorites" : "Add \(peer.displayName) to favorites")
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if !peer.isMe {
+                // Allow tapping on any peer (contacted or discovered)
+                viewModel.startPrivateChat(with: peer.id)
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showSidebar = false
+                    sidebarDragOffset = 0
+                }
+            }
+        }
+        .onTapGesture(count: 2) {
+            if !peer.isMe {
+                // Show fingerprint on double tap
+                viewModel.showFingerprint(for: peer.id)
+            }
         }
     }
     
@@ -838,7 +1123,44 @@ struct ContentView: View {
             .foregroundColor(textColor)
         }
     }
+
+    // Split a name into base and a '#abcd' suffix if present
+    private func splitNameSuffix(_ name: String) -> (base: String, suffix: String) {
+        guard name.count >= 5 else { return (name, "") }
+        let suffix = String(name.suffix(5))
+        if suffix.first == "#", suffix.dropFirst().allSatisfy({ c in
+            ("0"..."9").contains(String(c)) || ("a"..."f").contains(String(c)) || ("A"..."F").contains(String(c))
+        }) {
+            let base = String(name.dropLast(5))
+            return (base, suffix)
+        }
+        return (name, "")
+    }
     
+    #if os(iOS)
+    // Compute channel-aware people count and color for toolbar
+    private func channelPeopleCountAndColor() -> (Int, Color) {
+        switch locationManager.selectedChannel {
+        case .location:
+            let n = viewModel.geohashPeople.count
+            // Use standard green (dark: system green; light: custom darker green)
+            let standardGreen = (colorScheme == .dark) ? Color.green : Color(red: 0, green: 0.5, blue: 0)
+            return (n, n > 0 ? standardGreen : Color.secondary)
+        case .mesh:
+            let counts = viewModel.allPeers.reduce(into: (others: 0, mesh: 0)) { counts, peer in
+                guard peer.id != viewModel.meshService.myPeerID else { return }
+                let isMeshConnected = peer.isConnected
+                if isMeshConnected { counts.mesh += 1; counts.others += 1 }
+                else if peer.isMutualFavorite { counts.others += 1 }
+            }
+            // Darker, more neutral blue (less purple hue)
+            let meshBlue = Color(hue: 0.60, saturation: 0.85, brightness: 0.82)
+            let color: Color = counts.mesh > 0 ? meshBlue : Color.secondary
+            return (counts.others, color)
+        }
+    }
+    #endif
+
     
     private var mainHeaderView: some View {
         HStack(spacing: 0) {
@@ -882,34 +1204,64 @@ struct ContentView: View {
             
             Spacer()
             
-            // People counter with unread indicator
-            HStack(spacing: 4) {
-                if !viewModel.unreadPrivateMessages.isEmpty {
-                    Image(systemName: "envelope.fill")
-                        .font(.system(size: 12))
-                        .foregroundColor(Color.orange)
-                        .accessibilityLabel("Unread private messages")
-                }
-                
-                // Single pass to count both metrics
+            // Channel badge + dynamic spacing + people counter
+            HStack(spacing: 10) {
+                // Unread icon immediately to the left of the channel badge (independent from channel button)
+                #if os(iOS)
+                let cc = channelPeopleCountAndColor()
+                let otherPeersCount = cc.0
+                let countColor = cc.1
+                #else
                 let peerCounts = viewModel.allPeers.reduce(into: (others: 0, mesh: 0)) { counts, peer in
                     guard peer.id != viewModel.meshService.myPeerID else { return }
-                    
                     let isMeshConnected = peer.isConnected
-                    if isMeshConnected {
-                        counts.mesh += 1
-                        counts.others += 1
-                    } else if peer.isMutualFavorite {
-                        counts.others += 1
-                    }
+                    if isMeshConnected { counts.mesh += 1; counts.others += 1 }
+                    else if peer.isMutualFavorite { counts.others += 1 }
                 }
-                
                 let otherPeersCount = peerCounts.others
-                let meshPeerCount = peerCounts.mesh
+                // Darker, more neutral blue (less purple hue)
+                let meshBlue = Color(hue: 0.60, saturation: 0.85, brightness: 0.82)
+                let countColor: Color = (peerCounts.mesh > 0) ? meshBlue : Color.secondary
+                #endif
                 
-                // Purple only if we have peers but none are reachable via mesh (only via Nostr)
-                let isNostrOnly = otherPeersCount > 0 && meshPeerCount == 0
-                
+                // Unread indicator
+                #if os(iOS)
+                if viewModel.hasAnyUnreadMessages {
+                    Button(action: { viewModel.openMostRelevantPrivateChat() }) {
+                        Image(systemName: "envelope.fill")
+                            .font(.system(size: 12))
+                            .foregroundColor(Color.orange)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Open unread private chat")
+                }
+                // Location channels button '#'
+                Button(action: { showLocationChannelsSheet = true }) {
+                    let badgeText: String = {
+                        switch locationManager.selectedChannel {
+                        case .mesh: return "#mesh"
+                        case .location(let ch): return "#\(ch.geohash)"
+                        }
+                    }()
+                    let badgeColor: Color = {
+                        switch locationManager.selectedChannel {
+                        case .mesh:
+                            return Color(hue: 0.60, saturation: 0.85, brightness: 0.82)
+                        case .location:
+                            return (colorScheme == .dark) ? Color.green : Color(red: 0, green: 0.5, blue: 0)
+                        }
+                    }()
+                    Text(badgeText)
+                        .font(.system(size: 14, design: .monospaced))
+                        .foregroundColor(badgeColor)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .layoutPriority(2)
+                        .accessibilityLabel("location channels")
+                }
+                .buttonStyle(.plain)
+                #endif
+
                 HStack(spacing: 4) {
                     // People icon with count
                     Image(systemName: "person.2.fill")
@@ -919,7 +1271,7 @@ struct ContentView: View {
                         .font(.system(size: 12, design: .monospaced))
                         .accessibilityHidden(true)
                 }
-                .foregroundColor(isNostrOnly ? Color.purple : (meshPeerCount > 0 ? textColor : Color.red))
+                .foregroundColor(countColor)
             }
             .onTapGesture {
                 withAnimation(.easeInOut(duration: 0.2)) {
@@ -930,6 +1282,11 @@ struct ContentView: View {
         }
         .frame(height: 44)
         .padding(.horizontal, 12)
+        #if os(iOS)
+        .sheet(isPresented: $showLocationChannelsSheet) {
+            LocationChannelsSheet(isPresented: $showLocationChannelsSheet)
+        }
+        #endif
         .background(backgroundColor.opacity(0.95))
     }
     
@@ -943,21 +1300,60 @@ struct ContentView: View {
     
     @ViewBuilder
     private func privateHeaderContent(for privatePeerID: String) -> some View {
-        // Try to resolve to current peer ID if this is an old one
-        // resolveCurrentPeerID not implemented
-        let currentPeerID: String = privatePeerID
+        // Prefer short (mesh) ID when mesh-connected (radio). Only use full Noise key when not connected (globe).
+        let headerPeerID: String = {
+            if privatePeerID.count == 16 {
+                let isMeshConnected = viewModel.meshService.isPeerConnected(privatePeerID) || viewModel.connectedPeers.contains(privatePeerID)
+                if !isMeshConnected, let stable = viewModel.getNoiseKeyForShortID(privatePeerID) {
+                    return stable
+                }
+            } else if privatePeerID.count == 64 {
+                // If we have a full Noise key and a corresponding short ID is currently mesh-connected, prefer short ID
+                if let short = viewModel.getShortIDForNoiseKey(privatePeerID) {
+                    if viewModel.meshService.isPeerConnected(short) || viewModel.connectedPeers.contains(short) {
+                        return short
+                    }
+                }
+            }
+            return privatePeerID
+        }()
         
-        let peer = viewModel.getPeer(byID: currentPeerID)
-        let privatePeerNick = peer?.displayName ?? 
-                              viewModel.meshService.getPeerNicknames()[currentPeerID] ?? 
-                              FavoritesPersistenceService.shared.getFavoriteStatus(for: Data(hexString: privatePeerID) ?? Data())?.peerNickname ?? 
-                              // getFavoriteStatusByNostrKey not implemented
-                              // FavoritesPersistenceService.shared.getFavoriteStatusByNostrKey(privatePeerID)?.peerNickname ?? 
+        // Resolve peer object for header context (may be offline favorite)
+        let peer = viewModel.getPeer(byID: headerPeerID)
+
+        
+        // Try to get name from persistent chat first
+        let privatePeerNick: String = {
+            if let fingerprint = viewModel.getFingerprint(for: headerPeerID),
+               let persistentChat = viewModel.persistentChatManager?.getChat(fingerprint: fingerprint) {
+                return persistentChat.displayName
+            }
+            
+            return peer?.displayName ?? 
+                              viewModel.meshService.peerNickname(peerID: headerPeerID) ??
+                              FavoritesPersistenceService.shared.getFavoriteStatus(for: Data(hexString: headerPeerID) ?? Data())?.peerNickname ?? 
                               "Unknown"
+// --Main
+//         let privatePeerNick: String = {
+//             if privatePeerID.hasPrefix("nostr_") {
+//                 #if os(iOS)
+//                 // Build geohash DM header: "#<ghash>/@name#abcd"
+//                 if case .location(let ch) = locationManager.selectedChannel {
+//                     let disp = viewModel.geohashDisplayName(for: privatePeerID)
+//                     return "#\(ch.geohash)/@\(disp)"
+//                 }
+//                 #endif
+//             }
+//             return peer?.displayName ?? 
+//                    viewModel.meshService.peerNickname(peerID: headerPeerID) ??
+//                    FavoritesPersistenceService.shared.getFavoriteStatus(for: Data(hexString: headerPeerID) ?? Data())?.peerNickname ?? 
+//                    "Unknown"
+
+        }()
         let isNostrAvailable: Bool = {
             guard let connectionState = peer?.connectionState else { 
                 // Check if we can reach this peer via Nostr even if not in allPeers
-                if let noiseKey = Data(hexString: privatePeerID),
+                if let noiseKey = Data(hexString: headerPeerID),
                    let favoriteStatus = FavoritesPersistenceService.shared.getFavoriteStatus(for: noiseKey),
                    favoriteStatus.isMutual {
                     return true
@@ -975,7 +1371,7 @@ struct ContentView: View {
         ZStack {
                     // Center content - always perfectly centered
                     Button(action: {
-                        viewModel.showFingerprint(for: privatePeerID)
+                        viewModel.showFingerprint(for: headerPeerID)
                     }) {
                         HStack(spacing: 6) {
                             // Show transport icon based on connection state (like peer list)
@@ -1003,21 +1399,27 @@ struct ContentView: View {
                                     .font(.system(size: 14))
                                     .foregroundColor(.purple)
                                     .accessibilityLabel("Available via Nostr")
+                            } else if viewModel.meshService.isPeerConnected(headerPeerID) || viewModel.connectedPeers.contains(headerPeerID) {
+                                // Fallback: if peer lookup is missing but mesh reports connected, show radio
+                                Image(systemName: "dot.radiowaves.left.and.right")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(textColor)
+                                    .accessibilityLabel("Connected via mesh")
                             }
                             
                             Text("\(privatePeerNick)")
                                 .font(.system(size: 16, weight: .medium, design: .monospaced))
-                                .foregroundColor(textColor)
-                            
-                            // Dynamic encryption status icon
-                            let encryptionStatus = viewModel.getEncryptionStatus(for: privatePeerID)
-                            if let icon = encryptionStatus.icon {
-                                Image(systemName: icon)
-                                    .font(.system(size: 14))
-                                    .foregroundColor(encryptionStatus == .noiseVerified ? textColor : 
-                                                   encryptionStatus == .noiseSecured ? textColor :
-                                                   Color.red)
-                                    .accessibilityLabel("Encryption status: \(encryptionStatus == .noiseVerified ? "verified" : encryptionStatus == .noiseSecured ? "secured" : "not encrypted")")
+                                .foregroundColor(textColor)                            // Dynamic encryption status icon (hide for geohash DMs)
+                            if !privatePeerID.hasPrefix("nostr_") {
+                                let encryptionStatus = viewModel.getEncryptionStatus(for: headerPeerID)
+                                if let icon = encryptionStatus.icon {
+                                    Image(systemName: icon)
+                                        .font(.system(size: 14))
+                                        .foregroundColor(encryptionStatus == .noiseVerified ? textColor : 
+                                                       encryptionStatus == .noiseSecured ? textColor :
+                                                       Color.red)
+                                        .accessibilityLabel("Encryption status: \(encryptionStatus == .noiseVerified ? "verified" : encryptionStatus == .noiseSecured ? "secured" : "not encrypted")")
+                                }
                             }
                         }
                         .accessibilityLabel("Private chat with \(privatePeerNick)")
@@ -1044,17 +1446,19 @@ struct ContentView: View {
                         
                         Spacer()
                         
-                        // Favorite button
-                        Button(action: {
-                            viewModel.toggleFavorite(peerID: privatePeerID)
-                        }) {
-                            Image(systemName: viewModel.isFavorite(peerID: privatePeerID) ? "star.fill" : "star")
-                                .font(.system(size: 16))
-                                .foregroundColor(viewModel.isFavorite(peerID: privatePeerID) ? Color.yellow : textColor)
+                        // Favorite button (hidden for geohash DMs)
+                        if !(privatePeerID.hasPrefix("nostr_")) {
+                            Button(action: {
+                                viewModel.toggleFavorite(peerID: headerPeerID)
+                            }) {
+                                Image(systemName: viewModel.isFavorite(peerID: headerPeerID) ? "star.fill" : "star")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(viewModel.isFavorite(peerID: headerPeerID) ? Color.yellow : textColor)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(viewModel.isFavorite(peerID: privatePeerID) ? "Remove from favorites" : "Add to favorites")
+                            .accessibilityHint("Double tap to toggle favorite status")
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(viewModel.isFavorite(peerID: privatePeerID) ? "Remove from favorites" : "Add to favorites")
-                        .accessibilityHint("Double tap to toggle favorite status")
                     }
                 }
                 .frame(height: 44)
@@ -1066,7 +1470,7 @@ struct ContentView: View {
 
 // MARK: - Helper Views
 
-// Helper view for rendering message content with clickable hashtags
+// Helper view for rendering message content (plain, no hashtag/mention formatting)
 struct MessageContentView: View {
     let message: BitchatMessage
     let viewModel: ChatViewModel
@@ -1074,106 +1478,15 @@ struct MessageContentView: View {
     let isMentioned: Bool
     
     var body: some View {
-        let content = message.content
-        let hashtagPattern = "#([a-zA-Z0-9_]+)"
-        let mentionPattern = "@([a-zA-Z0-9_]+)"
-        
-        let hashtagRegex = try? NSRegularExpression(pattern: hashtagPattern, options: [])
-        let mentionRegex = try? NSRegularExpression(pattern: mentionPattern, options: [])
-        
-        let hashtagMatches = hashtagRegex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
-        let mentionMatches = mentionRegex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
-        
-        // Combine all matches and sort by location
-        var allMatches: [(range: NSRange, type: String)] = []
-        for match in hashtagMatches {
-            allMatches.append((match.range(at: 0), "hashtag"))
-        }
-        for match in mentionMatches {
-            allMatches.append((match.range(at: 0), "mention"))
-        }
-        allMatches.sort { $0.range.location < $1.range.location }
-        
-        // Build the text as a concatenated Text view for natural wrapping
-        let segments = buildTextSegments()
-        var result = Text("")
-        
-        for segment in segments {
-            if segment.type == "hashtag" {
-                // Note: We can't have clickable links in concatenated Text, so hashtags won't be clickable
-                result = result + Text(segment.text)
-                    .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                    .foregroundColor(Color.blue)
-                    .underline()
-            } else if segment.type == "mention" {
-                result = result + Text(segment.text)
-                    .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                    .foregroundColor(Color.orange)
-            } else {
-                result = result + Text(segment.text)
-                    .font(.system(size: 14, design: .monospaced))
-                    .fontWeight(isMentioned ? .bold : .regular)
-            }
-        }
-        
-        return result
+        Text(message.content)
+            .font(.system(size: 14, design: .monospaced))
+            .fontWeight(isMentioned ? .bold : .regular)
             .textSelection(.enabled)
     }
     
     // MARK: - Helper Methods
     
-    private func buildTextSegments() -> [(text: String, type: String)] {
-        var segments: [(text: String, type: String)] = []
-        let content = message.content
-        var lastEnd = content.startIndex
-        
-        let hashtagPattern = "#([a-zA-Z0-9_]+)"
-        let mentionPattern = "@([a-zA-Z0-9_]+)"
-        
-        let hashtagRegex = try? NSRegularExpression(pattern: hashtagPattern, options: [])
-        let mentionRegex = try? NSRegularExpression(pattern: mentionPattern, options: [])
-        
-        let hashtagMatches = hashtagRegex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
-        let mentionMatches = mentionRegex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
-        
-        // Combine all matches and sort by location
-        var allMatches: [(range: NSRange, type: String)] = []
-        for match in hashtagMatches {
-            allMatches.append((match.range(at: 0), "hashtag"))
-        }
-        for match in mentionMatches {
-            allMatches.append((match.range(at: 0), "mention"))
-        }
-        allMatches.sort { $0.range.location < $1.range.location }
-        
-        for (matchRange, matchType) in allMatches {
-            if let range = Range(matchRange, in: content) {
-                // Add text before the match
-                if lastEnd < range.lowerBound {
-                    let beforeText = String(content[lastEnd..<range.lowerBound])
-                    if !beforeText.isEmpty {
-                        segments.append((beforeText, "text"))
-                    }
-                }
-                
-                // Add the match
-                let matchText = String(content[range])
-                segments.append((matchText, matchType))
-                
-                lastEnd = range.upperBound
-            }
-        }
-        
-        // Add any remaining text
-        if lastEnd < content.endIndex {
-            let remainingText = String(content[lastEnd...])
-            if !remainingText.isEmpty {
-                segments.append((remainingText, "text"))
-            }
-        }
-        
-        return segments
-    }
+    // buildTextSegments removed: content is rendered plain.
 }
 
 // Delivery status indicator view

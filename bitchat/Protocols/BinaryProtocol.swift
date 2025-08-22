@@ -45,7 +45,7 @@
 ///
 /// ## Compression Strategy
 /// - Automatic compression for payloads > 256 bytes
-/// - LZ4 algorithm for speed over ratio
+/// - zlib compression for broad compatibility on Apple platforms
 /// - Original size stored for decompression
 /// - Flag bit indicates compressed payload
 ///
@@ -117,7 +117,7 @@ struct BinaryProtocol {
     }
     
     // Encode BitchatPacket to binary format
-    static func encode(_ packet: BitchatPacket) -> Data? {
+    static func encode(_ packet: BitchatPacket, padding: Bool = true) -> Data? {
         var data = Data()
         
         
@@ -200,58 +200,70 @@ struct BinaryProtocol {
         
         
         // Apply padding to standard block sizes for traffic analysis resistance
-        let optimalSize = MessagePadding.optimalBlockSize(for: data.count)
-        let paddedData = MessagePadding.pad(data, toSize: optimalSize)
-        
-        
-        return paddedData
+        if padding {
+            let optimalSize = MessagePadding.optimalBlockSize(for: data.count)
+            let paddedData = MessagePadding.pad(data, toSize: optimalSize)
+            return paddedData
+        } else {
+            // Caller explicitly requested no padding (e.g., BLE write path)
+            return data
+        }
     }
     
     // Decode binary data to BitchatPacket
     static func decode(_ data: Data) -> BitchatPacket? {
-        // Remove padding first
-        let unpaddedData = MessagePadding.unpad(data)
-        
+        // Try decode as-is first (robust when padding wasn't applied)
+        if let pkt = decodeCore(data) { return pkt }
+        // If that fails, try after removing padding
+        let unpadded = MessagePadding.unpad(data)
+        if unpadded as NSData === data as NSData { return nil }
+        return decodeCore(unpadded)
+    }
+
+    // Core decoding implementation used by decode(_:) with and without padding removal
+    private static func decodeCore(_ raw: Data) -> BitchatPacket? {
         // Minimum size check: header + senderID
-        guard unpaddedData.count >= headerSize + senderIDSize else { 
+        guard raw.count >= headerSize + senderIDSize else { 
             return nil 
         }
         
+        // Convert to array for safer indexed access
+        let dataArray = Array(raw)
         var offset = 0
         
         // Header parsing with bounds checks
-        guard offset + 1 <= unpaddedData.count else { return nil }
-        let version = unpaddedData[offset]; offset += 1
+        guard offset < dataArray.count else { return nil }
+        let version = dataArray[offset]; offset += 1
         
         // Check if version is 1 (only supported version)
         guard version == 1 else { 
             return nil 
         }
         
-        guard offset + 1 <= unpaddedData.count else { return nil }
-        let type = unpaddedData[offset]; offset += 1
+        guard offset < dataArray.count else { return nil }
+        let type = dataArray[offset]; offset += 1
         
-        guard offset + 1 <= unpaddedData.count else { return nil }
-        let ttl = unpaddedData[offset]; offset += 1
+        guard offset < dataArray.count else { return nil }
+        let ttl = dataArray[offset]; offset += 1
         
         // Timestamp - need 8 bytes
-        guard offset + 8 <= unpaddedData.count else { return nil }
-        let timestampData = unpaddedData[offset..<offset+8]
+        guard offset + 8 <= dataArray.count else { return nil }
+        let timestampData = Data(dataArray[offset..<offset+8])
         let timestamp = timestampData.reduce(0) { result, byte in
             (result << 8) | UInt64(byte)
         }
         offset += 8
         
         // Flags
-        guard offset + 1 <= unpaddedData.count else { return nil }
-        let flags = unpaddedData[offset]; offset += 1
+        guard offset < dataArray.count else { return nil }
+        let flags = dataArray[offset]; offset += 1
         let hasRecipient = (flags & Flags.hasRecipient) != 0
         let hasSignature = (flags & Flags.hasSignature) != 0
         let isCompressed = (flags & Flags.isCompressed) != 0
         
         // Payload length - need 2 bytes
-        guard offset + 2 <= unpaddedData.count else { return nil }
-        let payloadLengthData = unpaddedData[offset..<offset+2]
+        guard offset + 2 <= dataArray.count else { return nil }
+        let payloadLengthData = Data(dataArray[offset..<offset+2])
         let payloadLength = payloadLengthData.reduce(0) { result, byte in
             (result << 8) | UInt16(byte)
         }
@@ -261,15 +273,15 @@ struct BinaryProtocol {
         guard payloadLength <= 65535 else { return nil }
         
         // SenderID - need 8 bytes
-        guard offset + senderIDSize <= unpaddedData.count else { return nil }
-        let senderID = unpaddedData[offset..<offset+senderIDSize]
+        guard offset + senderIDSize <= dataArray.count else { return nil }
+        let senderID = Data(dataArray[offset..<offset+senderIDSize])
         offset += senderIDSize
         
         // RecipientID if present
         var recipientID: Data?
         if hasRecipient {
-            guard offset + recipientIDSize <= unpaddedData.count else { return nil }
-            recipientID = unpaddedData[offset..<offset+recipientIDSize]
+            guard offset + recipientIDSize <= dataArray.count else { return nil }
+            recipientID = Data(dataArray[offset..<offset+recipientIDSize])
             offset += recipientIDSize
         }
         
@@ -280,8 +292,8 @@ struct BinaryProtocol {
             guard Int(payloadLength) >= 2 else { return nil }
             
             // Check we have enough data for the original size prefix
-            guard offset + 2 <= unpaddedData.count else { return nil }
-            let originalSizeData = unpaddedData[offset..<offset+2]
+            guard offset + 2 <= dataArray.count else { return nil }
+            let originalSizeData = Data(dataArray[offset..<offset+2])
             let originalSize = Int(originalSizeData.reduce(0) { result, byte in
                 (result << 8) | UInt16(byte)
             })
@@ -292,11 +304,11 @@ struct BinaryProtocol {
             
             // Check we have enough data for the compressed payload
             let compressedPayloadSize = Int(payloadLength) - 2
-            guard compressedPayloadSize >= 0 && offset + compressedPayloadSize <= unpaddedData.count else { 
+            guard compressedPayloadSize >= 0 && offset + compressedPayloadSize <= dataArray.count else { 
                 return nil 
             }
             
-            let compressedPayload = unpaddedData[offset..<offset+compressedPayloadSize]
+            let compressedPayload = Data(dataArray[offset..<offset+compressedPayloadSize])
             offset += compressedPayloadSize
             
             // Decompress with error handling
@@ -312,23 +324,23 @@ struct BinaryProtocol {
             payload = decompressedPayload
         } else {
             // Uncompressed payload
-            guard Int(payloadLength) >= 0 && offset + Int(payloadLength) <= unpaddedData.count else { 
+            guard Int(payloadLength) >= 0 && offset + Int(payloadLength) <= dataArray.count else { 
                 return nil 
             }
-            payload = unpaddedData[offset..<offset+Int(payloadLength)]
+            payload = Data(dataArray[offset..<offset+Int(payloadLength)])
             offset += Int(payloadLength)
         }
         
         // Signature if present
         var signature: Data?
         if hasSignature {
-            guard offset + signatureSize <= unpaddedData.count else { return nil }
-            signature = unpaddedData[offset..<offset+signatureSize]
+            guard offset + signatureSize <= dataArray.count else { return nil }
+            signature = Data(dataArray[offset..<offset+signatureSize])
             offset += signatureSize
         }
         
         // Final validation: ensure we haven't gone past the end
-        guard offset <= unpaddedData.count else { return nil }
+        guard offset <= dataArray.count else { return nil }
         
         return BitchatPacket(
             type: type,

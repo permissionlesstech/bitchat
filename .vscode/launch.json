@@ -1,0 +1,22 @@
+{
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:bitchatF}",
+            "name": "Debug bitchat",
+            "program": "${workspaceFolder:bitchatF}/.build/debug/bitchat",
+            "preLaunchTask": "swift: Build Debug bitchat"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:bitchatF}",
+            "name": "Release bitchat",
+            "program": "${workspaceFolder:bitchatF}/.build/release/bitchat",
+            "preLaunchTask": "swift: Build Release bitchat"
+        }
+    ]
+}

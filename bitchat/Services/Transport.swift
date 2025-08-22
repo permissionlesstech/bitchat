@@ -1,0 +1,67 @@
+import Foundation
+import Combine
+
+/// Abstract transport interface used by ChatViewModel and services.
+/// BLEService implements this protocol; a future Nostr transport can too.
+struct TransportPeerSnapshot {
+    let id: String
+    let nickname: String
+    let isConnected: Bool
+    let noisePublicKey: Data?
+    let lastSeen: Date
+}
+
+protocol Transport: AnyObject {
+    // Peer events (preferred over publishers for UI)
+    var peerEventsDelegate: TransportPeerEventsDelegate? { get set }
+    // Event sink
+    var delegate: BitchatDelegate? { get set }
+
+    // Identity
+    var myPeerID: String { get }
+    var myNickname: String { get }
+    func setNickname(_ nickname: String)
+
+    // Lifecycle
+    func startServices()
+    func stopServices()
+    func emergencyDisconnectAll()
+
+    // Connectivity and peers
+    func isPeerConnected(_ peerID: String) -> Bool
+    func peerNickname(peerID: String) -> String?
+    func getPeerNicknames() -> [String: String]
+
+    // Protocol utilities
+    func getFingerprint(for peerID: String) -> String?
+    func getNoiseSessionState(for peerID: String) -> LazyHandshakeState
+    func triggerHandshake(with peerID: String)
+    func getNoiseService() -> NoiseEncryptionService
+    func setMeshService(_ service: Transport?)
+
+    // Messaging
+    func sendMessage(_ content: String, mentions: [String])
+    func sendPrivateMessage(_ content: String, to peerID: String, recipientNickname: String, messageID: String)
+    func sendReadReceipt(_ receipt: ReadReceipt, to peerID: String)
+    func sendFavoriteNotification(to peerID: String, isFavorite: Bool)
+    func sendBroadcastAnnounce()
+    func sendDeliveryAck(for messageID: String, to peerID: String)
+    func sendNoiseEncryptedPayload(_ encryptedData: Data, to peerID: String)
+    
+    // Group messaging
+    func sendGroupMessage(_ content: String, to groupID: String, mentions: [String])
+    func sendGroupInvitation(_ invitation: GroupInvitation, to peerID: String)
+    func sendGroupInviteResponse(invitationID: String, accepted: Bool, to peerID: String)
+    func sendGroupMemberUpdate(_ update: GroupMemberUpdate, to groupID: String)
+    func sendGroupInfoUpdate(_ update: GroupInfoUpdate, to groupID: String)
+
+    // Peer snapshots (for non-UI services)
+    var peerSnapshotPublisher: AnyPublisher<[TransportPeerSnapshot], Never> { get }
+    func currentPeerSnapshots() -> [TransportPeerSnapshot]
+}
+
+protocol TransportPeerEventsDelegate: AnyObject {
+    @MainActor func didUpdatePeerSnapshots(_ peers: [TransportPeerSnapshot])
+}
+
+extension BLEService: Transport {}
