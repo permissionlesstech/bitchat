@@ -4924,6 +4924,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     }
     
     /// Handle incoming public message
+    @MainActor
     private func handlePublicMessage(_ message: BitchatMessage) {
         let finalMessage = processActionMessage(message)
 
