@@ -79,6 +79,7 @@
 
 import Foundation
 import SwiftUI
+import CryptoKit
 import Combine
 import CommonCrypto
 import CoreBluetooth
