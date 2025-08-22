@@ -871,8 +871,12 @@ struct ContentView: View {
                 // Unread icon immediately to the left of the channel badge (independent from channel button)
                 #if os(iOS)
                 let cc = channelPeopleCountAndColor()
-                let otherPeersCount = cc.0
+                var otherPeersCount = cc.0
                 let countColor = cc.1
+                // Ensure geohash count matches the actual pruned list used in the sidebar
+                if case .location = locationManager.selectedChannel {
+                    otherPeersCount = viewModel.visibleGeohashPeople().count
+                }
                 #else
                 let peerCounts = viewModel.allPeers.reduce(into: (others: 0, mesh: 0)) { counts, peer in
                     guard peer.id != viewModel.meshService.myPeerID else { return }
