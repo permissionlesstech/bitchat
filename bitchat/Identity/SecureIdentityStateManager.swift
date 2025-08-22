@@ -335,6 +335,30 @@ class SecureIdentityStateManager {
             self.saveIdentityCache()
         }
     }
+
+    // MARK: - Geohash (Nostr) Blocking
+    
+    func isNostrBlocked(pubkeyHexLowercased: String) -> Bool {
+        queue.sync {
+            return cache.blockedNostrPubkeys.contains(pubkeyHexLowercased.lowercased())
+        }
+    }
+    
+    func setNostrBlocked(_ pubkeyHexLowercased: String, isBlocked: Bool) {
+        let key = pubkeyHexLowercased.lowercased()
+        queue.async(flags: .barrier) {
+            if isBlocked {
+                self.cache.blockedNostrPubkeys.insert(key)
+            } else {
+                self.cache.blockedNostrPubkeys.remove(key)
+            }
+            self.saveIdentityCache()
+        }
+    }
+    
+    func getBlockedNostrPubkeys() -> Set<String> {
+        queue.sync { cache.blockedNostrPubkeys }
+    }
     
     // MARK: - Ephemeral Session Management
     
