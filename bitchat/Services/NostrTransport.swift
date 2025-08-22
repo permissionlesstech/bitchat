@@ -47,18 +47,38 @@ final class NostrTransport: Transport {
     func sendMessage(_ content: String, mentions: [String]) { /* no-op */ }
 
     func sendPrivateMessage(_ content: String, to peerID: String, recipientNickname: String, messageID: String) {
+        print("📡 NostrTransport.sendPrivateMessage called")
+        print("📡   To peerID: \(peerID)")
+        print("📡   MessageID: \(messageID)")
+        print("📡   Content length: \(content.count)")
+        
         Task { @MainActor in
             // Resolve favorite by full noise key or by short peerID fallback
             var recipientNostrPubkey: String?
             if let noiseKey = Data(hexString: peerID),
                let fav = FavoritesPersistenceService.shared.getFavoriteStatus(for: noiseKey) {
                 recipientNostrPubkey = fav.peerNostrPublicKey
+                print("📡   Found Nostr pubkey via full noise key")
             }
             if recipientNostrPubkey == nil, peerID.count == 16 {
                 recipientNostrPubkey = FavoritesPersistenceService.shared.getFavoriteStatus(forPeerID: peerID)?.peerNostrPublicKey
+                if recipientNostrPubkey != nil {
+                    print("📡   Found Nostr pubkey via short peerID")
+                }
             }
-            guard let recipientNpub = recipientNostrPubkey else { return }
-            guard let senderIdentity = try? NostrIdentityBridge.getCurrentNostrIdentity() else { return }
+            
+            guard let recipientNpub = recipientNostrPubkey else { 
+                print("❌ No Nostr pubkey found for peerID \(peerID)")
+                print("❌ Cannot send via Nostr - peer not in favorites or missing Nostr key")
+                return 
+            }
+            
+            guard let senderIdentity = try? NostrIdentityBridge.getCurrentNostrIdentity() else { 
+                print("❌ Cannot get current Nostr identity")
+                return 
+            }
+            
+            print("✅ Nostr prerequisites met, sending message...")
             SecureLogger.log("NostrTransport: preparing PM to \(recipientNpub.prefix(16))… for peerID \(peerID.prefix(8))… id=\(messageID.prefix(8))…",
                             category: SecureLogger.session, level: .debug)
             // Convert recipient npub -> hex (x-only)
@@ -232,10 +252,30 @@ final class NostrTransport: Transport {
     }
     
     func sendGroupInvitation(_ invitation: GroupInvitation, to peerID: String) {
-        // Group invitations over Nostr not implemented yet
-        // This would use gift wraps to send invitations
-        SecureLogger.log("📤 Group invitation over Nostr not implemented (to: \(peerID.prefix(8))...)", 
-                        category: SecureLogger.session, level: .debug)
+        print("📡 NostrTransport.sendGroupInvitation called")
+        print("📡   Invitation ID: \(invitation.id)")
+        print("📡   Group: \(invitation.groupName)")
+        print("📡   To peer: \(peerID.prefix(8))")
+        
+        // Basic implementation: send as embedded message in private chat
+        do {
+            let invitationData = try JSONEncoder().encode(invitation)
+            let base64Invitation = invitationData.base64EncodedString()
+            let groupInviteMessage = "[GROUP_INVITATION]\(base64Invitation)"
+            
+            print("📡 Encoded invitation: \(invitationData.count) bytes → \(base64Invitation.count) chars")
+            print("📡 Full message: \(groupInviteMessage.prefix(50))...")
+            print("📡 Sending group invitation via Nostr private message")
+            
+            sendPrivateMessage(groupInviteMessage, to: peerID, recipientNickname: "Group Invite", messageID: invitation.id)
+            
+            SecureLogger.log("📤 Sent group invitation via Nostr to \(peerID.prefix(8))...", 
+                            category: SecureLogger.session, level: .debug)
+        } catch {
+            print("❌ Failed to encode group invitation for Nostr: \(error)")
+            SecureLogger.log("❌ Failed to encode group invitation for Nostr: \(error)", 
+                            category: SecureLogger.session, level: .error)
+        }
     }
     
     func sendGroupInviteResponse(invitationID: String, accepted: Bool, to peerID: String) {

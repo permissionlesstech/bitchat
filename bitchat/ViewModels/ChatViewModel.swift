@@ -910,11 +910,18 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     }
     
     private func handleGroupInvitation(from peerID: String, payload: Data) {
+        print("📥 handleGroupInvitation called")
+        print("📥   From peerID: \(peerID)")
+        print("📥   Payload size: \(payload.count) bytes")
+        
         do {
             let invitation = try JSONDecoder().decode(GroupInvitation.self, from: payload)
+            print("📥   Successfully decoded invitation for group: \(invitation.groupName)")
+            print("📥   From: \(invitation.inviterNickname)")
             didReceiveGroupInvitation(invitation, from: peerID)
         } catch {
             print("❌ Failed to decode group invitation from \(peerID): \(error)")
+            print("❌ Payload as string: \(String(data: payload, encoding: .utf8) ?? "non-UTF8")")
         }
     }
     
@@ -1623,7 +1630,11 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     /// Create a new group chat
     @MainActor
     func createGroup(name: String, description: String? = nil, isPrivate: Bool = false) -> GroupChat? {
-        guard let fingerprint = getCurrentUserFingerprint() else { return nil }
+        guard let fingerprint = getCurrentUserFingerprint() else { 
+            print("❌ Failed to create group: Unable to get current user fingerprint")
+            return nil 
+        }
+        print("🔐 Creating group with fingerprint: \(fingerprint.prefix(8))...")
         return groupChatManager.createGroup(name: name, description: description, isPrivate: isPrivate, creatorFingerprint: fingerprint)
     }
     
@@ -1657,9 +1668,28 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     /// Send group invitation
     @MainActor
     func sendGroupInvitation(groupID: String, to peerID: String) -> Bool {
-        guard let fingerprint = getCurrentUserFingerprint(),
-              let targetFingerprint = meshService.getFingerprint(for: peerID),
-              let targetNickname = meshService.peerNickname(peerID: peerID) else { return false }
+        print("🔍 Sending group invitation from ChatViewModel")
+        print("🔍   Group ID: \(groupID.prefix(8))")
+        print("🔍   Target peer ID: \(peerID)")
+        
+        guard let fingerprint = getCurrentUserFingerprint() else {
+            print("❌ Cannot get current user fingerprint")
+            return false
+        }
+        
+        guard let targetFingerprint = meshService.getFingerprint(for: peerID) else {
+            print("❌ Cannot get target fingerprint for peer \(peerID)")
+            return false
+        }
+        
+        guard let targetNickname = meshService.peerNickname(peerID: peerID) else {
+            print("❌ Cannot get target nickname for peer \(peerID)")
+            return false
+        }
+        
+        print("🔍   Inviter fingerprint: \(fingerprint.prefix(8))")
+        print("🔍   Target fingerprint: \(targetFingerprint.prefix(8))")
+        print("🔍   Target nickname: \(targetNickname)")
         
         return groupChatManager.sendInvitation(
             groupID: groupID,
@@ -1684,9 +1714,10 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     
     /// Get current user's fingerprint
     private func getCurrentUserFingerprint() -> String? {
-        // This would typically come from the identity/encryption service
-        // For now, we'll use the mesh service's peer ID as a placeholder
-        return meshService.getFingerprint(for: meshService.myPeerID)
+        // Get the current user's fingerprint from the Noise identity service
+        let fingerprint = getMyFingerprint()
+        print("🔐 Getting user fingerprint: '\(fingerprint.isEmpty ? "EMPTY" : fingerprint.prefix(8))...'")
+        return fingerprint.isEmpty ? nil : fingerprint
     }
 
     @MainActor
@@ -1698,6 +1729,29 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
            let senderPeerID = message.senderPeerID {
             // Store mapping for read receipts
             nostrKeyMapping[senderPeerID] = nostrPubkey
+        }
+        
+        // Check for embedded group invitations from Nostr
+        print("🔍 Checking Nostr message for group invitation...")
+        print("🔍   Message content preview: \(message.content.prefix(50))...")
+        print("🔍   Sender: \(message.sender)")
+        print("🔍   SenderPeerID: \(message.senderPeerID ?? "nil")")
+        
+        if message.content.hasPrefix("[GROUP_INVITATION]") {
+            print("✅ Found group invitation prefix!")
+            let base64Data = String(message.content.dropFirst("[GROUP_INVITATION]".count))
+            print("📡 Extracted base64 data: \(base64Data.count) chars")
+            
+            if let invitationData = Data(base64Encoded: base64Data) {
+                print("✅ Successfully decoded base64 to \(invitationData.count) bytes")
+                print("📡 Detected group invitation from Nostr message")
+                handleGroupInvitation(from: message.senderPeerID ?? "unknown", payload: invitationData)
+                return // Don't process as regular message
+            } else {
+                print("❌ Failed to decode base64 invitation data")
+            }
+        } else {
+            print("ℹ️ Not a group invitation (no prefix found)")
         }
         
         // Process the Nostr message through the same flow as Bluetooth messages
@@ -3400,7 +3454,13 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     }
     
     func didReceiveGroupInvitation(_ invitation: GroupInvitation, from peerID: String) {
+        print("🎯 didReceiveGroupInvitation called!")
+        print("🎯   Group: \(invitation.groupName)")
+        print("🎯   From peer: \(peerID)")
+        print("🎯   Inviter: \(invitation.inviterNickname)")
+        
         Task { @MainActor in
+            print("🎯   Calling groupChatManager.handleIncomingInvitation...")
             groupChatManager.handleIncomingInvitation(invitation)
             
             // Trigger UI update
@@ -3408,6 +3468,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             
             // Show notification for new invitation
             addSystemMessage("📧 New group invitation: \(invitation.groupName)")
+            print("🎯   Added system message for invitation")
         }
     }
     
@@ -4223,6 +4284,19 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         if message.content.hasPrefix("[FAVORITED]") || message.content.hasPrefix("[UNFAVORITED]") {
             handleFavoriteNotificationFromMesh(message.content, from: peerID, senderNickname: message.sender)
             return  // Don't store as a regular message
+        }
+        
+        // Check if this is an embedded group invitation
+        if message.content.hasPrefix("[GROUP_INVITATION]") {
+            print("📨 Detected group invitation in private message!")
+            let base64Data = String(message.content.dropFirst("[GROUP_INVITATION]".count))
+            if let invitationData = Data(base64Encoded: base64Data) {
+                print("📨 Successfully decoded invitation from private message")
+                handleGroupInvitation(from: peerID, payload: invitationData)
+                return  // Don't store as a regular message
+            } else {
+                print("❌ Failed to decode group invitation from private message")
+            }
         }
         
         // Migrate chats if needed

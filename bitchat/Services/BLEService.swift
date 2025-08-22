@@ -1246,12 +1246,24 @@ final class BLEService: NSObject {
         updatePeerLastSeen(peerID)
         
         do {
+            print("🔐 Attempting to decrypt \(packet.payload.count) bytes from \(peerID.prefix(8))")
             let decrypted = try noiseService.decrypt(packet.payload, from: peerID)
-            guard decrypted.count > 0 else { return }
+            guard decrypted.count > 0 else { 
+                print("❌ Decrypted payload is empty")
+                return 
+            }
+            
+            print("✅ Successfully decrypted \(decrypted.count) bytes")
             
             // First byte indicates the payload type
             let payloadType = decrypted[0]
             let payloadData = decrypted.dropFirst()
+            
+            if let noiseType = NoisePayloadType(rawValue: payloadType) {
+                print("🔍 Payload type: \(payloadType) (\(noiseType))")
+            } else {
+                print("🔍 Payload type: \(payloadType) (unknown)")
+            }
             
             switch NoisePayloadType(rawValue: payloadType) {
             case .privateMessage:
@@ -1311,6 +1323,11 @@ final class BLEService: NSObject {
                 initiateNoiseHandshake(with: peerID)
             }
         } catch {
+            print("❌ Decryption failed from \(peerID.prefix(8)): \(error)")
+            print("❌   Payload size: \(packet.payload.count) bytes")
+            print("❌   Has Noise session: \(noiseService.hasEstablishedSession(with: peerID))")
+            print("❌   Error type: \(type(of: error))")
+            
             SecureLogger.log("❌ Failed to decrypt message from \(peerID): \(error)", 
                             category: SecureLogger.noise, level: .error)
         }
@@ -1551,14 +1568,30 @@ final class BLEService: NSObject {
     }
     
     func sendGroupInvitation(_ invitation: GroupInvitation, to peerID: String) {
+        print("🔍 BLEService.sendGroupInvitation called for peer \(peerID.prefix(8))")
+        
+        // Verify Noise session is established and stable
+        guard getNoiseService().hasEstablishedSession(with: peerID) else {
+            print("❌ Cannot send group invitation: No Noise session with \(peerID.prefix(8))")
+            SecureLogger.log("❌ Cannot send group invitation: No Noise session with \(peerID.prefix(8))", 
+                            category: SecureLogger.session, level: .error)
+            return
+        }
+        
+        print("✅ Noise session verified, encoding invitation...")
+        
         // Encode invitation as JSON and send as private message
         do {
             let invitationData = try JSONEncoder().encode(invitation)
             let payload = NoisePayload(type: .groupInvitation, data: invitationData)
+            
+            print("📤 Sending encrypted group invitation payload (\(payload.encode().count) bytes)")
             sendNoiseEncryptedPayload(payload.encode(), to: peerID)
+            
             SecureLogger.log("📤 Sent group invitation for \(invitation.groupName) to \(peerID.prefix(8))...", 
                             category: SecureLogger.session, level: .debug)
         } catch {
+            print("❌ Failed to encode group invitation: \(error)")
             SecureLogger.log("❌ Failed to encode group invitation: \(error)", 
                             category: SecureLogger.session, level: .error)
         }

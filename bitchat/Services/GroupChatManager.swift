@@ -56,7 +56,9 @@ class GroupChatManager: ObservableObject {
         }
         
         do {
-            let chats = try JSONDecoder().decode([String: GroupChat].self, from: data)
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let chats = try decoder.decode([String: GroupChat].self, from: data)
             DispatchQueue.main.async { [weak self] in
                 self?.groupChats = chats
             }
@@ -74,12 +76,55 @@ class GroupChatManager: ObservableObject {
     /// Save group chats to storage
     private func saveGroupChats() {
         do {
-            let data = try JSONEncoder().encode(groupChats)
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            let data = try encoder.encode(groupChats)
             userDefaults.set(data, forKey: groupChatsKey)
             userDefaults.synchronize()
             print("💾 Saved \(groupChats.count) group chats")
         } catch {
             print("❌ Failed to save group chats: \(error)")
+            print("❌ Error details: \(error.localizedDescription)")
+            
+            // Try to save individual groups to identify the problematic one
+            for (groupID, group) in groupChats {
+                do {
+                    let encoder = JSONEncoder()
+                    encoder.dateEncodingStrategy = .iso8601
+                    _ = try encoder.encode(group)
+                    print("✅ Group '\(group.groupName)' (\(groupID.prefix(8))) encoded successfully")
+                } catch let groupError {
+                    print("❌ Failed to encode group '\(group.groupName)' (\(groupID.prefix(8))): \(groupError)")
+                    
+                    // Try to identify which part of the group is problematic
+                    do {
+                        let testEncoder = JSONEncoder()
+                        testEncoder.dateEncodingStrategy = .iso8601
+                        _ = try testEncoder.encode(group.members)
+                        print("✅   Members encoded successfully")
+                    } catch {
+                        print("❌   Members failed: \(error)")
+                    }
+                    
+                    do {
+                        let testEncoder = JSONEncoder()
+                        testEncoder.dateEncodingStrategy = .iso8601
+                        _ = try testEncoder.encode(group.messages)
+                        print("✅   Messages encoded successfully") 
+                    } catch {
+                        print("❌   Messages failed: \(error)")
+                    }
+                    
+                    do {
+                        let testEncoder = JSONEncoder()
+                        testEncoder.dateEncodingStrategy = .iso8601
+                        _ = try testEncoder.encode(group.pendingMessages)
+                        print("✅   Pending messages encoded successfully")
+                    } catch {
+                        print("❌   Pending messages failed: \(error)")
+                    }
+                }
+            }
         }
     }
     
@@ -153,8 +198,8 @@ class GroupChatManager: ObservableObject {
         
         DispatchQueue.main.async { [weak self] in
             self?.groupChats[newGroup.id] = newGroup
+            self?.saveGroupChats()
         }
-        saveGroupChats()
         
         print("✅ Created new group '\(name)' with ID \(newGroup.id.prefix(8))")
         return newGroup
@@ -358,19 +403,28 @@ class GroupChatManager: ObservableObject {
     
     /// Send group message via transport
     private func sendGroupMessage(_ message: BitchatMessage, to peerID: String, groupID: String) {
-        // This would use the transport layer to send group messages
-        // For now, we'll use the private message mechanism with group metadata
-        let groupMessageData: [String: Any] = [
-            "type": "group_message",
-            "groupID": groupID,
-            "messageID": message.id,
-            "content": message.content,
-            "timestamp": ISO8601DateFormatter().string(from: message.timestamp)
-        ]
-        
-        if let jsonData = try? JSONSerialization.data(withJSONObject: groupMessageData),
-           let jsonString = String(data: jsonData, encoding: .utf8) {
-            meshService?.sendPrivateMessage(jsonString, to: peerID, recipientNickname: "Group", messageID: message.id)
+        // Send via MessageRouter using proper group message protocol
+        Task { @MainActor in
+            if let router = messageRouter {
+                let mentions = message.mentions ?? []
+                router.sendGroupMessage(message.content, to: groupID, mentions: mentions)
+                print("📨 Sent group message via router to group \(groupID.prefix(8))")
+            } else {
+                // Fallback: use private message mechanism with group metadata
+                let groupMessageData: [String: Any] = [
+                    "type": "group_message",
+                    "groupID": groupID,
+                    "messageID": message.id,
+                    "content": message.content,
+                    "timestamp": ISO8601DateFormatter().string(from: message.timestamp)
+                ]
+                
+                if let jsonData = try? JSONSerialization.data(withJSONObject: groupMessageData),
+                   let jsonString = String(data: jsonData, encoding: .utf8) {
+                    meshService?.sendPrivateMessage(jsonString, to: peerID, recipientNickname: "Group", messageID: message.id)
+                }
+                print("📨 Sent group message via fallback private message to \(peerID)")
+            }
         }
     }
     
@@ -449,10 +503,20 @@ class GroupChatManager: ObservableObject {
     
     /// Send group invitation
     func sendInvitation(groupID: String, to fingerprint: String, nickname: String, from inviterFingerprint: String) -> Bool {
-        guard let group = groupChats[groupID],
-              group.isAdmin(inviterFingerprint),
-              !group.members.contains(where: { $0.fingerprint == fingerprint }) else {
-            print("❌ Cannot send invitation: insufficient permissions or already a member")
+        print("🔍 Attempting to send invitation to \(nickname) (\(fingerprint.prefix(8))) for group \(groupID.prefix(8))")
+        
+        guard let group = groupChats[groupID] else {
+            print("❌ Cannot send invitation: group not found")
+            return false
+        }
+        
+        guard group.isAdmin(inviterFingerprint) else {
+            print("❌ Cannot send invitation: insufficient permissions")
+            return false
+        }
+        
+        guard !group.members.contains(where: { $0.fingerprint == fingerprint }) else {
+            print("❌ Cannot send invitation: user is already a member")
             return false
         }
         
@@ -478,11 +542,24 @@ class GroupChatManager: ObservableObject {
     
     /// Handle received invitation
     func handleIncomingInvitation(_ invitation: GroupInvitation) {
+        print("📋 GroupChatManager.handleIncomingInvitation called")
+        print("📋   Group: \(invitation.groupName)")
+        print("📋   Invitation ID: \(invitation.id)")
+        print("📋   Current pending invitations: \(pendingInvitations.count)")
+        
         DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
             // Check for duplicates
-            if !(self?.pendingInvitations.contains(where: { $0.id == invitation.id }) ?? true) {
-                self?.pendingInvitations.append(invitation)
-                self?.saveInvitations()
+            let isDuplicate = self.pendingInvitations.contains(where: { $0.id == invitation.id })
+            print("📋   Is duplicate: \(isDuplicate)")
+            
+            if !isDuplicate {
+                self.pendingInvitations.append(invitation)
+                self.saveInvitations()
+                print("📋   Added invitation to pending list. New count: \(self.pendingInvitations.count)")
+            } else {
+                print("📋   Skipped duplicate invitation")
             }
         }
         print("📥 Received group invitation for '\(invitation.groupName)'")
@@ -523,6 +600,7 @@ class GroupChatManager: ObservableObject {
     /// Decline group invitation
     func declineInvitation(_ invitationID: String) -> Bool {
         guard let invitation = pendingInvitations.first(where: { $0.id == invitationID }) else {
+            print("❌ Invitation not found: \(invitationID)")
             return false
         }
         
@@ -540,36 +618,44 @@ class GroupChatManager: ObservableObject {
     
     /// Send invitation message via transport
     private func sendInvitationMessage(_ invitation: GroupInvitation, to fingerprint: String) {
+        print("🔍 Looking for peerID for fingerprint: \(fingerprint.prefix(8))")
+        print("🔍 Available peer fingerprints: \(peerFingerprints.keys.map { $0.prefix(8) })")
+        
         guard let peerID = peerFingerprints[fingerprint] else {
-            print("📝 Queuing invitation for offline peer")
+            print("📝 Queuing invitation for offline peer (\(fingerprint.prefix(8)))")
+            print("❌ No peerID found for fingerprint - peer might be offline")
             return
         }
         
-        let invitationData: [String: Any] = [
-            "type": "group_invitation",
-            "invitation": try? JSONEncoder().encode(invitation)
-        ]
+        print("🔍 Found peerID \(peerID) for fingerprint \(fingerprint.prefix(8))")
         
-        // Send via transport (simplified for now)
-        if let jsonData = try? JSONSerialization.data(withJSONObject: invitationData),
-           let jsonString = String(data: jsonData, encoding: .utf8) {
-            meshService?.sendPrivateMessage(jsonString, to: peerID, recipientNickname: "Group Invite", messageID: invitation.id)
+        // Send via Noise transport using the group invitation payload type
+        Task { @MainActor in
+            if let router = messageRouter {
+                print("🔍 MessageRouter available, sending invitation...")
+                router.sendGroupInvitation(invitation, to: peerID)
+                print("📤 Sent group invitation via Noise transport to \(peerID)")
+            } else {
+                print("❌ Message router not available for sending invitation")
+            }
         }
     }
     
     /// Send invitation response
     private func sendInvitationResponse(invitationID: String, accepted: Bool, to fingerprint: String) {
-        guard let peerID = peerFingerprints[fingerprint] else { return }
+        guard let peerID = peerFingerprints[fingerprint] else { 
+            print("❌ Cannot send invitation response: peer offline (\(fingerprint.prefix(8)))")
+            return 
+        }
         
-        let responseData = [
-            "type": "group_invitation_response",
-            "invitationID": invitationID,
-            "accepted": accepted
-        ] as [String : Any]
-        
-        if let jsonData = try? JSONSerialization.data(withJSONObject: responseData),
-           let jsonString = String(data: jsonData, encoding: .utf8) {
-            meshService?.sendPrivateMessage(jsonString, to: peerID, recipientNickname: "Group Response", messageID: UUID().uuidString)
+        // Send via Noise transport using the group invite response payload type
+        Task { @MainActor in
+            if let router = messageRouter {
+                router.sendGroupInviteResponse(invitationID: invitationID, accepted: accepted, to: peerID)
+                print("📤 Sent group invitation response (\(accepted ? "accepted" : "declined")) to \(peerID)")
+            } else {
+                print("❌ Message router not available for sending response")
+            }
         }
     }
     
