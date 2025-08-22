@@ -1126,10 +1126,14 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                         NostrRelayManager.shared.sendEvent(event)
                         // Track ourselves as active participant
                         self.recordGeoParticipant(pubkeyHex: identity.publicKeyHex)
+                        SecureLogger.log("GeoTeleport: sent geo message pub=\(identity.publicKeyHex.prefix(8))… teleported=\(LocationChannelManager.shared.teleported)",
+                                        category: SecureLogger.session, level: .debug)
                         // If we tagged this as teleported, also mark our pubkey in teleportedGeo for UI
                         if LocationChannelManager.shared.teleported {
                             let key = identity.publicKeyHex.lowercased()
                             self.teleportedGeo = self.teleportedGeo.union([key])
+                            SecureLogger.log("GeoTeleport: mark self teleported key=\(key.prefix(8))… total=\(self.teleportedGeo.count)",
+                                            category: SecureLogger.session, level: .info)
                         }
                     } catch {
                         SecureLogger.log("❌ Failed to send geohash message: \(error)", category: SecureLogger.session, level: .error)
@@ -1186,6 +1190,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             if LocationChannelManager.shared.teleported {
                 let key = id.publicKeyHex.lowercased()
                 teleportedGeo = teleportedGeo.union([key])
+                SecureLogger.log("GeoTeleport: channel switch mark self teleported key=\(key.prefix(8))… total=\(teleportedGeo.count)",
+                                category: SecureLogger.session, level: .info)
             }
             #endif
         }
@@ -1200,6 +1206,10 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             // Deduplicate
             if self.processedNostrEvents.contains(event.id) { return }
             self.recordProcessedEvent(event.id)
+            // Log incoming tags for diagnostics
+            let tagSummary = event.tags.map { "[" + $0.joined(separator: ",") + "]" }.joined(separator: ",")
+            SecureLogger.log("GeoTeleport: recv pub=\(event.pubkey.prefix(8))… tags=\(tagSummary)",
+                            category: SecureLogger.session, level: .debug)
             // Track teleport tag for participants
             // Detect teleport tag robustly: accept ["t","teleport"], ["t"], ["teleport"], or boolean-like values
             let hasTeleportTag: Bool = {
@@ -1218,6 +1228,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 let key = event.pubkey.lowercased()
                 Task { @MainActor in
                     self.teleportedGeo = self.teleportedGeo.union([key])
+                    SecureLogger.log("GeoTeleport: mark peer teleported key=\(key.prefix(8))… total=\(self.teleportedGeo.count)",
+                                    category: SecureLogger.session, level: .info)
                 }
             }
             // Skip our own events (we already locally echoed)
