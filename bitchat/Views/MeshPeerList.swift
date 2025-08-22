@@ -7,6 +7,7 @@ struct MeshPeerList: View {
     let onTapPeer: (String) -> Void
     let onToggleFavorite: (String) -> Void
     let onShowFingerprint: (String) -> Void
+    @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
         Group {
@@ -61,7 +62,8 @@ struct MeshPeerList: View {
 
                         let displayName = isMe ? viewModel.nickname : peer.nickname
                         let (base, suffix) = splitSuffix(from: displayName)
-                        let baseColor = ((peer.favoriteStatus?.isFavorite ?? false) || peerNicknames[peer.id] != nil) ? textColor : secondaryTextColor
+                        let assigned = viewModel.colorForMeshPeer(id: peer.id, isDark: colorScheme == .dark)
+                        let baseColor = isMe ? Color.orange : assigned
                         HStack(spacing: 0) {
                             Text(base)
                                 .font(.system(size: 14, design: .monospaced))

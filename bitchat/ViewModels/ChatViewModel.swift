@@ -3144,7 +3144,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         return hash
     }
 
-    private func colorForPeerSeed(_ seed: String, isDark: Bool) -> Color {
+    @MainActor
+    func colorForPeerSeed(_ seed: String, isDark: Bool) -> Color {
         if let cached = peerColorCache[seed] { return cached }
         var hue = Double(djb2(seed) % 360) / 360.0
         // Avoid orange (~30°) reserved for self
@@ -3173,6 +3174,21 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             seed = message.sender.lowercased()
         }
         return colorForPeerSeed(seed, isDark: isDark)
+    }
+
+    // Public helpers for views to color peers consistently in lists
+    @MainActor
+    func colorForNostrPubkey(_ pubkeyHexLowercased: String, isDark: Bool) -> Color {
+        return colorForPeerSeed("nostr:" + pubkeyHexLowercased.lowercased(), isDark: isDark)
+    }
+
+    @MainActor
+    func colorForMeshPeer(id peerID: String, isDark: Bool) -> Color {
+        if let peer = unifiedPeerService.getPeer(by: peerID) {
+            let full = peer.noisePublicKey.hexEncodedString().lowercased()
+            return colorForPeerSeed("noise:" + full, isDark: isDark)
+        }
+        return colorForPeerSeed(peerID.lowercased(), isDark: isDark)
     }
 
     private func trimMeshTimelineIfNeeded() {
