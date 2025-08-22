@@ -2918,10 +2918,11 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                             tagStyle.foregroundColor = baseColor
                             result.append(AttributedString(matchText).mergingAttributes(tagStyle))
                         } else if type == "cashu" {
-                            // Render compact cashu chip: 🥜 pay via cashu
+                            // Render compact cashu chip: 🥜 pay via cashu, with subtle background
                             var matchStyle = AttributeContainer()
                             matchStyle.font = .system(size: 14, weight: isSelf ? .bold : .semibold, design: .monospaced)
                             matchStyle.foregroundColor = isSelf ? .orange : .blue
+                            matchStyle.backgroundColor = (isDark ? Color.gray.opacity(0.18) : Color.gray.opacity(0.12))
                             // No underline; keep link attribute for tap
                             if let encoded = matchText.addingPercentEncoding(withAllowedCharacters: .alphanumerics.union(CharacterSet(charactersIn: "-_"))) {
                                 matchStyle.link = URL(string: "cashu:\(encoded)")
@@ -2929,12 +2930,21 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                                 matchStyle.link = URL(string: "cashu:\(matchText)")
                             }
                             let display = "🥜 pay via cashu"
+                            // Surround with spaces for visual separation (no background on spaces)
+                            var spacer = AttributeContainer()
+                            spacer.foregroundColor = baseColor
+                            spacer.font = isSelf
+                                ? .system(size: 14, weight: .bold, design: .monospaced)
+                                : .system(size: 14, design: .monospaced)
+                            result.append(AttributedString(" ").mergingAttributes(spacer))
                             result.append(AttributedString(display).mergingAttributes(matchStyle))
+                            result.append(AttributedString(" ").mergingAttributes(spacer))
                         } else if type == "lightning" || type == "bolt11" || type == "lnurl" {
-                            // Render compact lightning chip: ⚡ pay via lightning
+                            // Render compact lightning chip: ⚡ pay via lightning, with subtle background
                             var matchStyle = AttributeContainer()
                             matchStyle.font = .system(size: 14, weight: isSelf ? .bold : .semibold, design: .monospaced)
                             matchStyle.foregroundColor = isSelf ? .orange : .blue
+                            matchStyle.backgroundColor = (isDark ? Color.gray.opacity(0.18) : Color.gray.opacity(0.12))
                             let payload: String
                             if type == "lightning" {
                                 payload = matchText
@@ -2947,7 +2957,14 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                                 matchStyle.link = URL(string: payload)
                             }
                             let display = "⚡ pay via lightning"
+                            var spacer = AttributeContainer()
+                            spacer.foregroundColor = baseColor
+                            spacer.font = isSelf
+                                ? .system(size: 14, weight: .bold, design: .monospaced)
+                                : .system(size: 14, design: .monospaced)
+                            result.append(AttributedString(" ").mergingAttributes(spacer))
                             result.append(AttributedString(display).mergingAttributes(matchStyle))
+                            result.append(AttributedString(" ").mergingAttributes(spacer))
                         } else {
                             // Keep URL styling (blue + underline for non-self, orange for self)
                             var matchStyle = AttributeContainer()
