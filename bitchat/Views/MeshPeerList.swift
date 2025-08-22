@@ -75,6 +75,14 @@ struct MeshPeerList: View {
                             }
                         }
 
+                        // Blocked indicator
+                        if !isMe, viewModel.isPeerBlocked(peer.id) {
+                            Image(systemName: "nosign")
+                                .font(.system(size: 10))
+                                .foregroundColor(.red)
+                                .help("Blocked")
+                        }
+
                         if let icon = item.enc.icon, !isMe {
                             Image(systemName: icon)
                                 .font(.system(size: 10))

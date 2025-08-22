@@ -654,19 +654,23 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     let wasReadBefore = self.sentReadReceipts.contains(messageId)
                     let isRecentMessage = Date().timeIntervalSince(messageTimestamp) < 30
                     let shouldMarkUnread = !wasReadBefore && !isViewing && isRecentMessage
-                    let msg = BitchatMessage(
-                        id: messageId,
-                        sender: senderName,
-                        content: pm.content,
-                        timestamp: messageTimestamp,
-                        isRelay: false,
-                        originalSender: nil,
-                        isPrivate: true,
-                        recipientNickname: self.nickname,
-                        senderPeerID: convKey,
-                        mentions: nil,
-                        deliveryStatus: .delivered(to: self.nickname, at: Date())
-                    )
+                let msg = BitchatMessage(
+                    id: messageId,
+                    sender: senderName,
+                    content: pm.content,
+                    timestamp: messageTimestamp,
+                    isRelay: false,
+                    originalSender: nil,
+                    isPrivate: true,
+                    recipientNickname: self.nickname,
+                    senderPeerID: convKey,
+                    mentions: nil,
+                    deliveryStatus: .delivered(to: self.nickname, at: Date())
+                )
+                    // Respect geohash blocks
+                    if SecureIdentityStateManager.shared.isNostrBlocked(pubkeyHexLowercased: senderPubkey) {
+                        return
+                    }
                     if self.privateChats[convKey] == nil { self.privateChats[convKey] = [] }
                     self.privateChats[convKey]?.append(msg)
                     self.trimPrivateChatMessagesIfNeeded(for: convKey)
@@ -1243,6 +1247,10 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 let nick = nickTag[1]
                 self.geoNicknames[event.pubkey.lowercased()] = nick
             }
+            // If this pubkey is blocked, skip mapping, participants, and timeline
+            if SecureIdentityStateManager.shared.isNostrBlocked(pubkeyHexLowercased: event.pubkey) {
+                return
+            }
             // Store mapping for geohash DM initiation
             let key16 = "nostr_" + String(event.pubkey.prefix(16))
             self.nostrKeyMapping[key16] = event.pubkey
@@ -1446,6 +1454,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         var map = geoParticipants[gh] ?? [:]
         // Prune expired entries
         map = map.filter { $0.value >= cutoff }
+        // Remove blocked Nostr pubkeys
+        map = map.filter { !SecureIdentityStateManager.shared.isNostrBlocked(pubkeyHexLowercased: $0.key) }
         geoParticipants[gh] = map
         // Build display list
         let people = map
@@ -1478,7 +1488,9 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     func visibleGeohashPeople() -> [GeoPerson] {
         guard let gh = currentGeohash else { return [] }
         let cutoff = Date().addingTimeInterval(-5 * 60)
-        let map = (geoParticipants[gh] ?? [:]).filter { $0.value >= cutoff }
+        let map = (geoParticipants[gh] ?? [:])
+            .filter { $0.value >= cutoff }
+            .filter { !SecureIdentityStateManager.shared.isNostrBlocked(pubkeyHexLowercased: $0.key) }
         let people = map
             .map { (pub, seen) in GeoPerson(id: pub, displayName: displayNameForNostrPubkey(pub), lastSeen: seen) }
             .sorted { $0.lastSeen > $1.lastSeen }
@@ -1490,6 +1502,66 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         let cutoff = Date().addingTimeInterval(-5 * 60)
         let map = geoParticipants[geohash] ?? [:]
         return map.values.filter { $0 >= cutoff }.count
+    }
+
+    // Geohash block helpers
+    @MainActor
+    func isGeohashUserBlocked(pubkeyHexLowercased: String) -> Bool {
+        return SecureIdentityStateManager.shared.isNostrBlocked(pubkeyHexLowercased: pubkeyHexLowercased)
+    }
+    @MainActor
+    func blockGeohashUser(pubkeyHexLowercased: String, displayName: String) {
+        let hex = pubkeyHexLowercased.lowercased()
+        SecureIdentityStateManager.shared.setNostrBlocked(hex, isBlocked: true)
+        
+        // Remove from participants for all geohashes
+        for (gh, var map) in geoParticipants {
+            map.removeValue(forKey: hex)
+            geoParticipants[gh] = map
+        }
+        refreshGeohashPeople()
+        
+        // Remove their public messages from current geohash timeline and visible list
+        if let gh = currentGeohash {
+            if var arr = geoTimelines[gh] {
+                arr.removeAll { msg in
+                    if let spid = msg.senderPeerID, spid.hasPrefix("nostr") {
+                        if let full = nostrKeyMapping[spid]?.lowercased() { return full == hex }
+                    }
+                    return false
+                }
+                geoTimelines[gh] = arr
+            }
+            // Also filter currently bound messages if we are in geohash channel
+            switch activeChannel {
+            case .location:
+                messages.removeAll { msg in
+                    if let spid = msg.senderPeerID, spid.hasPrefix("nostr") {
+                        if let full = nostrKeyMapping[spid]?.lowercased() { return full == hex }
+                    }
+                    return false
+                }
+            default:
+                break
+            }
+        }
+        
+        // Remove geohash DM conversation if exists
+        let convKey = "nostr_" + String(hex.prefix(16))
+        if privateChats[convKey] != nil {
+            privateChats.removeValue(forKey: convKey)
+            unreadPrivateMessages.remove(convKey)
+        }
+        
+        // Remove mapping keys pointing to this pubkey to avoid accidental resolution
+        for (k, v) in nostrKeyMapping where v.lowercased() == hex { nostrKeyMapping.removeValue(forKey: k) }
+        
+        addSystemMessage("blocked \(displayName) in geohash chats")
+    }
+    @MainActor
+    func unblockGeohashUser(pubkeyHexLowercased: String, displayName: String) {
+        SecureIdentityStateManager.shared.setNostrBlocked(pubkeyHexLowercased, isBlocked: false)
+        addSystemMessage("unblocked \(displayName) in geohash chats")
     }
 
     /// Begin sampling multiple geohashes (used by channel sheet) without changing active channel.
@@ -1616,6 +1688,14 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 if let msgIdx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
                     privateChats[peerID]?[msgIdx].deliveryStatus = .failed(reason: "unknown recipient")
                 }
+                return
+            }
+            // Respect geohash blocks
+            if SecureIdentityStateManager.shared.isNostrBlocked(pubkeyHexLowercased: recipientHex) {
+                if let msgIdx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
+                    privateChats[peerID]?[msgIdx].deliveryStatus = .failed(reason: "user is blocked")
+                }
+                addSystemMessage("cannot send message: user is blocked.")
                 return
             }
             // Send via Nostr using per-geohash identity
@@ -4607,9 +4687,27 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     @MainActor
     private func isMessageBlocked(_ message: BitchatMessage) -> Bool {
         if let peerID = message.senderPeerID ?? getPeerIDForNickname(message.sender) {
-            return isPeerBlocked(peerID)
+            // Check mesh/known peers first
+            if isPeerBlocked(peerID) { return true }
+            // Check geohash (Nostr) blocks using mapping to full pubkey
+            if peerID.hasPrefix("nostr") {
+                if let full = nostrKeyMapping[peerID]?.lowercased() {
+                    if SecureIdentityStateManager.shared.isNostrBlocked(pubkeyHexLowercased: full) { return true }
+                }
+            }
+            return false
         }
         return false
+    }
+
+    // MARK: - Geohash Nickname Resolution (for /block in geohash)
+    @MainActor
+    func nostrPubkeyForDisplayName(_ name: String) -> String? {
+        // Look up current visible geohash participants for an exact displayName match
+        for p in visibleGeohashPeople() {
+            if p.displayName == name { return p.id }
+        }
+        return nil
     }
     
     /// Process action messages (hugs, slaps) into system messages
@@ -4878,8 +4976,12 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     }
     
     /// Handle incoming public message
+    @MainActor
     private func handlePublicMessage(_ message: BitchatMessage) {
         let finalMessage = processActionMessage(message)
+
+        // Drop if sender is blocked (covers geohash via Nostr pubkey mapping)
+        if isMessageBlocked(finalMessage) { return }
 
         // Classify origin: geochat if senderPeerID starts with 'nostr:', else mesh (or system)
         let isGeo = finalMessage.senderPeerID?.hasPrefix("nostr:") == true

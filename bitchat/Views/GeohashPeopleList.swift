@@ -71,6 +71,15 @@ struct GeohashPeopleList: View {
                                     .foregroundColor(rowColor)
                             }
                         }
+                        // Blocked indicator for geohash users
+                        if let me = myHex, person.id != me {
+                            if viewModel.isGeohashUserBlocked(pubkeyHexLowercased: person.id) {
+                                Image(systemName: "nosign")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.red)
+                                    .help("Blocked in geochash")
+                            }
+                        }
                         Spacer()
                     }
                     .padding(.horizontal)
@@ -81,6 +90,18 @@ struct GeohashPeopleList: View {
                         if person.id != myHex {
                             viewModel.startGeohashDM(withPubkeyHex: person.id)
                             onTapPerson()
+                        }
+                    }
+                    .contextMenu {
+                        if let me = myHex, person.id == me {
+                            EmptyView()
+                        } else {
+                            let blocked = viewModel.isGeohashUserBlocked(pubkeyHexLowercased: person.id)
+                            if blocked {
+                                Button("Unblock") { viewModel.unblockGeohashUser(pubkeyHexLowercased: person.id, displayName: person.displayName) }
+                            } else {
+                                Button("Block") { viewModel.blockGeohashUser(pubkeyHexLowercased: person.id, displayName: person.displayName) }
+                            }
                         }
                     }
                 }
