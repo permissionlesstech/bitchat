@@ -604,6 +604,25 @@ struct ContentView: View {
                     }
                 }
             }
+            #if os(iOS)
+            .onChange(of: locationManager.selectedChannel) { newChannel in
+                // When switching to a new geohash channel, scroll to the top of that chat
+                guard privatePeer == nil else { return }
+                switch newChannel {
+                case .mesh:
+                    break
+                case .location(let ch):
+                    // Compute the top item (first of the current window)
+                    let contextKey = "geo:\(ch.geohash)"
+                    let top = viewModel.messages.suffix(100).first?.id
+                    let target = top.map { "\(contextKey)|\($0)" }
+                    isAtBottom.wrappedValue = false
+                    DispatchQueue.main.async {
+                        if let target = target { proxy.scrollTo(target, anchor: .top) }
+                    }
+                }
+            }
+            #endif
             .onAppear {
                 // Also check when view appears
                 if let peerID = privatePeer {
