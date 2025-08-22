@@ -149,58 +149,75 @@ class CommandProcessor {
         let targetName = args.trimmingCharacters(in: .whitespaces)
         
         if targetName.isEmpty {
-            // List blocked users
-            guard let blockedUsers = chatViewModel?.blockedUsers, !blockedUsers.isEmpty else {
-                return .success(message: "no blocked peers")
-            }
-            
+            // List blocked users (mesh) and geohash (Nostr) blocks
+            let meshBlocked = chatViewModel?.blockedUsers ?? []
             var blockedNicknames: [String] = []
             if let peers = meshService?.getPeerNicknames() {
                 for (peerID, nickname) in peers {
                     if let fingerprint = meshService?.getFingerprint(for: peerID),
-                       blockedUsers.contains(fingerprint) {
+                       meshBlocked.contains(fingerprint) {
                         blockedNicknames.append(nickname)
                     }
                 }
             }
-            
-            let list = blockedNicknames.isEmpty ? "blocked peers (not currently online)" 
-                                                 : blockedNicknames.sorted().joined(separator: ", ")
-            return .success(message: "blocked peers: \(list)")
+
+            // Geohash blocked names (prefer visible display names; fallback to #suffix)
+            let geoBlocked = Array(SecureIdentityStateManager.shared.getBlockedNostrPubkeys())
+            var geoNames: [String] = []
+            if let vm = chatViewModel {
+                let visible = vm.visibleGeohashPeople()
+                let visibleIndex = Dictionary(uniqueKeysWithValues: visible.map { ($0.id.lowercased(), $0.displayName) })
+                for pk in geoBlocked {
+                    if let name = visibleIndex[pk.lowercased()] {
+                        geoNames.append(name)
+                    } else {
+                        let suffix = String(pk.suffix(4))
+                        geoNames.append("anon#\(suffix)")
+                    }
+                }
+            }
+
+            let meshList = blockedNicknames.isEmpty ? "none" : blockedNicknames.sorted().joined(separator: ", ")
+            let geoList = geoNames.isEmpty ? "none" : geoNames.sorted().joined(separator: ", ")
+            return .success(message: "blocked peers: \(meshList) | geohash blocks: \(geoList)")
         }
         
         let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
         
-        guard let peerID = chatViewModel?.getPeerIDForNickname(nickname),
-              let fingerprint = meshService?.getFingerprint(for: peerID) else {
-            return .error(message: "cannot block \(nickname): not found or unable to verify identity")
+        if let peerID = chatViewModel?.getPeerIDForNickname(nickname),
+           let fingerprint = meshService?.getFingerprint(for: peerID) {
+            if SecureIdentityStateManager.shared.isBlocked(fingerprint: fingerprint) {
+                return .success(message: "\(nickname) is already blocked")
+            }
+            // Block the user (mesh/noise identity)
+            if var identity = SecureIdentityStateManager.shared.getSocialIdentity(for: fingerprint) {
+                identity.isBlocked = true
+                identity.isFavorite = false
+                SecureIdentityStateManager.shared.updateSocialIdentity(identity)
+            } else {
+                let blockedIdentity = SocialIdentity(
+                    fingerprint: fingerprint,
+                    localPetname: nil,
+                    claimedNickname: nickname,
+                    trustLevel: .unknown,
+                    isFavorite: false,
+                    isBlocked: true,
+                    notes: nil
+                )
+                SecureIdentityStateManager.shared.updateSocialIdentity(blockedIdentity)
+            }
+            return .success(message: "blocked \(nickname). you will no longer receive messages from them")
+        }
+        // Mesh lookup failed; try geohash (Nostr) participant by display name
+        if let pub = chatViewModel?.nostrPubkeyForDisplayName(nickname) {
+            if SecureIdentityStateManager.shared.isNostrBlocked(pubkeyHexLowercased: pub) {
+                return .success(message: "\(nickname) is already blocked")
+            }
+            SecureIdentityStateManager.shared.setNostrBlocked(pub, isBlocked: true)
+            return .success(message: "blocked \(nickname) in geohash chats")
         }
         
-        if SecureIdentityStateManager.shared.isBlocked(fingerprint: fingerprint) {
-            return .success(message: "\(nickname) is already blocked")
-        }
-        
-        // Block the user
-        if var identity = SecureIdentityStateManager.shared.getSocialIdentity(for: fingerprint) {
-            identity.isBlocked = true
-            identity.isFavorite = false
-            SecureIdentityStateManager.shared.updateSocialIdentity(identity)
-        } else {
-            let blockedIdentity = SocialIdentity(
-                fingerprint: fingerprint,
-                localPetname: nil,
-                claimedNickname: nickname,
-                trustLevel: .unknown,
-                isFavorite: false,
-                isBlocked: true,
-                notes: nil
-            )
-            SecureIdentityStateManager.shared.updateSocialIdentity(blockedIdentity)
-        }
-        
-        // The peerStateManager and SecureIdentityStateManager handle the blocking state
-        
-        return .success(message: "blocked \(nickname). you will no longer receive messages from them")
+        return .error(message: "cannot block \(nickname): not found or unable to verify identity")
     }
     
     private func handleUnblock(_ args: String) -> CommandResult {
@@ -211,19 +228,23 @@ class CommandProcessor {
         
         let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
         
-        guard let peerID = chatViewModel?.getPeerIDForNickname(nickname),
-              let fingerprint = meshService?.getFingerprint(for: peerID) else {
-            return .error(message: "cannot unblock \(nickname): not found")
+        if let peerID = chatViewModel?.getPeerIDForNickname(nickname),
+           let fingerprint = meshService?.getFingerprint(for: peerID) {
+            if !SecureIdentityStateManager.shared.isBlocked(fingerprint: fingerprint) {
+                return .success(message: "\(nickname) is not blocked")
+            }
+            SecureIdentityStateManager.shared.setBlocked(fingerprint, isBlocked: false)
+            return .success(message: "unblocked \(nickname)")
         }
-        
-        if !SecureIdentityStateManager.shared.isBlocked(fingerprint: fingerprint) {
-            return .success(message: "\(nickname) is not blocked")
+        // Try geohash unblock
+        if let pub = chatViewModel?.nostrPubkeyForDisplayName(nickname) {
+            if !SecureIdentityStateManager.shared.isNostrBlocked(pubkeyHexLowercased: pub) {
+                return .success(message: "\(nickname) is not blocked")
+            }
+            SecureIdentityStateManager.shared.setNostrBlocked(pub, isBlocked: false)
+            return .success(message: "unblocked \(nickname) in geohash chats")
         }
-        
-        SecureIdentityStateManager.shared.setBlocked(fingerprint, isBlocked: false)
-        // The SecureIdentityStateManager handles the unblocking state
-        
-        return .success(message: "unblocked \(nickname)")
+        return .error(message: "cannot unblock \(nickname): not found")
     }
     
     private func handleFavorite(_ args: String, add: Bool) -> CommandResult {
