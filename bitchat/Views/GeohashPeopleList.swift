@@ -40,7 +40,8 @@ struct GeohashPeopleList: View {
                             // For the local user, use a different face icon when teleported
                             let isMe = (person.id == myHex)
                             #if os(iOS)
-                            let teleported = isMe ? LocationChannelManager.shared.teleported : viewModel.teleportedGeo.contains(person.id.lowercased())
+                            // Consider either the per-session tag (for any peer) or the manager flag for self
+                            let teleported = viewModel.teleportedGeo.contains(person.id.lowercased()) || (isMe && LocationChannelManager.shared.teleported)
                             #else
                             let teleported = false
                             #endif
