@@ -80,7 +80,6 @@
 import Foundation
 import SwiftUI
 import Combine
-import CryptoKit
 import CommonCrypto
 import CoreBluetooth
 #if os(iOS)
@@ -2679,6 +2678,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         return processedContent
     }
     
+    @MainActor
     func formatMessageAsText(_ message: BitchatMessage, colorScheme: ColorScheme) -> AttributedString {
         // Determine if this message was sent by self (mesh, geo, or DM)
         let isSelf: Bool = {
@@ -2706,7 +2706,6 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         // Not cached, format the message
         var result = AttributedString()
         
-        let primaryColor = isDark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
         let baseColor: Color = isSelf ? .orange : peerColor(for: message, isDark: isDark)
         
         if message.sender != "system" {
@@ -3157,6 +3156,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         return c
     }
 
+    @MainActor
     private func peerColor(for message: BitchatMessage, isDark: Bool) -> Color {
         var seed: String
         if let spid = message.senderPeerID {
