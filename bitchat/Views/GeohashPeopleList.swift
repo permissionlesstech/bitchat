@@ -6,6 +6,7 @@ struct GeohashPeopleList: View {
     let textColor: Color
     let secondaryTextColor: Color
     let onTapPerson: () -> Void
+    @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
         Group {
@@ -51,14 +52,15 @@ struct GeohashPeopleList: View {
                         }
                         let (base, suffix) = splitSuffix(from: person.displayName)
                         let isMe = person.id == myHex
+                        let assignedColor = viewModel.colorForNostrPubkey(person.id, isDark: colorScheme == .dark)
                         HStack(spacing: 0) {
-                            let rowColor: Color = isMe ? .orange : textColor
+                            let rowColor: Color = isMe ? .orange : assignedColor
                             Text(base)
                                 .font(.system(size: 14, design: .monospaced))
                                 .fontWeight(isMe ? .bold : .regular)
                                 .foregroundColor(rowColor)
                             if !suffix.isEmpty {
-                                let suffixColor = isMe ? Color.orange.opacity(0.6) : textColor.opacity(0.6)
+                                let suffixColor = isMe ? Color.orange.opacity(0.6) : rowColor.opacity(0.6)
                                 Text(suffix)
                                     .font(.system(size: 14, design: .monospaced))
                                     .foregroundColor(suffixColor)
