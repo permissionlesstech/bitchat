@@ -1473,6 +1473,17 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
 
     // MARK: - Public helpers (iOS)
     #if os(iOS)
+    /// Return the current, pruned, sorted people list for the active geohash without mutating state.
+    @MainActor
+    func visibleGeohashPeople() -> [GeoPerson] {
+        guard let gh = currentGeohash else { return [] }
+        let cutoff = Date().addingTimeInterval(-5 * 60)
+        let map = (geoParticipants[gh] ?? [:]).filter { $0.value >= cutoff }
+        let people = map
+            .map { (pub, seen) in GeoPerson(id: pub, displayName: displayNameForNostrPubkey(pub), lastSeen: seen) }
+            .sorted { $0.lastSeen > $1.lastSeen }
+        return people
+    }
     /// Returns the current participant count for a specific geohash, using the 5-minute activity window.
     @MainActor
     func geohashParticipantCount(for geohash: String) -> Int {
