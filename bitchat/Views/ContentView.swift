@@ -357,6 +357,46 @@ struct ContentView: View {
                                                 .id("\(message.id)-\(urlInfo.url.absoluteString)")
                                         }
                                     }
+
+                                    // Render payment chips (Lightning / Cashu) with rounded background
+                                    let lightningLinks = message.content.extractLightningLinks()
+                                    let cashuTokens = message.content.extractCashuTokens()
+                                    if !lightningLinks.isEmpty || !cashuTokens.isEmpty {
+                                        HStack(spacing: 8) {
+                                            ForEach(Array(lightningLinks.prefix(3)).indices, id: \.self) { i in
+                                                let link = lightningLinks[i]
+                                                PaymentChipView(
+                                                    emoji: "⚡",
+                                                    label: "pay via lightning",
+                                                    colorScheme: colorScheme
+                                                ) {
+                                                    #if os(iOS)
+                                                    if let url = URL(string: link) { UIApplication.shared.open(url) }
+                                                    #else
+                                                    if let url = URL(string: link) { NSWorkspace.shared.open(url) }
+                                                    #endif
+                                                }
+                                            }
+                                            ForEach(Array(cashuTokens.prefix(3)).indices, id: \.self) { i in
+                                                let token = cashuTokens[i]
+                                                let enc = token.addingPercentEncoding(withAllowedCharacters: .alphanumerics.union(CharacterSet(charactersIn: "-_"))) ?? token
+                                                let urlStr = "cashu:\(enc)"
+                                                PaymentChipView(
+                                                    emoji: "🥜",
+                                                    label: "pay via cashu",
+                                                    colorScheme: colorScheme
+                                                ) {
+                                                    #if os(iOS)
+                                                    if let url = URL(string: urlStr) { UIApplication.shared.open(url) }
+                                                    #else
+                                                    if let url = URL(string: urlStr) { NSWorkspace.shared.open(url) }
+                                                    #endif
+                                                }
+                                            }
+                                        }
+                                        .padding(.top, 4)
+                                        .padding(.leading, 2)
+                                    }
                                 }
                             }
                         }
@@ -1269,6 +1309,44 @@ struct ContentView: View {
 }
 
 // MARK: - Helper Views
+
+// Rounded payment chip button
+private struct PaymentChipView: View {
+    let emoji: String
+    let label: String
+    let colorScheme: ColorScheme
+    let action: () -> Void
+    
+    private var fgColor: Color {
+        colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
+    }
+    private var bgColor: Color {
+        colorScheme == .dark ? Color.gray.opacity(0.18) : Color.gray.opacity(0.12)
+    }
+    private var border: Color { fgColor.opacity(0.25) }
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Text(emoji)
+                Text(label)
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+            }
+            .padding(.vertical, 4)
+            .padding(.horizontal, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(bgColor)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(border, lineWidth: 1)
+            )
+            .foregroundColor(fgColor)
+        }
+        .buttonStyle(.plain)
+    }
+}
 
 // Helper view for rendering message content (plain, no hashtag/mention formatting)
 struct MessageContentView: View {

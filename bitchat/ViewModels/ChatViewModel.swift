@@ -2918,52 +2918,21 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                             tagStyle.foregroundColor = baseColor
                             result.append(AttributedString(matchText).mergingAttributes(tagStyle))
                         } else if type == "cashu" {
-                            // Render compact cashu chip: 🥜 pay via cashu, with subtle background
-                            var matchStyle = AttributeContainer()
-                            matchStyle.font = .system(size: 14, weight: isSelf ? .bold : .semibold, design: .monospaced)
-                            matchStyle.foregroundColor = isSelf ? .orange : .blue
-                            matchStyle.backgroundColor = (isDark ? Color.gray.opacity(0.18) : Color.gray.opacity(0.12))
-                            // No underline; keep link attribute for tap
-                            if let encoded = matchText.addingPercentEncoding(withAllowedCharacters: .alphanumerics.union(CharacterSet(charactersIn: "-_"))) {
-                                matchStyle.link = URL(string: "cashu:\(encoded)")
-                            } else {
-                                matchStyle.link = URL(string: "cashu:\(matchText)")
-                            }
-                            let display = "🥜 pay via cashu"
-                            // Surround with spaces for visual separation (no background on spaces)
+                            // Skip inline token; a styled chip is rendered below the message
+                            // We insert a single space to avoid words sticking together
                             var spacer = AttributeContainer()
                             spacer.foregroundColor = baseColor
                             spacer.font = isSelf
                                 ? .system(size: 14, weight: .bold, design: .monospaced)
                                 : .system(size: 14, design: .monospaced)
-                            result.append(AttributedString(" ").mergingAttributes(spacer))
-                            result.append(AttributedString(display).mergingAttributes(matchStyle))
                             result.append(AttributedString(" ").mergingAttributes(spacer))
                         } else if type == "lightning" || type == "bolt11" || type == "lnurl" {
-                            // Render compact lightning chip: ⚡ pay via lightning, with subtle background
-                            var matchStyle = AttributeContainer()
-                            matchStyle.font = .system(size: 14, weight: isSelf ? .bold : .semibold, design: .monospaced)
-                            matchStyle.foregroundColor = isSelf ? .orange : .blue
-                            matchStyle.backgroundColor = (isDark ? Color.gray.opacity(0.18) : Color.gray.opacity(0.12))
-                            let payload: String
-                            if type == "lightning" {
-                                payload = matchText
-                            } else {
-                                payload = "lightning:\(matchText)"
-                            }
-                            if let encoded = payload.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed.union(.alphanumerics)) {
-                                matchStyle.link = URL(string: encoded) ?? URL(string: payload)
-                            } else {
-                                matchStyle.link = URL(string: payload)
-                            }
-                            let display = "⚡ pay via lightning"
+                            // Skip inline invoice/link; a styled chip is rendered below the message
                             var spacer = AttributeContainer()
                             spacer.foregroundColor = baseColor
                             spacer.font = isSelf
                                 ? .system(size: 14, weight: .bold, design: .monospaced)
                                 : .system(size: 14, design: .monospaced)
-                            result.append(AttributedString(" ").mergingAttributes(spacer))
-                            result.append(AttributedString(display).mergingAttributes(matchStyle))
                             result.append(AttributedString(" ").mergingAttributes(spacer))
                         } else {
                             // Keep URL styling (blue + underline for non-self, orange for self)
