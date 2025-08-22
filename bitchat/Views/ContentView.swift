@@ -695,24 +695,25 @@ struct ContentView: View {
         .environment(\.openURL, OpenURLAction { url in
             // Intercept custom links created in attributed text
             if let scheme = url.scheme?.lowercased() {
-                if scheme == "cashu" || scheme == "lightning" {
+                switch scheme {
+                case "cashu", "lightning":
                     #if os(iOS)
                     UIApplication.shared.open(url)
                     return .handled
                     #else
                     return .systemAction
                     #endif
-                }
-                if scheme == "mention" {
+                case "mention":
                     if let comps = URLComponents(url: url, resolvingAgainstBaseURL: false),
                        let name = comps.queryItems?.first(where: { $0.name == "n" })?.value,
                        !name.isEmpty {
-                        // Show action sheet for the mentioned user instead of the sender
                         selectedMessageSender = name
                         selectedMessageSenderID = viewModel.getPeerIDForNickname(name)
                         showMessageActions = true
                         return .handled
                     }
+                default:
+                    break
                 }
             }
             return .systemAction
