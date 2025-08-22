@@ -2977,6 +2977,12 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                         mentionStyle.font = .system(size: 14, weight: isSelf ? .bold : .semibold, design: .monospaced)
                         let mentionColor: Color = isMentionToMe ? .orange : baseColor
                         mentionStyle.foregroundColor = mentionColor
+                        // Make mentions tappable using a custom URL that we intercept in the view
+                        let mentionToken = mBase + mSuffix
+                        let encoded = mentionToken.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? mentionToken
+                        if let url = URL(string: "mention://user?n=\(encoded)") {
+                            mentionStyle.link = url
+                        }
                         // Emit '@'
                         result.append(AttributedString("@").mergingAttributes(mentionStyle))
                         // Base name
@@ -2985,6 +2991,10 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                         if !mSuffix.isEmpty {
                             var light = mentionStyle
                             light.foregroundColor = mentionColor.opacity(0.6)
+                            // Preserve link on the suffix as well
+                            if let url = URL(string: "mention://user?n=\(encoded)") {
+                                light.link = url
+                            }
                             result.append(AttributedString(mSuffix).mergingAttributes(light))
                         }
                     } else {

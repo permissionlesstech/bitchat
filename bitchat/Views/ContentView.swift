@@ -693,15 +693,27 @@ struct ContentView: View {
             }
         }
         .environment(\.openURL, OpenURLAction { url in
-            // Intercept custom cashu: links created in attributed text
-            if let scheme = url.scheme?.lowercased(), scheme == "cashu" || scheme == "lightning" {
-                #if os(iOS)
-                UIApplication.shared.open(url)
-                return .handled
-                #else
-                // On non-iOS platforms, let the system handle or ignore
-                return .systemAction
-                #endif
+            // Intercept custom links created in attributed text
+            if let scheme = url.scheme?.lowercased() {
+                if scheme == "cashu" || scheme == "lightning" {
+                    #if os(iOS)
+                    UIApplication.shared.open(url)
+                    return .handled
+                    #else
+                    return .systemAction
+                    #endif
+                }
+                if scheme == "mention" {
+                    if let comps = URLComponents(url: url, resolvingAgainstBaseURL: false),
+                       let name = comps.queryItems?.first(where: { $0.name == "n" })?.value,
+                       !name.isEmpty {
+                        // Show action sheet for the mentioned user instead of the sender
+                        selectedMessageSender = name
+                        selectedMessageSenderID = viewModel.getPeerIDForNickname(name)
+                        showMessageActions = true
+                        return .handled
+                    }
+                }
             }
             return .systemAction
         })
