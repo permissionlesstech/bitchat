@@ -64,7 +64,7 @@ struct RoundedTextField: View {
         TextField(placeholder, text: $text)
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            .background(Color(.systemGray6))
+            .background(Color.gray.opacity(0.1))
             .cornerRadius(20)
             .overlay(RoundedRectangle(cornerRadius: 20)
                 .stroke(Color.gray.opacity(0.4), lineWidth: 1)

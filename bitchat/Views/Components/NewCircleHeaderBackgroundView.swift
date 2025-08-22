@@ -27,5 +27,5 @@ struct NewCircleHeaderBackgroundView: View {
 #Preview {
     NewCircleHeaderBackgroundView()
         .padding()
-        .background(Color(.background))
+        .background(Color.white)
 }

@@ -125,25 +125,13 @@ class CommandProcessor {
             // In private chat
             if let peerNickname = meshService?.peerNickname(peerID: targetPeerID) {
                 let personalMessage = "* \(emoji) \(myNickname) \(action) you\(suffix) *"
-                meshService?.sendPrivateMessage(personalMessage, to: targetPeerID, 
-                                               recipientNickname: peerNickname, 
+                meshService?.sendPrivateMessage(personalMessage, to: targetPeerID,
+                                               recipientNickname: peerNickname,
                                                messageID: UUID().uuidString)
-                // Also add a local system message so the sender sees a natural-language confirmation
-                let pastAction: String = {
-                    switch action {
-                    case "hugs": return "hugged"
-                    case "slaps": return "slapped"
-                    default: return action.hasSuffix("e") ? action + "d" : action + "ed"
-                    }
-                }()
-                let localText = "\(emoji) you \(pastAction) \(nickname)\(suffix)"
-                chatViewModel?.addLocalPrivateSystemMessage(localText, to: targetPeerID)
             }
         } else {
-            // In public chat: send to active public channel (mesh or geohash)
-            chatViewModel?.sendPublicRaw(emoteContent)
-            let publicEcho = "\(emoji) \(myNickname) \(action) \(nickname)\(suffix)"
-            chatViewModel?.addPublicSystemMessage(publicEcho)
+            // In public chat
+            meshService?.sendMessage(emoteContent, mentions: [])
         }
         
         return .handled
@@ -168,7 +156,7 @@ class CommandProcessor {
                 }
             }
             
-            let list = blockedNicknames.isEmpty ? "blocked peers (not currently online)" 
+            let list = blockedNicknames.isEmpty ? "blocked peers (not currently online)"
                                                  : blockedNicknames.sorted().joined(separator: ", ")
             return .success(message: "blocked peers: \(list)")
         }

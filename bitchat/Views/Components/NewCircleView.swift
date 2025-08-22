@@ -53,7 +53,7 @@ struct NewCircleView: View {
     
     var body: some View {
         ZStack(alignment: .top){
-            Color.background
+            Color.white
             VStack {
                 Image("bubble")
                     .resizable()
@@ -69,14 +69,18 @@ struct NewCircleView: View {
             .padding(.top, 120)
         }
         .ignoresSafeArea(.all)
-        .navigationTitle("New Circle")
-        .navigationBarTitleDisplayMode(.inline)
+                    .navigationTitle("New Circle")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
         .sheet(isPresented: $showSheet) {
             if #available(iOS 16.4, *) {
                 CreateCircleSheetContainer(draft: draft, step: $step, nearbyProfiles: nearbyProfiles, onTapProfile: onTapProfile)
                     .presentationDetents([.fraction(0.75)])
+                    #if os(iOS)
                     .presentationCornerRadius(24)
                     .presentationBackgroundInteraction(.enabled)
+                    #endif
                     .presentationDragIndicator(.visible)
                     .id(step)
             } else {
@@ -133,7 +137,7 @@ struct CreateCircleSheetContainer: View {
                     Spacer(minLength: 100)
                 }
                 .padding(.top, 12)
-                .background(Color.activityView)
+                .background(Color.white)
             }
             
             .overlay(alignment: .bottom) {
@@ -164,7 +168,7 @@ struct CreateCircleSheetContainer: View {
                 .presentationDragIndicator(.visible)
             }
         }
-        .background(.activityView)
+                        .background(Color.white)
     }
 }
 
@@ -405,7 +409,7 @@ private struct MemberRow: View {
                         .accessibilityHidden(true)
                 } else {
                     Circle()
-                        .fill(Color(.systemGray5))
+                        .fill(Color.gray.opacity(0.2))
                         .overlay(
                             Text(profile.initials)
                                 .font(.system(size: size * 0.35, weight: .semibold))

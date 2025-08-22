@@ -105,7 +105,7 @@ struct NewContact: View {
                         .font(.system(size: 30))
                         .foregroundStyle(.secondary)
                         .frame(width: 40, height: 40)
-                        .background(Circle().fill(Color(.systemGray5)))
+                        .background(Circle().fill(Color.gray.opacity(0.2)))
                         .clipShape(Circle())
 
                     VStack(alignment: .leading, spacing: 2) {
@@ -130,7 +130,7 @@ struct NewContact: View {
 
                 HStack(alignment: .top, spacing: 14) {
                     ZStack {
-                        Circle().fill(Color(.systemGray6)).frame(width: 44, height: 44)
+                        Circle().fill(Color.gray.opacity(0.1)).frame(width: 44, height: 44)
                         Image(systemName: "dot.radiowaves.left.and.right")
                             .font(.system(size: 20))
                             .foregroundStyle(.secondary)

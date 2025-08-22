@@ -47,10 +47,10 @@ struct NearYouSectionView: View {
         ],
         onTapProfile: { _ in print("Tapped") }
     )
-    .background(Color(.systemBackground))
+    .background(Color.white)
 }
 
 #Preview("NearYouSection – empty") {
     NearYouSectionView(profiles: [])
-        .background(Color(.systemBackground))
+        .background(Color.white)
 }

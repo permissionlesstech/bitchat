@@ -52,8 +52,8 @@ private struct ListLikeContainer<Content: View>: View {
 }
 
 #Preview("Chats – Empty") {
-    ChatsSectionView(items: [], accent: .brandPrimary)
-        .background(Color(.systemBackground))
+    ChatsSectionView(items: [], accent: .orange)
+        .background(Color.white)
 }
 
 #Preview("Chats – With items") {
@@ -69,6 +69,6 @@ private struct ListLikeContainer<Content: View>: View {
                  iconSystemName: "paintbrush.fill",
                  iconBackground: Color(.systemTeal))
     ]
-    ChatsSectionView(items: sample, accent: .brandPrimary)
-        .background(Color(.systemBackground))
+    ChatsSectionView(items: sample, accent: .orange)
+        .background(Color.white)
 }

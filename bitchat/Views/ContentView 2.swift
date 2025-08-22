@@ -8,9 +8,10 @@ import SwiftUI
 
 struct Homepage: View {
     init() {
+        #if os(iOS)
         let tabBarAppearance = UITabBarAppearance()
         tabBarAppearance.configureWithOpaqueBackground()
-        tabBarAppearance.backgroundColor = UIColor(Color.brandPrimary)
+        tabBarAppearance.backgroundColor = UIColor(Color.orange)
 
      
         tabBarAppearance.stackedLayoutAppearance.normal.iconColor = UIColor(
@@ -31,6 +32,7 @@ struct Homepage: View {
         if #available(iOS 15.0, *) {
             UITabBar.appearance().scrollEdgeAppearance = tabBarAppearance
         }
+        #endif
     }
 
     var body: some View {
@@ -48,7 +50,7 @@ struct Homepage: View {
                     Text("Profile")
                 }
         }
-        .tint(.brandPrimary)
+        .tint(.orange)
     }
 }
 

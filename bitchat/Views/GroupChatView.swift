@@ -390,9 +390,11 @@ struct GroupInfoView: View {
             }
             .background(backgroundColor)
             .navigationTitle("Group Info")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .primaryAction) {
                     Button("Done") {
                         presentationMode.wrappedValue.dismiss()
                     }
@@ -468,9 +470,11 @@ struct GroupMembersView: View {
             }
             .background(backgroundColor)
             .navigationTitle("Members (\(group.members.count))")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .primaryAction) {
                     Button("Done") {
                         presentationMode.wrappedValue.dismiss()
                     }
@@ -612,9 +616,11 @@ struct InviteMembersView: View {
             }
             .background(backgroundColor)
             .navigationTitle("Invite Members")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .primaryAction) {
                     Button("Done") {
                         presentationMode.wrappedValue.dismiss()
                     }

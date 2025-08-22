@@ -16,7 +16,7 @@ struct EditableCircleAvatar: View {
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
             Circle()
-                .fill(Color(.systemGray6))
+                .fill(Color.gray.opacity(0.1))
                 .frame(width: diameter, height: diameter)
                 .overlay(
                     Group {
@@ -26,7 +26,7 @@ struct EditableCircleAvatar: View {
                     .foregroundStyle(.secondary)
 //                    .clipShape(Circle())
                 )
-                .overlay(Circle().stroke(Color.background, lineWidth: 8))
+                .overlay(Circle().stroke(Color.white, lineWidth: 8))
 
             Button(action: onEdit) {
                 Image(systemName: "pencil")
@@ -34,7 +34,7 @@ struct EditableCircleAvatar: View {
                     .foregroundStyle(.white)
                     .padding(6)
                     .background(Circle().fill(Color.black.opacity(0.6)))
-                    .overlay(Circle().stroke(Color.background, lineWidth: 2))
+                    .overlay(Circle().stroke(Color.white, lineWidth: 2))
             }
             .buttonStyle(.plain)
         }

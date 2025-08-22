@@ -144,7 +144,7 @@ struct ChatInputBar: View {
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                                      ? .gray.opacity(0.6)
-                                     : .brandPrimary)
+                                     : .orange)
                     .padding(10)
             }
             .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -168,7 +168,7 @@ struct ChatHeader: View {
 
     var body: some View {
         ZStack {
-            Color.brandPrimary.ignoresSafeArea(edges: .top)
+            Color.orange.ignoresSafeArea(edges: .top)
 
             HStack {
                 Button(action: back) {
@@ -238,7 +238,9 @@ struct ChatRoomView: View {
                 }
             }
         }
+        #if os(iOS)
         .navigationBarHidden(true)
+        #endif
     }
 }
 

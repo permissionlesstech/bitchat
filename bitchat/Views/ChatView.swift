@@ -21,8 +21,9 @@ struct ChatsView: View {
     ]
 
     init() {
+        #if os(iOS)
         let appearance = UISegmentedControl.appearance()
-        appearance.selectedSegmentTintColor = UIColor(Color.brandPrimary)
+        appearance.selectedSegmentTintColor = UIColor(Color.orange)
         let normalAttrs: [NSAttributedString.Key: Any] = [
             .foregroundColor: UIColor.gray,
             .font: UIFont.systemFont(ofSize: 14, weight: .semibold),
@@ -36,7 +37,7 @@ struct ChatsView: View {
         ]
         UISegmentedControl.appearance().setTitleTextAttributes(
             selectedAttrs, for: .selected)
-        
+        #endif
     }
     
     var body: some View {
@@ -55,7 +56,7 @@ struct ChatsView: View {
                 Spacer()
             }
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .primaryAction) {
                     CircleIconButtonView()
                 }
             }

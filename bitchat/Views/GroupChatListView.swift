@@ -433,9 +433,11 @@ struct GroupInvitationsView: View {
                 }
             }
             .background(backgroundColor)
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .primaryAction) {
                     Button("Done") {
                         presentationMode.wrappedValue.dismiss()
                     }

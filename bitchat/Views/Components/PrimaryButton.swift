@@ -18,7 +18,7 @@ struct PrimaryButton: View {
                 .foregroundStyle(.white)
                 .padding(.horizontal, 28)
                 .padding(.vertical, 12)
-                .background(Capsule().fill(.brandPrimary))
+                .background(Capsule().fill(.orange))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(title)

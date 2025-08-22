@@ -48,7 +48,7 @@ struct NearbyProfileCardView: View {
     private var avatarView: some View {
         ZStack {
             Circle()
-                .strokeBorder(.brandPrimary, lineWidth: ringWidth)
+                .strokeBorder(.orange, lineWidth: ringWidth)
                 .frame(width: size, height: size)
                 .shadow(color: .black.opacity(0.1), radius: 3, x: 0, y: 2)
             
@@ -61,7 +61,7 @@ struct NearbyProfileCardView: View {
                     .accessibilityHidden(true)
             } else {
                 Circle()
-                    .fill(Color(.systemGray5))
+                    .fill(Color.gray.opacity(0.2))
                     .overlay(
                         Text(profile.initials)
                             .font(.system(size: size * 0.35, weight: .semibold))
@@ -95,7 +95,7 @@ private let dummyProfiles: [NearbyProfile] = [
 #Preview("NearbyProfileCard - single") {
     NearbyProfileCardView(profile: dummyProfiles[0]) { print("Tapped") }
         .padding()
-        .background(Color(.systemBackground))
+        .background(Color.white)
 }
 
 #Preview("NearbyProfileCard - horizontal list") {
@@ -108,5 +108,5 @@ private let dummyProfiles: [NearbyProfile] = [
         .padding(.horizontal, 20)
         .padding(.vertical, 8)
     }
-    .background(Color(.systemBackground))
+    .background(Color.white)
 }

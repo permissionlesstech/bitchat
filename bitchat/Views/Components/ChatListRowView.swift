@@ -9,7 +9,7 @@ import SwiftUI
 
 struct ChatListRowView: View {
     var item: ChatItem
-    var accent: Color = .brandPrimary
+    var accent: Color = .orange
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
             LeadingIconCircleView(systemName: item.iconSystemName, bg: item.iconBackground, size: 44)
@@ -41,7 +41,7 @@ struct ChatListRowView: View {
                 if let time = item.time {
                     Text(time)
                         .font(.caption)
-                        .foregroundStyle(.brandPrimary)
+                        .foregroundStyle(.orange)
                 }
                 UnreadBadgeView(count: 2)
             }
