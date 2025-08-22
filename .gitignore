@@ -57,7 +57,6 @@ iOSInjectionProject/
 
 ## Xcode project
 *.xcodeproj/project.xcworkspace/
-*.xcodeproj/xcshareddata/
 
 ## Python
 __pycache__/
@@ -66,8 +65,10 @@ __pycache__/
 
 ## Temporary files
 *.tmp
+
 *.temp
 
 # Local build results
 .Result*/
 .Result*.xcresult/
+
