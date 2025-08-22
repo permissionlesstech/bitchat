@@ -1618,6 +1618,14 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 }
                 return
             }
+            // Respect geohash blocks
+            if SecureIdentityStateManager.shared.isNostrBlocked(pubkeyHexLowercased: recipientHex) {
+                if let msgIdx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
+                    privateChats[peerID]?[msgIdx].deliveryStatus = .failed(reason: "user is blocked")
+                }
+                addSystemMessage("cannot send message: user is blocked.")
+                return
+            }
             // Send via Nostr using per-geohash identity
             do {
                 let id = try NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash)
@@ -4607,9 +4615,27 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     @MainActor
     private func isMessageBlocked(_ message: BitchatMessage) -> Bool {
         if let peerID = message.senderPeerID ?? getPeerIDForNickname(message.sender) {
-            return isPeerBlocked(peerID)
+            // Check mesh/known peers first
+            if isPeerBlocked(peerID) { return true }
+            // Check geohash (Nostr) blocks using mapping to full pubkey
+            if peerID.hasPrefix("nostr") {
+                if let full = nostrKeyMapping[peerID]?.lowercased() {
+                    if SecureIdentityStateManager.shared.isNostrBlocked(pubkeyHexLowercased: full) { return true }
+                }
+            }
+            return false
         }
         return false
+    }
+
+    // MARK: - Geohash Nickname Resolution (for /block in geohash)
+    @MainActor
+    func nostrPubkeyForDisplayName(_ name: String) -> String? {
+        // Look up current visible geohash participants for an exact displayName match
+        for p in visibleGeohashPeople() {
+            if p.displayName == name { return p.id }
+        }
+        return nil
     }
     
     /// Process action messages (hugs, slaps) into system messages

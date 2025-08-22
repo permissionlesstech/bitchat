@@ -149,6 +149,9 @@ struct IdentityCache: Codable {
     // Last interaction timestamps (privacy: optional)
     var lastInteractions: [String: Date] = [:] 
     
+    // Blocked Nostr pubkeys (lowercased hex) for geohash chats
+    var blockedNostrPubkeys: Set<String> = []
+    
     // Schema version for future migrations
     var version: Int = 1
 }
