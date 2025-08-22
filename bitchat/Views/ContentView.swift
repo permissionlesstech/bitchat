@@ -204,6 +204,14 @@ struct ContentView: View {
             isPresented: $showMessageActions,
             titleVisibility: .visible
         ) {
+            Button("mention") {
+                if let sender = selectedMessageSender {
+                    // Pre-fill the input with an @mention and focus the field
+                    messageText = "@\(sender) "
+                    isTextFieldFocused = true
+                }
+            }
+
             Button("private message") {
                 if let peerID = selectedMessageSenderID {
                     #if os(iOS)
