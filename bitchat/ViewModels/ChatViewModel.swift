@@ -1179,8 +1179,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             self.recordGeoParticipant(pubkeyHex: id.publicKeyHex)
             #if os(iOS)
             if LocationChannelManager.shared.teleported {
-                teleportedGeo.insert(id.publicKeyHex.lowercased())
-                objectWillChange.send()
+                let key = id.publicKeyHex.lowercased()
+                teleportedGeo = teleportedGeo.union([key])
             }
             #endif
         }
@@ -1198,9 +1198,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             // Track teleport tag for participants
             if let teleTag = event.tags.first(where: { $0.first == "t" }), teleTag.count >= 2, teleTag[1] == "teleport" {
                 let key = event.pubkey.lowercased()
-                if !self.teleportedGeo.contains(key) {
-                    self.teleportedGeo.insert(key)
-                    DispatchQueue.main.async { [weak self] in self?.objectWillChange.send() }
+                Task { @MainActor in
+                    self.teleportedGeo = self.teleportedGeo.union([key])
                 }
             }
             // Skip our own events (we already locally echoed)
