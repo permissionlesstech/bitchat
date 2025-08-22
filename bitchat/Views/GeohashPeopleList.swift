@@ -71,6 +71,15 @@ struct GeohashPeopleList: View {
                                     .foregroundColor(rowColor)
                             }
                         }
+                        // Blocked indicator for geohash users
+                        if let me = myHex, person.id != me {
+                            if viewModel.isGeohashUserBlocked(pubkeyHexLowercased: person.id) {
+                                Image(systemName: "nosign")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.red)
+                                    .help("Blocked in geochash")
+                            }
+                        }
                         Spacer()
                     }
                     .padding(.horizontal)
