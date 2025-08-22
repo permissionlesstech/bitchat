@@ -21,6 +21,7 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
     private var lastLocation: CLLocation?
     private var refreshTimer: Timer?
     private let userDefaultsKey = "locationChannel.selected"
+    private let teleportedStoreKey = "locationChannel.teleportedSet"
     private var isGeocoding: Bool = false
 
     // Published state for UI bindings
@@ -31,6 +32,9 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
     @Published var teleported: Bool = false
     @Published private(set) var locationNames: [GeohashChannelLevel: String] = [:]
 
+    // Persisted set of geohashes that were selected via teleport
+    private var teleportedSet: Set<String> = []
+
     private override init() {
         super.init()
         cl.delegate = self
@@ -40,6 +44,15 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
         if let data = UserDefaults.standard.data(forKey: userDefaultsKey),
            let channel = try? JSONDecoder().decode(ChannelID.self, from: data) {
             selectedChannel = channel
+        }
+        // Load persisted teleported set
+        if let data = UserDefaults.standard.data(forKey: teleportedStoreKey),
+           let arr = try? JSONDecoder().decode([String].self, from: data) {
+            teleportedSet = Set(arr)
+        }
+        // Initialize teleported flag from persisted state if a location channel is selected
+        if case .location(let ch) = selectedChannel {
+            teleported = teleportedSet.contains(ch.geohash)
         }
         let status: CLAuthorizationStatus
         if #available(iOS 14.0, *) {
@@ -104,6 +117,24 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
             if let data = try? JSONEncoder().encode(channel) {
                 UserDefaults.standard.set(data, forKey: self.userDefaultsKey)
             }
+            // Update teleported flag based on persisted state for immediate UI behavior
+            switch channel {
+            case .mesh:
+                self.teleported = false
+            case .location(let ch):
+                self.teleported = self.teleportedSet.contains(ch.geohash)
+            }
+        }
+    }
+
+    // Mark or unmark a geohash as teleported in persistence and update current flag if relevant
+    func markTeleported(for geohash: String, _ flag: Bool) {
+        if flag { teleportedSet.insert(geohash) } else { teleportedSet.remove(geohash) }
+        if let data = try? JSONEncoder().encode(Array(teleportedSet)) {
+            UserDefaults.standard.set(data, forKey: teleportedStoreKey)
+        }
+        if case .location(let ch) = selectedChannel, ch.geohash == geohash {
+            Task { @MainActor in self.teleported = flag }
         }
     }
 
@@ -164,13 +195,14 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
         }
         Task { @MainActor in
             self.availableChannels = result
-            // Recompute teleported status based on current location vs selected channel
+            // Recompute teleported status based on persisted state OR current location vs selected channel
             switch self.selectedChannel {
             case .mesh:
                 self.teleported = false
             case .location(let ch):
+                let persisted = self.teleportedSet.contains(ch.geohash)
                 let currentGH = Geohash.encode(latitude: coord.latitude, longitude: coord.longitude, precision: ch.level.precision)
-                self.teleported = (currentGH != ch.geohash)
+                self.teleported = persisted || (currentGH != ch.geohash)
             }
         }
     }

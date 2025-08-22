@@ -79,8 +79,8 @@
 
 import Foundation
 import SwiftUI
-import Combine
 import CryptoKit
+import Combine
 import CommonCrypto
 import CoreBluetooth
 #if os(iOS)
@@ -1126,6 +1126,15 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                         NostrRelayManager.shared.sendEvent(event)
                         // Track ourselves as active participant
                         self.recordGeoParticipant(pubkeyHex: identity.publicKeyHex)
+                        SecureLogger.log("GeoTeleport: sent geo message pub=\(identity.publicKeyHex.prefix(8))… teleported=\(LocationChannelManager.shared.teleported)",
+                                        category: SecureLogger.session, level: .debug)
+                        // If we tagged this as teleported, also mark our pubkey in teleportedGeo for UI
+                        if LocationChannelManager.shared.teleported {
+                            let key = identity.publicKeyHex.lowercased()
+                            self.teleportedGeo = self.teleportedGeo.union([key])
+                            SecureLogger.log("GeoTeleport: mark self teleported key=\(key.prefix(8))… total=\(self.teleportedGeo.count)",
+                                            category: SecureLogger.session, level: .info)
+                        }
                     } catch {
                         SecureLogger.log("❌ Failed to send geohash message: \(error)", category: SecureLogger.session, level: .error)
                         self.addSystemMessage("failed to send to location channel")
@@ -1181,6 +1190,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             if LocationChannelManager.shared.teleported {
                 let key = id.publicKeyHex.lowercased()
                 teleportedGeo = teleportedGeo.union([key])
+                SecureLogger.log("GeoTeleport: channel switch mark self teleported key=\(key.prefix(8))… total=\(teleportedGeo.count)",
+                                category: SecureLogger.session, level: .info)
             }
             #endif
         }
@@ -1195,11 +1206,30 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             // Deduplicate
             if self.processedNostrEvents.contains(event.id) { return }
             self.recordProcessedEvent(event.id)
+            // Log incoming tags for diagnostics
+            let tagSummary = event.tags.map { "[" + $0.joined(separator: ",") + "]" }.joined(separator: ",")
+            SecureLogger.log("GeoTeleport: recv pub=\(event.pubkey.prefix(8))… tags=\(tagSummary)",
+                            category: SecureLogger.session, level: .debug)
             // Track teleport tag for participants
-            if let teleTag = event.tags.first(where: { $0.first == "t" }), teleTag.count >= 2, teleTag[1] == "teleport" {
+            // Detect teleport tag robustly: accept ["t","teleport"], ["t"], ["teleport"], or boolean-like values
+            let hasTeleportTag: Bool = {
+                for tag in event.tags {
+                    guard let key = tag.first?.lowercased() else { continue }
+                    if key == "t" || key == "teleport" { return true }
+                    // Some clients may encode as ["t","1"] or ["t","true"]
+                    if key == "t", tag.dropFirst().contains(where: { v in
+                        let lv = v.lowercased()
+                        return lv == "teleport" || lv == "1" || lv == "true"
+                    }) { return true }
+                }
+                return false
+            }()
+            if hasTeleportTag {
                 let key = event.pubkey.lowercased()
                 Task { @MainActor in
                     self.teleportedGeo = self.teleportedGeo.union([key])
+                    SecureLogger.log("GeoTeleport: mark peer teleported key=\(key.prefix(8))… total=\(self.teleportedGeo.count)",
+                                    category: SecureLogger.session, level: .info)
                 }
             }
             // Skip our own events (we already locally echoed)
@@ -2679,6 +2709,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         return processedContent
     }
     
+    @MainActor
     func formatMessageAsText(_ message: BitchatMessage, colorScheme: ColorScheme) -> AttributedString {
         // Determine if this message was sent by self (mesh, geo, or DM)
         let isSelf: Bool = {
@@ -2706,8 +2737,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         // Not cached, format the message
         var result = AttributedString()
         
-        let primaryColor = isDark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
-        let baseColor: Color = isSelf ? .orange : primaryColor
+        let baseColor: Color = isSelf ? .orange : peerColor(for: message, isDark: isDark)
         
         if message.sender != "system" {
             // Sender (at the beginning) with light-gray suffix styling if present
@@ -2812,7 +2842,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                         }()
                         var mentionStyle = AttributeContainer()
                         mentionStyle.font = .system(size: 14, weight: isSelf ? .bold : .semibold, design: .monospaced)
-                        let mentionColor: Color = isMentionToMe ? .orange : primaryColor
+                        let mentionColor: Color = isMentionToMe ? .orange : baseColor
                         mentionStyle.foregroundColor = mentionColor
                         // Emit '@'
                         result.append(AttributedString("@").mergingAttributes(mentionStyle))
@@ -3133,6 +3163,62 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             let removeCount = messages.count - maxMessages
             messages.removeFirst(removeCount)
         }
+    }
+
+    // MARK: - Per-Peer Colors
+    private var peerColorCache: [String: Color] = [:]
+
+    private func djb2(_ s: String) -> UInt64 {
+        var hash: UInt64 = 5381
+        for b in s.utf8 { hash = ((hash << 5) &+ hash) &+ UInt64(b) }
+        return hash
+    }
+
+    @MainActor
+    func colorForPeerSeed(_ seed: String, isDark: Bool) -> Color {
+        if let cached = peerColorCache[seed] { return cached }
+        var hue = Double(djb2(seed) % 360) / 360.0
+        // Avoid orange (~30°) reserved for self
+        let orange = 30.0 / 360.0
+        if abs(hue - orange) < 0.05 { hue = fmod(hue + 0.12, 1.0) }
+        let saturation: Double = isDark ? 0.80 : 0.70
+        let brightness: Double = isDark ? 0.75 : 0.45
+        let c = Color(hue: hue, saturation: saturation, brightness: brightness)
+        peerColorCache[seed] = c
+        return c
+    }
+
+    @MainActor
+    private func peerColor(for message: BitchatMessage, isDark: Bool) -> Color {
+        var seed: String
+        if let spid = message.senderPeerID {
+            if spid.hasPrefix("nostr:") || spid.hasPrefix("nostr_") {
+                let full = nostrKeyMapping[spid]?.lowercased() ?? spid.lowercased()
+                seed = "nostr:" + full
+            } else if spid.count == 16, let full = getNoiseKeyForShortID(spid)?.lowercased() {
+                seed = "noise:" + full
+            } else {
+                seed = spid.lowercased()
+            }
+        } else {
+            seed = message.sender.lowercased()
+        }
+        return colorForPeerSeed(seed, isDark: isDark)
+    }
+
+    // Public helpers for views to color peers consistently in lists
+    @MainActor
+    func colorForNostrPubkey(_ pubkeyHexLowercased: String, isDark: Bool) -> Color {
+        return colorForPeerSeed("nostr:" + pubkeyHexLowercased.lowercased(), isDark: isDark)
+    }
+
+    @MainActor
+    func colorForMeshPeer(id peerID: String, isDark: Bool) -> Color {
+        if let peer = unifiedPeerService.getPeer(by: peerID) {
+            let full = peer.noisePublicKey.hexEncodedString().lowercased()
+            return colorForPeerSeed("noise:" + full, isDark: isDark)
+        }
+        return colorForPeerSeed(peerID.lowercased(), isDark: isDark)
     }
 
     private func trimMeshTimelineIfNeeded() {
