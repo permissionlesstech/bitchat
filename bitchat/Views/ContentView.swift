@@ -244,9 +244,18 @@ struct ContentView: View {
             }
             
             Button("BLOCK", role: .destructive) {
-                if let sender = selectedMessageSender {
+                // Prefer direct geohash block when we have a Nostr sender ID
+                #if os(iOS)
+                if let peerID = selectedMessageSenderID, peerID.hasPrefix("nostr:"),
+                   let full = viewModel.fullNostrHex(forSenderPeerID: peerID),
+                   let sender = selectedMessageSender {
+                    viewModel.blockGeohashUser(pubkeyHexLowercased: full, displayName: sender)
+                } else if let sender = selectedMessageSender {
                     viewModel.sendMessage("/block \(sender)")
                 }
+                #else
+                if let sender = selectedMessageSender { viewModel.sendMessage("/block \(sender)") }
+                #endif
             }
             
             Button("cancel", role: .cancel) {}

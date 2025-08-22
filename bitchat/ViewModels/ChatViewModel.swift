@@ -1511,7 +1511,51 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     }
     @MainActor
     func blockGeohashUser(pubkeyHexLowercased: String, displayName: String) {
-        SecureIdentityStateManager.shared.setNostrBlocked(pubkeyHexLowercased, isBlocked: true)
+        let hex = pubkeyHexLowercased.lowercased()
+        SecureIdentityStateManager.shared.setNostrBlocked(hex, isBlocked: true)
+        
+        // Remove from participants for all geohashes
+        for (gh, var map) in geoParticipants {
+            map.removeValue(forKey: hex)
+            geoParticipants[gh] = map
+        }
+        refreshGeohashPeople()
+        
+        // Remove their public messages from current geohash timeline and visible list
+        if let gh = currentGeohash {
+            if var arr = geoTimelines[gh] {
+                arr.removeAll { msg in
+                    if let spid = msg.senderPeerID, spid.hasPrefix("nostr") {
+                        if let full = nostrKeyMapping[spid]?.lowercased() { return full == hex }
+                    }
+                    return false
+                }
+                geoTimelines[gh] = arr
+            }
+            // Also filter currently bound messages if we are in geohash channel
+            switch activeChannel {
+            case .location:
+                messages.removeAll { msg in
+                    if let spid = msg.senderPeerID, spid.hasPrefix("nostr") {
+                        if let full = nostrKeyMapping[spid]?.lowercased() { return full == hex }
+                    }
+                    return false
+                }
+            default:
+                break
+            }
+        }
+        
+        // Remove geohash DM conversation if exists
+        let convKey = "nostr_" + String(hex.prefix(16))
+        if privateChats[convKey] != nil {
+            privateChats.removeValue(forKey: convKey)
+            unreadPrivateMessages.remove(convKey)
+        }
+        
+        // Remove mapping keys pointing to this pubkey to avoid accidental resolution
+        for (k, v) in nostrKeyMapping where v.lowercased() == hex { nostrKeyMapping.removeValue(forKey: k) }
+        
         addSystemMessage("blocked \(displayName) in geohash chats")
     }
     @MainActor
