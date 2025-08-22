@@ -2918,23 +2918,23 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                             tagStyle.foregroundColor = baseColor
                             result.append(AttributedString(matchText).mergingAttributes(tagStyle))
                         } else if type == "cashu" {
-                            // Make cashu tokens tappable via custom scheme
+                            // Render compact cashu chip: 🥜 pay via cashu
                             var matchStyle = AttributeContainer()
                             matchStyle.font = .system(size: 14, weight: isSelf ? .bold : .semibold, design: .monospaced)
                             matchStyle.foregroundColor = isSelf ? .orange : .blue
-                            matchStyle.underlineStyle = .single
+                            // No underline; keep link attribute for tap
                             if let encoded = matchText.addingPercentEncoding(withAllowedCharacters: .alphanumerics.union(CharacterSet(charactersIn: "-_"))) {
                                 matchStyle.link = URL(string: "cashu:\(encoded)")
                             } else {
                                 matchStyle.link = URL(string: "cashu:\(matchText)")
                             }
-                            result.append(AttributedString(matchText).mergingAttributes(matchStyle))
+                            let display = "🥜 pay via cashu"
+                            result.append(AttributedString(display).mergingAttributes(matchStyle))
                         } else if type == "lightning" || type == "bolt11" || type == "lnurl" {
-                            // Tappable as lightning: link
+                            // Render compact lightning chip: ⚡ pay via lightning
                             var matchStyle = AttributeContainer()
                             matchStyle.font = .system(size: 14, weight: isSelf ? .bold : .semibold, design: .monospaced)
                             matchStyle.foregroundColor = isSelf ? .orange : .blue
-                            matchStyle.underlineStyle = .single
                             let payload: String
                             if type == "lightning" {
                                 payload = matchText
@@ -2946,7 +2946,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                             } else {
                                 matchStyle.link = URL(string: payload)
                             }
-                            result.append(AttributedString(matchText).mergingAttributes(matchStyle))
+                            let display = "⚡ pay via lightning"
+                            result.append(AttributedString(display).mergingAttributes(matchStyle))
                         } else {
                             // Keep URL styling (blue + underline for non-self, orange for self)
                             var matchStyle = AttributeContainer()
