@@ -53,13 +53,9 @@ struct NoiseSecurityValidator {
         return data.count <= NoiseSecurityConstants.maxHandshakeMessageSize
     }
     
-    /// Validate peer ID format
+    /// Validate peer ID format using unified validator
     static func validatePeerID(_ peerID: String) -> Bool {
-        // Peer ID should be reasonable length and contain valid characters
-        let validCharset = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
-        return peerID.count > 0 && 
-               peerID.count <= 64 && 
-               peerID.rangeOfCharacter(from: validCharset.inverted) == nil
+        return InputValidator.validatePeerID(peerID)
     }
 }
 
