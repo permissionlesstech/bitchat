@@ -2785,19 +2785,23 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     : .system(size: 14, design: .monospaced)
                 result.append(AttributedString(content).mergingAttributes(plainStyle))
             } else {
-                let hashtagPattern = "#([a-zA-Z0-9_]+)"
-                // Allow optional '#abcd' suffix in mentions
-                let mentionPattern = "@([\\p{L}0-9_]+(?:#[a-fA-F0-9]{4})?)"
-                
-                let hashtagRegex = try? NSRegularExpression(pattern: hashtagPattern, options: [])
-                let mentionRegex = try? NSRegularExpression(pattern: mentionPattern, options: [])
-                
-                // Use NSDataDetector for URL detection
-                let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
+            let hashtagPattern = "#([a-zA-Z0-9_]+)"
+            // Allow optional '#abcd' suffix in mentions
+            let mentionPattern = "@([\\p{L}0-9_]+(?:#[a-fA-F0-9]{4})?)"
+            // Cashu token detector: cashuA/cashuB + long base64url
+            let cashuPattern = "\\bcashu[AB][A-Za-z0-9_-]{60,}\\b"
+            
+            let hashtagRegex = try? NSRegularExpression(pattern: hashtagPattern, options: [])
+            let mentionRegex = try? NSRegularExpression(pattern: mentionPattern, options: [])
+            let cashuRegex = try? NSRegularExpression(pattern: cashuPattern, options: [])
+            
+            // Use NSDataDetector for URL detection
+            let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
             
             let hashtagMatches = hashtagRegex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
             let mentionMatches = mentionRegex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
             let urlMatches = detector?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
+            let cashuMatches = cashuRegex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
             
             // Combine and sort matches, excluding hashtags/URLs overlapping mentions
             let mentionRanges = mentionMatches.map { $0.range(at: 0) }
@@ -2814,6 +2818,9 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             }
             for match in urlMatches where !overlapsMention(match.range) {
                 allMatches.append((match.range, "url"))
+            }
+            for match in cashuMatches where !overlapsMention(match.range(at: 0)) {
+                allMatches.append((match.range(at: 0), "cashu"))
             }
             allMatches.sort { $0.range.location < $1.range.location }
             
@@ -2884,6 +2891,18 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                                 : .system(size: 14, design: .monospaced)
                             tagStyle.foregroundColor = baseColor
                             result.append(AttributedString(matchText).mergingAttributes(tagStyle))
+                        } else if type == "cashu" {
+                            // Make cashu tokens tappable via custom scheme
+                            var matchStyle = AttributeContainer()
+                            matchStyle.font = .system(size: 14, weight: isSelf ? .bold : .semibold, design: .monospaced)
+                            matchStyle.foregroundColor = isSelf ? .orange : .blue
+                            matchStyle.underlineStyle = .single
+                            if let encoded = matchText.addingPercentEncoding(withAllowedCharacters: .alphanumerics.union(CharacterSet(charactersIn: "-_"))) {
+                                matchStyle.link = URL(string: "cashu:\(encoded)")
+                            } else {
+                                matchStyle.link = URL(string: "cashu:\(matchText)")
+                            }
+                            result.append(AttributedString(matchText).mergingAttributes(matchStyle))
                         } else {
                             // Keep URL styling (blue + underline for non-self, orange for self)
                             var matchStyle = AttributeContainer()

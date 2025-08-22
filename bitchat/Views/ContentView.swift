@@ -565,6 +565,19 @@ struct ContentView: View {
                 }
             }
         }
+        .environment(\.openURL, OpenURLAction { url in
+            // Intercept custom cashu: links created in attributed text
+            if url.scheme?.lowercased() == "cashu" {
+                #if os(iOS)
+                UIApplication.shared.open(url)
+                return .handled
+                #else
+                // On non-iOS platforms, let the system handle or ignore
+                return .systemAction
+                #endif
+            }
+            return .systemAction
+        })
     }
     
     // MARK: - Input View
