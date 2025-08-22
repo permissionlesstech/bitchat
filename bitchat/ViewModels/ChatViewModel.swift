@@ -2785,19 +2785,33 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     : .system(size: 14, design: .monospaced)
                 result.append(AttributedString(content).mergingAttributes(plainStyle))
             } else {
-                let hashtagPattern = "#([a-zA-Z0-9_]+)"
-                // Allow optional '#abcd' suffix in mentions
-                let mentionPattern = "@([\\p{L}0-9_]+(?:#[a-fA-F0-9]{4})?)"
-                
-                let hashtagRegex = try? NSRegularExpression(pattern: hashtagPattern, options: [])
-                let mentionRegex = try? NSRegularExpression(pattern: mentionPattern, options: [])
-                
-                // Use NSDataDetector for URL detection
-                let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
+            let hashtagPattern = "#([a-zA-Z0-9_]+)"
+            // Allow optional '#abcd' suffix in mentions
+            let mentionPattern = "@([\\p{L}0-9_]+(?:#[a-fA-F0-9]{4})?)"
+            // Cashu token detector: cashuA/cashuB + long base64url
+            let cashuPattern = "\\bcashu[AB][A-Za-z0-9_-]{60,}\\b"
+            // Lightning invoices and links
+            let bolt11Pattern = "(?i)\\bln(bc|tb|bcrt)[0-9][a-z0-9]{50,}\\b"
+            let lnurlPattern = "(?i)\\blnurl1[a-z0-9]{20,}\\b"
+            let lightningSchemePattern = "(?i)\\blightning:[^\\s]+"
+            
+            let hashtagRegex = try? NSRegularExpression(pattern: hashtagPattern, options: [])
+            let mentionRegex = try? NSRegularExpression(pattern: mentionPattern, options: [])
+            let cashuRegex = try? NSRegularExpression(pattern: cashuPattern, options: [])
+            let bolt11Regex = try? NSRegularExpression(pattern: bolt11Pattern, options: [])
+            let lnurlRegex = try? NSRegularExpression(pattern: lnurlPattern, options: [])
+            let lightningSchemeRegex = try? NSRegularExpression(pattern: lightningSchemePattern, options: [])
+            
+            // Use NSDataDetector for URL detection
+            let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
             
             let hashtagMatches = hashtagRegex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
             let mentionMatches = mentionRegex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
             let urlMatches = detector?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
+            let cashuMatches = cashuRegex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
+            let lightningMatches = lightningSchemeRegex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
+            let bolt11Matches = bolt11Regex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
+            let lnurlMatches = lnurlRegex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
             
             // Combine and sort matches, excluding hashtags/URLs overlapping mentions
             let mentionRanges = mentionMatches.map { $0.range(at: 0) }
@@ -2814,6 +2828,25 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             }
             for match in urlMatches where !overlapsMention(match.range) {
                 allMatches.append((match.range, "url"))
+            }
+            for match in cashuMatches where !overlapsMention(match.range(at: 0)) {
+                allMatches.append((match.range(at: 0), "cashu"))
+            }
+            // Lightning scheme first to avoid overlapping submatches
+            for match in lightningMatches where !overlapsMention(match.range(at: 0)) {
+                allMatches.append((match.range(at: 0), "lightning"))
+            }
+            // Exclude overlaps with lightning/url for bolt11/lnurl
+            let occupied: [NSRange] = urlMatches.map { $0.range } + lightningMatches.map { $0.range(at: 0) }
+            func overlapsOccupied(_ r: NSRange) -> Bool {
+                for or in occupied { if NSIntersectionRange(r, or).length > 0 { return true } }
+                return false
+            }
+            for match in bolt11Matches where !overlapsMention(match.range(at: 0)) && !overlapsOccupied(match.range(at: 0)) {
+                allMatches.append((match.range(at: 0), "bolt11"))
+            }
+            for match in lnurlMatches where !overlapsMention(match.range(at: 0)) && !overlapsOccupied(match.range(at: 0)) {
+                allMatches.append((match.range(at: 0), "lnurl"))
             }
             allMatches.sort { $0.range.location < $1.range.location }
             
@@ -2884,6 +2917,23 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                                 : .system(size: 14, design: .monospaced)
                             tagStyle.foregroundColor = baseColor
                             result.append(AttributedString(matchText).mergingAttributes(tagStyle))
+                        } else if type == "cashu" {
+                            // Skip inline token; a styled chip is rendered below the message
+                            // We insert a single space to avoid words sticking together
+                            var spacer = AttributeContainer()
+                            spacer.foregroundColor = baseColor
+                            spacer.font = isSelf
+                                ? .system(size: 14, weight: .bold, design: .monospaced)
+                                : .system(size: 14, design: .monospaced)
+                            result.append(AttributedString(" ").mergingAttributes(spacer))
+                        } else if type == "lightning" || type == "bolt11" || type == "lnurl" {
+                            // Skip inline invoice/link; a styled chip is rendered below the message
+                            var spacer = AttributeContainer()
+                            spacer.foregroundColor = baseColor
+                            spacer.font = isSelf
+                                ? .system(size: 14, weight: .bold, design: .monospaced)
+                                : .system(size: 14, design: .monospaced)
+                            result.append(AttributedString(" ").mergingAttributes(spacer))
                         } else {
                             // Keep URL styling (blue + underline for non-self, orange for self)
                             var matchStyle = AttributeContainer()
