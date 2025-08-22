@@ -10,7 +10,7 @@ struct GeohashPeopleList: View {
 
     var body: some View {
         Group {
-            if viewModel.geohashPeople.isEmpty {
+            if viewModel.visibleGeohashPeople().isEmpty {
                 Text("nobody around...")
                     .font(.system(size: 14, design: .monospaced))
                     .foregroundColor(secondaryTextColor)
