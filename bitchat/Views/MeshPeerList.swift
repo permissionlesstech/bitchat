@@ -18,7 +18,6 @@ struct MeshPeerList: View {
                     .padding(.horizontal)
                     .padding(.top, 12)
             } else {
-                let peerNicknames = viewModel.meshService.getPeerNicknames()
                 let myPeerID = viewModel.meshService.myPeerID
                 let mapped: [(peer: BitchatPeer, isMe: Bool, hasUnread: Bool, enc: EncryptionStatus)] = viewModel.allPeers.map { peer in
                     let isMe = peer.id == myPeerID
