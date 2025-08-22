@@ -354,6 +354,13 @@ struct ContentView: View {
                                 showMessageActions = true
                             }
                         }
+                        .onLongPressGesture(minimumDuration: 0.35) {
+                            // Quick @mention: prefill input with @nick#abcd
+                            if message.sender != "system" && message.sender != viewModel.nickname {
+                                messageText = "@\(message.sender) "
+                                isTextFieldFocused = true
+                            }
+                        }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 2)
                     }
