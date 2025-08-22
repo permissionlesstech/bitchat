@@ -10,7 +10,7 @@ struct GeohashPeopleList: View {
 
     var body: some View {
         Group {
-            if viewModel.geohashPeople.isEmpty {
+            if viewModel.visibleGeohashPeople().isEmpty {
                 Text("nobody around...")
                     .font(.system(size: 14, design: .monospaced))
                     .foregroundColor(secondaryTextColor)
@@ -24,7 +24,7 @@ struct GeohashPeopleList: View {
                     }
                     return nil
                 }()
-                let ordered = viewModel.geohashPeople.sorted { a, b in
+                let ordered = viewModel.visibleGeohashPeople().sorted { a, b in
                     if let me = myHex {
                         if a.id == me && b.id != me { return true }
                         if b.id == me && a.id != me { return false }
