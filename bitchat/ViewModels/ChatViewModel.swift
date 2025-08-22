@@ -1247,6 +1247,10 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 let nick = nickTag[1]
                 self.geoNicknames[event.pubkey.lowercased()] = nick
             }
+            // If this pubkey is blocked, skip mapping, participants, and timeline
+            if SecureIdentityStateManager.shared.isNostrBlocked(pubkeyHexLowercased: event.pubkey) {
+                return
+            }
             // Store mapping for geohash DM initiation
             let key16 = "nostr_" + String(event.pubkey.prefix(16))
             self.nostrKeyMapping[key16] = event.pubkey
@@ -1450,6 +1454,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         var map = geoParticipants[gh] ?? [:]
         // Prune expired entries
         map = map.filter { $0.value >= cutoff }
+        // Remove blocked Nostr pubkeys
+        map = map.filter { !SecureIdentityStateManager.shared.isNostrBlocked(pubkeyHexLowercased: $0.key) }
         geoParticipants[gh] = map
         // Build display list
         let people = map
@@ -1482,7 +1488,9 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     func visibleGeohashPeople() -> [GeoPerson] {
         guard let gh = currentGeohash else { return [] }
         let cutoff = Date().addingTimeInterval(-5 * 60)
-        let map = (geoParticipants[gh] ?? [:]).filter { $0.value >= cutoff }
+        let map = (geoParticipants[gh] ?? [:])
+            .filter { $0.value >= cutoff }
+            .filter { !SecureIdentityStateManager.shared.isNostrBlocked(pubkeyHexLowercased: $0.key) }
         let people = map
             .map { (pub, seen) in GeoPerson(id: pub, displayName: displayNameForNostrPubkey(pub), lastSeen: seen) }
             .sorted { $0.lastSeen > $1.lastSeen }
