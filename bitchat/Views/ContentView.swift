@@ -204,6 +204,14 @@ struct ContentView: View {
             isPresented: $showMessageActions,
             titleVisibility: .visible
         ) {
+            Button("mention") {
+                if let sender = selectedMessageSender {
+                    // Pre-fill the input with an @mention and focus the field
+                    messageText = "@\(sender) "
+                    isTextFieldFocused = true
+                }
+            }
+
             Button("private message") {
                 if let peerID = selectedMessageSenderID {
                     #if os(iOS)
@@ -344,6 +352,17 @@ struct ContentView: View {
                                 selectedMessageSender = message.sender
                                 selectedMessageSenderID = message.senderPeerID
                                 showMessageActions = true
+                            }
+                        }
+                        .contextMenu {
+                            Button("Copy message") {
+                                #if os(iOS)
+                                UIPasteboard.general.string = message.content
+                                #else
+                                let pb = NSPasteboard.general
+                                pb.clearContents()
+                                pb.setString(message.content, forType: .string)
+                                #endif
                             }
                         }
                         .padding(.horizontal, 12)
