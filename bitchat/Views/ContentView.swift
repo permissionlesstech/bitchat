@@ -77,6 +77,8 @@ struct ContentView: View {
     @State private var selectedMessageSender: String?
     @State private var selectedMessageSenderID: String?
     @FocusState private var isNicknameFieldFocused: Bool
+    @State private var isAtBottomPublic: Bool = true
+    @State private var isAtBottomPrivate: Bool = true
     @State private var lastScrollTime: Date = .distantPast
     @State private var scrollThrottleTimer: Timer?
     @State private var autocompleteDebounceTimer: Timer?
@@ -273,9 +275,8 @@ struct ContentView: View {
     
     // MARK: - Message List View
     
-    private func messagesView(privatePeer: String?) -> some View {
+    private func messagesView(privatePeer: String?, isAtBottom: Binding<Bool>) -> some View {
         ScrollViewReader { proxy in
-            @State var isAtBottom: Bool = true
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     // Extract messages based on context (private or public chat)
@@ -337,12 +338,12 @@ struct ContentView: View {
                         .onAppear {
                             // Track if last item is visible to enable auto-scroll only when near bottom
                             if message.id == windowedMessages.last?.id {
-                                isAtBottom = true
+                                isAtBottom.wrappedValue = true
                             }
                         }
                         .onDisappear {
                             if message.id == windowedMessages.last?.id {
-                                isAtBottom = false
+                                isAtBottom.wrappedValue = false
                             }
                         }
                         .contentShape(Rectangle())
@@ -379,7 +380,7 @@ struct ContentView: View {
             .onChange(of: viewModel.messages.count) { _ in
                 if privatePeer == nil && !viewModel.messages.isEmpty {
                     // Only autoscroll when user is at/near bottom
-                    guard isAtBottom else { return }
+                    guard isAtBottom.wrappedValue else { return }
                     // Throttle scroll animations to prevent excessive UI updates
                     let now = Date()
                     if now.timeIntervalSince(lastScrollTime) > 0.5 {
@@ -401,7 +402,7 @@ struct ContentView: View {
                    let messages = viewModel.privateChats[peerID],
                    !messages.isEmpty {
                     // Only autoscroll when user is at/near bottom
-                    guard isAtBottom else { return }
+                    guard isAtBottom.wrappedValue else { return }
                     // Same throttling for private chats
                     let now = Date()
                     if now.timeIntervalSince(lastScrollTime) > 0.5 {
@@ -727,7 +728,7 @@ struct ContentView: View {
         VStack(spacing: 0) {
             mainHeaderView
             Divider()
-            messagesView(privatePeer: nil)
+            messagesView(privatePeer: nil, isAtBottom: $isAtBottomPublic)
             Divider()
             inputView
         }
@@ -777,7 +778,7 @@ struct ContentView: View {
             VStack(spacing: 0) {
                 privateHeaderView
                 Divider()
-                messagesView(privatePeer: viewModel.selectedPrivateChatPeer)
+                messagesView(privatePeer: viewModel.selectedPrivateChatPeer, isAtBottom: $isAtBottomPrivate)
                 Divider()
                 inputView
             }
