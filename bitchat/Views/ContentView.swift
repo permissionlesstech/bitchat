@@ -567,7 +567,7 @@ struct ContentView: View {
         }
         .environment(\.openURL, OpenURLAction { url in
             // Intercept custom cashu: links created in attributed text
-            if url.scheme?.lowercased() == "cashu" {
+            if let scheme = url.scheme?.lowercased(), scheme == "cashu" || scheme == "lightning" {
                 #if os(iOS)
                 UIApplication.shared.open(url)
                 return .handled

@@ -2790,10 +2790,17 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             let mentionPattern = "@([\\p{L}0-9_]+(?:#[a-fA-F0-9]{4})?)"
             // Cashu token detector: cashuA/cashuB + long base64url
             let cashuPattern = "\\bcashu[AB][A-Za-z0-9_-]{60,}\\b"
+            // Lightning invoices and links
+            let bolt11Pattern = "(?i)\\bln(bc|tb|bcrt)[0-9][a-z0-9]{50,}\\b"
+            let lnurlPattern = "(?i)\\blnurl1[a-z0-9]{20,}\\b"
+            let lightningSchemePattern = "(?i)\\blightning:[^\\s]+"
             
             let hashtagRegex = try? NSRegularExpression(pattern: hashtagPattern, options: [])
             let mentionRegex = try? NSRegularExpression(pattern: mentionPattern, options: [])
             let cashuRegex = try? NSRegularExpression(pattern: cashuPattern, options: [])
+            let bolt11Regex = try? NSRegularExpression(pattern: bolt11Pattern, options: [])
+            let lnurlRegex = try? NSRegularExpression(pattern: lnurlPattern, options: [])
+            let lightningSchemeRegex = try? NSRegularExpression(pattern: lightningSchemePattern, options: [])
             
             // Use NSDataDetector for URL detection
             let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
@@ -2802,6 +2809,9 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             let mentionMatches = mentionRegex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
             let urlMatches = detector?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
             let cashuMatches = cashuRegex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
+            let lightningMatches = lightningSchemeRegex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
+            let bolt11Matches = bolt11Regex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
+            let lnurlMatches = lnurlRegex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
             
             // Combine and sort matches, excluding hashtags/URLs overlapping mentions
             let mentionRanges = mentionMatches.map { $0.range(at: 0) }
@@ -2821,6 +2831,22 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             }
             for match in cashuMatches where !overlapsMention(match.range(at: 0)) {
                 allMatches.append((match.range(at: 0), "cashu"))
+            }
+            // Lightning scheme first to avoid overlapping submatches
+            for match in lightningMatches where !overlapsMention(match.range(at: 0)) {
+                allMatches.append((match.range(at: 0), "lightning"))
+            }
+            // Exclude overlaps with lightning/url for bolt11/lnurl
+            let occupied: [NSRange] = urlMatches.map { $0.range } + lightningMatches.map { $0.range(at: 0) }
+            func overlapsOccupied(_ r: NSRange) -> Bool {
+                for or in occupied { if NSIntersectionRange(r, or).length > 0 { return true } }
+                return false
+            }
+            for match in bolt11Matches where !overlapsMention(match.range(at: 0)) && !overlapsOccupied(match.range(at: 0)) {
+                allMatches.append((match.range(at: 0), "bolt11"))
+            }
+            for match in lnurlMatches where !overlapsMention(match.range(at: 0)) && !overlapsOccupied(match.range(at: 0)) {
+                allMatches.append((match.range(at: 0), "lnurl"))
             }
             allMatches.sort { $0.range.location < $1.range.location }
             
@@ -2901,6 +2927,24 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                                 matchStyle.link = URL(string: "cashu:\(encoded)")
                             } else {
                                 matchStyle.link = URL(string: "cashu:\(matchText)")
+                            }
+                            result.append(AttributedString(matchText).mergingAttributes(matchStyle))
+                        } else if type == "lightning" || type == "bolt11" || type == "lnurl" {
+                            // Tappable as lightning: link
+                            var matchStyle = AttributeContainer()
+                            matchStyle.font = .system(size: 14, weight: isSelf ? .bold : .semibold, design: .monospaced)
+                            matchStyle.foregroundColor = isSelf ? .orange : .blue
+                            matchStyle.underlineStyle = .single
+                            let payload: String
+                            if type == "lightning" {
+                                payload = matchText
+                            } else {
+                                payload = "lightning:\(matchText)"
+                            }
+                            if let encoded = payload.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed.union(.alphanumerics)) {
+                                matchStyle.link = URL(string: encoded) ?? URL(string: payload)
+                            } else {
+                                matchStyle.link = URL(string: payload)
                             }
                             result.append(AttributedString(matchText).mergingAttributes(matchStyle))
                         } else {
