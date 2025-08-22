@@ -1179,8 +1179,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             self.recordGeoParticipant(pubkeyHex: id.publicKeyHex)
             #if os(iOS)
             if LocationChannelManager.shared.teleported {
-                teleportedGeo.insert(id.publicKeyHex.lowercased())
-                objectWillChange.send()
+                let key = id.publicKeyHex.lowercased()
+                teleportedGeo = teleportedGeo.union([key])
             }
             #endif
         }
@@ -1198,9 +1198,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             // Track teleport tag for participants
             if let teleTag = event.tags.first(where: { $0.first == "t" }), teleTag.count >= 2, teleTag[1] == "teleport" {
                 let key = event.pubkey.lowercased()
-                if !self.teleportedGeo.contains(key) {
-                    self.teleportedGeo.insert(key)
-                    DispatchQueue.main.async { [weak self] in self?.objectWillChange.send() }
+                Task { @MainActor in
+                    self.teleportedGeo = self.teleportedGeo.union([key])
                 }
             }
             // Skip our own events (we already locally echoed)
@@ -2826,17 +2825,25 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                             result.append(AttributedString(mSuffix).mergingAttributes(light))
                         }
                     } else {
-                        var matchStyle = AttributeContainer()
-                        matchStyle.font = .system(size: 14, weight: isSelf ? .bold : .semibold, design: .monospaced)
-                        // Self messages use orange for all tokens; others keep blue for links/hashtags
+                        // Style non-mention matches
                         if type == "hashtag" {
-                            matchStyle.foregroundColor = isSelf ? .orange : .blue
-                            matchStyle.underlineStyle = .single
-                        } else if type == "url" {
-                            matchStyle.foregroundColor = isSelf ? .orange : .blue
-                            matchStyle.underlineStyle = .single
+                            // Do NOT special-style hashtags: render like normal content (no blue, no underline)
+                            var tagStyle = AttributeContainer()
+                            tagStyle.font = isSelf
+                                ? .system(size: 14, weight: .bold, design: .monospaced)
+                                : .system(size: 14, design: .monospaced)
+                            tagStyle.foregroundColor = baseColor
+                            result.append(AttributedString(matchText).mergingAttributes(tagStyle))
+                        } else {
+                            // Keep URL styling (blue + underline for non-self, orange for self)
+                            var matchStyle = AttributeContainer()
+                            matchStyle.font = .system(size: 14, weight: isSelf ? .bold : .semibold, design: .monospaced)
+                            if type == "url" {
+                                matchStyle.foregroundColor = isSelf ? .orange : .blue
+                                matchStyle.underlineStyle = .single
+                            }
+                            result.append(AttributedString(matchText).mergingAttributes(matchStyle))
                         }
-                        result.append(AttributedString(matchText).mergingAttributes(matchStyle))
                     }
                     lastEnd = nsRange.upperBound
                 }

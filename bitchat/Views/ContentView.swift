@@ -267,6 +267,7 @@ struct ContentView: View {
     
     private func messagesView(privatePeer: String?) -> some View {
         ScrollViewReader { proxy in
+            @State var isAtBottom: Bool = true
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     // Extract messages based on context (private or public chat)
@@ -325,6 +326,17 @@ struct ContentView: View {
                             }
                         }
                         .id(message.id)
+                        .onAppear {
+                            // Track if last item is visible to enable auto-scroll only when near bottom
+                            if message.id == windowedMessages.last?.id {
+                                isAtBottom = true
+                            }
+                        }
+                        .onDisappear {
+                            if message.id == windowedMessages.last?.id {
+                                isAtBottom = false
+                            }
+                        }
                         .contentShape(Rectangle())
                         .onTapGesture {
                             // Only show actions for messages from other users (not system or self)
@@ -347,6 +359,8 @@ struct ContentView: View {
             }
             .onChange(of: viewModel.messages.count) { _ in
                 if privatePeer == nil && !viewModel.messages.isEmpty {
+                    // Only autoscroll when user is at/near bottom
+                    guard isAtBottom else { return }
                     // Throttle scroll animations to prevent excessive UI updates
                     let now = Date()
                     if now.timeIntervalSince(lastScrollTime) > 0.5 {
@@ -367,6 +381,8 @@ struct ContentView: View {
                 if let peerID = privatePeer,
                    let messages = viewModel.privateChats[peerID],
                    !messages.isEmpty {
+                    // Only autoscroll when user is at/near bottom
+                    guard isAtBottom else { return }
                     // Same throttling for private chats
                     let now = Date()
                     if now.timeIntervalSince(lastScrollTime) > 0.5 {
@@ -508,10 +524,7 @@ struct ContentView: View {
                 .foregroundColor(textColor)
                 .focused($isTextFieldFocused)
                 .padding(.leading, 12)
-                .autocorrectionDisabled(true)
-                #if os(iOS)
-                .textInputAutocapitalization(.never)
-                #endif
+                // iOS keyboard autocomplete and capitalization enabled by default
                 .onChange(of: messageText) { newValue in
                     // Cancel previous debounce timer
                     autocompleteDebounceTimer?.invalidate()
