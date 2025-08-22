@@ -295,8 +295,8 @@ struct ContentView: View {
                         }
                     }()
                     
-                    // Implement windowing - show last 100 messages for performance
-                    let windowedMessages = messages.suffix(100)
+                    // Implement windowing - show last 300 messages for performance
+                    let windowedMessages = messages.suffix(300)
 
                     // Build stable UI IDs with a context key to avoid ID collisions when switching channels
                     #if os(iOS)
@@ -319,7 +319,6 @@ struct ContentView: View {
                             if message.sender == "system" {
                                 // System messages
                                 Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme))
-                                    .textSelection(.enabled)
                                     .fixedSize(horizontal: false, vertical: true)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             } else {
@@ -330,7 +329,6 @@ struct ContentView: View {
                                         let isLong = message.content.count > 2000 || message.content.hasVeryLongToken(threshold: 512)
                                         let isExpanded = expandedMessageIDs.contains(message.id)
                                         Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme))
-                                            .textSelection(.enabled)
                                             .fixedSize(horizontal: false, vertical: true)
                                             .lineLimit(isLong && !isExpanded ? 30 : nil)
                                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -358,7 +356,7 @@ struct ContentView: View {
                                     // Check for plain URLs
                                     let urls = message.content.extractURLs()
                                     if !urls.isEmpty {
-                                        ForEach(urls.prefix(3).indices, id: \.self) { index in
+                                        ForEach(urls.prefix(2).indices, id: \.self) { index in
                                             let urlInfo = urls[index]
                                             LazyLinkPreviewView(url: urlInfo.url, title: nil)
                                                 .padding(.top, 3)
@@ -456,7 +454,7 @@ struct ContentView: View {
                 // Force scroll to bottom when opening a chat view
                 let targetID: String? = {
                     if let peer = privatePeer,
-                       let last = viewModel.getPrivateChatMessages(for: peer).suffix(100).last?.id {
+                       let last = viewModel.getPrivateChatMessages(for: peer).suffix(300).last?.id {
                         return "dm:\(peer)|\(last)"
                     }
                     #if os(iOS)
@@ -469,7 +467,7 @@ struct ContentView: View {
                     #else
                     let contextKey: String = "mesh"
                     #endif
-                    if let last = viewModel.messages.suffix(100).last?.id { return "\(contextKey)|\(last)" }
+                    if let last = viewModel.messages.suffix(300).last?.id { return "\(contextKey)|\(last)" }
                     return nil
                 }()
                 isAtBottom.wrappedValue = true
@@ -480,7 +478,7 @@ struct ContentView: View {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                     let targetID2: String? = {
                         if let peer = privatePeer,
-                           let last = viewModel.getPrivateChatMessages(for: peer).suffix(100).last?.id {
+                           let last = viewModel.getPrivateChatMessages(for: peer).suffix(300).last?.id {
                             return "dm:\(peer)|\(last)"
                         }
                         #if os(iOS)
@@ -493,7 +491,7 @@ struct ContentView: View {
                         #else
                         let contextKey: String = "mesh"
                         #endif
-                        if let last = viewModel.messages.suffix(100).last?.id { return "\(contextKey)|\(last)" }
+                        if let last = viewModel.messages.suffix(300).last?.id { return "\(contextKey)|\(last)" }
                         return nil
                     }()
                     if let t2 = targetID2 { proxy.scrollTo(t2, anchor: .bottom) }
@@ -503,7 +501,7 @@ struct ContentView: View {
                 // When switching to a different private chat, jump to bottom
                 let targetID: String? = {
                     if let peer = privatePeer,
-                       let last = viewModel.getPrivateChatMessages(for: peer).suffix(100).last?.id {
+                       let last = viewModel.getPrivateChatMessages(for: peer).suffix(300).last?.id {
                         return "dm:\(peer)|\(last)"
                     }
                     #if os(iOS)
@@ -516,7 +514,7 @@ struct ContentView: View {
                     #else
                     let contextKey: String = "mesh"
                     #endif
-                    if let last = viewModel.messages.suffix(100).last?.id { return "\(contextKey)|\(last)" }
+                    if let last = viewModel.messages.suffix(300).last?.id { return "\(contextKey)|\(last)" }
                     return nil
                 }()
                 isAtBottom.wrappedValue = true
@@ -551,7 +549,7 @@ struct ContentView: View {
                         #else
                         let contextKey: String = "mesh"
                         #endif
-                        let target = viewModel.messages.suffix(100).last.map { "\(contextKey)|\($0.id)" }
+                        let target = viewModel.messages.suffix(300).last.map { "\(contextKey)|\($0.id)" }
                         DispatchQueue.main.async {
                             if let target = target { proxy.scrollTo(target, anchor: .bottom) }
                         }
@@ -570,7 +568,7 @@ struct ContentView: View {
                             #else
                             let contextKey: String = "mesh"
                             #endif
-                            let target = viewModel.messages.suffix(100).last.map { "\(contextKey)|\($0.id)" }
+                            let target = viewModel.messages.suffix(300).last.map { "\(contextKey)|\($0.id)" }
                             DispatchQueue.main.async {
                                 if let target = target { proxy.scrollTo(target, anchor: .bottom) }
                             }
@@ -596,7 +594,7 @@ struct ContentView: View {
                     if now.timeIntervalSince(lastScrollTime) > 0.5 {
                         lastScrollTime = now
                         let contextKey = "dm:\(peerID)"
-                        let target = messages.suffix(100).last.map { "\(contextKey)|\($0.id)" }
+                        let target = messages.suffix(300).last.map { "\(contextKey)|\($0.id)" }
                         DispatchQueue.main.async {
                             if let target = target { proxy.scrollTo(target, anchor: .bottom) }
                         }
@@ -605,7 +603,7 @@ struct ContentView: View {
                         scrollThrottleTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
                             lastScrollTime = Date()
                             let contextKey = "dm:\(peerID)"
-                            let target = messages.suffix(100).last.map { "\(contextKey)|\($0.id)" }
+                            let target = messages.suffix(300).last.map { "\(contextKey)|\($0.id)" }
                             DispatchQueue.main.async {
                                 if let target = target { proxy.scrollTo(target, anchor: .bottom) }
                             }
@@ -623,7 +621,7 @@ struct ContentView: View {
                 case .location(let ch):
                     // Compute the top item (first of the current window)
                     let contextKey = "geo:\(ch.geohash)"
-                    let top = viewModel.messages.suffix(100).first?.id
+                    let top = viewModel.messages.suffix(300).first?.id
                     let target = top.map { "\(contextKey)|\($0)" }
                     isAtBottom.wrappedValue = false
                     DispatchQueue.main.async {
@@ -1402,7 +1400,6 @@ struct MessageContentView: View {
         Text(message.content)
             .font(.system(size: 14, design: .monospaced))
             .fontWeight(isMentioned ? .bold : .regular)
-            .textSelection(.enabled)
     }
     
     // MARK: - Helper Methods
