@@ -28,13 +28,10 @@ struct MeshPeerList: View {
                 let enc = viewModel.getEncryptionStatus(for: peer.id)
                 return (peer, isMe, hasUnread, enc)
             }
-            // Maintain a stable order: append new peers at the bottom, remove disappeared
+            // Stable visual order without mutating state here
             let currentIDs = mapped.map { $0.peer.id }
-            var newOrder = orderedIDs
-            newOrder.removeAll { !currentIDs.contains($0) }
-            for id in currentIDs where !newOrder.contains(id) { newOrder.append(id) }
-            if newOrder != orderedIDs { orderedIDs = newOrder }
-            let peers: [(peer: BitchatPeer, isMe: Bool, hasUnread: Bool, enc: EncryptionStatus)] = orderedIDs.compactMap { id in
+            let displayIDs = orderedIDs.filter { currentIDs.contains($0) } + currentIDs.filter { !orderedIDs.contains($0) }
+            let peers: [(peer: BitchatPeer, isMe: Bool, hasUnread: Bool, enc: EncryptionStatus)] = displayIDs.compactMap { id in
                 mapped.first(where: { $0.peer.id == id })
             }
 
@@ -97,6 +94,17 @@ struct MeshPeerList: View {
                     .onTapGesture { if !isMe { onTapPeer(peer.id) } }
                     .onTapGesture(count: 2) { if !isMe { onShowFingerprint(peer.id) } }
                 }
+            }
+            // Seed and update order outside result builder
+            .onAppear {
+                let currentIDs = mapped.map { $0.peer.id }
+                orderedIDs = currentIDs
+            }
+            .onChange(of: mapped.map { $0.peer.id }) { ids in
+                var newOrder = orderedIDs
+                newOrder.removeAll { !ids.contains($0) }
+                for id in ids where !newOrder.contains(id) { newOrder.append(id) }
+                if newOrder != orderedIDs { orderedIDs = newOrder }
             }
         }
         .onAppear {

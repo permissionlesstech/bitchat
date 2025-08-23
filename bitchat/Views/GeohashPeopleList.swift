@@ -28,10 +28,6 @@ struct GeohashPeopleList: View {
             }()
             let people = viewModel.visibleGeohashPeople()
             let currentIDs = people.map { $0.id }
-            var newOrder = orderedIDs
-            newOrder.removeAll { !currentIDs.contains($0) }
-            for id in currentIDs where !newOrder.contains(id) { newOrder.append(id) }
-            if newOrder != orderedIDs { orderedIDs = newOrder }
 
             #if os(iOS)
             let teleportedSet = Set(viewModel.teleportedGeo.map { $0.lowercased() })
@@ -44,9 +40,9 @@ struct GeohashPeopleList: View {
             let isTeleportedID: (String) -> Bool = { _ in false }
             #endif
 
-            let stableOrdered = orderedIDs.filter { currentIDs.contains($0) }
-            let nonTele = stableOrdered.filter { !isTeleportedID($0) }
-            let tele = stableOrdered.filter { isTeleportedID($0) }
+            let displayIDs = orderedIDs.filter { currentIDs.contains($0) } + currentIDs.filter { !orderedIDs.contains($0) }
+            let nonTele = displayIDs.filter { !isTeleportedID($0) }
+            let tele = displayIDs.filter { isTeleportedID($0) }
             let finalOrder: [String] = nonTele + tele
             let firstID = finalOrder.first
             let personByID = Dictionary(uniqueKeysWithValues: people.map { ($0.id, $0) })
@@ -117,6 +113,16 @@ struct GeohashPeopleList: View {
                         }
                     }
                 }
+            }
+            // Seed and update order outside result builder
+            .onAppear {
+                orderedIDs = currentIDs
+            }
+            .onChange(of: currentIDs) { ids in
+                var newOrder = orderedIDs
+                newOrder.removeAll { !ids.contains($0) }
+                for id in ids where !newOrder.contains(id) { newOrder.append(id) }
+                if newOrder != orderedIDs { orderedIDs = newOrder }
             }
         }
         .onAppear {
