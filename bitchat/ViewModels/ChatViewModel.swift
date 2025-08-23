@@ -2709,7 +2709,14 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     func completeNickname(_ nickname: String, in text: inout String) -> Int {
         guard let range = autocompleteRange else { return text.count }
         
+       
         text = autocompleteService.applySuggestion(nickname, to: text, range: range)
+
+        // Append an extra space so the user can immediately continue typing
+        // without needing to manually press space after the completion.
+        if !text.hasSuffix(" ") {
+            text += " "
+        }
         
         // Hide autocomplete
         showAutocomplete = false
