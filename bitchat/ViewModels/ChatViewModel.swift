@@ -3007,12 +3007,18 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     } else {
                         // Style non-mention matches
                         if type == "hashtag" {
-                            // Do NOT special-style hashtags: render like normal content (no blue, no underline)
+                            // If the hashtag is a valid geohash, make it tappable (bitchat://geohash/<gh>)
+                            let token = String(matchText.dropFirst()).lowercased()
+                            let allowed = Set("0123456789bcdefghjkmnpqrstuvwxyz")
+                            let isGeohash = (2...12).contains(token.count) && token.allSatisfy { allowed.contains($0) }
                             var tagStyle = AttributeContainer()
                             tagStyle.font = isSelf
                                 ? .system(size: 14, weight: .bold, design: .monospaced)
                                 : .system(size: 14, design: .monospaced)
                             tagStyle.foregroundColor = baseColor
+                            if isGeohash, let url = URL(string: "bitchat://geohash/\(token)") {
+                                tagStyle.link = url
+                            }
                             result.append(AttributedString(matchText).mergingAttributes(tagStyle))
                         } else if type == "cashu" {
                             // Skip inline token; a styled chip is rendered below the message

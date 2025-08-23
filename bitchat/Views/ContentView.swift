@@ -464,6 +464,28 @@ struct ContentView: View {
                 selectedMessageSender = viewModel.messages.last(where: { $0.senderPeerID == peerID })?.sender
                 showMessageActions = true
             }
+            .onOpenURL { url in
+                guard url.scheme == "bitchat", url.host == "geohash" else { return }
+                let gh = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")).lowercased()
+                let allowed = Set("0123456789bcdefghjkmnpqrstuvwxyz")
+                guard (2...12).contains(gh.count), gh.allSatisfy({ allowed.contains($0) }) else { return }
+                #if os(iOS)
+                func levelForLength(_ len: Int) -> GeohashChannelLevel {
+                    switch len {
+                    case 0...2: return .region
+                    case 3...4: return .province
+                    case 5: return .city
+                    case 6: return .neighborhood
+                    case 7: return .block
+                    default: return .block
+                    }
+                }
+                let level = levelForLength(gh.count)
+                let ch = GeohashChannel(level: level, geohash: gh)
+                LocationChannelManager.shared.markTeleported(for: gh, true)
+                LocationChannelManager.shared.select(ChannelID.location(ch))
+                #endif
+            }
             .onTapGesture(count: 3) {
                 // Triple-tap to clear current chat
                 viewModel.sendMessage("/clear")
