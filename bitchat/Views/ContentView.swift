@@ -312,7 +312,7 @@ struct ContentView: View {
                                 VStack(alignment: .leading, spacing: 0) {
                                     HStack(alignment: .top, spacing: 0) {
                                         // Single text view for natural wrapping
-                                        let isLong = message.content.count > 2000 || message.content.hasVeryLongToken(threshold: 512)
+                                        let isLong = (message.content.count > 2000 || message.content.hasVeryLongToken(threshold: 512)) && message.content.extractCashuTokens().isEmpty
                                         let isExpanded = expandedMessageIDs.contains(message.id)
                                         Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme))
                                             .fixedSize(horizontal: false, vertical: true)
@@ -328,7 +328,7 @@ struct ContentView: View {
                                     }
                                     
                                     // Expand/Collapse for very long messages
-                                    if (message.content.count > 2000 || message.content.hasVeryLongToken(threshold: 512)) {
+                                    if (message.content.count > 2000 || message.content.hasVeryLongToken(threshold: 512)) && message.content.extractCashuTokens().isEmpty {
                                         let isExpanded = expandedMessageIDs.contains(message.id)
                                         Button(isExpanded ? "Show less" : "Show more") {
                                             if isExpanded { expandedMessageIDs.remove(message.id) }
