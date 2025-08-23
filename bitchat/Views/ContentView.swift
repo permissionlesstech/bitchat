@@ -25,28 +25,7 @@ struct PeerDisplayData: Identifiable {
     let isMutualFavorite: Bool
 }
 
-// MARK: - Lazy Link Preview
-
-// Lazy loading wrapper for link previews
-struct LazyLinkPreviewView: View {
-    let url: URL
-    let title: String?
-    @State private var isVisible = false
-    
-    var body: some View {
-        Group {
-            if isVisible {
-                LinkPreviewView(url: url, title: title)
-            } else {
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color.gray.opacity(0.1))
-                    .frame(height: 80)
-            }
-        }
-        .frame(height: 80)
-        .onAppear { isVisible = true }
-    }
-}
+// (Link previews removed; URLs are now clickable inline)
 
 // MARK: - Main Content View
 
@@ -360,17 +339,7 @@ struct ContentView: View {
                                         .padding(.top, 4)
                                     }
 
-                                    // Check for plain URLs
-                                    let urls = message.content.extractURLs()
-                                    if !urls.isEmpty {
-                                        ForEach(urls.prefix(2).indices, id: \.self) { index in
-                                            let urlInfo = urls[index]
-                                            LazyLinkPreviewView(url: urlInfo.url, title: nil)
-                                                .padding(.top, 3)
-                                                .padding(.horizontal, 1)
-                                                .id("\(message.id)-\(urlInfo.url.absoluteString)")
-                                        }
-                                    }
+                                    // Link previews removed: URLs appear inline and are tappable
 
                                     // Render payment chips (Lightning / Cashu) with rounded background
                                     let lightningLinks = message.content.extractLightningLinks()

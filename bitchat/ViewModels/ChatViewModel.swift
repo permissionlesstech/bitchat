@@ -3015,12 +3015,15 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                                 : .system(size: 14, design: .monospaced)
                             result.append(AttributedString(" ").mergingAttributes(spacer))
                         } else {
-                            // Keep URL styling (blue + underline for non-self, orange for self)
+                            // Keep URL styling and make it tappable via .link attribute
                             var matchStyle = AttributeContainer()
                             matchStyle.font = .system(size: 14, weight: isSelf ? .bold : .semibold, design: .monospaced)
                             if type == "url" {
                                 matchStyle.foregroundColor = isSelf ? .orange : .blue
                                 matchStyle.underlineStyle = .single
+                                if let url = URL(string: matchText) {
+                                    matchStyle.link = url
+                                }
                             }
                             result.append(AttributedString(matchText).mergingAttributes(matchStyle))
                         }
