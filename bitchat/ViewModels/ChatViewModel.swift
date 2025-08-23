@@ -1184,7 +1184,12 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             geohashPeople = []
             teleportedGeo.removeAll()
         case .location(let ch):
-            messages = geoTimelines[ch.geohash] ?? []
+            // Sanitize existing timeline (filter any prior empty-content entries)
+            var arr = geoTimelines[ch.geohash] ?? []
+            let before = arr.count
+            arr.removeAll { $0.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            if arr.count != before { geoTimelines[ch.geohash] = arr }
+            messages = arr
         }
         // Unsubscribe previous
         if let sub = geoSubscriptionID {
