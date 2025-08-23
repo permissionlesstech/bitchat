@@ -20,8 +20,16 @@ final class LocalizationTests: XCTestCase {
         let locales = ["Base", "es", "zh-Hans", "ar", "fr"]
         for locale in locales {
             let b = bundle(for: locale)
-            let value = NSLocalizedString("nav.settings", tableName: nil, bundle: b, value: "", comment: "")
-            XCTAssertFalse(value.isEmpty, "Expected a localized value for locale: \(locale)")
+            let keys = [
+                "nav.settings",
+                "nav.people",
+                "alert.bluetooth_required",
+                "actions.title"
+            ]
+            for key in keys {
+                let value = NSLocalizedString(key, tableName: nil, bundle: b, value: "", comment: "")
+                XCTAssertFalse(value.isEmpty, "Expected a localized value for \(key) in locale: \(locale)")
+            }
         }
     }
 
@@ -47,4 +55,3 @@ final class LocalizationTests: XCTestCase {
         XCTAssertFalse(frPerm.isEmpty)
     }
 }
-

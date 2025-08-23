@@ -13,7 +13,7 @@ struct LocationChannelsSheet: View {
     var body: some View {
         NavigationView {
             VStack(alignment: .leading, spacing: 12) {
-                Text("#location channels")
+                Text(LocalizedStringKey("nav.location_channels"))
                     .font(.system(size: 18, design: .monospaced))
                 Text("chat with people near you using geohash channels. only a coarse geohash is shared, never exact gps.")
                     .font(.system(size: 12, design: .monospaced))
@@ -57,7 +57,7 @@ struct LocationChannelsSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("close") { isPresented = false }
+                    Button(String(localized: "common.close")) { isPresented = false }
                         .font(.system(size: 14, design: .monospaced))
                 }
             }

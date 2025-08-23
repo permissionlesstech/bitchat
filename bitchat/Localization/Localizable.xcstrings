@@ -153,8 +153,34 @@
         "ar" : { "stringUnit" : { "state" : "translated", "value" : "%d أشخاص" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "%d personnes" } }
       }
+    },
+    "nav.location_channels" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "#location channels" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "#canales de ubicación" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "#位置频道" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "#قنوات الموقع" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "#canaux de localisation" } }
+      }
+    },
+    "common.close" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "close" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "cerrar" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "关闭" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "إغلاق" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "fermer" } }
+      }
+    },
+    "accessibility.location_channels" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "location channels" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "canales de ubicación" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "位置频道" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "قنوات الموقع" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "canaux de localisation" } }
+      }
     }
   },
   "version" : "1.0"
 }
-

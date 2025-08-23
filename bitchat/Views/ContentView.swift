@@ -1199,7 +1199,7 @@ struct ContentView: View {
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
                         .layoutPriority(2)
-                        .accessibilityLabel("location channels")
+                        .accessibilityLabel(String(localized: "accessibility.location_channels"))
                 }
                 .buttonStyle(.plain)
                 #endif
