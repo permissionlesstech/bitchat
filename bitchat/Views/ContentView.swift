@@ -839,7 +839,7 @@ struct ContentView: View {
                     // Check for command autocomplete (instant, no debounce needed)
                     if newValue.hasPrefix("/") && newValue.count >= 1 {
                         // Build context-aware command list
-                        let commandDescriptions = [
+                        var commandDescriptions = [
                             ("/block", "block or list blocked peers"),
                             ("/clear", "clear chat messages"),
                             ("/fav", "add to favorites"),
@@ -851,6 +851,17 @@ struct ContentView: View {
                             ("/unfav", "remove from favorites"),
                             ("/w", "see who's online")
                         ]
+                        #if os(iOS)
+                        if case .location = locationManager.selectedChannel {
+                            // Hide favorites in geohash chats; tweak descriptions
+                            commandDescriptions.removeAll { $0.0 == "/fav" || $0.0 == "/unfav" }
+                            commandDescriptions = commandDescriptions.map { pair in
+                                if pair.0 == "/m" { return (pair.0, "send direct message") }
+                                if pair.0 == "/w" { return (pair.0, "see who's here") }
+                                return pair
+                            }
+                        }
+                        #endif
                         
                         let input = newValue.lowercased()
                         

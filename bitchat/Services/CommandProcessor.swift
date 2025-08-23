@@ -85,10 +85,16 @@ class CommandProcessor {
     }
     
     private func handleWho() -> CommandResult {
-        guard let peers = meshService?.getPeerNicknames(), !peers.isEmpty else {
-            return .success(message: "no one else is online right now")
+        #if os(iOS)
+        if chatViewModel?.isInGeohashChannel == true {
+            let people = chatViewModel?.visibleGeohashPeople() ?? []
+            if people.isEmpty { return .success(message: "nobody around...") }
+            let names = people.map { $0.displayName }.joined(separator: ", ")
+            return .success(message: "here: \(names)")
         }
-        
+        #endif
+        let peers = meshService?.getPeerNicknames() ?? [:]
+        if peers.isEmpty { return .success(message: "no one else is online right now") }
         let onlineList = peers.values.sorted().joined(separator: ", ")
         return .success(message: "online: \(onlineList)")
     }
@@ -248,6 +254,11 @@ class CommandProcessor {
     }
     
     private func handleFavorite(_ args: String, add: Bool) -> CommandResult {
+        #if os(iOS)
+        if chatViewModel?.isInGeohashChannel == true {
+            return .error(message: "favorites are not available in geohash chats")
+        }
+        #endif
         let targetName = args.trimmingCharacters(in: .whitespaces)
         guard !targetName.isEmpty else {
             return .error(message: "usage: /\(add ? "fav" : "unfav") <nickname>")
@@ -283,6 +294,21 @@ class CommandProcessor {
     }
     
     private func handleHelp() -> CommandResult {
+        #if os(iOS)
+        if chatViewModel?.isInGeohashChannel == true {
+            let helpText = """
+            commands:
+            /msg @name - start direct message
+            /who - list who's here
+            /clear - clear messages
+            /hug @name - send a hug
+            /slap @name - slap with a trout
+            /block @name - block (geohash)
+            /unblock @name - unblock (geohash)
+            """
+            return .success(message: helpText)
+        }
+        #endif
         let helpText = """
         commands:
         /msg @name - start private chat

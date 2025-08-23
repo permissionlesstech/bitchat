@@ -151,6 +151,19 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         !unreadPrivateMessages.isEmpty
     }
 
+    #if os(iOS)
+    @MainActor
+    var isInGeohashChannel: Bool {
+        if case .location = activeChannel { return true }
+        return false
+    }
+    @MainActor
+    var activeGeohashID: String? {
+        if case .location(let ch) = activeChannel { return ch.geohash }
+        return nil
+    }
+    #endif
+
     /// Open the most relevant private chat when tapping the toolbar unread icon.
     /// Prefers the most recently active unread conversation, otherwise the most recent PM.
     @MainActor
