@@ -28,6 +28,7 @@ enum GeohashChannelLevel: CaseIterable, Codable, Equatable {
         case .region: return "Region"
     }
 }
+}
 // Backward-compatible Codable for renamed cases
 extension GeohashChannelLevel {
     init(from decoder: Decoder) throws {
@@ -67,7 +68,6 @@ extension GeohashChannelLevel {
         case .region: try container.encode("region")
         }
     }
-}
 }
 
 /// A computed geohash channel option.
