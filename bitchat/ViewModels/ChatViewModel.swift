@@ -590,8 +590,23 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 let nick = nickTag[1]
                 self.geoNicknames[event.pubkey.lowercased()] = nick
             }
+            // Store mapping for geohash sender IDs used in messages (ensures consistent colors)
+            let key16 = "nostr_" + String(event.pubkey.prefix(16))
+            self.nostrKeyMapping[key16] = event.pubkey
+            let key8 = "nostr:" + String(event.pubkey.prefix(8))
+            self.nostrKeyMapping[key8] = event.pubkey
+
             // Update participants last-seen for this pubkey
             self.recordGeoParticipant(pubkeyHex: event.pubkey)
+            
+            // Track teleported tag (only our format ["t","teleport"]) for icon state
+            let hasTeleportTag = event.tags.contains(where: { tag in
+                tag.count >= 2 && tag[0].lowercased() == "t" && tag[1].lowercased() == "teleport"
+            })
+            if hasTeleportTag {
+                let key = event.pubkey.lowercased()
+                Task { @MainActor in self.teleportedGeo = self.teleportedGeo.union([key]) }
+            }
             let senderName = self.displayNameForNostrPubkey(event.pubkey)
             let content = event.content
             let timestamp = Date(timeIntervalSince1970: TimeInterval(event.created_at))
@@ -1214,20 +1229,10 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             let tagSummary = event.tags.map { "[" + $0.joined(separator: ",") + "]" }.joined(separator: ",")
             SecureLogger.log("GeoTeleport: recv pub=\(event.pubkey.prefix(8))… tags=\(tagSummary)",
                             category: SecureLogger.session, level: .debug)
-            // Track teleport tag for participants
-            // Detect teleport tag robustly: accept ["t","teleport"], ["t","teleported"], ["t"], ["teleport"], or boolean-like values
-            let hasTeleportTag: Bool = {
-                for tag in event.tags {
-                    guard let key = tag.first?.lowercased() else { continue }
-                    if key == "t" || key == "teleport" || key == "teleported" { return true }
-                    // Some clients may encode as ["t","1"] or ["t","true"]
-                    if key == "t", tag.dropFirst().contains(where: { v in
-                        let lv = v.lowercased()
-                        return lv == "teleport" || lv == "teleported" || lv == "1" || lv == "true"
-                    }) { return true }
-                }
-                return false
-            }()
+            // Track teleport tag for participants – only our format ["t", "teleport"]
+            let hasTeleportTag: Bool = event.tags.contains(where: { tag in
+                tag.count >= 2 && tag[0].lowercased() == "t" && tag[1].lowercased() == "teleport"
+            })
             if hasTeleportTag {
                 let key = event.pubkey.lowercased()
                 Task { @MainActor in
@@ -1262,7 +1267,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             let senderName = self.displayNameForNostrPubkey(event.pubkey)
             let content = event.content
             // If this is a teleport presence event (no content), don't add to timeline
-            if let teleTag = event.tags.first(where: { $0.first == "t" }), teleTag.count >= 2, (teleTag[1] == "teleport" || teleTag[1] == "teleported"),
+            if let teleTag = event.tags.first(where: { $0.first == "t" }), teleTag.count >= 2, (teleTag[1] == "teleport"),
                content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 return
             }
