@@ -3105,7 +3105,9 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         }()
 
         let isDark = colorScheme == .dark
+        #if os(iOS)
         if let cached = message.getCachedFormattedPrefix(isDark: isDark, isSelf: isSelf) { return cached }
+        #endif
         let baseColor: Color = isSelf ? .orange : peerColor(for: message, isDark: isDark)
 
         var result = AttributedString()
@@ -3124,7 +3126,9 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         }
         result.append(AttributedString("> ").mergingAttributes(senderStyle))
 
+        #if os(iOS)
         message.setCachedFormattedPrefix(result, isDark: isDark, isSelf: isSelf)
+        #endif
         return result
     }
 
