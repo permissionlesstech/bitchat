@@ -3018,6 +3018,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                             tagStyle.foregroundColor = baseColor
                             if isGeohash, let url = URL(string: "bitchat://geohash/\(token)") {
                                 tagStyle.link = url
+                                tagStyle.underlineStyle = .single
                             }
                             result.append(AttributedString(matchText).mergingAttributes(tagStyle))
                         } else if type == "cashu" {
