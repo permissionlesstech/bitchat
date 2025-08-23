@@ -25,28 +25,7 @@ struct PeerDisplayData: Identifiable {
     let isMutualFavorite: Bool
 }
 
-// MARK: - Lazy Link Preview
-
-// Lazy loading wrapper for link previews
-struct LazyLinkPreviewView: View {
-    let url: URL
-    let title: String?
-    @State private var isVisible = false
-    
-    var body: some View {
-        Group {
-            if isVisible {
-                LinkPreviewView(url: url, title: title)
-            } else {
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color.gray.opacity(0.1))
-                    .frame(height: 80)
-            }
-        }
-        .frame(height: 80)
-        .onAppear { isVisible = true }
-    }
-}
+// MARK: - Lazy Link Preview (removed)
 
 // MARK: - Main Content View
 
@@ -81,7 +60,7 @@ struct ContentView: View {
     @State private var showLocationChannelsSheet = false
     @State private var expandedMessageIDs: Set<String> = []
     // Window sizes for rendering (infinite scroll up)
-    @State private var windowCountPublic: Int = 300
+    @State private var windowCountPublic: Int = 180
     @State private var windowCountPrivate: [String: Int] = [:]
     
     // MARK: - Computed Properties
@@ -97,7 +76,7 @@ struct ContentView: View {
     private var secondaryTextColor: Color {
         colorScheme == .dark ? Color.green.opacity(0.8) : Color(red: 0, green: 0.5, blue: 0).opacity(0.8)
     }
-    
+
     // MARK: - Body
     
     var body: some View {
@@ -206,15 +185,7 @@ struct ContentView: View {
             isPresented: $showMessageActions,
             titleVisibility: .visible
         ) {
-            Button("mention") {
-                if let sender = selectedMessageSender {
-                    // Pre-fill the input with an @mention and focus the field
-                    messageText = "@\(sender) "
-                    isTextFieldFocused = true
-                }
-            }
-
-            Button("private message") {
+            Button("direct message") {
                 if let peerID = selectedMessageSenderID {
                     #if os(iOS)
                     if peerID.hasPrefix("nostr:") {
@@ -316,7 +287,7 @@ struct ContentView: View {
                     #else
                     let contextKey: String = "mesh"
                     #endif
-                    let items = windowedMessages.map { (uiID: "\(contextKey)|\($0.id)", message: $0) }
+                    let items: [(uiID: String, message: BitchatMessage)] = windowedMessages.map { (uiID: "\(contextKey)|\($0.id)", message: $0) }
                     
                     ForEach(items, id: \.uiID) { item in
                         let message = item.message
@@ -332,14 +303,51 @@ struct ContentView: View {
                                 // Regular messages with natural text wrapping
                                 VStack(alignment: .leading, spacing: 0) {
                                     HStack(alignment: .top, spacing: 0) {
-                                        // Single text view for natural wrapping
-                                        let isLong = message.content.count > 2000 || message.content.hasVeryLongToken(threshold: 512)
-                                        let isExpanded = expandedMessageIDs.contains(message.id)
-                                        Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme))
-                                            .fixedSize(horizontal: false, vertical: true)
-                                            .lineLimit(isLong && !isExpanded ? 30 : nil)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                        
+                                        // Render as a single Text so wrapping naturally continues under the prefix
+                                        let isLong: Bool = message.content.count > 2000 || message.content.hasVeryLongToken(threshold: 512)
+                                        let isExpanded: Bool = expandedMessageIDs.contains(message.id)
+                                        let prefixWidth: CGFloat = viewModel.prefixWidth(for: message, colorScheme: colorScheme)
+                                        let fullText: AttributedString = {
+                                            var s = AttributedString()
+                                            s.append(viewModel.formatSenderPrefix(message, colorScheme: colorScheme))
+                                            s.append(viewModel.formatMessageBody(message, colorScheme: colorScheme))
+                                            return s
+                                        }()
+
+                                        ZStack(alignment: .topLeading) {
+                                            // Full message ensures natural hanging indent
+                                            Text(fullText)
+                                                .fixedSize(horizontal: false, vertical: true)
+                                                .lineLimit(isLong && !isExpanded ? 30 : nil)
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                                .multilineTextAlignment(.leading)
+                                                // Use double-tap on body to prefill mention; single-tap reserved for links
+                                                .onTapGesture(count: 2) {
+                                                    if message.sender != "system" && message.sender != viewModel.nickname {
+                                                        messageText = "@\(message.sender) "
+                                                        isTextFieldFocused = true
+                                                    }
+                                                }
+
+                                            // Invisible prefix (no measurement; width computed and cached)
+                                            Text(viewModel.formatSenderPrefix(message, colorScheme: colorScheme))
+                                                .fixedSize(horizontal: true, vertical: false)
+                                                .opacity(0)
+
+                                            // Transparent overlay only over the prefix to trigger the action sheet
+                                            Color.clear
+                                                .frame(width: prefixWidth)
+                                                .contentShape(Rectangle())
+                                                .onTapGesture {
+                                                    if message.sender != "system" && message.sender != viewModel.nickname {
+                                                        selectedMessageSender = message.sender
+                                                        selectedMessageSenderID = message.senderPeerID
+                                                        showMessageActions = true
+                                                    }
+                                                }
+                                        }
+                                        // No onPreferenceChange; width computed and cached in ViewModel
+
                                         // Delivery status indicator for private messages
                                         if message.isPrivate && message.sender == viewModel.nickname,
                                            let status = message.deliveryStatus {
@@ -348,33 +356,11 @@ struct ContentView: View {
                                         }
                                     }
                                     
-                                    // Expand/Collapse for very long messages
-                                    if (message.content.count > 2000 || message.content.hasVeryLongToken(threshold: 512)) {
-                                        let isExpanded = expandedMessageIDs.contains(message.id)
-                                        Button(isExpanded ? "Show less" : "Show more") {
-                                            if isExpanded { expandedMessageIDs.remove(message.id) }
-                                            else { expandedMessageIDs.insert(message.id) }
-                                        }
-                                        .font(.system(size: 11, weight: .medium, design: .monospaced))
-                                        .foregroundColor(Color.blue)
-                                        .padding(.top, 4)
-                                    }
-
-                                    // Check for plain URLs
-                                    let urls = message.content.extractURLs()
-                                    if !urls.isEmpty {
-                                        ForEach(urls.prefix(2).indices, id: \.self) { index in
-                                            let urlInfo = urls[index]
-                                            LazyLinkPreviewView(url: urlInfo.url, title: nil)
-                                                .padding(.top, 3)
-                                                .padding(.horizontal, 1)
-                                                .id("\(message.id)-\(urlInfo.url.absoluteString)")
-                                        }
-                                    }
+                                    // Link previews removed for performance; URLs remain tappable in-text
 
                                     // Render payment chips (Lightning / Cashu) with rounded background
-                                    let lightningLinks = message.content.extractLightningLinks()
-                                    let cashuTokens = message.content.extractCashuTokens()
+                                    let lightningLinks: [String] = Array(message.content.extractLightningLinks(max: 3))
+                                    let cashuTokens: [String] = Array(message.content.extractCashuTokens(max: 3))
                                     if !lightningLinks.isEmpty || !cashuTokens.isEmpty {
                                         HStack(spacing: 8) {
                                             ForEach(Array(lightningLinks.prefix(3)).indices, id: \.self) { i in
@@ -411,64 +397,48 @@ struct ContentView: View {
                                         .padding(.top, 6)
                                         .padding(.leading, 2)
                                     }
+
+                                    // Expand/Collapse for very long messages (placed after chips)
+                                    let isVeryLong: Bool = message.content.count > 2000 || message.content.hasVeryLongToken(threshold: 512)
+                                    if isVeryLong {
+                                        let isExpanded: Bool = expandedMessageIDs.contains(message.id)
+                                        Button(isExpanded ? "Show less" : "Show more") {
+                                            if isExpanded { expandedMessageIDs.remove(message.id) }
+                                            else { expandedMessageIDs.insert(message.id) }
+                                        }
+                                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                        .foregroundColor(Color.blue)
+                                        .padding(.top, 4)
+                                    }
                                 }
                             }
                         }
                         .id(item.uiID)
                         .onAppear {
-                            // Track if last item is visible to enable auto-scroll only when near bottom
-                            if message.id == windowedMessages.last?.id {
-                                isAtBottom.wrappedValue = true
-                            }
-                            // Infinite scroll up: when top row appears, increase window and preserve anchor
-                            if message.id == windowedMessages.first?.id, messages.count > windowedMessages.count {
-                                let step = 200
-                                #if os(iOS)
-                                let contextKey: String = {
-                                    switch locationManager.selectedChannel {
-                                    case .mesh: return "mesh"
-                                    case .location(let ch): return "geo:\(ch.geohash)"
-                                    }
-                                }()
-                                #else
-                                let contextKey: String = "mesh"
-                                #endif
-                                let preserveID = "\(contextKey)|\(message.id)"
-                                if let peer = privatePeer {
-                                    let current = windowCountPrivate[peer] ?? 300
-                                    let newCount = min(messages.count, current + step)
-                                    if newCount != current {
-                                        windowCountPrivate[peer] = newCount
-                                        DispatchQueue.main.async {
-                                            proxy.scrollTo(preserveID, anchor: .top)
-                                        }
-                                    }
-                                } else {
-                                    let current = windowCountPublic
-                                    let newCount = min(messages.count, current + step)
-                                    if newCount != current {
-                                        windowCountPublic = newCount
-                                        DispatchQueue.main.async {
-                                            proxy.scrollTo(preserveID, anchor: .top)
-                                        }
-                                    }
+                            #if os(iOS)
+                            let contextKey: String = {
+                                switch locationManager.selectedChannel {
+                                case .mesh: return "mesh"
+                                case .location(let ch): return "geo:\(ch.geohash)"
                                 }
-                            }
+                            }()
+                            #else
+                            let contextKey: String = "mesh"
+                            #endif
+                            handleRowAppear(messageID: message.id,
+                                            privatePeer: privatePeer,
+                                            messages: messages,
+                                            windowedMessages: windowedMessages,
+                                            isAtBottom: isAtBottom,
+                                            proxy: proxy,
+                                            contextKey: contextKey)
                         }
                         .onDisappear {
                             if message.id == windowedMessages.last?.id {
                                 isAtBottom.wrappedValue = false
                             }
                         }
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            // Only show actions for messages from other users (not system or self)
-                            if message.sender != "system" && message.sender != viewModel.nickname {
-                                selectedMessageSender = message.sender
-                                selectedMessageSenderID = message.senderPeerID
-                                showMessageActions = true
-                            }
-                        }
+                        // Tap targets handled on specific subviews above (username/body)
                         .contextMenu {
                             Button("Copy message") {
                                 #if os(iOS)
@@ -705,6 +675,44 @@ struct ContentView: View {
             }
             return .systemAction
         })
+    }
+
+    // MARK: - Helpers
+    private func handleRowAppear(messageID: String,
+                                 privatePeer: String?,
+                                 messages: [BitchatMessage],
+                                 windowedMessages: ArraySlice<BitchatMessage>,
+                                 isAtBottom: Binding<Bool>,
+                                 proxy: ScrollViewProxy,
+                                 contextKey: String) {
+        // Track if last item is visible to enable auto-scroll only when near bottom
+        if messageID == windowedMessages.last?.id {
+            isAtBottom.wrappedValue = true
+        }
+        // Infinite scroll up: when top row appears, increase window and preserve anchor
+        if messageID == windowedMessages.first?.id, messages.count > windowedMessages.count {
+            let step = 120
+            let preserveID = "\(contextKey)|\(messageID)"
+            if let peer = privatePeer {
+                let current = windowCountPrivate[peer] ?? 300
+                let newCount = min(messages.count, current + step)
+                if newCount != current {
+                    windowCountPrivate[peer] = newCount
+                    DispatchQueue.main.async {
+                        proxy.scrollTo(preserveID, anchor: .top)
+                    }
+                }
+            } else {
+                let current = windowCountPublic
+                let newCount = min(messages.count, current + step)
+                if newCount != current {
+                    windowCountPublic = newCount
+                    DispatchQueue.main.async {
+                        proxy.scrollTo(preserveID, anchor: .top)
+                    }
+                }
+            }
+        }
     }
     
     // MARK: - Input View
@@ -1518,5 +1526,13 @@ struct DeliveryStatusView: View {
             .foregroundColor(secondaryTextColor.opacity(0.6))
             .help("Delivered to \(reached) of \(total) members")
         }
+    }
+}
+
+// Preference key to measure the width of the sender prefix for hanging indent
+private struct PrefixWidthPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }
