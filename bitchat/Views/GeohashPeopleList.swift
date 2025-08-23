@@ -37,7 +37,7 @@ struct GeohashPeopleList: View {
                 // Partition teleported to the end while preserving relative order
                 #if os(iOS)
                 let teleportedSet = Set(viewModel.teleportedGeo.map { $0.lowercased() })
-                let meTeleported = (LocationChannelManager.shared.teleported ? myHex.map { Set([$0]) } : nil) ?? Set()
+                let meTeleported: Set<String> = (LocationChannelManager.shared.teleported ? (myHex.map { Set([$0]) }) : nil) ?? Set<String>()
                 let isTeleported: (String) -> Bool = { id in teleportedSet.contains(id.lowercased()) || meTeleported.contains(id) }
                 #else
                 let isTeleported: (String) -> Bool = { _ in false }
@@ -47,10 +47,11 @@ struct GeohashPeopleList: View {
                 let tele = stableOrdered.filter { isTeleported($0) }
                 let finalOrder: [String] = nonTele + tele
                 let firstID = finalOrder.first
-                ForEach(finalOrder, id: \.self) { pid in
-                    guard let person = people.first(where: { $0.id == pid }) else { EmptyView() }
+                // Only iterate over IDs that still exist; lookup person by ID
+                let personByID = Dictionary(uniqueKeysWithValues: people.map { ($0.id, $0) })
+                ForEach(finalOrder.filter { personByID[$0] != nil }, id: \.self) { pid in
+                    let person = personByID[pid]!
                     HStack(spacing: 4) {
-                        let convKey = "nostr_" + String(person.id.prefix(16))
                         // Icon should match peer color; default to map pin; dashed face for teleported
                         let isMe = (person.id == myHex)
                         #if os(iOS)
@@ -63,10 +64,7 @@ struct GeohashPeopleList: View {
                         let rowColor: Color = isMe ? .orange : assignedColor
                         Image(systemName: icon).font(.system(size: 12)).foregroundColor(rowColor)
                         let (base, suffix) = splitSuffix(from: person.displayName)
-                        let isMe = person.id == myHex
-                        let assignedColor = viewModel.colorForNostrPubkey(person.id, isDark: colorScheme == .dark)
                         HStack(spacing: 0) {
-                            let rowColor: Color = isMe ? .orange : assignedColor
                             Text(base)
                                 .font(.system(size: 14, design: .monospaced))
                                 .fontWeight(isMe ? .bold : .regular)
