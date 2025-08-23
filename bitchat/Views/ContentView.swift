@@ -788,7 +788,7 @@ struct ContentView: View {
             }
             
             HStack(alignment: .center, spacing: 4) {
-            TextField("type a message...", text: $messageText)
+            TextField(String(localized: "placeholder.type_message"), text: $messageText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 14, design: .monospaced))
                 .foregroundColor(textColor)
@@ -835,8 +835,8 @@ struct ContentView: View {
             }
             .buttonStyle(.plain)
             .padding(.trailing, 12)
-            .accessibilityLabel("Send message")
-            .accessibilityHint(messageText.isEmpty ? "Enter a message to send" : "Double tap to send")
+            .accessibilityLabel(String(localized: "accessibility.send_message"))
+            .accessibilityHint(messageText.isEmpty ? String(localized: "accessibility.send_message_hint_empty") : String(localized: "accessibility.send_message_hint_ready"))
             }
             .padding(.vertical, 8)
             .background(backgroundColor.opacity(0.95))

@@ -360,6 +360,123 @@
         "ar" : { "stringUnit" : { "state" : "translated", "value" : "قنوات الموقع" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "canaux de localisation" } }
       }
+    },
+    "accessibility.send_message" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Send message" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Enviar mensaje" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "发送消息" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "إرسال رسالة" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Envoyer le message" } }
+      }
+    },
+    "accessibility.send_message_hint_empty" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Enter a message to send" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Escribe un mensaje para enviar" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "输入要发送的消息" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "أدخل رسالة لإرسالها" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Saisissez un message à envoyer" } }
+      }
+    },
+    "accessibility.send_message_hint_ready" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Double tap to send" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Tocar dos veces para enviar" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "双击发送" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "اضغط مرتين للإرسال" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Touchez deux fois pour envoyer" } }
+      }
+    },
+    "placeholder.type_message" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "type a message..." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "escribe un mensaje..." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "输入消息..." } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "اكتب رسالة..." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "écrivez un message..." } }
+      }
+    },
+    "location.about" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "chat with people near you using geohash channels. only a coarse geohash is shared, never exact gps." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "chatea con personas cercanas usando canales geohash. solo se comparte un geohash aproximado, nunca GPS exacto." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "使用地理哈希频道与附近的人聊天。仅共享粗略 geohash，绝不共享精确 GPS。" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "الدردشة مع الأشخاص القريبين باستخدام قنوات geohash. تتم مشاركة geohash تقريبي فقط، وليس GPS الدقيق." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "discutez avec des personnes proches via des canaux geohash. seul un geohash approximatif est partagé, jamais un GPS précis." } }
+      }
+    },
+    "location.enable_action" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "get location and my geohashes" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "obtener ubicación y mis geohashes" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "获取位置和我的 geohash" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "الحصول على الموقع و geohash الخاص بي" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "obtenir la position et mes geohashes" } }
+      }
+    },
+    "location.permission_denied" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "location permission denied. enable in settings to use location channels." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "permiso de ubicación denegado. habilite en ajustes para usar canales de ubicación." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "位置权限被拒绝。前往设置启用以使用位置频道。" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "تم رفض إذن الموقع. فعِّل في الإعدادات لاستخدام قنوات الموقع." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "autorisation de localisation refusée. activez-la dans Réglages pour utiliser les canaux de localisation." } }
+      }
+    },
+    "location.finding" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "finding nearby channels…" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "buscando canales cercanos…" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "正在查找附近频道…" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "جاري العثور على قنوات قريبة…" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "recherche de canaux à proximité…" } }
+      }
+    },
+    "location.teleport" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "teleport" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "teletransportarse" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "瞬移" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "انتقال فوري" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "téléporter" } }
+      }
+    },
+    "errors.invalid_geohash" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "invalid geohash" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "geohash no válido" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "无效的 geohash" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "geohash غير صالح" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "geohash invalide" } }
+      }
+    },
+    "location.remove_access" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "remove location access" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "quitar acceso a la ubicación" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "移除位置访问权限" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "إزالة وصول الموقع" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "retirer l’accès à la localisation" } }
+      }
+    },
+    "common.open_settings" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "open settings" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "abrir ajustes" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "打开设置" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "فتح الإعدادات" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "ouvrir les réglages" } }
+      }
+    },
+    "placeholder.geohash" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "geohash" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "geohash" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "geohash" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "geohash" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "geohash" } }
+      }
     }
   },
   "version" : "1.0"
