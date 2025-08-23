@@ -107,9 +107,7 @@ struct MeshPeerList: View {
         .onAppear {
             orderedIDs = viewModel.allPeers.map { $0.id }
         }
-        .onChange(of: viewModel.allPeers.map { $0.id }) { _ in
-            // Trigger body recompute; ordering is updated within body
-        }
+        // Ordering updates react to viewModel changes automatically via ObservedObject
     }
 }
 

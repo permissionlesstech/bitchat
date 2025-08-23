@@ -120,9 +120,7 @@ struct GeohashPeopleList: View {
         .onAppear {
             orderedIDs = viewModel.visibleGeohashPeople().map { $0.id }
         }
-        .onChange(of: viewModel.visibleGeohashPeople().map { $0.id }) { _ in
-            // Ordering adjusted within body render
-        }
+        // Ordering updates react to viewModel changes automatically via ObservedObject
     }
 }
 #endif
