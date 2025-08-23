@@ -5,8 +5,8 @@ enum GeohashChannelLevel: CaseIterable, Codable, Equatable {
     case block
     case neighborhood
     case city
+    case province
     case region
-    case country
 
     /// Geohash length used for this level.
     var precision: Int {
@@ -14,8 +14,8 @@ enum GeohashChannelLevel: CaseIterable, Codable, Equatable {
         case .block: return 7
         case .neighborhood: return 6
         case .city: return 5
-        case .region: return 4
-        case .country: return 2
+        case .province: return 4
+        case .region: return 2
         }
     }
 
@@ -24,8 +24,8 @@ enum GeohashChannelLevel: CaseIterable, Codable, Equatable {
         case .block: return "Block"
         case .neighborhood: return "Neighborhood"
         case .city: return "City"
+        case .province: return "Province"
         case .region: return "Region"
-        case .country: return "Country"
         }
     }
 }

@@ -270,39 +270,33 @@ struct ContentView: View {
     private func messagesView(privatePeer: String?, isAtBottom: Binding<Bool>) -> some View {
         ScrollViewReader { proxy in
             ScrollView {
+                // Precompute data outside the row builder to keep type-checking simple
+                let localMessages: [BitchatMessage] = {
+                    if let peer = privatePeer { return viewModel.getPrivateChatMessages(for: peer) }
+                    return viewModel.messages
+                }()
+                let currentWindowCount: Int = {
+                    if let peer = privatePeer { return windowCountPrivate[peer] ?? 300 }
+                    return windowCountPublic
+                }()
+                let windowed: ArraySlice<BitchatMessage> = localMessages.suffix(currentWindowCount)
+                let idPrefix: String = {
+                    if let peer = privatePeer { return "dm:\(peer)" }
+                    #if os(iOS)
+                    switch locationManager.selectedChannel {
+                    case .mesh: return "mesh"
+                    case .location(let ch): return "geo:\(ch.geohash)"
+                    }
+                    #else
+                    return "mesh"
+                    #endif
+                }()
+                let items: [(uiID: String, message: BitchatMessage)] = windowed.map { (uiID: "\(idPrefix)|\($0.id)", message: $0) }
+                
                 LazyVStack(alignment: .leading, spacing: 0) {
-                        // Extract messages based on context (private or public chat)
-                        let messages: [BitchatMessage] = {
-                            if let privatePeer = privatePeer {
-                                let msgs = viewModel.getPrivateChatMessages(for: privatePeer)
-                                return msgs
-                            } else {
-                                return viewModel.messages
-                            }
-                        }()
-                        
-                        // Implement windowing with adjustable window count per chat
-                        let currentWindowCount: Int = {
-                            if let peer = privatePeer { return windowCountPrivate[peer] ?? 300 }
-                            return windowCountPublic
-                        }()
-                        let windowedMessages = messages.suffix(currentWindowCount)
-
-                    // Build stable UI IDs. For private chats, namespace by DM peer; for public, by channel.
-                    let idPrefix: String = {
-                        if let peer = privatePeer { return "dm:\(peer)" }
-                        #if os(iOS)
-                        switch locationManager.selectedChannel {
-                        case .mesh: return "mesh"
-                        case .location(let ch): return "geo:\(ch.geohash)"
-                        }
-                        #else
-                        return "mesh"
-                        #endif
-                    }()
-                    let items: [(uiID: String, message: BitchatMessage)] = windowedMessages.map { (uiID: "\(idPrefix)|\($0.id)", message: $0) }
                     
-                    ForEach(items, id: \.uiID) { item in
+                    ForEach(items.indices, id: \.self) { idx in
+                        let item = items[idx]
                         let message = item.message
                         VStack(alignment: .leading, spacing: 0) {
                             // Check if current user is mentioned
@@ -441,14 +435,14 @@ struct ContentView: View {
                             }()
                             handleRowAppear(messageID: message.id,
                                             privatePeer: privatePeer,
-                                            messages: messages,
-                                            windowedMessages: windowedMessages,
+                                            messages: Array(localMessages),
+                                            windowedMessages: windowed,
                                             isAtBottom: isAtBottom,
                                             proxy: proxy,
                                             idPrefix: idPrefix)
                         }
                         .onDisappear {
-                            if message.id == windowedMessages.last?.id {
+                            if message.id == windowed.last?.id {
                                 isAtBottom.wrappedValue = false
                             }
                         }
@@ -525,6 +519,23 @@ struct ContentView: View {
             }
             #endif
             .onAppear {
+                // Dynamically size initial window to roughly 2× screenful for smoother initial load
+                #if os(iOS)
+                let screenH = UIScreen.main.bounds.height
+                let rowEstimate: CGFloat = 22 // approx monospaced row height including spacing
+                let initialRows = max(80, Int((screenH / rowEstimate).rounded()) * 2)
+                if let peer = privatePeer {
+                    let current = windowCountPrivate[peer] ?? 300
+                    let total = viewModel.getPrivateChatMessages(for: peer).count
+                    let desired = min(total, initialRows)
+                    if current > desired { windowCountPrivate[peer] = desired }
+                } else {
+                    let current = windowCountPublic
+                    let total = viewModel.messages.count
+                    let desired = min(total, initialRows)
+                    if current > desired { windowCountPublic = desired }
+                }
+                #endif
                 // Force scroll to bottom when opening a chat view
                 let targetID: String? = {
                     if let peer = privatePeer,
@@ -1067,7 +1078,7 @@ struct ContentView: View {
                         #endif
                     }
                 }
-                .id(viewModel.allPeers.map { "\($0.id)-\($0.isConnected)" }.joined())
+                // Avoid forcing full remounts; rely on SwiftUI diffing for peer updates
             }
             
             Spacer()
@@ -1084,7 +1095,7 @@ struct ContentView: View {
             VStack(spacing: 0) {
                 mainHeaderView
                 Divider()
-                messagesView(privatePeer: nil, isAtBottom: $isAtBottomPublic)
+            messagesView(privatePeer: nil, isAtBottom: $isAtBottomPublic)
             }
             .safeAreaInset(edge: .bottom) {
                 VStack(spacing: 0) {
@@ -1151,7 +1162,7 @@ struct ContentView: View {
                 VStack(spacing: 0) {
                     privateHeaderView
                     Divider()
-                    messagesView(privatePeer: viewModel.selectedPrivateChatPeer, isAtBottom: $isAtBottomPrivate)
+                messagesView(privatePeer: viewModel.selectedPrivateChatPeer, isAtBottom: $isAtBottomPrivate)
                 }
                 .safeAreaInset(edge: .bottom) {
                     VStack(spacing: 0) {

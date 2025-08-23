@@ -3752,6 +3752,26 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         messages.append(message)
         messages.sort { $0.timestamp < $1.timestamp }
         trimMessagesIfNeeded()
+
+        // Prewarm lightweight caches to reduce first-render work
+        prewarmMessageCaches(message)
+    }
+
+    /// Precompute lightweight rendering caches for a message to keep scrolling smooth.
+    /// Currently warms prefix width and sender prefix formatting for both light/dark.
+    private func prewarmMessageCaches(_ message: BitchatMessage) {
+        // Compute prefix width cheaply: width is independent of color, only font/weight
+        Task.detached { [weak self] in
+            guard let self = self else { return }
+            // Computing width uses attributed prefix; do it on main to reuse existing helpers safely
+            Task { @MainActor in
+                // Warm prefix width once
+                _ = self.prefixWidth(for: message, colorScheme: .light)
+                // Warm sender prefix attributed strings for both schemes (small strings)
+                _ = self.formatSenderPrefix(message, colorScheme: .light)
+                _ = self.formatSenderPrefix(message, colorScheme: .dark)
+            }
+        }
     }
     
     private func addPrivateMessage(_ message: BitchatMessage, for peerID: String) {
