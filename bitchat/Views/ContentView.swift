@@ -890,11 +890,12 @@ struct ContentView: View {
             }
             
             HStack(alignment: .center, spacing: 4) {
-            TextField("type a message...", text: $messageText)
+                TextField("type a message...", text: $messageText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 14, design: .monospaced))
                 .foregroundColor(textColor)
                 .focused($isTextFieldFocused)
+                .submitLabel(.send)
                 .padding(.leading, 12)
                 // iOS keyboard autocomplete and capitalization enabled by default
                 .onChange(of: messageText) { newValue in
