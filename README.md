@@ -86,3 +86,20 @@ For detailed protocol documentation, see the [Technical Whitepaper](WHITEPAPER.m
 
 Want to try this on macos: `just run` will set it up and run from source. 
 Run `just clean` afterwards to restore things to original state for mobile app building and development.
+
+## Localization
+
+- Supported locales: English (Base), Spanish (`es`), Simplified Chinese (`zh-Hans`), Arabic (`ar`), French (`fr`).
+- UI strings live in a String Catalog: `bitchat/Localization/Localizable.xcstrings`.
+- System permission texts (e.g., Bluetooth) live in `InfoPlist.strings` per locale under `bitchat/Localization/<locale>.lproj/`.
+- Key naming convention uses namespaces: `nav.*`, `settings.*`, `cmd.*`, `errors.*`, `toast.*`, `accessibility.*`, `placeholder.*`.
+
+Add a new language
+- Add translations to `Localizable.xcstrings` via Xcode (recommended) or by editing JSON.
+- Create `bitchat/Localization/<locale>.lproj/InfoPlist.strings` (copy Base keys) for permission prompts.
+- Launch the app in Simulator with language overrides to test:
+  - `-AppleLanguages (es) -AppleLocale es_ES`
+
+Notes
+- Command tokens (`/msg`, `/w`, etc.) remain canonical and are not localized. Only titles/help text are.
+- RTL (Arabic) is supported; UI uses SwiftUI’s directionality where possible.
