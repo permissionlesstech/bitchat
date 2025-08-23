@@ -26,6 +26,7 @@ struct GeohashPeopleList: View {
                 }()
                 let ordered = viewModel.visibleGeohashPeople()
                 let firstID = ordered.first?.id
+                LazyVStack(alignment: .leading, spacing: 0) {
                 ForEach(ordered) { person in
                     HStack(spacing: 4) {
                         let assignedColor = viewModel.colorForNostrPubkey(person.id, isDark: colorScheme == .dark)
@@ -97,6 +98,7 @@ struct GeohashPeopleList: View {
                             }
                         }
                     }
+                }
                 }
             }
         }

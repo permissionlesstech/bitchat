@@ -28,78 +28,80 @@ struct MeshPeerList: View {
                 }
                 let peers = mapped
 
-                ForEach(0..<peers.count, id: \.self) { idx in
-                    let item = peers[idx]
-                    let peer = item.peer
-                    let isMe = item.isMe
-                    let hasUnread = item.hasUnread
-                    HStack(spacing: 4) {
-                        if isMe {
-                            Image(systemName: "person.fill").font(.system(size: 10)).foregroundColor(textColor)
-                        } else if hasUnread {
-                            Image(systemName: "envelope.fill").font(.system(size: 12)).foregroundColor(.orange)
-                        } else {
-                            switch peer.connectionState {
-                            case .bluetoothConnected:
-                                Image(systemName: "dot.radiowaves.left.and.right").font(.system(size: 10)).foregroundColor(textColor)
-                            case .nostrAvailable:
-                                Image(systemName: "globe").font(.system(size: 10)).foregroundColor(.purple)
-                            case .offline:
-                                if peer.favoriteStatus?.isFavorite ?? false {
-                                    Image(systemName: "moon.fill").font(.system(size: 10)).foregroundColor(.gray)
-                                } else {
-                                    Image(systemName: "person").font(.system(size: 10)).foregroundColor(.gray)
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(0..<peers.count, id: \.self) { idx in
+                        let item = peers[idx]
+                        let peer = item.peer
+                        let isMe = item.isMe
+                        let hasUnread = item.hasUnread
+                        HStack(spacing: 4) {
+                            if isMe {
+                                Image(systemName: "person.fill").font(.system(size: 10)).foregroundColor(textColor)
+                            } else if hasUnread {
+                                Image(systemName: "envelope.fill").font(.system(size: 12)).foregroundColor(.orange)
+                            } else {
+                                switch peer.connectionState {
+                                case .bluetoothConnected:
+                                    Image(systemName: "dot.radiowaves.left.and.right").font(.system(size: 10)).foregroundColor(textColor)
+                                case .nostrAvailable:
+                                    Image(systemName: "globe").font(.system(size: 10)).foregroundColor(.purple)
+                                case .offline:
+                                    if peer.favoriteStatus?.isFavorite ?? false {
+                                        Image(systemName: "moon.fill").font(.system(size: 10)).foregroundColor(.gray)
+                                    } else {
+                                        Image(systemName: "person").font(.system(size: 10)).foregroundColor(.gray)
+                                    }
                                 }
                             }
-                        }
 
-                        let displayName = isMe ? viewModel.nickname : peer.nickname
-                        let (base, suffix) = splitSuffix(from: displayName)
-                        let assigned = viewModel.colorForMeshPeer(id: peer.id, isDark: colorScheme == .dark)
-                        let baseColor = isMe ? Color.orange : assigned
-                        HStack(spacing: 0) {
-                            Text(base)
-                                .font(.system(size: 14, design: .monospaced))
-                                .foregroundColor(baseColor)
-                            if !suffix.isEmpty {
-                                let suffixColor = isMe ? Color.orange.opacity(0.6) : baseColor.opacity(0.6)
-                                Text(suffix)
+                            let displayName = isMe ? viewModel.nickname : peer.nickname
+                            let (base, suffix) = splitSuffix(from: displayName)
+                            let assigned = viewModel.colorForMeshPeer(id: peer.id, isDark: colorScheme == .dark)
+                            let baseColor = isMe ? Color.orange : assigned
+                            HStack(spacing: 0) {
+                                Text(base)
                                     .font(.system(size: 14, design: .monospaced))
-                                    .foregroundColor(suffixColor)
+                                    .foregroundColor(baseColor)
+                                if !suffix.isEmpty {
+                                    let suffixColor = isMe ? Color.orange.opacity(0.6) : baseColor.opacity(0.6)
+                                    Text(suffix)
+                                        .font(.system(size: 14, design: .monospaced))
+                                        .foregroundColor(suffixColor)
+                                }
+                            }
+
+                            // Blocked indicator
+                            if !isMe, viewModel.isPeerBlocked(peer.id) {
+                                Image(systemName: "nosign")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.red)
+                                    .help("Blocked")
+                            }
+
+                            if let icon = item.enc.icon, !isMe {
+                                Image(systemName: icon)
+                                    .font(.system(size: 10))
+                                    .foregroundColor(item.enc == .noiseVerified || item.enc == .noiseSecured ? textColor : (item.enc == .noiseHandshaking ? .orange : .red))
+                            }
+
+                            Spacer()
+
+                            if !isMe {
+                                Button(action: { onToggleFavorite(peer.id) }) {
+                                    Image(systemName: (peer.favoriteStatus?.isFavorite ?? false) ? "star.fill" : "star")
+                                        .font(.system(size: 12))
+                                        .foregroundColor((peer.favoriteStatus?.isFavorite ?? false) ? .yellow : secondaryTextColor)
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
-
-                        // Blocked indicator
-                        if !isMe, viewModel.isPeerBlocked(peer.id) {
-                            Image(systemName: "nosign")
-                                .font(.system(size: 10))
-                                .foregroundColor(.red)
-                                .help("Blocked")
-                        }
-
-                        if let icon = item.enc.icon, !isMe {
-                            Image(systemName: icon)
-                                .font(.system(size: 10))
-                                .foregroundColor(item.enc == .noiseVerified || item.enc == .noiseSecured ? textColor : (item.enc == .noiseHandshaking ? .orange : .red))
-                        }
-
-                        Spacer()
-
-                        if !isMe {
-                            Button(action: { onToggleFavorite(peer.id) }) {
-                                Image(systemName: (peer.favoriteStatus?.isFavorite ?? false) ? "star.fill" : "star")
-                                    .font(.system(size: 12))
-                                    .foregroundColor((peer.favoriteStatus?.isFavorite ?? false) ? .yellow : secondaryTextColor)
-                            }
-                            .buttonStyle(.plain)
-                        }
+                        .padding(.horizontal)
+                        .padding(.vertical, 4)
+                        .padding(.top, idx == 0 ? 10 : 0)
+                        .contentShape(Rectangle())
+                        .onTapGesture { if !isMe { onTapPeer(peer.id) } }
+                        .onTapGesture(count: 2) { if !isMe { onShowFingerprint(peer.id) } }
                     }
-                    .padding(.horizontal)
-                    .padding(.vertical, 4)
-                    .padding(.top, idx == 0 ? 10 : 0)
-                    .contentShape(Rectangle())
-                    .onTapGesture { if !isMe { onTapPeer(peer.id) } }
-                    .onTapGesture(count: 2) { if !isMe { onShowFingerprint(peer.id) } }
                 }
             }
         }
