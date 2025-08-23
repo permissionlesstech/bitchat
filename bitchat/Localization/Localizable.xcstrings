@@ -127,6 +127,186 @@
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "BLOQUER" } }
       }
     },
+    "cmd.block.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Block" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Bloquear" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "屏蔽" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "حظر" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Bloquer" } }
+      }
+    },
+    "cmd.block.help" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Block or list blocked peers. Usage: /block [nickname]" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Bloquea o lista usuarios bloqueados. Uso: /block [apodo]" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "屏蔽或列出已屏蔽用户。用法：/block [昵称]" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "حظر أو عرض المحظورين. الاستخدام: /block [اسم]" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Bloquer ou lister les bloqués. Utilisation : /block [pseudo]" } }
+      }
+    },
+    "cmd.clear.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Clear" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Limpiar" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "清除" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "مسح" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Effacer" } }
+      }
+    },
+    "cmd.clear.help" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Clear chat messages. Usage: /clear" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Borra los mensajes. Uso: /clear" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "清除聊天消息。用法：/clear" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "مسح الرسائل. الاستخدام: /clear" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Efface les messages. Utilisation : /clear" } }
+      }
+    },
+    "cmd.fav.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Favorite" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Favori" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "收藏" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "مفضلة" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Favori" } }
+      }
+    },
+    "cmd.fav.help" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Add to favorites. Usage: /fav <nickname>" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Añadir a favoritos. Uso: /fav <apodo>" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "加入收藏。用法：/fav <昵称>" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "إضافة إلى المفضلة. الاستخدام: /fav <اسم>" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Ajouter aux favoris. Utilisation : /fav <pseudo>" } }
+      }
+    },
+    "cmd.help.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Help" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Ayuda" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "帮助" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "مساعدة" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Aide" } }
+      }
+    },
+    "cmd.help.help" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Show this help. Usage: /help" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Mostrar esta ayuda. Uso: /help" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "显示此帮助。用法：/help" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "عرض هذه المساعدة. الاستخدام: /help" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Afficher cette aide. Utilisation : /help" } }
+      }
+    },
+    "cmd.hug.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Hug" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Abrazo" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "拥抱" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "عناق" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Câlin" } }
+      }
+    },
+    "cmd.hug.help" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Send someone a warm hug. Usage: /hug <nickname>" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Envía un abrazo. Uso: /hug <apodo>" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "发送拥抱。用法：/hug <昵称>" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "أرسل عناقًا. الاستخدام: /hug <اسم>" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Envoyer un câlin. Utilisation : /hug <pseudo>" } }
+      }
+    },
+    "cmd.msg.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Private Message" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Mensaje privado" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "私信" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "رسالة خاصة" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Message privé" } }
+      }
+    },
+    "cmd.msg.help" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Send private message. Usage: /m <nickname> [message]" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Enviar mensaje privado. Uso: /m <apodo> [mensaje]" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "发送私信。用法：/m <昵称> [消息]" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "إرسال رسالة خاصة. الاستخدام: /m <اسم> [رسالة]" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Envoyer un message privé. Utilisation : /m <pseudo> [message]" } }
+      }
+    },
+    "cmd.slap.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Slap" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Bofetada" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "拍" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "صفعة" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Gifle" } }
+      }
+    },
+    "cmd.slap.help" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Slap someone with a trout. Usage: /slap <nickname>" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Abofetea con una trucha. Uso: /slap <apodo>" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "用鳟鱼拍一下。用法：/slap <昵称>" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "صفع سمكة تراوت. الاستخدام: /slap <اسم>" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Giffler avec une truite. Utilisation : /slap <pseudo>" } }
+      }
+    },
+    "cmd.unblock.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Unblock" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Desbloquear" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "取消屏蔽" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "إلغاء الحظر" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Débloquer" } }
+      }
+    },
+    "cmd.unblock.help" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Unblock a peer. Usage: /unblock <nickname>" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Desbloquear un usuario. Uso: /unblock <apodo>" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "取消屏蔽用户。用法：/unblock <昵称>" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "إلغاء حظر مستخدم. الاستخدام: /unblock <اسم>" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Débloquer un pair. Utilisation : /unblock <pseudo>" } }
+      }
+    },
+    "cmd.unfav.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Unfavorite" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Quitar de favoritos" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "取消收藏" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "إزالة من المفضلة" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Retirer des favoris" } }
+      }
+    },
+    "cmd.unfav.help" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Remove from favorites. Usage: /unfav <nickname>" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Quitar de favoritos. Uso: /unfav <apodo>" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "从收藏移除。用法：/unfav <昵称>" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "إزالة من المفضلة. الاستخدام: /unfav <اسم>" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Retirer des favoris. Utilisation : /unfav <pseudo>" } }
+      }
+    },
+    "cmd.who.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Who" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Quién" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "在线用户" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "من" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Qui" } }
+      }
+    },
+    "cmd.who.help" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "See who's online. Usage: /w" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Ver quién está en línea. Uso: /w" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "查看谁在线。用法：/w" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "عرض المتصلين. الاستخدام: /w" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Voir qui est en ligne. Utilisation : /w" } }
+      }
+    }
     "placeholder.nickname" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "nickname" } },

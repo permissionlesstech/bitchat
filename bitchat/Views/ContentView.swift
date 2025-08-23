@@ -744,27 +744,12 @@ struct ContentView: View {
             // Command suggestions
             if showCommandSuggestions && !commandSuggestions.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
-                    // Define commands with aliases and syntax
-                    let commandInfo: [(commands: [String], syntax: String?, description: String)] = [
-                        (["/block"], "[nickname]", "block or list blocked peers"),
-                        (["/clear"], nil, "clear chat messages"),
-                        (["/fav"], "<nickname>", "add to favorites"),
-                        (["/help"], nil, "show this help"),
-                        (["/hug"], "<nickname>", "send someone a warm hug"),
-                        (["/m", "/msg"], "<nickname> [message]", "send private message"),
-                        (["/slap"], "<nickname>", "slap someone with a trout"),
-                        (["/unblock"], "<nickname>", "unblock a peer"),
-                        (["/unfav"], "<nickname>", "remove from favorites"),
-                        (["/w"], nil, "see who's online")
-                    ]
-                    
-                    // Build the display
-                    let allCommands = commandInfo
+                    let allCommands = CommandRegistry.all
                     
                     // Show matching commands
                     ForEach(commandSuggestions, id: \.self) { command in
                         // Find the command info for this suggestion
-                        if let info = allCommands.first(where: { $0.commands.contains(command) }) {
+                        if let meta = allCommands.first(where: { $0.tokens.contains(command) }) {
                             Button(action: {
                                 // Replace current text with selected command
                                 messageText = command + " "
@@ -772,23 +757,16 @@ struct ContentView: View {
                                 commandSuggestions = []
                             }) {
                                 HStack {
-                                    // Show all aliases together
-                                    Text(info.commands.joined(separator: ", "))
+                                    // Show all tokens together (not localized)
+                                    Text(meta.tokens.joined(separator: ", "))
                                         .font(.system(size: 11, design: .monospaced))
                                         .foregroundColor(textColor)
                                         .fontWeight(.medium)
                                     
-                                    // Show syntax if any
-                                    if let syntax = info.syntax {
-                                        Text(syntax)
-                                            .font(.system(size: 10, design: .monospaced))
-                                            .foregroundColor(secondaryTextColor.opacity(0.8))
-                                    }
-                                    
                                     Spacer()
                                     
-                                    // Show description
-                                    Text(info.description)
+                                    // Show localized description/help
+                                    Text(LocalizedStringKey(meta.helpKey))
                                         .font(.system(size: 10, design: .monospaced))
                                         .foregroundColor(secondaryTextColor)
                                 }
@@ -831,40 +809,10 @@ struct ContentView: View {
                     // Check for command autocomplete (instant, no debounce needed)
                     if newValue.hasPrefix("/") && newValue.count >= 1 {
                         // Build context-aware command list
-                        let commandDescriptions = [
-                            ("/block", "block or list blocked peers"),
-                            ("/clear", "clear chat messages"),
-                            ("/fav", "add to favorites"),
-                            ("/help", "show this help"),
-                            ("/hug", "send someone a warm hug"),
-                            ("/m", "send private message"),
-                            ("/slap", "slap someone with a trout"),
-                            ("/unblock", "unblock a peer"),
-                            ("/unfav", "remove from favorites"),
-                            ("/w", "see who's online")
-                        ]
-                        
                         let input = newValue.lowercased()
-                        
-                        // Map of aliases to primary commands
-                        let aliases: [String: String] = [
-                            "/join": "/j",
-                            "/msg": "/m"
-                        ]
-                        
-                        // Filter commands, but convert aliases to primary
-                        commandSuggestions = commandDescriptions
-                            .filter { $0.0.starts(with: input) }
-                            .map { $0.0 }
-                        
-                        // Also check if input matches an alias
-                        for (alias, primary) in aliases {
-                            if alias.starts(with: input) && !commandSuggestions.contains(primary) {
-                                if commandDescriptions.contains(where: { $0.0 == primary }) {
-                                    commandSuggestions.append(primary)
-                                }
-                            }
-                        }
+                        // Gather all tokens from registry
+                        let allTokens = CommandRegistry.all.flatMap { $0.tokens }
+                        commandSuggestions = Array(Set(allTokens.filter { $0.starts(with: input) })).sorted()
                         
                         // Remove duplicates and sort
                         commandSuggestions = Array(Set(commandSuggestions)).sorted()

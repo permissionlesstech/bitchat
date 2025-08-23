@@ -45,6 +45,19 @@ final class LocalizationTests: XCTestCase {
         XCTAssertEqual(valueViaHelper, "Base Fallback")
     }
 
+    func testCommandMetaLocalizationResolves() {
+        let locales = ["Base", "es", "zh-Hans", "ar", "fr"]
+        for locale in locales {
+            let b = bundle(for: locale)
+            for meta in CommandRegistry.all {
+                let title = NSLocalizedString(meta.titleKey, tableName: nil, bundle: b, value: "", comment: "")
+                let help = NSLocalizedString(meta.helpKey, tableName: nil, bundle: b, value: "", comment: "")
+                XCTAssertFalse(title.isEmpty, "Missing title for \(meta.id) in locale: \(locale)")
+                XCTAssertFalse(help.isEmpty, "Missing help for \(meta.id) in locale: \(locale)")
+            }
+        }
+    }
+
     func testInfoPlistStringsResolve() {
         let esBundle = bundle(for: "es")
         let esPerm = NSLocalizedString("NSBluetoothAlwaysUsageDescription", tableName: "InfoPlist", bundle: esBundle, value: "", comment: "")
