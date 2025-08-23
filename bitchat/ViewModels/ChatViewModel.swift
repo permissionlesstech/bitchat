@@ -3652,7 +3652,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
 
     @MainActor
     func colorForPeerSeed(_ seed: String, isDark: Bool) -> Color {
-        if let cached = peerColorCache[seed] { return cached }
+        let cacheKey = seed + (isDark ? "|dark" : "|light")
+        if let cached = peerColorCache[cacheKey] { return cached }
         var hue = Double(djb2(seed) % 360) / 360.0
         // Avoid orange (~30°) reserved for self
         let orange = 30.0 / 360.0
@@ -3660,7 +3661,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         let saturation: Double = isDark ? 0.80 : 0.70
         let brightness: Double = isDark ? 0.75 : 0.45
         let c = Color(hue: hue, saturation: saturation, brightness: brightness)
-        peerColorCache[seed] = c
+        peerColorCache[cacheKey] = c
         return c
     }
 
