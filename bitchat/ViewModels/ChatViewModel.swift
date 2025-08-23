@@ -618,7 +618,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 originalSender: nil,
                 isPrivate: false,
                 recipientNickname: nil,
-                senderPeerID: "nostr:\(event.pubkey.prefix(8))",
+                senderPeerID: "nostr:\(event.pubkey.lowercased())",
                 mentions: mentions.isEmpty ? nil : mentions
             )
             Task { @MainActor in
@@ -1072,7 +1072,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                let myGeoIdentity = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
                 let suffix = String(myGeoIdentity.publicKeyHex.suffix(4))
                 displaySender = nickname + "#" + suffix
-                localSenderPeerID = "nostr:\(myGeoIdentity.publicKeyHex.prefix(8))"
+                localSenderPeerID = "nostr:\(myGeoIdentity.publicKeyHex.lowercased())"
             }
             #endif
 
@@ -1809,7 +1809,14 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
 
     @MainActor
     func fullNostrHex(forSenderPeerID senderID: String) -> String? {
-        return nostrKeyMapping[senderID]
+        // Support both mapped short keys and direct full keys
+        if let mapped = nostrKeyMapping[senderID] { return mapped }
+        if senderID.hasPrefix("nostr:") {
+            let rest = String(senderID.dropFirst("nostr:".count))
+            let hex = rest.lowercased()
+            if hex.count == 64, hex.allSatisfy({ $0.isHexDigit }) { return hex }
+        }
+        return nil
     }
 
     @MainActor
