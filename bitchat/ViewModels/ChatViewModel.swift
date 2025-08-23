@@ -2865,8 +2865,16 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             // Process content with hashtags and mentions
             let content = message.content
             
-            // For extremely long content, render as plain text to avoid heavy regex/layout work
-            if content.count > 4000 || content.hasVeryLongToken(threshold: 1024) {
+            // For extremely long content, render as plain text to avoid heavy regex/layout work,
+            // unless the content includes Cashu tokens we want to chip-render below
+            let containsCashuEarly: Bool = {
+                let pattern = "\\bcashu[AB][A-Za-z0-9._-]{40,}\\b"
+                if let rx = try? NSRegularExpression(pattern: pattern, options: []) {
+                    return rx.numberOfMatches(in: content, options: [], range: NSRange(location: 0, length: content.count)) > 0
+                }
+                return false
+            }()
+            if (content.count > 4000 || content.hasVeryLongToken(threshold: 1024)) && !containsCashuEarly {
                 var plainStyle = AttributeContainer()
                 plainStyle.foregroundColor = baseColor
                 plainStyle.font = isSelf
@@ -2877,8 +2885,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             let hashtagPattern = "#([a-zA-Z0-9_]+)"
             // Allow optional '#abcd' suffix in mentions
             let mentionPattern = "@([\\p{L}0-9_]+(?:#[a-fA-F0-9]{4})?)"
-            // Cashu token detector: cashuA/cashuB + long base64url
-            let cashuPattern = "\\bcashu[AB][A-Za-z0-9_-]{60,}\\b"
+            // Cashu token detector: cashuA/cashuB + long base64url; allow '.' and shorter variants
+            let cashuPattern = "\\bcashu[AB][A-Za-z0-9._-]{40,}\\b"
             // Lightning invoices and links
             let bolt11Pattern = "(?i)\\bln(bc|tb|bcrt)[0-9][a-z0-9]{50,}\\b"
             let lnurlPattern = "(?i)\\blnurl1[a-z0-9]{20,}\\b"

@@ -21,9 +21,9 @@ extension String {
         return current >= threshold
     }
 
-    // Extract up to `max` Cashu tokens (cashuA/cashuB)
+    // Extract up to `max` Cashu tokens (cashuA/cashuB). Allow dot '.' and shorter lengths.
     func extractCashuTokens(max: Int = 3) -> [String] {
-        let pattern = "\\bcashu[AB][A-Za-z0-9_-]{60,}\\b"
+        let pattern = "\\bcashu[AB][A-Za-z0-9._-]{40,}\\b"
         guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else { return [] }
         let ns = self as NSString
         let range = NSRange(location: 0, length: ns.length)
@@ -70,4 +70,3 @@ extension String {
         return results
     }
 }
-
