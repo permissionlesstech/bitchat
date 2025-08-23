@@ -275,10 +275,8 @@ struct ContentView: View {
                     if let peer = privatePeer { return viewModel.getPrivateChatMessages(for: peer) }
                     return viewModel.messages
                 }()
-                let currentWindowCount: Int = {
-                    if let peer = privatePeer { return windowCountPrivate[peer] ?? 300 }
-                    return windowCountPublic
-                }()
+                // Show the full set for clarity (avoid truncation issues)
+                let currentWindowCount: Int = localMessages.count
                 let windowed: ArraySlice<BitchatMessage> = localMessages.suffix(currentWindowCount)
                 let idPrefix: String = {
                     if let peer = privatePeer { return "dm:\(peer)" }

@@ -167,9 +167,10 @@ class CommandProcessor {
                 }
             }
 
-            // Geohash blocked names (prefer visible display names; fallback to #suffix)
+            // Geohash blocked names (prefer visible display names on iOS; fallback to #suffix elsewhere)
             let geoBlocked = Array(SecureIdentityStateManager.shared.getBlockedNostrPubkeys())
             var geoNames: [String] = []
+            #if os(iOS)
             if let vm = chatViewModel {
                 let visible = vm.visibleGeohashPeople()
                 let visibleIndex = Dictionary(uniqueKeysWithValues: visible.map { ($0.id.lowercased(), $0.displayName) })
@@ -181,7 +182,18 @@ class CommandProcessor {
                         geoNames.append("anon#\(suffix)")
                     }
                 }
+            } else {
+                for pk in geoBlocked {
+                    let suffix = String(pk.suffix(4))
+                    geoNames.append("anon#\(suffix)")
+                }
             }
+            #else
+            for pk in geoBlocked {
+                let suffix = String(pk.suffix(4))
+                geoNames.append("anon#\(suffix)")
+            }
+            #endif
 
             let meshList = blockedNicknames.isEmpty ? "none" : blockedNicknames.sorted().joined(separator: ", ")
             let geoList = geoNames.isEmpty ? "none" : geoNames.sorted().joined(separator: ", ")

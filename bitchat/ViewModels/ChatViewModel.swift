@@ -5065,11 +5065,16 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     // MARK: - Geohash Nickname Resolution (for /block in geohash)
     @MainActor
     func nostrPubkeyForDisplayName(_ name: String) -> String? {
+        #if os(iOS)
         // Look up current visible geohash participants for an exact displayName match
         for p in visibleGeohashPeople() {
             if p.displayName == name { return p.id }
         }
         return nil
+        #else
+        // Not available on macOS (no geohash people list)
+        return nil
+        #endif
     }
     
     /// Process action messages (hugs, slaps) into system messages
@@ -5417,23 +5422,10 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             return
         }
 
-        if finalMessage.sender != "system" {
-            // Check for duplicates
-            let messageExists = messages.contains { existingMsg in
-                if existingMsg.id == finalMessage.id { return true }
-                if existingMsg.content == finalMessage.content && existingMsg.sender == finalMessage.sender {
-                    let timeDiff = abs(existingMsg.timestamp.timeIntervalSince(finalMessage.timestamp))
-                    return timeDiff < 1.0
-                }
-                return false
-            }
-            if !messageExists && !finalMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                addMessage(finalMessage)
-            }
-        } else {
-            if !finalMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                addMessage(finalMessage)
-            }
+        if !finalMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            // Rely on addMessage's ID-based duplicate check only to avoid dropping
+            // distinct messages that happen to have the same text close in time.
+            addMessage(finalMessage)
         }
     }
     
