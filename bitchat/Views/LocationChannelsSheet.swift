@@ -271,8 +271,8 @@ struct LocationChannelsSheet: View {
     private func meshTitleWithCount() -> String {
         // Count currently connected mesh peers (excluding self)
         let meshCount = meshCount()
-        let noun = meshCount == 1 ? "person" : "people"
-        return "mesh [\(meshCount) \(noun)]"
+        let people = String(format: String(localized: "accessibility.people_count"), meshCount)
+        return "mesh [\(people)]"
     }
 
     private func meshCount() -> Int {
@@ -286,8 +286,8 @@ struct LocationChannelsSheet: View {
     private func geohashTitleWithCount(for channel: GeohashChannel) -> String {
         // Use ViewModel's 5-minute activity counts; may be 0 for non-selected channels
         let count = viewModel.geohashParticipantCount(for: channel.geohash)
-        let noun = count == 1 ? "person" : "people"
-        return "\(channel.level.displayName.lowercased()) [\(count) \(noun)]"
+        let people = String(format: String(localized: "accessibility.people_count"), count)
+        return "\(channel.level.displayName.lowercased()) [\(people)]"
     }
 
     private func validateGeohash(_ s: String) -> Bool {

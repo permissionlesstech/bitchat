@@ -381,7 +381,7 @@ struct ContentView: View {
                                                 let link = lightningLinks[i]
                                                 PaymentChipView(
                                                     emoji: "⚡",
-                                                    label: "pay via lightning",
+                                                    label: String(localized: "payment.lightning"),
                                                     colorScheme: colorScheme
                                                 ) {
                                                     #if os(iOS)
@@ -397,7 +397,7 @@ struct ContentView: View {
                                                 let urlStr = "cashu:\(enc)"
                                                 PaymentChipView(
                                                     emoji: "🥜",
-                                                    label: "pay via cashu",
+                                                    label: String(localized: "payment.cashu"),
                                                     colorScheme: colorScheme
                                                 ) {
                                                     #if os(iOS)
@@ -470,7 +470,7 @@ struct ContentView: View {
                             }
                         }
                         .contextMenu {
-                            Button("Copy message") {
+                            Button(String(localized: "actions.copy_message")) {
                                 #if os(iOS)
                                 UIPasteboard.general.string = message.content
                                 #else
@@ -1263,7 +1263,7 @@ struct ContentView: View {
                                     Image(systemName: "globe")
                                         .font(.system(size: 14))
                                         .foregroundColor(.purple)
-                                        .accessibilityLabel("Available via Nostr")
+                                        .accessibilityLabel(String(localized: "accessibility.available_nostr"))
                                 case .offline:
                                     // Should not happen for PM header, but handle gracefully
                                     EmptyView()
@@ -1273,13 +1273,13 @@ struct ContentView: View {
                                 Image(systemName: "globe")
                                     .font(.system(size: 14))
                                     .foregroundColor(.purple)
-                                    .accessibilityLabel("Available via Nostr")
+                                    .accessibilityLabel(String(localized: "accessibility.available_nostr"))
                             } else if viewModel.meshService.isPeerConnected(headerPeerID) || viewModel.connectedPeers.contains(headerPeerID) {
                                 // Fallback: if peer lookup is missing but mesh reports connected, show radio
                                 Image(systemName: "dot.radiowaves.left.and.right")
                                     .font(.system(size: 14))
                                     .foregroundColor(textColor)
-                                    .accessibilityLabel("Connected via mesh")
+                                    .accessibilityLabel(String(localized: "accessibility.connected_mesh"))
                             }
                             
                             Text("\(privatePeerNick)")
@@ -1293,12 +1293,19 @@ struct ContentView: View {
                                         .foregroundColor(encryptionStatus == .noiseVerified ? textColor : 
                                                        encryptionStatus == .noiseSecured ? textColor :
                                                        Color.red)
-                                        .accessibilityLabel("Encryption status: \(encryptionStatus == .noiseVerified ? "verified" : encryptionStatus == .noiseSecured ? "secured" : "not encrypted")")
+                                        .accessibilityLabel(
+                                            String(
+                                                format: String(localized: "accessibility.encryption_status"),
+                                                encryptionStatus == .noiseVerified ? String(localized: "fp.status.verified") :
+                                                encryptionStatus == .noiseSecured ? String(localized: "fp.status.secured") :
+                                                String(localized: "fp.status.unencrypted")
+                                            )
+                                        )
                                 }
                             }
                         }
-                        .accessibilityLabel("Private chat with \(privatePeerNick)")
-                        .accessibilityHint("Tap to view encryption fingerprint")
+                        .accessibilityLabel(String(format: String(localized: "accessibility.private_chat_with"), privatePeerNick))
+                        .accessibilityHint(String(localized: "accessibility.view_fingerprint_hint"))
                     }
                     .buttonStyle(.plain)
                     
@@ -1317,7 +1324,7 @@ struct ContentView: View {
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("Back to main chat")
+                        .accessibilityLabel(String(localized: "accessibility.back_to_main"))
                         
                         Spacer()
                         
@@ -1331,8 +1338,8 @@ struct ContentView: View {
                                     .foregroundColor(viewModel.isFavorite(peerID: headerPeerID) ? Color.yellow : textColor)
                             }
                             .buttonStyle(.plain)
-                            .accessibilityLabel(viewModel.isFavorite(peerID: privatePeerID) ? "Remove from favorites" : "Add to favorites")
-                            .accessibilityHint("Double tap to toggle favorite status")
+                            .accessibilityLabel(viewModel.isFavorite(peerID: privatePeerID) ? String(localized: "accessibility.remove_favorite") : String(localized: "accessibility.add_favorite"))
+                            .accessibilityHint(String(localized: "accessibility.toggle_favorite_hint"))
                         }
                     }
                 }

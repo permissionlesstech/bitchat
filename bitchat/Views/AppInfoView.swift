@@ -62,7 +62,7 @@ struct AppInfoView: View {
             // Custom header for macOS
             HStack {
                 Spacer()
-                Button("DONE") {
+                Button(String(localized: "common.done")) {
                     dismiss()
                 }
                 .buttonStyle(.plain)
@@ -86,7 +86,7 @@ struct AppInfoView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("close") {
+                    Button(String(localized: "common.close")) {
                         dismiss()
                     }
                     .foregroundColor(textColor)
@@ -114,57 +114,62 @@ struct AppInfoView: View {
             
             // Features
             VStack(alignment: .leading, spacing: 16) {
-                SectionHeader(Strings.Features.title)
+                SectionHeader(String(localized: "appinfo.features.title"))
                 
                 FeatureRow(icon: Strings.Features.offlineComm.0, 
-                          title: Strings.Features.offlineComm.1,
-                          description: Strings.Features.offlineComm.2)
+                          title: String(localized: "appinfo.features.offline.title"),
+                          description: String(localized: "appinfo.features.offline.desc"))
                 
                 FeatureRow(icon: Strings.Features.encryption.0,
-                          title: Strings.Features.encryption.1,
-                          description: Strings.Features.encryption.2)
+                          title: String(localized: "appinfo.features.encryption.title"),
+                          description: String(localized: "appinfo.features.encryption.desc"))
                 
                 FeatureRow(icon: Strings.Features.extendedRange.0,
-                          title: Strings.Features.extendedRange.1,
-                          description: Strings.Features.extendedRange.2)
+                          title: String(localized: "appinfo.features.extended_range.title"),
+                          description: String(localized: "appinfo.features.extended_range.desc"))
                 
                 FeatureRow(icon: Strings.Features.favorites.0,
-                          title: Strings.Features.favorites.1,
-                          description: Strings.Features.favorites.2)
+                          title: String(localized: "appinfo.features.favorites.title"),
+                          description: String(localized: "appinfo.features.favorites.desc"))
                 
                 FeatureRow(icon: Strings.Features.geohash.0,
-                          title: Strings.Features.geohash.1,
-                          description: Strings.Features.geohash.2)
+                          title: String(localized: "appinfo.features.geohash.title"),
+                          description: String(localized: "appinfo.features.geohash.desc"))
                 
                 FeatureRow(icon: Strings.Features.mentions.0,
-                          title: Strings.Features.mentions.1,
-                          description: Strings.Features.mentions.2)
+                          title: String(localized: "appinfo.features.mentions.title"),
+                          description: String(localized: "appinfo.features.mentions.desc"))
             }
             
             // Privacy
             VStack(alignment: .leading, spacing: 16) {
-                SectionHeader(Strings.Privacy.title)
+                SectionHeader(String(localized: "appinfo.privacy.title"))
                 
                 FeatureRow(icon: Strings.Privacy.noTracking.0,
-                          title: Strings.Privacy.noTracking.1,
-                          description: Strings.Privacy.noTracking.2)
+                          title: String(localized: "appinfo.privacy.no_tracking.title"),
+                          description: String(localized: "appinfo.privacy.no_tracking.desc"))
                 
                 FeatureRow(icon: Strings.Privacy.ephemeral.0,
-                          title: Strings.Privacy.ephemeral.1,
-                          description: Strings.Privacy.ephemeral.2)
+                          title: String(localized: "appinfo.privacy.ephemeral.title"),
+                          description: String(localized: "appinfo.privacy.ephemeral.desc"))
                 
                 FeatureRow(icon: Strings.Privacy.panic.0,
-                          title: Strings.Privacy.panic.1,
-                          description: Strings.Privacy.panic.2)
+                          title: String(localized: "appinfo.privacy.panic.title"),
+                          description: String(localized: "appinfo.privacy.panic.desc"))
             }
             
             // How to Use
             VStack(alignment: .leading, spacing: 16) {
-                SectionHeader(Strings.HowToUse.title)
+                SectionHeader(String(localized: "appinfo.howto.title"))
                 
                 VStack(alignment: .leading, spacing: 8) {
-                    ForEach(Strings.HowToUse.instructions, id: \.self) { instruction in
-                        Text(instruction)
+                    Group {
+                        Text(String(localized: "appinfo.howto.bullet.nickname"))
+                        Text(String(localized: "appinfo.howto.bullet.mesh"))
+                        Text(String(localized: "appinfo.howto.bullet.sidebar"))
+                        Text(String(localized: "appinfo.howto.bullet.dm"))
+                        Text(String(localized: "appinfo.howto.bullet.clear"))
+                        Text(String(localized: "appinfo.howto.bullet.commands"))
                     }
                 }
                 .font(.system(size: 14, design: .monospaced))
@@ -173,10 +178,10 @@ struct AppInfoView: View {
             
             // Warning
             VStack(alignment: .leading, spacing: 6) {
-                SectionHeader(Strings.Warning.title)
+                SectionHeader(String(localized: "appinfo.warning.title"))
                     .foregroundColor(Color.red)
                 
-                Text(Strings.Warning.message)
+                Text(String(localized: "appinfo.warning.message"))
                     .font(.system(size: 14, design: .monospaced))
                     .foregroundColor(Color.red)
                     .fixedSize(horizontal: false, vertical: true)

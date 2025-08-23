@@ -12,7 +12,7 @@ struct MeshPeerList: View {
     var body: some View {
         Group {
             if viewModel.allPeers.isEmpty {
-                Text("nobody around...")
+                Text(LocalizedStringKey("people.none_around"))
                     .font(.system(size: 14, design: .monospaced))
                     .foregroundColor(secondaryTextColor)
                     .padding(.horizontal)
@@ -80,7 +80,7 @@ struct MeshPeerList: View {
                             Image(systemName: "nosign")
                                 .font(.system(size: 10))
                                 .foregroundColor(.red)
-                                .help("Blocked")
+                                .help(String(localized: "peer.blocked"))
                         }
 
                         if let icon = item.enc.icon, !isMe {
