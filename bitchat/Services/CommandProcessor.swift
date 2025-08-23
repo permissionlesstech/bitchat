@@ -85,7 +85,7 @@ class CommandProcessor {
     }
     
     private func handleWho() -> CommandResult {
-        #if os(iOS)
+        #if os(iOS) || os(macOS)
         if chatViewModel?.isInGeohashChannel == true {
             let people = chatViewModel?.visibleGeohashPeople() ?? []
             if people.isEmpty { return .success(message: "nobody around...") }
@@ -167,10 +167,10 @@ class CommandProcessor {
                 }
             }
 
-            // Geohash blocked names (prefer visible display names on iOS; fallback to #suffix elsewhere)
+            // Geohash blocked names (prefer visible display names when available; fallback to #suffix otherwise)
             let geoBlocked = Array(SecureIdentityStateManager.shared.getBlockedNostrPubkeys())
             var geoNames: [String] = []
-            #if os(iOS)
+            #if os(iOS) || os(macOS)
             if let vm = chatViewModel {
                 let visible = vm.visibleGeohashPeople()
                 let visibleIndex = Dictionary(uniqueKeysWithValues: visible.map { ($0.id.lowercased(), $0.displayName) })
@@ -187,11 +187,6 @@ class CommandProcessor {
                     let suffix = String(pk.suffix(4))
                     geoNames.append("anon#\(suffix)")
                 }
-            }
-            #else
-            for pk in geoBlocked {
-                let suffix = String(pk.suffix(4))
-                geoNames.append("anon#\(suffix)")
             }
             #endif
 

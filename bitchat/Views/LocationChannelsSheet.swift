@@ -2,6 +2,9 @@ import SwiftUI
 
 #if os(iOS)
 import UIKit
+#elseif os(macOS)
+import AppKit
+#endif
 struct LocationChannelsSheet: View {
     @Binding var isPresented: Bool
     @ObservedObject private var manager = LocationChannelManager.shared
@@ -11,6 +14,9 @@ struct LocationChannelsSheet: View {
     @State private var customError: String? = nil
 
     var body: some View {
+        #if os(macOS)
+        macOSBody
+        #else
         NavigationView {
             VStack(alignment: .leading, spacing: 12) {
                 Text("#location channels")
@@ -37,11 +43,7 @@ struct LocationChannelsSheet: View {
                             Text("location permission denied. enable in settings to use location channels.")
                                 .font(.system(size: 12, design: .monospaced))
                                 .foregroundColor(.secondary)
-                            Button("open settings") {
-                                if let url = URL(string: UIApplication.openSettingsURLString) {
-                                    UIApplication.shared.open(url)
-                                }
-                            }
+                            Button("open settings") { openLocationPrivacySettings() }
                             .buttonStyle(.plain)
                         }
                     case LocationChannelManager.PermissionState.authorized:
@@ -54,6 +56,7 @@ struct LocationChannelsSheet: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -63,14 +66,12 @@ struct LocationChannelsSheet: View {
             }
         }
         .presentationDetents([.large])
+        // Lifecycle hooks (iOS)
         .onAppear {
-            // Refresh channels when opening
             if manager.permissionState == LocationChannelManager.PermissionState.authorized {
                 manager.refreshChannels()
             }
-            // Begin periodic refresh while sheet is open
             manager.beginLiveRefresh()
-            // Begin multi-channel sampling for counts
             let ghs = manager.availableChannels.map { $0.geohash }
             viewModel.beginGeohashSampling(for: ghs)
         }
@@ -84,7 +85,86 @@ struct LocationChannelsSheet: View {
             }
         }
         .onChange(of: manager.availableChannels) { newValue in
-            // Keep sampling list in sync with available channels as they refresh live
+            let ghs = newValue.map { $0.geohash }
+            viewModel.beginGeohashSampling(for: ghs)
+        }
+        #endif
+    }
+
+    // MARK: - macOS Body
+    @ViewBuilder
+    private var macOSBody: some View {
+        VStack(spacing: 0) {
+            // Top bar with title + close (upper right)
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("#location channels").font(.system(size: 18, design: .monospaced))
+                    Text("chat with people near you using geohash channels. only a coarse geohash is shared, never exact gps.")
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+                Button("close") { isPresented = false }
+                    .font(.system(size: 14, design: .monospaced))
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            Divider()
+            // Permissions / actions (macOS)
+            VStack(alignment: .leading, spacing: 12) {
+                Group {
+                    switch manager.permissionState {
+                    case LocationChannelManager.PermissionState.notDetermined:
+                        Button(action: { manager.enableLocationChannels() }) {
+                            Text("get location and my geohashes")
+                                .font(.system(size: 12, design: .monospaced))
+                                .foregroundColor(standardGreen)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 6)
+                                .background(standardGreen.opacity(0.12))
+                                .cornerRadius(6)
+                        }
+                        .buttonStyle(.plain)
+                    case LocationChannelManager.PermissionState.denied, LocationChannelManager.PermissionState.restricted:
+                        HStack(alignment: .center, spacing: 12) {
+                            Text("location permission denied. enable in settings to use location channels.")
+                                .font(.system(size: 12, design: .monospaced))
+                                .foregroundColor(.secondary)
+                            Button("open settings") { openLocationPrivacySettings() }
+                                .buttonStyle(.plain)
+                        }
+                    case LocationChannelManager.PermissionState.authorized:
+                        EmptyView()
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+
+            // Main content list fills the modal
+            channelList
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .frame(minWidth: 640, minHeight: 560)
+        // Lifecycle hooks (macOS)
+        .onAppear {
+            if manager.permissionState == LocationChannelManager.PermissionState.authorized {
+                manager.refreshChannels()
+            }
+            manager.beginLiveRefresh()
+            let ghs = manager.availableChannels.map { $0.geohash }
+            viewModel.beginGeohashSampling(for: ghs)
+        }
+        .onDisappear {
+            manager.endLiveRefresh()
+            viewModel.endGeohashSampling()
+        }
+        .onChange(of: manager.permissionState) { newValue in
+            if newValue == LocationChannelManager.PermissionState.authorized {
+                manager.refreshChannels()
+            }
+        }
+        .onChange(of: manager.availableChannels) { newValue in
             let ghs = newValue.map { $0.geohash }
             viewModel.beginGeohashSampling(for: ghs)
         }
@@ -128,10 +208,14 @@ struct LocationChannelsSheet: View {
                         .font(.system(size: 14, design: .monospaced))
                         .foregroundColor(.secondary)
                     TextField("geohash", text: $customGeohash)
+                        #if os(iOS)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled(true)
+                        #endif
                         .font(.system(size: 14, design: .monospaced))
+                        #if os(iOS)
                         .keyboardType(.asciiCapable)
+                        #endif
                         .onChange(of: customGeohash) { newValue in
                             // Allow only geohash base32 characters, strip '#', limit length
                             let allowed = Set("0123456789bcdefghjkmnpqrstuvwxyz")
@@ -182,11 +266,7 @@ struct LocationChannelsSheet: View {
 
             // Footer action inside the list
             if manager.permissionState == LocationChannelManager.PermissionState.authorized {
-                Button(action: {
-                    if let url = URL(string: UIApplication.openSettingsURLString) {
-                        UIApplication.shared.open(url)
-                    }
-                }) {
+                Button(action: { openLocationPrivacySettings() }) {
                     Text("remove location access")
                         .font(.system(size: 12, design: .monospaced))
                         .foregroundColor(Color(red: 0.75, green: 0.1, blue: 0.1))
@@ -200,6 +280,7 @@ struct LocationChannelsSheet: View {
             }
         }
         .listStyle(.plain)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func isSelected(_ channel: GeohashChannel) -> Bool {
@@ -343,7 +424,7 @@ extension LocationChannelsSheet {
         }()
 
         let usesMetric: Bool = {
-            if #available(iOS 16.0, *) {
+            if #available(iOS 16.0, macOS 13.0, *) {
                 return Locale.current.measurementSystem == .metric
             } else {
                 return Locale.current.usesMetricSystem
@@ -366,7 +447,7 @@ extension LocationChannelsSheet {
 
     private func bluetoothRangeString() -> String {
         let usesMetric: Bool = {
-            if #available(iOS 16.0, *) {
+            if #available(iOS 16.0, macOS 13.0, *) {
                 return Locale.current.measurementSystem == .metric
             } else {
                 return Locale.current.usesMetricSystem
@@ -390,4 +471,17 @@ extension LocationChannelsSheet {
     }
 }
 
-#endif
+// MARK: - Platform helpers
+extension LocationChannelsSheet {
+    private func openLocationPrivacySettings() {
+        #if os(iOS)
+        if let url = URL(string: UIApplication.openSettingsURLString) {
+            UIApplication.shared.open(url)
+        }
+        #elseif os(macOS)
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices") {
+            NSWorkspace.shared.open(url)
+        }
+        #endif
+    }
+}

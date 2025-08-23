@@ -1,6 +1,6 @@
 import Foundation
 
-#if os(iOS)
+#if canImport(CoreLocation)
 import CoreLocation
 import Combine
 
@@ -55,7 +55,7 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
             teleported = teleportedSet.contains(ch.geohash)
         }
         let status: CLAuthorizationStatus
-        if #available(iOS 14.0, *) {
+        if #available(iOS 14.0, macOS 11.0, *) {
             status = cl.authorizationStatus
         } else {
             status = CLLocationManager.authorizationStatus()
@@ -66,7 +66,7 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
     // MARK: - Public API
     func enableLocationChannels() {
         let status: CLAuthorizationStatus
-        if #available(iOS 14.0, *) {
+        if #available(iOS 14.0, macOS 11.0, *) {
             status = cl.authorizationStatus
         } else {
             status = CLLocationManager.authorizationStatus()
@@ -74,11 +74,18 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
         switch status {
         case .notDetermined:
             cl.requestWhenInUseAuthorization()
+            #if os(macOS)
+            // On macOS, starting updates can trigger the permission prompt
+            cl.startUpdatingLocation()
+            #endif
         case .restricted:
             Task { @MainActor in self.permissionState = .restricted }
         case .denied:
             Task { @MainActor in self.permissionState = .denied }
         case .authorizedAlways, .authorizedWhenInUse:
+            Task { @MainActor in self.permissionState = .authorized }
+            requestOneShotLocation()
+        case .authorized: // macOS
             Task { @MainActor in self.permissionState = .authorized }
             requestOneShotLocation()
         @unknown default:
@@ -141,9 +148,15 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
     // MARK: - CoreLocation
     private func requestOneShotLocation() {
         cl.requestLocation()
+        #if os(macOS)
+        // For macOS, ensure an active update to prompt if needed
+        if permissionState != .authorized {
+            cl.startUpdatingLocation()
+        }
+        #endif
     }
 
-    // iOS < 14
+    // iOS < 14 / macOS < 11
     func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
         updatePermissionState(from: status)
         if case .authorized = permissionState {
@@ -151,8 +164,8 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
         }
     }
 
-    // iOS 14+
-    @available(iOS 14.0, *)
+    // iOS 14+ / macOS 11+
+    @available(iOS 14.0, macOS 11.0, *)
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         updatePermissionState(from: manager.authorizationStatus)
         if case .authorized = permissionState {
@@ -165,6 +178,10 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
         lastLocation = loc
         computeChannels(from: loc.coordinate)
         reverseGeocodeIfNeeded(location: loc)
+        #if os(macOS)
+        // Stop continuous updates after a successful fetch
+        cl.stopUpdatingLocation()
+        #endif
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
@@ -181,6 +198,7 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
         case .restricted: newState = .restricted
         case .denied: newState = .denied
         case .authorizedAlways, .authorizedWhenInUse: newState = .authorized
+        case .authorized: newState = .authorized // macOS
         @unknown default: newState = .restricted
         }
         Task { @MainActor in self.permissionState = newState }

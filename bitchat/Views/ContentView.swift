@@ -33,9 +33,7 @@ struct ContentView: View {
     // MARK: - Properties
     
     @EnvironmentObject var viewModel: ChatViewModel
-    #if os(iOS)
     @ObservedObject private var locationManager = LocationChannelManager.shared
-    #endif
     @State private var messageText = ""
     @State private var textFieldSelection: NSRange? = nil
     @FocusState private var isTextFieldFocused: Bool
@@ -199,7 +197,6 @@ struct ContentView: View {
         ) {
             Button("direct message") {
                 if let peerID = selectedMessageSenderID {
-                    #if os(iOS)
                     if peerID.hasPrefix("nostr:") {
                         if let full = viewModel.fullNostrHex(forSenderPeerID: peerID) {
                             viewModel.startGeohashDM(withPubkeyHex: full)
@@ -207,9 +204,6 @@ struct ContentView: View {
                     } else {
                         viewModel.startPrivateChat(with: peerID)
                     }
-                    #else
-                    viewModel.startPrivateChat(with: peerID)
-                    #endif
                     withAnimation(.easeInOut(duration: 0.2)) {
                         showSidebar = false
                         sidebarDragOffset = 0
@@ -231,7 +225,6 @@ struct ContentView: View {
             
             Button("BLOCK", role: .destructive) {
                 // Prefer direct geohash block when we have a Nostr sender ID
-                #if os(iOS)
                 if let peerID = selectedMessageSenderID, peerID.hasPrefix("nostr:"),
                    let full = viewModel.fullNostrHex(forSenderPeerID: peerID),
                    let sender = selectedMessageSender {
@@ -239,9 +232,6 @@ struct ContentView: View {
                 } else if let sender = selectedMessageSender {
                     viewModel.sendMessage("/block \(sender)")
                 }
-                #else
-                if let sender = selectedMessageSender { viewModel.sendMessage("/block \(sender)") }
-                #endif
             }
             
             Button("cancel", role: .cancel) {}
@@ -280,14 +270,10 @@ struct ContentView: View {
                 let windowed: ArraySlice<BitchatMessage> = localMessages.suffix(currentWindowCount)
                 let idPrefix: String = {
                     if let peer = privatePeer { return "dm:\(peer)" }
-                    #if os(iOS)
                     switch locationManager.selectedChannel {
                     case .mesh: return "mesh"
                     case .location(let ch): return "geo:\(ch.geohash)"
                     }
-                    #else
-                    return "mesh"
-                    #endif
                 }()
                 let items: [(uiID: String, message: BitchatMessage)] = windowed.map { (uiID: "\(idPrefix)|\($0.id)", message: $0) }
                 
@@ -1025,55 +1011,40 @@ struct ContentView: View {
             // Rooms and People list
             ScrollView {
                 VStack(alignment: .leading, spacing: 6) {
-                    // People section
+                    // People section (unified across platforms)
                     VStack(alignment: .leading, spacing: 4) {
-                        #if os(iOS)
                         if case .location = locationManager.selectedChannel {
-                            GeohashPeopleList(viewModel: viewModel,
-                                              textColor: textColor,
-                                              secondaryTextColor: secondaryTextColor,
-                                              onTapPerson: {
-                                                  withAnimation(.easeInOut(duration: 0.2)) {
-                                                      showSidebar = false
-                                                      sidebarDragOffset = 0
-                                                  }
-                                              })
+                            GeohashPeopleList(
+                                viewModel: viewModel,
+                                textColor: textColor,
+                                secondaryTextColor: secondaryTextColor,
+                                onTapPerson: {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        showSidebar = false
+                                        sidebarDragOffset = 0
+                                    }
+                                }
+                            )
                         } else {
-                            MeshPeerList(viewModel: viewModel,
-                                         textColor: textColor,
-                                         secondaryTextColor: secondaryTextColor,
-                                         onTapPeer: { peerID in
-                                             viewModel.startPrivateChat(with: peerID)
-                                             withAnimation(.easeInOut(duration: 0.2)) {
-                                                 showSidebar = false
-                                                 sidebarDragOffset = 0
-                                             }
-                                         },
-                                         onToggleFavorite: { peerID in
-                                             viewModel.toggleFavorite(peerID: peerID)
-                                         },
-                                         onShowFingerprint: { peerID in
-                                             viewModel.showFingerprint(for: peerID)
-                                         })
+                            MeshPeerList(
+                                viewModel: viewModel,
+                                textColor: textColor,
+                                secondaryTextColor: secondaryTextColor,
+                                onTapPeer: { peerID in
+                                    viewModel.startPrivateChat(with: peerID)
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        showSidebar = false
+                                        sidebarDragOffset = 0
+                                    }
+                                },
+                                onToggleFavorite: { peerID in
+                                    viewModel.toggleFavorite(peerID: peerID)
+                                },
+                                onShowFingerprint: { peerID in
+                                    viewModel.showFingerprint(for: peerID)
+                                }
+                            )
                         }
-                        #else
-                        MeshPeerList(viewModel: viewModel,
-                                     textColor: textColor,
-                                     secondaryTextColor: secondaryTextColor,
-                                     onTapPeer: { peerID in
-                                         viewModel.startPrivateChat(with: peerID)
-                                         withAnimation(.easeInOut(duration: 0.2)) {
-                                             showSidebar = false
-                                             sidebarDragOffset = 0
-                                         }
-                                     },
-                                     onToggleFavorite: { peerID in
-                                         viewModel.toggleFavorite(peerID: peerID)
-                                     },
-                                     onShowFingerprint: { peerID in
-                                         viewModel.showFingerprint(for: peerID)
-                                     })
-                        #endif
                     }
                 }
                 // Avoid forcing full remounts; rely on SwiftUI diffing for peer updates
@@ -1197,7 +1168,6 @@ struct ContentView: View {
         return (name, "")
     }
     
-    #if os(iOS)
     // Compute channel-aware people count and color for toolbar
     private func channelPeopleCountAndColor() -> (Int, Color) {
         switch locationManager.selectedChannel {
@@ -1219,7 +1189,6 @@ struct ContentView: View {
             return (counts.others, color)
         }
     }
-    #endif
 
     
     private var mainHeaderView: some View {
@@ -1266,7 +1235,6 @@ struct ContentView: View {
             
             // Channel badge + dynamic spacing + people counter
             // Precompute header count and color outside the ViewBuilder expressions
-            #if os(iOS)
             let cc = channelPeopleCountAndColor()
             let headerCountColor: Color = cc.1
             let headerOtherPeersCount: Int = {
@@ -1275,24 +1243,11 @@ struct ContentView: View {
                 }
                 return cc.0
             }()
-            #else
-            let peerCounts = viewModel.allPeers.reduce(into: (others: 0, mesh: 0)) { counts, peer in
-                guard peer.id != viewModel.meshService.myPeerID else { return }
-                let isMeshConnected = peer.isConnected
-                if isMeshConnected { counts.mesh += 1; counts.others += 1 }
-                else if peer.isMutualFavorite { counts.others += 1 }
-            }
-            let headerOtherPeersCount = peerCounts.others
-            // Darker, more neutral blue (less purple hue)
-            let meshBlue = Color(hue: 0.60, saturation: 0.85, brightness: 0.82)
-            let headerCountColor: Color = (peerCounts.mesh > 0) ? meshBlue : Color.secondary
-            #endif
 
             HStack(spacing: 10) {
                 // Unread icon immediately to the left of the channel badge (independent from channel button)
                 
                 // Unread indicator
-                #if os(iOS)
                 if viewModel.hasAnyUnreadMessages {
                     Button(action: { viewModel.openMostRelevantPrivateChat() }) {
                         Image(systemName: "envelope.fill")
@@ -1327,7 +1282,6 @@ struct ContentView: View {
                         .accessibilityLabel("location channels")
                 }
                 .buttonStyle(.plain)
-                #endif
 
                 HStack(spacing: 4) {
                     // People icon with count
@@ -1349,11 +1303,9 @@ struct ContentView: View {
         }
         .frame(height: 44)
         .padding(.horizontal, 12)
-        #if os(iOS)
         .sheet(isPresented: $showLocationChannelsSheet) {
             LocationChannelsSheet(isPresented: $showLocationChannelsSheet)
         }
-        #endif
         .background(backgroundColor.opacity(0.95))
     }
     
@@ -1389,17 +1341,15 @@ struct ContentView: View {
         let peer = viewModel.getPeer(byID: headerPeerID)
         let privatePeerNick: String = {
             if privatePeerID.hasPrefix("nostr_") {
-                #if os(iOS)
-                // Build geohash DM header: "#<ghash>/@name#abcd"
+                // Build geohash DM header: "#<ghash>/@name#abcd" on all platforms
                 if case .location(let ch) = locationManager.selectedChannel {
                     let disp = viewModel.geohashDisplayName(for: privatePeerID)
                     return "#\(ch.geohash)/@\(disp)"
                 }
-                #endif
             }
-            return peer?.displayName ?? 
+            return peer?.displayName ??
                    viewModel.meshService.peerNickname(peerID: headerPeerID) ??
-                   FavoritesPersistenceService.shared.getFavoriteStatus(for: Data(hexString: headerPeerID) ?? Data())?.peerNickname ?? 
+                   FavoritesPersistenceService.shared.getFavoriteStatus(for: Data(hexString: headerPeerID) ?? Data())?.peerNickname ??
                    "Unknown"
         }()
         let isNostrAvailable: Bool = {
