@@ -1,0 +1,160 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "nav.home" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Home" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Inicio" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "主页" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "الصفحة الرئيسية" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Accueil" } }
+      }
+    },
+    "nav.settings" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Settings" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Ajustes" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "设置" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "الإعدادات" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Réglages" } }
+      }
+    },
+    "help.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "How to Use" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Cómo usar" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "使用指南" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "كيفية الاستخدام" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Mode d’emploi" } }
+      }
+    },
+    "test.sample" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Sample" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Ejemplo" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "示例" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "مثال" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Exemple" } }
+      }
+    },
+    "common.ok" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "OK" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Aceptar" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "确定" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "موافق" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "OK" } }
+      }
+    },
+    "common.cancel" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cancel" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Cancelar" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "取消" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "إلغاء" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Annuler" } }
+      }
+    },
+    "nav.people" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "PEOPLE" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "PERSONAS" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "联系人" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "الأشخاص" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "PERSONNES" } }
+      }
+    },
+    "alert.bluetooth_required" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Bluetooth Required" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Se requiere Bluetooth" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "需要蓝牙" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "يتطلب البلوتوث" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Bluetooth requis" } }
+      }
+    },
+    "actions.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Actions" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Acciones" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "操作" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "إجراءات" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Actions" } }
+      }
+    },
+    "actions.mention" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "mention" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "mencionar" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "提及" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "إشارة" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "mentionner" } }
+      }
+    },
+    "actions.private_message" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "private message" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "message privé" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "私信" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "رسالة خاصة" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "message privé" } }
+      }
+    },
+    "actions.hug" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "hug" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "abrazo" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "拥抱" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "عناق" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "câlin" } }
+      }
+    },
+    "actions.slap" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "slap" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "bofetada" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "拍一下" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "صفعة" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "gifle" } }
+      }
+    },
+    "actions.block" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "BLOCK" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "BLOQUEAR" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "屏蔽" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "حظر" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "BLOQUER" } }
+      }
+    },
+    "placeholder.nickname" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "nickname" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "apodo" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "昵称" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "اسم مستعار" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "pseudo" } }
+      }
+    },
+    "accessibility.open_unread_private_chat" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Open unread private chat" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Abrir chat privado no leído" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "打开未读私聊" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "فتح دردشة خاصة غير مقروءة" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Ouvrir une discussion privée non lue" } }
+      }
+    },
+    "accessibility.people_count" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%d people" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "%d personas" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "%d 人" } },
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "%d أشخاص" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "%d personnes" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}
+

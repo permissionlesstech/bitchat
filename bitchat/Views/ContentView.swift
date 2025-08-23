@@ -202,11 +202,11 @@ struct ContentView: View {
             }
         }
         .confirmationDialog(
-            selectedMessageSender.map { "@\($0)" } ?? "Actions",
+            selectedMessageSender.map { "@\($0)" } ?? String(localized: "actions.title"),
             isPresented: $showMessageActions,
             titleVisibility: .visible
         ) {
-            Button("mention") {
+            Button(String(localized: "actions.mention")) {
                 if let sender = selectedMessageSender {
                     // Pre-fill the input with an @mention and focus the field
                     messageText = "@\(sender) "
@@ -214,7 +214,7 @@ struct ContentView: View {
                 }
             }
 
-            Button("private message") {
+            Button(String(localized: "actions.private_message")) {
                 if let peerID = selectedMessageSenderID {
                     #if os(iOS)
                     if peerID.hasPrefix("nostr:") {
@@ -234,19 +234,19 @@ struct ContentView: View {
                 }
             }
             
-            Button("hug") {
+            Button(String(localized: "actions.hug")) {
                 if let sender = selectedMessageSender {
                     viewModel.sendMessage("/hug @\(sender)")
                 }
             }
             
-            Button("slap") {
+            Button(String(localized: "actions.slap")) {
                 if let sender = selectedMessageSender {
                     viewModel.sendMessage("/slap @\(sender)")
                 }
             }
             
-            Button("BLOCK", role: .destructive) {
+            Button(String(localized: "actions.block"), role: .destructive) {
                 // Prefer direct geohash block when we have a Nostr sender ID
                 #if os(iOS)
                 if let peerID = selectedMessageSenderID, peerID.hasPrefix("nostr:"),
@@ -261,17 +261,17 @@ struct ContentView: View {
                 #endif
             }
             
-            Button("cancel", role: .cancel) {}
+            Button(String(localized: "common.cancel"), role: .cancel) {}
         }
-        .alert("Bluetooth Required", isPresented: $viewModel.showBluetoothAlert) {
-            Button("Settings") {
+        .alert(LocalizedStringKey("alert.bluetooth_required"), isPresented: $viewModel.showBluetoothAlert) {
+            Button(LocalizedStringKey("nav.settings")) {
                 #if os(iOS)
                 if let url = URL(string: UIApplication.openSettingsURLString) {
                     UIApplication.shared.open(url)
                 }
                 #endif
             }
-            Button("OK", role: .cancel) {}
+            Button(LocalizedStringKey("common.ok"), role: .cancel) {}
         } message: {
             Text(viewModel.bluetoothAlertMessage)
         }
@@ -920,7 +920,7 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 0) {
                 // Header - match main toolbar height
                 HStack {
-                    Text("PEOPLE")
+                    Text(LocalizedStringKey("nav.people"))
                         .font(.system(size: 16, weight: .bold, design: .monospaced))
                         .foregroundColor(textColor)
                     Spacer()
@@ -1116,7 +1116,7 @@ struct ContentView: View {
                     .font(.system(size: 14, design: .monospaced))
                     .foregroundColor(secondaryTextColor)
                 
-                TextField("nickname", text: $viewModel.nickname)
+                TextField("placeholder.nickname", text: $viewModel.nickname)
                     .textFieldStyle(.plain)
                     .font(.system(size: 14, design: .monospaced))
                     .frame(maxWidth: 100)
@@ -1175,7 +1175,7 @@ struct ContentView: View {
                             .foregroundColor(Color.orange)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Open unread private chat")
+                    .accessibilityLabel(String(localized: "accessibility.open_unread_private_chat"))
                 }
                 // Location channels button '#'
                 Button(action: { showLocationChannelsSheet = true }) {
@@ -1208,7 +1208,7 @@ struct ContentView: View {
                     // People icon with count
                     Image(systemName: "person.2.fill")
                         .font(.system(size: 11))
-                        .accessibilityLabel("\(headerOtherPeersCount) people")
+                        .accessibilityLabel(String(format: String(localized: "accessibility.people_count"), headerOtherPeersCount))
                     Text("\(headerOtherPeersCount)")
                         .font(.system(size: 12, design: .monospaced))
                         .accessibilityHidden(true)
