@@ -12,44 +12,40 @@ struct MeshPeerList: View {
     @State private var orderedIDs: [String] = []
 
     var body: some View {
-        Group {
-            if viewModel.allPeers.isEmpty {
+        if viewModel.allPeers.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
                 Text("nobody around...")
                     .font(.system(size: 14, design: .monospaced))
                     .foregroundColor(secondaryTextColor)
                     .padding(.horizontal)
                     .padding(.top, 12)
-            } else {
-                let myPeerID = viewModel.meshService.myPeerID
-                let mapped: [(peer: BitchatPeer, isMe: Bool, hasUnread: Bool, enc: EncryptionStatus)] = viewModel.allPeers.map { peer in
-                    let isMe = peer.id == myPeerID
-                    let hasUnread = viewModel.hasUnreadMessages(for: peer.id)
-                    let enc = viewModel.getEncryptionStatus(for: peer.id)
-                    return (peer, isMe, hasUnread, enc)
-                }
-                // Maintain a stable order: append new peers at the bottom, remove disappeared
-                let currentIDs = mapped.map { $0.peer.id }
-                var newOrder = orderedIDs
-                // Remove IDs no longer present
-                newOrder.removeAll { !currentIDs.contains($0) }
-                // Append new IDs in the order they appear
-                for id in currentIDs where !newOrder.contains(id) { newOrder.append(id) }
-                // Commit state (on main thread via SwiftUI transaction)
-                if newOrder != orderedIDs { orderedIDs = newOrder }
-                // Project ordered items
-                let peers: [(peer: BitchatPeer, isMe: Bool, hasUnread: Bool, enc: EncryptionStatus)] = orderedIDs.compactMap { id in
-                    mapped.first(where: { $0.peer.id == id })
-                }
+            }
+        } else {
+            let myPeerID = viewModel.meshService.myPeerID
+            let mapped: [(peer: BitchatPeer, isMe: Bool, hasUnread: Bool, enc: EncryptionStatus)] = viewModel.allPeers.map { peer in
+                let isMe = peer.id == myPeerID
+                let hasUnread = viewModel.hasUnreadMessages(for: peer.id)
+                let enc = viewModel.getEncryptionStatus(for: peer.id)
+                return (peer, isMe, hasUnread, enc)
+            }
+            // Maintain a stable order: append new peers at the bottom, remove disappeared
+            let currentIDs = mapped.map { $0.peer.id }
+            var newOrder = orderedIDs
+            newOrder.removeAll { !currentIDs.contains($0) }
+            for id in currentIDs where !newOrder.contains(id) { newOrder.append(id) }
+            if newOrder != orderedIDs { orderedIDs = newOrder }
+            let peers: [(peer: BitchatPeer, isMe: Bool, hasUnread: Bool, enc: EncryptionStatus)] = orderedIDs.compactMap { id in
+                mapped.first(where: { $0.peer.id == id })
+            }
 
+            VStack(alignment: .leading, spacing: 0) {
                 ForEach(0..<peers.count, id: \.self) { idx in
                     let item = peers[idx]
                     let peer = item.peer
                     let isMe = item.isMe
-                    let hasUnread = item.hasUnread
                     HStack(spacing: 4) {
                         let assigned = viewModel.colorForMeshPeer(id: peer.id, isDark: colorScheme == .dark)
                         let baseColor = isMe ? Color.orange : assigned
-                        // Use a consistent icon colored with the peer color
                         if isMe {
                             Image(systemName: "person.fill").font(.system(size: 10)).foregroundColor(baseColor)
                         } else {
@@ -70,7 +66,6 @@ struct MeshPeerList: View {
                             }
                         }
 
-                        // Blocked indicator
                         if !isMe, viewModel.isPeerBlocked(peer.id) {
                             Image(systemName: "nosign")
                                 .font(.system(size: 10))

@@ -10,49 +10,51 @@ struct GeohashPeopleList: View {
     @State private var orderedIDs: [String] = []
 
     var body: some View {
-        Group {
-            if viewModel.visibleGeohashPeople().isEmpty {
+        if viewModel.visibleGeohashPeople().isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
                 Text("nobody around...")
                     .font(.system(size: 14, design: .monospaced))
                     .foregroundColor(secondaryTextColor)
                     .padding(.horizontal)
                     .padding(.top, 12)
-            } else {
-                let myHex: String? = {
-                    if case .location(let ch) = LocationChannelManager.shared.selectedChannel,
-                       let id = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
-                        return id.publicKeyHex.lowercased()
-                    }
-                    return nil
-                }()
-                let people = viewModel.visibleGeohashPeople()
-                let currentIDs = people.map { $0.id }
-                var newOrder = orderedIDs
-                // Remove disappeared
-                newOrder.removeAll { !currentIDs.contains($0) }
-                // Append new in arrival order
-                for id in currentIDs where !newOrder.contains(id) { newOrder.append(id) }
-                if newOrder != orderedIDs { orderedIDs = newOrder }
+            }
+        } else {
+            let myHex: String? = {
+                if case .location(let ch) = LocationChannelManager.shared.selectedChannel,
+                   let id = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
+                    return id.publicKeyHex.lowercased()
+                }
+                return nil
+            }()
+            let people = viewModel.visibleGeohashPeople()
+            let currentIDs = people.map { $0.id }
+            var newOrder = orderedIDs
+            newOrder.removeAll { !currentIDs.contains($0) }
+            for id in currentIDs where !newOrder.contains(id) { newOrder.append(id) }
+            if newOrder != orderedIDs { orderedIDs = newOrder }
 
-                // Partition teleported to the end while preserving relative order
-                #if os(iOS)
-                let teleportedSet = Set(viewModel.teleportedGeo.map { $0.lowercased() })
-                let meTeleported: Set<String> = (LocationChannelManager.shared.teleported ? (myHex.map { Set([$0]) }) : nil) ?? Set<String>()
-                let isTeleported: (String) -> Bool = { id in teleportedSet.contains(id.lowercased()) || meTeleported.contains(id) }
-                #else
-                let isTeleported: (String) -> Bool = { _ in false }
-                #endif
-                let stableOrdered = orderedIDs.filter { currentIDs.contains($0) }
-                let nonTele = stableOrdered.filter { !isTeleported($0) }
-                let tele = stableOrdered.filter { isTeleported($0) }
-                let finalOrder: [String] = nonTele + tele
-                let firstID = finalOrder.first
-                // Only iterate over IDs that still exist; lookup person by ID
-                let personByID = Dictionary(uniqueKeysWithValues: people.map { ($0.id, $0) })
+            #if os(iOS)
+            let teleportedSet = Set(viewModel.teleportedGeo.map { $0.lowercased() })
+            let isTeleportedID: (String) -> Bool = { id in
+                if teleportedSet.contains(id.lowercased()) { return true }
+                if let me = myHex, id == me, LocationChannelManager.shared.teleported { return true }
+                return false
+            }
+            #else
+            let isTeleportedID: (String) -> Bool = { _ in false }
+            #endif
+
+            let stableOrdered = orderedIDs.filter { currentIDs.contains($0) }
+            let nonTele = stableOrdered.filter { !isTeleportedID($0) }
+            let tele = stableOrdered.filter { isTeleportedID($0) }
+            let finalOrder: [String] = nonTele + tele
+            let firstID = finalOrder.first
+            let personByID = Dictionary(uniqueKeysWithValues: people.map { ($0.id, $0) })
+
+            VStack(alignment: .leading, spacing: 0) {
                 ForEach(finalOrder.filter { personByID[$0] != nil }, id: \.self) { pid in
                     let person = personByID[pid]!
                     HStack(spacing: 4) {
-                        // Icon should match peer color; default to map pin; dashed face for teleported
                         let isMe = (person.id == myHex)
                         #if os(iOS)
                         let teleported = viewModel.teleportedGeo.contains(person.id.lowercased()) || (isMe && LocationChannelManager.shared.teleported)
@@ -63,6 +65,7 @@ struct GeohashPeopleList: View {
                         let assignedColor = viewModel.colorForNostrPubkey(person.id, isDark: colorScheme == .dark)
                         let rowColor: Color = isMe ? .orange : assignedColor
                         Image(systemName: icon).font(.system(size: 12)).foregroundColor(rowColor)
+
                         let (base, suffix) = splitSuffix(from: person.displayName)
                         HStack(spacing: 0) {
                             Text(base)
@@ -81,7 +84,6 @@ struct GeohashPeopleList: View {
                                     .foregroundColor(rowColor)
                             }
                         }
-                        // Blocked indicator for geohash users
                         if let me = myHex, person.id != me {
                             if viewModel.isGeohashUserBlocked(pubkeyHexLowercased: person.id) {
                                 Image(systemName: "nosign")
