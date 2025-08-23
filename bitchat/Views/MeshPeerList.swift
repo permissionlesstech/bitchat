@@ -19,20 +19,14 @@ struct MeshPeerList: View {
                     .padding(.top, 12)
             } else {
                 let myPeerID = viewModel.meshService.myPeerID
+                // Preserve stable order as provided by ViewModel (no sorting)
                 let mapped: [(peer: BitchatPeer, isMe: Bool, hasUnread: Bool, enc: EncryptionStatus)] = viewModel.allPeers.map { peer in
                     let isMe = peer.id == myPeerID
                     let hasUnread = viewModel.hasUnreadMessages(for: peer.id)
                     let enc = viewModel.getEncryptionStatus(for: peer.id)
                     return (peer, isMe, hasUnread, enc)
                 }
-                let peers = mapped.sorted { lhs, rhs in
-                    let lFav = lhs.peer.favoriteStatus?.isFavorite ?? false
-                    let rFav = rhs.peer.favoriteStatus?.isFavorite ?? false
-                    if lFav != rFav { return lFav }
-                    let lhsName = lhs.isMe ? viewModel.nickname : lhs.peer.nickname
-                    let rhsName = rhs.isMe ? viewModel.nickname : rhs.peer.nickname
-                    return lhsName < rhsName
-                }
+                let peers = mapped
 
                 ForEach(0..<peers.count, id: \.self) { idx in
                     let item = peers[idx]

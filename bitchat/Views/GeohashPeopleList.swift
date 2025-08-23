@@ -24,13 +24,7 @@ struct GeohashPeopleList: View {
                     }
                     return nil
                 }()
-                let ordered = viewModel.visibleGeohashPeople().sorted { a, b in
-                    if let me = myHex {
-                        if a.id == me && b.id != me { return true }
-                        if b.id == me && a.id != me { return false }
-                    }
-                    return a.lastSeen > b.lastSeen
-                }
+                let ordered = viewModel.visibleGeohashPeople()
                 let firstID = ordered.first?.id
                 ForEach(ordered) { person in
                     HStack(spacing: 4) {

@@ -1457,13 +1457,27 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         // Remove blocked Nostr pubkeys
         map = map.filter { !SecureIdentityStateManager.shared.isNostrBlocked(pubkeyHexLowercased: $0.key) }
         geoParticipants[gh] = map
-        // Build display list
-        let people = map
-            .map { (pub, seen) in
-                GeoPerson(id: pub, displayName: displayNameForNostrPubkey(pub), lastSeen: seen)
+        // Build display list preserving existing order. Only append new people at the bottom.
+        var newList: [GeoPerson] = []
+        let activeIDs = Set(map.keys)
+        // Keep existing order for currently active entries
+        for person in geohashPeople {
+            if activeIDs.contains(person.id) {
+                let seen = map[person.id] ?? person.lastSeen
+                let updated = GeoPerson(id: person.id,
+                                        displayName: displayNameForNostrPubkey(person.id),
+                                        lastSeen: seen)
+                newList.append(updated)
             }
-            .sorted { $0.lastSeen > $1.lastSeen }
-        geohashPeople = people
+        }
+        // Append any newly active IDs at the bottom
+        let existingIDs = Set(newList.map { $0.id })
+        for (pub, seen) in map where !existingIDs.contains(pub) {
+            newList.append(GeoPerson(id: pub,
+                                     displayName: displayNameForNostrPubkey(pub),
+                                     lastSeen: seen))
+        }
+        geohashPeople = newList
     }
 
     private func startGeoParticipantsTimer() {
@@ -1485,17 +1499,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     #if os(iOS)
     /// Return the current, pruned, sorted people list for the active geohash without mutating state.
     @MainActor
-    func visibleGeohashPeople() -> [GeoPerson] {
-        guard let gh = currentGeohash else { return [] }
-        let cutoff = Date().addingTimeInterval(-5 * 60)
-        let map = (geoParticipants[gh] ?? [:])
-            .filter { $0.value >= cutoff }
-            .filter { !SecureIdentityStateManager.shared.isNostrBlocked(pubkeyHexLowercased: $0.key) }
-        let people = map
-            .map { (pub, seen) in GeoPerson(id: pub, displayName: displayNameForNostrPubkey(pub), lastSeen: seen) }
-            .sorted { $0.lastSeen > $1.lastSeen }
-        return people
-    }
+    func visibleGeohashPeople() -> [GeoPerson] { geohashPeople }
     /// Returns the current participant count for a specific geohash, using the 5-minute activity window.
     @MainActor
     func geohashParticipantCount(for geohash: String) -> Int {
