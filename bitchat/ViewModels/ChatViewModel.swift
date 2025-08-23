@@ -2844,6 +2844,10 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             // Bold the user's own nickname
             let fontWeight: Font.Weight = isSelf ? .bold : .medium
             senderStyle.font = .system(size: 14, weight: fontWeight, design: .monospaced)
+            // Make sender clickable: encode senderPeerID into a custom URL
+            if let spid = message.senderPeerID, let url = URL(string: "bitchat://user/\(spid.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? spid)") {
+                senderStyle.link = url
+            }
 
             // Prefix "<@"
             result.append(AttributedString("<@").mergingAttributes(senderStyle))

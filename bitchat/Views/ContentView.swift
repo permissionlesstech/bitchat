@@ -193,7 +193,7 @@ struct ContentView: View {
                 }
             }
 
-            Button("private message") {
+            Button("direct message") {
                 if let peerID = selectedMessageSenderID {
                     #if os(iOS)
                     if peerID.hasPrefix("nostr:") {
@@ -431,11 +431,11 @@ struct ContentView: View {
                         }
                         .contentShape(Rectangle())
                         .onTapGesture {
-                            // Only show actions for messages from other users (not system or self)
-                            if message.sender != "system" && message.sender != viewModel.nickname {
-                                selectedMessageSender = message.sender
-                                selectedMessageSenderID = message.senderPeerID
-                                showMessageActions = true
+                            // Tap on message body: insert @mention for this sender
+                            if message.sender != "system" {
+                                let name = message.sender
+                                messageText = "@\(name) "
+                                isTextFieldFocused = true
                             }
                         }
                         .contextMenu {
@@ -456,6 +456,14 @@ struct ContentView: View {
                 .padding(.vertical, 4)
             }
             .background(backgroundColor)
+            .onOpenURL { url in
+                guard url.scheme == "bitchat", url.host == "user" else { return }
+                let id = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+                let peerID = id.removingPercentEncoding ?? id
+                selectedMessageSenderID = peerID
+                selectedMessageSender = viewModel.messages.last(where: { $0.senderPeerID == peerID })?.sender
+                showMessageActions = true
+            }
             .onTapGesture(count: 3) {
                 // Triple-tap to clear current chat
                 viewModel.sendMessage("/clear")
