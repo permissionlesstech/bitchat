@@ -7,6 +7,7 @@ struct GeohashPeopleList: View {
     let secondaryTextColor: Color
     let onTapPerson: () -> Void
     @Environment(\.colorScheme) var colorScheme
+    @State private var orderedIDs: [String] = []
 
     var body: some View {
         Group {
@@ -24,32 +25,43 @@ struct GeohashPeopleList: View {
                     }
                     return nil
                 }()
-                let ordered = viewModel.visibleGeohashPeople().sorted { a, b in
-                    if let me = myHex {
-                        if a.id == me && b.id != me { return true }
-                        if b.id == me && a.id != me { return false }
-                    }
-                    return a.lastSeen > b.lastSeen
-                }
-                let firstID = ordered.first?.id
-                ForEach(ordered) { person in
+                let people = viewModel.visibleGeohashPeople()
+                let currentIDs = people.map { $0.id }
+                var newOrder = orderedIDs
+                // Remove disappeared
+                newOrder.removeAll { !currentIDs.contains($0) }
+                // Append new in arrival order
+                for id in currentIDs where !newOrder.contains(id) { newOrder.append(id) }
+                if newOrder != orderedIDs { orderedIDs = newOrder }
+
+                // Partition teleported to the end while preserving relative order
+                #if os(iOS)
+                let teleportedSet = Set(viewModel.teleportedGeo.map { $0.lowercased() })
+                let meTeleported = (LocationChannelManager.shared.teleported ? myHex.map { Set([$0]) } : nil) ?? Set()
+                let isTeleported: (String) -> Bool = { id in teleportedSet.contains(id.lowercased()) || meTeleported.contains(id) }
+                #else
+                let isTeleported: (String) -> Bool = { _ in false }
+                #endif
+                let stableOrdered = orderedIDs.filter { currentIDs.contains($0) }
+                let nonTele = stableOrdered.filter { !isTeleported($0) }
+                let tele = stableOrdered.filter { isTeleported($0) }
+                let finalOrder: [String] = nonTele + tele
+                let firstID = finalOrder.first
+                ForEach(finalOrder, id: \.self) { pid in
+                    guard let person = people.first(where: { $0.id == pid }) else { EmptyView() }
                     HStack(spacing: 4) {
                         let convKey = "nostr_" + String(person.id.prefix(16))
-                        if viewModel.unreadPrivateMessages.contains(convKey) {
-                            Image(systemName: "envelope.fill").font(.system(size: 12)).foregroundColor(.orange)
-                        } else {
-                            // For the local user, use a different face icon when teleported
-                            let isMe = (person.id == myHex)
-                            #if os(iOS)
-                            // Consider either the per-session tag (for any peer) or the manager flag for self
-                            let teleported = viewModel.teleportedGeo.contains(person.id.lowercased()) || (isMe && LocationChannelManager.shared.teleported)
-                            #else
-                            let teleported = false
-                            #endif
-                            let icon = teleported ? "face.dashed" : "face.smiling"
-                            let rowColor: Color = isMe ? .orange : textColor
-                            Image(systemName: icon).font(.system(size: 12)).foregroundColor(rowColor)
-                        }
+                        // Icon should match peer color; default to map pin; dashed face for teleported
+                        let isMe = (person.id == myHex)
+                        #if os(iOS)
+                        let teleported = viewModel.teleportedGeo.contains(person.id.lowercased()) || (isMe && LocationChannelManager.shared.teleported)
+                        #else
+                        let teleported = false
+                        #endif
+                        let icon = teleported ? "face.dashed" : "mappin"
+                        let assignedColor = viewModel.colorForNostrPubkey(person.id, isDark: colorScheme == .dark)
+                        let rowColor: Color = isMe ? .orange : assignedColor
+                        Image(systemName: icon).font(.system(size: 12)).foregroundColor(rowColor)
                         let (base, suffix) = splitSuffix(from: person.displayName)
                         let isMe = person.id == myHex
                         let assignedColor = viewModel.colorForNostrPubkey(person.id, isDark: colorScheme == .dark)
@@ -106,6 +118,12 @@ struct GeohashPeopleList: View {
                     }
                 }
             }
+        }
+        .onAppear {
+            orderedIDs = viewModel.visibleGeohashPeople().map { $0.id }
+        }
+        .onChange(of: viewModel.visibleGeohashPeople().map { $0.id }) { _ in
+            // Ordering adjusted within body render
         }
     }
 }

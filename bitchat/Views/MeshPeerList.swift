@@ -9,6 +9,8 @@ struct MeshPeerList: View {
     let onShowFingerprint: (String) -> Void
     @Environment(\.colorScheme) var colorScheme
 
+    @State private var orderedIDs: [String] = []
+
     var body: some View {
         Group {
             if viewModel.allPeers.isEmpty {
@@ -25,13 +27,18 @@ struct MeshPeerList: View {
                     let enc = viewModel.getEncryptionStatus(for: peer.id)
                     return (peer, isMe, hasUnread, enc)
                 }
-                let peers = mapped.sorted { lhs, rhs in
-                    let lFav = lhs.peer.favoriteStatus?.isFavorite ?? false
-                    let rFav = rhs.peer.favoriteStatus?.isFavorite ?? false
-                    if lFav != rFav { return lFav }
-                    let lhsName = lhs.isMe ? viewModel.nickname : lhs.peer.nickname
-                    let rhsName = rhs.isMe ? viewModel.nickname : rhs.peer.nickname
-                    return lhsName < rhsName
+                // Maintain a stable order: append new peers at the bottom, remove disappeared
+                let currentIDs = mapped.map { $0.peer.id }
+                var newOrder = orderedIDs
+                // Remove IDs no longer present
+                newOrder.removeAll { !currentIDs.contains($0) }
+                // Append new IDs in the order they appear
+                for id in currentIDs where !newOrder.contains(id) { newOrder.append(id) }
+                // Commit state (on main thread via SwiftUI transaction)
+                if newOrder != orderedIDs { orderedIDs = newOrder }
+                // Project ordered items
+                let peers: [(peer: BitchatPeer, isMe: Bool, hasUnread: Bool, enc: EncryptionStatus)] = orderedIDs.compactMap { id in
+                    mapped.first(where: { $0.peer.id == id })
                 }
 
                 ForEach(0..<peers.count, id: \.self) { idx in
@@ -40,29 +47,17 @@ struct MeshPeerList: View {
                     let isMe = item.isMe
                     let hasUnread = item.hasUnread
                     HStack(spacing: 4) {
+                        let assigned = viewModel.colorForMeshPeer(id: peer.id, isDark: colorScheme == .dark)
+                        let baseColor = isMe ? Color.orange : assigned
+                        // Use a consistent icon colored with the peer color
                         if isMe {
-                            Image(systemName: "person.fill").font(.system(size: 10)).foregroundColor(textColor)
-                        } else if hasUnread {
-                            Image(systemName: "envelope.fill").font(.system(size: 12)).foregroundColor(.orange)
+                            Image(systemName: "person.fill").font(.system(size: 10)).foregroundColor(baseColor)
                         } else {
-                            switch peer.connectionState {
-                            case .bluetoothConnected:
-                                Image(systemName: "dot.radiowaves.left.and.right").font(.system(size: 10)).foregroundColor(textColor)
-                            case .nostrAvailable:
-                                Image(systemName: "globe").font(.system(size: 10)).foregroundColor(.purple)
-                            case .offline:
-                                if peer.favoriteStatus?.isFavorite ?? false {
-                                    Image(systemName: "moon.fill").font(.system(size: 10)).foregroundColor(.gray)
-                                } else {
-                                    Image(systemName: "person").font(.system(size: 10)).foregroundColor(.gray)
-                                }
-                            }
+                            Image(systemName: "mappin").font(.system(size: 10)).foregroundColor(baseColor)
                         }
 
                         let displayName = isMe ? viewModel.nickname : peer.nickname
                         let (base, suffix) = splitSuffix(from: displayName)
-                        let assigned = viewModel.colorForMeshPeer(id: peer.id, isDark: colorScheme == .dark)
-                        let baseColor = isMe ? Color.orange : assigned
                         HStack(spacing: 0) {
                             Text(base)
                                 .font(.system(size: 14, design: .monospaced))
@@ -86,7 +81,7 @@ struct MeshPeerList: View {
                         if let icon = item.enc.icon, !isMe {
                             Image(systemName: icon)
                                 .font(.system(size: 10))
-                                .foregroundColor(item.enc == .noiseVerified || item.enc == .noiseSecured ? textColor : (item.enc == .noiseHandshaking ? .orange : .red))
+                                .foregroundColor(baseColor)
                         }
 
                         Spacer()
@@ -108,6 +103,12 @@ struct MeshPeerList: View {
                     .onTapGesture(count: 2) { if !isMe { onShowFingerprint(peer.id) } }
                 }
             }
+        }
+        .onAppear {
+            orderedIDs = viewModel.allPeers.map { $0.id }
+        }
+        .onChange(of: viewModel.allPeers.map { $0.id }) { _ in
+            // Trigger body recompute; ordering is updated within body
         }
     }
 }
