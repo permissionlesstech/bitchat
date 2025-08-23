@@ -462,16 +462,12 @@ struct ContentView: View {
                        let last = viewModel.getPrivateChatMessages(for: peer).suffix(300).last?.id {
                         return "dm:\(peer)|\(last)"
                     }
-                    #if os(iOS)
                     let idPrefix: String = {
                         switch locationManager.selectedChannel {
                         case .mesh: return "mesh"
                         case .location(let ch): return "geo:\(ch.geohash)"
                         }
                     }()
-                    #else
-                    let idPrefix: String = "mesh"
-                    #endif
                     if let last = viewModel.messages.suffix(300).last?.id { return "\(idPrefix)|\(last)" }
                     return nil
                 }()
@@ -608,16 +604,12 @@ struct ContentView: View {
                     if now.timeIntervalSince(lastScrollTime) > 0.5 {
                         // Immediate scroll if enough time has passed
                         lastScrollTime = now
-                        #if os(iOS)
                         let idPrefix: String = {
                             switch locationManager.selectedChannel {
                             case .mesh: return "mesh"
                             case .location(let ch): return "geo:\(ch.geohash)"
                             }
                         }()
-                        #else
-                        let idPrefix: String = "mesh"
-                        #endif
                         let count = windowCountPublic
                         let target = viewModel.messages.suffix(count).last.map { "\(idPrefix)|\($0.id)" }
                         DispatchQueue.main.async {
@@ -628,16 +620,12 @@ struct ContentView: View {
                         scrollThrottleTimer?.invalidate()
                         scrollThrottleTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
                             lastScrollTime = Date()
-                            #if os(iOS)
                             let idPrefix: String = {
                                 switch locationManager.selectedChannel {
                                 case .mesh: return "mesh"
                                 case .location(let ch): return "geo:\(ch.geohash)"
                                 }
                             }()
-                            #else
-                            let idPrefix: String = "mesh"
-                            #endif
                             let count = windowCountPublic
                             let target = viewModel.messages.suffix(count).last.map { "\(idPrefix)|\($0.id)" }
                             DispatchQueue.main.async {

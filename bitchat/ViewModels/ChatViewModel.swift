@@ -3679,8 +3679,15 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                         seed = spid.lowercased()
                     }
                 }
-            } else if spid.count == 16, let full = getNoiseKeyForShortID(spid)?.lowercased() {
-                seed = "noise:" + full
+            } else if spid.count == 16 {
+                // Prefer full Noise key to ensure consistent coloring with peer list
+                if let full = getNoiseKeyForShortID(spid)?.lowercased() {
+                    seed = "noise:" + full
+                } else if let full = unifiedPeerService.getPeer(by: spid)?.noisePublicKey.hexEncodedString().lowercased() {
+                    seed = "noise:" + full
+                } else {
+                    seed = spid.lowercased()
+                }
             } else {
                 seed = spid.lowercased()
             }
