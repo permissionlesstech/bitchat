@@ -57,7 +57,7 @@ struct GeohashPeopleList: View {
                         #else
                         let teleported = false
                         #endif
-                        let icon = teleported ? "face.dashed" : "mappin.circle"
+                        let icon = teleported ? "face.dashed" : "mappin.and.ellipse"
                         let assignedColor = viewModel.colorForNostrPubkey(person.id, isDark: colorScheme == .dark)
                         let rowColor: Color = isMe ? .orange : assignedColor
                         Image(systemName: icon).font(.system(size: 12)).foregroundColor(rowColor)

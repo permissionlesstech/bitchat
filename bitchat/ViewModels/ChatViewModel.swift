@@ -1215,15 +1215,15 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             SecureLogger.log("GeoTeleport: recv pub=\(event.pubkey.prefix(8))… tags=\(tagSummary)",
                             category: SecureLogger.session, level: .debug)
             // Track teleport tag for participants
-            // Detect teleport tag robustly: accept ["t","teleport"], ["t"], ["teleport"], or boolean-like values
+            // Detect teleport tag robustly: accept ["t","teleport"], ["t","teleported"], ["t"], ["teleport"], or boolean-like values
             let hasTeleportTag: Bool = {
                 for tag in event.tags {
                     guard let key = tag.first?.lowercased() else { continue }
-                    if key == "t" || key == "teleport" { return true }
+                    if key == "t" || key == "teleport" || key == "teleported" { return true }
                     // Some clients may encode as ["t","1"] or ["t","true"]
                     if key == "t", tag.dropFirst().contains(where: { v in
                         let lv = v.lowercased()
-                        return lv == "teleport" || lv == "1" || lv == "true"
+                        return lv == "teleport" || lv == "teleported" || lv == "1" || lv == "true"
                     }) { return true }
                 }
                 return false
@@ -1262,7 +1262,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             let senderName = self.displayNameForNostrPubkey(event.pubkey)
             let content = event.content
             // If this is a teleport presence event (no content), don't add to timeline
-            if let teleTag = event.tags.first(where: { $0.first == "t" }), teleTag.count >= 2, teleTag[1] == "teleport",
+            if let teleTag = event.tags.first(where: { $0.first == "t" }), teleTag.count >= 2, (teleTag[1] == "teleport" || teleTag[1] == "teleported"),
                content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 return
             }
@@ -3375,8 +3375,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
 
     @MainActor
     func colorForMeshPeer(id peerID: String, isDark: Bool) -> Color {
-        if let peer = unifiedPeerService.getPeer(by: peerID) {
-            let full = peer.noisePublicKey.hexEncodedString().lowercased()
+        // Mirror message coloring: prefer stable full noise key mapping when available, else short ID
+        if let full = getNoiseKeyForShortID(peerID)?.lowercased() {
             return colorForPeerSeed("noise:" + full, isDark: isDark)
         }
         return colorForPeerSeed(peerID.lowercased(), isDark: isDark)

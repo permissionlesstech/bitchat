@@ -46,7 +46,7 @@ struct MeshPeerList: View {
                         if isMe {
                             Image(systemName: "person.fill").font(.system(size: 10)).foregroundColor(baseColor)
                         } else {
-                            Image(systemName: "mappin.circle").font(.system(size: 10)).foregroundColor(baseColor)
+                            Image(systemName: "mappin.and.ellipse").font(.system(size: 10)).foregroundColor(baseColor)
                         }
 
                         let displayName = isMe ? viewModel.nickname : peer.nickname
