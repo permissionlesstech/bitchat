@@ -62,6 +62,9 @@ struct ContentView: View {
     // Window sizes for rendering (infinite scroll up)
     @State private var windowCountPublic: Int = 180
     @State private var windowCountPrivate: [String: Int] = [:]
+    #if os(iOS)
+    @State private var keyboardIsVisible: Bool = false
+    #endif
     
     // MARK: - Computed Properties
     
@@ -164,6 +167,15 @@ struct ContentView: View {
         #if os(macOS)
         .frame(minWidth: 600, minHeight: 400)
         #endif
+        #if os(iOS)
+        // Track keyboard visibility
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+            keyboardIsVisible = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            keyboardIsVisible = false
+        }
+        #endif
         .onChange(of: viewModel.selectedPrivateChatPeer) { newValue in
             withAnimation(.easeInOut(duration: 0.2)) {
                 showPrivateChat = newValue != nil
@@ -259,35 +271,36 @@ struct ContentView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    // Extract messages based on context (private or public chat)
-                    let messages: [BitchatMessage] = {
-                        if let privatePeer = privatePeer {
-                            let msgs = viewModel.getPrivateChatMessages(for: privatePeer)
-                            return msgs
-                        } else {
-                            return viewModel.messages
-                        }
-                    }()
-                    
-                    // Implement windowing with adjustable window count per chat
-                    let currentWindowCount: Int = {
-                        if let peer = privatePeer { return windowCountPrivate[peer] ?? 300 }
-                        return windowCountPublic
-                    }()
-                    let windowedMessages = messages.suffix(currentWindowCount)
+                        // Extract messages based on context (private or public chat)
+                        let messages: [BitchatMessage] = {
+                            if let privatePeer = privatePeer {
+                                let msgs = viewModel.getPrivateChatMessages(for: privatePeer)
+                                return msgs
+                            } else {
+                                return viewModel.messages
+                            }
+                        }()
+                        
+                        // Implement windowing with adjustable window count per chat
+                        let currentWindowCount: Int = {
+                            if let peer = privatePeer { return windowCountPrivate[peer] ?? 300 }
+                            return windowCountPublic
+                        }()
+                        let windowedMessages = messages.suffix(currentWindowCount)
 
-                    // Build stable UI IDs with a context key to avoid ID collisions when switching channels
-                    #if os(iOS)
-                    let contextKey: String = {
+                    // Build stable UI IDs. For private chats, namespace by DM peer; for public, by channel.
+                    let idPrefix: String = {
+                        if let peer = privatePeer { return "dm:\(peer)" }
+                        #if os(iOS)
                         switch locationManager.selectedChannel {
                         case .mesh: return "mesh"
                         case .location(let ch): return "geo:\(ch.geohash)"
                         }
+                        #else
+                        return "mesh"
+                        #endif
                     }()
-                    #else
-                    let contextKey: String = "mesh"
-                    #endif
-                    let items: [(uiID: String, message: BitchatMessage)] = windowedMessages.map { (uiID: "\(contextKey)|\($0.id)", message: $0) }
+                    let items: [(uiID: String, message: BitchatMessage)] = windowedMessages.map { (uiID: "\(idPrefix)|\($0.id)", message: $0) }
                     
                     ForEach(items, id: \.uiID) { item in
                         let message = item.message
@@ -415,23 +428,24 @@ struct ContentView: View {
                         }
                         .id(item.uiID)
                         .onAppear {
-                            #if os(iOS)
-                            let contextKey: String = {
+                            let idPrefix: String = {
+                                if let peer = privatePeer { return "dm:\(peer)" }
+                                #if os(iOS)
                                 switch locationManager.selectedChannel {
                                 case .mesh: return "mesh"
                                 case .location(let ch): return "geo:\(ch.geohash)"
                                 }
+                                #else
+                                return "mesh"
+                                #endif
                             }()
-                            #else
-                            let contextKey: String = "mesh"
-                            #endif
                             handleRowAppear(messageID: message.id,
                                             privatePeer: privatePeer,
                                             messages: messages,
                                             windowedMessages: windowedMessages,
                                             isAtBottom: isAtBottom,
                                             proxy: proxy,
-                                            contextKey: contextKey)
+                                            idPrefix: idPrefix)
                         }
                         .onDisappear {
                             if message.id == windowedMessages.last?.id {
@@ -461,6 +475,55 @@ struct ContentView: View {
                 // Triple-tap to clear current chat
                 viewModel.sendMessage("/clear")
             }
+            #if os(iOS)
+            // Sync scroll to bottom with keyboard frame animations when already at bottom
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notif in
+                guard isAtBottom.wrappedValue else { return }
+                let targetID: String? = {
+                    if let peer = privatePeer,
+                       let last = viewModel.getPrivateChatMessages(for: peer).suffix(300).last?.id {
+                        return "dm:\(peer)|\(last)"
+                    }
+                    #if os(iOS)
+                    let idPrefix: String = {
+                        switch locationManager.selectedChannel {
+                        case .mesh: return "mesh"
+                        case .location(let ch): return "geo:\(ch.geohash)"
+                        }
+                    }()
+                    #else
+                    let idPrefix: String = "mesh"
+                    #endif
+                    if let last = viewModel.messages.suffix(300).last?.id { return "\(idPrefix)|\(last)" }
+                    return nil
+                }()
+                guard let target = targetID else { return }
+                let duration = (notif.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? NSNumber)?.doubleValue ?? 0.25
+                let curveRaw = (notif.userInfo?[UIResponder.keyboardAnimationCurveUserInfoKey] as? NSNumber)?.intValue ?? 2
+                let anim: Animation = {
+                    switch curveRaw {
+                    case 0: return .easeInOut(duration: duration)
+                    case 1: return .easeIn(duration: duration)
+                    case 2: return .easeOut(duration: duration)
+                    case 3: return .linear(duration: duration)
+                    default: return .easeOut(duration: duration)
+                    }
+                }()
+                DispatchQueue.main.async {
+                    withAnimation(anim) {
+                        proxy.scrollTo(target, anchor: .bottom)
+                    }
+                }
+                // Final correction without animation to eliminate any end-of-animation jitter
+                DispatchQueue.main.asyncAfter(deadline: .now() + duration + 0.02) {
+                    var txn = Transaction()
+                    txn.disablesAnimations = true
+                    withTransaction(txn) {
+                        proxy.scrollTo(target, anchor: .bottom)
+                    }
+                }
+            }
+            #endif
             .onAppear {
                 // Force scroll to bottom when opening a chat view
                 let targetID: String? = {
@@ -469,16 +532,16 @@ struct ContentView: View {
                         return "dm:\(peer)|\(last)"
                     }
                     #if os(iOS)
-                    let contextKey: String = {
+                    let idPrefix: String = {
                         switch locationManager.selectedChannel {
                         case .mesh: return "mesh"
                         case .location(let ch): return "geo:\(ch.geohash)"
                         }
                     }()
                     #else
-                    let contextKey: String = "mesh"
+                    let idPrefix: String = "mesh"
                     #endif
-                    if let last = viewModel.messages.suffix(300).last?.id { return "\(contextKey)|\(last)" }
+                    if let last = viewModel.messages.suffix(300).last?.id { return "\(idPrefix)|\(last)" }
                     return nil
                 }()
                 isAtBottom.wrappedValue = true
@@ -493,16 +556,16 @@ struct ContentView: View {
                             return "dm:\(peer)|\(last)"
                         }
                         #if os(iOS)
-                        let contextKey: String = {
+                        let idPrefix: String = {
                             switch locationManager.selectedChannel {
                             case .mesh: return "mesh"
                             case .location(let ch): return "geo:\(ch.geohash)"
                             }
                         }()
                         #else
-                        let contextKey: String = "mesh"
+                        let idPrefix: String = "mesh"
                         #endif
-                        if let last = viewModel.messages.suffix(300).last?.id { return "\(contextKey)|\(last)" }
+                        if let last = viewModel.messages.suffix(300).last?.id { return "\(idPrefix)|\(last)" }
                         return nil
                     }()
                     if let t2 = targetID2 { proxy.scrollTo(t2, anchor: .bottom) }
@@ -516,16 +579,16 @@ struct ContentView: View {
                         return "dm:\(peer)|\(last)"
                     }
                     #if os(iOS)
-                    let contextKey: String = {
+                    let idPrefix: String = {
                         switch locationManager.selectedChannel {
                         case .mesh: return "mesh"
                         case .location(let ch): return "geo:\(ch.geohash)"
                         }
                     }()
                     #else
-                    let contextKey: String = "mesh"
+                    let idPrefix: String = "mesh"
                     #endif
-                    if let last = viewModel.messages.suffix(300).last?.id { return "\(contextKey)|\(last)" }
+                    if let last = viewModel.messages.suffix(300).last?.id { return "\(idPrefix)|\(last)" }
                     return nil
                 }()
                 isAtBottom.wrappedValue = true
@@ -551,17 +614,17 @@ struct ContentView: View {
                         // Immediate scroll if enough time has passed
                         lastScrollTime = now
                         #if os(iOS)
-                        let contextKey: String = {
+                        let idPrefix: String = {
                             switch locationManager.selectedChannel {
                             case .mesh: return "mesh"
                             case .location(let ch): return "geo:\(ch.geohash)"
                             }
                         }()
                         #else
-                        let contextKey: String = "mesh"
+                        let idPrefix: String = "mesh"
                         #endif
                         let count = windowCountPublic
-                        let target = viewModel.messages.suffix(count).last.map { "\(contextKey)|\($0.id)" }
+                        let target = viewModel.messages.suffix(count).last.map { "\(idPrefix)|\($0.id)" }
                         DispatchQueue.main.async {
                             if let target = target { proxy.scrollTo(target, anchor: .bottom) }
                         }
@@ -571,17 +634,17 @@ struct ContentView: View {
                         scrollThrottleTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
                             lastScrollTime = Date()
                             #if os(iOS)
-                            let contextKey: String = {
+                            let idPrefix: String = {
                                 switch locationManager.selectedChannel {
                                 case .mesh: return "mesh"
                                 case .location(let ch): return "geo:\(ch.geohash)"
                                 }
                             }()
                             #else
-                            let contextKey: String = "mesh"
+                            let idPrefix: String = "mesh"
                             #endif
                             let count = windowCountPublic
-                            let target = viewModel.messages.suffix(count).last.map { "\(contextKey)|\($0.id)" }
+                            let target = viewModel.messages.suffix(count).last.map { "\(idPrefix)|\($0.id)" }
                             DispatchQueue.main.async {
                                 if let target = target { proxy.scrollTo(target, anchor: .bottom) }
                             }
@@ -636,9 +699,9 @@ struct ContentView: View {
                 case .location(let ch):
                     // Reset window size
                     windowCountPublic = 300
-                    let contextKey = "geo:\(ch.geohash)"
+                    let idPrefix = "geo:\(ch.geohash)"
                     let last = viewModel.messages.suffix(windowCountPublic).last?.id
-                    let target = last.map { "\(contextKey)|\($0)" }
+                    let target = last.map { "\(idPrefix)|\($0)" }
                     isAtBottom.wrappedValue = true
                     DispatchQueue.main.async {
                         if let target = target { proxy.scrollTo(target, anchor: .bottom) }
@@ -684,7 +747,7 @@ struct ContentView: View {
                                  windowedMessages: ArraySlice<BitchatMessage>,
                                  isAtBottom: Binding<Bool>,
                                  proxy: ScrollViewProxy,
-                                 contextKey: String) {
+                                 idPrefix: String) {
         // Track if last item is visible to enable auto-scroll only when near bottom
         if messageID == windowedMessages.last?.id {
             isAtBottom.wrappedValue = true
@@ -692,7 +755,7 @@ struct ContentView: View {
         // Infinite scroll up: when top row appears, increase window and preserve anchor
         if messageID == windowedMessages.first?.id, messages.count > windowedMessages.count {
             let step = 120
-            let preserveID = "\(contextKey)|\(messageID)"
+            let preserveID = "\(idPrefix)|\(messageID)"
             if let peer = privatePeer {
                 let current = windowCountPrivate[peer] ?? 300
                 let newCount = min(messages.count, current + step)
@@ -1016,12 +1079,29 @@ struct ContentView: View {
     // MARK: - View Components
     
     private var mainChatView: some View {
-        VStack(spacing: 0) {
-            mainHeaderView
-            Divider()
-            messagesView(privatePeer: nil, isAtBottom: $isAtBottomPublic)
-            Divider()
-            inputView
+        Group {
+            #if os(iOS)
+            VStack(spacing: 0) {
+                mainHeaderView
+                Divider()
+                messagesView(privatePeer: nil, isAtBottom: $isAtBottomPublic)
+            }
+            .safeAreaInset(edge: .bottom) {
+                VStack(spacing: 0) {
+                    Divider()
+                    inputView
+                }
+                .background(backgroundColor)
+            }
+            #else
+            VStack(spacing: 0) {
+                mainHeaderView
+                Divider()
+                messagesView(privatePeer: nil, isAtBottom: $isAtBottomPublic)
+                Divider()
+                inputView
+            }
+            #endif
         }
         .background(backgroundColor)
         .foregroundColor(textColor)
@@ -1066,12 +1146,29 @@ struct ContentView: View {
                 .fill(Color.gray.opacity(0.3))
                 .frame(width: 1)
             
-            VStack(spacing: 0) {
-                privateHeaderView
-                Divider()
-                messagesView(privatePeer: viewModel.selectedPrivateChatPeer, isAtBottom: $isAtBottomPrivate)
-                Divider()
-                inputView
+            Group {
+                #if os(iOS)
+                VStack(spacing: 0) {
+                    privateHeaderView
+                    Divider()
+                    messagesView(privatePeer: viewModel.selectedPrivateChatPeer, isAtBottom: $isAtBottomPrivate)
+                }
+                .safeAreaInset(edge: .bottom) {
+                    VStack(spacing: 0) {
+                        Divider()
+                        inputView
+                    }
+                    .background(backgroundColor)
+                }
+                #else
+                VStack(spacing: 0) {
+                    privateHeaderView
+                    Divider()
+                    messagesView(privatePeer: viewModel.selectedPrivateChatPeer, isAtBottom: $isAtBottomPrivate)
+                    Divider()
+                    inputView
+                }
+                #endif
             }
             .background(backgroundColor)
             .foregroundColor(textColor)
