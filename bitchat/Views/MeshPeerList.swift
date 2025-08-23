@@ -107,10 +107,6 @@ struct MeshPeerList: View {
                 if newOrder != orderedIDs { orderedIDs = newOrder }
             }
         }
-        .onAppear {
-            orderedIDs = viewModel.allPeers.map { $0.id }
-        }
-        // Ordering updates react to viewModel changes automatically via ObservedObject
     }
 }
 
