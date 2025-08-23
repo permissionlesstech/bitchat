@@ -115,19 +115,22 @@ class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
             fingerprintCache[peerID] = favoriteKey.sha256Fingerprint()
         }
         
-        // Phase 3: Sort peers
-        enrichedPeers.sort { lhs, rhs in
-            // Connected first
-            if lhs.isConnected != rhs.isConnected {
-                return lhs.isConnected
+        // Phase 3: Preserve stable order
+        // Keep previous order for peers that still exist, then append any new peers at the bottom.
+        let previousOrder = self.peers.map { $0.id }
+        let byID = Dictionary(uniqueKeysWithValues: enrichedPeers.map { ($0.id, $0) })
+        var ordered: [BitchatPeer] = []
+        var seen: Set<String> = []
+        for id in previousOrder {
+            if let p = byID[id] {
+                ordered.append(p)
+                seen.insert(id)
             }
-            // Then favorites
-            if lhs.isFavorite != rhs.isFavorite {
-                return lhs.isFavorite
-            }
-            // Finally alphabetical
-            return lhs.displayName < rhs.displayName
         }
+        for p in enrichedPeers where !seen.contains(p.id) {
+            ordered.append(p)
+        }
+        enrichedPeers = ordered
         
         // Phase 4: Build subsets and indices
         var favoritesList: [BitchatPeer] = []

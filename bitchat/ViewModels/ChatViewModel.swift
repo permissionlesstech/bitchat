@@ -151,6 +151,19 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         !unreadPrivateMessages.isEmpty
     }
 
+    #if os(iOS)
+    @MainActor
+    var isInGeohashChannel: Bool {
+        if case .location = activeChannel { return true }
+        return false
+    }
+    @MainActor
+    var activeGeohashID: String? {
+        if case .location(let ch) = activeChannel { return ch.geohash }
+        return nil
+    }
+    #endif
+
     /// Open the most relevant private chat when tapping the toolbar unread icon.
     /// Prefers the most recently active unread conversation, otherwise the most recent PM.
     @MainActor
@@ -1457,13 +1470,27 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         // Remove blocked Nostr pubkeys
         map = map.filter { !SecureIdentityStateManager.shared.isNostrBlocked(pubkeyHexLowercased: $0.key) }
         geoParticipants[gh] = map
-        // Build display list
-        let people = map
-            .map { (pub, seen) in
-                GeoPerson(id: pub, displayName: displayNameForNostrPubkey(pub), lastSeen: seen)
+        // Build display list preserving existing order. Only append new people at the bottom.
+        var newList: [GeoPerson] = []
+        let activeIDs = Set(map.keys)
+        // Keep existing order for currently active entries
+        for person in geohashPeople {
+            if activeIDs.contains(person.id) {
+                let seen = map[person.id] ?? person.lastSeen
+                let updated = GeoPerson(id: person.id,
+                                        displayName: displayNameForNostrPubkey(person.id),
+                                        lastSeen: seen)
+                newList.append(updated)
             }
-            .sorted { $0.lastSeen > $1.lastSeen }
-        geohashPeople = people
+        }
+        // Append any newly active IDs at the bottom
+        let existingIDs = Set(newList.map { $0.id })
+        for (pub, seen) in map where !existingIDs.contains(pub) {
+            newList.append(GeoPerson(id: pub,
+                                     displayName: displayNameForNostrPubkey(pub),
+                                     lastSeen: seen))
+        }
+        geohashPeople = newList
     }
 
     private func startGeoParticipantsTimer() {
@@ -1485,17 +1512,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     #if os(iOS)
     /// Return the current, pruned, sorted people list for the active geohash without mutating state.
     @MainActor
-    func visibleGeohashPeople() -> [GeoPerson] {
-        guard let gh = currentGeohash else { return [] }
-        let cutoff = Date().addingTimeInterval(-5 * 60)
-        let map = (geoParticipants[gh] ?? [:])
-            .filter { $0.value >= cutoff }
-            .filter { !SecureIdentityStateManager.shared.isNostrBlocked(pubkeyHexLowercased: $0.key) }
-        let people = map
-            .map { (pub, seen) in GeoPerson(id: pub, displayName: displayNameForNostrPubkey(pub), lastSeen: seen) }
-            .sorted { $0.lastSeen > $1.lastSeen }
-        return people
-    }
+    func visibleGeohashPeople() -> [GeoPerson] { geohashPeople }
     /// Returns the current participant count for a specific geohash, using the 5-minute activity window.
     @MainActor
     func geohashParticipantCount(for geohash: String) -> Int {
@@ -3019,8 +3036,9 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                             var matchStyle = AttributeContainer()
                             matchStyle.font = .system(size: 14, weight: isSelf ? .bold : .semibold, design: .monospaced)
                             if type == "url" {
-                                matchStyle.foregroundColor = isSelf ? .orange : .blue
+                                matchStyle.foregroundColor = .blue
                                 matchStyle.underlineStyle = .single
+                                if let u = URL(string: matchText) { matchStyle.link = u }
                             }
                             result.append(AttributedString(matchText).mergingAttributes(matchStyle))
                         }
@@ -3070,6 +3088,322 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         message.setCachedFormattedText(result, isDark: isDark, isSelf: isSelf)
         
         return result
+    }
+
+    // MARK: - Split Message Formatting
+    // Provides separate attributed strings for the sender prefix and the message body
+    // to enable distinct tap targets in the UI (username vs. message text).
+    @MainActor
+    func formatSenderPrefix(_ message: BitchatMessage, colorScheme: ColorScheme) -> AttributedString {
+        guard message.sender != "system" else { return AttributedString("") }
+
+        // Determine if this message was sent by self (mesh, geo, or DM)
+        let isSelf: Bool = {
+            if let spid = message.senderPeerID {
+                #if os(iOS)
+                if case .location(let ch) = activeChannel, spid.hasPrefix("nostr:"),
+                   let myGeo = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
+                    return spid == "nostr:\(myGeo.publicKeyHex.prefix(8))"
+                }
+                #endif
+                return spid == meshService.myPeerID
+            }
+            if message.sender == nickname { return true }
+            if message.sender.hasPrefix(nickname + "#") { return true }
+            return false
+        }()
+
+        let isDark = colorScheme == .dark
+        if let cached = message.getCachedFormattedPrefix(isDark: isDark, isSelf: isSelf) { return cached }
+        let baseColor: Color = isSelf ? .orange : peerColor(for: message, isDark: isDark)
+
+        var result = AttributedString()
+        let (baseName, suffix) = splitSuffix(from: message.sender)
+        var senderStyle = AttributeContainer()
+        senderStyle.foregroundColor = baseColor
+        let fontWeight: Font.Weight = isSelf ? .bold : .medium
+        senderStyle.font = .system(size: 14, weight: fontWeight, design: .monospaced)
+
+        result.append(AttributedString("<@").mergingAttributes(senderStyle))
+        result.append(AttributedString(baseName).mergingAttributes(senderStyle))
+        if !suffix.isEmpty {
+            var suffixStyle = senderStyle
+            suffixStyle.foregroundColor = baseColor.opacity(0.6)
+            result.append(AttributedString(suffix).mergingAttributes(suffixStyle))
+        }
+        result.append(AttributedString("> ").mergingAttributes(senderStyle))
+
+        message.setCachedFormattedPrefix(result, isDark: isDark, isSelf: isSelf)
+        return result
+    }
+
+    // Compute and cache the rendered width (in points) of the sender prefix for hanging indent.
+    // Uses the same attributed content as formatSenderPrefix to ensure consistency.
+    @MainActor
+    func prefixWidth(for message: BitchatMessage, colorScheme: ColorScheme) -> CGFloat {
+        // Determine self flag to match font weight
+        let isSelf: Bool = {
+            if let spid = message.senderPeerID {
+                #if os(iOS)
+                if case .location(let ch) = activeChannel, spid.hasPrefix("nostr:"),
+                   let myGeo = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
+                    return spid == "nostr:\(myGeo.publicKeyHex.prefix(8))"
+                }
+                #endif
+                return spid == meshService.myPeerID
+            }
+            if message.sender == nickname { return true }
+            if message.sender.hasPrefix(nickname + "#") { return true }
+            return false
+        }()
+        if let cached = message.getCachedPrefixWidth(isSelf: isSelf) { return CGFloat(cached) }
+        let attr = formatSenderPrefix(message, colorScheme: colorScheme)
+        let ns = NSAttributedString(attr)
+        let bounds = ns.boundingRect(
+            with: CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            context: nil
+        )
+        let w = ceil(bounds.width)
+        message.setCachedPrefixWidth(Double(w), isSelf: isSelf)
+        return w
+    }
+
+    @MainActor
+    func formatMessageBody(_ message: BitchatMessage, colorScheme: ColorScheme) -> AttributedString {
+        // For system messages, reproduce the existing formatting from formatMessageAsText
+        if message.sender == "system" {
+            var result = AttributedString()
+            var contentStyle = AttributeContainer()
+            contentStyle.foregroundColor = Color.gray
+            let content = AttributedString("* \(message.content) *")
+            contentStyle.font = .system(size: 12, design: .monospaced).italic()
+            result.append(content.mergingAttributes(contentStyle))
+
+            let timestamp = AttributedString(" [\(formatTimestamp(message.timestamp))]")
+            var timestampStyle = AttributeContainer()
+            timestampStyle.foregroundColor = Color.gray.opacity(0.5)
+            timestampStyle.font = .system(size: 10, design: .monospaced)
+            result.append(timestamp.mergingAttributes(timestampStyle))
+            return result
+        }
+
+        // Determine if this message was sent by self (mesh, geo, or DM)
+        let isSelf: Bool = {
+            if let spid = message.senderPeerID {
+                #if os(iOS)
+                if case .location(let ch) = activeChannel, spid.hasPrefix("nostr:"),
+                   let myGeo = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
+                    return spid == "nostr:\(myGeo.publicKeyHex.prefix(8))"
+                }
+                #endif
+                return spid == meshService.myPeerID
+            }
+            if message.sender == nickname { return true }
+            if message.sender.hasPrefix(nickname + "#") { return true }
+            return false
+        }()
+
+        // Mirror the content formatting logic from formatMessageAsText (without the sender prefix)
+        var result = AttributedString()
+        let isDark = colorScheme == .dark
+        if let cached = message.getCachedFormattedBody(isDark: isDark, isSelf: isSelf) { return cached }
+        let baseColor: Color = isSelf ? .orange : peerColor(for: message, isDark: isDark)
+        let content = message.content
+
+        if content.count > 4000 || content.hasVeryLongToken(threshold: 1024) {
+            var plainStyle = AttributeContainer()
+            plainStyle.foregroundColor = baseColor
+            plainStyle.font = isSelf
+                ? .system(size: 14, weight: .bold, design: .monospaced)
+                : .system(size: 14, design: .monospaced)
+            result.append(AttributedString(content).mergingAttributes(plainStyle))
+        } else {
+            let hashtagPattern = "#([a-zA-Z0-9_]+)"
+            let mentionPattern = "@([\\p{L}0-9_]+(?:#[a-fA-F0-9]{4})?)"
+            let cashuPattern = "\\bcashu[AB][A-Za-z0-9_-]{60,}\\b"
+            let bolt11Pattern = "(?i)\\bln(bc|tb|bcrt)[0-9][a-z0-9]{50,}\\b"
+            let lnurlPattern = "(?i)\\blnurl1[a-z0-9]{20,}\\b"
+            let lightningSchemePattern = "(?i)\\blightning:[^\\s]+"
+
+            let hashtagRegex = try? NSRegularExpression(pattern: hashtagPattern, options: [])
+            let mentionRegex = try? NSRegularExpression(pattern: mentionPattern, options: [])
+            let cashuRegex = try? NSRegularExpression(pattern: cashuPattern, options: [])
+            let bolt11Regex = try? NSRegularExpression(pattern: bolt11Pattern, options: [])
+            let lnurlRegex = try? NSRegularExpression(pattern: lnurlPattern, options: [])
+            let lightningSchemeRegex = try? NSRegularExpression(pattern: lightningSchemePattern, options: [])
+
+            let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
+
+            let hashtagMatches = hashtagRegex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
+            let mentionMatches = mentionRegex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
+            let urlMatches = detector?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
+            let cashuMatches = cashuRegex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
+            let lightningMatches = lightningSchemeRegex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
+            let bolt11Matches = bolt11Regex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
+            let lnurlMatches = lnurlRegex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
+
+            let mentionRanges = mentionMatches.map { $0.range(at: 0) }
+            func overlapsMention(_ r: NSRange) -> Bool {
+                for mr in mentionRanges { if NSIntersectionRange(r, mr).length > 0 { return true } }
+                return false
+            }
+            var allMatches: [(range: NSRange, type: String)] = []
+            for match in hashtagMatches where !overlapsMention(match.range(at: 0)) {
+                allMatches.append((match.range(at: 0), "hashtag"))
+            }
+            for match in mentionMatches { allMatches.append((match.range(at: 0), "mention")) }
+            for match in urlMatches where !overlapsMention(match.range) {
+                allMatches.append((match.range, "url"))
+            }
+            for match in cashuMatches where !overlapsMention(match.range(at: 0)) {
+                allMatches.append((match.range(at: 0), "cashu"))
+            }
+            for match in lightningMatches where !overlapsMention(match.range(at: 0)) {
+                allMatches.append((match.range(at: 0), "lightning"))
+            }
+            let occupied: [NSRange] = urlMatches.map { $0.range } + lightningMatches.map { $0.range(at: 0) }
+            func overlapsOccupied(_ r: NSRange) -> Bool {
+                for or in occupied { if NSIntersectionRange(r, or).length > 0 { return true } }
+                return false
+            }
+            for match in bolt11Matches where !overlapsMention(match.range(at: 0)) && !overlapsOccupied(match.range(at: 0)) {
+                allMatches.append((match.range(at: 0), "bolt11"))
+            }
+            for match in lnurlMatches where !overlapsMention(match.range(at: 0)) && !overlapsOccupied(match.range(at: 0)) {
+                allMatches.append((match.range(at: 0), "lnurl"))
+            }
+            allMatches.sort { $0.range.location < $1.range.location }
+
+            var lastEnd = content.startIndex
+            let isMentioned = message.mentions?.contains(nickname) ?? false
+            for (range, type) in allMatches {
+                if let nsRange = Range(range, in: content) {
+                    let beforeText = String(content[lastEnd..<nsRange.lowerBound])
+                    if !beforeText.isEmpty {
+                        var beforeStyle = AttributeContainer()
+                        beforeStyle.foregroundColor = baseColor
+                        beforeStyle.font = isSelf
+                            ? .system(size: 14, weight: .bold, design: .monospaced)
+                            : .system(size: 14, design: .monospaced)
+                        if isMentioned { beforeStyle.font = beforeStyle.font?.bold() }
+                        let wrapped = softWrapLongTokens(beforeText)
+                        result.append(AttributedString(wrapped).mergingAttributes(beforeStyle))
+                    }
+
+                    let matchText = String(content[nsRange])
+                    if type == "mention" {
+                        let (mBase, mSuffix) = splitSuffix(from: matchText.replacingOccurrences(of: "@", with: ""))
+                        let mySuffix: String? = {
+                            #if os(iOS)
+                            if case .location(let ch) = activeChannel, let id = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
+                                return String(id.publicKeyHex.suffix(4))
+                            }
+                            #endif
+                            return String(meshService.myPeerID.prefix(4))
+                        }()
+                        let isMentionToMe: Bool = {
+                            if mBase == nickname {
+                                if let suf = mySuffix, !mSuffix.isEmpty { return mSuffix == "#\(suf)" }
+                                return mSuffix.isEmpty
+                            }
+                            return false
+                        }()
+                        var mentionStyle = AttributeContainer()
+                        mentionStyle.font = .system(size: 14, weight: isSelf ? .bold : .semibold, design: .monospaced)
+                        let mentionColor: Color = isMentionToMe ? .orange : baseColor
+                        mentionStyle.foregroundColor = mentionColor
+                        result.append(AttributedString("@").mergingAttributes(mentionStyle))
+                        result.append(AttributedString(mBase).mergingAttributes(mentionStyle))
+                        if !mSuffix.isEmpty {
+                            var light = mentionStyle
+                            light.foregroundColor = mentionColor.opacity(0.6)
+                            result.append(AttributedString(mSuffix).mergingAttributes(light))
+                        }
+                    } else {
+                        if type == "hashtag" {
+                            var tagStyle = AttributeContainer()
+                            tagStyle.font = isSelf
+                                ? .system(size: 14, weight: .bold, design: .monospaced)
+                                : .system(size: 14, design: .monospaced)
+                            tagStyle.foregroundColor = baseColor
+                            let wrapped = softWrapLongTokens(matchText)
+                            result.append(AttributedString(wrapped).mergingAttributes(tagStyle))
+                        } else if type == "cashu" {
+                            var spacer = AttributeContainer()
+                            spacer.foregroundColor = baseColor
+                            spacer.font = isSelf
+                                ? .system(size: 14, weight: .bold, design: .monospaced)
+                                : .system(size: 14, design: .monospaced)
+                            result.append(AttributedString(" ").mergingAttributes(spacer))
+                        } else if type == "lightning" || type == "bolt11" || type == "lnurl" {
+                            var spacer = AttributeContainer()
+                            spacer.foregroundColor = baseColor
+                            spacer.font = isSelf
+                                ? .system(size: 14, weight: .bold, design: .monospaced)
+                                : .system(size: 14, design: .monospaced)
+                            result.append(AttributedString(" ").mergingAttributes(spacer))
+                        } else {
+                            var matchStyle = AttributeContainer()
+                            matchStyle.font = .system(size: 14, weight: isSelf ? .bold : .semibold, design: .monospaced)
+            if type == "url" {
+                                matchStyle.foregroundColor = .blue
+                                matchStyle.underlineStyle = .single
+                                if let u = URL(string: matchText) { matchStyle.link = u }
+                            }
+                            // For generic text (and even urls), allow soft-wrapping of long tokens
+                            let wrapped = softWrapLongTokens(matchText)
+                            result.append(AttributedString(wrapped).mergingAttributes(matchStyle))
+                        }
+                    }
+                    lastEnd = nsRange.upperBound
+                }
+            }
+
+            if lastEnd < content.endIndex {
+                let remainingText = String(content[lastEnd...])
+                var remainingStyle = AttributeContainer()
+                remainingStyle.foregroundColor = baseColor
+                remainingStyle.font = isSelf
+                    ? .system(size: 14, weight: .bold, design: .monospaced)
+                    : .system(size: 14, design: .monospaced)
+                if isMentioned { remainingStyle.font = remainingStyle.font?.bold() }
+                let wrapped = softWrapLongTokens(remainingText)
+                result.append(AttributedString(wrapped).mergingAttributes(remainingStyle))
+            }
+        }
+
+        // Append timestamp at end
+        let timestamp = AttributedString(" [\(formatTimestamp(message.timestamp))]")
+        var timestampStyle = AttributeContainer()
+        timestampStyle.foregroundColor = Color.gray.opacity(0.7)
+        timestampStyle.font = .system(size: 10, design: .monospaced)
+        result.append(timestamp.mergingAttributes(timestampStyle))
+
+        message.setCachedFormattedBody(result, isDark: isDark, isSelf: isSelf)
+        return result
+    }
+
+    // Insert zero-width space every few characters within long tokens (no whitespace)
+    // to allow character-level line wrapping for very long strings.
+    private func softWrapLongTokens(_ text: String, breakInterval: Int = 16, threshold: Int = 32) -> String {
+        if text.isEmpty { return text }
+        var out = String()
+        out.reserveCapacity(text.count + text.count / breakInterval)
+        var tokenLen = 0
+        for ch in text {
+            if ch.isWhitespace || ch.isNewline {
+                out.append(ch)
+                tokenLen = 0
+            } else {
+                out.append(ch)
+                tokenLen += 1
+                if tokenLen >= threshold && ((tokenLen - threshold) % breakInterval == 0) {
+                    out.append("\u{200B}") // zero-width space
+                }
+            }
+        }
+        return out
     }
 
     // Split a nickname into base and a '#abcd' suffix if present
@@ -3344,8 +3678,16 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         var seed: String
         if let spid = message.senderPeerID {
             if spid.hasPrefix("nostr:") || spid.hasPrefix("nostr_") {
-                let full = nostrKeyMapping[spid]?.lowercased() ?? spid.lowercased()
-                seed = "nostr:" + full
+                if let full = nostrKeyMapping[spid]?.lowercased() {
+                    seed = "nostr:" + full
+                } else {
+                    // Fallback: resolve by display name from visible geohash participants
+                    if let fullFromName = nostrPubkeyForDisplayName(message.sender)?.lowercased() {
+                        seed = "nostr:" + fullFromName
+                    } else {
+                        seed = spid.lowercased()
+                    }
+                }
             } else if spid.count == 16, let full = getNoiseKeyForShortID(spid)?.lowercased() {
                 seed = "noise:" + full
             } else {
@@ -3410,6 +3752,26 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         messages.append(message)
         messages.sort { $0.timestamp < $1.timestamp }
         trimMessagesIfNeeded()
+
+        // Prewarm lightweight caches to reduce first-render work
+        prewarmMessageCaches(message)
+    }
+
+    /// Precompute lightweight rendering caches for a message to keep scrolling smooth.
+    /// Currently warms prefix width and sender prefix formatting for both light/dark.
+    private func prewarmMessageCaches(_ message: BitchatMessage) {
+        // Compute prefix width cheaply: width is independent of color, only font/weight
+        Task.detached { [weak self] in
+            guard let self = self else { return }
+            // Computing width uses attributed prefix; do it on main to reuse existing helpers safely
+            Task { @MainActor in
+                // Warm prefix width once
+                _ = self.prefixWidth(for: message, colorScheme: .light)
+                // Warm sender prefix attributed strings for both schemes (small strings)
+                _ = self.formatSenderPrefix(message, colorScheme: .light)
+                _ = self.formatSenderPrefix(message, colorScheme: .dark)
+            }
+        }
     }
     
     private func addPrivateMessage(_ message: BitchatMessage, for peerID: String) {
@@ -4703,11 +5065,16 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     // MARK: - Geohash Nickname Resolution (for /block in geohash)
     @MainActor
     func nostrPubkeyForDisplayName(_ name: String) -> String? {
+        #if os(iOS)
         // Look up current visible geohash participants for an exact displayName match
         for p in visibleGeohashPeople() {
             if p.displayName == name { return p.id }
         }
         return nil
+        #else
+        // Not available on macOS (no geohash people list)
+        return nil
+        #endif
     }
     
     /// Process action messages (hugs, slaps) into system messages
@@ -5055,23 +5422,10 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             return
         }
 
-        if finalMessage.sender != "system" {
-            // Check for duplicates
-            let messageExists = messages.contains { existingMsg in
-                if existingMsg.id == finalMessage.id { return true }
-                if existingMsg.content == finalMessage.content && existingMsg.sender == finalMessage.sender {
-                    let timeDiff = abs(existingMsg.timestamp.timeIntervalSince(finalMessage.timestamp))
-                    return timeDiff < 1.0
-                }
-                return false
-            }
-            if !messageExists && !finalMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                addMessage(finalMessage)
-            }
-        } else {
-            if !finalMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                addMessage(finalMessage)
-            }
+        if !finalMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            // Rely on addMessage's ID-based duplicate check only to avoid dropping
+            // distinct messages that happen to have the same text close in time.
+            addMessage(finalMessage)
         }
     }
     

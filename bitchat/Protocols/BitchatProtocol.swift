@@ -409,6 +409,9 @@ class BitchatMessage: Codable {
     
     // Cached formatted text (not included in Codable)
     private var _cachedFormattedText: [String: AttributedString] = [:]
+    private var _cachedFormattedPrefix: [String: AttributedString] = [:]
+    private var _cachedFormattedBody: [String: AttributedString] = [:]
+    private var _cachedPrefixWidth: [String: Double] = [:]
     
     func getCachedFormattedText(isDark: Bool, isSelf: Bool) -> AttributedString? {
         return _cachedFormattedText["\(isDark)-\(isSelf)"]
@@ -416,6 +419,30 @@ class BitchatMessage: Codable {
     
     func setCachedFormattedText(_ text: AttributedString, isDark: Bool, isSelf: Bool) {
         _cachedFormattedText["\(isDark)-\(isSelf)"] = text
+    }
+
+    func getCachedFormattedPrefix(isDark: Bool, isSelf: Bool) -> AttributedString? {
+        return _cachedFormattedPrefix["\(isDark)-\(isSelf)"]
+    }
+
+    func setCachedFormattedPrefix(_ text: AttributedString, isDark: Bool, isSelf: Bool) {
+        _cachedFormattedPrefix["\(isDark)-\(isSelf)"] = text
+    }
+
+    func getCachedFormattedBody(isDark: Bool, isSelf: Bool) -> AttributedString? {
+        return _cachedFormattedBody["\(isDark)-\(isSelf)"]
+    }
+
+    func setCachedFormattedBody(_ text: AttributedString, isDark: Bool, isSelf: Bool) {
+        _cachedFormattedBody["\(isDark)-\(isSelf)"] = text
+    }
+
+    func getCachedPrefixWidth(isSelf: Bool) -> Double? {
+        return _cachedPrefixWidth["self=\(isSelf)"]
+    }
+
+    func setCachedPrefixWidth(_ width: Double, isSelf: Bool) {
+        _cachedPrefixWidth["self=\(isSelf)"] = width
     }
     
     // Codable implementation

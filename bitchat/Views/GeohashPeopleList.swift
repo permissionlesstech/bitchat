@@ -24,22 +24,18 @@ struct GeohashPeopleList: View {
                     }
                     return nil
                 }()
-                let ordered = viewModel.visibleGeohashPeople().sorted { a, b in
-                    if let me = myHex {
-                        if a.id == me && b.id != me { return true }
-                        if b.id == me && a.id != me { return false }
-                    }
-                    return a.lastSeen > b.lastSeen
-                }
+                let ordered = viewModel.visibleGeohashPeople()
                 let firstID = ordered.first?.id
+                LazyVStack(alignment: .leading, spacing: 0) {
                 ForEach(ordered) { person in
                     HStack(spacing: 4) {
+                        let assignedColor = viewModel.colorForNostrPubkey(person.id, isDark: colorScheme == .dark)
+                        let isMe = person.id == myHex
                         let convKey = "nostr_" + String(person.id.prefix(16))
                         if viewModel.unreadPrivateMessages.contains(convKey) {
                             Image(systemName: "envelope.fill").font(.system(size: 12)).foregroundColor(.orange)
                         } else {
                             // For the local user, use a different face icon when teleported
-                            let isMe = (person.id == myHex)
                             #if os(iOS)
                             // Consider either the per-session tag (for any peer) or the manager flag for self
                             let teleported = viewModel.teleportedGeo.contains(person.id.lowercased()) || (isMe && LocationChannelManager.shared.teleported)
@@ -47,12 +43,10 @@ struct GeohashPeopleList: View {
                             let teleported = false
                             #endif
                             let icon = teleported ? "face.dashed" : "face.smiling"
-                            let rowColor: Color = isMe ? .orange : textColor
+                            let rowColor: Color = isMe ? .orange : assignedColor
                             Image(systemName: icon).font(.system(size: 12)).foregroundColor(rowColor)
                         }
                         let (base, suffix) = splitSuffix(from: person.displayName)
-                        let isMe = person.id == myHex
-                        let assignedColor = viewModel.colorForNostrPubkey(person.id, isDark: colorScheme == .dark)
                         HStack(spacing: 0) {
                             let rowColor: Color = isMe ? .orange : assignedColor
                             Text(base)
@@ -104,6 +98,7 @@ struct GeohashPeopleList: View {
                             }
                         }
                     }
+                }
                 }
             }
         }
