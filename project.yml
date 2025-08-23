@@ -24,6 +24,8 @@ targets:
     resources:
       - bitchat/Assets.xcassets
       - bitchat/LaunchScreen.storyboard
+      - bitchat/**/Localizable.strings
+      - bitchat/**/InfoPlist.strings
     info:
       path: bitchat/Info.plist
       properties:
@@ -76,6 +78,8 @@ targets:
       - bitchat
     resources:
       - bitchat/Assets.xcassets
+      - bitchat/**/Localizable.strings
+      - bitchat/**/InfoPlist.strings
     info:
       path: bitchat/Info.plist
       properties:
