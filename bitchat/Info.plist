@@ -37,6 +37,8 @@
 	<string>bitchat uses Bluetooth to discover and connect with other bitchat users nearby.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>bitchat uses your approximate location to compute local geohash channels for optional public chats. Exact GPS is never shared.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>bitchat uses the camera to scan QR codes to verify peers.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>bluetooth-central</string>

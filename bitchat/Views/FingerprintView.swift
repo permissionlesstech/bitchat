@@ -32,8 +32,9 @@ struct FingerprintView: View {
                 
                 Spacer()
                 
-                Button("DONE") {
-                    dismiss()
+                Button(action: { dismiss() }) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 14, weight: .semibold))
                 }
                 .foregroundColor(textColor)
             }
@@ -162,6 +163,20 @@ struct FingerprintView: View {
                                     .padding(.horizontal, 20)
                                     .padding(.vertical, 10)
                                     .background(Color.green)
+                                    .cornerRadius(8)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        } else {
+                            Button(action: {
+                                viewModel.unverifyFingerprint(for: peerID)
+                                dismiss()
+                            }) {
+                                Text("REMOVE VERIFICATION")
+                                    .font(.system(size: 14, weight: .bold, design: .monospaced))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 20)
+                                    .padding(.vertical, 10)
+                                    .background(Color.red)
                                     .cornerRadius(8)
                             }
                             .buttonStyle(PlainButtonStyle())

@@ -165,8 +165,12 @@ class CommandProcessor {
             let geoBlocked = Array(SecureIdentityStateManager.shared.getBlockedNostrPubkeys())
             var geoNames: [String] = []
             if let vm = chatViewModel {
+                #if os(iOS)
                 let visible = vm.visibleGeohashPeople()
                 let visibleIndex = Dictionary(uniqueKeysWithValues: visible.map { ($0.id.lowercased(), $0.displayName) })
+                #else
+                let visibleIndex: [String: String] = [:]
+                #endif
                 for pk in geoBlocked {
                     if let name = visibleIndex[pk.lowercased()] {
                         geoNames.append(name)

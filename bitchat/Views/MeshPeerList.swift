@@ -85,10 +85,27 @@ struct MeshPeerList: View {
                                 .help("Blocked")
                         }
 
-                        if let icon = item.enc.icon, !isMe {
-                            Image(systemName: icon)
-                                .font(.system(size: 10))
-                                .foregroundColor(baseColor)
+                        if !isMe {
+                            if peer.isConnected {
+                                if let icon = item.enc.icon {
+                                    Image(systemName: icon)
+                                        .font(.system(size: 10))
+                                        .foregroundColor(baseColor)
+                                }
+                            } else {
+                                // Offline: prefer showing verified badge from persisted fingerprints
+                                if let fp = viewModel.getFingerprint(for: peer.id),
+                                   viewModel.verifiedFingerprints.contains(fp) {
+                                    Image(systemName: "checkmark.seal.fill")
+                                        .font(.system(size: 10))
+                                        .foregroundColor(baseColor)
+                                } else if let icon = item.enc.icon {
+                                    // Fallback to whatever status says (likely lock if we had a past session)
+                                    Image(systemName: icon)
+                                        .font(.system(size: 10))
+                                        .foregroundColor(baseColor)
+                                }
+                            }
                         }
 
                         Spacer()

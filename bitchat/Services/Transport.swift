@@ -46,9 +46,18 @@ protocol Transport: AnyObject {
     func sendBroadcastAnnounce()
     func sendDeliveryAck(for messageID: String, to peerID: String)
 
+    // QR verification (optional for transports)
+    func sendVerifyChallenge(to peerID: String, noiseKeyHex: String, nonceA: Data)
+    func sendVerifyResponse(to peerID: String, noiseKeyHex: String, nonceA: Data)
+
     // Peer snapshots (for non-UI services)
     var peerSnapshotPublisher: AnyPublisher<[TransportPeerSnapshot], Never> { get }
     func currentPeerSnapshots() -> [TransportPeerSnapshot]
+}
+
+extension Transport {
+    func sendVerifyChallenge(to peerID: String, noiseKeyHex: String, nonceA: Data) {}
+    func sendVerifyResponse(to peerID: String, noiseKeyHex: String, nonceA: Data) {}
 }
 
 protocol TransportPeerEventsDelegate: AnyObject {

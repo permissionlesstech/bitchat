@@ -412,6 +412,22 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     // Delivery tracking
     private var cancellables = Set<AnyCancellable>()
 
+    // MARK: - QR Verification (pending state)
+    private struct PendingVerification {
+        let noiseKeyHex: String
+        let signKeyHex: String
+        let nonceA: Data
+        let startedAt: Date
+        var sent: Bool
+    }
+    private var pendingQRVerifications: [String: PendingVerification] = [:] // peerID -> pending
+    // Last handled challenge nonce per peer to avoid duplicate responses
+    private var lastVerifyNonceByPeer: [String: Data] = [:]
+    // Track when we last received a verify challenge from a peer (fingerprint-keyed)
+    private var lastInboundVerifyChallengeAt: [String: Date] = [:] // key: fingerprint
+    // Throttle mutual verification toasts per fingerprint
+    private var lastMutualToastAt: [String: Date] = [:] // key: fingerprint
+
     // MARK: - Public message batching (UI perf)
     // Buffer incoming public messages and flush in small batches to reduce UI invalidations
     private var publicBuffer: [BitchatMessage] = []
@@ -450,6 +466,9 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             }
         }
     }
+
+    // Throttle verification response toasts per peer to avoid spam
+    private var lastVerifyToastAt: [String: Date] = [:]
     
     // Track processed Nostr ACKs to avoid duplicate processing
     private var processedNostrAcks: Set<String> = []  // "messageId:ackType:senderPubkey" format
@@ -871,6 +890,9 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                                             category: SecureLogger.session, level: .warning)
                         }
                     }
+                case .verifyChallenge, .verifyResponse:
+                    // QR verification payloads over Nostr are not supported; ignore in geohash DMs
+                    break
                 }
             }
         } catch { }
@@ -3726,10 +3748,35 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         // Update encryption status after verification
         updateEncryptionStatus(for: peerID)
     }
+
+    @MainActor
+    func unverifyFingerprint(for peerID: String) {
+        guard let fingerprint = getFingerprint(for: peerID) else { return }
+        SecureIdentityStateManager.shared.setVerified(fingerprint: fingerprint, verified: false)
+        SecureIdentityStateManager.shared.forceSave()
+        verifiedFingerprints.remove(fingerprint)
+        updateEncryptionStatus(for: peerID)
+    }
     
+    @MainActor
     func loadVerifiedFingerprints() {
         // Load verified fingerprints directly from secure storage
         verifiedFingerprints = SecureIdentityStateManager.shared.getVerifiedFingerprints()
+        // Log snapshot for debugging persistence
+        let sample = Array(verifiedFingerprints.prefix(3)).map { $0.prefix(8) }.joined(separator: ", ")
+        SecureLogger.log("🔐 Verified loaded: \(verifiedFingerprints.count) [\(sample)]", category: SecureLogger.security, level: .info)
+        // Also log any offline favorites and whether we consider them verified
+        let offlineFavorites = unifiedPeerService.favorites.filter { !$0.isConnected }
+        for fav in offlineFavorites {
+            let fp = unifiedPeerService.getFingerprint(for: fav.id)
+            let isVer = fp.flatMap { verifiedFingerprints.contains($0) } ?? false
+            let fpShort = fp?.prefix(8) ?? "nil"
+            SecureLogger.log("⭐️ Favorite offline: \(fav.nickname) fp=\(fpShort) verified=\(isVer)", category: SecureLogger.security, level: .info)
+        }
+        // Invalidate cached encryption statuses so offline favorites can show verified badges immediately
+        invalidateEncryptionCache()
+        // Trigger UI refresh of peer list
+        objectWillChange.send()
     }
     
     private func setupNoiseCallbacks() {
@@ -3761,6 +3808,14 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     self.shortIDToNoiseKey[peerID] = stable
                     SecureLogger.log("🗺️ Mapped short peerID to Noise key for header continuity: \(peerID) -> \(stable.prefix(8))…",
                                     category: SecureLogger.session, level: .debug)
+                }
+
+                // If a QR verification is pending but not sent yet, send it now that session is authenticated
+                if var pending = self.pendingQRVerifications[peerID], pending.sent == false {
+                    self.meshService.sendVerifyChallenge(to: peerID, noiseKeyHex: pending.noiseKeyHex, nonceA: pending.nonceA)
+                    pending.sent = true
+                    self.pendingQRVerifications[peerID] = pending
+                    SecureLogger.log("📤 Sent deferred verify challenge to \(peerID) after handshake", category: SecureLogger.security, level: .debug)
                 }
 
                 // Schedule UI update
@@ -3866,6 +3921,72 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                         objectWillChange.send()
                     }
                 }
+            case .verifyChallenge:
+                // Parse and respond
+                guard let tlv = VerificationService.shared.parseVerifyChallenge(payload) else { return }
+                // Ensure intended for our noise key
+                let myNoiseHex = meshService.getNoiseService().getStaticPublicKeyData().hexEncodedString().lowercased()
+                guard tlv.noiseKeyHex.lowercased() == myNoiseHex else { return }
+                // Deduplicate: ignore if we've already responded to this nonce for this peer
+                if let last = lastVerifyNonceByPeer[peerID], last == tlv.nonceA { return }
+                lastVerifyNonceByPeer[peerID] = tlv.nonceA
+                // Record inbound challenge time keyed by stable fingerprint if available
+                if let fp = getFingerprint(for: peerID) {
+                    lastInboundVerifyChallengeAt[fp] = Date()
+                    // If we've already verified this fingerprint locally, treat this as mutual and toast immediately (responder side)
+                    if verifiedFingerprints.contains(fp) {
+                        let now = Date()
+                        let last = lastMutualToastAt[fp] ?? .distantPast
+                        if now.timeIntervalSince(last) > 60 { // 1-minute throttle
+                            lastMutualToastAt[fp] = now
+                            let name = unifiedPeerService.getPeer(by: peerID)?.nickname ?? resolveNickname(for: peerID)
+                            NotificationService.shared.sendLocalNotification(
+                                title: "Mutual verification",
+                                body: "You and \(name) verified each other",
+                                identifier: "verify-mutual-\(peerID)-\(UUID().uuidString)"
+                            )
+                        }
+                    }
+                }
+                meshService.sendVerifyResponse(to: peerID, noiseKeyHex: tlv.noiseKeyHex, nonceA: tlv.nonceA)
+                // Silent response: no toast needed on responder
+            case .verifyResponse:
+                guard let resp = VerificationService.shared.parseVerifyResponse(payload) else { return }
+                // Check pending for this peer
+                guard let pending = pendingQRVerifications[peerID] else { return }
+                guard resp.noiseKeyHex.lowercased() == pending.noiseKeyHex.lowercased(), resp.nonceA == pending.nonceA else { return }
+                // Verify signature with expected sign key
+                let ok = VerificationService.shared.verifyResponseSignature(noiseKeyHex: resp.noiseKeyHex, nonceA: resp.nonceA, signature: resp.signature, signerPublicKeyHex: pending.signKeyHex)
+                if ok {
+                    pendingQRVerifications.removeValue(forKey: peerID)
+                    if let fp = getFingerprint(for: peerID) {
+                        let short = fp.prefix(8)
+                        SecureLogger.log("🔐 Marking verified fingerprint: \(short)", category: SecureLogger.security, level: .info)
+                        SecureIdentityStateManager.shared.setVerified(fingerprint: fp, verified: true)
+                        SecureIdentityStateManager.shared.forceSave()
+                        verifiedFingerprints.insert(fp)
+                        let name = unifiedPeerService.getPeer(by: peerID)?.nickname ?? resolveNickname(for: peerID)
+                        NotificationService.shared.sendLocalNotification(
+                            title: "Verified",
+                            body: "You verified \(name)",
+                            identifier: "verify-success-\(peerID)-\(UUID().uuidString)"
+                        )
+                        // If we also recently responded to their challenge, flag mutual and toast (initiator side)
+                        if let t = lastInboundVerifyChallengeAt[fp], Date().timeIntervalSince(t) < 600 {
+                            let now = Date()
+                            let lastToast = lastMutualToastAt[fp] ?? .distantPast
+                            if now.timeIntervalSince(lastToast) > 60 {
+                                lastMutualToastAt[fp] = now
+                                NotificationService.shared.sendLocalNotification(
+                                    title: "Mutual verification",
+                                    body: "You and \(name) verified each other",
+                                    identifier: "verify-mutual-\(peerID)-\(UUID().uuidString)"
+                                )
+                            }
+                        }
+                        updateEncryptionStatus(for: peerID)
+                    }
+                }
             }
         }
     }
@@ -3889,6 +4010,36 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             checkForMentions(msg)
             sendHapticFeedback(for: msg)
         }
+    }
+
+    // MARK: - QR Verification API
+    @MainActor
+    func beginQRVerification(with qr: VerificationService.VerificationQR) -> Bool {
+        // Find a matching peer by Noise key
+        let targetNoise = qr.noiseKeyHex.lowercased()
+        guard let peer = unifiedPeerService.peers.first(where: { $0.noisePublicKey.hexEncodedString().lowercased() == targetNoise }) else {
+            return false
+        }
+        let peerID = peer.id
+        // If we already have a pending verification with this peer, don't send another
+        if pendingQRVerifications[peerID] != nil {
+            return true
+        }
+        // Generate nonceA
+        var nonce = Data(count: 16)
+        _ = nonce.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 16, $0.baseAddress!) }
+        var pending = PendingVerification(noiseKeyHex: qr.noiseKeyHex, signKeyHex: qr.signKeyHex, nonceA: nonce, startedAt: Date(), sent: false)
+        pendingQRVerifications[peerID] = pending
+        // If Noise session is established, send immediately; otherwise trigger handshake and send on auth
+        let noise = meshService.getNoiseService()
+        if noise.hasEstablishedSession(with: peerID) {
+            meshService.sendVerifyChallenge(to: peerID, noiseKeyHex: qr.noiseKeyHex, nonceA: nonce)
+            pending.sent = true
+            pendingQRVerifications[peerID] = pending
+        } else {
+            meshService.triggerHandshake(with: peerID)
+        }
+        return true
     }
 
     // Mention parsing moved from BLE – use the existing non-optional helper below
@@ -4552,6 +4703,9 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     privateChats[targetPeerID]?[idx].deliveryStatus = .read(by: peerName, at: Date())
                     objectWillChange.send()
                 }
+            case .verifyChallenge, .verifyResponse:
+                // Ignore verification payloads arriving via Nostr path for now
+                break
             }
             
         } catch {
@@ -4904,10 +5058,12 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     // MARK: - Geohash Nickname Resolution (for /block in geohash)
     @MainActor
     func nostrPubkeyForDisplayName(_ name: String) -> String? {
-        // Look up current visible geohash participants for an exact displayName match
+        // Look up current visible geohash participants for an exact displayName match (iOS only)
+        #if os(iOS)
         for p in visibleGeohashPeople() {
             if p.displayName == name { return p.id }
         }
+        #endif
         return nil
     }
     

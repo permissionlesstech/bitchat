@@ -155,12 +155,17 @@ enum NoisePayloadType: UInt8 {
     case privateMessage = 0x01      // Private chat message
     case readReceipt = 0x02         // Message was read
     case delivered = 0x03           // Message was delivered
+    // Verification (QR-based OOB binding)
+    case verifyChallenge = 0x10     // Verification challenge
+    case verifyResponse  = 0x11     // Verification response
     
     var description: String {
         switch self {
         case .privateMessage: return "privateMessage"
         case .readReceipt: return "readReceipt"
         case .delivered: return "delivered"
+        case .verifyChallenge: return "verifyChallenge"
+        case .verifyResponse: return "verifyResponse"
         }
     }
 }

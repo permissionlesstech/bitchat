@@ -508,11 +508,51 @@ final class BLEService: NSObject {
     func sendBroadcastAnnounce() {
         sendAnnounce()
     }
+
+    // MARK: - QR Verification over Noise
+    func sendVerifyChallenge(to peerID: String, noiseKeyHex: String, nonceA: Data) {
+        let payload = VerificationService.shared.buildVerifyChallenge(noiseKeyHex: noiseKeyHex, nonceA: nonceA)
+        sendNoisePayload(payload, to: peerID)
+    }
+
+    func sendVerifyResponse(to peerID: String, noiseKeyHex: String, nonceA: Data) {
+        guard let payload = VerificationService.shared.buildVerifyResponse(noiseKeyHex: noiseKeyHex, nonceA: nonceA) else { return }
+        sendNoisePayload(payload, to: peerID)
+    }
+
+    private func sendNoisePayload(_ typedPayload: Data, to peerID: String) {
+        guard noiseService.hasSession(with: peerID) else {
+            // Lazy-handshake path: queue? For now, initiate handshake and drop
+            initiateNoiseHandshake(with: peerID)
+            return
+        }
+        do {
+            let encrypted = try noiseService.encrypt(typedPayload, for: peerID)
+            let packet = BitchatPacket(
+                type: MessageType.noiseEncrypted.rawValue,
+                senderID: Data(hexString: myPeerID) ?? Data(),
+                recipientID: Data(hexString: peerID),
+                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                payload: encrypted,
+                signature: nil,
+                ttl: messageTTL
+            )
+            if DispatchQueue.getSpecific(key: messageQueueKey) != nil {
+                broadcastPacket(packet)
+            } else {
+                messageQueue.async { [weak self] in self?.broadcastPacket(packet) }
+            }
+        } catch {
+            SecureLogger.log("Failed to send verification payload: \(error)", category: SecureLogger.noise, level: .error)
+        }
+    }
     
     func getPeerFingerprint(_ peerID: String) -> String? {
         return collectionsQueue.sync {
             if let publicKey = peers[peerID]?.noisePublicKey {
-                return publicKey.hexEncodedString()
+                // Use the same fingerprinting method as NoiseEncryptionService/UnifiedPeerService (SHA-256 of raw key)
+                let hash = SHA256.hash(data: publicKey)
+                return hash.map { String(format: "%02x", $0) }.joined()
             }
             return nil
         }
@@ -1382,6 +1422,16 @@ final class BLEService: NSObject {
                 let ts = Date(timeIntervalSince1970: Double(packet.timestamp) / 1000)
                 notifyUI { [weak self] in
                     self?.delegate?.didReceiveNoisePayload(from: peerID, type: .readReceipt, payload: Data(payloadData), timestamp: ts)
+                }
+            case .verifyChallenge:
+                let ts = Date(timeIntervalSince1970: Double(packet.timestamp) / 1000)
+                notifyUI { [weak self] in
+                    self?.delegate?.didReceiveNoisePayload(from: peerID, type: .verifyChallenge, payload: Data(payloadData), timestamp: ts)
+                }
+            case .verifyResponse:
+                let ts = Date(timeIntervalSince1970: Double(packet.timestamp) / 1000)
+                notifyUI { [weak self] in
+                    self?.delegate?.didReceiveNoisePayload(from: peerID, type: .verifyResponse, payload: Data(payloadData), timestamp: ts)
                 }
             default:
                 SecureLogger.log("⚠️ Unknown noise payload type: \(payloadType)", category: SecureLogger.noise, level: .warning)
