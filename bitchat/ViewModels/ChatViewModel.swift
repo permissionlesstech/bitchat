@@ -4889,9 +4889,11 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     @MainActor
     func nostrPubkeyForDisplayName(_ name: String) -> String? {
         // Look up current visible geohash participants for an exact displayName match
+        #if os(iOS)
         for p in visibleGeohashPeople() {
             if p.displayName == name { return p.id }
         }
+        #endif
         return nil
     }
     
