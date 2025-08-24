@@ -25,28 +25,7 @@ struct PeerDisplayData: Identifiable {
     let isMutualFavorite: Bool
 }
 
-// MARK: - Lazy Link Preview
-
-// Lazy loading wrapper for link previews
-struct LazyLinkPreviewView: View {
-    let url: URL
-    let title: String?
-    @State private var isVisible = false
-    
-    var body: some View {
-        Group {
-            if isVisible {
-                LinkPreviewView(url: url, title: title)
-            } else {
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color.gray.opacity(0.1))
-                    .frame(height: 80)
-            }
-        }
-        .frame(height: 80)
-        .onAppear { isVisible = true }
-    }
-}
+// (Link previews removed; URLs are now clickable inline)
 
 // MARK: - Main Content View
 
@@ -214,7 +193,7 @@ struct ContentView: View {
                 }
             }
 
-            Button("private message") {
+            Button("direct message") {
                 if let peerID = selectedMessageSenderID {
                     #if os(iOS)
                     if peerID.hasPrefix("nostr:") {
@@ -333,7 +312,7 @@ struct ContentView: View {
                                 VStack(alignment: .leading, spacing: 0) {
                                     HStack(alignment: .top, spacing: 0) {
                                         // Single text view for natural wrapping
-                                        let isLong = message.content.count > 2000 || message.content.hasVeryLongToken(threshold: 512)
+                                        let isLong = (message.content.count > 2000 || message.content.hasVeryLongToken(threshold: 512)) && message.content.extractCashuTokens().isEmpty
                                         let isExpanded = expandedMessageIDs.contains(message.id)
                                         Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme))
                                             .fixedSize(horizontal: false, vertical: true)
@@ -349,7 +328,7 @@ struct ContentView: View {
                                     }
                                     
                                     // Expand/Collapse for very long messages
-                                    if (message.content.count > 2000 || message.content.hasVeryLongToken(threshold: 512)) {
+                                    if (message.content.count > 2000 || message.content.hasVeryLongToken(threshold: 512)) && message.content.extractCashuTokens().isEmpty {
                                         let isExpanded = expandedMessageIDs.contains(message.id)
                                         Button(isExpanded ? "Show less" : "Show more") {
                                             if isExpanded { expandedMessageIDs.remove(message.id) }
@@ -360,17 +339,7 @@ struct ContentView: View {
                                         .padding(.top, 4)
                                     }
 
-                                    // Check for plain URLs
-                                    let urls = message.content.extractURLs()
-                                    if !urls.isEmpty {
-                                        ForEach(urls.prefix(2).indices, id: \.self) { index in
-                                            let urlInfo = urls[index]
-                                            LazyLinkPreviewView(url: urlInfo.url, title: nil)
-                                                .padding(.top, 3)
-                                                .padding(.horizontal, 1)
-                                                .id("\(message.id)-\(urlInfo.url.absoluteString)")
-                                        }
-                                    }
+                                    // Link previews removed: URLs appear inline and are tappable
 
                                     // Render payment chips (Lightning / Cashu) with rounded background
                                     let lightningLinks = message.content.extractLightningLinks()
@@ -462,11 +431,11 @@ struct ContentView: View {
                         }
                         .contentShape(Rectangle())
                         .onTapGesture {
-                            // Only show actions for messages from other users (not system or self)
-                            if message.sender != "system" && message.sender != viewModel.nickname {
-                                selectedMessageSender = message.sender
-                                selectedMessageSenderID = message.senderPeerID
-                                showMessageActions = true
+                            // Tap on message body: insert @mention for this sender
+                            if message.sender != "system" {
+                                let name = message.sender
+                                messageText = "@\(name) "
+                                isTextFieldFocused = true
                             }
                         }
                         .contextMenu {
@@ -487,6 +456,36 @@ struct ContentView: View {
                 .padding(.vertical, 4)
             }
             .background(backgroundColor)
+            .onOpenURL { url in
+                guard url.scheme == "bitchat", url.host == "user" else { return }
+                let id = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+                let peerID = id.removingPercentEncoding ?? id
+                selectedMessageSenderID = peerID
+                selectedMessageSender = viewModel.messages.last(where: { $0.senderPeerID == peerID })?.sender
+                showMessageActions = true
+            }
+            .onOpenURL { url in
+                guard url.scheme == "bitchat", url.host == "geohash" else { return }
+                let gh = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")).lowercased()
+                let allowed = Set("0123456789bcdefghjkmnpqrstuvwxyz")
+                guard (2...12).contains(gh.count), gh.allSatisfy({ allowed.contains($0) }) else { return }
+                #if os(iOS)
+                func levelForLength(_ len: Int) -> GeohashChannelLevel {
+                    switch len {
+                    case 0...2: return .region
+                    case 3...4: return .province
+                    case 5: return .city
+                    case 6: return .neighborhood
+                    case 7: return .block
+                    default: return .block
+                    }
+                }
+                let level = levelForLength(gh.count)
+                let ch = GeohashChannel(level: level, geohash: gh)
+                LocationChannelManager.shared.markTeleported(for: gh, true)
+                LocationChannelManager.shared.select(ChannelID.location(ch))
+                #endif
+            }
             .onTapGesture(count: 3) {
                 // Triple-tap to clear current chat
                 viewModel.sendMessage("/clear")

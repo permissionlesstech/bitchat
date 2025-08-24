@@ -298,8 +298,8 @@ struct LocationChannelsSheet: View {
 
     private func levelForLength(_ len: Int) -> GeohashChannelLevel {
         switch len {
-        case 0...2: return .country
-        case 3...4: return .region
+        case 0...2: return .region
+        case 3...4: return .province
         case 5: return .city
         case 6: return .neighborhood
         case 7: return .block
@@ -382,7 +382,7 @@ extension LocationChannelsSheet {
 
     private func formattedNamePrefix(for level: GeohashChannelLevel) -> String {
         switch level {
-        case .country:
+        case .region:
             return ""
         default:
             return "~"
