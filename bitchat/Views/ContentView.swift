@@ -291,13 +291,17 @@ struct ContentView: View {
                     // Build stable UI IDs with a context key to avoid ID collisions when switching channels
                     #if os(iOS)
                     let contextKey: String = {
+                        if let peer = privatePeer { return "dm:\(peer)" }
                         switch locationManager.selectedChannel {
                         case .mesh: return "mesh"
                         case .location(let ch): return "geo:\(ch.geohash)"
                         }
                     }()
                     #else
-                    let contextKey: String = "mesh"
+                    let contextKey: String = {
+                        if let peer = privatePeer { return "dm:\(peer)" }
+                        return "mesh"
+                    }()
                     #endif
                     let items = windowedMessages.map { (uiID: "\(contextKey)|\($0.id)", message: $0) }
                     
@@ -396,13 +400,17 @@ struct ContentView: View {
                                 let step = 200
                                 #if os(iOS)
                                 let contextKey: String = {
+                                    if let peer = privatePeer { return "dm:\(peer)" }
                                     switch locationManager.selectedChannel {
                                     case .mesh: return "mesh"
                                     case .location(let ch): return "geo:\(ch.geohash)"
                                     }
                                 }()
                                 #else
-                                let contextKey: String = "mesh"
+                                let contextKey: String = {
+                                    if let peer = privatePeer { return "dm:\(peer)" }
+                                    return "mesh"
+                                }()
                                 #endif
                                 let preserveID = "\(contextKey)|\(message.id)"
                                 if let peer = privatePeer {
