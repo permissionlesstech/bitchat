@@ -31,6 +31,13 @@ struct BitchatApp: App {
                 .environmentObject(chatViewModel)
                 .onAppear {
                     NotificationDelegate.shared.chatViewModel = chatViewModel
+                    // Inject live Noise service into VerificationService to avoid creating new BLE instances
+                    VerificationService.shared.configure(with: chatViewModel.meshService.getNoiseService())
+                    // Prewarm Nostr identity and QR to make first VERIFY sheet fast
+                    DispatchQueue.global(qos: .utility).async {
+                        let npub = try? NostrIdentityBridge.getCurrentNostrIdentity()?.npub
+                        _ = VerificationService.shared.buildMyQRString(nickname: chatViewModel.nickname, npub: npub)
+                    }
                     #if os(iOS)
                     appDelegate.chatViewModel = chatViewModel
                     #elseif os(macOS)

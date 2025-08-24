@@ -58,6 +58,7 @@ struct ContentView: View {
     @State private var scrollThrottleTimer: Timer?
     @State private var autocompleteDebounceTimer: Timer?
     @State private var showLocationChannelsSheet = false
+    @State private var showVerifySheet = false
     @State private var expandedMessageIDs: Set<String> = []
     // Window sizes for rendering (infinite scroll up)
     @State private var windowCountPublic: Int = 300
@@ -934,6 +935,24 @@ struct ContentView: View {
                         .font(.system(size: 16, weight: .bold, design: .monospaced))
                         .foregroundColor(textColor)
                     Spacer()
+                    // Show QR only on mesh channel's peer list
+                    #if os(iOS)
+                    if case .mesh = locationManager.selectedChannel {
+                        Button(action: { showVerifySheet = true }) {
+                            Image(systemName: "qrcode")
+                                .font(.system(size: 14))
+                        }
+                        .buttonStyle(.plain)
+                        .help("Verification: show my QR or scan a friend")
+                    }
+                    #else
+                    Button(action: { showVerifySheet = true }) {
+                        Image(systemName: "qrcode")
+                            .font(.system(size: 14))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Verification: show my QR or scan a friend")
+                    #endif
                 }
                 .frame(height: 44) // Match header height
                 .padding(.horizontal, 12)
@@ -1224,12 +1243,18 @@ struct ContentView: View {
                         .accessibilityHidden(true)
                 }
                 .foregroundColor(headerCountColor)
+
+                // QR moved to the PEOPLE header in the sidebar when on mesh channel
             }
             .onTapGesture {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     showSidebar.toggle()
                     sidebarDragOffset = 0
                 }
+            }
+            .sheet(isPresented: $showVerifySheet) {
+                VerificationSheetView(isPresented: $showVerifySheet)
+                    .environmentObject(viewModel)
             }
         }
         .frame(height: 44)

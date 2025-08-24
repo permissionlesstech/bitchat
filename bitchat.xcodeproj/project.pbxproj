@@ -142,6 +142,10 @@
 		FBC409E105493C491531B59A /* NostrProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E5A9FF4AEA8A923317ED26A /* NostrProtocol.swift */; };
 		A1B2C3D44E5F60718293A4B5 /* XChaCha20Poly1305Compat.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D44E5F60718293A4B4 /* XChaCha20Poly1305Compat.swift */; };
 		A1B2C3D54E5F60718293A4B6 /* XChaCha20Poly1305Compat.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D44E5F60718293A4B4 /* XChaCha20Poly1305Compat.swift */; };
+		AA77BB11CC22DD33EE44FF55 /* VerificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA77BB10CC22DD33EE44FF55 /* VerificationService.swift */; };
+		AA77BB12CC22DD33EE44FF56 /* VerificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA77BB10CC22DD33EE44FF55 /* VerificationService.swift */; };
+		AA77BB14CC22DD33EE44FF58 /* VerificationViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA77BB13CC22DD33EE44FF57 /* VerificationViews.swift */; };
+		AA77BB15CC22DD33EE44FF59 /* VerificationViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA77BB13CC22DD33EE44FF57 /* VerificationViews.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -261,6 +265,8 @@
 		FE7CCF2BD78A3F3DAE6DA145 /* MockBLEService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockBLEService.swift; sourceTree = "<group>"; };
 		FF7AF93D874001FBD94C8306 /* bitchat-macOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "bitchat-macOS.entitlements"; sourceTree = "<group>"; };
 		A1B2C3D44E5F60718293A4B4 /* XChaCha20Poly1305Compat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XChaCha20Poly1305Compat.swift; sourceTree = "<group>"; };
+		AA77BB10CC22DD33EE44FF55 /* VerificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerificationService.swift; sourceTree = "<group>"; };
+		AA77BB13CC22DD33EE44FF57 /* VerificationViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerificationViews.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -431,6 +437,7 @@
 		A55126E93155456CAA8D6656 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				AA77BB13CC22DD33EE44FF57 /* VerificationViews.swift */,
 				047502B22E55FED60083520F /* GeohashPeopleList.swift */,
 				047502B32E55FED60083520F /* MeshPeerList.swift */,
 				0475028E2E5417660083520F /* LocationChannelsSheet.swift */,
@@ -504,6 +511,7 @@
 		D98A3186D7E4C72E35BDF7FE /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				AA77BB10CC22DD33EE44FF55 /* VerificationService.swift */,
 				047502B82E560F690083520F /* RelayController.swift */,
 				0475028B2E54171C0083520F /* LocationChannelManager.swift */,
 				049BD3B02E51F319001A566B /* MessageRouter.swift */,
@@ -724,6 +732,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AA77BB12CC22DD33EE44FF56 /* VerificationService.swift in Sources */,
+				AA77BB15CC22DD33EE44FF59 /* VerificationViews.swift in Sources */,
 				A1B2C3D54E5F60718293A4B6 /* XChaCha20Poly1305Compat.swift in Sources */,
 				AD11E46940D742AEAF547EB2 /* AppInfoView.swift in Sources */,
 				9B51E9B63A3EA59B1A7874BD /* BinaryEncodingUtils.swift in Sources */,
@@ -779,6 +789,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AA77BB11CC22DD33EE44FF55 /* VerificationService.swift in Sources */,
+				AA77BB14CC22DD33EE44FF58 /* VerificationViews.swift in Sources */,
 				A1B2C3D44E5F60718293A4B5 /* XChaCha20Poly1305Compat.swift in Sources */,
 				ABAF130D88561F4A646F0430 /* AppInfoView.swift in Sources */,
 				AFB6AEFCABBE97441CB3102B /* BinaryEncodingUtils.swift in Sources */,
