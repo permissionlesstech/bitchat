@@ -719,7 +719,11 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             self.processedNostrEvents.insert(event.id)
             if let gh = self.currentGeohash,
                let myGeoIdentity = try? NostrIdentityBridge.deriveIdentity(forGeohash: gh),
-               myGeoIdentity.publicKeyHex.lowercased() == event.pubkey.lowercased() { return }
+               myGeoIdentity.publicKeyHex.lowercased() == event.pubkey.lowercased() {
+                // Skip very recent self-echo from relay, but allow older events (e.g., after app restart)
+                let eventTime = Date(timeIntervalSince1970: TimeInterval(event.created_at))
+                if Date().timeIntervalSince(eventTime) < 15 { return }
+            }
             if let nickTag = event.tags.first(where: { $0.first == "n" }), nickTag.count >= 2 {
                 let nick = nickTag[1]
                 self.geoNicknames[event.pubkey.lowercased()] = nick
@@ -833,16 +837,14 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                             self.sentReadReceipts.insert(messageId)
                         }
                     } else {
-                        // Optionally notify if app backgrounded and message is truly unread
-                        #if os(iOS)
-                        if shouldMarkUnread && UIApplication.shared.applicationState != .active {
+                        // Notify for truly unread and recent messages when not viewing
+                        if shouldMarkUnread {
                             NotificationService.shared.sendPrivateMessageNotification(
                                 from: senderName,
                                 message: pm.content,
                                 peerID: convKey
                             )
                         }
-                        #endif
                     }
                     self.objectWillChange.send()
                 case .delivered:
@@ -1389,11 +1391,12 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                                     category: SecureLogger.session, level: .info)
                 }
             }
-            // Skip our own events (we already locally echoed)
+            // Skip only very recent self-echo from relay; include older self events for hydration
             if let gh = self.currentGeohash,
                let myGeoIdentity = try? NostrIdentityBridge.deriveIdentity(forGeohash: gh),
                myGeoIdentity.publicKeyHex.lowercased() == event.pubkey.lowercased() {
-                return
+                let eventTime = Date(timeIntervalSince1970: TimeInterval(event.created_at))
+                if Date().timeIntervalSince(eventTime) < 15 { return }
             }
             // Cache nickname from tag if present
             if let nickTag = event.tags.first(where: { $0.first == "n" }), nickTag.count >= 2 {
@@ -1521,19 +1524,14 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     } else {
                         // pared back: omit defer READ log
                     }
-                    // Notify only when app is backgrounded and not viewing, and only if not already read
-                    #if os(iOS)
+                    // Notify for truly unread and recent messages when not viewing
                     if !isViewing && shouldMarkUnread {
-                        if UIApplication.shared.applicationState != .active {
-                            NotificationService.shared.sendPrivateMessageNotification(
-                                from: senderName,
-                                message: pm.content,
-                                peerID: convKey
-                            )
-                            // pared back: omit notification log
-                        }
+                        NotificationService.shared.sendPrivateMessageNotification(
+                            from: senderName,
+                            message: pm.content,
+                            peerID: convKey
+                        )
                     }
-                    #endif
                     self.objectWillChange.send()
                 default:
                     // Handle delivered/read receipts for our sent messages
