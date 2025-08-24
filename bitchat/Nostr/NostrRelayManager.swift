@@ -78,9 +78,23 @@ class NostrRelayManager: ObservableObject {
         updateConnectionStatus()
     }
     
+    /// Ensure connections exist to the given relay URLs (idempotent).
+    func ensureConnections(to relayUrls: [String]) {
+        let existing = Set(relays.map { $0.url })
+        for url in Set(relayUrls) {
+            if !existing.contains(url) {
+                relays.append(Relay(url: url))
+            }
+            if connections[url] == nil {
+                connectToRelay(url)
+            }
+        }
+    }
+
     /// Send an event to specified relays (or all if none specified)
     func sendEvent(_ event: NostrEvent, to relayUrls: [String]? = nil) {
-        let targetRelays = relayUrls ?? relays.map { $0.url }
+        let targetRelays = relayUrls ?? Self.defaultRelays
+        ensureConnections(to: targetRelays)
         
         // Add to queue for reliability
         messageQueueLock.lock()
@@ -95,10 +109,11 @@ class NostrRelayManager: ObservableObject {
         }
     }
     
-    /// Subscribe to events matching a filter
+    /// Subscribe to events matching a filter. If `relayUrls` provided, targets only those relays.
     func subscribe(
         filter: NostrFilter,
         id: String = UUID().uuidString,
+        relayUrls: [String]? = nil,
         handler: @escaping (NostrEvent) -> Void
     ) {
         messageHandlers[id] = handler
@@ -120,8 +135,14 @@ class NostrRelayManager: ObservableObject {
             // SecureLogger.log("📋 Subscription filter JSON: \(messageString.prefix(200))...", 
             //                 category: SecureLogger.session, level: .debug)
             
-            // Send subscription to all connected relays
-            for (relayUrl, connection) in connections {
+            // Target specific relays if provided; else all connections
+            let urls = relayUrls ?? Self.defaultRelays
+            ensureConnections(to: urls)
+            let targets: [(String, URLSessionWebSocketTask)] = urls.compactMap { url in
+                connections[url].map { (url, $0) }
+            }
+
+            for (relayUrl, connection) in targets {
                 connection.send(.string(messageString)) { error in
                     if let error = error {
                         SecureLogger.log("❌ Failed to send subscription to \(relayUrl): \(error)", 

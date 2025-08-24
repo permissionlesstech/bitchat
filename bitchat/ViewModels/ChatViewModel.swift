@@ -711,7 +711,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         // Unsubscribe + resubscribe
         NostrRelayManager.shared.unsubscribe(id: subID)
         let filter = NostrFilter.geohashEphemeral(ch.geohash, since: Date().addingTimeInterval(-3600), limit: 200)
-        NostrRelayManager.shared.subscribe(filter: filter, id: subID) { [weak self] event in
+        let subRelays = GeoRelayDirectory.shared.closestRelays(toGeohash: ch.geohash, count: 5)
+        NostrRelayManager.shared.subscribe(filter: filter, id: subID, relayUrls: subRelays) { [weak self] event in
             guard let self = self else { return }
             guard event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue else { return }
             if self.processedNostrEvents.contains(event.id) { return }
@@ -1275,7 +1276,12 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                             nickname: self.nickname,
                             teleported: LocationChannelManager.shared.teleported
                         )
-                        NostrRelayManager.shared.sendEvent(event)
+                        let targetRelays = GeoRelayDirectory.shared.closestRelays(toGeohash: ch.geohash, count: 5)
+                        if targetRelays.isEmpty {
+                            SecureLogger.log("Geo: no geohash relays available for \(ch.geohash); not sending", category: SecureLogger.session, level: .warning)
+                        } else {
+                            NostrRelayManager.shared.sendEvent(event, to: targetRelays)
+                        }
                         // Track ourselves as active participant
                         self.recordGeoParticipant(pubkeyHex: identity.publicKeyHex)
                         SecureLogger.log("GeoTeleport: sent geo message pub=\(identity.publicKeyHex.prefix(8))… teleported=\(LocationChannelManager.shared.teleported)",
@@ -1359,7 +1365,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         geoSubscriptionID = subID
         startGeoParticipantsTimer()
         let filter = NostrFilter.geohashEphemeral(ch.geohash, since: Date().addingTimeInterval(-3600), limit: 200)
-        NostrRelayManager.shared.subscribe(filter: filter, id: subID) { [weak self] event in
+        let subRelays = GeoRelayDirectory.shared.closestRelays(toGeohash: ch.geohash, count: 5)
+        NostrRelayManager.shared.subscribe(filter: filter, id: subID, relayUrls: subRelays) { [weak self] event in
             guard let self = self else { return }
             // Only handle ephemeral kind 20000 with matching tag
             guard event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue else { return }
@@ -1730,7 +1737,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             let subID = "geo-sample-\(gh)"
             geoSamplingSubs[subID] = gh
             let filter = NostrFilter.geohashEphemeral(gh, since: Date().addingTimeInterval(-300), limit: 100)
-            NostrRelayManager.shared.subscribe(filter: filter, id: subID) { [weak self] event in
+            let subRelays = GeoRelayDirectory.shared.closestRelays(toGeohash: gh, count: 5)
+            NostrRelayManager.shared.subscribe(filter: filter, id: subID, relayUrls: subRelays) { [weak self] event in
                 guard let self = self else { return }
                 guard event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue else { return }
                 // Update participants for this specific geohash
@@ -2478,7 +2486,17 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                             nickname: self.nickname,
                             teleported: LocationChannelManager.shared.teleported
                         )
-                        NostrRelayManager.shared.sendEvent(event)
+                        let targetRelays = GeoRelayDirectory.shared.closestRelays(toGeohash: ch.geohash, count: 5)
+                        if targetRelays.isEmpty {
+                    let targetRelays = GeoRelayDirectory.shared.closestRelays(toGeohash: ch.geohash, count: 5)
+                    if targetRelays.isEmpty {
+                        SecureLogger.log("Geo: no geohash relays available for \(ch.geohash); not sending", category: SecureLogger.session, level: .warning)
+                    } else {
+                        NostrRelayManager.shared.sendEvent(event, to: targetRelays)
+                    }
+                        } else {
+                            NostrRelayManager.shared.sendEvent(event, to: targetRelays)
+                        }
                         // Track ourselves as active participant
                         self.recordGeoParticipant(pubkeyHex: identity.publicKeyHex)
                     } catch {
@@ -4276,7 +4294,12 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                         nickname: self.nickname,
                         teleported: LocationChannelManager.shared.teleported
                     )
-                    NostrRelayManager.shared.sendEvent(event)
+                    let targetRelays = GeoRelayDirectory.shared.closestRelays(toGeohash: ch.geohash, count: 5)
+                    if targetRelays.isEmpty {
+                        NostrRelayManager.shared.sendEvent(event)
+                    } else {
+                        NostrRelayManager.shared.sendEvent(event, to: targetRelays)
+                    }
                 } catch {
                     SecureLogger.log("❌ Failed to send geohash raw message: \(error)", category: SecureLogger.session, level: .error)
                 }
