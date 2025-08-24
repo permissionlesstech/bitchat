@@ -21,6 +21,8 @@ struct BitchatApp: App {
     
     init() {
         UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
+        // Warm up georelay directory and refresh if stale (once/day)
+        GeoRelayDirectory.shared.prefetchIfNeeded()
     }
     
     var body: some Scene {

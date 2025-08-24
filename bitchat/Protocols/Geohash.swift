@@ -4,6 +4,11 @@ import Foundation
 /// Encodes latitude/longitude to base32 geohash with a fixed precision.
 enum Geohash {
     private static let base32Chars = Array("0123456789bcdefghjkmnpqrstuvwxyz")
+    private static let base32Map: [Character: Int] = {
+        var map: [Character: Int] = [:]
+        for (i, c) in base32Chars.enumerated() { map[c] = i }
+        return map
+    }()
 
     /// Encodes the provided coordinates into a geohash string.
     /// - Parameters:
@@ -56,5 +61,30 @@ enum Geohash {
 
         return String(geohash)
     }
-}
 
+    /// Decodes a geohash into the center latitude/longitude of its bounding box.
+    /// - Parameter geohash: Base32 geohash string.
+    /// - Returns: (lat, lon) center coordinate.
+    static func decodeCenter(_ geohash: String) -> (lat: Double, lon: Double) {
+        var latInterval: (Double, Double) = (-90.0, 90.0)
+        var lonInterval: (Double, Double) = (-180.0, 180.0)
+
+        var isEven = true
+        for ch in geohash.lowercased() {
+            guard let cd = base32Map[ch] else { continue }
+            for mask in [16, 8, 4, 2, 1] {
+                if isEven {
+                    let mid = (lonInterval.0 + lonInterval.1) / 2
+                    if (cd & mask) != 0 { lonInterval.0 = mid } else { lonInterval.1 = mid }
+                } else {
+                    let mid = (latInterval.0 + latInterval.1) / 2
+                    if (cd & mask) != 0 { latInterval.0 = mid } else { latInterval.1 = mid }
+                }
+                isEven.toggle()
+            }
+        }
+        let lat = (latInterval.0 + latInterval.1) / 2
+        let lon = (lonInterval.0 + lonInterval.1) / 2
+        return (lat, lon)
+    }
+}
