@@ -44,9 +44,24 @@ struct MeshPeerList: View {
                         let assigned = viewModel.colorForMeshPeer(id: peer.id, isDark: colorScheme == .dark)
                         let baseColor = isMe ? Color.orange : assigned
                         if isMe {
-                            Image(systemName: "person.fill").font(.system(size: 10)).foregroundColor(baseColor)
+                            Image(systemName: "person.fill")
+                                .font(.system(size: 10))
+                                .foregroundColor(baseColor)
+                        } else if peer.isConnected {
+                            // Mesh-connected peer: radio icon
+                            Image(systemName: "antenna.radiowaves.left.and.right")
+                                .font(.system(size: 10))
+                                .foregroundColor(baseColor)
+                        } else if peer.isMutualFavorite {
+                            // Mutual favorite reachable via Nostr: globe icon (purple)
+                            Image(systemName: "globe")
+                                .font(.system(size: 10))
+                                .foregroundColor(.purple)
                         } else {
-                            Image(systemName: "mappin.and.ellipse").font(.system(size: 10)).foregroundColor(baseColor)
+                            // Fallback icon for others (dimmed)
+                            Image(systemName: "person")
+                                .font(.system(size: 10))
+                                .foregroundColor(secondaryTextColor)
                         }
 
                         let displayName = isMe ? viewModel.nickname : peer.nickname

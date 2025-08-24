@@ -1,6 +1,7 @@
 import Foundation
 import CryptoKit
 import P256K
+import Security
 
 // Note: This file depends on Data extension from BinaryEncodingUtils.swift
 // Make sure BinaryEncodingUtils.swift is included in the target
@@ -12,8 +13,9 @@ struct NostrProtocol {
     enum EventKind: Int {
         case metadata = 0
         case textNote = 1
+        case dm = 14 // NIP-17 DM rumor kind
         case seal = 13 // NIP-17 sealed event
-        case giftWrap = 1059 // NIP-17 gift wrap
+        case giftWrap = 1059 // NIP-59 gift wrap
         case ephemeralEvent = 20000
     }
     
@@ -30,7 +32,7 @@ struct NostrProtocol {
         let rumor = NostrEvent(
             pubkey: senderIdentity.publicKeyHex,
             createdAt: Date(),
-            kind: .textNote,
+            kind: .dm, // NIP-17: DM rumor kind 14
             tags: [],
             content: content
         )
@@ -227,7 +229,7 @@ struct NostrProtocol {
         return try NostrEvent(from: rumorDict)
     }
     
-    // MARK: - Encryption (NIP-44 style)
+    // MARK: - Encryption (NIP-44 v2)
     
     private static func encrypt(
         plaintext: String,
@@ -239,33 +241,31 @@ struct NostrProtocol {
             throw NostrError.invalidPublicKey
         }
         
-        // Encrypting message
+        // Encrypting message (NIP-44 v2: XChaCha20-Poly1305, versioned)
         
         // Derive shared secret
         let sharedSecret = try deriveSharedSecret(
             privateKey: senderKey,
             publicKey: recipientPubkeyData
         )
+        // Derive NIP-44 v2 symmetric key (HKDF-SHA256 with label in info)
+        let key = try deriveNIP44V2Key(from: sharedSecret)
         
-        // Derived shared secret
+        // 24-byte random nonce for XChaCha20-Poly1305
+        var nonce24 = Data(count: 24)
+        _ = nonce24.withUnsafeMutableBytes { ptr in
+            SecRandomCopyBytes(kSecRandomDefault, 24, ptr.baseAddress!)
+        }
         
-        // Generate nonce
-        let nonce = AES.GCM.Nonce()
+        let pt = Data(plaintext.utf8)
+        let sealed = try XChaCha20Poly1305Compat.seal(plaintext: pt, key: key, nonce24: nonce24)
         
-        // Encrypt
-        let sealed = try AES.GCM.seal(
-            plaintext.data(using: .utf8)!,
-            using: SymmetricKey(data: sharedSecret),
-            nonce: nonce
-        )
-        
-        // Combine nonce + ciphertext + tag
-        var result = Data()
-        result.append(nonce.withUnsafeBytes { Data($0) })
-        result.append(sealed.ciphertext)
-        result.append(sealed.tag)
-        
-        return result.base64EncodedString()
+        // v2: base64url(nonce24 || ciphertext || tag)
+        var combined = Data()
+        combined.append(nonce24)
+        combined.append(sealed.ciphertext)
+        combined.append(sealed.tag)
+        return "v2:" + base64URLEncode(combined)
     }
     
     private static func decrypt(
@@ -273,86 +273,45 @@ struct NostrProtocol {
         senderPubkey: String,
         recipientKey: P256K.Schnorr.PrivateKey
     ) throws -> String {
-        
-        // Decrypting message
-        
-        guard let data = Data(base64Encoded: ciphertext),
+        // Expect NIP-44 v2 format
+        guard ciphertext.hasPrefix("v2:") else { throw NostrError.invalidCiphertext }
+        let encoded = String(ciphertext.dropFirst(3))
+        guard let data = base64URLDecode(encoded),
+              data.count > (24 + 16),
               let senderPubkeyData = Data(hexString: senderPubkey) else {
-            SecureLogger.log("❌ Invalid ciphertext or sender pubkey format", 
-                            category: SecureLogger.session, level: .error)
             throw NostrError.invalidCiphertext
         }
-        
-        // Ciphertext data parsed
-        
-        // Extract components
-        let nonceData = data.prefix(12)
-        let ciphertextData = data.dropFirst(12).dropLast(16)
-        let tagData = data.suffix(16)
-        
-        // Components parsed
-        
-        // Derive shared secret - try with default Y coordinate first
-        var sharedSecret: Data
-        var decrypted: Data? = nil
-        
-        do {
-            sharedSecret = try deriveSharedSecret(
-                privateKey: recipientKey,
-                publicKey: senderPubkeyData
+
+        let nonce24 = data.prefix(24)
+        let rest = data.dropFirst(24)
+        let tag = rest.suffix(16)
+        let ct = rest.dropLast(16)
+
+        // Try decryption with even-Y then odd-Y when sender pubkey is x-only
+        func attemptDecrypt(using pubKeyData: Data) throws -> Data {
+            let ss = try deriveSharedSecret(privateKey: recipientKey, publicKey: pubKeyData)
+            let key = try deriveNIP44V2Key(from: ss)
+            return try XChaCha20Poly1305Compat.open(
+                ciphertext: Data(ct),
+                tag: Data(tag),
+                key: key,
+                nonce24: Data(nonce24)
             )
-            // Derived shared secret with first Y coordinate
-            
-            // Try to decrypt
-            let sealedBox = try AES.GCM.SealedBox(
-                nonce: AES.GCM.Nonce(data: nonceData),
-                ciphertext: ciphertextData,
-                tag: tagData
-            )
-            
-            do {
-                decrypted = try AES.GCM.open(
-                    sealedBox,
-                    using: SymmetricKey(data: sharedSecret)
-                )
-                // AES-GCM decryption successful
-            } catch {
-                // AES-GCM decryption failed, trying alternate
-                
-                // If the sender pubkey is x-only (32 bytes), try the other Y coordinate
-                if senderPubkeyData.count == 32 {
-                    // Trying alternate Y coordinate
-                    
-                    // Force deriveSharedSecret to use odd Y by manipulating the data
-                    var altPubkey = Data()
-                    altPubkey.append(0x03) // Force odd Y
-                    altPubkey.append(senderPubkeyData)
-                    
-                    sharedSecret = try deriveSharedSecretDirect(
-                        privateKey: recipientKey,
-                        publicKey: altPubkey
-                    )
-                    
-                    decrypted = try AES.GCM.open(
-                        sealedBox,
-                        using: SymmetricKey(data: sharedSecret)
-                    )
-                    // AES-GCM decryption successful with alternate Y
-                } else {
-                    throw error
-                }
+        }
+
+        // If 32 bytes (x-only) try both parities, otherwise single try
+        if senderPubkeyData.count == 32 {
+            let even = Data([0x02]) + senderPubkeyData
+            if let pt = try? attemptDecrypt(using: even) {
+                return String(data: pt, encoding: .utf8) ?? ""
             }
-        } catch {
-            SecureLogger.log("❌ Failed to derive shared secret or decrypt: \(error)", 
-                            category: SecureLogger.session, level: .error)
-            throw error
+            let odd = Data([0x03]) + senderPubkeyData
+            let pt = try attemptDecrypt(using: odd)
+            return String(data: pt, encoding: .utf8) ?? ""
+        } else {
+            let pt = try attemptDecrypt(using: senderPubkeyData)
+            return String(data: pt, encoding: .utf8) ?? ""
         }
-        
-        guard let finalDecrypted = decrypted else {
-            throw NostrError.encryptionFailed
-        }
-        
-        return String(data: finalDecrypted, encoding: .utf8) ?? ""
     }
     
     private static func deriveSharedSecret(
@@ -412,17 +371,8 @@ struct NostrProtocol {
         let sharedSecretData = sharedSecret.withUnsafeBytes { Data($0) }
         // ECDH shared secret derived
         
-        // Derive key using HKDF for NIP-44 v2
-        let derivedKey = HKDF<CryptoKit.SHA256>.deriveKey(
-            inputKeyMaterial: SymmetricKey(data: sharedSecretData),
-            salt: "nip44-v2".data(using: .utf8)!,
-            info: Data(),
-            outputByteCount: 32
-        )
-        
-        let result = derivedKey.withUnsafeBytes { Data($0) }
-        // Final derived key ready
-        return result
+        // Return raw ECDH shared secret; HKDF is applied by deriveNIP44V2Key
+        return sharedSecretData
     }
     
     // Direct version that doesn't try to add prefixes
@@ -452,15 +402,8 @@ struct NostrProtocol {
         // Convert SharedSecret to Data
         let sharedSecretData = sharedSecret.withUnsafeBytes { Data($0) }
         
-        // Derive key using HKDF for NIP-44 v2
-        let derivedKey = HKDF<CryptoKit.SHA256>.deriveKey(
-            inputKeyMaterial: SymmetricKey(data: sharedSecretData),
-            salt: "nip44-v2".data(using: .utf8)!,
-            info: Data(),
-            outputByteCount: 32
-        )
-        
-        return derivedKey.withUnsafeBytes { Data($0) }
+        // Return raw ECDH shared secret; HKDF is applied by deriveNIP44V2Key
+        return sharedSecretData
     }
     
     private static func randomizedTimestamp() -> Date {
@@ -537,7 +480,10 @@ struct NostrEvent: Codable {
         
         // Sign with Schnorr
         var messageBytes = [UInt8](eventIdHash)
-        var auxRand = [UInt8](repeating: 0, count: 32) // Zero auxiliary randomness for deterministic signing
+        var auxRand = [UInt8](repeating: 0, count: 32)
+        _ = auxRand.withUnsafeMutableBytes { ptr in
+            SecRandomCopyBytes(kSecRandomDefault, 32, ptr.baseAddress!)
+        }
         let schnorrSignature = try schnorrKey.signature(message: &messageBytes, auxiliaryRand: &auxRand)
         
         let signatureHex = schnorrSignature.dataRepresentation.hexEncodedString()
@@ -580,4 +526,33 @@ enum NostrError: Error {
     case invalidCiphertext
     case signingFailed
     case encryptionFailed
+}
+
+// MARK: - NIP-44 v2 helpers (XChaCha20-Poly1305 + base64url)
+
+private extension NostrProtocol {
+    static func base64URLEncode(_ data: Data) -> String {
+        return data.base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+    }
+
+    static func base64URLDecode(_ s: String) -> Data? {
+        var str = s
+        let pad = (4 - (str.count % 4)) % 4
+        if pad > 0 { str += String(repeating: "=", count: pad) }
+        str = str.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        return Data(base64Encoded: str)
+    }
+
+    static func deriveNIP44V2Key(from sharedSecretData: Data) throws -> Data {
+        let derivedKey = HKDF<CryptoKit.SHA256>.deriveKey(
+            inputKeyMaterial: SymmetricKey(data: sharedSecretData),
+            salt: Data(),
+            info: "nip44-v2".data(using: .utf8)!,
+            outputByteCount: 32
+        )
+        return derivedKey.withUnsafeBytes { Data($0) }
+    }
 }

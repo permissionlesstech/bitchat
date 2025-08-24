@@ -112,4 +112,109 @@ final class NostrProtocolTests: XCTestCase {
             print("Expected error when decrypting with wrong key: \(error)")
         }
     }
+
+    func testAckRoundTripNIP44V2_Delivered() throws {
+        // Identities
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+
+        // Build a DELIVERED ack embedded payload (geohash-style, no recipient peer ID)
+        let messageID = "TEST-MSG-DELIVERED-1"
+        let senderPeerID = "0123456789abcdef" // 8-byte hex peer ID
+        guard let embedded = NostrEmbeddedBitChat.encodeAckForNostrNoRecipient(type: .delivered, messageID: messageID, senderPeerID: senderPeerID) else {
+            XCTFail("Failed to embed delivered ack")
+            return
+        }
+
+        // Create NIP-17 gift wrap to recipient (uses NIP-44 v2 internally)
+        let giftWrap = try NostrProtocol.createPrivateMessage(
+            content: embedded,
+            recipientPubkey: recipient.publicKeyHex,
+            senderIdentity: sender
+        )
+
+        // Ensure v2 format was used for ciphertext
+        XCTAssertTrue(giftWrap.content.hasPrefix("v2:"))
+
+        // Decrypt as recipient
+        let (content, senderPubkey, _) = try NostrProtocol.decryptPrivateMessage(
+            giftWrap: giftWrap,
+            recipientIdentity: recipient
+        )
+
+        // Verify sender is correct
+        XCTAssertEqual(senderPubkey, sender.publicKeyHex)
+
+        // Parse BitChat payload
+        XCTAssertTrue(content.hasPrefix("bitchat1:"))
+        let base64url = String(content.dropFirst("bitchat1:".count))
+        guard let packetData = Self.base64URLDecode(base64url),
+              let packet = BitchatPacket.from(packetData) else {
+            return XCTFail("Failed to decode bitchat packet")
+        }
+        XCTAssertEqual(packet.type, MessageType.noiseEncrypted.rawValue)
+        guard let payload = NoisePayload.decode(packet.payload) else {
+            return XCTFail("Failed to decode NoisePayload")
+        }
+        switch payload.type {
+        case .delivered:
+            let mid = String(data: payload.data, encoding: .utf8)
+            XCTAssertEqual(mid, messageID)
+        default:
+            XCTFail("Unexpected payload type: \(payload.type)")
+        }
+    }
+
+    func testAckRoundTripNIP44V2_ReadReceipt() throws {
+        // Identities
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+
+        let messageID = "TEST-MSG-READ-1"
+        let senderPeerID = "fedcba9876543210" // 8-byte hex peer ID
+        guard let embedded = NostrEmbeddedBitChat.encodeAckForNostrNoRecipient(type: .readReceipt, messageID: messageID, senderPeerID: senderPeerID) else {
+            XCTFail("Failed to embed read ack")
+            return
+        }
+
+        let giftWrap = try NostrProtocol.createPrivateMessage(
+            content: embedded,
+            recipientPubkey: recipient.publicKeyHex,
+            senderIdentity: sender
+        )
+
+        XCTAssertTrue(giftWrap.content.hasPrefix("v2:"))
+
+        let (content, senderPubkey, _) = try NostrProtocol.decryptPrivateMessage(
+            giftWrap: giftWrap,
+            recipientIdentity: recipient
+        )
+        XCTAssertEqual(senderPubkey, sender.publicKeyHex)
+
+        XCTAssertTrue(content.hasPrefix("bitchat1:"))
+        let base64url = String(content.dropFirst("bitchat1:".count))
+        guard let packetData = Self.base64URLDecode(base64url),
+              let packet = BitchatPacket.from(packetData) else {
+            return XCTFail("Failed to decode bitchat packet")
+        }
+        XCTAssertEqual(packet.type, MessageType.noiseEncrypted.rawValue)
+        guard let payload = NoisePayload.decode(packet.payload) else {
+            return XCTFail("Failed to decode NoisePayload")
+        }
+        switch payload.type {
+        case .readReceipt:
+            let mid = String(data: payload.data, encoding: .utf8)
+            XCTAssertEqual(mid, messageID)
+        default:
+            XCTFail("Unexpected payload type: \(payload.type)")
+        }
+    }
+
+    // MARK: - Helpers
+    private static func base64URLDecode(_ s: String) -> Data? {
+        var str = s.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        let rem = str.count % 4
+        if rem > 0 { str.append(String(repeating: "=", count: 4 - rem)) }
+        return Data(base64Encoded: str)
+    }
 }

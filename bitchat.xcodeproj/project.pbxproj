@@ -140,6 +140,8 @@
 		F455F011B3B648ADA233F998 /* BinaryProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2136C3E22D02D4A8DBE7EAB /* BinaryProtocol.swift */; };
 		FB8819B4C84FAFEF5C36B216 /* KeychainManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 136696FC4436A02D98CE6A77 /* KeychainManager.swift */; };
 		FBC409E105493C491531B59A /* NostrProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E5A9FF4AEA8A923317ED26A /* NostrProtocol.swift */; };
+		A1B2C3D44E5F60718293A4B5 /* XChaCha20Poly1305Compat.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D44E5F60718293A4B4 /* XChaCha20Poly1305Compat.swift */; };
+		A1B2C3D54E5F60718293A4B6 /* XChaCha20Poly1305Compat.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D44E5F60718293A4B4 /* XChaCha20Poly1305Compat.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -258,6 +260,7 @@
 		FDC18D910D6FF2E8B1B6C885 /* SecureIdentityStateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureIdentityStateManager.swift; sourceTree = "<group>"; };
 		FE7CCF2BD78A3F3DAE6DA145 /* MockBLEService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockBLEService.swift; sourceTree = "<group>"; };
 		FF7AF93D874001FBD94C8306 /* bitchat-macOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "bitchat-macOS.entitlements"; sourceTree = "<group>"; };
+		A1B2C3D44E5F60718293A4B4 /* XChaCha20Poly1305Compat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XChaCha20Poly1305Compat.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -522,6 +525,7 @@
 		E78C7F4B6769C0A72F5DE544 /* Nostr */ = {
 			isa = PBXGroup;
 			children = (
+				A1B2C3D44E5F60718293A4B4 /* XChaCha20Poly1305Compat.swift */,
 				049BD39B2E51DBD9001A566B /* NostrEmbeddedBitChat.swift */,
 				5F8043995007F0D84438EDD9 /* NostrIdentity.swift */,
 				2E5A9FF4AEA8A923317ED26A /* NostrProtocol.swift */,
@@ -720,6 +724,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A1B2C3D54E5F60718293A4B6 /* XChaCha20Poly1305Compat.swift in Sources */,
 				AD11E46940D742AEAF547EB2 /* AppInfoView.swift in Sources */,
 				9B51E9B63A3EA59B1A7874BD /* BinaryEncodingUtils.swift in Sources */,
 				049BD3B42E51F319001A566B /* NostrTransport.swift in Sources */,
@@ -774,6 +779,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A1B2C3D44E5F60718293A4B5 /* XChaCha20Poly1305Compat.swift in Sources */,
 				ABAF130D88561F4A646F0430 /* AppInfoView.swift in Sources */,
 				AFB6AEFCABBE97441CB3102B /* BinaryEncodingUtils.swift in Sources */,
 				049BD3B22E51F319001A566B /* NostrTransport.swift in Sources */,

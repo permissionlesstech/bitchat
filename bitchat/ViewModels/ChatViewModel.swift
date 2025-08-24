@@ -4480,10 +4480,18 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     privateChatManager.sanitizeChat(for: ephemeralPeerID)
                 }
 
-                // Send delivery ack via Nostr embedded if not previously read and we know sender's Noise key
-                if !wasReadBefore, let key = actualSenderNoiseKey {
-                    SecureLogger.log("Sending DELIVERED ack for \(messageId.prefix(8))… via router", category: SecureLogger.session, level: .debug)
-                    messageRouter.sendDeliveryAck(messageId, to: key.hexEncodedString())
+                // Send delivery ack via Nostr embedded
+                if !wasReadBefore {
+                    if let key = actualSenderNoiseKey {
+                        SecureLogger.log("Sending DELIVERED ack for \(messageId.prefix(8))… via router", category: SecureLogger.session, level: .debug)
+                        messageRouter.sendDeliveryAck(messageId, to: key.hexEncodedString())
+                    } else if let id = try? NostrIdentityBridge.getCurrentNostrIdentity() {
+                        // Fallback: no Noise mapping yet — send directly to sender's Nostr pubkey
+                        let nt = NostrTransport()
+                        nt.senderPeerID = meshService.myPeerID
+                        nt.sendDeliveryAckGeohash(for: messageId, toRecipientHex: senderPubkey, from: id)
+                        SecureLogger.log("Sent DELIVERED ack directly to Nostr pub=\(senderPubkey.prefix(8))… for mid=\(messageId.prefix(8))…", category: SecureLogger.session, level: .debug)
+                    }
                 }
 
                 if wasReadBefore {
@@ -4494,11 +4502,19 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                        let ephemeralPeerID = unifiedPeerService.peers.first(where: { $0.noisePublicKey == key })?.id {
                         unreadPrivateMessages.remove(ephemeralPeerID)
                     }
-                    if !sentReadReceipts.contains(messageId), let key = actualSenderNoiseKey {
-                        let receipt = ReadReceipt(originalMessageID: messageId, readerID: meshService.myPeerID, readerNickname: nickname)
-                        SecureLogger.log("Viewing chat; sending READ ack for \(messageId.prefix(8))… via router", category: SecureLogger.session, level: .debug)
-                        messageRouter.sendReadReceipt(receipt, to: key.hexEncodedString())
-                        sentReadReceipts.insert(messageId)
+                    if !sentReadReceipts.contains(messageId) {
+                        if let key = actualSenderNoiseKey {
+                            let receipt = ReadReceipt(originalMessageID: messageId, readerID: meshService.myPeerID, readerNickname: nickname)
+                            SecureLogger.log("Viewing chat; sending READ ack for \(messageId.prefix(8))… via router", category: SecureLogger.session, level: .debug)
+                            messageRouter.sendReadReceipt(receipt, to: key.hexEncodedString())
+                            sentReadReceipts.insert(messageId)
+                        } else if let id = try? NostrIdentityBridge.getCurrentNostrIdentity() {
+                            let nt = NostrTransport()
+                            nt.senderPeerID = meshService.myPeerID
+                            nt.sendReadReceiptGeohash(messageId, toRecipientHex: senderPubkey, from: id)
+                            sentReadReceipts.insert(messageId)
+                            SecureLogger.log("Viewing chat; sent READ ack directly to Nostr pub=\(senderPubkey.prefix(8))… for mid=\(messageId.prefix(8))…", category: SecureLogger.session, level: .debug)
+                        }
                     }
                 } else {
                     if shouldMarkAsUnread {
