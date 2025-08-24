@@ -9,8 +9,8 @@ final class LocationChannelsTests: XCTestCase {
         let block = Geohash.encode(latitude: lat, longitude: lon, precision: GeohashChannelLevel.block.precision)
         let neighborhood = Geohash.encode(latitude: lat, longitude: lon, precision: GeohashChannelLevel.neighborhood.precision)
         let city = Geohash.encode(latitude: lat, longitude: lon, precision: GeohashChannelLevel.city.precision)
-        let region = Geohash.encode(latitude: lat, longitude: lon, precision: GeohashChannelLevel.region.precision)
-        let country = Geohash.encode(latitude: lat, longitude: lon, precision: GeohashChannelLevel.country.precision)
+        let region = Geohash.encode(latitude: lat, longitude: lon, precision: GeohashChannelLevel.province.precision)
+        let country = Geohash.encode(latitude: lat, longitude: lon, precision: GeohashChannelLevel.region.precision)
         
         XCTAssertEqual(block.count, 7)
         XCTAssertEqual(neighborhood.count, 6)

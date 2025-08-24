@@ -590,8 +590,23 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 let nick = nickTag[1]
                 self.geoNicknames[event.pubkey.lowercased()] = nick
             }
+            // Store mapping for geohash sender IDs used in messages (ensures consistent colors)
+            let key16 = "nostr_" + String(event.pubkey.prefix(16))
+            self.nostrKeyMapping[key16] = event.pubkey
+            let key8 = "nostr:" + String(event.pubkey.prefix(8))
+            self.nostrKeyMapping[key8] = event.pubkey
+
             // Update participants last-seen for this pubkey
             self.recordGeoParticipant(pubkeyHex: event.pubkey)
+            
+            // Track teleported tag (only our format ["t","teleport"]) for icon state
+            let hasTeleportTag = event.tags.contains(where: { tag in
+                tag.count >= 2 && tag[0].lowercased() == "t" && tag[1].lowercased() == "teleport"
+            })
+            if hasTeleportTag {
+                let key = event.pubkey.lowercased()
+                Task { @MainActor in self.teleportedGeo = self.teleportedGeo.union([key]) }
+            }
             let senderName = self.displayNameForNostrPubkey(event.pubkey)
             let content = event.content
             let timestamp = Date(timeIntervalSince1970: TimeInterval(event.created_at))
@@ -1169,7 +1184,12 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             geohashPeople = []
             teleportedGeo.removeAll()
         case .location(let ch):
-            messages = geoTimelines[ch.geohash] ?? []
+            // Sanitize existing timeline (filter any prior empty-content entries)
+            var arr = geoTimelines[ch.geohash] ?? []
+            let before = arr.count
+            arr.removeAll { $0.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            if arr.count != before { geoTimelines[ch.geohash] = arr }
+            messages = arr
         }
         // Unsubscribe previous
         if let sub = geoSubscriptionID {
@@ -1214,20 +1234,10 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             let tagSummary = event.tags.map { "[" + $0.joined(separator: ",") + "]" }.joined(separator: ",")
             SecureLogger.log("GeoTeleport: recv pub=\(event.pubkey.prefix(8))… tags=\(tagSummary)",
                             category: SecureLogger.session, level: .debug)
-            // Track teleport tag for participants
-            // Detect teleport tag robustly: accept ["t","teleport"], ["t"], ["teleport"], or boolean-like values
-            let hasTeleportTag: Bool = {
-                for tag in event.tags {
-                    guard let key = tag.first?.lowercased() else { continue }
-                    if key == "t" || key == "teleport" { return true }
-                    // Some clients may encode as ["t","1"] or ["t","true"]
-                    if key == "t", tag.dropFirst().contains(where: { v in
-                        let lv = v.lowercased()
-                        return lv == "teleport" || lv == "1" || lv == "true"
-                    }) { return true }
-                }
-                return false
-            }()
+            // Track teleport tag for participants – only our format ["t", "teleport"]
+            let hasTeleportTag: Bool = event.tags.contains(where: { tag in
+                tag.count >= 2 && tag[0].lowercased() == "t" && tag[1].lowercased() == "teleport"
+            })
             if hasTeleportTag {
                 let key = event.pubkey.lowercased()
                 Task { @MainActor in
@@ -1262,7 +1272,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             let senderName = self.displayNameForNostrPubkey(event.pubkey)
             let content = event.content
             // If this is a teleport presence event (no content), don't add to timeline
-            if let teleTag = event.tags.first(where: { $0.first == "t" }), teleTag.count >= 2, teleTag[1] == "teleport",
+            if let teleTag = event.tags.first(where: { $0.first == "t" }), teleTag.count >= 2, (teleTag[1] == "teleport"),
                content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 return
             }
@@ -2839,6 +2849,10 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             // Bold the user's own nickname
             let fontWeight: Font.Weight = isSelf ? .bold : .medium
             senderStyle.font = .system(size: 14, weight: fontWeight, design: .monospaced)
+            // Make sender clickable: encode senderPeerID into a custom URL
+            if let spid = message.senderPeerID, let url = URL(string: "bitchat://user/\(spid.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? spid)") {
+                senderStyle.link = url
+            }
 
             // Prefix "<@"
             result.append(AttributedString("<@").mergingAttributes(senderStyle))
@@ -2856,8 +2870,16 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             // Process content with hashtags and mentions
             let content = message.content
             
-            // For extremely long content, render as plain text to avoid heavy regex/layout work
-            if content.count > 4000 || content.hasVeryLongToken(threshold: 1024) {
+            // For extremely long content, render as plain text to avoid heavy regex/layout work,
+            // unless the content includes Cashu tokens we want to chip-render below
+            let containsCashuEarly: Bool = {
+                let pattern = "\\bcashu[AB][A-Za-z0-9._-]{40,}\\b"
+                if let rx = try? NSRegularExpression(pattern: pattern, options: []) {
+                    return rx.numberOfMatches(in: content, options: [], range: NSRange(location: 0, length: content.count)) > 0
+                }
+                return false
+            }()
+            if (content.count > 4000 || content.hasVeryLongToken(threshold: 1024)) && !containsCashuEarly {
                 var plainStyle = AttributeContainer()
                 plainStyle.foregroundColor = baseColor
                 plainStyle.font = isSelf
@@ -2868,8 +2890,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             let hashtagPattern = "#([a-zA-Z0-9_]+)"
             // Allow optional '#abcd' suffix in mentions
             let mentionPattern = "@([\\p{L}0-9_]+(?:#[a-fA-F0-9]{4})?)"
-            // Cashu token detector: cashuA/cashuB + long base64url
-            let cashuPattern = "\\bcashu[AB][A-Za-z0-9_-]{60,}\\b"
+            // Cashu token detector: cashuA/cashuB + long base64url; allow '.' and shorter variants
+            let cashuPattern = "\\bcashu[AB][A-Za-z0-9._-]{40,}\\b"
             // Lightning invoices and links
             let bolt11Pattern = "(?i)\\bln(bc|tb|bcrt)[0-9][a-z0-9]{50,}\\b"
             let lnurlPattern = "(?i)\\blnurl1[a-z0-9]{20,}\\b"
@@ -2990,12 +3012,19 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     } else {
                         // Style non-mention matches
                         if type == "hashtag" {
-                            // Do NOT special-style hashtags: render like normal content (no blue, no underline)
+                            // If the hashtag is a valid geohash, make it tappable (bitchat://geohash/<gh>)
+                            let token = String(matchText.dropFirst()).lowercased()
+                            let allowed = Set("0123456789bcdefghjkmnpqrstuvwxyz")
+                            let isGeohash = (2...12).contains(token.count) && token.allSatisfy { allowed.contains($0) }
                             var tagStyle = AttributeContainer()
                             tagStyle.font = isSelf
                                 ? .system(size: 14, weight: .bold, design: .monospaced)
                                 : .system(size: 14, design: .monospaced)
                             tagStyle.foregroundColor = baseColor
+                            if isGeohash, let url = URL(string: "bitchat://geohash/\(token)") {
+                                tagStyle.link = url
+                                tagStyle.underlineStyle = .single
+                            }
                             result.append(AttributedString(matchText).mergingAttributes(tagStyle))
                         } else if type == "cashu" {
                             // Skip inline token; a styled chip is rendered below the message
@@ -3015,12 +3044,15 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                                 : .system(size: 14, design: .monospaced)
                             result.append(AttributedString(" ").mergingAttributes(spacer))
                         } else {
-                            // Keep URL styling (blue + underline for non-self, orange for self)
+                            // Keep URL styling and make it tappable via .link attribute
                             var matchStyle = AttributeContainer()
                             matchStyle.font = .system(size: 14, weight: isSelf ? .bold : .semibold, design: .monospaced)
                             if type == "url" {
                                 matchStyle.foregroundColor = isSelf ? .orange : .blue
                                 matchStyle.underlineStyle = .single
+                                if let url = URL(string: matchText) {
+                                    matchStyle.link = url
+                                }
                             }
                             result.append(AttributedString(matchText).mergingAttributes(matchStyle))
                         }
@@ -3327,7 +3359,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
 
     @MainActor
     func colorForPeerSeed(_ seed: String, isDark: Bool) -> Color {
-        if let cached = peerColorCache[seed] { return cached }
+        let cacheKey = seed + (isDark ? "|dark" : "|light")
+        if let cached = peerColorCache[cacheKey] { return cached }
         var hue = Double(djb2(seed) % 360) / 360.0
         // Avoid orange (~30°) reserved for self
         let orange = 30.0 / 360.0
@@ -3335,7 +3368,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         let saturation: Double = isDark ? 0.80 : 0.70
         let brightness: Double = isDark ? 0.75 : 0.45
         let c = Color(hue: hue, saturation: saturation, brightness: brightness)
-        peerColorCache[seed] = c
+        peerColorCache[cacheKey] = c
         return c
     }
 
@@ -3344,7 +3377,13 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         var seed: String
         if let spid = message.senderPeerID {
             if spid.hasPrefix("nostr:") || spid.hasPrefix("nostr_") {
-                let full = nostrKeyMapping[spid]?.lowercased() ?? spid.lowercased()
+                // Normalize to the bare short id, then prefer full mapping when available
+                let bare: String = {
+                    if spid.hasPrefix("nostr:") { return String(spid.dropFirst(6)) }
+                    if spid.hasPrefix("nostr_") { return String(spid.dropFirst(6)) }
+                    return spid
+                }()
+                let full = nostrKeyMapping[spid]?.lowercased() ?? bare.lowercased()
                 seed = "nostr:" + full
             } else if spid.count == 16, let full = getNoiseKeyForShortID(spid)?.lowercased() {
                 seed = "noise:" + full
@@ -3365,8 +3404,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
 
     @MainActor
     func colorForMeshPeer(id peerID: String, isDark: Bool) -> Color {
-        if let peer = unifiedPeerService.getPeer(by: peerID) {
-            let full = peer.noisePublicKey.hexEncodedString().lowercased()
+        // Mirror message coloring: prefer stable full noise key mapping when available, else short ID
+        if let full = getNoiseKeyForShortID(peerID)?.lowercased() {
             return colorForPeerSeed("noise:" + full, isDark: isDark)
         }
         return colorForPeerSeed(peerID.lowercased(), isDark: isDark)

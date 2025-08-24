@@ -5,8 +5,8 @@ enum GeohashChannelLevel: CaseIterable, Codable, Equatable {
     case block
     case neighborhood
     case city
-    case region
-    case country
+    case province   // previously .region
+    case region     // previously .country
 
     /// Geohash length used for this level.
     var precision: Int {
@@ -14,9 +14,9 @@ enum GeohashChannelLevel: CaseIterable, Codable, Equatable {
         case .block: return 7
         case .neighborhood: return 6
         case .city: return 5
-        case .region: return 4
-        case .country: return 2
-        }
+        case .province: return 4
+        case .region: return 2
+    }
     }
 
     var displayName: String {
@@ -24,8 +24,48 @@ enum GeohashChannelLevel: CaseIterable, Codable, Equatable {
         case .block: return "Block"
         case .neighborhood: return "Neighborhood"
         case .city: return "City"
+        case .province: return "Province"
         case .region: return "Region"
-        case .country: return "Country"
+    }
+}
+}
+// Backward-compatible Codable for renamed cases
+extension GeohashChannelLevel {
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let raw = try? container.decode(String.self) {
+            switch raw {
+            case "block": self = .block
+            case "neighborhood": self = .neighborhood
+            case "city": self = .city
+            case "region": self = .province      // old "region" maps to new .province
+            case "country": self = .region       // old "country" maps to new .region
+            case "province": self = .province
+            default:
+                self = .block
+            }
+        } else if let precision = try? container.decode(Int.self) {
+            switch precision {
+            case 7: self = .block
+            case 6: self = .neighborhood
+            case 5: self = .city
+            case 4: self = .province
+            case 0...3: self = .region
+            default: self = .block
+            }
+        } else {
+            self = .block
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .block: try container.encode("block")
+        case .neighborhood: try container.encode("neighborhood")
+        case .city: try container.encode("city")
+        case .province: try container.encode("province")
+        case .region: try container.encode("region")
         }
     }
 }

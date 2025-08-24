@@ -223,15 +223,15 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
 
     private func namesByLevel(from pm: CLPlacemark) -> [GeohashChannelLevel: String] {
         var dict: [GeohashChannelLevel: String] = [:]
-        // Country
+        // Region (country)
         if let country = pm.country, !country.isEmpty {
-            dict[.country] = country
+            dict[.region] = country
         }
-        // Region (state/province or county)
+        // Province (state/province or county)
         if let admin = pm.administrativeArea, !admin.isEmpty {
-            dict[.region] = admin
+            dict[.province] = admin
         } else if let subAdmin = pm.subAdministrativeArea, !subAdmin.isEmpty {
-            dict[.region] = subAdmin
+            dict[.province] = subAdmin
         }
         // City (locality)
         if let locality = pm.locality, !locality.isEmpty {
