@@ -84,6 +84,10 @@ struct ContentView: View {
             ZStack {
                 // Base layer - Main public chat (always visible)
                 mainChatView
+                    .onAppear { viewModel.currentColorScheme = colorScheme }
+                    .onChange(of: colorScheme) { newValue in
+                        viewModel.currentColorScheme = newValue
+                    }
                 
                 // Private chat slide-over
                 if viewModel.selectedPrivateChatPeer != nil {
@@ -310,9 +314,11 @@ struct ContentView: View {
                             } else {
                                 // Regular messages with natural text wrapping
                                 VStack(alignment: .leading, spacing: 0) {
+                                    // Precompute heavy token scans once per row
+                                    let cashuTokens = message.content.extractCashuTokens()
+                                    let lightningLinks = message.content.extractLightningLinks()
                                     HStack(alignment: .top, spacing: 0) {
-                                        // Single text view for natural wrapping
-                                        let isLong = (message.content.count > 2000 || message.content.hasVeryLongToken(threshold: 512)) && message.content.extractCashuTokens().isEmpty
+                                        let isLong = (message.content.count > 2000 || message.content.hasVeryLongToken(threshold: 512)) && cashuTokens.isEmpty
                                         let isExpanded = expandedMessageIDs.contains(message.id)
                                         Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme))
                                             .fixedSize(horizontal: false, vertical: true)
@@ -328,9 +334,9 @@ struct ContentView: View {
                                     }
                                     
                                     // Expand/Collapse for very long messages
-                                    if (message.content.count > 2000 || message.content.hasVeryLongToken(threshold: 512)) && message.content.extractCashuTokens().isEmpty {
+                                    if (message.content.count > 2000 || message.content.hasVeryLongToken(threshold: 512)) && cashuTokens.isEmpty {
                                         let isExpanded = expandedMessageIDs.contains(message.id)
-                                        Button(isExpanded ? "Show less" : "Show more") {
+                                        Button(isExpanded ? "show less" : "show more") {
                                             if isExpanded { expandedMessageIDs.remove(message.id) }
                                             else { expandedMessageIDs.insert(message.id) }
                                         }
@@ -339,11 +345,7 @@ struct ContentView: View {
                                         .padding(.top, 4)
                                     }
 
-                                    // Link previews removed: URLs appear inline and are tappable
-
                                     // Render payment chips (Lightning / Cashu) with rounded background
-                                    let lightningLinks = message.content.extractLightningLinks()
-                                    let cashuTokens = message.content.extractCashuTokens()
                                     if !lightningLinks.isEmpty || !cashuTokens.isEmpty {
                                         HStack(spacing: 8) {
                                             ForEach(Array(lightningLinks.prefix(3)).indices, id: \.self) { i in
@@ -453,6 +455,7 @@ struct ContentView: View {
                         .padding(.vertical, 2)
                     }
                 }
+                .transaction { tx in if viewModel.isBatchingPublic { tx.disablesAnimations = true } }
                 .padding(.vertical, 4)
             }
             .background(backgroundColor)

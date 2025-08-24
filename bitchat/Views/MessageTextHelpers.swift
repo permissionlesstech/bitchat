@@ -5,6 +5,21 @@
 
 import Foundation
 
+private enum RegexCache {
+    static let cashu: NSRegularExpression = {
+        try! NSRegularExpression(pattern: "\\bcashu[AB][A-Za-z0-9._-]{40,}\\b", options: [])
+    }()
+    static let lightningScheme: NSRegularExpression = {
+        try! NSRegularExpression(pattern: "(?i)\\blightning:[^\\s]+", options: [])
+    }()
+    static let bolt11: NSRegularExpression = {
+        try! NSRegularExpression(pattern: "(?i)\\bln(bc|tb|bcrt)[0-9][a-z0-9]{50,}\\b", options: [])
+    }()
+    static let lnurl: NSRegularExpression = {
+        try! NSRegularExpression(pattern: "(?i)\\blnurl1[a-z0-9]{20,}\\b", options: [])
+    }()
+}
+
 extension String {
     // Detect if there is an extremely long token (no whitespace/newlines) that could break layout
     func hasVeryLongToken(threshold: Int) -> Bool {
@@ -23,8 +38,7 @@ extension String {
 
     // Extract up to `max` Cashu tokens (cashuA/cashuB). Allow dot '.' and shorter lengths.
     func extractCashuTokens(max: Int = 3) -> [String] {
-        let pattern = "\\bcashu[AB][A-Za-z0-9._-]{40,}\\b"
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else { return [] }
+        let regex = RegexCache.cashu
         let ns = self as NSString
         let range = NSRange(location: 0, length: ns.length)
         var found: [String] = []
@@ -44,28 +58,22 @@ extension String {
         let ns = self as NSString
         let full = NSRange(location: 0, length: ns.length)
         // lightning: scheme
-        if let schemeRx = try? NSRegularExpression(pattern: "(?i)\\blightning:[^\\s]+", options: []) {
-            for m in schemeRx.matches(in: self, options: [], range: full) {
-                let s = ns.substring(with: m.range(at: 0))
-                results.append(s)
-                if results.count >= max { return results }
-            }
+        for m in RegexCache.lightningScheme.matches(in: self, options: [], range: full) {
+            let s = ns.substring(with: m.range(at: 0))
+            results.append(s)
+            if results.count >= max { return results }
         }
         // BOLT11
-        if let boltRx = try? NSRegularExpression(pattern: "(?i)\\bln(bc|tb|bcrt)[0-9][a-z0-9]{50,}\\b", options: []) {
-            for m in boltRx.matches(in: self, options: [], range: full) {
-                let s = ns.substring(with: m.range(at: 0))
-                results.append("lightning:\(s)")
-                if results.count >= max { return results }
-            }
+        for m in RegexCache.bolt11.matches(in: self, options: [], range: full) {
+            let s = ns.substring(with: m.range(at: 0))
+            results.append("lightning:\(s)")
+            if results.count >= max { return results }
         }
         // LNURL bech32
-        if let lnurlRx = try? NSRegularExpression(pattern: "(?i)\\blnurl1[a-z0-9]{20,}\\b", options: []) {
-            for m in lnurlRx.matches(in: self, options: [], range: full) {
-                let s = ns.substring(with: m.range(at: 0))
-                results.append("lightning:\(s)")
-                if results.count >= max { return results }
-            }
+        for m in RegexCache.lnurl.matches(in: self, options: [], range: full) {
+            let s = ns.substring(with: m.range(at: 0))
+            results.append("lightning:\(s)")
+            if results.count >= max { return results }
         }
         return results
     }
