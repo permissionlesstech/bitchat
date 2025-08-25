@@ -33,6 +33,15 @@ class CommandProcessor {
         guard let cmd = parts.first else { return .error(message: "Invalid command") }
         let args = parts.count > 1 ? String(parts[1]) : ""
         
+        // Geohash context: disable favoriting in public geohash or GeoDM
+        let inGeoPublic: Bool = {
+            switch LocationChannelManager.shared.selectedChannel {
+            case .mesh: return false
+            case .location: return true
+            }
+        }()
+        let inGeoDM = (chatViewModel?.selectedPrivateChatPeer?.hasPrefix("nostr_") == true)
+
         switch cmd {
         case "/m", "/msg":
             return handleMessage(args)
@@ -49,11 +58,14 @@ class CommandProcessor {
         case "/unblock":
             return handleUnblock(args)
         case "/fav":
+            if inGeoPublic || inGeoDM { return .error(message: "favorites are only for mesh peers in #mesh") }
             return handleFavorite(args, add: true)
         case "/unfav":
+            if inGeoPublic || inGeoDM { return .error(message: "favorites are only for mesh peers in #mesh") }
             return handleFavorite(args, add: false)
+        // /help removed
         case "/help", "/h":
-            return handleHelp()
+            return .error(message: "unknown command: \(cmd)")
         default:
             return .error(message: "unknown command: \(cmd)")
         }
@@ -85,19 +97,34 @@ class CommandProcessor {
     }
     
     private func handleWho() -> CommandResult {
-        guard let peers = meshService?.getPeerNicknames(), !peers.isEmpty else {
-            return .success(message: "no one else is online right now")
+        // Show geohash participants when in a geohash channel; otherwise mesh peers
+        switch LocationChannelManager.shared.selectedChannel {
+        case .location(let ch):
+            // Geohash context: show visible geohash participants (exclude self)
+            guard let vm = chatViewModel else { return .success(message: "nobody around") }
+            let myHex = (try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash))?.publicKeyHex.lowercased()
+            let people = vm.visibleGeohashPeople().filter { person in
+                if let me = myHex { return person.id.lowercased() != me }
+                return true
+            }
+            let names = people.map { $0.displayName }
+            if names.isEmpty { return .success(message: "no one else is online right now") }
+            return .success(message: "online: " + names.sorted().joined(separator: ", "))
+        case .mesh:
+            // Mesh context: show connected peer nicknames
+            guard let peers = meshService?.getPeerNicknames(), !peers.isEmpty else {
+                return .success(message: "no one else is online right now")
+            }
+            let onlineList = peers.values.sorted().joined(separator: ", ")
+            return .success(message: "online: \(onlineList)")
         }
-        
-        let onlineList = peers.values.sorted().joined(separator: ", ")
-        return .success(message: "online: \(onlineList)")
     }
     
     private func handleClear() -> CommandResult {
         if let peerID = chatViewModel?.selectedPrivateChatPeer {
             chatViewModel?.privateChats[peerID]?.removeAll()
         } else {
-            chatViewModel?.messages.removeAll()
+            chatViewModel?.clearCurrentPublicTimeline()
         }
         return .handled
     }
@@ -165,12 +192,8 @@ class CommandProcessor {
             let geoBlocked = Array(SecureIdentityStateManager.shared.getBlockedNostrPubkeys())
             var geoNames: [String] = []
             if let vm = chatViewModel {
-                #if os(iOS)
                 let visible = vm.visibleGeohashPeople()
                 let visibleIndex = Dictionary(uniqueKeysWithValues: visible.map { ($0.id.lowercased(), $0.displayName) })
-                #else
-                let visibleIndex: [String: String] = [:]
-                #endif
                 for pk in geoBlocked {
                     if let name = visibleIndex[pk.lowercased()] {
                         geoNames.append(name)

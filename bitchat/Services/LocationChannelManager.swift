@@ -1,8 +1,8 @@
 import Foundation
-
-#if os(iOS)
-import CoreLocation
 import Combine
+
+#if os(iOS) || os(macOS)
+import CoreLocation
 
 /// Manages location permissions, one-shot location retrieval, and computing geohash channels.
 /// Not main-actor isolated to satisfy CLLocationManagerDelegate in Swift 6; state updates hop to MainActor.
@@ -55,7 +55,7 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
             teleported = teleportedSet.contains(ch.geohash)
         }
         let status: CLAuthorizationStatus
-        if #available(iOS 14.0, *) {
+        if #available(iOS 14.0, macOS 11.0, *) {
             status = cl.authorizationStatus
         } else {
             status = CLLocationManager.authorizationStatus()
@@ -66,7 +66,7 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
     // MARK: - Public API
     func enableLocationChannels() {
         let status: CLAuthorizationStatus
-        if #available(iOS 14.0, *) {
+        if #available(iOS 14.0, macOS 11.0, *) {
             status = cl.authorizationStatus
         } else {
             status = CLLocationManager.authorizationStatus()
@@ -78,7 +78,7 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
             Task { @MainActor in self.permissionState = .restricted }
         case .denied:
             Task { @MainActor in self.permissionState = .denied }
-        case .authorizedAlways, .authorizedWhenInUse:
+        case .authorizedAlways, .authorizedWhenInUse, .authorized:
             Task { @MainActor in self.permissionState = .authorized }
             requestOneShotLocation()
         @unknown default:
@@ -151,8 +151,8 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
         }
     }
 
-    // iOS 14+
-    @available(iOS 14.0, *)
+    // iOS 14+ / macOS 11+
+    @available(iOS 14.0, macOS 11.0, *)
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         updatePermissionState(from: manager.authorizationStatus)
         if case .authorized = permissionState {
@@ -180,7 +180,7 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
         case .notDetermined: newState = .notDetermined
         case .restricted: newState = .restricted
         case .denied: newState = .denied
-        case .authorizedAlways, .authorizedWhenInUse: newState = .authorized
+        case .authorizedAlways, .authorizedWhenInUse, .authorized: newState = .authorized
         @unknown default: newState = .restricted
         }
         Task { @MainActor in self.permissionState = newState }
@@ -256,5 +256,4 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
         return dict
     }
 }
-
 #endif

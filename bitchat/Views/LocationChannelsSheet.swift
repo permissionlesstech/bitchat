@@ -1,7 +1,10 @@
 import SwiftUI
-
+import CoreLocation
 #if os(iOS)
 import UIKit
+#else
+import AppKit
+#endif
 struct LocationChannelsSheet: View {
     @Binding var isPresented: Bool
     @ObservedObject private var manager = LocationChannelManager.shared
@@ -37,11 +40,7 @@ struct LocationChannelsSheet: View {
                             Text("location permission denied. enable in settings to use location channels.")
                                 .font(.system(size: 12, design: .monospaced))
                                 .foregroundColor(.secondary)
-                            Button("open settings") {
-                                if let url = URL(string: UIApplication.openSettingsURLString) {
-                                    UIApplication.shared.open(url)
-                                }
-                            }
+                            Button("open settings") { openSystemLocationSettings() }
                             .buttonStyle(.plain)
                         }
                     case LocationChannelManager.PermissionState.authorized:
@@ -54,6 +53,7 @@ struct LocationChannelsSheet: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -61,8 +61,21 @@ struct LocationChannelsSheet: View {
                         .font(.system(size: 14, design: .monospaced))
                 }
             }
+            #else
+            .toolbar {
+                ToolbarItem(placement: .automatic) {
+                    Button("close") { isPresented = false }
+                        .font(.system(size: 14, design: .monospaced))
+                }
+            }
+            #endif
         }
+        #if os(iOS)
         .presentationDetents([.large])
+        #endif
+        #if os(macOS)
+        .frame(minWidth: 420, minHeight: 520)
+        #endif
         .onAppear {
             // Refresh channels when opening
             if manager.permissionState == LocationChannelManager.PermissionState.authorized {
@@ -128,10 +141,12 @@ struct LocationChannelsSheet: View {
                         .font(.system(size: 14, design: .monospaced))
                         .foregroundColor(.secondary)
                     TextField("geohash", text: $customGeohash)
+                        #if os(iOS)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled(true)
-                        .font(.system(size: 14, design: .monospaced))
                         .keyboardType(.asciiCapable)
+                        #endif
+                        .font(.system(size: 14, design: .monospaced))
                         .onChange(of: customGeohash) { newValue in
                             // Allow only geohash base32 characters, strip '#', limit length
                             let allowed = Set("0123456789bcdefghjkmnpqrstuvwxyz")
@@ -183,9 +198,7 @@ struct LocationChannelsSheet: View {
             // Footer action inside the list
             if manager.permissionState == LocationChannelManager.PermissionState.authorized {
                 Button(action: {
-                    if let url = URL(string: UIApplication.openSettingsURLString) {
-                        UIApplication.shared.open(url)
-                    }
+                    openSystemLocationSettings()
                 }) {
                     Text("remove location access")
                         .font(.system(size: 12, design: .monospaced))
@@ -343,7 +356,7 @@ extension LocationChannelsSheet {
         }()
 
         let usesMetric: Bool = {
-            if #available(iOS 16.0, *) {
+            if #available(iOS 16.0, macOS 13.0, *) {
                 return Locale.current.measurementSystem == .metric
             } else {
                 return Locale.current.usesMetricSystem
@@ -366,7 +379,7 @@ extension LocationChannelsSheet {
 
     private func bluetoothRangeString() -> String {
         let usesMetric: Bool = {
-            if #available(iOS 16.0, *) {
+            if #available(iOS 16.0, macOS 13.0, *) {
                 return Locale.current.measurementSystem == .metric
             } else {
                 return Locale.current.usesMetricSystem
@@ -390,4 +403,17 @@ extension LocationChannelsSheet {
     }
 }
 
-#endif
+// MARK: - Open Settings helper
+private func openSystemLocationSettings() {
+    #if os(iOS)
+    if let url = URL(string: UIApplication.openSettingsURLString) {
+        UIApplication.shared.open(url)
+    }
+    #else
+    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices") {
+        NSWorkspace.shared.open(url)
+    } else if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security") {
+        NSWorkspace.shared.open(url)
+    }
+    #endif
+}

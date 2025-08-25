@@ -17,6 +17,7 @@
 		0475028D2E54171C0083520F /* LocationChannelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0475028B2E54171C0083520F /* LocationChannelManager.swift */; };
 		0475028F2E5417660083520F /* LocationChannelsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0475028E2E5417660083520F /* LocationChannelsSheet.swift */; };
 		047502902E5417660083520F /* LocationChannelsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0475028E2E5417660083520F /* LocationChannelsSheet.swift */; };
+
 		047502922E547ACC0083520F /* LocationChannelsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 047502912E547ACC0083520F /* LocationChannelsTests.swift */; };
 		047502932E547ACC0083520F /* LocationChannelsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 047502912E547ACC0083520F /* LocationChannelsTests.swift */; };
 		047502AC2E55E8360083520F /* BinaryProtocolPaddingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 047502AB2E55E8360083520F /* BinaryProtocolPaddingTests.swift */; };
@@ -245,6 +246,7 @@
 		9AB6BE4ABD7F5088E9865E56 /* NoiseSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoiseSession.swift; sourceTree = "<group>"; };
 		A08E03AA0C63E97C91749AEC /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		A2136C3E22D02D4A8DBE7EAB /* BinaryProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BinaryProtocol.swift; sourceTree = "<group>"; };
+
 		AA11BB22CC33DD44EE55FF68 /* MessageTextHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageTextHelpers.swift; sourceTree = "<group>"; };
 		B1D6A89B36A3D31E590B94E5 /* NoiseHandshakeCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoiseHandshakeCoordinator.swift; sourceTree = "<group>"; };
 		C0DB1DE27F0AAB5092663E8E /* bitchatTests_iOS.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = bitchatTests_iOS.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -441,6 +443,7 @@
 				047502B22E55FED60083520F /* GeohashPeopleList.swift */,
 				047502B32E55FED60083520F /* MeshPeerList.swift */,
 				0475028E2E5417660083520F /* LocationChannelsSheet.swift */,
+
 				763E0DBA9492A654FC0CDCB9 /* AppInfoView.swift */,
 				A08E03AA0C63E97C91749AEC /* ContentView.swift */,
 				9195CDC7EB236AFBC9A4D41A /* FingerprintView.swift */,
@@ -755,6 +758,7 @@
 				7241FFD6CFFB875B864FA223 /* InputValidator.swift in Sources */,
 				FB8819B4C84FAFEF5C36B216 /* KeychainManager.swift in Sources */,
 				0475028F2E5417660083520F /* LocationChannelsSheet.swift in Sources */,
+
 				501BC56B1A08C0327A09AAF1 /* NoiseEncryptionService.swift in Sources */,
 				0475028C2E54171C0083520F /* LocationChannelManager.swift in Sources */,
 				AFF33EF44626EF0579D17EB1 /* NoiseHandshakeCoordinator.swift in Sources */,
@@ -812,6 +816,7 @@
 				EF49C600C1E464710DD6CA29 /* InputValidator.swift in Sources */,
 				8F737CE0435792CC2AD65FCB /* KeychainManager.swift in Sources */,
 				047502902E5417660083520F /* LocationChannelsSheet.swift in Sources */,
+
 				5EE49E150BBF0488E7473687 /* NoiseEncryptionService.swift in Sources */,
 				0475028D2E54171C0083520F /* LocationChannelManager.swift in Sources */,
 				6D0D4A0B1D8B659DCBAE7C9C /* NoiseHandshakeCoordinator.swift in Sources */,

@@ -14,7 +14,7 @@ class AutocompleteService {
     private let commandRegex = try? NSRegularExpression(pattern: "^/([a-z]*)$", options: [])
     
     private let commands = [
-        "/msg", "/who", "/clear", "/help",
+        "/msg", "/who", "/clear",
         "/hug", "/slap", "/fav", "/unfav",
         "/block", "/unblock"
     ]
@@ -95,7 +95,7 @@ class AutocompleteService {
     
     private func needsArgument(command: String) -> Bool {
         switch command {
-        case "/who", "/clear", "/help":
+        case "/who", "/clear":
             return false
         default:
             return true

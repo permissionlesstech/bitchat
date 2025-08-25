@@ -1,6 +1,5 @@
 import SwiftUI
 
-#if os(iOS)
 struct GeohashPeopleList: View {
     @ObservedObject var viewModel: ChatViewModel
     let textColor: Color
@@ -29,16 +28,12 @@ struct GeohashPeopleList: View {
             let people = viewModel.visibleGeohashPeople()
             let currentIDs = people.map { $0.id }
 
-            #if os(iOS)
             let teleportedSet = Set(viewModel.teleportedGeo.map { $0.lowercased() })
             let isTeleportedID: (String) -> Bool = { id in
                 if teleportedSet.contains(id.lowercased()) { return true }
                 if let me = myHex, id == me, LocationChannelManager.shared.teleported { return true }
                 return false
             }
-            #else
-            let isTeleportedID: (String) -> Bool = { _ in false }
-            #endif
 
             let displayIDs = orderedIDs.filter { currentIDs.contains($0) } + currentIDs.filter { !orderedIDs.contains($0) }
             let nonTele = displayIDs.filter { !isTeleportedID($0) }
@@ -52,11 +47,7 @@ struct GeohashPeopleList: View {
                     let person = personByID[pid]!
                     HStack(spacing: 4) {
                         let isMe = (person.id == myHex)
-                        #if os(iOS)
                         let teleported = viewModel.teleportedGeo.contains(person.id.lowercased()) || (isMe && LocationChannelManager.shared.teleported)
-                        #else
-                        let teleported = false
-                        #endif
                         let icon = teleported ? "face.dashed" : "mappin.and.ellipse"
                         let assignedColor = viewModel.colorForNostrPubkey(person.id, isDark: colorScheme == .dark)
                         let rowColor: Color = isMe ? .orange : assignedColor
@@ -127,10 +118,8 @@ struct GeohashPeopleList: View {
         }
     }
 }
-#endif
 
 // Helper to split a trailing #abcd suffix
-#if os(iOS)
 private func splitSuffix(from name: String) -> (String, String) {
     guard name.count >= 5 else { return (name, "") }
     let suffix = String(name.suffix(5))
@@ -142,4 +131,3 @@ private func splitSuffix(from name: String) -> (String, String) {
     }
     return (name, "")
 }
-#endif
