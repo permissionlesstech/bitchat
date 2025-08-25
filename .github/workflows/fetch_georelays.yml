@@ -33,7 +33,7 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add app/src/main/assets/nostr_relays.csv
+          git add relays/online_relays_gps.csv
           git commit -m "Automated update of relay data - $(date -u)"
           git push
         env:
