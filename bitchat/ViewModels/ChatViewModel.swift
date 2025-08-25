@@ -3183,12 +3183,28 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                             let token = String(matchText.dropFirst()).lowercased()
                             let allowed = Set("0123456789bcdefghjkmnpqrstuvwxyz")
                             let isGeohash = (2...12).contains(token.count) && token.allSatisfy { allowed.contains($0) }
+                            // Do not link if this hashtag is directly attached to an @mention (e.g., @name#geohash)
+                            let attachedToMention: Bool = {
+                                // nsRange is the Range<String.Index> for this match within content
+                                // Walk left until whitespace/newline; if we encounter '@' first, treat as part of mention
+                                if nsRange.lowerBound > content.startIndex {
+                                    var i = content.index(before: nsRange.lowerBound)
+                                    while true {
+                                        let ch = content[i]
+                                        if ch.isWhitespace || ch.isNewline { break }
+                                        if ch == "@" { return true }
+                                        if i == content.startIndex { break }
+                                        i = content.index(before: i)
+                                    }
+                                }
+                                return false
+                            }()
                             var tagStyle = AttributeContainer()
                             tagStyle.font = isSelf
                                 ? .system(size: 14, weight: .bold, design: .monospaced)
                                 : .system(size: 14, design: .monospaced)
                             tagStyle.foregroundColor = baseColor
-                            if isGeohash, let url = URL(string: "bitchat://geohash/\(token)") {
+                            if isGeohash && !attachedToMention, let url = URL(string: "bitchat://geohash/\(token)") {
                                 tagStyle.link = url
                                 tagStyle.underlineStyle = .single
                             }
