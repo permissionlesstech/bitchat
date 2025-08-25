@@ -352,14 +352,12 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     private let maxProcessedNostrEvents = 2000
     private let userDefaults = UserDefaults.standard
     private let nicknameKey = "bitchat.nickname"
-    // Location channel state
-    #if os(iOS)
+    // Location channel state (macOS supports manual geohash selection)
     @Published private var activeChannel: ChannelID = .mesh
     private var geoSubscriptionID: String? = nil
     private var geoDmSubscriptionID: String? = nil
     private var currentGeohash: String? = nil
     private var geoNicknames: [String: String] = [:] // pubkeyHex(lowercased) -> nickname
-    #endif
     
     // MARK: - Caches
     
@@ -389,7 +387,6 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     // Persist mesh public timeline across channel switches
     private var meshTimeline: [BitchatMessage] = []
     private let meshTimelineCap = 1337
-    #if os(iOS)
     // Persist per-geohash public timelines across switches
     private var geoTimelines: [String: [BitchatMessage]] = [:] // geohash -> messages
     private let geoTimelineCap = 1337
@@ -405,7 +402,6 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     @Published private(set) var teleportedGeo: Set<String> = []  // lowercased pubkey hex
     // Sampling subscriptions for multiple geohashes (when channel sheet is open)
     private var geoSamplingSubs: [String: String] = [:] // subID -> geohash
-    #endif
     
     // MARK: - Message Delivery Tracking
     
@@ -592,8 +588,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             
             self.cancellables.insert(cancellable)
 
-            // Resubscribe geohash on relay reconnect (iOS only)
-            #if os(iOS)
+            // Resubscribe geohash on relay reconnect
             if let relayMgr = self.nostrRelayManager {
                 relayMgr.$isConnected
                     .receive(on: DispatchQueue.main)
@@ -607,13 +602,11 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     }
                     .store(in: &self.cancellables)
             }
-            #endif
         }
 
         // Set up Noise encryption callbacks
         setupNoiseCallbacks()
 
-        #if os(iOS)
         // Observe location channel selection
         LocationChannelManager.shared.$selectedChannel
             .receive(on: DispatchQueue.main)
@@ -628,7 +621,6 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         Task { @MainActor in
             self.switchLocationChannel(to: LocationChannelManager.shared.selectedChannel)
         }
-        #endif
         
         // Request notification permission
         NotificationService.shared.requestAuthorization()
@@ -714,8 +706,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         // Force immediate save
         userDefaults.synchronize()
     }
-
-    #if os(iOS)
+    
     // Resubscribe to the active geohash channel without clearing timeline
     @MainActor
     private func resubscribeCurrentGeohash() {
@@ -897,7 +888,6 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             }
         } catch { }
     }
-    #endif
 
     // MARK: - Nickname Management
     
@@ -1225,7 +1215,6 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             let mentions = parseMentions(from: content)
             
             // Add message to local display
-            #if os(iOS)
             var displaySender = nickname
             var localSenderPeerID = meshService.myPeerID
             if case .location(let ch) = activeChannel,
@@ -1234,10 +1223,6 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 displaySender = nickname + "#" + suffix
                 localSenderPeerID = "nostr:\(myGeoIdentity.publicKeyHex.prefix(8))"
             }
-            #else
-            let displaySender = nickname
-            let localSenderPeerID = meshService.myPeerID
-            #endif
 
             let message = BitchatMessage(
                 sender: displaySender,
@@ -1257,7 +1242,6 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             let ckey = normalizedContentKey(message.content)
             recordContentKey(ckey, timestamp: message.timestamp)
             // Persist to channel-specific timelines
-            #if os(iOS)
             switch activeChannel {
             case .mesh:
                 meshTimeline.append(message)
@@ -1268,26 +1252,19 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 if arr.count > geoTimelineCap { arr = Array(arr.suffix(geoTimelineCap)) }
                 geoTimelines[ch.geohash] = arr
             }
-            #else
-            meshTimeline.append(message)
-            trimMeshTimelineIfNeeded()
-            #endif
             trimMessagesIfNeeded()
             
             // Force immediate UI update for user's own messages
             objectWillChange.send()
 
             // Update channel activity time on send
-            #if os(iOS)
             switch activeChannel {
             case .mesh:
                 lastPublicActivityAt["mesh"] = Date()
             case .location(let ch):
                 lastPublicActivityAt["geo:\(ch.geohash)"] = Date()
             }
-            #endif
             
-            #if os(iOS)
             if case .location(let ch) = activeChannel {
                 // Send to geohash channel via Nostr ephemeral
                 Task { @MainActor in
@@ -1326,14 +1303,10 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 // Send via mesh with mentions
                 meshService.sendMessage(content, mentions: mentions)
             }
-            #else
-            // Send via mesh with mentions (non-iOS)
-            meshService.sendMessage(content, mentions: mentions)
-            #endif
+            
         }
     }
 
-    #if os(iOS)
     @MainActor
     private func switchLocationChannel(to channel: ChannelID) {
         // Flush pending public buffer to avoid cross-channel bleed
@@ -1376,14 +1349,12 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         // Ensure self appears immediately in the people list; mark teleported state if applicable
         if let id = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
             self.recordGeoParticipant(pubkeyHex: id.publicKeyHex)
-            #if os(iOS)
             if LocationChannelManager.shared.teleported {
                 let key = id.publicKeyHex.lowercased()
                 teleportedGeo = teleportedGeo.union([key])
                 SecureLogger.log("GeoTeleport: channel switch mark self teleported key=\(key.prefix(8))… total=\(teleportedGeo.count)",
                                 category: SecureLogger.session, level: .info)
             }
-            #endif
         }
         let subID = "geo-\(ch.geohash)"
         geoSubscriptionID = subID
@@ -1593,8 +1564,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         // Presence announcement removed; we will tag actual chat events instead
     }
 
-    // MARK: - Geohash Participants (iOS)
-    #if os(iOS)
+    // MARK: - Geohash Participants
     struct GeoPerson: Identifiable, Equatable {
         let id: String        // pubkey hex (lowercased)
         let displayName: String
@@ -1652,10 +1622,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         geoParticipantsTimer?.invalidate()
         geoParticipantsTimer = nil
     }
-    #endif
-
-    // MARK: - Public helpers (iOS)
-    #if os(iOS)
+    
+    // MARK: - Public helpers
     /// Return the current, pruned, sorted people list for the active geohash without mutating state.
     @MainActor
     func visibleGeohashPeople() -> [GeoPerson] {
@@ -1773,7 +1741,6 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         for subID in geoSamplingSubs.keys { NostrRelayManager.shared.unsubscribe(id: subID) }
         geoSamplingSubs.removeAll()
     }
-    #endif
 
     private func displayNameForNostrPubkey(_ pubkeyHex: String) -> String {
         let suffix = String(pubkeyHex.suffix(4))
@@ -1793,16 +1760,12 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
 
     // Helper: display name for current active channel (for notifications)
     private func activeChannelDisplayName() -> String {
-        #if os(iOS)
         switch activeChannel {
         case .mesh:
             return "#mesh"
         case .location(let ch):
             return "#\(ch.geohash)"
         }
-        #else
-        return "#mesh"
-        #endif
     }
 
     // Dedup helper with small memory cap
@@ -1819,7 +1782,6 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             }
         }
     }
-    #endif
     
     /// Sends an encrypted private message to a specific peer.
     /// - Parameters:
@@ -1831,7 +1793,6 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         guard !content.isEmpty else { return }
         
         // Geohash DM routing: conversation keys start with "nostr_"
-        #if os(iOS)
         if peerID.hasPrefix("nostr_") {
             guard case .location(let ch) = activeChannel else {
                 addSystemMessage("cannot send: not in a location channel")
@@ -1897,7 +1858,6 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             }
             return
         }
-        #endif
 
         // Check if blocked
         if unifiedPeerService.isBlocked(peerID) {
@@ -1964,7 +1924,6 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         }
     }
 
-    #if os(iOS)
     // MARK: - Geohash DMs initiation
     @MainActor
     func startGeohashDM(withPubkeyHex hex: String) {
@@ -1990,7 +1949,6 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         }
         return "anon#\(suffix)"
     }
-    #endif
     /// Add a local system message to a private chat (no network send)
     @MainActor
     func addLocalPrivateSystemMessage(_ content: String, to peerID: String) {
@@ -2444,9 +2402,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             }
         }
         // Also resubscribe the current geohash channel if active
-        #if os(iOS)
         resubscribeCurrentGeohash()
-        #endif
     }
     
     @MainActor
@@ -2491,7 +2447,6 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             
         } else {
             // In public chat - send to active public channel
-            #if os(iOS)
             switch activeChannel {
             case .mesh:
                 meshService.sendMessage(screenshotMessage, mentions: [])
@@ -2525,9 +2480,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     }
                 }
             }
-            #else
-            meshService.sendMessage(screenshotMessage, mentions: [])
-            #endif
+            
 
             // Show local notification immediately as system message
             let localNotification = BitchatMessage(
@@ -2607,7 +2560,6 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         privateChatManager.markAsRead(from: peerID)
         
         // Handle GeoDM (nostr_*) read receipts directly via per-geohash identity
-        #if os(iOS)
         if peerID.hasPrefix("nostr_"),
            let recipientHex = nostrKeyMapping[peerID],
            case .location(let ch) = LocationChannelManager.shared.selectedChannel,
@@ -2625,7 +2577,6 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             }
             return
         }
-        #endif
 
         // Get the peer's Noise key to check for Nostr messages
         var noiseKeyHex: String? = nil
@@ -2722,7 +2673,6 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     
     @MainActor
     func getPeerIDForNickname(_ nickname: String) -> String? {
-        #if os(iOS)
         // When in a geohash channel, allow resolving by geohash participant nickname
         switch LocationChannelManager.shared.selectedChannel {
         case .location:
@@ -2736,9 +2686,10 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 nostrKeyMapping[convKey] = pub
                 return convKey
             }
-        default: break
+        default:
+            break
         }
-        #endif
+        // Fallback to mesh nickname resolution
         return unifiedPeerService.getPeerID(for: nickname)
     }
     
@@ -2846,7 +2797,6 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     func updateAutocomplete(for text: String, cursorPosition: Int) {
         // Build candidate list based on active channel
         let peerCandidates: [String] = {
-            #if os(iOS)
             switch activeChannel {
             case .mesh:
                 let values = meshService.getPeerNicknames().values
@@ -2865,10 +2815,6 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 }
                 return Array(tokens)
             }
-            #else
-            let values = meshService.getPeerNicknames().values
-            return Array(values.filter { $0 != meshService.myNickname })
-            #endif
         }()
 
         let (suggestions, range) = autocompleteService.getSuggestions(
@@ -2989,13 +2935,12 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         // Determine if this message was sent by self (mesh, geo, or DM)
         let isSelf: Bool = {
             if let spid = message.senderPeerID {
-                #if os(iOS)
+                // In geohash channels, compare against our per-geohash nostr short ID
                 if case .location(let ch) = activeChannel, spid.hasPrefix("nostr:") {
                     if let myGeo = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
                         return spid == "nostr:\(myGeo.publicKeyHex.prefix(8))"
                     }
                 }
-                #endif
                 return spid == meshService.myPeerID
             }
             // Fallback by nickname
@@ -3146,11 +3091,9 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                         let (mBase, mSuffix) = splitSuffix(from: matchText.replacingOccurrences(of: "@", with: ""))
                         // Determine if this mention targets me (resolves with optional suffix per active channel)
                         let mySuffix: String? = {
-                            #if os(iOS)
                             if case .location(let ch) = activeChannel, let id = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
                                 return String(id.publicKeyHex.suffix(4))
                             }
-                            #endif
                             return String(meshService.myPeerID.prefix(4))
                         }()
                         let isMentionToMe: Bool = {
@@ -3602,7 +3545,6 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     // Clear the current public channel's timeline (visible + persistent buffer)
     @MainActor
     func clearCurrentPublicTimeline() {
-        #if os(iOS)
         switch activeChannel {
         case .mesh:
             messages.removeAll()
@@ -3611,10 +3553,6 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             messages.removeAll()
             geoTimelines[ch.geohash] = []
         }
-        #else
-        messages.removeAll()
-        meshTimeline.removeAll()
-        #endif
     }
     
     private func trimPrivateChatMessagesIfNeeded(for peerID: String) {
@@ -4447,7 +4385,6 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     // Used for emotes where we want a local system-style confirmation instead.
     @MainActor
     func sendPublicRaw(_ content: String) {
-        #if os(iOS)
         if case .location(let ch) = activeChannel {
             Task { @MainActor in
                 do {
@@ -4471,7 +4408,6 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             }
             return
         }
-        #endif
         // Default: send over mesh
         meshService.sendMessage(content, mentions: [])
     }
@@ -5074,12 +5010,10 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     // MARK: - Geohash Nickname Resolution (for /block in geohash)
     @MainActor
     func nostrPubkeyForDisplayName(_ name: String) -> String? {
-        // Look up current visible geohash participants for an exact displayName match (iOS only)
-        #if os(iOS)
+        // Look up current visible geohash participants for an exact displayName match
         for p in visibleGeohashPeople() {
             if p.displayName == name { return p.id }
         }
-        #endif
         return nil
     }
     
@@ -5381,8 +5315,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             trimMeshTimelineIfNeeded()
         }
 
-        // Persist geochat messages to per-geohash timeline (iOS-only)
-        #if os(iOS)
+        // Persist geochat messages to per-geohash timeline
         if isGeo && finalMessage.sender != "system" {
             if let gh = currentGeohash {
                 var arr = geoTimelines[gh] ?? []
@@ -5391,20 +5324,14 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 geoTimelines[gh] = arr
             }
         }
-        #endif
 
         // Only add message to current timeline if it matches active channel or is system
         let isSystem = finalMessage.sender == "system"
         let channelMatches: Bool = {
-            #if os(iOS)
             switch activeChannel {
             case .mesh: return !isGeo || isSystem
             case .location: return isGeo || isSystem
             }
-            #else
-            // On non-iOS builds, we don't have location channels; accept all
-            return true
-            #endif
         }()
 
         guard channelMatches else { return }
