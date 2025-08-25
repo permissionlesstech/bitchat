@@ -122,8 +122,8 @@ struct NostrProtocol {
             tags: tags,
             content: content
         )
-        let signingKey = try senderIdentity.signingKey()
-        return try event.sign(with: signingKey)
+        let schnorrKey = try senderIdentity.schnorrSigningKey()
+        return try event.sign(with: schnorrKey)
     }
     
     // MARK: - Private Methods
@@ -149,9 +149,8 @@ struct NostrProtocol {
             content: encrypted
         )
         
-        // Convert to P256K.Signing.PrivateKey for signing (temporary until we update sign method)
-        let signingKey = try P256K.Signing.PrivateKey(dataRepresentation: senderKey.dataRepresentation)
-        return try seal.sign(with: signingKey)
+        // Sign the seal with the sender's Schnorr private key
+        return try seal.sign(with: senderKey)
     }
     
     private static func createGiftWrap(
@@ -181,9 +180,8 @@ struct NostrProtocol {
             content: encrypted
         )
         
-        // Convert to P256K.Signing.PrivateKey for signing (temporary until we update sign method)
-        let signingKey = try P256K.Signing.PrivateKey(dataRepresentation: wrapKey.dataRepresentation)
-        return try giftWrap.sign(with: signingKey)
+        // Sign the gift wrap with the wrap Schnorr private key
+        return try giftWrap.sign(with: wrapKey)
     }
     
     private static func unwrapGiftWrap(
@@ -472,19 +470,16 @@ struct NostrEvent: Codable {
         self.sig = dict["sig"] as? String
     }
     
-    func sign(with key: P256K.Signing.PrivateKey) throws -> NostrEvent {
+    func sign(with key: P256K.Schnorr.PrivateKey) throws -> NostrEvent {
         let (eventId, eventIdHash) = try calculateEventId()
         
-        // Convert to Schnorr key for Nostr signing
-        let schnorrKey = try P256K.Schnorr.PrivateKey(dataRepresentation: key.dataRepresentation)
-        
-        // Sign with Schnorr
+        // Sign with Schnorr (BIP-340)
         var messageBytes = [UInt8](eventIdHash)
         var auxRand = [UInt8](repeating: 0, count: 32)
         _ = auxRand.withUnsafeMutableBytes { ptr in
             SecRandomCopyBytes(kSecRandomDefault, 32, ptr.baseAddress!)
         }
-        let schnorrSignature = try schnorrKey.signature(message: &messageBytes, auxiliaryRand: &auxRand)
+        let schnorrSignature = try key.signature(message: &messageBytes, auxiliaryRand: &auxRand)
         
         let signatureHex = schnorrSignature.dataRepresentation.hexEncodedString()
         
