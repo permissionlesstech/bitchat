@@ -112,6 +112,16 @@ final class BLEService: NSObject {
     private var scheduledRelays: [String: DispatchWorkItem] = [:]
     // Track short-lived traffic bursts to adapt announces/scanning under load
     private var recentPacketTimestamps: [Date] = []
+
+    // Ingress link tracking for last-hop suppression
+    private enum LinkID: Hashable {
+        case peripheral(String)
+        case central(String)
+    }
+    private var ingressByMessageID: [String: (link: LinkID, timestamp: Date)] = [:]
+
+    // Backpressure-aware write queue per peripheral
+    private var pendingPeripheralWrites: [String: [Data]] = [:]
     
     // MARK: - Maintenance Timer
     
@@ -154,6 +164,88 @@ final class BLEService: NSObject {
             return (self.subscribedCentrals, self.centralToPeerID)
         } else {
             return bleQueue.sync { (self.subscribedCentrals, self.centralToPeerID) }
+        }
+    }
+
+    // MARK: - Helpers: IDs, selection, and write backpressure
+    private func makeMessageID(for packet: BitchatPacket) -> String {
+        let senderID = packet.senderID.hexEncodedString()
+        return "\(senderID)-\(packet.timestamp)-\(packet.type)"
+    }
+
+    private func subsetSizeForFanout(_ n: Int) -> Int {
+        guard n > 0 else { return 0 }
+        if n <= 2 { return n }
+        // approx ceil(log2(n)) + 1 without floating point
+        var v = n - 1
+        var bits = 0
+        while v > 0 { v >>= 1; bits += 1 }
+        return min(n, max(1, bits + 1))
+    }
+
+    private func selectDeterministicSubset(ids: [String], k: Int, seed: String) -> Set<String> {
+        guard k > 0 && ids.count > k else { return Set(ids) }
+        // Stable order by SHA256(seed || "::" || id)
+        var scored: [(score: [UInt8], id: String)] = []
+        for id in ids {
+            let msg = (seed + "::" + id).data(using: .utf8) ?? Data()
+            let digest = Array(SHA256.hash(data: msg))
+            scored.append((digest, id))
+        }
+        scored.sort { a, b in
+            for i in 0..<min(a.score.count, b.score.count) {
+                if a.score[i] != b.score[i] { return a.score[i] < b.score[i] }
+            }
+            return a.id < b.id
+        }
+        return Set(scored.prefix(k).map { $0.id })
+    }
+
+    private func writeOrEnqueue(_ data: Data, to peripheral: CBPeripheral, characteristic: CBCharacteristic) {
+        // BLE operations run on bleQueue; keep queue affinity
+        bleQueue.async { [weak self] in
+            guard let self = self else { return }
+            let uuid = peripheral.identifier.uuidString
+            if peripheral.canSendWriteWithoutResponse {
+                peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
+            } else {
+                self.collectionsQueue.async(flags: .barrier) {
+                    self.pendingPeripheralWrites[uuid, default: []].append(data)
+                }
+            }
+        }
+    }
+
+    private func drainPendingWrites(for peripheral: CBPeripheral) {
+        let uuid = peripheral.identifier.uuidString
+        bleQueue.async { [weak self] in
+            guard let self = self else { return }
+            guard let state = self.peripherals[uuid], let ch = state.characteristic else { return }
+            var queueCopy: [Data] = []
+            self.collectionsQueue.sync {
+                queueCopy = self.pendingPeripheralWrites[uuid] ?? []
+            }
+            guard !queueCopy.isEmpty else { return }
+            var sent = 0
+            for item in queueCopy {
+                if peripheral.canSendWriteWithoutResponse {
+                    peripheral.writeValue(item, for: ch, type: .withoutResponse)
+                    sent += 1
+                } else {
+                    break
+                }
+            }
+            if sent > 0 {
+                self.collectionsQueue.async(flags: .barrier) {
+                    var q = self.pendingPeripheralWrites[uuid] ?? []
+                    if sent <= q.count {
+                        q.removeFirst(sent)
+                    } else {
+                        q.removeAll()
+                    }
+                    self.pendingPeripheralWrites[uuid] = q.isEmpty ? nil : q
+                }
+            }
         }
     }
     
@@ -369,7 +461,7 @@ final class BLEService: NSObject {
             // Send to peripherals we're connected to as central
             for state in peripherals.values where state.isConnected {
                 if let characteristic = state.characteristic {
-                    state.peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
+                    writeOrEnqueue(data, to: state.peripheral, characteristic: characteristic)
                 }
             }
             
@@ -877,7 +969,7 @@ final class BLEService: NSObject {
            let state = (DispatchQueue.getSpecific(key: bleQueueKey) != nil) ? peripherals[peripheralUUID] : bleQueue.sync(execute: { peripherals[peripheralUUID] }),
            state.isConnected,
            let characteristic = state.characteristic {
-            state.peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
+            writeOrEnqueue(data, to: state.peripheral, characteristic: characteristic)
             sentEncrypted = true
         }
 
@@ -908,6 +1000,10 @@ final class BLEService: NSObject {
     }
 
     private func sendOnAllLinks(packet: BitchatPacket, data: Data, pad: Bool, directedOnlyPeer: String?) {
+        // Determine last-hop link for this message to avoid echoing back
+        let messageID = makeMessageID(for: packet)
+        let ingressLink: LinkID? = collectionsQueue.sync { ingressByMessageID[messageID]?.link }
+
         let states = snapshotPeripheralStates()
         var minCentralWriteLen: Int?
         for s in states where s.isConnected {
@@ -932,15 +1028,54 @@ final class BLEService: NSObject {
             sendFragmentedPacket(packet, pad: pad, maxChunk: chunk, directedOnlyPeer: directedOnlyPeer)
             return
         }
-        // Writes to connected peripherals
-        for s in states where s.isConnected {
-            if let ch = s.characteristic {
-                s.peripheral.writeValue(data, for: ch, type: .withoutResponse)
+        // Build link lists and apply K-of-N fanout for broadcasts; always exclude ingress link
+        let connectedPeripheralIDs: [String] = states.filter { $0.isConnected }.map { $0.peripheral.identifier.uuidString }
+        let subscribedCentrals: [CBCentral]
+        var centralIDs: [String] = []
+        if let _ = characteristic {
+            let (centrals, _) = snapshotSubscribedCentrals()
+            subscribedCentrals = centrals
+            centralIDs = centrals.map { $0.identifier.uuidString }
+        } else {
+            subscribedCentrals = []
+        }
+
+        // Exclude ingress link
+        var allowedPeripheralIDs = connectedPeripheralIDs
+        var allowedCentralIDs = centralIDs
+        if let ingress = ingressLink {
+            switch ingress {
+            case .peripheral(let id):
+                allowedPeripheralIDs.removeAll { $0 == id }
+            case .central(let id):
+                allowedCentralIDs.removeAll { $0 == id }
             }
         }
-        // Notify all subscribed centrals
+
+        // For broadcast (no directed peer) and non-fragment, choose a subset deterministically
+        var selectedPeripheralIDs = Set(allowedPeripheralIDs)
+        var selectedCentralIDs = Set(allowedCentralIDs)
+        if directedOnlyPeer == nil && packet.type != MessageType.fragment.rawValue {
+            let kp = subsetSizeForFanout(allowedPeripheralIDs.count)
+            let kc = subsetSizeForFanout(allowedCentralIDs.count)
+            selectedPeripheralIDs = selectDeterministicSubset(ids: allowedPeripheralIDs, k: kp, seed: messageID)
+            selectedCentralIDs = selectDeterministicSubset(ids: allowedCentralIDs, k: kc, seed: messageID)
+        }
+
+        // Writes to selected connected peripherals
+        for s in states where s.isConnected {
+            let pid = s.peripheral.identifier.uuidString
+            guard selectedPeripheralIDs.contains(pid) else { continue }
+            if let ch = s.characteristic {
+                writeOrEnqueue(data, to: s.peripheral, characteristic: ch)
+            }
+        }
+        // Notify selected subscribed centrals
         if let ch = characteristic {
-            _ = peripheralManager?.updateValue(data, for: ch, onSubscribedCentrals: nil)
+            let targets = subscribedCentrals.filter { selectedCentralIDs.contains($0.identifier.uuidString) }
+            if !targets.isEmpty {
+                _ = peripheralManager?.updateValue(data, for: ch, onSubscribedCentrals: targets)
+            }
         }
     }
     
@@ -954,7 +1089,7 @@ final class BLEService: NSObject {
         
         // Fire-and-forget principle: always use .withoutResponse for speed
         // CoreBluetooth will handle fragmentation at L2CAP layer
-        peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
+        writeOrEnqueue(data, to: peripheral, characteristic: characteristic)
     }
     
     // MARK: - Fragmentation (Required for messages > BLE MTU)
@@ -1162,6 +1297,7 @@ final class BLEService: NSObject {
                 ttl: packet.ttl,
                 senderIsSelf: senderID == myPeerID,
                 isEncrypted: packet.type == MessageType.noiseEncrypted.rawValue,
+                isDirectedEncrypted: (packet.type == MessageType.noiseEncrypted.rawValue) && (packet.recipientID != nil),
                 isDirectedFragment: packet.type == MessageType.fragment.rawValue && packet.recipientID != nil,
                 isHandshake: packet.type == MessageType.noiseHandshake.rawValue,
                 degree: degree,
@@ -1727,6 +1863,15 @@ final class BLEService: NSObject {
                 }
             }
         }
+
+        // Clean ingress link records older than 3 seconds
+        collectionsQueue.async(flags: .barrier) { [weak self] in
+            guard let self = self else { return }
+            let cutoff = now.addingTimeInterval(-3)
+            if !self.ingressByMessageID.isEmpty {
+                self.ingressByMessageID = self.ingressByMessageID.filter { $0.value.timestamp >= cutoff }
+            }
+        }
     }
 
     private func updateScanningDutyCycle(connectedCount: Int) {
@@ -2117,6 +2262,27 @@ extension BLEService {
 // Test-only helper to inject packets into the receive pipeline
 extension BLEService {
     func _test_handlePacket(_ packet: BitchatPacket, fromPeerID: String) {
+        // Ensure the synthetic peer is known and marked verified for public-message tests
+        let normalizedID = packet.senderID.hexEncodedString()
+        collectionsQueue.sync(flags: .barrier) {
+            if peers[normalizedID] == nil {
+                peers[normalizedID] = PeerInfo(
+                    id: normalizedID,
+                    nickname: "TestPeer_\(fromPeerID.prefix(4))",
+                    isConnected: true,
+                    noisePublicKey: packet.senderID,
+                    signingPublicKey: nil,
+                    isVerifiedNickname: true,
+                    lastSeen: Date()
+                )
+            } else {
+                var p = peers[normalizedID]!
+                p.isConnected = true
+                p.isVerifiedNickname = true
+                p.lastSeen = Date()
+                peers[normalizedID] = p
+            }
+        }
         if DispatchQueue.getSpecific(key: messageQueueKey) != nil {
             handleReceivedPacket(packet, from: fromPeerID)
         } else {
@@ -2245,12 +2411,22 @@ extension BLEService: CBPeripheralDelegate {
                 peerToPeripheralUUID[senderID] = peripheralUUID
                 // Mapping update - direct announce from peer
             }
+            // Record ingress link for last-hop suppression and process
+            let msgID = makeMessageID(for: packet)
+            collectionsQueue.async(flags: .barrier) { [weak self] in
+                self?.ingressByMessageID[msgID] = (.peripheral(peripheralUUID), Date())
+            }
             // Process the announce packet regardless of whether we updated the mapping
             handleReceivedPacket(packet, from: senderID)
         } else {
             // For non-announce packets, DO NOT update mappings
             // These could be relayed packets from other peers
             // Always use the packet's original senderID
+            // Record ingress link for last-hop suppression and process
+            let msgID = makeMessageID(for: packet)
+            collectionsQueue.async(flags: .barrier) { [weak self] in
+                self?.ingressByMessageID[msgID] = (.peripheral(peripheralUUID), Date())
+            }
             handleReceivedPacket(packet, from: senderID)
         }
     }
@@ -2265,7 +2441,8 @@ extension BLEService: CBPeripheralDelegate {
     }
     
     func peripheralIsReady(toSendWriteWithoutResponse peripheral: CBPeripheral) {
-        // Suppress verbose ready logs
+        // Resume queued writes for this peripheral
+        drainPendingWrites(for: peripheral)
     }
     
     func peripheral(_ peripheral: CBPeripheral, didModifyServices invalidatedServices: [CBService]) {
@@ -2489,8 +2666,18 @@ extension BLEService: CBPeripheralManagerDelegate {
                 }
                 if packet.type == MessageType.announce.rawValue {
                     if packet.ttl == messageTTL { centralToPeerID[centralUUID] = senderID }
+                    // Record ingress link for last-hop suppression then process
+                    let msgID = makeMessageID(for: packet)
+                    collectionsQueue.async(flags: .barrier) { [weak self] in
+                        self?.ingressByMessageID[msgID] = (.central(centralUUID), Date())
+                    }
                     handleReceivedPacket(packet, from: senderID)
                 } else {
+                    // Record ingress link for last-hop suppression then process
+                    let msgID = makeMessageID(for: packet)
+                    collectionsQueue.async(flags: .barrier) { [weak self] in
+                        self?.ingressByMessageID[msgID] = (.central(centralUUID), Date())
+                    }
                     handleReceivedPacket(packet, from: senderID)
                 }
             } else {
