@@ -297,7 +297,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         }
     }
     
-    // Missing properties that were removed during refactoring
+    //
     private var peerIDToPublicKeyFingerprint: [String: String] = [:]
     private var selectedPrivateChatFingerprint: String? = nil
     // Map stable short peer IDs (16-hex) to full Noise public key hex (64-hex) for session continuity
@@ -1561,7 +1561,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         } catch {
             // ignore
         }
-        // Presence announcement removed; we will tag actual chat events instead
+        //
     }
 
     // MARK: - Geohash Participants
@@ -1714,7 +1714,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         let toAdd = desired.subtracting(current)
         let toRemove = current.subtracting(desired)
 
-        // Unsubscribe removed
+        //
         for (subID, gh) in geoSamplingSubs where toRemove.contains(gh) {
             NostrRelayManager.shared.unsubscribe(id: subID)
             geoSamplingSubs.removeValue(forKey: subID)
@@ -3617,26 +3617,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         return unifiedPeerService.getFingerprint(for: peerID)
     }
     
-    private func getFingerprint_old(for peerID: String) -> String? {
-        // Remove debug logging to prevent console spam during view updates
-        
-        // First try to get fingerprint from mesh service's peer ID rotation mapping
-        if let fingerprint = meshService.getFingerprint(for: peerID) {
-            return fingerprint
-        }
-        
-        // Check noise service (direct Noise session fingerprint)
-        if let fingerprint = meshService.getNoiseService().getPeerFingerprint(peerID) {
-            return fingerprint
-        }
-        
-        // Last resort: check local mapping
-        if let fingerprint = peerIDToPublicKeyFingerprint[peerID] {
-            return fingerprint
-        }
-        
-        return nil
-    }
+    //
+
     
     // Helper to resolve nickname for a peer ID through various sources
     @MainActor
@@ -4034,7 +4016,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             messageRouter.flushOutbox(for: peerID)
         }
         
-        // Connection messages removed to reduce chat noise
+        //
     }
     
     func didDisconnectFromPeer(_ peerID: String) {
@@ -4101,7 +4083,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             }
         }
         
-        // Disconnection messages removed to reduce chat noise
+        //
     }
     
     func didUpdatePeerList(_ peers: [String]) {
@@ -4414,7 +4396,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     
     // MARK: - Simplified Nostr Integration (Inlined from MessageRouter)
     
-    // Removed inlined Nostr send helpers in favor of MessageRouter
+    //
     
     @MainActor
     private func setupNostrMessageHandling() {
@@ -4745,7 +4727,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         return Data(base64Encoded: str)
     }
     
-    // Removed local TLV decoder; using PrivateMessagePacket.decode from Protocols
+    //
     
     @MainActor
     private func handleFavoriteNotificationFromMesh(_ content: String, from peerID: String, senderNickname: String) {

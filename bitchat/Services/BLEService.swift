@@ -730,7 +730,7 @@ final class BLEService: NSObject {
         }
     }
     
-    // Removed unused getPeers(): use getPeerNicknames() from Transport
+    //
     
     // MARK: - Private Message Handling
     

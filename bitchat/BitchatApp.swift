@@ -109,20 +109,8 @@ struct BitchatApp: App {
             userDefaults.removeObject(forKey: "sharedContentDate")
             userDefaults.synchronize()
             
-            // Show notification about shared content
+            // Send the shared content immediately on the main queue
             DispatchQueue.main.async {
-                // Add system message about sharing
-                let systemMessage = BitchatMessage(
-                    sender: "system",
-                    content: "preparing to share \(contentType)...",
-                    timestamp: Date(),
-                    isRelay: false
-                )
-                self.chatViewModel.messages.append(systemMessage)
-            }
-            
-            // Send the shared content after a short delay
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                 if contentType == "url" {
                     // Try to parse as JSON first
                     if let data = sharedContent.data(using: .utf8),

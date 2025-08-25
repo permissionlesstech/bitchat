@@ -173,56 +173,7 @@ struct PendingActions {
     var setPetname: String?
 }
 
-// MARK: - Privacy Settings
-
-struct PrivacySettings: Codable {
-    // Level 1: Maximum privacy (default)
-    var persistIdentityCache = false
-    var showLastSeen = false
-    
-    // Level 2: Convenience
-    var autoAcceptKnownFingerprints = false
-    var rememberNicknameHistory = false
-    
-    // Level 3: Social
-    var shareTrustNetworkHints = false  // "3 mutual contacts trust this person"
-}
-
-// MARK: - Conflict Resolution
-
-/// Strategies for resolving identity conflicts in the decentralized network.
-/// Handles cases where multiple peers claim the same nickname or when
-/// identity mappings become ambiguous due to network partitions.
-enum ConflictResolution {
-    case acceptNew(petname: String)      // "John (2)"
-    case rejectNew
-    case blockFingerprint(String)
-    case alertUser(message: String)
-}
-
-// MARK: - UI State
-
-struct PeerUIState {
-    let peerID: String
-    let nickname: String
-    var identityState: IdentityState
-    var connectionQuality: ConnectionQuality
-    
-    enum IdentityState {
-        case unknown                    // Gray - No identity info
-        case unverifiedKnown(String)   // Blue - Handshake done, matches cache
-        case verified(String)          // Green - Cryptographically verified
-        case conflict(String, String)  // Red - Nickname doesn't match fingerprint
-        case pending                   // Yellow - Handshake in progress
-    }
-}
-
-enum ConnectionQuality {
-    case excellent
-    case good
-    case poor
-    case disconnected
-}
+//
 
 // MARK: - Migration Support
-// Removed LegacyFavorite - no longer needed
+//

@@ -21,8 +21,10 @@ final class NostrProtocolTests: XCTestCase {
         let sender = try NostrIdentity.generate()
         let recipient = try NostrIdentity.generate()
         
+        #if DEBUG
         print("Sender pubkey: \(sender.publicKeyHex)")
         print("Recipient pubkey: \(recipient.publicKeyHex)")
+        #endif
         
         // Create a test message
         let originalContent = "Hello from NIP-17 test!"
@@ -34,8 +36,10 @@ final class NostrProtocolTests: XCTestCase {
             senderIdentity: sender
         )
         
+        #if DEBUG
         print("Gift wrap created with ID: \(giftWrap.id)")
         print("Gift wrap pubkey: \(giftWrap.pubkey)")
+        #endif
         
         // Decrypt the gift wrap
         let (decryptedContent, senderPubkey, timestamp) = try NostrProtocol.decryptPrivateMessage(
@@ -52,7 +56,9 @@ final class NostrProtocolTests: XCTestCase {
         let timeDiff = abs(messageDate.timeIntervalSinceNow)
         XCTAssertLessThan(timeDiff, 60, "Message timestamp should be recent")
         
+        #if DEBUG
         print("✅ Successfully decrypted message: '\(decryptedContent)' from \(senderPubkey) at \(messageDate)")
+        #endif
     }
     
     func testGiftWrapUsesUniqueEphemeralKeys() throws {
@@ -75,8 +81,10 @@ final class NostrProtocolTests: XCTestCase {
         
         // Gift wrap pubkeys should be different (unique ephemeral keys)
         XCTAssertNotEqual(message1.pubkey, message2.pubkey)
+        #if DEBUG
         print("Message 1 gift wrap pubkey: \(message1.pubkey)")
         print("Message 2 gift wrap pubkey: \(message2.pubkey)")
+        #endif
         
         // Both should decrypt successfully
         let (content1, _, _) = try NostrProtocol.decryptPrivateMessage(
@@ -109,7 +117,9 @@ final class NostrProtocolTests: XCTestCase {
             giftWrap: giftWrap,
             recipientIdentity: wrongRecipient
         )) { error in
+            #if DEBUG
             print("Expected error when decrypting with wrong key: \(error)")
+            #endif
         }
     }
 

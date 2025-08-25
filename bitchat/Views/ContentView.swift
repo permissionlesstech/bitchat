@@ -13,19 +13,9 @@ import UIKit
 
 // MARK: - Supporting Types
 
-// Pre-computed peer data for performance
-struct PeerDisplayData: Identifiable {
-    let id: String
-    let displayName: String
-    let isFavorite: Bool
-    let isMe: Bool
-    let hasUnreadMessages: Bool
-    let encryptionStatus: EncryptionStatus
-    let connectionState: BitchatPeer.ConnectionState
-    let isMutualFavorite: Bool
-}
+//
 
-// (Link previews removed; URLs are now clickable inline)
+//
 
 // MARK: - Main Content View
 
@@ -1382,23 +1372,7 @@ private struct PaymentChipView: View {
     }
 }
 
-// Helper view for rendering message content (plain, no hashtag/mention formatting)
-struct MessageContentView: View {
-    let message: BitchatMessage
-    let viewModel: ChatViewModel
-    let colorScheme: ColorScheme
-    let isMentioned: Bool
-    
-    var body: some View {
-        Text(message.content)
-            .font(.system(size: 14, design: .monospaced))
-            .fontWeight(isMentioned ? .bold : .regular)
-    }
-    
-    // MARK: - Helper Methods
-    
-    // buildTextSegments removed: content is rendered plain.
-}
+//
 
 // Delivery status indicator view
 struct DeliveryStatusView: View {
