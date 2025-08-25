@@ -102,7 +102,7 @@ final class VerificationService {
     }
 
     /// Verify a scanned QR and return the parsed payload if valid (signature + freshness checks)
-    func verifyScannedQR(_ urlString: String, maxAge: TimeInterval = 5 * 60) -> VerificationQR? {
+    func verifyScannedQR(_ urlString: String, maxAge: TimeInterval = TransportConfig.verificationQRMaxAgeSeconds) -> VerificationQR? {
         guard let url = URL(string: urlString), let qr = VerificationQR.fromURL(url) else { return nil }
         // Freshness
         let now = Date().timeIntervalSince1970

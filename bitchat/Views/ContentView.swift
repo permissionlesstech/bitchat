@@ -100,14 +100,14 @@ struct ContentView: View {
                                 .onEnded { value in
                                     let translation = value.translation.width.isNaN ? 0 : value.translation.width
                                     let velocity = value.velocity.width.isNaN ? 0 : value.velocity.width
-                                    if translation > 50 || (translation > 30 && velocity > 300) {
-                                        withAnimation(.easeOut(duration: 0.2)) {
+                                    if translation > TransportConfig.uiBackSwipeTranslationLarge || (translation > TransportConfig.uiBackSwipeTranslationSmall && velocity > TransportConfig.uiBackSwipeVelocityThreshold) {
+                                        withAnimation(.easeOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
                                             showPrivateChat = false
                                             backSwipeOffset = 0
                                             viewModel.endPrivateChat()
                                         }
                                     } else {
-                                        withAnimation(.easeOut(duration: 0.15)) {
+                                        withAnimation(.easeOut(duration: TransportConfig.uiAnimationShortSeconds)) {
                                             backSwipeOffset = 0
                                         }
                                     }
@@ -121,7 +121,7 @@ struct ContentView: View {
                     Color.clear
                         .contentShape(Rectangle())
                         .onTapGesture {
-                            withAnimation(.easeInOut(duration: 0.2)) {
+            withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
                                 showSidebar = false
                                 sidebarDragOffset = 0
                             }
@@ -151,14 +151,14 @@ struct ContentView: View {
                     let width = geometry.size.width.isNaN ? 0 : max(0, geometry.size.width)
                     return showSidebar ? -dragOffset : width - dragOffset
                 }())
-                .animation(.easeInOut(duration: 0.25), value: showSidebar)
+                .animation(.easeInOut(duration: TransportConfig.uiAnimationSidebarSeconds), value: showSidebar)
             }
         }
         #if os(macOS)
         .frame(minWidth: 600, minHeight: 400)
         #endif
         .onChange(of: viewModel.selectedPrivateChatPeer) { newValue in
-            withAnimation(.easeInOut(duration: 0.2)) {
+            withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
                 showPrivateChat = newValue != nil
             }
         }
@@ -195,7 +195,7 @@ struct ContentView: View {
                     } else {
                         viewModel.startPrivateChat(with: peerID)
                     }
-                    withAnimation(.easeInOut(duration: 0.2)) {
+                    withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
                         showSidebar = false
                         sidebarDragOffset = 0
                     }
@@ -264,7 +264,7 @@ struct ContentView: View {
                     
                     // Implement windowing with adjustable window count per chat
                     let currentWindowCount: Int = {
-                        if let peer = privatePeer { return windowCountPrivate[peer] ?? 300 }
+                        if let peer = privatePeer { return windowCountPrivate[peer] ?? TransportConfig.uiWindowInitialCountPrivate }
                         return windowCountPublic
                     }()
                     let windowedMessages = messages.suffix(currentWindowCount)
@@ -296,11 +296,11 @@ struct ContentView: View {
                                     let cashuTokens = message.content.extractCashuTokens()
                                     let lightningLinks = message.content.extractLightningLinks()
                                     HStack(alignment: .top, spacing: 0) {
-                                        let isLong = (message.content.count > 2000 || message.content.hasVeryLongToken(threshold: 512)) && cashuTokens.isEmpty
+                                        let isLong = (message.content.count > TransportConfig.uiLongMessageLengthThreshold || message.content.hasVeryLongToken(threshold: TransportConfig.uiVeryLongTokenThreshold)) && cashuTokens.isEmpty
                                         let isExpanded = expandedMessageIDs.contains(message.id)
                                         Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme))
                                             .fixedSize(horizontal: false, vertical: true)
-                                            .lineLimit(isLong && !isExpanded ? 30 : nil)
+                                            .lineLimit(isLong && !isExpanded ? TransportConfig.uiLongMessageLineLimit : nil)
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                         
                                         // Delivery status indicator for private messages
@@ -312,7 +312,7 @@ struct ContentView: View {
                                     }
                                     
                                     // Expand/Collapse for very long messages
-                                    if (message.content.count > 2000 || message.content.hasVeryLongToken(threshold: 512)) && cashuTokens.isEmpty {
+                                    if (message.content.count > TransportConfig.uiLongMessageLengthThreshold || message.content.hasVeryLongToken(threshold: TransportConfig.uiVeryLongTokenThreshold)) && cashuTokens.isEmpty {
                                         let isExpanded = expandedMessageIDs.contains(message.id)
                                         Button(isExpanded ? "show less" : "show more") {
                                             if isExpanded { expandedMessageIDs.remove(message.id) }
@@ -371,7 +371,7 @@ struct ContentView: View {
                             }
                             // Infinite scroll up: when top row appears, increase window and preserve anchor
                             if message.id == windowedMessages.first?.id, messages.count > windowedMessages.count {
-                                let step = 200
+                                let step = TransportConfig.uiWindowStepCount
                                 let contextKey: String = {
                                     if let peer = privatePeer { return "dm:\(peer)" }
                                     switch locationManager.selectedChannel {
@@ -381,7 +381,7 @@ struct ContentView: View {
                                 }()
                                 let preserveID = "\(contextKey)|\(message.id)"
                                 if let peer = privatePeer {
-                                    let current = windowCountPrivate[peer] ?? 300
+                                    let current = windowCountPrivate[peer] ?? TransportConfig.uiWindowInitialCountPrivate
                                     let newCount = min(messages.count, current + step)
                                     if newCount != current {
                                         windowCountPrivate[peer] = newCount
@@ -540,7 +540,7 @@ struct ContentView: View {
                     }
                     // Throttle scroll animations to prevent excessive UI updates
                     let now = Date()
-                    if now.timeIntervalSince(lastScrollTime) > 0.5 {
+                    if now.timeIntervalSince(lastScrollTime) > TransportConfig.uiScrollThrottleSeconds {
                         // Immediate scroll if enough time has passed
                         lastScrollTime = now
                         let contextKey: String = {
@@ -557,7 +557,7 @@ struct ContentView: View {
                     } else {
                         // Schedule a delayed scroll
                         scrollThrottleTimer?.invalidate()
-                        scrollThrottleTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
+                        scrollThrottleTimer = Timer.scheduledTimer(withTimeInterval: TransportConfig.uiScrollThrottleSeconds, repeats: false) { _ in
                             lastScrollTime = Date()
                         let contextKey: String = {
                             switch locationManager.selectedChannel {
@@ -589,7 +589,7 @@ struct ContentView: View {
                     }
                     // Same throttling for private chats
                     let now = Date()
-                    if now.timeIntervalSince(lastScrollTime) > 0.5 {
+                    if now.timeIntervalSince(lastScrollTime) > TransportConfig.uiScrollThrottleSeconds {
                         lastScrollTime = now
                         let contextKey = "dm:\(peerID)"
                         let count = windowCountPrivate[peerID] ?? 300
@@ -599,7 +599,7 @@ struct ContentView: View {
                         }
                     } else {
                         scrollThrottleTimer?.invalidate()
-                        scrollThrottleTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
+                        scrollThrottleTimer = Timer.scheduledTimer(withTimeInterval: TransportConfig.uiScrollThrottleSeconds, repeats: false) { _ in
                             lastScrollTime = Date()
                             let contextKey = "dm:\(peerID)"
                             let count = windowCountPrivate[peerID] ?? 300
@@ -619,7 +619,7 @@ struct ContentView: View {
                     break
                 case .location(let ch):
                     // Reset window size
-                    windowCountPublic = 300
+                    windowCountPublic = TransportConfig.uiWindowInitialCountPublic
                     let contextKey = "geo:\(ch.geohash)"
                     let last = viewModel.messages.suffix(windowCountPublic).last?.id
                     let target = last.map { "\(contextKey)|\($0)" }
@@ -635,11 +635,11 @@ struct ContentView: View {
                     // Try multiple times to ensure read receipts are sent
                     viewModel.markPrivateMessagesAsRead(from: peerID)
                     
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + TransportConfig.uiReadReceiptRetryShortSeconds) {
                         viewModel.markPrivateMessagesAsRead(from: peerID)
                     }
                     
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + TransportConfig.uiReadReceiptRetryLongSeconds) {
                         viewModel.markPrivateMessagesAsRead(from: peerID)
                     }
                 }
@@ -859,7 +859,7 @@ struct ContentView: View {
         }
         .onAppear {
             // Delay keyboard focus to avoid iOS constraint warnings
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + TransportConfig.uiReadReceiptRetryShortSeconds) {
                 isTextFieldFocused = true
             }
         }
@@ -925,7 +925,7 @@ struct ContentView: View {
                                  secondaryTextColor: secondaryTextColor,
                                  onTapPeer: { peerID in
                                      viewModel.startPrivateChat(with: peerID)
-                                     withAnimation(.easeInOut(duration: 0.2)) {
+                                     withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
                                          showSidebar = false
                                          sidebarDragOffset = 0
                                      }
@@ -973,7 +973,7 @@ struct ContentView: View {
                 .onEnded { value in
                     let translation = value.translation.width.isNaN ? 0 : value.translation.width
                     let velocity = value.velocity.width.isNaN ? 0 : value.velocity.width
-                    withAnimation(.easeOut(duration: 0.2)) {
+                    withAnimation(.easeOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
                         if !showSidebar {
                             if translation < -100 || (translation < -50 && velocity < -500) {
                                 showSidebar = true
@@ -1153,7 +1153,7 @@ struct ContentView: View {
                 // QR moved to the PEOPLE header in the sidebar when on mesh channel
             }
             .onTapGesture {
-                withAnimation(.easeInOut(duration: 0.2)) {
+                withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
                     showSidebar.toggle()
                     sidebarDragOffset = 0
                 }
@@ -1294,7 +1294,7 @@ struct ContentView: View {
                     // Left and right buttons positioned with HStack
                     HStack {
                         Button(action: {
-                            withAnimation(.easeInOut(duration: 0.2)) {
+                            withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
                                 showPrivateChat = false
                                 viewModel.endPrivateChat()
                             }

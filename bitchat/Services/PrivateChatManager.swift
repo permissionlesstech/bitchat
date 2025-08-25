@@ -27,7 +27,7 @@ class PrivateChatManager: ObservableObject {
     }
 
     // Cap for messages stored per private chat
-    private let privateChatCap = 1337
+    private let privateChatCap = TransportConfig.privateChatCap
     
     /// Start a private chat with a peer
     func startChat(with peerID: String) {
