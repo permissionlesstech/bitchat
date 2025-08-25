@@ -20,7 +20,7 @@ final class NostrTransport: Transport {
     }
     private var readQueue: [QueuedRead] = []
     private var isSendingReadAcks = false
-    private let readAckInterval: TimeInterval = 0.35 // ~3 per second
+    private let readAckInterval: TimeInterval = TransportConfig.nostrReadAckInterval
 
     var myPeerID: String { senderPeerID }
     var myNickname: String { "" }
@@ -48,16 +48,7 @@ final class NostrTransport: Transport {
 
     func sendPrivateMessage(_ content: String, to peerID: String, recipientNickname: String, messageID: String) {
         Task { @MainActor in
-            // Resolve favorite by full noise key or by short peerID fallback
-            var recipientNostrPubkey: String?
-            if let noiseKey = Data(hexString: peerID),
-               let fav = FavoritesPersistenceService.shared.getFavoriteStatus(for: noiseKey) {
-                recipientNostrPubkey = fav.peerNostrPublicKey
-            }
-            if recipientNostrPubkey == nil, peerID.count == 16 {
-                recipientNostrPubkey = FavoritesPersistenceService.shared.getFavoriteStatus(forPeerID: peerID)?.peerNostrPublicKey
-            }
-            guard let recipientNpub = recipientNostrPubkey else { return }
+            guard let recipientNpub = resolveRecipientNpub(for: peerID) else { return }
             guard let senderIdentity = try? NostrIdentityBridge.getCurrentNostrIdentity() else { return }
             SecureLogger.log("NostrTransport: preparing PM to \(recipientNpub.prefix(16))… for peerID \(peerID.prefix(8))… id=\(messageID.prefix(8))…",
                             category: SecureLogger.session, level: .debug)
@@ -105,15 +96,7 @@ final class NostrTransport: Transport {
         guard !readQueue.isEmpty else { isSendingReadAcks = false; return }
         let item = readQueue.removeFirst()
         Task { @MainActor in
-            var recipientNostrPubkey: String?
-            if let noiseKey = Data(hexString: item.peerID),
-               let fav = FavoritesPersistenceService.shared.getFavoriteStatus(for: noiseKey) {
-                recipientNostrPubkey = fav.peerNostrPublicKey
-            }
-            if recipientNostrPubkey == nil, item.peerID.count == 16 {
-                recipientNostrPubkey = FavoritesPersistenceService.shared.getFavoriteStatus(forPeerID: item.peerID)?.peerNostrPublicKey
-            }
-            guard let recipientNpub = recipientNostrPubkey else { scheduleNextReadAck(); return }
+            guard let recipientNpub = resolveRecipientNpub(for: item.peerID) else { scheduleNextReadAck(); return }
             guard let senderIdentity = try? NostrIdentityBridge.getCurrentNostrIdentity() else { scheduleNextReadAck(); return }
             SecureLogger.log("NostrTransport: preparing READ ack for id=\(item.receipt.originalMessageID.prefix(8))… to \(recipientNpub.prefix(16))…",
                             category: SecureLogger.session, level: .debug)
@@ -149,15 +132,7 @@ final class NostrTransport: Transport {
 
     func sendFavoriteNotification(to peerID: String, isFavorite: Bool) {
         Task { @MainActor in
-            var recipientNostrPubkey: String?
-            if let noiseKey = Data(hexString: peerID),
-               let fav = FavoritesPersistenceService.shared.getFavoriteStatus(for: noiseKey) {
-                recipientNostrPubkey = fav.peerNostrPublicKey
-            }
-            if recipientNostrPubkey == nil, peerID.count == 16 {
-                recipientNostrPubkey = FavoritesPersistenceService.shared.getFavoriteStatus(forPeerID: peerID)?.peerNostrPublicKey
-            }
-            guard let recipientNpub = recipientNostrPubkey else { return }
+            guard let recipientNpub = resolveRecipientNpub(for: peerID) else { return }
             guard let senderIdentity = try? NostrIdentityBridge.getCurrentNostrIdentity() else { return }
             let content = isFavorite ? "[FAVORITED]:\(senderIdentity.npub)" : "[UNFAVORITED]:\(senderIdentity.npub)"
             SecureLogger.log("NostrTransport: preparing FAVORITE(\(isFavorite)) to \(recipientNpub.prefix(16))…",
@@ -183,18 +158,26 @@ final class NostrTransport: Transport {
         }
     }
 
+    // MARK: - Helpers
+    @MainActor
+    private func resolveRecipientNpub(for peerID: String) -> String? {
+        if let noiseKey = Data(hexString: peerID),
+           let fav = FavoritesPersistenceService.shared.getFavoriteStatus(for: noiseKey),
+           let npub = fav.peerNostrPublicKey {
+            return npub
+        }
+        if peerID.count == 16,
+           let fav = FavoritesPersistenceService.shared.getFavoriteStatus(forPeerID: peerID),
+           let npub = fav.peerNostrPublicKey {
+            return npub
+        }
+        return nil
+    }
+
     func sendBroadcastAnnounce() { /* no-op for Nostr */ }
     func sendDeliveryAck(for messageID: String, to peerID: String) {
         Task { @MainActor in
-            var recipientNostrPubkey: String?
-            if let noiseKey = Data(hexString: peerID),
-               let fav = FavoritesPersistenceService.shared.getFavoriteStatus(for: noiseKey) {
-                recipientNostrPubkey = fav.peerNostrPublicKey
-            }
-            if recipientNostrPubkey == nil, peerID.count == 16 {
-                recipientNostrPubkey = FavoritesPersistenceService.shared.getFavoriteStatus(forPeerID: peerID)?.peerNostrPublicKey
-            }
-            guard let recipientNpub = recipientNostrPubkey else { return }
+            guard let recipientNpub = resolveRecipientNpub(for: peerID) else { return }
             guard let senderIdentity = try? NostrIdentityBridge.getCurrentNostrIdentity() else { return }
             SecureLogger.log("NostrTransport: preparing DELIVERED ack for id=\(messageID.prefix(8))… to \(recipientNpub.prefix(16))…",
                             category: SecureLogger.session, level: .debug)

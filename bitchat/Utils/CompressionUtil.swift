@@ -11,7 +11,7 @@ import Compression
 
 struct CompressionUtil {
     // Compression threshold - don't compress if data is smaller than this
-    static let compressionThreshold = 100 // bytes
+    static let compressionThreshold = TransportConfig.compressionThresholdBytes // bytes
     
     // Compress data using zlib algorithm (most compatible)
     static func compress(_ data: Data) -> Data? {

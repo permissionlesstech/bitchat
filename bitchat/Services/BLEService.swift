@@ -22,12 +22,12 @@ final class BLEService: NSObject {
     static let characteristicUUID = CBUUID(string: "A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D")
     
     // Default per-fragment chunk size when link limits are unknown
-    private let defaultFragmentSize = 469 // ~512 MTU minus protocol overhead
-    private let maxMessageLength = 10_000
-    private let messageTTL: UInt8 = 7
+    private let defaultFragmentSize = TransportConfig.bleDefaultFragmentSize
+    private let maxMessageLength = InputValidator.Limits.maxMessageLength
+    private let messageTTL: UInt8 = TransportConfig.messageTTLDefault
     // Flood/battery controls
-    private let maxInFlightAssemblies = 128 // cap concurrent fragment assemblies
-    private let highDegreeThreshold = 6 // for adaptive TTL/probabilistic relays
+    private let maxInFlightAssemblies = TransportConfig.bleMaxInFlightAssemblies // cap concurrent fragment assemblies
+    private let highDegreeThreshold = TransportConfig.bleHighDegreeThreshold // for adaptive TTL/probabilistic relays
     
     // MARK: - Core State (5 Essential Collections)
     
@@ -70,7 +70,7 @@ final class BLEService: NSObject {
     
     // Simple announce throttling
     private var lastAnnounceSent = Date.distantPast
-    private let announceMinInterval: TimeInterval = 1.0
+    private let announceMinInterval: TimeInterval = TransportConfig.bleAnnounceMinInterval
     
     // Application state tracking (thread-safe)
     #if os(iOS)
@@ -129,8 +129,8 @@ final class BLEService: NSObject {
     private var maintenanceCounter = 0  // Track maintenance cycles
 
     // MARK: - Connection budget & scheduling (central role)
-    private let maxCentralLinks = 6
-    private let connectRateLimitInterval: TimeInterval = 0.5
+    private let maxCentralLinks = TransportConfig.bleMaxCentralLinks
+    private let connectRateLimitInterval: TimeInterval = TransportConfig.bleConnectRateLimitInterval
     private var lastGlobalConnectAttempt: Date = .distantPast
     private struct ConnectionCandidate {
         let peripheral: CBPeripheral
@@ -142,13 +142,13 @@ final class BLEService: NSObject {
     private var connectionCandidates: [ConnectionCandidate] = []
     private var failureCounts: [String: Int] = [:] // Peripheral UUID -> failures
     private var lastIsolatedAt: Date? = nil
-    private var dynamicRSSIThreshold: Int = -90
+    private var dynamicRSSIThreshold: Int = TransportConfig.bleDynamicRSSIThresholdDefault
 
     // MARK: - Adaptive scanning duty-cycle
     private var scanDutyTimer: DispatchSourceTimer?
     private var dutyEnabled: Bool = true
-    private var dutyOnDuration: TimeInterval = 5
-    private var dutyOffDuration: TimeInterval = 10
+    private var dutyOnDuration: TimeInterval = TransportConfig.bleDutyOnDuration
+    private var dutyOffDuration: TimeInterval = TransportConfig.bleDutyOffDuration
     private var dutyActive: Bool = false
 
     // MARK: - Link capability snapshots (thread-safe via bleQueue)
@@ -257,20 +257,15 @@ final class BLEService: NSObject {
 
     func currentPeerSnapshots() -> [TransportPeerSnapshot] {
         collectionsQueue.sync {
-            // Compute nickname collision counts for connected peers
-            let connected = peers.values.filter { $0.isConnected }
-            var counts: [String: Int] = [:]
-            for p in connected { counts[p.nickname, default: 0] += 1 }
-            // Include our own nickname in collision counts so remote matching ours gets suffixed
-            counts[myNickname, default: 0] += 1
-            return peers.values.map { info in
-                var display = info.nickname
-                if info.isConnected, (counts[info.nickname] ?? 0) > 1 {
-                    display += "#" + String(info.id.prefix(4))
-                }
-                return TransportPeerSnapshot(
+            let snapshot = Array(peers.values)
+            let resolvedNames = PeerDisplayNameResolver.resolve(
+                snapshot.map { ($0.id, $0.nickname, $0.isConnected) },
+                selfNickname: myNickname
+            )
+            return snapshot.map { info in
+                TransportPeerSnapshot(
                     id: info.id,
-                    nickname: display,
+                    nickname: resolvedNames[info.id] ?? info.nickname,
                     isConnected: info.isConnected,
                     noisePublicKey: info.noisePublicKey,
                     lastSeen: info.lastSeen
@@ -351,7 +346,9 @@ final class BLEService: NSObject {
         
         // Single maintenance timer for all periodic tasks (dispatch-based for determinism)
         let timer = DispatchSource.makeTimerSource(queue: bleQueue)
-        timer.schedule(deadline: .now() + 10.0, repeating: 10.0, leeway: .seconds(1))
+        timer.schedule(deadline: .now() + TransportConfig.bleMaintenanceInterval,
+                       repeating: TransportConfig.bleMaintenanceInterval,
+                       leeway: .seconds(TransportConfig.bleMaintenanceLeewaySeconds))
         timer.setEventHandler { [weak self] in
             self?.performMaintenance()
         }
@@ -433,7 +430,7 @@ final class BLEService: NSObject {
         
         // Send initial announce after services are ready
         // Use longer delay to avoid conflicts with other announces
-        messageQueue.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+        messageQueue.asyncAfter(deadline: .now() + TransportConfig.bleInitialAnnounceDelaySeconds) { [weak self] in
             self?.sendAnnounce(forceSend: true)
         }
     }
@@ -472,7 +469,7 @@ final class BLEService: NSObject {
         }
         
         // Give leave message a moment to send
-        Thread.sleep(forTimeInterval: 0.05)
+        Thread.sleep(forTimeInterval: TransportConfig.bleThreadSleepWriteShortDelaySeconds)
         
         // Clear pending notifications
         collectionsQueue.sync(flags: .barrier) {
@@ -514,22 +511,9 @@ final class BLEService: NSObject {
 
     func getPeerNicknames() -> [String: String] {
         return collectionsQueue.sync {
-            // Only connected peers
             let connected = peers.filter { $0.value.isConnected }
-            // Count collisions by nickname (include our own nickname)
-            var counts: [String: Int] = [:]
-            for (_, info) in connected { counts[info.nickname, default: 0] += 1 }
-            counts[myNickname, default: 0] += 1
-            // Build map with suffix for collisions
-            var result: [String: String] = [:]
-            for (id, info) in connected {
-                var name = info.nickname
-                if (counts[info.nickname] ?? 0) > 1 {
-                    name += "#" + String(id.prefix(4))
-                }
-                result[id] = name
-            }
-            return result
+            let tuples = connected.map { ($0.key, $0.value.nickname, true) }
+            return PeerDisplayNameResolver.resolve(tuples, selfNickname: myNickname)
         }
     }
     
@@ -981,7 +965,7 @@ final class BLEService: NSObject {
                 if success { sentEncrypted = true; break }
                 collectionsQueue.async(flags: .barrier) { [weak self] in
                     guard let self = self else { return }
-                    if self.pendingNotifications.count < 20 {
+                    if self.pendingNotifications.count < TransportConfig.blePendingNotificationsCapCount {
                         self.pendingNotifications.append((data: data, centrals: [central]))
                         SecureLogger.log("📋 Queued encrypted packet for retry (notification queue full)", category: SecureLogger.session, level: .debug)
                     }
@@ -1112,7 +1096,7 @@ final class BLEService: NSObject {
                 guard let self = self, let c = self.centralManager, c.state == .poweredOn else { return }
                 if c.isScanning { c.stopScan() }
                 // Resume scanning after we expect last fragment to be sent
-                let expectedMs = min(2000, totalFragments * 8) // ~8ms per fragment
+            let expectedMs = min(TransportConfig.bleExpectedWriteMaxMs, totalFragments * TransportConfig.bleExpectedWritePerFragmentMs) // ~8ms per fragment
                 self.bleQueue.asyncAfter(deadline: .now() + .milliseconds(expectedMs)) { [weak self] in
                     self?.startScanning()
                 }
@@ -1143,7 +1127,7 @@ final class BLEService: NSObject {
                 ttl: packet.ttl
             )
             // Pace fragments with small jitter to avoid bursts
-            let delayMs = index * 6 // ~6ms spacing per fragment
+            let delayMs = index * TransportConfig.bleFragmentSpacingMs // ~6ms spacing per fragment
             messageQueue.asyncAfter(deadline: .now() + .milliseconds(delayMs)) { [weak self] in
                 self?.broadcastPacket(fragmentPacket)
             }
@@ -1255,10 +1239,10 @@ final class BLEService: NSObject {
             guard let self = self else { return }
             let now = Date()
             self.recentPacketTimestamps.append(now)
-            // keep last 100 timestamps within 30s window
-            let cutoff = now.addingTimeInterval(-30)
-            if self.recentPacketTimestamps.count > 100 {
-                self.recentPacketTimestamps.removeFirst(self.recentPacketTimestamps.count - 100)
+            // keep last N timestamps within window
+            let cutoff = now.addingTimeInterval(-TransportConfig.bleRecentPacketWindowSeconds)
+            if self.recentPacketTimestamps.count > TransportConfig.bleRecentPacketWindowMaxCount {
+                self.recentPacketTimestamps.removeFirst(self.recentPacketTimestamps.count - TransportConfig.bleRecentPacketWindowMaxCount)
             }
             self.recentPacketTimestamps.removeAll { $0 < cutoff }
         }
@@ -1622,7 +1606,7 @@ final class BLEService: NSObject {
         let timeSinceLastAnnounce = now.timeIntervalSince(lastAnnounceSent)
         
         // Even forced sends should respect a minimum interval to avoid overwhelming BLE
-        let minInterval = forceSend ? 0.2 : announceMinInterval
+        let minInterval = forceSend ? TransportConfig.bleForceAnnounceMinIntervalSeconds : announceMinInterval
         
         if timeSinceLastAnnounce < minInterval {
             // Skipping announce (rate limited)
@@ -1753,12 +1737,14 @@ final class BLEService: NSObject {
         let connectedCount = collectionsQueue.sync { peers.values.filter { $0.isConnected }.count }
         let elapsed = now.timeIntervalSince(lastAnnounceSent)
         if connectedCount == 0 {
-            // Discovery mode: keep frequent announces (~10s)
-            if elapsed >= 10.0 { sendAnnounce(forceSend: true) }
+            // Discovery mode: keep frequent announces
+            if elapsed >= TransportConfig.bleAnnounceIntervalSeconds { sendAnnounce(forceSend: true) }
         } else {
             // Connected mode: announce less often; much less in dense networks
-            let base = connectedCount >= 6 ? 90.0 : 45.0
-            let jitter = connectedCount >= 6 ? 20.0 : 7.5
+            let base = connectedCount >= TransportConfig.bleHighDegreeThreshold ?
+                TransportConfig.bleConnectedAnnounceBaseSecondsDense : TransportConfig.bleConnectedAnnounceBaseSecondsSparse
+            let jitter = connectedCount >= TransportConfig.bleHighDegreeThreshold ?
+                TransportConfig.bleConnectedAnnounceJitterDense : TransportConfig.bleConnectedAnnounceJitterSparse
             let target = base + Double.random(in: -jitter...jitter)
             if elapsed >= target { sendAnnounce(forceSend: true) }
         }
@@ -1799,7 +1785,7 @@ final class BLEService: NSObject {
         
         collectionsQueue.sync(flags: .barrier) {
             for (peerID, peer) in peers {
-                if peer.isConnected && now.timeIntervalSince(peer.lastSeen) > 20 {
+                if peer.isConnected && now.timeIntervalSince(peer.lastSeen) > TransportConfig.blePeerInactivityTimeoutSeconds {
                     // Check if we still have an active BLE connection to this peer
                     let hasPeripheralConnection = peerToPeripheralUUID[peerID] != nil &&
                                                  peripherals[peerToPeripheralUUID[peerID]!]?.isConnected == true
@@ -1839,9 +1825,9 @@ final class BLEService: NSObject {
         // Clean old processed messages efficiently
         messageDeduplicator.cleanup()
         
-        // Clean old fragments (> 30 seconds old)
+        // Clean old fragments (> configured seconds old)
         collectionsQueue.sync(flags: .barrier) {
-            let cutoff = now.addingTimeInterval(-30)
+            let cutoff = now.addingTimeInterval(-TransportConfig.bleFragmentLifetimeSeconds)
             let oldFragments = fragmentMetadata.filter { $0.value.timestamp < cutoff }.map { $0.key }
             for fragmentID in oldFragments {
                 incomingFragments.removeValue(forKey: fragmentID)
@@ -1849,8 +1835,8 @@ final class BLEService: NSObject {
             }
         }
 
-        // Clean old connection timeout backoff entries (> 2 minutes)
-        let timeoutCutoff = now.addingTimeInterval(-120)
+        // Clean old connection timeout backoff entries (> window)
+        let timeoutCutoff = now.addingTimeInterval(-TransportConfig.bleConnectTimeoutBackoffWindowSeconds)
         recentConnectTimeouts = recentConnectTimeouts.filter { $0.value >= timeoutCutoff }
 
         // Clean up stale scheduled relays that somehow persisted (> 2s)
@@ -1864,10 +1850,10 @@ final class BLEService: NSObject {
             }
         }
 
-        // Clean ingress link records older than 3 seconds
+        // Clean ingress link records older than configured seconds
         collectionsQueue.async(flags: .barrier) { [weak self] in
             guard let self = self else { return }
-            let cutoff = now.addingTimeInterval(-3)
+            let cutoff = now.addingTimeInterval(-TransportConfig.bleIngressRecordLifetimeSeconds)
             if !self.ingressByMessageID.isEmpty {
                 self.ingressByMessageID = self.ingressByMessageID.filter { $0.value.timestamp >= cutoff }
             }
@@ -1891,12 +1877,12 @@ final class BLEService: NSObject {
                 if !central.isScanning { startScanning() }
                 dutyActive = true
                 // Adjust duty cycle under dense networks to save battery
-                if connectedCount >= 6 {
-                    dutyOnDuration = 3
-                    dutyOffDuration = 15
+                if connectedCount >= TransportConfig.bleHighDegreeThreshold {
+                    dutyOnDuration = TransportConfig.bleDutyOnDurationDense
+                    dutyOffDuration = TransportConfig.bleDutyOffDurationDense
                 } else {
-                    dutyOnDuration = 5
-                    dutyOffDuration = 10
+                    dutyOnDuration = TransportConfig.bleDutyOnDuration
+                    dutyOffDuration = TransportConfig.bleDutyOffDuration
                 }
                 t.schedule(deadline: .now() + dutyOnDuration, repeating: dutyOnDuration + dutyOffDuration)
                 t.setEventHandler { [weak self] in
@@ -1930,25 +1916,25 @@ final class BLEService: NSObject {
             if lastIsolatedAt == nil { lastIsolatedAt = Date() }
             let iso = lastIsolatedAt ?? Date()
             let elapsed = Date().timeIntervalSince(iso)
-            if elapsed > 60 {
-                dynamicRSSIThreshold = -92
+            if elapsed > TransportConfig.bleIsolationRelaxThresholdSeconds {
+                dynamicRSSIThreshold = TransportConfig.bleRSSIIsolatedRelaxed
             } else {
-                dynamicRSSIThreshold = -90
+                dynamicRSSIThreshold = TransportConfig.bleRSSIIsolatedBase
             }
             return
         }
         lastIsolatedAt = nil
         // Base threshold when connected
-        var threshold = -90
+        var threshold = TransportConfig.bleDynamicRSSIThresholdDefault
         // If we're at budget or queue is large, prefer closer peers
         let linkCount = peripherals.values.filter { $0.isConnected || $0.isConnecting }.count
-        if linkCount >= maxCentralLinks || connectionCandidates.count > 20 {
-            threshold = -85
+        if linkCount >= maxCentralLinks || connectionCandidates.count > TransportConfig.bleConnectionCandidatesMax {
+            threshold = TransportConfig.bleRSSIConnectedThreshold
         }
         // If we have many recent timeouts, raise further
-        let recentTimeouts = recentConnectTimeouts.filter { Date().timeIntervalSince($0.value) < 60 }.count
-        if recentTimeouts >= 3 {
-            threshold = max(threshold, -80)
+        let recentTimeouts = recentConnectTimeouts.filter { Date().timeIntervalSince($0.value) < TransportConfig.bleRecentTimeoutWindowSeconds }.count
+        if recentTimeouts >= TransportConfig.bleRecentTimeoutCountThreshold {
+            threshold = max(threshold, TransportConfig.bleRSSIHighTimeoutThreshold)
         }
         dynamicRSSIThreshold = threshold
     }
@@ -2002,7 +1988,9 @@ extension BLEService: CBCentralManagerDelegate {
                 if a.rssi != b.rssi { return a.rssi > b.rssi }
                 return a.discoveredAt < b.discoveredAt
             }
-            if connectionCandidates.count > 100 { connectionCandidates.removeLast(connectionCandidates.count - 100) }
+            if connectionCandidates.count > TransportConfig.bleConnectionCandidatesMax {
+                connectionCandidates.removeLast(connectionCandidates.count - TransportConfig.bleConnectionCandidatesMax)
+            }
             return
         }
         
@@ -2016,7 +2004,9 @@ extension BLEService: CBCentralManagerDelegate {
                 if a.rssi != b.rssi { return a.rssi > b.rssi }
                 return a.discoveredAt < b.discoveredAt
             }
-            if connectionCandidates.count > 100 { connectionCandidates.removeLast(connectionCandidates.count - 100) }
+            if connectionCandidates.count > TransportConfig.bleConnectionCandidatesMax {
+                connectionCandidates.removeLast(connectionCandidates.count - TransportConfig.bleConnectionCandidatesMax)
+            }
             return
         }
 
@@ -2093,7 +2083,7 @@ extension BLEService: CBCentralManagerDelegate {
         
         // Set a timeout for the connection attempt (slightly longer for reliability)
         // Use BLE queue to mutate BLE-related state consistently
-        bleQueue.asyncAfter(deadline: .now() + 8.0) { [weak self] in
+        bleQueue.asyncAfter(deadline: .now() + TransportConfig.bleConnectTimeoutSeconds) { [weak self] in
             guard let self = self,
                   let state = self.peripherals[peripheralID],
                   state.isConnecting && !state.isConnected else { return }
@@ -2165,7 +2155,7 @@ func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeriph
         if centralManager?.state == .poweredOn {
             // Stop and restart scanning to ensure we get fresh discovery events
             centralManager?.stopScan()
-            bleQueue.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            bleQueue.asyncAfter(deadline: .now() + TransportConfig.bleRestartScanDelaySeconds) { [weak self] in
                 self?.startScanning()
             }
         }
@@ -2363,7 +2353,7 @@ extension BLEService: CBPeripheralDelegate {
             SecureLogger.log("🔔 Subscribed to notifications from \(peripheral.name ?? "Unknown")", category: SecureLogger.session, level: .debug)
             
             // Send announce after subscription is confirmed (force send for new connection)
-            messageQueue.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            messageQueue.asyncAfter(deadline: .now() + TransportConfig.blePostSubscribeAnnounceDelaySeconds) { [weak self] in
                 self?.sendAnnounce(forceSend: true)
             }
         } else {
@@ -2386,7 +2376,9 @@ extension BLEService: CBPeripheralDelegate {
         
         // Process directly on main thread to avoid deadlocks (matches original implementation)
         guard let packet = BinaryProtocol.decode(data) else {
-            SecureLogger.log("❌ Failed to decode notification packet, full data: \(data.map { String(format: "%02x", $0) }.joined(separator: " "))",
+            // Avoid dumping entire payload; log size and short prefix for diagnostics
+            let prefix = data.prefix(16).map { String(format: "%02x", $0) }.joined(separator: " ")
+            SecureLogger.log("❌ Failed to decode notification packet (len=\(data.count), prefix=\(prefix))",
                             category: SecureLogger.session, level: .error)
             return
         }
@@ -2523,7 +2515,7 @@ extension BLEService: CBPeripheralManagerDelegate {
         SecureLogger.log("📥 Central subscribed: \(central.identifier.uuidString)", category: SecureLogger.session, level: .debug)
         subscribedCentrals.append(central)
         // Send announce to the newly subscribed central after a small delay to avoid overwhelming
-        messageQueue.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+        messageQueue.asyncAfter(deadline: .now() + TransportConfig.blePostAnnounceDelaySeconds) { [weak self] in
             self?.sendAnnounce(forceSend: true)
         }
     }
@@ -2682,13 +2674,14 @@ extension BLEService: CBPeripheralManagerDelegate {
                 }
             } else {
                 // If buffer grows suspiciously large, reset to avoid memory leak
-                if combined.count > 1_000_000 { // 1MB cap for safety
+                if combined.count > TransportConfig.blePendingWriteBufferCapBytes { // cap for safety
                     pendingWriteBuffers.removeValue(forKey: centralUUID)
                     SecureLogger.log("⚠️ Dropping oversized pending write buffer (\(combined.count) bytes) for central \(centralUUID)", category: SecureLogger.session, level: .warning)
                 }
                 // If this was a single short write and still failed, log the raw chunk for debugging
                 if !hasMultiple, let only = sorted.first, let raw = only.value {
-                    SecureLogger.log("❌ Failed to decode packet from central, full data: \(raw.map { String(format: "%02x", $0) }.joined(separator: " "))", category: SecureLogger.session, level: .error)
+                    let prefix = raw.prefix(16).map { String(format: "%02x", $0) }.joined(separator: " ")
+                    SecureLogger.log("❌ Failed to decode packet from central (len=\(raw.count), prefix=\(prefix))", category: SecureLogger.session, level: .error)
                 }
             }
         }

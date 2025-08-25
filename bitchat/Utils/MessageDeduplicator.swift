@@ -11,8 +11,8 @@ final class MessageDeduplicator {
     private var entries: [Entry] = []
     private var lookup = Set<String>()
     private let lock = NSLock()
-    private let maxAge: TimeInterval = 300  // 5 minutes
-    private let maxCount = 1000
+    private let maxAge: TimeInterval = TransportConfig.messageDedupMaxAgeSeconds  // 5 minutes
+    private let maxCount = TransportConfig.messageDedupMaxCount
 
     /// Check if message is duplicate and add if not
     func isDuplicate(_ messageID: String) -> Bool {
@@ -84,4 +84,3 @@ final class MessageDeduplicator {
         }
     }
 }
-

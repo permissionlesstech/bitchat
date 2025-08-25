@@ -153,13 +153,13 @@ final class ShareViewController: UIViewController {
         userDefaults.set(content, forKey: "sharedContent")
         userDefaults.set(type, forKey: "sharedContentType")
         userDefaults.set(Date(), forKey: "sharedContentDate")
-        userDefaults.synchronize()
+        // No need to force synchronize; the system persists changes
     }
 
     private func finishWithMessage(_ msg: String) {
         statusLabel.text = msg
         // Complete shortly after showing status
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + TransportConfig.uiShareExtensionDismissDelaySeconds) {
             self.extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
         }
     }

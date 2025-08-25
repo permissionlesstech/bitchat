@@ -39,7 +39,7 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
         super.init()
         cl.delegate = self
         cl.desiredAccuracy = kCLLocationAccuracyHundredMeters
-        cl.distanceFilter = 1000 // meters; we're not tracking continuously
+        cl.distanceFilter = TransportConfig.locationDistanceFilterMeters // meters; we're not tracking continuously
         // Load selection
         if let data = UserDefaults.standard.data(forKey: userDefaultsKey),
            let channel = try? JSONDecoder().decode(ChannelID.self, from: data) {
@@ -93,7 +93,7 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
     }
 
     /// Begin periodic one-shot location refreshes while a selector UI is visible.
-    func beginLiveRefresh(interval: TimeInterval = 5.0) {
+    func beginLiveRefresh(interval: TimeInterval = TransportConfig.locationLiveRefreshInterval) {
         guard permissionState == .authorized else { return }
         // Switch to a lightweight periodic one-shot request (polling) while the sheet is open
         refreshTimer?.invalidate()

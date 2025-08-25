@@ -3,7 +3,7 @@ import Combine
 
 /// Abstract transport interface used by ChatViewModel and services.
 /// BLEService implements this protocol; a future Nostr transport can too.
-struct TransportPeerSnapshot {
+struct TransportPeerSnapshot: Equatable, Hashable {
     let id: String
     let nickname: String
     let isConnected: Bool
