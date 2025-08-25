@@ -17,7 +17,6 @@
 		0475028D2E54171C0083520F /* LocationChannelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0475028B2E54171C0083520F /* LocationChannelManager.swift */; };
 		0475028F2E5417660083520F /* LocationChannelsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0475028E2E5417660083520F /* LocationChannelsSheet.swift */; };
 		047502902E5417660083520F /* LocationChannelsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0475028E2E5417660083520F /* LocationChannelsSheet.swift */; };
-
 		047502922E547ACC0083520F /* LocationChannelsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 047502912E547ACC0083520F /* LocationChannelsTests.swift */; };
 		047502932E547ACC0083520F /* LocationChannelsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 047502912E547ACC0083520F /* LocationChannelsTests.swift */; };
 		047502AC2E55E8360083520F /* BinaryProtocolPaddingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 047502AB2E55E8360083520F /* BinaryProtocolPaddingTests.swift */; };
@@ -30,6 +29,9 @@
 		047502B72E55FED60083520F /* GeohashPeopleList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 047502B22E55FED60083520F /* GeohashPeopleList.swift */; };
 		047502B92E560F690083520F /* RelayController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 047502B82E560F690083520F /* RelayController.swift */; };
 		047502BA2E560F690083520F /* RelayController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 047502B82E560F690083520F /* RelayController.swift */; };
+		048A4BE72E5CCCC300162C4A /* TransportConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 048A4BE62E5CCCC300162C4A /* TransportConfig.swift */; };
+		048A4BE82E5CCCC300162C4A /* TransportConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 048A4BE62E5CCCC300162C4A /* TransportConfig.swift */; };
+		048A4BE92E5CCCC300162C4B /* TransportConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 048A4BE62E5CCCC300162C4A /* TransportConfig.swift */; };
 		049BD3902E4EC4F0001A566B /* PrivateChatManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 049BD38F2E4EC4F0001A566B /* PrivateChatManager.swift */; };
 		049BD3912E4EC4F0001A566B /* AutocompleteService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 049BD38C2E4EC4F0001A566B /* AutocompleteService.swift */; };
 		049BD3922E4EC4F0001A566B /* CommandProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 049BD38D2E4EC4F0001A566B /* CommandProcessor.swift */; };
@@ -57,6 +59,8 @@
 		0AE840940F21AFC07C226636 /* PrivateChatE2ETests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A262EDDC04B7D7B5E31F321 /* PrivateChatE2ETests.swift */; };
 		0B6F25559A21F8C69C8357C6 /* BinaryProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B3CC6FA298729906109F61B /* BinaryProtocolTests.swift */; };
 		10E68BB889356219189E38EC /* BitchatApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF625BB3AD919322C01A46B2 /* BitchatApp.swift */; };
+		1234567890ABCDEFFEDCBA13 /* PeerDisplayNameResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1234567890ABCDEFFEDCBA02 /* PeerDisplayNameResolver.swift */; };
+		1234567890ABCDEFFEDCBA14 /* PeerDisplayNameResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1234567890ABCDEFFEDCBA02 /* PeerDisplayNameResolver.swift */; };
 		132DF1E24B4E9C7DCDAD4376 /* FingerprintView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9195CDC7EB236AFBC9A4D41A /* FingerprintView.swift */; };
 		17901751FD8010AFC8E750F2 /* bitchatShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 61F92EBA29C47C0FCC482F1F /* bitchatShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		1D9674FA5F998503831DC281 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A08E03AA0C63E97C91749AEC /* ContentView.swift */; };
@@ -103,11 +107,17 @@
 		9C7D287C8E67AAE576A5ECB7 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1B378C16594575FCC7F9C75 /* ShareViewController.swift */; };
 		9CCF09F7527EC681A13FC246 /* NoiseSecurityConsiderations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43B4548DAFC9F7AA8873DA53 /* NoiseSecurityConsiderations.swift */; };
 		A0A1C26EFBFDD5B8EFEEDE57 /* PublicChatE2ETests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D22BF09A49010947CEFE45E2 /* PublicChatE2ETests.swift */; };
+		A1B2C3D44E5F60718293A4B5 /* XChaCha20Poly1305Compat.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D44E5F60718293A4B4 /* XChaCha20Poly1305Compat.swift */; };
+		A1B2C3D54E5F60718293A4B6 /* XChaCha20Poly1305Compat.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D44E5F60718293A4B4 /* XChaCha20Poly1305Compat.swift */; };
 		A2977428C1D9EF9944C4BFAF /* BLEServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 980B109CBA72BC996455C62B /* BLEServiceTests.swift */; };
 		A7187D48B07C6857DE01D0ED /* NoiseProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43613045E63D21D429396805 /* NoiseProtocol.swift */; };
 		AA11BB22CC33DD44EE55FF66 /* MessageTextHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11BB22CC33DD44EE55FF68 /* MessageTextHelpers.swift */; };
 		AA11BB22CC33DD44EE55FF67 /* MessageTextHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11BB22CC33DD44EE55FF68 /* MessageTextHelpers.swift */; };
 		AA6E067DB034FC0FA23C28A9 /* BinaryProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B3CC6FA298729906109F61B /* BinaryProtocolTests.swift */; };
+		AA77BB11CC22DD33EE44FF55 /* VerificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA77BB10CC22DD33EE44FF55 /* VerificationService.swift */; };
+		AA77BB12CC22DD33EE44FF56 /* VerificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA77BB10CC22DD33EE44FF55 /* VerificationService.swift */; };
+		AA77BB14CC22DD33EE44FF58 /* VerificationViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA77BB13CC22DD33EE44FF57 /* VerificationViews.swift */; };
+		AA77BB15CC22DD33EE44FF59 /* VerificationViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA77BB13CC22DD33EE44FF57 /* VerificationViews.swift */; };
 		ABAF130D88561F4A646F0430 /* AppInfoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 763E0DBA9492A654FC0CDCB9 /* AppInfoView.swift */; };
 		ACE2ED172C37F01561E50B71 /* FavoritesPersistenceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 419BFFF209EBA93F410E9E9F /* FavoritesPersistenceService.swift */; };
 		AD11E46940D742AEAF547EB2 /* AppInfoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 763E0DBA9492A654FC0CDCB9 /* AppInfoView.swift */; };
@@ -141,12 +151,6 @@
 		F455F011B3B648ADA233F998 /* BinaryProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2136C3E22D02D4A8DBE7EAB /* BinaryProtocol.swift */; };
 		FB8819B4C84FAFEF5C36B216 /* KeychainManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 136696FC4436A02D98CE6A77 /* KeychainManager.swift */; };
 		FBC409E105493C491531B59A /* NostrProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E5A9FF4AEA8A923317ED26A /* NostrProtocol.swift */; };
-		A1B2C3D44E5F60718293A4B5 /* XChaCha20Poly1305Compat.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D44E5F60718293A4B4 /* XChaCha20Poly1305Compat.swift */; };
-		A1B2C3D54E5F60718293A4B6 /* XChaCha20Poly1305Compat.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D44E5F60718293A4B4 /* XChaCha20Poly1305Compat.swift */; };
-		AA77BB11CC22DD33EE44FF55 /* VerificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA77BB10CC22DD33EE44FF55 /* VerificationService.swift */; };
-		AA77BB12CC22DD33EE44FF56 /* VerificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA77BB10CC22DD33EE44FF55 /* VerificationService.swift */; };
-		AA77BB14CC22DD33EE44FF58 /* VerificationViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA77BB13CC22DD33EE44FF57 /* VerificationViews.swift */; };
-		AA77BB15CC22DD33EE44FF59 /* VerificationViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA77BB13CC22DD33EE44FF57 /* VerificationViews.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -200,6 +204,7 @@
 		047502B22E55FED60083520F /* GeohashPeopleList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeohashPeopleList.swift; sourceTree = "<group>"; };
 		047502B32E55FED60083520F /* MeshPeerList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeshPeerList.swift; sourceTree = "<group>"; };
 		047502B82E560F690083520F /* RelayController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayController.swift; sourceTree = "<group>"; };
+		048A4BE62E5CCCC300162C4A /* TransportConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransportConfig.swift; sourceTree = "<group>"; };
 		049BD38C2E4EC4F0001A566B /* AutocompleteService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutocompleteService.swift; sourceTree = "<group>"; };
 		049BD38D2E4EC4F0001A566B /* CommandProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandProcessor.swift; sourceTree = "<group>"; };
 		049BD38F2E4EC4F0001A566B /* PrivateChatManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivateChatManager.swift; sourceTree = "<group>"; };
@@ -215,6 +220,7 @@
 		05BA20BC0F123F1507C5C247 /* IdentityModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdentityModels.swift; sourceTree = "<group>"; };
 		0B3CC6FA298729906109F61B /* BinaryProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BinaryProtocolTests.swift; sourceTree = "<group>"; };
 		11186E29A064E8D210880E1B /* BitchatPeer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitchatPeer.swift; sourceTree = "<group>"; };
+		1234567890ABCDEFFEDCBA02 /* PeerDisplayNameResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerDisplayNameResolver.swift; sourceTree = "<group>"; };
 		136696FC4436A02D98CE6A77 /* KeychainManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainManager.swift; sourceTree = "<group>"; };
 		229F17B68CFF7AB1BC91C847 /* BitchatProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitchatProtocol.swift; sourceTree = "<group>"; };
 		2E346DF8E026FD34EE3DD038 /* TestHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestHelpers.swift; sourceTree = "<group>"; };
@@ -245,9 +251,11 @@
 		980B109CBA72BC996455C62B /* BLEServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BLEServiceTests.swift; sourceTree = "<group>"; };
 		9AB6BE4ABD7F5088E9865E56 /* NoiseSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoiseSession.swift; sourceTree = "<group>"; };
 		A08E03AA0C63E97C91749AEC /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		A1B2C3D44E5F60718293A4B4 /* XChaCha20Poly1305Compat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XChaCha20Poly1305Compat.swift; sourceTree = "<group>"; };
 		A2136C3E22D02D4A8DBE7EAB /* BinaryProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BinaryProtocol.swift; sourceTree = "<group>"; };
-
 		AA11BB22CC33DD44EE55FF68 /* MessageTextHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageTextHelpers.swift; sourceTree = "<group>"; };
+		AA77BB10CC22DD33EE44FF55 /* VerificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerificationService.swift; sourceTree = "<group>"; };
+		AA77BB13CC22DD33EE44FF57 /* VerificationViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerificationViews.swift; sourceTree = "<group>"; };
 		B1D6A89B36A3D31E590B94E5 /* NoiseHandshakeCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoiseHandshakeCoordinator.swift; sourceTree = "<group>"; };
 		C0DB1DE27F0AAB5092663E8E /* bitchatTests_iOS.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = bitchatTests_iOS.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C1B378C16594575FCC7F9C75 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
@@ -266,9 +274,6 @@
 		FDC18D910D6FF2E8B1B6C885 /* SecureIdentityStateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureIdentityStateManager.swift; sourceTree = "<group>"; };
 		FE7CCF2BD78A3F3DAE6DA145 /* MockBLEService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockBLEService.swift; sourceTree = "<group>"; };
 		FF7AF93D874001FBD94C8306 /* bitchat-macOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "bitchat-macOS.entitlements"; sourceTree = "<group>"; };
-		A1B2C3D44E5F60718293A4B4 /* XChaCha20Poly1305Compat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XChaCha20Poly1305Compat.swift; sourceTree = "<group>"; };
-		AA77BB10CC22DD33EE44FF55 /* VerificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerificationService.swift; sourceTree = "<group>"; };
-		AA77BB13CC22DD33EE44FF57 /* VerificationViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerificationViews.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -323,6 +328,7 @@
 				A2E8C336FA1ADBEC03261DFD /* bitchatShareExtension */,
 				C3D98EB3E1B455E321F519F4 /* bitchatTests */,
 				9F37F9F2C353B58AC809E93B /* Products */,
+				048A4BE52E5CCC5C00162C4A /* Recovered References */,
 			);
 			sourceTree = "<group>";
 		};
@@ -405,6 +411,7 @@
 		9A78348821A7D3374607D4E3 /* Utils */ = {
 			isa = PBXGroup;
 			children = (
+				1234567890ABCDEFFEDCBA02 /* PeerDisplayNameResolver.swift */,
 				049BD3AA2E51E38E001A566B /* PeerIDResolver.swift */,
 				049BD3A42E51DC0E001A566B /* MessageDeduplicator.swift */,
 				32F149C43D1915831B60FE09 /* CompressionUtil.swift */,
@@ -443,7 +450,6 @@
 				047502B22E55FED60083520F /* GeohashPeopleList.swift */,
 				047502B32E55FED60083520F /* MeshPeerList.swift */,
 				0475028E2E5417660083520F /* LocationChannelsSheet.swift */,
-
 				763E0DBA9492A654FC0CDCB9 /* AppInfoView.swift */,
 				A08E03AA0C63E97C91749AEC /* ContentView.swift */,
 				9195CDC7EB236AFBC9A4D41A /* FingerprintView.swift */,
@@ -514,6 +520,7 @@
 		D98A3186D7E4C72E35BDF7FE /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				048A4BE62E5CCCC300162C4A /* TransportConfig.swift */,
 				AA77BB10CC22DD33EE44FF55 /* VerificationService.swift */,
 				047502B82E560F690083520F /* RelayController.swift */,
 				0475028B2E54171C0083520F /* LocationChannelManager.swift */,
@@ -727,6 +734,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				048A4BE92E5CCCC300162C4B /* TransportConfig.swift in Sources */,
 				9C7D287C8E67AAE576A5ECB7 /* ShareViewController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -735,11 +743,14 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+                048A4BE72E5CCCC300162C4A /* TransportConfig.swift in Sources */,
+                1234567890ABCDEFFEDCBA13 /* PeerDisplayNameResolver.swift in Sources */,
 				AA77BB12CC22DD33EE44FF56 /* VerificationService.swift in Sources */,
 				AA77BB15CC22DD33EE44FF59 /* VerificationViews.swift in Sources */,
 				A1B2C3D54E5F60718293A4B6 /* XChaCha20Poly1305Compat.swift in Sources */,
 				AD11E46940D742AEAF547EB2 /* AppInfoView.swift in Sources */,
 				9B51E9B63A3EA59B1A7874BD /* BinaryEncodingUtils.swift in Sources */,
+
 				049BD3B42E51F319001A566B /* NostrTransport.swift in Sources */,
 				049BD3B52E51F319001A566B /* MessageRouter.swift in Sources */,
 				4B747085D07A1BCE0F5BA612 /* BinaryProtocol.swift in Sources */,
@@ -758,7 +769,6 @@
 				7241FFD6CFFB875B864FA223 /* InputValidator.swift in Sources */,
 				FB8819B4C84FAFEF5C36B216 /* KeychainManager.swift in Sources */,
 				0475028F2E5417660083520F /* LocationChannelsSheet.swift in Sources */,
-
 				501BC56B1A08C0327A09AAF1 /* NoiseEncryptionService.swift in Sources */,
 				0475028C2E54171C0083520F /* LocationChannelManager.swift in Sources */,
 				AFF33EF44626EF0579D17EB1 /* NoiseHandshakeCoordinator.swift in Sources */,
@@ -793,11 +803,14 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+                048A4BE82E5CCCC300162C4A /* TransportConfig.swift in Sources */,
+                1234567890ABCDEFFEDCBA14 /* PeerDisplayNameResolver.swift in Sources */,
 				AA77BB11CC22DD33EE44FF55 /* VerificationService.swift in Sources */,
 				AA77BB14CC22DD33EE44FF58 /* VerificationViews.swift in Sources */,
 				A1B2C3D44E5F60718293A4B5 /* XChaCha20Poly1305Compat.swift in Sources */,
 				ABAF130D88561F4A646F0430 /* AppInfoView.swift in Sources */,
 				AFB6AEFCABBE97441CB3102B /* BinaryEncodingUtils.swift in Sources */,
+
 				049BD3B22E51F319001A566B /* NostrTransport.swift in Sources */,
 				049BD3B32E51F319001A566B /* MessageRouter.swift in Sources */,
 				F455F011B3B648ADA233F998 /* BinaryProtocol.swift in Sources */,
@@ -816,7 +829,6 @@
 				EF49C600C1E464710DD6CA29 /* InputValidator.swift in Sources */,
 				8F737CE0435792CC2AD65FCB /* KeychainManager.swift in Sources */,
 				047502902E5417660083520F /* LocationChannelsSheet.swift in Sources */,
-
 				5EE49E150BBF0488E7473687 /* NoiseEncryptionService.swift in Sources */,
 				0475028D2E54171C0083520F /* LocationChannelManager.swift in Sources */,
 				6D0D4A0B1D8B659DCBAE7C9C /* NoiseHandshakeCoordinator.swift in Sources */,

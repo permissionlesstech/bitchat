@@ -48,10 +48,10 @@ class NostrRelayManager: ObservableObject {
     private let messageQueueLock = NSLock()
     
     // Exponential backoff configuration
-    private let initialBackoffInterval: TimeInterval = 1.0  // Start with 1 second
-    private let maxBackoffInterval: TimeInterval = 300.0    // Max 5 minutes
-    private let backoffMultiplier: Double = 2.0            // Double each time
-    private let maxReconnectAttempts = 10                  // Stop after 10 attempts
+    private let initialBackoffInterval: TimeInterval = TransportConfig.nostrRelayInitialBackoffSeconds
+    private let maxBackoffInterval: TimeInterval = TransportConfig.nostrRelayMaxBackoffSeconds
+    private let backoffMultiplier: Double = TransportConfig.nostrRelayBackoffMultiplier
+    private let maxReconnectAttempts = TransportConfig.nostrRelayMaxReconnectAttempts
     
     // Reconnection timer
     private var reconnectionTimer: Timer?
@@ -289,7 +289,7 @@ class NostrRelayManager: ObservableObject {
                         
                         // Only log non-gift-wrap events to reduce noise
                         if event.kind != 1059 {
-                            SecureLogger.log("📥 Received Nostr event (kind: \(event.kind)) from relay: \(relayUrl)", 
+                            SecureLogger.log("📥 Event kind=\(event.kind) id=\(event.id.prefix(16))… relay=\(relayUrl)",
                                             category: SecureLogger.session, level: .debug)
                         }
                         
@@ -321,11 +321,11 @@ class NostrRelayManager: ObservableObject {
                         let reason = array.count >= 4 ? (array[3] as? String ?? "no reason given") : "no reason given"
                         if success {
                             _ = Self.pendingGiftWrapIDs.remove(eventId)
-                            SecureLogger.log("✅ Event accepted id=\(eventId.prefix(16))... by relay: \(relayUrl)",
+                            SecureLogger.log("✅ Accepted id=\(eventId.prefix(16))… relay=\(relayUrl)",
                                             category: SecureLogger.session, level: .debug)
                         } else {
                             let isGiftWrap = Self.pendingGiftWrapIDs.remove(eventId) != nil
-                            SecureLogger.log("📮 Event \(eventId.prefix(16))... rejected by relay: \(reason)", 
+                            SecureLogger.log("📮 Rejected id=\(eventId.prefix(16))… reason=\(reason)", 
                                             category: SecureLogger.session, level: isGiftWrap ? .warning : .error)
                         }
                     }
@@ -353,7 +353,7 @@ class NostrRelayManager: ObservableObject {
             let data = try encoder.encode(req)
             let message = String(data: data, encoding: .utf8) ?? ""
             
-            SecureLogger.log("📤 Sending Nostr event (kind: \(event.kind)) to relay: \(relayUrl)", 
+            SecureLogger.log("📤 Send kind=\(event.kind) id=\(event.id.prefix(16))… relay=\(relayUrl)", 
                             category: SecureLogger.session, level: .debug)
             
             connection.send(.string(message)) { [weak self] error in
@@ -568,7 +568,7 @@ struct NostrFilter: Encodable {
         filter.kinds = [1059] // Gift wrap kind
         filter.since = since?.timeIntervalSince1970.toInt()
         filter.tagFilters = ["p": [pubkey]]
-        filter.limit = 100 // Add a reasonable limit
+        filter.limit = TransportConfig.nostrRelayDefaultFetchLimit // reasonable limit
         return filter
     }
 

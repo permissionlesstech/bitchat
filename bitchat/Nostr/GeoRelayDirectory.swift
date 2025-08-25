@@ -14,7 +14,7 @@ final class GeoRelayDirectory {
     private let cacheFileName = "georelays_cache.csv"
     private let lastFetchKey = "georelay.lastFetchAt"
     private let remoteURL = URL(string: "https://raw.githubusercontent.com/permissionlesstech/georelays/refs/heads/main/nostr_relays.csv")!
-    private let fetchInterval: TimeInterval = 60 * 60 * 24 // 24h
+    private let fetchInterval: TimeInterval = TransportConfig.geoRelayFetchIntervalSeconds // 24h
 
     private init() {
         // Load cached or bundled data synchronously
