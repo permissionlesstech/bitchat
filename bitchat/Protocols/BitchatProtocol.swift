@@ -181,8 +181,7 @@ enum LazyHandshakeState {
     case failed(Error)         // Handshake failed
 }
 
-// MARK: - Special Recipients (removed)
-// Previously defined broadcast identifiers were unused; removed for simplicity.
+//
 
 // MARK: - Core Protocol Structures
 
@@ -268,8 +267,7 @@ struct BitchatPacket: Codable {
     }
 }
 
-// MARK: - Delivery Acknowledgments (removed)
-// Legacy DeliveryAck structures are no longer used; delivery status flows via Noise payloads.
+//
 
 // MARK: - Read Receipts
 
@@ -361,7 +359,7 @@ struct ReadReceipt: Codable {
 }
 
 
-// PeerIdentityBinding removed (unused).
+//
 
 
 // MARK: - Delivery Status

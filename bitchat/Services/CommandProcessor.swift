@@ -63,7 +63,7 @@ class CommandProcessor {
         case "/unfav":
             if inGeoPublic || inGeoDM { return .error(message: "favorites are only for mesh peers in #mesh") }
             return handleFavorite(args, add: false)
-        // /help removed
+        //
         case "/help", "/h":
             return .error(message: "unknown command: \(cmd)")
         default:

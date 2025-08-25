@@ -7,160 +7,160 @@
 //
 
 import UIKit
-import Social
 import UniformTypeIdentifiers
 
-class ShareViewController: SLComposeServiceViewController {
-    
+/// Modern share extension using UIKit + UTTypes.
+/// Avoids deprecated Social framework and SLComposeServiceViewController.
+final class ShareViewController: UIViewController {
+    private let statusLabel: UILabel = {
+        let l = UILabel()
+        l.translatesAutoresizingMaskIntoConstraints = false
+        l.font = .systemFont(ofSize: 15, weight: .semibold)
+        l.textAlignment = .center
+        l.numberOfLines = 0
+        l.textColor = .label
+        return l
+    }()
+
     override func viewDidLoad() {
         super.viewDidLoad()
-        // Set placeholder text
-        placeholder = "Share to bitchat..."
-        // Set character limit (optional)
-        charactersRemaining = 500
+        view.backgroundColor = .systemBackground
+        view.addSubview(statusLabel)
+        NSLayoutConstraint.activate([
+            statusLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            statusLabel.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            statusLabel.leadingAnchor.constraint(greaterThanOrEqualTo: view.layoutMarginsGuide.leadingAnchor),
+            statusLabel.trailingAnchor.constraint(lessThanOrEqualTo: view.layoutMarginsGuide.trailingAnchor)
+        ])
+
+        processShare()
     }
-    
-    override func isContentValid() -> Bool {
-        // Validate that we have text content or attachments
-        if let text = contentText, !text.isEmpty {
-            return true
-        }
-        // Check if we have attachments
-        if let item = extensionContext?.inputItems.first as? NSExtensionItem,
-           let attachments = item.attachments,
-           !attachments.isEmpty {
-            return true
-        }
-        return false
-    }
-    
-    override func didSelectPost() {
-        guard let extensionItem = extensionContext?.inputItems.first as? NSExtensionItem else {
-            self.extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
+
+    // MARK: - Processing
+    private func processShare() {
+        guard let ctx = self.extensionContext,
+              let item = ctx.inputItems.first as? NSExtensionItem else {
+            finishWithMessage("Nothing to share")
             return
         }
-        
-        
-        // Get the page title from the compose view or extension item
-        let pageTitle = self.contentText ?? extensionItem.attributedContentText?.string ?? extensionItem.attributedTitle?.string
-        
-        var foundURL: URL? = nil
-        let group = DispatchGroup()
-        
-        // IMPORTANT: Check if the NSExtensionItem itself has a URL
-        // Safari often provides the URL as an attributedString with a link
-        if let attributedText = extensionItem.attributedContentText {
-            let text = attributedText.string
-            let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
-            let matches = detector?.matches(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count))
-            if let firstMatch = matches?.first, let url = firstMatch.url {
-                foundURL = url
-            }
+
+        // Try content from attributed text first (Safari often passes URL here)
+        if let url = detectURL(in: item.attributedContentText?.string ?? "") {
+            saveAndFinish(url: url, title: item.attributedTitle?.string)
+            return
         }
-        
-        // Only check attachments if we haven't found a URL yet
-        if foundURL == nil {
-            for (_, itemProvider) in (extensionItem.attachments ?? []).enumerated() {
-                
-                // Try multiple URL type identifiers that Safari might use
-                let urlTypes = [
-                    UTType.url.identifier,
-                    "public.url",
-                    "public.file-url"
-                ]
-                
-                for urlType in urlTypes {
-                    if itemProvider.hasItemConformingToTypeIdentifier(urlType) {
-                        group.enter()
-                        itemProvider.loadItem(forTypeIdentifier: urlType, options: nil) { (item, error) in
-                            defer { group.leave() }
-                            
-                            if let url = item as? URL {
-                                foundURL = url
-                        } else if let data = item as? Data,
-                                  let urlString = String(data: data, encoding: .utf8),
-                                  let url = URL(string: urlString) {
-                            foundURL = url
-                        } else if let string = item as? String,
-                                  let url = URL(string: string) {
-                            foundURL = url
-                        }
-                    }
-                    break // Found a URL type, no need to check other types
-                }
+
+        // Scan attachments for URL/text
+        let providers = item.attachments ?? []
+        if providers.isEmpty {
+            // Fallback: use attributed title as plain text
+            if let title = item.attributedTitle?.string, !title.isEmpty {
+                saveAndFinish(text: title)
+            } else {
+                finishWithMessage("No shareable content")
             }
-            
-            // Also check for plain text that might be a URL
-            if foundURL == nil && itemProvider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) {
-                group.enter()
-                itemProvider.loadItem(forTypeIdentifier: UTType.plainText.identifier, options: nil) { (item, error) in
-                    defer { group.leave() }
-                    
-                    if let text = item as? String {
-                        // Check if the text is actually a URL
-                        if let url = URL(string: text),
-                           (url.scheme == "http" || url.scheme == "https") {
-                            foundURL = url
+            return
+        }
+
+        // Load URL or text asynchronously
+        loadFirstURL(from: providers) { [weak self] url in
+            guard let self = self else { return }
+            if let url = url {
+                self.saveAndFinish(url: url, title: item.attributedTitle?.string)
+            } else {
+                self.loadFirstPlainText(from: providers) { text in
+                    if let t = text, !t.isEmpty {
+                        // Treat as URL if parseable http(s), else plain text
+                        if let u = URL(string: t), ["http","https"].contains(u.scheme?.lowercased() ?? "") {
+                            self.saveAndFinish(url: u, title: item.attributedTitle?.string)
+                        } else {
+                            self.saveAndFinish(text: t)
                         }
+                    } else {
+                        self.finishWithMessage("No shareable content")
                     }
                 }
             }
         }
-        } // End of if foundURL == nil
-        
-        // Process after all checks complete
-        group.notify(queue: .main) { [weak self] in
-            if let url = foundURL {
-                // We have a URL! Create the JSON data
-                let urlData: [String: String] = [
-                    "url": url.absoluteString,
-                    "title": pageTitle ?? url.host ?? "Shared Link"
-                ]
-                
-                
-                if let jsonData = try? JSONSerialization.data(withJSONObject: urlData),
-                   let jsonString = String(data: jsonData, encoding: .utf8) {
-                    self?.saveToSharedDefaults(content: jsonString, type: "url")
+    }
+
+    private func detectURL(in text: String) -> URL? {
+        guard !text.isEmpty else { return nil }
+        let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
+        let range = NSRange(location: 0, length: (text as NSString).length)
+        let match = detector?.matches(in: text, options: [], range: range).first
+        return match?.url
+    }
+
+    private func loadFirstURL(from providers: [NSItemProvider], completion: @escaping (URL?) -> Void) {
+        let identifiers = [UTType.url.identifier, "public.url", "public.file-url"]
+        let grp = DispatchGroup()
+        var found: URL?
+
+        for p in providers where found == nil {
+            for id in identifiers where p.hasItemConformingToTypeIdentifier(id) {
+                grp.enter()
+                p.loadItem(forTypeIdentifier: id, options: nil) { item, _ in
+                    defer { grp.leave() }
+                    if let u = item as? URL { found = u; return }
+                    if let s = item as? String, let u = URL(string: s) { found = u; return }
+                    if let d = item as? Data, let s = String(data: d, encoding: .utf8), let u = URL(string: s) { found = u; return }
                 }
-            } else if let title = pageTitle, !title.isEmpty {
-                // No URL found, just share the text
-                self?.saveToSharedDefaults(content: title, type: "text")
+                break
             }
-            
-            self?.extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
+        }
+        grp.notify(queue: .main) { completion(found) }
+    }
+
+    private func loadFirstPlainText(from providers: [NSItemProvider], completion: @escaping (String?) -> Void) {
+        let id = UTType.plainText.identifier
+        let grp = DispatchGroup()
+        var text: String?
+        for p in providers where p.hasItemConformingToTypeIdentifier(id) {
+            grp.enter()
+            p.loadItem(forTypeIdentifier: id, options: nil) { item, _ in
+                defer { grp.leave() }
+                if let s = item as? String { text = s }
+                else if let d = item as? Data, let s = String(data: d, encoding: .utf8) { text = s }
+            }
+            break
+        }
+        grp.notify(queue: .main) { completion(text) }
+    }
+
+    // MARK: - Save + Finish
+    private func saveAndFinish(url: URL, title: String?) {
+        let payload: [String: String] = [
+            "url": url.absoluteString,
+            "title": title ?? url.host ?? "Shared Link"
+        ]
+        if let json = try? JSONSerialization.data(withJSONObject: payload),
+           let s = String(data: json, encoding: .utf8) {
+            saveToSharedDefaults(content: s, type: "url")
+            finishWithMessage("✓ Shared link to bitchat")
+        } else {
+            finishWithMessage("Failed to encode link")
         }
     }
-    
-    override func configurationItems() -> [Any]! {
-        // No configuration items needed
-        return []
+
+    private func saveAndFinish(text: String) {
+        saveToSharedDefaults(content: text, type: "text")
+        finishWithMessage("✓ Shared text to bitchat")
     }
-    
-    // MARK: - Helper Methods
-    
+
     private func saveToSharedDefaults(content: String, type: String) {
-        // Use app groups to share data between extension and main app
-        guard let userDefaults = UserDefaults(suiteName: "group.chat.bitchat") else {
-            return
-        }
-        
+        guard let userDefaults = UserDefaults(suiteName: "group.chat.bitchat") else { return }
         userDefaults.set(content, forKey: "sharedContent")
         userDefaults.set(type, forKey: "sharedContentType")
         userDefaults.set(Date(), forKey: "sharedContentDate")
         userDefaults.synchronize()
-        
-        
-        // Force open the main app
-        self.openMainApp()
     }
-    
-    private func openMainApp() {
-        // Share extensions cannot directly open the containing app
-        // The app will check for shared content when it becomes active
-        // Show success feedback to user
-        DispatchQueue.main.async {
-            self.textView.text = "✓ Shared to bitchat"
-            self.textView.isEditable = false
+
+    private func finishWithMessage(_ msg: String) {
+        statusLabel.text = msg
+        // Complete shortly after showing status
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            self.extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
         }
     }
 }

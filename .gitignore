@@ -71,3 +71,7 @@ __pycache__/
 # Local build results
 .Result*/
 .Result*.xcresult/
+TestResult.xcresult/
+*.xcresult/
+build.log
+*.log

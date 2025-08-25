@@ -416,7 +416,7 @@ struct NostrProtocol {
         
         // Log with explicit UTC and local time for debugging
         let formatter = DateFormatter()
-        // Removed unnecessary date formatting operations
+        //
         formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
         formatter.timeZone = TimeZone(abbreviation: "UTC")
         
