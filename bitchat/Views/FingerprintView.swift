@@ -26,15 +26,14 @@ struct FingerprintView: View {
         VStack(spacing: 20) {
             // Header
             HStack {
-                Text("SECURITY VERIFICATION")
+                Text(LocalizedStringKey("fp.title"))
                     .font(.system(size: 16, weight: .bold, design: .monospaced))
                     .foregroundColor(textColor)
                 
                 Spacer()
                 
-                Button(action: { dismiss() }) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 14, weight: .semibold))
+                Button(String(localized: "common.done")) {
+                    dismiss()
                 }
                 .foregroundColor(textColor)
             }
@@ -42,7 +41,7 @@ struct FingerprintView: View {
             
             VStack(alignment: .leading, spacing: 16) {
                 // Peer info
-                let peerNickname = viewModel.meshService.peerNickname(peerID: peerID) ?? "Unknown"
+                let peerNickname = viewModel.meshService.peerNickname(peerID: peerID) ?? String(localized: "common.unknown")
                 let encryptionStatus = viewModel.getEncryptionStatus(for: peerID)
                 
                 HStack {
@@ -70,7 +69,7 @@ struct FingerprintView: View {
                 
                 // Their fingerprint
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("THEIR FINGERPRINT:")
+                    Text(LocalizedStringKey("fp.their"))
                         .font(.system(size: 12, weight: .bold, design: .monospaced))
                         .foregroundColor(textColor.opacity(0.7))
                     
@@ -86,7 +85,7 @@ struct FingerprintView: View {
                             .background(Color.gray.opacity(0.1))
                             .cornerRadius(8)
                             .contextMenu {
-                                Button("Copy") {
+                                Button(String(localized: "common.copy")) {
                                     #if os(iOS)
                                     UIPasteboard.general.string = fingerprint
                                     #else
@@ -96,7 +95,7 @@ struct FingerprintView: View {
                                 }
                             }
                     } else {
-                        Text("not available - handshake in progress")
+                        Text(LocalizedStringKey("fp.handshake_in_progress"))
                             .font(.system(size: 14, design: .monospaced))
                             .foregroundColor(Color.orange)
                             .padding()
@@ -105,7 +104,7 @@ struct FingerprintView: View {
                 
                 // My fingerprint
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("YOUR FINGERPRINT:")
+                    Text(LocalizedStringKey("fp.yours"))
                         .font(.system(size: 12, weight: .bold, design: .monospaced))
                         .foregroundColor(textColor.opacity(0.7))
                     
@@ -121,7 +120,7 @@ struct FingerprintView: View {
                         .background(Color.gray.opacity(0.1))
                         .cornerRadius(8)
                         .contextMenu {
-                            Button("Copy") {
+                            Button(String(localized: "common.copy")) {
                                 #if os(iOS)
                                 UIPasteboard.general.string = myFingerprint
                                 #else
@@ -137,46 +136,36 @@ struct FingerprintView: View {
                     let isVerified = encryptionStatus == .noiseVerified
                     
                     VStack(spacing: 12) {
-                        Text(isVerified ? "✓ VERIFIED" : "⚠️ NOT VERIFIED")
+                        Text(isVerified ? LocalizedStringKey("fp.verified") : LocalizedStringKey("fp.not_verified"))
                             .font(.system(size: 14, weight: .bold, design: .monospaced))
                             .foregroundColor(isVerified ? Color.green : Color.orange)
                             .frame(maxWidth: .infinity)
                         
-                        Text(isVerified ? 
-                             "you have verified this person's identity." :
-                             "compare these fingerprints with \(peerNickname) using a secure channel.")
-                            .font(.system(size: 12, design: .monospaced))
-                            .foregroundColor(textColor.opacity(0.7))
-                            .multilineTextAlignment(.center)
-                            .lineLimit(nil)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity)
+                        Group {
+                            if isVerified {
+                                Text(LocalizedStringKey("fp.verified.detail"))
+                            } else {
+                                Text(String(format: String(localized: "fp.compare_instruction"), peerNickname))
+                            }
+                        }
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundColor(textColor.opacity(0.7))
+                        .multilineTextAlignment(.center)
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity)
                         
                         if !isVerified {
                             Button(action: {
                                 viewModel.verifyFingerprint(for: peerID)
                                 dismiss()
                             }) {
-                                Text("MARK AS VERIFIED")
+                                Text(LocalizedStringKey("fp.mark_verified"))
                                     .font(.system(size: 14, weight: .bold, design: .monospaced))
                                     .foregroundColor(.white)
                                     .padding(.horizontal, 20)
                                     .padding(.vertical, 10)
                                     .background(Color.green)
-                                    .cornerRadius(8)
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                        } else {
-                            Button(action: {
-                                viewModel.unverifyFingerprint(for: peerID)
-                                dismiss()
-                            }) {
-                                Text("REMOVE VERIFICATION")
-                                    .font(.system(size: 14, weight: .bold, design: .monospaced))
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 20)
-                                    .padding(.vertical, 10)
-                                    .background(Color.red)
                                     .cornerRadius(8)
                             }
                             .buttonStyle(PlainButtonStyle())

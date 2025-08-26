@@ -4,6 +4,8 @@ import PackageDescription
 
 let package = Package(
     name: "bitchat",
+    // Required when the package contains localized resources
+    defaultLocalization: "en",
     platforms: [
         .iOS(.v16),
         .macOS(.v13)
@@ -34,3 +36,4 @@ let package = Package(
         ),
     ]
 )
+

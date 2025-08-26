@@ -1,0 +1,3 @@
+/* سلاسل Info.plist (العربية المصرية) */
+"NSBluetoothAlwaysUsageDescription" = "تستخدم bitchat تقنية Bluetooth علشان تعمل شبكة mesh آمنة للدردشة مع الناس القريبين منك.";
+"NSBluetoothPeripheralUsageDescription" = "تستخدم bitchat Bluetooth علشان تلاقي وتوصل بمستخدمين bitchat القريبين منك.";

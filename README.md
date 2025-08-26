@@ -86,3 +86,39 @@ For detailed protocol documentation, see the [Technical Whitepaper](WHITEPAPER.m
 
 Want to try this on macos: `just run` will set it up and run from source. 
 Run `just clean` afterwards to restore things to original state for mobile app building and development.
+
+## Localization
+
+- Supported locales: English (Base), Spanish (`es`), Simplified Chinese (`zh-Hans`), Arabic (`ar`), French (`fr`).
+- UI strings live in a String Catalog: `bitchat/Localization/Localizable.xcstrings`.
+- System permission texts (e.g., Bluetooth) live in `InfoPlist.strings` per locale under `bitchat/Localization/<locale>.lproj/`.
+- Key naming convention uses namespaces: `nav.*`, `settings.*`, `cmd.*`, `errors.*`, `toast.*`, `accessibility.*`, `placeholder.*`.
+
+Add a new language
+- Add translations to `Localizable.xcstrings` via Xcode (recommended) or by editing JSON.
+- Create `bitchat/Localization/<locale>.lproj/InfoPlist.strings` (copy Base keys) for permission prompts.
+- Update the UITest locales list in `bitchatTests/UI/Localization/Support/LocalizationUITestUtils.swift` and add exact expected labels if available.
+- Run UITests with the helper:
+  - `./bitchatTests/UI/Localization/Scripts/test-sim-locale.sh --test`
+- For manual runs: launch the app in Simulator with overrides:
+  - `-AppleLanguages (es) -AppleLocale es_ES`
+
+Notes
+- Command tokens (`/msg`, `/w`, etc.) remain canonical and are not localized. Only titles/help text are.
+- RTL (Arabic) is supported; UI uses SwiftUI’s directionality where possible.
+- See `bitchatTests/UI/Localization/README.md` for localization test structure and guidance.
+
+Lint rule: no raw UI string literals
+- SwiftLint enforces a custom rule (`no_raw_ui_string_literals`) that errors on raw literals passed directly to UI APIs like `Text("…")`, `.alert("…")`, `.help("…")`, `.accessibilityLabel("…")`.
+- Use `Text(LocalizedStringKey("key"))` or `String(localized: "key")` instead.
+- Intentional, non-translatable symbols/brand (e.g., `"bitchat/"`, `"@"`, `"#"`, `"•"`, `"✔︎"`) are allowed by the rule.
+- To intentionally bypass for a single line, use a SwiftLint directive:
+  - `// swiftlint:disable:next no_raw_ui_string_literals`
+  - or wrap a block with `// swiftlint:disable no_raw_ui_string_literals` … `// swiftlint:enable no_raw_ui_string_literals`
+
+Strings verification checklist
+- New key added to `Localizable.xcstrings` with translations for en, es, zh-Hans, ar, fr.
+- Any matching Info.plist user-facing text added to `Localization/<locale>.lproj/InfoPlist.strings`.
+- UI uses `Text(LocalizedStringKey(...))` or `String(localized:)` for literals; dynamic keys resolve with `NSLocalizedString`/`Bundle.localizedString`.
+- Formatting uses placeholders (`%@`, `%d`) and `String(format:)` where needed.
+- RTL smoke: launch in Arabic and verify critical labels don’t truncate and align correctly.

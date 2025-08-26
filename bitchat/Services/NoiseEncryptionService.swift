@@ -116,15 +116,15 @@ enum EncryptionStatus: Equatable {
     var description: String {
         switch self {
         case .none:
-            return "Encryption failed"
+            return String(localized: "encryption.status.none")
         case .noHandshake:
-            return "Not encrypted"
+            return String(localized: "encryption.status.no_handshake")
         case .noiseHandshaking:
-            return "Establishing encryption..."
+            return String(localized: "encryption.status.handshaking")
         case .noiseSecured:
-            return "Encrypted"
+            return String(localized: "encryption.status.secured")
         case .noiseVerified:
-            return "Encrypted & Verified"
+            return String(localized: "encryption.status.verified")
         }
     }
 }

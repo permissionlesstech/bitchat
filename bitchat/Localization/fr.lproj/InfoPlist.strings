@@ -1,0 +1,4 @@
+/* Chaînes localisées pour Info.plist (Français) */
+"NSBluetoothAlwaysUsageDescription" = "bitchat utilise le Bluetooth pour créer un réseau maillé sécurisé afin de discuter avec les utilisateurs à proximité.";
+"NSBluetoothPeripheralUsageDescription" = "bitchat utilise le Bluetooth pour découvrir et se connecter aux autres utilisateurs bitchat à proximité.";
+

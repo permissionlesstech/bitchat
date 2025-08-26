@@ -155,17 +155,12 @@ enum NoisePayloadType: UInt8 {
     case privateMessage = 0x01      // Private chat message
     case readReceipt = 0x02         // Message was read
     case delivered = 0x03           // Message was delivered
-    // Verification (QR-based OOB binding)
-    case verifyChallenge = 0x10     // Verification challenge
-    case verifyResponse  = 0x11     // Verification response
     
     var description: String {
         switch self {
         case .privateMessage: return "privateMessage"
         case .readReceipt: return "readReceipt"
         case .delivered: return "delivered"
-        case .verifyChallenge: return "verifyChallenge"
-        case .verifyResponse: return "verifyResponse"
         }
     }
 }
@@ -181,7 +176,8 @@ enum LazyHandshakeState {
     case failed(Error)         // Handshake failed
 }
 
-//
+// MARK: - Special Recipients (removed)
+// Previously defined broadcast identifiers were unused; removed for simplicity.
 
 // MARK: - Core Protocol Structures
 
@@ -267,7 +263,8 @@ struct BitchatPacket: Codable {
     }
 }
 
-//
+// MARK: - Delivery Acknowledgments (removed)
+// Legacy DeliveryAck structures are no longer used; delivery status flows via Noise payloads.
 
 // MARK: - Read Receipts
 
@@ -359,7 +356,7 @@ struct ReadReceipt: Codable {
 }
 
 
-//
+// PeerIdentityBinding removed (unused).
 
 
 // MARK: - Delivery Status
@@ -376,17 +373,17 @@ enum DeliveryStatus: Codable, Equatable {
     var displayText: String {
         switch self {
         case .sending:
-            return "Sending..."
+            return String(localized: "delivery.sending")
         case .sent:
-            return "Sent"
+            return String(localized: "delivery.sent")
         case .delivered(let nickname, _):
-            return "Delivered to \(nickname)"
+            return String(format: String(localized: "delivery.delivered_to"), nickname)
         case .read(let nickname, _):
-            return "Read by \(nickname)"
+            return String(format: String(localized: "delivery.read_by"), nickname)
         case .failed(let reason):
-            return "Failed: \(reason)"
+            return String(format: String(localized: "delivery.failed"), reason)
         case .partiallyDelivered(let reached, let total):
-            return "Delivered to \(reached)/\(total)"
+            return String(format: String(localized: "delivery.partial_ratio"), reached, total)
         }
     }
 }

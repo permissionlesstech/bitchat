@@ -1,0 +1,3 @@
+/* Mga lokalisadong string ng Info.plist (Filipino) */
+"NSBluetoothAlwaysUsageDescription" = "Gumagamit ang bitchat ng Bluetooth upang gumawa ng ligtas na mesh network para makipag-chat sa mga nasa malapit.";
+"NSBluetoothPeripheralUsageDescription" = "Gumagamit ang bitchat ng Bluetooth upang maghanap at kumonekta sa ibang mga user ng bitchat na malapit.";

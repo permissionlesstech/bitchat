@@ -1,8 +1,8 @@
 import Foundation
-import Combine
 
-#if os(iOS) || os(macOS)
+#if os(iOS)
 import CoreLocation
+import Combine
 
 /// Manages location permissions, one-shot location retrieval, and computing geohash channels.
 /// Not main-actor isolated to satisfy CLLocationManagerDelegate in Swift 6; state updates hop to MainActor.
@@ -39,7 +39,7 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
         super.init()
         cl.delegate = self
         cl.desiredAccuracy = kCLLocationAccuracyHundredMeters
-        cl.distanceFilter = TransportConfig.locationDistanceFilterMeters // meters; we're not tracking continuously
+        cl.distanceFilter = 1000 // meters; we're not tracking continuously
         // Load selection
         if let data = UserDefaults.standard.data(forKey: userDefaultsKey),
            let channel = try? JSONDecoder().decode(ChannelID.self, from: data) {
@@ -55,7 +55,7 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
             teleported = teleportedSet.contains(ch.geohash)
         }
         let status: CLAuthorizationStatus
-        if #available(iOS 14.0, macOS 11.0, *) {
+        if #available(iOS 14.0, *) {
             status = cl.authorizationStatus
         } else {
             status = CLLocationManager.authorizationStatus()
@@ -66,7 +66,7 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
     // MARK: - Public API
     func enableLocationChannels() {
         let status: CLAuthorizationStatus
-        if #available(iOS 14.0, macOS 11.0, *) {
+        if #available(iOS 14.0, *) {
             status = cl.authorizationStatus
         } else {
             status = CLLocationManager.authorizationStatus()
@@ -78,7 +78,7 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
             Task { @MainActor in self.permissionState = .restricted }
         case .denied:
             Task { @MainActor in self.permissionState = .denied }
-        case .authorizedAlways, .authorizedWhenInUse, .authorized:
+        case .authorizedAlways, .authorizedWhenInUse:
             Task { @MainActor in self.permissionState = .authorized }
             requestOneShotLocation()
         @unknown default:
@@ -93,7 +93,7 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
     }
 
     /// Begin periodic one-shot location refreshes while a selector UI is visible.
-    func beginLiveRefresh(interval: TimeInterval = TransportConfig.locationLiveRefreshInterval) {
+    func beginLiveRefresh(interval: TimeInterval = 5.0) {
         guard permissionState == .authorized else { return }
         // Switch to a lightweight periodic one-shot request (polling) while the sheet is open
         refreshTimer?.invalidate()
@@ -151,8 +151,8 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
         }
     }
 
-    // iOS 14+ / macOS 11+
-    @available(iOS 14.0, macOS 11.0, *)
+    // iOS 14+
+    @available(iOS 14.0, *)
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         updatePermissionState(from: manager.authorizationStatus)
         if case .authorized = permissionState {
@@ -180,7 +180,7 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
         case .notDetermined: newState = .notDetermined
         case .restricted: newState = .restricted
         case .denied: newState = .denied
-        case .authorizedAlways, .authorizedWhenInUse, .authorized: newState = .authorized
+        case .authorizedAlways, .authorizedWhenInUse: newState = .authorized
         @unknown default: newState = .restricted
         }
         Task { @MainActor in self.permissionState = newState }
@@ -223,15 +223,15 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
 
     private func namesByLevel(from pm: CLPlacemark) -> [GeohashChannelLevel: String] {
         var dict: [GeohashChannelLevel: String] = [:]
-        // Region (country)
+        // Country
         if let country = pm.country, !country.isEmpty {
-            dict[.region] = country
+            dict[.country] = country
         }
-        // Province (state/province or county)
+        // Region (state/province or county)
         if let admin = pm.administrativeArea, !admin.isEmpty {
-            dict[.province] = admin
+            dict[.region] = admin
         } else if let subAdmin = pm.subAdministrativeArea, !subAdmin.isEmpty {
-            dict[.province] = subAdmin
+            dict[.region] = subAdmin
         }
         // City (locality)
         if let locality = pm.locality, !locality.isEmpty {
@@ -256,4 +256,5 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
         return dict
     }
 }
+
 #endif

@@ -30,18 +30,9 @@ class CommandProcessor {
     @MainActor
     func process(_ command: String) -> CommandResult {
         let parts = command.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: false)
-        guard let cmd = parts.first else { return .error(message: "Invalid command") }
+        guard let cmd = parts.first else { return .error(message: String(localized: "cmd.error.invalid")) }
         let args = parts.count > 1 ? String(parts[1]) : ""
         
-        // Geohash context: disable favoriting in public geohash or GeoDM
-        let inGeoPublic: Bool = {
-            switch LocationChannelManager.shared.selectedChannel {
-            case .mesh: return false
-            case .location: return true
-            }
-        }()
-        let inGeoDM = (chatViewModel?.selectedPrivateChatPeer?.hasPrefix("nostr_") == true)
-
         switch cmd {
         case "/m", "/msg":
             return handleMessage(args)
@@ -58,16 +49,13 @@ class CommandProcessor {
         case "/unblock":
             return handleUnblock(args)
         case "/fav":
-            if inGeoPublic || inGeoDM { return .error(message: "favorites are only for mesh peers in #mesh") }
             return handleFavorite(args, add: true)
         case "/unfav":
-            if inGeoPublic || inGeoDM { return .error(message: "favorites are only for mesh peers in #mesh") }
             return handleFavorite(args, add: false)
-        //
         case "/help", "/h":
-            return .error(message: "unknown command: \(cmd)")
+            return handleHelp()
         default:
-            return .error(message: "unknown command: \(cmd)")
+            return .error(message: String(format: String(localized: "cmd.error.unknown_command"), String(cmd)))
         }
     }
     
@@ -76,14 +64,14 @@ class CommandProcessor {
     private func handleMessage(_ args: String) -> CommandResult {
         let parts = args.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: false)
         guard !parts.isEmpty else {
-            return .error(message: "usage: /msg @nickname [message]")
+            return .error(message: String(localized: "cmd.msg.usage"))
         }
         
         let targetName = String(parts[0])
         let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
         
         guard let peerID = chatViewModel?.getPeerIDForNickname(nickname) else {
-            return .error(message: "'\(nickname)' not found")
+            return .error(message: String(format: String(localized: "cmd.error.not_found"), nickname))
         }
         
         chatViewModel?.startPrivateChat(with: peerID)
@@ -93,53 +81,41 @@ class CommandProcessor {
             chatViewModel?.sendPrivateMessage(message, to: peerID)
         }
         
-        return .success(message: "started private chat with \(nickname)")
+        return .success(message: String(format: String(localized: "cmd.msg.started"), nickname))
     }
     
     private func handleWho() -> CommandResult {
-        // Show geohash participants when in a geohash channel; otherwise mesh peers
-        switch LocationChannelManager.shared.selectedChannel {
-        case .location(let ch):
-            // Geohash context: show visible geohash participants (exclude self)
-            guard let vm = chatViewModel else { return .success(message: "nobody around") }
-            let myHex = (try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash))?.publicKeyHex.lowercased()
-            let people = vm.visibleGeohashPeople().filter { person in
-                if let me = myHex { return person.id.lowercased() != me }
-                return true
-            }
-            let names = people.map { $0.displayName }
-            if names.isEmpty { return .success(message: "no one else is online right now") }
-            return .success(message: "online: " + names.sorted().joined(separator: ", "))
-        case .mesh:
-            // Mesh context: show connected peer nicknames
-            guard let peers = meshService?.getPeerNicknames(), !peers.isEmpty else {
-                return .success(message: "no one else is online right now")
-            }
-            let onlineList = peers.values.sorted().joined(separator: ", ")
-            return .success(message: "online: \(onlineList)")
+        guard let peers = meshService?.getPeerNicknames(), !peers.isEmpty else {
+            return .success(message: String(localized: "cmd.who.none_online"))
         }
+        
+        let onlineList = peers.values.sorted().joined(separator: ", ")
+        return .success(message: String(format: String(localized: "cmd.who.online_list"), onlineList))
     }
     
     private func handleClear() -> CommandResult {
         if let peerID = chatViewModel?.selectedPrivateChatPeer {
             chatViewModel?.privateChats[peerID]?.removeAll()
         } else {
-            chatViewModel?.clearCurrentPublicTimeline()
+            chatViewModel?.messages.removeAll()
         }
         return .handled
     }
     
     private func handleEmote(_ args: String, action: String, emoji: String, suffix: String = "") -> CommandResult {
         let targetName = args.trimmingCharacters(in: .whitespaces)
+        // Derive base verb (singular) and token for usage/errors
+        let baseAction: String = action.hasSuffix("s") ? String(action.dropLast()) : action
+        let actionToken = "/\(baseAction)"
         guard !targetName.isEmpty else {
-            return .error(message: "usage: /\(action) <nickname>")
+            return .error(message: String(format: String(localized: "cmd.emote.usage"), actionToken))
         }
         
         let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
         
         guard let targetPeerID = chatViewModel?.getPeerIDForNickname(nickname),
               let myNickname = chatViewModel?.nickname else {
-            return .error(message: "cannot \(action) \(nickname): not found")
+            return .error(message: String(format: String(localized: "cmd.emote.not_found"), baseAction, nickname))
         }
         
         let emoteContent = "* \(emoji) \(myNickname) \(action) \(nickname)\(suffix) *"
@@ -192,8 +168,9 @@ class CommandProcessor {
             let geoBlocked = Array(SecureIdentityStateManager.shared.getBlockedNostrPubkeys())
             var geoNames: [String] = []
             if let vm = chatViewModel {
+                #if os(iOS)
                 let visible = vm.visibleGeohashPeople()
-                let visibleIndex = Dictionary(uniqueKeysWithValues: visible.map { ($0.id.lowercased(), $0.displayName) })
+                let visibleIndex: [String: String] = Dictionary(uniqueKeysWithValues: visible.map { ($0.id.lowercased(), $0.displayName) })
                 for pk in geoBlocked {
                     if let name = visibleIndex[pk.lowercased()] {
                         geoNames.append(name)
@@ -202,11 +179,17 @@ class CommandProcessor {
                         geoNames.append("anon#\(suffix)")
                     }
                 }
+                #else
+                for pk in geoBlocked {
+                    let suffix = String(pk.suffix(4))
+                    geoNames.append("anon#\(suffix)")
+                }
+                #endif
             }
 
-            let meshList = blockedNicknames.isEmpty ? "none" : blockedNicknames.sorted().joined(separator: ", ")
-            let geoList = geoNames.isEmpty ? "none" : geoNames.sorted().joined(separator: ", ")
-            return .success(message: "blocked peers: \(meshList) | geohash blocks: \(geoList)")
+            let meshList = blockedNicknames.isEmpty ? String(localized: "common.none") : blockedNicknames.sorted().joined(separator: ", ")
+            let geoList = geoNames.isEmpty ? String(localized: "common.none") : geoNames.sorted().joined(separator: ", ")
+            return .success(message: String(format: String(localized: "cmd.block.list"), meshList, geoList))
         }
         
         let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
@@ -233,24 +216,24 @@ class CommandProcessor {
                 )
                 SecureIdentityStateManager.shared.updateSocialIdentity(blockedIdentity)
             }
-            return .success(message: "blocked \(nickname). you will no longer receive messages from them")
+            return .success(message: String(format: String(localized: "cmd.block.success"), nickname))
         }
         // Mesh lookup failed; try geohash (Nostr) participant by display name
         if let pub = chatViewModel?.nostrPubkeyForDisplayName(nickname) {
             if SecureIdentityStateManager.shared.isNostrBlocked(pubkeyHexLowercased: pub) {
-                return .success(message: "\(nickname) is already blocked")
+                return .success(message: String(format: String(localized: "cmd.block.already"), nickname))
             }
             SecureIdentityStateManager.shared.setNostrBlocked(pub, isBlocked: true)
-            return .success(message: "blocked \(nickname) in geohash chats")
+            return .success(message: String(format: String(localized: "cmd.block.success_geohash"), nickname))
         }
         
-        return .error(message: "cannot block \(nickname): not found or unable to verify identity")
+        return .error(message: String(format: String(localized: "cmd.block.not_found"), nickname))
     }
     
     private func handleUnblock(_ args: String) -> CommandResult {
         let targetName = args.trimmingCharacters(in: .whitespaces)
         guard !targetName.isEmpty else {
-            return .error(message: "usage: /unblock <nickname>")
+            return .error(message: String(localized: "cmd.unblock.usage"))
         }
         
         let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
@@ -258,33 +241,33 @@ class CommandProcessor {
         if let peerID = chatViewModel?.getPeerIDForNickname(nickname),
            let fingerprint = meshService?.getFingerprint(for: peerID) {
             if !SecureIdentityStateManager.shared.isBlocked(fingerprint: fingerprint) {
-                return .success(message: "\(nickname) is not blocked")
+                return .success(message: String(format: String(localized: "cmd.unblock.not_blocked"), nickname))
             }
             SecureIdentityStateManager.shared.setBlocked(fingerprint, isBlocked: false)
-            return .success(message: "unblocked \(nickname)")
+            return .success(message: String(format: String(localized: "cmd.unblock.success"), nickname))
         }
         // Try geohash unblock
         if let pub = chatViewModel?.nostrPubkeyForDisplayName(nickname) {
             if !SecureIdentityStateManager.shared.isNostrBlocked(pubkeyHexLowercased: pub) {
-                return .success(message: "\(nickname) is not blocked")
+                return .success(message: String(format: String(localized: "cmd.unblock.not_blocked"), nickname))
             }
             SecureIdentityStateManager.shared.setNostrBlocked(pub, isBlocked: false)
-            return .success(message: "unblocked \(nickname) in geohash chats")
+            return .success(message: String(format: String(localized: "cmd.unblock.success_geohash"), nickname))
         }
-        return .error(message: "cannot unblock \(nickname): not found")
+        return .error(message: String(format: String(localized: "cmd.unblock.not_found"), nickname))
     }
     
     private func handleFavorite(_ args: String, add: Bool) -> CommandResult {
         let targetName = args.trimmingCharacters(in: .whitespaces)
         guard !targetName.isEmpty else {
-            return .error(message: "usage: /\(add ? "fav" : "unfav") <nickname>")
+            return .error(message: String(format: String(localized: "cmd.fav.usage"), (add ? "fav" : "unfav")))
         }
         
         let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
         
         guard let peerID = chatViewModel?.getPeerIDForNickname(nickname),
               let noisePublicKey = Data(hexString: peerID) else {
-            return .error(message: "can't find peer: \(nickname)")
+            return .error(message: String(format: String(localized: "cmd.peer.not_found"), nickname))
         }
         
         if add {
@@ -298,30 +281,19 @@ class CommandProcessor {
             chatViewModel?.toggleFavorite(peerID: peerID)
             chatViewModel?.sendFavoriteNotification(to: peerID, isFavorite: true)
             
-            return .success(message: "added \(nickname) to favorites")
+            return .success(message: String(format: String(localized: "cmd.fav.added"), nickname))
         } else {
             FavoritesPersistenceService.shared.removeFavorite(peerNoisePublicKey: noisePublicKey)
             
             chatViewModel?.toggleFavorite(peerID: peerID)
             chatViewModel?.sendFavoriteNotification(to: peerID, isFavorite: false)
             
-            return .success(message: "removed \(nickname) from favorites")
+            return .success(message: String(format: String(localized: "cmd.fav.removed"), nickname))
         }
     }
     
     private func handleHelp() -> CommandResult {
-        let helpText = """
-        commands:
-        /msg @name - start private chat
-        /who - list who's online
-        /clear - clear messages
-        /hug @name - send a hug
-        /slap @name - slap with a trout
-        /fav @name - add to favorites
-        /unfav @name - remove from favorites
-        /block @name - block
-        /unblock @name - unblock
-        """
+        let helpText = String(localized: "cmd.help.summary")
         return .success(message: helpText)
     }
 }

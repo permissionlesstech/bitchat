@@ -1,0 +1,3 @@
+/* String Info.plist terlokalisasi (Bahasa Indonesia) */
+"NSBluetoothAlwaysUsageDescription" = "bitchat menggunakan Bluetooth untuk membuat jaringan mesh yang aman guna mengobrol dengan pengguna di sekitar.";
+"NSBluetoothPeripheralUsageDescription" = "bitchat menggunakan Bluetooth untuk menemukan dan terhubung dengan pengguna bitchat lain di sekitar.";
