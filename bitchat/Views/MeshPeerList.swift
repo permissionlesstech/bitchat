@@ -52,6 +52,11 @@ struct MeshPeerList: View {
                             Image(systemName: "antenna.radiowaves.left.and.right")
                                 .font(.system(size: 10))
                                 .foregroundColor(baseColor)
+                        } else if peer.isReachable {
+                            // Mesh-reachable (relayed): point.3 icon
+                            Image(systemName: "point.3.filled.connected.trianglepath.dotted")
+                                .font(.system(size: 10))
+                                .foregroundColor(baseColor)
                         } else if peer.isMutualFavorite {
                             // Mutual favorite reachable via Nostr: globe icon (purple)
                             Image(systemName: "globe")
@@ -109,6 +114,14 @@ struct MeshPeerList: View {
                         }
 
                         Spacer()
+
+                        // Unread message indicator for this peer
+                        if !isMe, item.hasUnread {
+                            Image(systemName: "envelope.fill")
+                                .font(.system(size: 10))
+                                .foregroundColor(.orange)
+                                .help("New messages")
+                        }
 
                         if !isMe {
                             Button(action: { onToggleFavorite(peer.id) }) {

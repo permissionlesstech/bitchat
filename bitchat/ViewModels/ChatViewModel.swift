@@ -935,6 +935,13 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             if unreadPrivateMessages.contains(noiseKeyHex) {
                 return true
             }
+            // Also check for geohash (Nostr) DM conv key if this peer has a known Nostr pubkey
+            if let nostrHex = peer.nostrPublicKey {
+                let convKey = "nostr_" + String(nostrHex.prefix(TransportConfig.nostrConvKeyPrefixLength))
+                if unreadPrivateMessages.contains(convKey) {
+                    return true
+                }
+            }
         }
         
         // Get the peer's nickname to check for temporary Nostr peer IDs
@@ -1874,6 +1881,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         // Determine routing method and recipient nickname
         guard let noiseKey = Data(hexString: peerID) else { return }
         let isConnected = meshService.isPeerConnected(peerID)
+        let isReachable = meshService.isPeerReachable(peerID)
         let favoriteStatus = FavoritesPersistenceService.shared.getFavoriteStatus(for: noiseKey)
         let isMutualFavorite = favoriteStatus?.isMutual ?? false
         let hasNostrKey = favoriteStatus?.peerNostrPublicKey != nil
@@ -1913,8 +1921,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         // Trigger UI update for sent message
         objectWillChange.send()
         
-        // Send via appropriate transport (BLE if connected, else Nostr when possible)
-        if isConnected || (isMutualFavorite && hasNostrKey) {
+        // Send via appropriate transport (BLE if connected/reachable, else Nostr when possible)
+        if isConnected || isReachable || (isMutualFavorite && hasNostrKey) {
             messageRouter.sendPrivate(content, to: peerID, recipientNickname: recipientNickname ?? "user", messageID: messageID)
             // Optimistically mark as sent for both transports; delivery/read will update subsequently
             if let idx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
@@ -2542,16 +2550,12 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             }
         }
         
-        // If we know the original transport, use it for the read receipt
+        // If this originated over Nostr, skip (handled by Nostr code paths)
         if originalTransport == "nostr" {
-            // Skip read receipts for Nostr messages - unnecessary complexity
-            // The radical simplification plan says to accept occasional loss
-        } else if meshService.peerNickname(peerID: actualPeerID) != nil {
-            // Use mesh for connected peers (default behavior)
-            messageRouter.sendReadReceipt(receipt, to: actualPeerID)
-        } else {
-            // Skip read receipts for offline peers - fire and forget principle
+            return
         }
+        // Use router to decide (mesh if reachable, else Nostr if available)
+        messageRouter.sendReadReceipt(receipt, to: actualPeerID)
     }
     
     @MainActor

@@ -106,6 +106,8 @@ enum HandshakeState {
 struct CryptographicIdentity: Codable {
     let fingerprint: String     // SHA256 of public key
     let publicKey: Data         // Noise static public key
+    // Optional Ed25519 signing public key (used to authenticate public messages)
+    var signingPublicKey: Data? = nil
     let firstSeen: Date
     let lastHandshake: Date?
 }
