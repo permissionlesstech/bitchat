@@ -1,0 +1,30 @@
+disabled_rules:
+  - trailing_whitespace
+  - line_length
+
+included:
+  - bitchat
+  - bitchatTests
+
+excluded:
+  - bitchat/Localization
+  - bitchatTests
+
+custom_rules:
+  no_raw_ui_string_literals:
+    name: "No Raw UI String Literals"
+    message: "Localize UI strings. Use LocalizedStringKey/String(localized:)."
+    severity: error
+    included: 
+      - "bitchat/.+\.swift"
+    excluded:
+      - "bitchat/Localization/.+"
+    regex: |
+      (?x)
+      (?:
+        \bText\(\s*"(?!bitchat/|@|#|•|✔︎)[^"]+"\s*\) |
+        \.alert\(\s*"(?!bitchat/|@|#|•|✔︎)[^"]+" |
+        \.help\(\s*"(?!bitchat/|@|#|•|✔︎)[^"]+" |
+        \.accessibility\w*\(\s*"(?!bitchat/|@|#|•|✔︎)[^"]+"
+      )
+

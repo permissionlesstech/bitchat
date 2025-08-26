@@ -1,0 +1,3 @@
+/* ローカライズされた Info.plist 文字列（日本語） */
+"NSBluetoothAlwaysUsageDescription" = "bitchat は Bluetooth を使用して、近くのユーザーとチャットするための安全な mesh ネットワークを構築します。";
+"NSBluetoothPeripheralUsageDescription" = "bitchat は Bluetooth を使用して、近くの他の bitchat ユーザーを検出して接続します。";

@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>accessibility.people_count</key>
+  <dict>
+    <key>NSStringLocalizedFormatKey</key>
+    <string>%#@people@</string>
+    <key>people</key>
+    <dict>
+      <key>NSStringFormatSpecTypeKey</key>
+      <string>NSStringPluralRuleType</string>
+      <key>NSStringFormatValueTypeKey</key>
+      <string>d</string>
+      <key>one</key>
+      <string>%d personne</string>
+      <key>other</key>
+      <string>%d personnes</string>
+    </dict>
+  </dict>
+  <key>delivery.partial_members</key>
+  <dict>
+    <key>NSStringLocalizedFormatKey</key>
+    <string>%#@members@</string>
+    <key>members</key>
+    <dict>
+      <key>NSStringFormatSpecTypeKey</key>
+      <string>NSStringPluralRuleType</string>
+      <key>NSStringFormatValueTypeKey</key>
+      <string>d</string>
+      <key>one</key>
+      <string>Livré à %d sur %d membre</string>
+      <key>other</key>
+      <string>Livré à %d sur %d membres</string>
+    </dict>
+  </dict>
+</dict>
+</plist>
+

@@ -1,0 +1,3 @@
+/* Локализованные строки Info.plist (Русский) */
+"NSBluetoothAlwaysUsageDescription" = "bitchat использует Bluetooth для создания безопасной ячеистой сети для общения с пользователями поблизости.";
+"NSBluetoothPeripheralUsageDescription" = "bitchat использует Bluetooth для обнаружения и подключения к другим пользователям bitchat поблизости.";

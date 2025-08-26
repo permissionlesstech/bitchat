@@ -1,0 +1,3 @@
+/* Yerelleştirilmiş Info.plist dizeleri (Türkçe) */
+"NSBluetoothAlwaysUsageDescription" = "bitchat, yakındaki kullanıcılarla sohbet etmek için güvenli bir mesh ağı oluşturmak üzere Bluetooth kullanır.";
+"NSBluetoothPeripheralUsageDescription" = "bitchat, yakındaki diğer bitchat kullanıcılarını bulmak ve bağlanmak için Bluetooth kullanır.";

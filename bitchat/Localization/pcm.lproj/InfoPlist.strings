@@ -1,0 +1,3 @@
+/* Info.plist strings (Nigerian Pidgin) */
+"NSBluetoothAlwaysUsageDescription" = "bitchat dey use Bluetooth build secure mesh network make you fit chat with people wey dey near you.";
+"NSBluetoothPeripheralUsageDescription" = "bitchat dey use Bluetooth find and connect with other bitchat users wey dey near.";

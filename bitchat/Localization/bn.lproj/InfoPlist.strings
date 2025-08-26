@@ -1,0 +1,3 @@
+/* Info.plist লোকালাইজড স্ট্রিং (বাংলা) */
+"NSBluetoothAlwaysUsageDescription" = "bitchat Bluetooth ব্যবহার করে কাছাকাছি ব্যবহারকারীদের সাথে চ্যাট করার জন্য একটি নিরাপদ mesh নেটওয়ার্ক তৈরি করে।";
+"NSBluetoothPeripheralUsageDescription" = "bitchat Bluetooth ব্যবহার করে কাছাকাছি অন্যান্য bitchat ব্যবহারকারীকে খুঁজে বের করে এবং সংযোগ করে।";

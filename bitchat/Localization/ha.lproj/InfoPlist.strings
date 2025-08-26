@@ -1,0 +1,3 @@
+/* Sassan Info.plist da aka fassara (Hausa) */
+"NSBluetoothAlwaysUsageDescription" = "bitchat na amfani da Bluetooth don ƙirƙirar hanyar sadarwa ta mesh mai kariya don yin hira da masu amfani da ke kusa.";
+"NSBluetoothPeripheralUsageDescription" = "bitchat na amfani da Bluetooth don gano da haɗawa da sauran masu amfani da bitchat da ke kusa.";
