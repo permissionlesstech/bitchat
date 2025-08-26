@@ -1,0 +1,214 @@
+key,en,pt-BR
+accessibility.add_favorite,Add to favorites,Add to favorites
+accessibility.available_nostr,Available via Nostr,Available via Nostr
+accessibility.back_to_main,Back to main chat,Back to main chat
+accessibility.connected_mesh,Connected via mesh,Connected via mesh
+accessibility.encryption_status,Encryption status: %@,Encryption status: %@
+accessibility.location_channels,location channels,canais de localização
+accessibility.open_unread_private_chat,Open unread private chat,Open unread private chat
+accessibility.people_count,accessibility.people_count,accessibility.people_count
+accessibility.people_count.few,%d people,%d people
+accessibility.people_count.many,%d people,%d people
+accessibility.people_count.one,%d person,%d pessoa
+accessibility.people_count.other,%d people,%d pessoas
+accessibility.private_chat_with,Private chat with %@,Private chat with %@
+accessibility.remove_favorite,Remove from favorites,Remove from favorites
+accessibility.send_message,Send message,Send message
+accessibility.send_message_hint_empty,Enter a message to send,Enter a message to send
+accessibility.send_message_hint_ready,Double tap to send,Double tap to send
+accessibility.toggle_favorite_hint,Double tap to toggle favorite status,Double tap to toggle favorite status
+accessibility.view_fingerprint_hint,Tap to view encryption fingerprint,Tap to view encryption fingerprint
+action.screenshot.core,took a screenshot,tirou uma captura de tela
+action.screenshot.self,you took a screenshot,você tirou uma captura de tela
+actions.block,BLOCK,BLOCK
+actions.copy_message,Copy message,Copy message
+actions.hug,hug,hug
+actions.mention,mention,mention
+actions.private_message,private message,private message
+actions.slap,slap,slap
+actions.title,Actions,Actions
+actions.unblock,Unblock,Unblock
+alert.bluetooth.off_message,Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat.,O Bluetooth está desligado. Ative-o em Ajustes para usar o bitchat.
+alert.bluetooth.unauthorized_message,BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings.,O bitchat precisa de permissão de Bluetooth para conectar a dispositivos próximos. Habilite o acesso em Ajustes.
+alert.bluetooth.unsupported_message,This device does not support Bluetooth. BitChat requires Bluetooth to function.,Este dispositivo não oferece suporte a Bluetooth. O bitchat requer Bluetooth para funcionar.
+alert.bluetooth_required,Bluetooth Required,Bluetooth Required
+appinfo.features.encryption.desc,private messages encrypted with noise protocol,private messages encrypted with noise protocol
+appinfo.features.encryption.title,end-to-end encryption,end-to-end encryption
+appinfo.features.extended_range.desc,"messages relay through peers, going the distance","messages relay through peers, going the distance"
+appinfo.features.extended_range.title,extended range,extended range
+appinfo.features.favorites.desc,get notified when your favorite people join,get notified when your favorite people join
+appinfo.features.favorites.title,favorites,favorites
+appinfo.features.geohash.desc,geohash channels to chat with people in nearby regions over decentralized anonymous relays,geohash channels to chat with people in nearby regions over decentralized anonymous relays
+appinfo.features.geohash.title,local channels,local channels
+appinfo.features.mentions.desc,use @nickname to notify specific people,use @nickname to notify specific people
+appinfo.features.mentions.title,mentions,mentions
+appinfo.features.offline.desc,works without internet using Bluetooth low energy,works without internet using Bluetooth low energy
+appinfo.features.offline.title,offline communication,offline communication
+appinfo.features.title,FEATURES,FEATURES
+appinfo.howto.bullet.clear,• triple-tap chat to clear,• triple-tap chat to clear
+appinfo.howto.bullet.commands,• type / for commands,• type / for commands
+appinfo.howto.bullet.dm,• tap a peer's name to start a DM,• tap a peer's name to start a DM
+appinfo.howto.bullet.mesh,• tap #mesh to change channels,• tap #mesh to change channels
+appinfo.howto.bullet.nickname,• set your nickname by tapping it,• set your nickname by tapping it
+appinfo.howto.bullet.sidebar,• tap people icon for sidebar,• tap people icon for sidebar
+appinfo.howto.title,HOW TO USE,HOW TO USE
+appinfo.privacy.ephemeral.desc,new peer ID generated regularly,new peer ID generated regularly
+appinfo.privacy.ephemeral.title,ephemeral identity,ephemeral identity
+appinfo.privacy.no_tracking.desc,"no servers, accounts, or data collection","no servers, accounts, or data collection"
+appinfo.privacy.no_tracking.title,no tracking,no tracking
+appinfo.privacy.panic.desc,triple-tap logo to instantly clear all data,triple-tap logo to instantly clear all data
+appinfo.privacy.panic.title,panic mode,panic mode
+appinfo.privacy.title,PRIVACY,PRIVACY
+appinfo.tagline,sidegroupchat,sidegroupchat
+appinfo.warning.message,private message security has not yet been fully audited. do not use for critical situations until this warning disappears.,private message security has not yet been fully audited. do not use for critical situations until this warning disappears.
+appinfo.warning.title,WARNING,WARNING
+channel.mesh,Mesh,Malha
+cmd.block.already,%@ is already blocked,%@ is already blocked
+cmd.block.help,Block or list blocked peers. Usage: /block [nickname],Block or list blocked peers. Usage: /block [nickname]
+cmd.block.list,blocked peers: %@ | geohash blocks: %@,blocked peers: %@ | geohash blocks: %@
+cmd.block.not_found,cannot block %@: not found or unable to verify identity,cannot block %@: not found or unable to verify identity
+cmd.block.success,blocked %@. you will no longer receive messages from them,bloqueado %@. você não receberá mais mensagens dessa pessoa
+cmd.block.success_geohash,blocked %@ in geohash chats,blocked %@ in geohash chats
+cmd.block.title,Block,Block
+cmd.clear.help,Clear chat messages. Usage: /clear,Clear chat messages. Usage: /clear
+cmd.clear.title,Clear,Clear
+cmd.emote.not_found,cannot %@ %@: not found,cannot %@ %@: not found
+cmd.emote.usage,usage: /%@ <nickname>,usage: /%@ <nickname>
+cmd.error.invalid,Invalid command,Invalid command
+cmd.error.not_found,'%@' not found,'%@' não encontrado
+cmd.error.unknown_command,unknown command: %@,unknown command: %@
+cmd.fav.added,added %@ to favorites,added %@ to favorites
+cmd.fav.help,Add to favorites. Usage: /fav <nickname>,Add to favorites. Usage: /fav <nickname>
+cmd.fav.removed,removed %@ from favorites,removed %@ from favorites
+cmd.fav.title,Favorite,Favorite
+cmd.fav.usage,usage: /%@ <nickname>,usage: /%@ <nickname>
+cmd.help.help,Show this help. Usage: /help,Show this help. Usage: /help
+cmd.help.summary,"commands:
+/msg @name - start private chat
+/who - list who's online
+/clear - clear messages
+/hug @name - send a hug
+/slap @name - slap with a trout
+/fav @name - add to favorites
+/unfav @name - remove from favorites
+/block @name - block
+/unblock @name - unblock","commands:
+/msg @name - start private chat
+/who - list who's online
+/clear - clear messages
+/hug @name - send a hug
+/slap @name - slap with a trout
+/fav @name - add to favorites
+/unfav @name - remove from favorites
+/block @name - block
+/unblock @name - unblock"
+cmd.help.title,Help,Help
+cmd.hug.help,Send someone a warm hug. Usage: /hug <nickname>,Send someone a warm hug. Usage: /hug <nickname>
+cmd.hug.title,Hug,Hug
+cmd.invalid,Invalid command,Invalid command
+cmd.msg.help,Send private message. Usage: /m <nickname> [message],Send private message. Usage: /m <nickname> [message]
+cmd.msg.started,started private chat with %@,started private chat with %@
+cmd.msg.title,Private Message,Private Message
+cmd.msg.usage,usage: /msg @nickname [message],uso: /msg @nickname [mensagem]
+cmd.peer.not_found,can't find peer: %@,não foi possível encontrar o par: %@
+cmd.slap.help,Slap someone with a trout. Usage: /slap <nickname>,Slap someone with a trout. Usage: /slap <nickname>
+cmd.slap.title,Slap,Slap
+cmd.unblock.help,Unblock a peer. Usage: /unblock <nickname>,Unblock a peer. Usage: /unblock <nickname>
+cmd.unblock.not_blocked,%@ is not blocked,%@ is not blocked
+cmd.unblock.not_found,cannot unblock %@: not found,cannot unblock %@: not found
+cmd.unblock.success,unblocked %@,desbloqueado %@
+cmd.unblock.success_geohash,unblocked %@ in geohash chats,unblocked %@ in geohash chats
+cmd.unblock.title,Unblock,Unblock
+cmd.unblock.usage,usage: /unblock <nickname>,usage: /unblock <nickname>
+cmd.unfav.help,Remove from favorites. Usage: /unfav <nickname>,Remove from favorites. Usage: /unfav <nickname>
+cmd.unfav.title,Unfavorite,Unfavorite
+cmd.unknown,unknown command: %@,unknown command: %@
+cmd.who.help,See who's online. Usage: /w,See who's online. Usage: /w
+cmd.who.none_online,no one else is online right now,no one else is online right now
+cmd.who.online_list,online: %@,online: %@
+cmd.who.title,Who,Who
+common.cancel,Cancel,Cancel
+common.close,close,close
+common.copy,Copy,Copy
+common.done,DONE,DONE
+common.none,none,none
+common.ok,OK,OK
+common.open_settings,open settings,open settings
+common.show_less,Show less,Mostrar menos
+common.show_more,Show more,Mostrar mais
+common.unknown,Unknown,Unknown
+delivery.delivered_to,Delivered to %@,Delivered to %@
+delivery.failed,Failed: %@,Failed: %@
+delivery.partial_members.one,Delivered to %d of %d member,Entregue a %d de %d membro
+delivery.partial_members.other,Delivered to %d of %d members,Entregue a %d de %d membros
+delivery.partial_ratio,Delivered to %d/%d,Delivered to %d/%d
+delivery.read_by,Read by %@,Read by %@
+delivery.sending,Sending...,Sending...
+delivery.sent,Sent,Sent
+encryption.status.handshaking,Establishing encryption...,Establishing encryption...
+encryption.status.no_handshake,Not encrypted,Not encrypted
+encryption.status.none,Encryption failed,Encryption failed
+encryption.status.secured,Encrypted,Encrypted
+encryption.status.verified,Encrypted & Verified,Encrypted & Verified
+errors.invalid_geohash,invalid geohash,invalid geohash
+fp.compare_instruction,compare these fingerprints with %@ using a secure channel.,compare these fingerprints with %@ using a secure channel.
+fp.handshake_in_progress,not available - handshake in progress,not available - handshake in progress
+fp.mark_verified,MARK AS VERIFIED,MARK AS VERIFIED
+fp.not_verified,⚠️ NOT VERIFIED,⚠️ NOT VERIFIED
+fp.status.secured,secured,secured
+fp.status.unencrypted,not encrypted,not encrypted
+fp.status.verified,verified,verified
+fp.their,THEIR FINGERPRINT:,THEIR FINGERPRINT:
+fp.title,SECURITY VERIFICATION,SECURITY VERIFICATION
+fp.verified,✓ VERIFIED,✓ VERIFIED
+fp.verified.detail,you have verified this person's identity.,you have verified this person's identity.
+fp.yours,YOUR FINGERPRINT:,YOUR FINGERPRINT:
+help.title,How to Use,Como usar
+label.you_suffix, (you), (you)
+location.about,"chat with people near you using geohash channels. only a coarse geohash is shared, never exact gps.","chat with people near you using geohash channels. only a coarse geohash is shared, never exact gps."
+location.enable_action,get location and my geohashes,get location and my geohashes
+location.finding,finding nearby channels…,finding nearby channels…
+location.level.block,Block,Quadra
+location.level.city,City,Cidade
+location.level.country,Country,País
+location.level.neighborhood,Neighborhood,Bairro
+location.level.region,Region,Região
+location.mesh,mesh,malha
+location.permission_denied,location permission denied. enable in settings to use location channels.,location permission denied. enable in settings to use location channels.
+location.remove_access,remove location access,remove location access
+location.teleport,teleport,teleport
+nav.home,Home,Home
+nav.location_channels,#location channels,#location channels
+nav.people,PEOPLE,PEOPLE
+nav.settings,Settings,Ajustes
+notif.favorite_online.body,wanna get in there?,wanna get in there?
+notif.favorite_online.title,⭐ %@ is online!,⭐ %@ is online!
+notif.mention.title,🫵 you were mentioned by %@,🫵 you were mentioned by %@
+notif.network_available.body.one,1 person around,1 person around
+notif.network_available.body.other,%d people around,%d people around
+notif.network_available.title,👥 bitchatters nearby!,👥 bitchatters nearby!
+notif.private_message.title,🔒 private message from %@,🔒 private message from %@
+payment.cashu,pay via cashu,pay via cashu
+payment.lightning,pay via lightning,pay via lightning
+peer.blocked,Blocked,Blocked
+peer.blocked_geohash,Blocked in geohash,Blocked in geohash
+people.none_around,nobody around...,nobody around...
+placeholder.geohash,geohash,geohash
+placeholder.nickname,nickname,nickname
+placeholder.type_message,type a message,type a message...
+share.link_title,Shared Link,Link compartilhado
+share.placeholder,Share to bitchat...,Compartilhar no bitchat...
+share.success,✓ Shared to bitchat,✓ Compartilhado no bitchat
+system.blocked_geohash,blocked %@ in geohash chats,%@ bloqueado nos chats geohash
+system.cannot_send_blocked,cannot send message: user is blocked.,não é possível enviar a mensagem: o usuário está bloqueado.
+system.cannot_send_blocked_to,cannot send message to %@: user is blocked.,não é possível enviar a mensagem para %@: o usuário está bloqueado.
+system.cannot_send_not_in_location,cannot send: not in a location channel,não é possível enviar: não está em um canal de localização
+system.cannot_send_unreachable,Cannot send message to %@ - peer is not reachable via mesh or Nostr.,Não é possível enviar mensagem para %@ — par inacessível via malha ou Nostr.
+system.cannot_start_blocked,cannot start chat with %@: user is blocked.,não é possível iniciar chat com %@: o usuário está bloqueado.
+system.cannot_start_need_mutual,cannot start chat with %@: mutual favorite required for offline messaging.,não é possível iniciar chat com %@: é necessário favorito mútuo para mensagens offline.
+system.favorited_you,%@ favorited you,%@ marcou você como favorito
+system.send_failed_location,failed to send to location channel,falha ao enviar para o canal de localização
+system.unblocked_geohash,unblocked %@ in geohash chats,%@ desbloqueado nos chats geohash
+system.unfavorited_you,%@ unfavorited you,%@ removeu você dos favoritos
+test.baseOnly,Base Fallback,Base Fallback
+test.sample,Sample,Sample

@@ -22,10 +22,17 @@ Add a new locale
    - Optional UI: run Simulator with launch args `-AppleLanguages (xx) -AppleLocale xx_YY`.
 
 Testing
-- Unit tests live under `bitchatTests/LocalizationTests.swift`.
+- Unit tests live under `bitchatTests/Localization/LocalizationTests.swift` (see also `LocalizationMatrixTests`).
 - CI builds and packages the String Catalog and InfoPlist strings automatically (see `project.yml`).
 
 Review checklist
 - Translations are concise and consistent in tone.
 - Usage/help strings explain arguments, but tokens remain canonical.
 - RTL strings render without clipping; use shorter phrasing if needed.
+
+Strings verification checklist
+- Prefer `Text("key")`/`LocalizedStringKey` in SwiftUI; use `String(localized:)` for literal strings.
+- For dynamic keys (from data), use `NSLocalizedString`/`Bundle.localizedString`.
+- Use placeholders (`%@`, `%d`) and `String(format:)` for variable content.
+- Test fallbacks: if a translation is missing, Base/en should appear.
+- Verify Arabic (RTL) key screens for alignment and truncation.

@@ -4,6 +4,7 @@ final class LocalizationUITests: XCTestCase {
     func testSpanishShowsLocationChannelsAccessibility() {
         let app = XCUIApplication()
         app.launchArguments += ["-AppleLanguages", "(es)", "-AppleLocale", "es_ES"]
+        app.launchEnvironment["UITests"] = "1"
         app.launch()
 
         // The location channels button has a localized accessibility label

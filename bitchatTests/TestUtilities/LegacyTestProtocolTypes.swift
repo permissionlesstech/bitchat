@@ -6,6 +6,7 @@
 // These are not part of production code anymore.
 
 import Foundation
+@testable import bitchat
 
 struct ProtocolNack {
     let originalPacketID: String
@@ -42,4 +43,3 @@ struct ProtocolNack {
         return data
     }
 }
-

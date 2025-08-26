@@ -1,0 +1,3 @@
+/* Cadeias localizadas para Info.plist (Português - Brasil) */
+"NSBluetoothAlwaysUsageDescription" = "O bitchat usa o Bluetooth para criar uma rede em malha segura para conversar com usuários próximos.";
+"NSBluetoothPeripheralUsageDescription" = "O bitchat usa o Bluetooth para descobrir e conectar-se a outros usuários do bitchat nas proximidades.";

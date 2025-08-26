@@ -1,0 +1,214 @@
+key,en,zh-Hans
+accessibility.add_favorite,Add to favorites,加入收藏
+accessibility.available_nostr,Available via Nostr,可通过 Nostr
+accessibility.back_to_main,Back to main chat,返回主聊天
+accessibility.connected_mesh,Connected via mesh,通过网状连接
+accessibility.encryption_status,Encryption status: %@,加密状态：%@
+accessibility.location_channels,location channels,位置频道
+accessibility.open_unread_private_chat,Open unread private chat,打开未读私聊
+accessibility.people_count,accessibility.people_count,accessibility.people_count
+accessibility.people_count.few,%d people,%d people
+accessibility.people_count.many,%d people,%d people
+accessibility.people_count.one,%d person,%d 人
+accessibility.people_count.other,%d people,%d 人
+accessibility.private_chat_with,Private chat with %@,与 %@ 的私聊
+accessibility.remove_favorite,Remove from favorites,从收藏移除
+accessibility.send_message,Send message,发送消息
+accessibility.send_message_hint_empty,Enter a message to send,输入要发送的消息
+accessibility.send_message_hint_ready,Double tap to send,双击发送
+accessibility.toggle_favorite_hint,Double tap to toggle favorite status,双击切换收藏状态
+accessibility.view_fingerprint_hint,Tap to view encryption fingerprint,点按查看加密指纹
+action.screenshot.core,took a screenshot,截了图
+action.screenshot.self,you took a screenshot,你截了图
+actions.block,BLOCK,屏蔽
+actions.copy_message,Copy message,复制消息
+actions.hug,hug,拥抱
+actions.mention,mention,提及
+actions.private_message,private message,私信
+actions.slap,slap,拍一下
+actions.title,Actions,操作
+actions.unblock,Unblock,取消屏蔽
+alert.bluetooth.off_message,Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat.,蓝牙已关闭。请在“设置”中打开蓝牙以使用 bitchat。
+alert.bluetooth.unauthorized_message,BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings.,bitchat 需要蓝牙权限以连接附近设备。请在“设置”中启用蓝牙访问。
+alert.bluetooth.unsupported_message,This device does not support Bluetooth. BitChat requires Bluetooth to function.,此设备不支持蓝牙。bitchat 需要蓝牙才能运行。
+alert.bluetooth_required,Bluetooth Required,需要蓝牙
+appinfo.features.encryption.desc,private messages encrypted with noise protocol,私信使用 Noise 协议加密
+appinfo.features.encryption.title,end-to-end encryption,端到端加密
+appinfo.features.extended_range.desc,"messages relay through peers, going the distance",消息通过节点中继，传得更远
+appinfo.features.extended_range.title,extended range,扩展范围
+appinfo.features.favorites.desc,get notified when your favorite people join,喜爱的人加入时提醒
+appinfo.features.favorites.title,favorites,收藏
+appinfo.features.geohash.desc,geohash channels to chat with people in nearby regions over decentralized anonymous relays,通过去中心化匿名中继的 geohash 频道
+appinfo.features.geohash.title,local channels,本地频道
+appinfo.features.mentions.desc,use @nickname to notify specific people,使用 @昵称 提醒特定用户
+appinfo.features.mentions.title,mentions,提及
+appinfo.features.offline.desc,works without internet using Bluetooth low energy,使用低功耗蓝牙，无需互联网
+appinfo.features.offline.title,offline communication,离线通信
+appinfo.features.title,FEATURES,功能
+appinfo.howto.bullet.clear,• triple-tap chat to clear,• 三击聊天清除
+appinfo.howto.bullet.commands,• type / for commands,• 输入 / 查看命令
+appinfo.howto.bullet.dm,• tap a peer's name to start a DM,• 点按昵称开始私聊
+appinfo.howto.bullet.mesh,• tap #mesh to change channels,• 点按 #mesh 切换频道
+appinfo.howto.bullet.nickname,• set your nickname by tapping it,• 轻点设置你的昵称
+appinfo.howto.bullet.sidebar,• tap people icon for sidebar,• 点按人员图标打开侧边栏
+appinfo.howto.title,HOW TO USE,使用方法
+appinfo.privacy.ephemeral.desc,new peer ID generated regularly,定期生成新的节点 ID
+appinfo.privacy.ephemeral.title,ephemeral identity,临时身份
+appinfo.privacy.no_tracking.desc,"no servers, accounts, or data collection",无服务器、账户或数据收集
+appinfo.privacy.no_tracking.title,no tracking,不跟踪
+appinfo.privacy.panic.desc,triple-tap logo to instantly clear all data,三击徽标立即清除所有数据
+appinfo.privacy.panic.title,panic mode,紧急模式
+appinfo.privacy.title,PRIVACY,隐私
+appinfo.tagline,sidegroupchat,sidegroupchat
+appinfo.warning.message,private message security has not yet been fully audited. do not use for critical situations until this warning disappears.,私信安全尚未完全审计。在此警告消失前请勿用于关键场景。
+appinfo.warning.title,WARNING,警告
+channel.mesh,Mesh,网状
+cmd.block.already,%@ is already blocked,%@ is already blocked
+cmd.block.help,Block or list blocked peers. Usage: /block [nickname],屏蔽或列出已屏蔽用户。用法：/block [昵称]
+cmd.block.list,blocked peers: %@ | geohash blocks: %@,blocked peers: %@ | geohash blocks: %@
+cmd.block.not_found,cannot block %@: not found or unable to verify identity,cannot block %@: not found or unable to verify identity
+cmd.block.success,blocked %@. you will no longer receive messages from them,blocked %@. you will no longer receive messages from them
+cmd.block.success_geohash,blocked %@ in geohash chats,blocked %@ in geohash chats
+cmd.block.title,Block,屏蔽
+cmd.clear.help,Clear chat messages. Usage: /clear,清除聊天消息。用法：/clear
+cmd.clear.title,Clear,清除
+cmd.emote.not_found,cannot %@ %@: not found,cannot %@ %@: not found
+cmd.emote.usage,usage: /%@ <nickname>,usage: /%@ <nickname>
+cmd.error.invalid,Invalid command,Invalid command
+cmd.error.not_found,'%@' not found,'%@' not found
+cmd.error.unknown_command,unknown command: %@,unknown command: %@
+cmd.fav.added,added %@ to favorites,added %@ to favorites
+cmd.fav.help,Add to favorites. Usage: /fav <nickname>,加入收藏。用法：/fav <昵称>
+cmd.fav.removed,removed %@ from favorites,removed %@ from favorites
+cmd.fav.title,Favorite,收藏
+cmd.fav.usage,usage: /%@ <nickname>,usage: /%@ <nickname>
+cmd.help.help,Show this help. Usage: /help,显示此帮助。用法：/help
+cmd.help.summary,"commands:
+/msg @name - start private chat
+/who - list who's online
+/clear - clear messages
+/hug @name - send a hug
+/slap @name - slap with a trout
+/fav @name - add to favorites
+/unfav @name - remove from favorites
+/block @name - block
+/unblock @name - unblock","commands:
+/msg @name - start private chat
+/who - list who's online
+/clear - clear messages
+/hug @name - send a hug
+/slap @name - slap with a trout
+/fav @name - add to favorites
+/unfav @name - remove from favorites
+/block @name - block
+/unblock @name - unblock"
+cmd.help.title,Help,帮助
+cmd.hug.help,Send someone a warm hug. Usage: /hug <nickname>,发送拥抱。用法：/hug <昵称>
+cmd.hug.title,Hug,拥抱
+cmd.invalid,Invalid command,Invalid command
+cmd.msg.help,Send private message. Usage: /m <nickname> [message],发送私信。用法：/m <昵称> [消息]
+cmd.msg.started,started private chat with %@,started private chat with %@
+cmd.msg.title,Private Message,私信
+cmd.msg.usage,usage: /msg @nickname [message],usage: /msg @nickname [message]
+cmd.peer.not_found,can't find peer: %@,can't find peer: %@
+cmd.slap.help,Slap someone with a trout. Usage: /slap <nickname>,用鳟鱼拍一下。用法：/slap <昵称>
+cmd.slap.title,Slap,拍
+cmd.unblock.help,Unblock a peer. Usage: /unblock <nickname>,取消屏蔽用户。用法：/unblock <昵称>
+cmd.unblock.not_blocked,%@ is not blocked,%@ is not blocked
+cmd.unblock.not_found,cannot unblock %@: not found,cannot unblock %@: not found
+cmd.unblock.success,unblocked %@,unblocked %@
+cmd.unblock.success_geohash,unblocked %@ in geohash chats,unblocked %@ in geohash chats
+cmd.unblock.title,Unblock,取消屏蔽
+cmd.unblock.usage,usage: /unblock <nickname>,usage: /unblock <nickname>
+cmd.unfav.help,Remove from favorites. Usage: /unfav <nickname>,从收藏移除。用法：/unfav <昵称>
+cmd.unfav.title,Unfavorite,取消收藏
+cmd.unknown,unknown command: %@,unknown command: %@
+cmd.who.help,See who's online. Usage: /w,查看谁在线。用法：/w
+cmd.who.none_online,no one else is online right now,no one else is online right now
+cmd.who.online_list,online: %@,online: %@
+cmd.who.title,Who,在线用户
+common.cancel,Cancel,取消
+common.close,close,关闭
+common.copy,Copy,复制
+common.done,DONE,完成
+common.none,none,none
+common.ok,OK,确定
+common.open_settings,open settings,打开设置
+common.show_less,Show less,显示较少
+common.show_more,Show more,显示更多
+common.unknown,Unknown,未知
+delivery.delivered_to,Delivered to %@,已送达 %@
+delivery.failed,Failed: %@,失败：%@
+delivery.partial_members.one,Delivered to %d of %d member,已送达 %d/%d 名成员
+delivery.partial_members.other,Delivered to %d of %d members,已送达 %d/%d 名成员
+delivery.partial_ratio,Delivered to %d/%d,送达 %d/%d
+delivery.read_by,Read by %@,已读：%@
+delivery.sending,Sending...,发送中...
+delivery.sent,Sent,已发送
+encryption.status.handshaking,Establishing encryption...,Establishing encryption...
+encryption.status.no_handshake,Not encrypted,Not encrypted
+encryption.status.none,Encryption failed,Encryption failed
+encryption.status.secured,Encrypted,Encrypted
+encryption.status.verified,Encrypted & Verified,Encrypted & Verified
+errors.invalid_geohash,invalid geohash,无效的 geohash
+fp.compare_instruction,compare these fingerprints with %@ using a secure channel.,通过安全渠道将这些指纹与 %@ 比较。
+fp.handshake_in_progress,not available - handshake in progress,不可用——握手进行中
+fp.mark_verified,MARK AS VERIFIED,标记为已验证
+fp.not_verified,⚠️ NOT VERIFIED,⚠️ 未验证
+fp.status.secured,secured,已加密
+fp.status.unencrypted,not encrypted,未加密
+fp.status.verified,verified,已验证
+fp.their,THEIR FINGERPRINT:,对方指纹：
+fp.title,SECURITY VERIFICATION,安全验证
+fp.verified,✓ VERIFIED,✓ 已验证
+fp.verified.detail,you have verified this person's identity.,你已验证此人的身份。
+fp.yours,YOUR FINGERPRINT:,你的指纹：
+help.title,How to Use,使用指南
+label.you_suffix, (you),（你）
+location.about,"chat with people near you using geohash channels. only a coarse geohash is shared, never exact gps.",使用地理哈希频道与附近的人聊天。仅共享粗略 geohash，绝不共享精确 GPS。
+location.enable_action,get location and my geohashes,获取位置和我的 geohash
+location.finding,finding nearby channels…,正在查找附近频道…
+location.level.block,Block,街区
+location.level.city,City,城市
+location.level.country,Country,国家
+location.level.neighborhood,Neighborhood,街区
+location.level.region,Region,区域
+location.mesh,mesh,网状
+location.permission_denied,location permission denied. enable in settings to use location channels.,位置权限被拒绝。前往设置启用以使用位置频道。
+location.remove_access,remove location access,移除位置访问权限
+location.teleport,teleport,瞬移
+nav.home,Home,主页
+nav.location_channels,#location channels,#位置频道
+nav.people,PEOPLE,联系人
+nav.settings,Settings,设置
+notif.favorite_online.body,wanna get in there?,wanna get in there?
+notif.favorite_online.title,⭐ %@ is online!,⭐ %@ is online!
+notif.mention.title,🫵 you were mentioned by %@,🫵 you were mentioned by %@
+notif.network_available.body.one,1 person around,1 person around
+notif.network_available.body.other,%d people around,%d people around
+notif.network_available.title,👥 bitchatters nearby!,👥 bitchatters nearby!
+notif.private_message.title,🔒 private message from %@,🔒 private message from %@
+payment.cashu,pay via cashu,通过 cashu 支付
+payment.lightning,pay via lightning,通过 lightning 支付
+peer.blocked,Blocked,已屏蔽
+peer.blocked_geohash,Blocked in geohash,在 geohash 中被屏蔽
+people.none_around,nobody around...,周围无人...
+placeholder.geohash,geohash,geohash
+placeholder.nickname,nickname,昵称
+placeholder.type_message,type a message,type a message
+share.link_title,Shared Link,分享的链接
+share.placeholder,Share to bitchat...,分享至 bitchat...
+share.success,✓ Shared to bitchat,✓ 已分享至 bitchat
+system.blocked_geohash,blocked %@ in geohash chats,已在 geohash 聊天中屏蔽 %@
+system.cannot_send_blocked,cannot send message: user is blocked.,无法发送消息：用户已被屏蔽。
+system.cannot_send_blocked_to,cannot send message to %@: user is blocked.,无法向 %@ 发送消息：用户已被屏蔽。
+system.cannot_send_not_in_location,cannot send: not in a location channel,无法发送：不在位置频道中
+system.cannot_send_unreachable,Cannot send message to %@ - peer is not reachable via mesh or Nostr.,无法向 %@ 发送消息——对端无法通过网状网络或 Nostr 到达。
+system.cannot_start_blocked,cannot start chat with %@: user is blocked.,无法与 %@ 开始聊天：用户已被屏蔽。
+system.cannot_start_need_mutual,cannot start chat with %@: mutual favorite required for offline messaging.,无法与 %@ 开始聊天：离线消息需要相互收藏。
+system.favorited_you,%@ favorited you,%@ 将你设为收藏
+system.send_failed_location,failed to send to location channel,发送到位置频道失败
+system.unblocked_geohash,unblocked %@ in geohash chats,已在 geohash 聊天中取消屏蔽 %@
+system.unfavorited_you,%@ unfavorited you,%@ 将你从收藏移除
+test.baseOnly,Base Fallback,Base Fallback
+test.sample,Sample,示例

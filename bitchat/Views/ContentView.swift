@@ -351,7 +351,7 @@ struct ContentView: View {
                                     // Expand/Collapse for very long messages
                                     if (message.content.count > 2000 || message.content.hasVeryLongToken(threshold: 512)) {
                                         let isExpanded = expandedMessageIDs.contains(message.id)
-                                        Button(isExpanded ? "Show less" : "Show more") {
+                                        Button(isExpanded ? String(localized: "common.show_less") : String(localized: "common.show_more")) {
                                             if isExpanded { expandedMessageIDs.remove(message.id) }
                                             else { expandedMessageIDs.insert(message.id) }
                                         }
@@ -788,8 +788,10 @@ struct ContentView: View {
             }
             
             HStack(alignment: .center, spacing: 4) {
-            TextField(String(localized: "placeholder.type_message"), text: $messageText)
+            TextField(LocalizedStringKey("placeholder.type_message"), text: $messageText)
                 .textFieldStyle(.plain)
+                .accessibilityLabel(LocalizedStringKey("placeholder.type_message"))
+                .accessibilityIdentifier("composer.input")
                 .font(.system(size: 14, design: .monospaced))
                 .foregroundColor(textColor)
                 .focused($isTextFieldFocused)
@@ -836,6 +838,7 @@ struct ContentView: View {
             .buttonStyle(.plain)
             .padding(.trailing, 12)
             .accessibilityLabel(String(localized: "accessibility.send_message"))
+            .accessibilityIdentifier("composer.send")
             .accessibilityHint(messageText.isEmpty ? String(localized: "accessibility.send_message_hint_empty") : String(localized: "accessibility.send_message_hint_ready"))
             }
             .padding(.vertical, 8)
@@ -1064,7 +1067,7 @@ struct ContentView: View {
                     .font(.system(size: 14, design: .monospaced))
                     .foregroundColor(secondaryTextColor)
                 
-                TextField("placeholder.nickname", text: $viewModel.nickname)
+                TextField(LocalizedStringKey("placeholder.nickname"), text: $viewModel.nickname)
                     .textFieldStyle(.plain)
                     .font(.system(size: 14, design: .monospaced))
                     .frame(maxWidth: 100)
@@ -1147,8 +1150,10 @@ struct ContentView: View {
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
                         .layoutPriority(2)
-                        .accessibilityLabel(String(localized: "accessibility.location_channels"))
-                }
+                        }
+                .accessibilityLabel(String(localized: "accessibility.location_channels"))
+                .accessibilityLabel(String(localized: "accessibility.location_channels"))
+                .accessibilityIdentifier(String(localized: "accessibility.location_channels"))
                 .buttonStyle(.plain)
                 #endif
 
@@ -1156,7 +1161,10 @@ struct ContentView: View {
                     // People icon with count
                     Image(systemName: "person.2.fill")
                         .font(.system(size: 11))
-                        .accessibilityLabel(String(format: String(localized: "accessibility.people_count"), headerOtherPeersCount))
+                        .accessibilityLabel({
+                            let fmt = String(localized: "accessibility.people_count")
+                            return String.localizedStringWithFormat(fmt, headerOtherPeersCount)
+                        }())
                     Text("\(headerOtherPeersCount)")
                         .font(.system(size: 12, design: .monospaced))
                         .accessibilityHidden(true)
@@ -1223,7 +1231,7 @@ struct ContentView: View {
             return peer?.displayName ?? 
                    viewModel.meshService.peerNickname(peerID: headerPeerID) ??
                    FavoritesPersistenceService.shared.getFavoriteStatus(for: Data(hexString: headerPeerID) ?? Data())?.peerNickname ?? 
-                   "Unknown"
+                   String(localized: "common.unknown")
         }()
         let isNostrAvailable: Bool = {
             guard let connectionState = peer?.connectionState else { 
@@ -1257,7 +1265,7 @@ struct ContentView: View {
                                     Image(systemName: "dot.radiowaves.left.and.right")
                                         .font(.system(size: 14))
                                         .foregroundColor(textColor)
-                                        .accessibilityLabel("Connected via mesh")
+                                        .accessibilityLabel(String(localized: "accessibility.connected_mesh"))
                                 case .nostrAvailable:
                                     // Purple globe for Nostr
                                     Image(systemName: "globe")
@@ -1445,7 +1453,7 @@ struct DeliveryStatusView: View {
                     .font(.system(size: 10))
             }
             .foregroundColor(textColor.opacity(0.8))
-            .help("Delivered to \(nickname)")
+            .help(String(format: String(localized: "delivery.delivered_to"), nickname))
             
         case .read(let nickname, _):
             HStack(spacing: -2) {
@@ -1455,23 +1463,26 @@ struct DeliveryStatusView: View {
                     .font(.system(size: 10, weight: .bold))
             }
             .foregroundColor(Color(red: 0.0, green: 0.478, blue: 1.0))  // Bright blue
-            .help("Read by \(nickname)")
+            .help(String(format: String(localized: "delivery.read_by"), nickname))
             
         case .failed(let reason):
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 10))
                 .foregroundColor(Color.red.opacity(0.8))
-                .help("Failed: \(reason)")
+                .help(String(format: String(localized: "delivery.failed"), reason))
             
         case .partiallyDelivered(let reached, let total):
             HStack(spacing: 1) {
                 Image(systemName: "checkmark")
                     .font(.system(size: 10))
-                Text("\(reached)/\(total)")
+                Text(String(format: String(localized: "delivery.partial_ratio"), reached, total))
                     .font(.system(size: 10, design: .monospaced))
             }
             .foregroundColor(secondaryTextColor.opacity(0.6))
-            .help("Delivered to \(reached) of \(total) members")
+            .help({
+                let fmt = String(localized: "delivery.partial_members")
+                return String.localizedStringWithFormat(fmt, reached, total)
+            }())
         }
     }
 }

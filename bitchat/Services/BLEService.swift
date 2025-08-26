@@ -2078,6 +2078,25 @@ extension BLEService {
 }
 #endif
 
+#if DEBUG
+// Test-only helper to register a verified peer so tests can inject messages
+extension BLEService {
+    func _test_addVerifiedPeer(id: String, nickname: String = "tester") {
+        collectionsQueue.sync(flags: .barrier) {
+            peers[id] = PeerInfo(
+                id: id,
+                nickname: nickname,
+                isConnected: true,
+                noisePublicKey: nil,
+                signingPublicKey: nil,
+                isVerifiedNickname: true,
+                lastSeen: Date()
+            )
+        }
+    }
+}
+#endif
+
 // MARK: - CBPeripheralDelegate
 
 extension BLEService: CBPeripheralDelegate {

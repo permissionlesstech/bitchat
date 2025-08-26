@@ -123,7 +123,7 @@ class FavoritesPersistenceService: ObservableObject {
         peerNostrPublicKey: String? = nil
     ) {
         let existing = favorites[peerNoisePublicKey]
-        let displayName = peerNickname ?? existing?.peerNickname ?? "Unknown"
+        let displayName = peerNickname ?? existing?.peerNickname ?? String(localized: "common.unknown")
         
         SecureLogger.log("📨 Received favorite notification: \(displayName) \(favorited ? "favorited" : "unfavorited") us", 
                         category: SecureLogger.session, level: .info)

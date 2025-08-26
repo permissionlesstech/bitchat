@@ -17,42 +17,19 @@ struct AppInfoView: View {
     }
     
     // MARK: - Constants
+    // Keep brand and icon names only; all text is localized via keys.
     private enum Strings {
-        static let appName = "bitchat"
-        static let tagline = "sidegroupchat"
-        
-        enum Features {
-            static let title = "FEATURES"
-            static let offlineComm = ("wifi.slash", "offline communication", "works without internet using Bluetooth low energy")
-            static let encryption = ("lock.shield", "end-to-end encryption", "private messages encrypted with noise protocol")
-            static let extendedRange = ("antenna.radiowaves.left.and.right", "extended range", "messages relay through peers, going the distance")
-            static let mentions = ("at", "mentions", "use @nickname to notify specific people")
-            static let favorites = ("star.fill", "favorites", "get notified when your favorite people join")
-            static let geohash = ("number", "local channels", "geohash channels to chat with people in nearby regions over decentralized anonymous relays")
-        }
-        
-        enum Privacy {
-            static let title = "PRIVACY"
-            static let noTracking = ("eye.slash", "no tracking", "no servers, accounts, or data collection")
-            static let ephemeral = ("shuffle", "ephemeral identity", "new peer ID generated regularly")
-            static let panic = ("hand.raised.fill", "panic mode", "triple-tap logo to instantly clear all data")
-        }
-        
-        enum HowToUse {
-            static let title = "HOW TO USE"
-            static let instructions = [
-                "• set your nickname by tapping it",
-                "• tap #mesh to change channels",
-                "• tap people icon for sidebar",
-                "• tap a peer's name to start a DM",
-                "• triple-tap chat to clear",
-                "• type / for commands"
-            ]
-        }
-        
-        enum Warning {
-            static let title = "WARNING"
-            static let message = "private message security has not yet been fully audited. do not use for critical situations until this warning disappears."
+        static let appName = "bitchat" // brand (not localized)
+        enum Icons {
+            static let offlineComm = "wifi.slash"
+            static let encryption = "lock.shield"
+            static let extendedRange = "antenna.radiowaves.left.and.right"
+            static let mentions = "at"
+            static let favorites = "star.fill"
+            static let geohash = "number"
+            static let noTracking = "eye.slash"
+            static let ephemeral = "shuffle"
+            static let panic = "hand.raised.fill"
         }
     }
     
@@ -105,7 +82,7 @@ struct AppInfoView: View {
                     .font(.system(size: 32, weight: .bold, design: .monospaced))
                     .foregroundColor(textColor)
                 
-                Text(Strings.tagline)
+                Text(String(localized: "appinfo.tagline"))
                     .font(.system(size: 16, design: .monospaced))
                     .foregroundColor(secondaryTextColor)
             }
@@ -116,27 +93,27 @@ struct AppInfoView: View {
             VStack(alignment: .leading, spacing: 16) {
                 SectionHeader(String(localized: "appinfo.features.title"))
                 
-                FeatureRow(icon: Strings.Features.offlineComm.0, 
+                FeatureRow(icon: Strings.Icons.offlineComm, 
                           title: String(localized: "appinfo.features.offline.title"),
                           description: String(localized: "appinfo.features.offline.desc"))
                 
-                FeatureRow(icon: Strings.Features.encryption.0,
+                FeatureRow(icon: Strings.Icons.encryption,
                           title: String(localized: "appinfo.features.encryption.title"),
                           description: String(localized: "appinfo.features.encryption.desc"))
                 
-                FeatureRow(icon: Strings.Features.extendedRange.0,
+                FeatureRow(icon: Strings.Icons.extendedRange,
                           title: String(localized: "appinfo.features.extended_range.title"),
                           description: String(localized: "appinfo.features.extended_range.desc"))
                 
-                FeatureRow(icon: Strings.Features.favorites.0,
+                FeatureRow(icon: Strings.Icons.favorites,
                           title: String(localized: "appinfo.features.favorites.title"),
                           description: String(localized: "appinfo.features.favorites.desc"))
                 
-                FeatureRow(icon: Strings.Features.geohash.0,
+                FeatureRow(icon: Strings.Icons.geohash,
                           title: String(localized: "appinfo.features.geohash.title"),
                           description: String(localized: "appinfo.features.geohash.desc"))
                 
-                FeatureRow(icon: Strings.Features.mentions.0,
+                FeatureRow(icon: Strings.Icons.mentions,
                           title: String(localized: "appinfo.features.mentions.title"),
                           description: String(localized: "appinfo.features.mentions.desc"))
             }
@@ -145,15 +122,15 @@ struct AppInfoView: View {
             VStack(alignment: .leading, spacing: 16) {
                 SectionHeader(String(localized: "appinfo.privacy.title"))
                 
-                FeatureRow(icon: Strings.Privacy.noTracking.0,
+                FeatureRow(icon: Strings.Icons.noTracking,
                           title: String(localized: "appinfo.privacy.no_tracking.title"),
                           description: String(localized: "appinfo.privacy.no_tracking.desc"))
                 
-                FeatureRow(icon: Strings.Privacy.ephemeral.0,
+                FeatureRow(icon: Strings.Icons.ephemeral,
                           title: String(localized: "appinfo.privacy.ephemeral.title"),
                           description: String(localized: "appinfo.privacy.ephemeral.desc"))
                 
-                FeatureRow(icon: Strings.Privacy.panic.0,
+                FeatureRow(icon: Strings.Icons.panic,
                           title: String(localized: "appinfo.privacy.panic.title"),
                           description: String(localized: "appinfo.privacy.panic.desc"))
             }

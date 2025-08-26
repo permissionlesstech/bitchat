@@ -15,7 +15,7 @@ class ShareViewController: SLComposeServiceViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         // Set placeholder text
-        placeholder = "Share to bitchat..."
+        placeholder = NSLocalizedString("share.placeholder", comment: "Share extension placeholder; keep 'bitchat' brand name unchanged")
         // Set character limit (optional)
         charactersRemaining = 500
     }
@@ -114,7 +114,7 @@ class ShareViewController: SLComposeServiceViewController {
                 // We have a URL! Create the JSON data
                 let urlData: [String: String] = [
                     "url": url.absoluteString,
-                    "title": pageTitle ?? url.host ?? "Shared Link"
+                    "title": pageTitle ?? url.host ?? NSLocalizedString("share.link_title", comment: "Fallback title for a shared link")
                 ]
                 
                 
@@ -159,7 +159,7 @@ class ShareViewController: SLComposeServiceViewController {
         // The app will check for shared content when it becomes active
         // Show success feedback to user
         DispatchQueue.main.async {
-            self.textView.text = "✓ Shared to bitchat"
+            self.textView.text = NSLocalizedString("share.success", comment: "Share success message; keep brand name unchanged")
             self.textView.isEditable = false
         }
     }

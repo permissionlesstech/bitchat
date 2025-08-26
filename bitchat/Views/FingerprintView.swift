@@ -141,17 +141,19 @@ struct FingerprintView: View {
                             .foregroundColor(isVerified ? Color.green : Color.orange)
                             .frame(maxWidth: .infinity)
                         
-                        if isVerified {
-                            Text(LocalizedStringKey("fp.verified.detail"))
-                        } else {
-                            Text(String(format: String(localized: "fp.compare_instruction"), peerNickname))
+                        Group {
+                            if isVerified {
+                                Text(LocalizedStringKey("fp.verified.detail"))
+                            } else {
+                                Text(String(format: String(localized: "fp.compare_instruction"), peerNickname))
+                            }
                         }
-                            .font(.system(size: 12, design: .monospaced))
-                            .foregroundColor(textColor.opacity(0.7))
-                            .multilineTextAlignment(.center)
-                            .lineLimit(nil)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity)
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundColor(textColor.opacity(0.7))
+                        .multilineTextAlignment(.center)
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity)
                         
                         if !isVerified {
                             Button(action: {

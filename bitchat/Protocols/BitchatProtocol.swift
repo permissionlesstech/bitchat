@@ -373,17 +373,17 @@ enum DeliveryStatus: Codable, Equatable {
     var displayText: String {
         switch self {
         case .sending:
-            return "Sending..."
+            return String(localized: "delivery.sending")
         case .sent:
-            return "Sent"
+            return String(localized: "delivery.sent")
         case .delivered(let nickname, _):
-            return "Delivered to \(nickname)"
+            return String(format: String(localized: "delivery.delivered_to"), nickname)
         case .read(let nickname, _):
-            return "Read by \(nickname)"
+            return String(format: String(localized: "delivery.read_by"), nickname)
         case .failed(let reason):
-            return "Failed: \(reason)"
+            return String(format: String(localized: "delivery.failed"), reason)
         case .partiallyDelivered(let reached, let total):
-            return "Delivered to \(reached)/\(total)"
+            return String(format: String(localized: "delivery.partial_ratio"), reached, total)
         }
     }
 }

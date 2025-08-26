@@ -17,7 +17,7 @@ final class LocalizationTests: XCTestCase {
     }
 
     func testLocalizedStringsResolveForEachLocale() {
-        let locales = ["Base", "es", "zh-Hans", "ar", "fr"]
+        let locales = ["Base", "es", "zh-Hans", "ar", "fr", "hi", "bn", "pt-BR", "ru"]
         for locale in locales {
             let b = bundle(for: locale)
             let keys = [
@@ -34,19 +34,14 @@ final class LocalizationTests: XCTestCase {
     }
 
     func testFallbackToBaseWhenKeyMissingInLocale() {
-        // "test.baseOnly" exists only in Base.lproj
-        let spanish = bundle(for: "es")
-        let valueDirect = NSLocalizedString("test.baseOnly", tableName: nil, bundle: spanish, value: "", comment: "")
-
-        // Direct lookup in a language-only bundle may return the key if missing; our helper should fallback to Base
+        // "test.baseOnly" exists only in the source language (en/Base).
+        // Looking up via our helper in a non-English locale should fall back to Base value.
         let valueViaHelper = Localization.localized("test.baseOnly", locale: "es")
-
-        XCTAssertTrue(valueDirect == "test.baseOnly" || valueDirect.isEmpty)
         XCTAssertEqual(valueViaHelper, "Base Fallback")
     }
 
     func testCommandMetaLocalizationResolves() {
-        let locales = ["Base", "es", "zh-Hans", "ar", "fr"]
+        let locales = ["Base", "es", "zh-Hans", "ar", "fr", "hi", "bn", "pt-BR", "ru"]
         for locale in locales {
             let b = bundle(for: locale)
             for meta in CommandRegistry.all {
@@ -66,5 +61,31 @@ final class LocalizationTests: XCTestCase {
         let frBundle = bundle(for: "fr")
         let frPerm = NSLocalizedString("NSBluetoothPeripheralUsageDescription", tableName: "InfoPlist", bundle: frBundle, value: "", comment: "")
         XCTAssertFalse(frPerm.isEmpty)
+    }
+
+    func testPluralizationPeopleCount() {
+        // English: singular vs plural
+        let oneEN = Localization.plural("accessibility.people_count", count: 1, locale: "en")
+        let manyEN = Localization.plural("accessibility.people_count", count: 2, locale: "en")
+        XCTAssertTrue(oneEN.contains("1") && oneEN.contains("person"))
+        XCTAssertTrue(manyEN.contains("2") && manyEN.contains("people"))
+
+        // French: personne/personnes
+        let oneFR = Localization.plural("accessibility.people_count", count: 1, locale: "fr")
+        let manyFR = Localization.plural("accessibility.people_count", count: 3, locale: "fr")
+        XCTAssertTrue(oneFR.contains("1") && oneFR.contains("personne"))
+        XCTAssertTrue(manyFR.contains("3") && manyFR.contains("personnes"))
+
+        // Arabic/Russian: just ensure result is non-empty
+        XCTAssertFalse(Localization.plural("accessibility.people_count", count: 1, locale: "ar").isEmpty)
+        XCTAssertFalse(Localization.plural("accessibility.people_count", count: 5, locale: "ru").isEmpty)
+    }
+
+    func testPluralizationPartialMembersEnglish() {
+        // Uses total to select singular/plural for the word 'member'
+        let one = Localization.plural("delivery.partial_members", count: 1, locale: "en", 1, 1)
+        let many = Localization.plural("delivery.partial_members", count: 2, locale: "en", 1, 2)
+        XCTAssertTrue(one.contains("1 of 1 member"))
+        XCTAssertTrue(many.contains("1 of 2 members"))
     }
 }

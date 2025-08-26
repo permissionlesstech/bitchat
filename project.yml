@@ -1,6 +1,7 @@
 name: bitchat
 options:
   bundleIdPrefix: chat.bitchat
+  developmentLanguage: en
   deploymentTarget:
     iOS: 16.0
     macOS: 13.0
@@ -24,7 +25,6 @@ targets:
     resources:
       - bitchat/Assets.xcassets
       - bitchat/LaunchScreen.storyboard
-      - bitchat/**/Localizable.strings
       - bitchat/**/Localizable.xcstrings
       - bitchat/**/InfoPlist.strings
     info:
@@ -75,11 +75,12 @@ targets:
   bitchat_macOS:
     type: application
     platform: macOS
-    sources: 
-      - bitchat
+    sources:
+      - path: bitchat
+        excludes:
+          - LaunchScreen.storyboard
     resources:
       - bitchat/Assets.xcassets
-      - bitchat/**/Localizable.strings
       - bitchat/**/Localizable.xcstrings
       - bitchat/**/InfoPlist.strings
     info:
@@ -94,8 +95,6 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLSchemes:
               - bitchat
-        # xcodegen quirk: include some iOS properties in macOS target
-        UIBackgroundModes:
           - bluetooth-central
           - bluetooth-peripheral
         UILaunchStoryboardName: LaunchScreen
@@ -124,6 +123,9 @@ targets:
     platform: iOS
     sources:
       - bitchatShareExtension
+    resources:
+      - bitchat/**/Localizable.xcstrings
+      - bitchat/**/InfoPlist.strings
     info:
       path: bitchatShareExtension/Info.plist
       properties:
@@ -153,13 +155,15 @@ targets:
   bitchatTests_iOS:
     type: bundle.unit-test
     platform: iOS
-    sources: 
-      - bitchatTests
+    sources:
+      - path: bitchatTests
+        excludes:
+          - Info.plist
+          - UI/**
     dependencies:
       - target: bitchat_iOS
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: chat.bitchat.tests
-      INFOPLIST_FILE: bitchatTests/Info.plist
       SWIFT_VERSION: 5.0
       IPHONEOS_DEPLOYMENT_TARGET: 16.0
       TEST_HOST: $(BUILT_PRODUCTS_DIR)/bitchat.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/bitchat
@@ -173,12 +177,13 @@ targets:
     type: bundle.ui-testing
     platform: iOS
     sources:
-      - bitchatUITests
+      - path: bitchatUITests
+        excludes:
+          - Info.plist
     dependencies:
       - target: bitchat_iOS
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: chat.bitchat.uitests
-      INFOPLIST_FILE: bitchatUITests/Info.plist
       SWIFT_VERSION: 5.0
       IPHONEOS_DEPLOYMENT_TARGET: 16.0
       CODE_SIGN_STYLE: Automatic

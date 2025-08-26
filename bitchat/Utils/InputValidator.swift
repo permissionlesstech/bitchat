@@ -18,14 +18,18 @@ struct InputValidator {
     
     /// Validates a peer ID from any source (short 16-hex, full 64-hex, or internal alnum/-/_ up to 64)
     static func validatePeerID(_ peerID: String) -> Bool {
-        // Accept short routing IDs (16-hex)
+        // Accept short routing IDs (exactly 16 hex)
         if PeerIDResolver.isShortID(peerID) { return true }
-        // Accept full Noise key hex (64-hex)
+        // If length is 16 but not valid hex, reject explicitly (avoid accepting as "internal" ID)
+        if peerID.count == Limits.hexPeerIDLength { return false }
+        // Accept full Noise key hex (exactly 64 hex)
         if PeerIDResolver.isNoiseKeyHex(peerID) { return true }
-        // Internal format: alphanumeric + dash/underscore up to 64
+        // If length is 64 but not valid hex, reject explicitly to prevent ambiguity
+        if peerID.count == Limits.maxPeerIDLength { return false }
+        // Internal format: alphanumeric + dash/underscore up to 63 (excluding the reserved 16/64 lengths)
         let validCharset = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
         return !peerID.isEmpty &&
-               peerID.count <= Limits.maxPeerIDLength &&
+               peerID.count < Limits.maxPeerIDLength &&
                peerID.rangeOfCharacter(from: validCharset.inverted) == nil
     }
     

@@ -20,7 +20,14 @@ struct BitchatApp: App {
     #endif
     
     init() {
-        UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
+        // Avoid initializing notification center in tests (unit or UI) or when not running as an app bundle
+        let env = ProcessInfo.processInfo.environment
+        let isRunningTests = env["XCTestConfigurationFilePath"] != nil
+        let isUITests = env["UITests"] == "1"
+        let isAppBundle = (Bundle.main.bundleIdentifier != nil) && (Bundle.main.bundleURL.pathExtension == "app")
+        if !isRunningTests && !isUITests && isAppBundle {
+            UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
+        }
     }
     
     var body: some Scene {
@@ -33,6 +40,13 @@ struct BitchatApp: App {
                     appDelegate.chatViewModel = chatViewModel
                     #elseif os(macOS)
                     appDelegate.chatViewModel = chatViewModel
+                    #endif
+                    #if os(iOS)
+                    // In UI tests, avoid first-run nickname prompt by seeding a nickname
+                    let env = ProcessInfo.processInfo.environment
+                    if env["UITests"] == "1" && chatViewModel.nickname.isEmpty {
+                        chatViewModel.nickname = "tester"
+                    }
                     #endif
                     // Check for shared content
                     checkForSharedContent()

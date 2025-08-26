@@ -1,0 +1,214 @@
+key,en,ar
+accessibility.add_favorite,Add to favorites,إضافة إلى المفضلة
+accessibility.available_nostr,Available via Nostr,متاح عبر Nostr
+accessibility.back_to_main,Back to main chat,العودة إلى الدردشة الرئيسية
+accessibility.connected_mesh,Connected via mesh,متصل عبر الشبكة
+accessibility.encryption_status,Encryption status: %@,حالة التشفير: %@
+accessibility.location_channels,location channels,قنوات الموقع
+accessibility.open_unread_private_chat,Open unread private chat,فتح دردشة خاصة غير مقروءة
+accessibility.people_count,accessibility.people_count,accessibility.people_count
+accessibility.people_count.few,%d people,%d people
+accessibility.people_count.many,%d people,%d people
+accessibility.people_count.one,%d person,%d شخص
+accessibility.people_count.other,%d people,%d أشخاص
+accessibility.private_chat_with,Private chat with %@,دردشة خاصة مع %@
+accessibility.remove_favorite,Remove from favorites,إزالة من المفضلة
+accessibility.send_message,Send message,إرسال رسالة
+accessibility.send_message_hint_empty,Enter a message to send,أدخل رسالة لإرسالها
+accessibility.send_message_hint_ready,Double tap to send,اضغط مرتين للإرسال
+accessibility.toggle_favorite_hint,Double tap to toggle favorite status,انقر مرتين لتبديل المفضلة
+accessibility.view_fingerprint_hint,Tap to view encryption fingerprint,اضغط لعرض بصمة التشفير
+action.screenshot.core,took a screenshot,التقط لقطة شاشة
+action.screenshot.self,you took a screenshot,لقد التقطت لقطة شاشة
+actions.block,BLOCK,حظر
+actions.copy_message,Copy message,نسخ الرسالة
+actions.hug,hug,عناق
+actions.mention,mention,إشارة
+actions.private_message,private message,رسالة خاصة
+actions.slap,slap,صفعة
+actions.title,Actions,إجراءات
+actions.unblock,Unblock,إلغاء الحظر
+alert.bluetooth.off_message,Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat.,Bluetooth مُعطّل. فعّل Bluetooth من الإعدادات لاستخدام bitchat.
+alert.bluetooth.unauthorized_message,BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings.,يحتاج bitchat إلى إذن Bluetooth للاتصال بالأجهزة القريبة. فعّل الوصول من الإعدادات.
+alert.bluetooth.unsupported_message,This device does not support Bluetooth. BitChat requires Bluetooth to function.,هذا الجهاز لا يدعم Bluetooth. يتطلب bitchat وجود Bluetooth للعمل.
+alert.bluetooth_required,Bluetooth Required,يتطلب البلوتوث
+appinfo.features.encryption.desc,private messages encrypted with noise protocol,رسائل خاصة مشفرة ببروتوكول Noise
+appinfo.features.encryption.title,end-to-end encryption,تشفير شامل
+appinfo.features.extended_range.desc,"messages relay through peers, going the distance",الرسائل تُرحّل عبر الأقران لمسافات أطول
+appinfo.features.extended_range.title,extended range,نطاق ممتد
+appinfo.features.favorites.desc,get notified when your favorite people join,تلقَّ إشعارًا عند انضمام المفضلين
+appinfo.features.favorites.title,favorites,المفضلة
+appinfo.features.geohash.desc,geohash channels to chat with people in nearby regions over decentralized anonymous relays,قنوات geohash للدردشة محليًا عبر مرحلات لامركزية
+appinfo.features.geohash.title,local channels,قنوات محلية
+appinfo.features.mentions.desc,use @nickname to notify specific people,استخدم @الاسم لتنبيه أشخاص محددين
+appinfo.features.mentions.title,mentions,إشارات
+appinfo.features.offline.desc,works without internet using Bluetooth low energy,يعمل بدون إنترنت باستخدام بلوتوث منخفض الطاقة
+appinfo.features.offline.title,offline communication,اتصال دون إنترنت
+appinfo.features.title,FEATURES,الميزات
+appinfo.howto.bullet.clear,• triple-tap chat to clear,• انقر ثلاثًا لمسح الدردشة
+appinfo.howto.bullet.commands,• type / for commands,• اكتب / للأوامر
+appinfo.howto.bullet.dm,• tap a peer's name to start a DM,• اضغط الاسم لبدء رسالة خاصة
+appinfo.howto.bullet.mesh,• tap #mesh to change channels,• اضغط #mesh لتغيير القنوات
+appinfo.howto.bullet.nickname,• set your nickname by tapping it,• اضغط لضبط لقبك
+appinfo.howto.bullet.sidebar,• tap people icon for sidebar,• اضغط أيقونة الأشخاص للشريط الجانبي
+appinfo.howto.title,HOW TO USE,كيفية الاستخدام
+appinfo.privacy.ephemeral.desc,new peer ID generated regularly,إنشاء معرف جديد بانتظام
+appinfo.privacy.ephemeral.title,ephemeral identity,هوية مؤقتة
+appinfo.privacy.no_tracking.desc,"no servers, accounts, or data collection",لا خوادم ولا حسابات ولا جمع بيانات
+appinfo.privacy.no_tracking.title,no tracking,بدون تتبع
+appinfo.privacy.panic.desc,triple-tap logo to instantly clear all data,انقر على الشعار ثلاث مرات لمسح كل البيانات
+appinfo.privacy.panic.title,panic mode,وضع الذعر
+appinfo.privacy.title,PRIVACY,الخصوصية
+appinfo.tagline,sidegroupchat,sidegroupchat
+appinfo.warning.message,private message security has not yet been fully audited. do not use for critical situations until this warning disappears.,أمان الرسائل الخاصة لم يُدقق بالكامل بعد. لا تستخدم في الحالات الحرجة حتى يزول هذا التحذير.
+appinfo.warning.title,WARNING,تحذير
+channel.mesh,Mesh,شبكة
+cmd.block.already,%@ is already blocked,%@ is already blocked
+cmd.block.help,Block or list blocked peers. Usage: /block [nickname],حظر أو عرض المحظورين. الاستخدام: /block [اسم]
+cmd.block.list,blocked peers: %@ | geohash blocks: %@,blocked peers: %@ | geohash blocks: %@
+cmd.block.not_found,cannot block %@: not found or unable to verify identity,cannot block %@: not found or unable to verify identity
+cmd.block.success,blocked %@. you will no longer receive messages from them,blocked %@. you will no longer receive messages from them
+cmd.block.success_geohash,blocked %@ in geohash chats,blocked %@ in geohash chats
+cmd.block.title,Block,حظر
+cmd.clear.help,Clear chat messages. Usage: /clear,مسح الرسائل. الاستخدام: /clear
+cmd.clear.title,Clear,مسح
+cmd.emote.not_found,cannot %@ %@: not found,cannot %@ %@: not found
+cmd.emote.usage,usage: /%@ <nickname>,usage: /%@ <nickname>
+cmd.error.invalid,Invalid command,Invalid command
+cmd.error.not_found,'%@' not found,'%@' not found
+cmd.error.unknown_command,unknown command: %@,unknown command: %@
+cmd.fav.added,added %@ to favorites,added %@ to favorites
+cmd.fav.help,Add to favorites. Usage: /fav <nickname>,إضافة إلى المفضلة. الاستخدام: /fav <اسم>
+cmd.fav.removed,removed %@ from favorites,removed %@ from favorites
+cmd.fav.title,Favorite,مفضلة
+cmd.fav.usage,usage: /%@ <nickname>,usage: /%@ <nickname>
+cmd.help.help,Show this help. Usage: /help,عرض هذه المساعدة. الاستخدام: /help
+cmd.help.summary,"commands:
+/msg @name - start private chat
+/who - list who's online
+/clear - clear messages
+/hug @name - send a hug
+/slap @name - slap with a trout
+/fav @name - add to favorites
+/unfav @name - remove from favorites
+/block @name - block
+/unblock @name - unblock","commands:
+/msg @name - start private chat
+/who - list who's online
+/clear - clear messages
+/hug @name - send a hug
+/slap @name - slap with a trout
+/fav @name - add to favorites
+/unfav @name - remove from favorites
+/block @name - block
+/unblock @name - unblock"
+cmd.help.title,Help,مساعدة
+cmd.hug.help,Send someone a warm hug. Usage: /hug <nickname>,أرسل عناقًا. الاستخدام: /hug <اسم>
+cmd.hug.title,Hug,عناق
+cmd.invalid,Invalid command,Invalid command
+cmd.msg.help,Send private message. Usage: /m <nickname> [message],إرسال رسالة خاصة. الاستخدام: /m <اسم> [رسالة]
+cmd.msg.started,started private chat with %@,started private chat with %@
+cmd.msg.title,Private Message,رسالة خاصة
+cmd.msg.usage,usage: /msg @nickname [message],usage: /msg @nickname [message]
+cmd.peer.not_found,can't find peer: %@,can't find peer: %@
+cmd.slap.help,Slap someone with a trout. Usage: /slap <nickname>,صفع سمكة تراوت. الاستخدام: /slap <اسم>
+cmd.slap.title,Slap,صفعة
+cmd.unblock.help,Unblock a peer. Usage: /unblock <nickname>,إلغاء حظر مستخدم. الاستخدام: /unblock <اسم>
+cmd.unblock.not_blocked,%@ is not blocked,%@ is not blocked
+cmd.unblock.not_found,cannot unblock %@: not found,cannot unblock %@: not found
+cmd.unblock.success,unblocked %@,unblocked %@
+cmd.unblock.success_geohash,unblocked %@ in geohash chats,unblocked %@ in geohash chats
+cmd.unblock.title,Unblock,إلغاء الحظر
+cmd.unblock.usage,usage: /unblock <nickname>,usage: /unblock <nickname>
+cmd.unfav.help,Remove from favorites. Usage: /unfav <nickname>,إزالة من المفضلة. الاستخدام: /unfav <اسم>
+cmd.unfav.title,Unfavorite,إزالة من المفضلة
+cmd.unknown,unknown command: %@,unknown command: %@
+cmd.who.help,See who's online. Usage: /w,عرض المتصلين. الاستخدام: /w
+cmd.who.none_online,no one else is online right now,no one else is online right now
+cmd.who.online_list,online: %@,online: %@
+cmd.who.title,Who,من
+common.cancel,Cancel,إلغاء
+common.close,close,إغلاق
+common.copy,Copy,نسخ
+common.done,DONE,تم
+common.none,none,none
+common.ok,OK,موافق
+common.open_settings,open settings,فتح الإعدادات
+common.show_less,Show less,عرض أقل
+common.show_more,Show more,عرض المزيد
+common.unknown,Unknown,غير معروف
+delivery.delivered_to,Delivered to %@,تم التسليم إلى %@
+delivery.failed,Failed: %@,فشل: %@
+delivery.partial_members.one,Delivered to %d of %d member,تم التسليم إلى %d من %d عضو
+delivery.partial_members.other,Delivered to %d of %d members,تم التسليم إلى %d من %d أعضاء
+delivery.partial_ratio,Delivered to %d/%d,تم التسليم %d/%d
+delivery.read_by,Read by %@,قُرِئ بواسطة %@
+delivery.sending,Sending...,جارٍ الإرسال...
+delivery.sent,Sent,تم الإرسال
+encryption.status.handshaking,Establishing encryption...,Establishing encryption...
+encryption.status.no_handshake,Not encrypted,Not encrypted
+encryption.status.none,Encryption failed,Encryption failed
+encryption.status.secured,Encrypted,Encrypted
+encryption.status.verified,Encrypted & Verified,Encrypted & Verified
+errors.invalid_geohash,invalid geohash,geohash غير صالح
+fp.compare_instruction,compare these fingerprints with %@ using a secure channel.,قارن هذه البصمات مع %@ باستخدام قناة آمنة.
+fp.handshake_in_progress,not available - handshake in progress,غير متاح - المصافحة جارية
+fp.mark_verified,MARK AS VERIFIED,وضع علامة كمتحقق
+fp.not_verified,⚠️ NOT VERIFIED,⚠️ غير مُتحقق
+fp.status.secured,secured,مؤمّن
+fp.status.unencrypted,not encrypted,غير مشفر
+fp.status.verified,verified,مُتحقق
+fp.their,THEIR FINGERPRINT:,بصمتهم:
+fp.title,SECURITY VERIFICATION,التحقق الأمني
+fp.verified,✓ VERIFIED,✓ مُتحقق
+fp.verified.detail,you have verified this person's identity.,لقد تحققت من هوية هذا الشخص.
+fp.yours,YOUR FINGERPRINT:,بصمتك:
+help.title,How to Use,كيفية الاستخدام
+label.you_suffix, (you), (أنت)
+location.about,"chat with people near you using geohash channels. only a coarse geohash is shared, never exact gps.",الدردشة مع الأشخاص القريبين باستخدام قنوات geohash. تتم مشاركة geohash تقريبي فقط، وليس GPS الدقيق.
+location.enable_action,get location and my geohashes,الحصول على الموقع و geohash الخاص بي
+location.finding,finding nearby channels…,جاري العثور على قنوات قريبة…
+location.level.block,Block,مربّع
+location.level.city,City,مدينة
+location.level.country,Country,بلد
+location.level.neighborhood,Neighborhood,حيّ
+location.level.region,Region,منطقة
+location.mesh,mesh,شبكة
+location.permission_denied,location permission denied. enable in settings to use location channels.,تم رفض إذن الموقع. فعِّل في الإعدادات لاستخدام قنوات الموقع.
+location.remove_access,remove location access,إزالة وصول الموقع
+location.teleport,teleport,انتقال فوري
+nav.home,Home,الصفحة الرئيسية
+nav.location_channels,#location channels,#قنوات الموقع
+nav.people,PEOPLE,الأشخاص
+nav.settings,Settings,الإعدادات
+notif.favorite_online.body,wanna get in there?,wanna get in there?
+notif.favorite_online.title,⭐ %@ is online!,⭐ %@ is online!
+notif.mention.title,🫵 you were mentioned by %@,🫵 you were mentioned by %@
+notif.network_available.body.one,1 person around,1 person around
+notif.network_available.body.other,%d people around,%d people around
+notif.network_available.title,👥 bitchatters nearby!,👥 bitchatters nearby!
+notif.private_message.title,🔒 private message from %@,🔒 private message from %@
+payment.cashu,pay via cashu,الدفع عبر cashu
+payment.lightning,pay via lightning,الدفع عبر lightning
+peer.blocked,Blocked,محظور
+peer.blocked_geohash,Blocked in geohash,محظور في geohash
+people.none_around,nobody around...,لا أحد بالقرب...
+placeholder.geohash,geohash,geohash
+placeholder.nickname,nickname,اسم مستعار
+placeholder.type_message,type a message,type a message
+share.link_title,Shared Link,رابط مُشترك
+share.placeholder,Share to bitchat...,المشاركة إلى bitchat...
+share.success,✓ Shared to bitchat,✓ تمّت المشاركة إلى bitchat
+system.blocked_geohash,blocked %@ in geohash chats,حُظر %@ في دردشات geohash
+system.cannot_send_blocked,cannot send message: user is blocked.,لا يمكن إرسال الرسالة: المستخدم محظور.
+system.cannot_send_blocked_to,cannot send message to %@: user is blocked.,لا يمكن إرسال رسالة إلى %@: المستخدم محظور.
+system.cannot_send_not_in_location,cannot send: not in a location channel,لا يمكن الإرسال: لست في قناة موقع
+system.cannot_send_unreachable,Cannot send message to %@ - peer is not reachable via mesh or Nostr.,لا يمكن إرسال رسالة إلى %@ — النظير غير قابل للوصول عبر الشبكة أو Nostr.
+system.cannot_start_blocked,cannot start chat with %@: user is blocked.,لا يمكن بدء محادثة مع %@: المستخدم محظور.
+system.cannot_start_need_mutual,cannot start chat with %@: mutual favorite required for offline messaging.,لا يمكن بدء محادثة مع %@: يلزم تفضيل متبادل للرسائل دون اتصال.
+system.favorited_you,%@ favorited you,%@ أضافك كمفضل
+system.send_failed_location,failed to send to location channel,فشل الإرسال إلى قناة الموقع
+system.unblocked_geohash,unblocked %@ in geohash chats,أُزيل الحظر عن %@ في دردشات geohash
+system.unfavorited_you,%@ unfavorited you,%@ أزالك من المفضلة
+test.baseOnly,Base Fallback,Base Fallback
+test.sample,Sample,مثال
