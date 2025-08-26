@@ -90,6 +90,15 @@ class NotificationService {
         }
     }
     
+    // Geohash public chat notification with deep link to a specific geohash
+    func sendGeohashActivityNotification(geohash: String, titlePrefix: String = "#", bodyPreview: String) {
+        let title = "\(titlePrefix)\(geohash)"
+        let identifier = "geo-activity-\(geohash)-\(Date().timeIntervalSince1970)"
+        let deeplink = "bitchat://geohash/\(geohash)"
+        let userInfo: [String: Any] = ["deeplink": deeplink]
+        sendLocalNotification(title: title, body: bodyPreview, identifier: identifier, userInfo: userInfo)
+    }
+
     func sendNetworkAvailableNotification(peerCount: Int) {
         let title = "👥 bitchatters nearby!"
         let body = peerCount == 1 ? "1 person around" : "\(peerCount) people around"
