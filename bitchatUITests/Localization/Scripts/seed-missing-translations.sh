@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -euo pipefail
 
 # seed-missing-translations.sh — fill missing required locales by copying English values
@@ -54,4 +54,3 @@ PY
 
 echo "$RESULTS"
 exit 0
-

@@ -21,26 +21,13 @@ final class LocalizationControlsUnitTests: XCTestCase {
     }
 
 
-    // Locales we want quick confidence on (LTR/RTL/CJK/Latin)
-    private let locales = ["es", "fr", "zh-Hans", "ar", "ru"]
+    // Test across all available localizations in the bundle (excluding Base)
+    private let locales: [String] = Bundle.main.localizations.filter { $0 != "Base" }
 
     // Expected localized strings for placeholder and send button where we know them
-    private let placeholderByLocale: [String: String] = [
-        // Use exact known translations from the catalog
-        "es": "escribe un mensaje...",
-        "fr": "écrivez un message...",
-        "zh-Hans": "输入消息...",
-        "ar": "اكتب رسالة...",
-        "ru": "type a message..."
-    ]
+    private let placeholderKey = "placeholder.type_message"
 
-    private let sendButtonLabelByLocale: [String: String] = [
-        "es": "Enviar mensaje", // if not present, fall back to Base assertion
-        "fr": "Envoyer le message",
-        "zh-Hans": "发送消息",
-        "ar": "إرسال رسالة",
-        "ru": "Отправить сообщение"
-    ]
+    private let sendKey = "accessibility.send_message"
 
     // Helper to get expected fallback (Base) for labels when we don't specify a locale value
     private let basePlaceholderFallback = "type a message..." // Base value for placeholder.type_message
@@ -66,7 +53,8 @@ func testPlaceholderLocalizedAcrossLocales() {
             app.launch()
             bringComposerIntoView(app)
 
-            let expected = placeholderByLocale[locale] ?? basePlaceholderFallback
+            // Resolve expected from the bundle when available; fallback to Base
+            let expected = NSLocalizedString(placeholderKey, tableName: nil, bundle: bundle(for: locale), value: basePlaceholderFallback, comment: "")
             // Placeholder appears as the text field's identifier in XCTest
             let input = app.descendants(matching: .any).matching(NSPredicate(format: "identifier == %@", "composer.input")).firstMatch
             XCTAssertTrue(input.waitForExistence(timeout: 5), "Missing placeholder for locale=\(locale)")
@@ -82,7 +70,8 @@ func testPlaceholderLocalizedAcrossLocales() {
             app.launch()
             bringComposerIntoView(app)
 
-            let expected = sendButtonLabelByLocale[locale] ?? baseSendLabelFallback
+            // Resolve expected from the bundle to support all locales
+            let expected = NSLocalizedString(sendKey, tableName: nil, bundle: bundle(for: locale), value: baseSendLabelFallback, comment: "")
             let exists = app.buttons[expected].waitForExistence(timeout: 5) || app.buttons.matching(NSPredicate(format: "identifier == %@", expected)).firstMatch.waitForExistence(timeout: 1) || existsLocalizedElement(app, expected: expected)
             XCTAssertTrue(exists, "Missing send button label for locale=\(locale)")
             app.terminate()

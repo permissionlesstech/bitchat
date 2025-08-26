@@ -1,22 +1,28 @@
 #!/usr/bin/env python3
 """
-export_xcstrings_csv.py — Export .xcstrings to CSV for translation.
+export_xcstrings_csv.py — Export .xcstrings to per-locale CSV files.
 
-Creates one CSV per requested locale with columns:
-  key,en,<locale>
+Purpose:
+  Writes one CSV per target locale with columns: key,en,<locale>.
 
 Usage:
-  python3 scripts/export_xcstrings_csv.py <xcstrings> <out_dir> [--locales es,fr,zh-Hans,ar,ru,pt-BR]
-If --locales is omitted, exports all locales present in the file (excluding 'en').
+  ./bitchatUITests/Localization/Scripts/export_xcstrings_csv.py <xcstrings> <out_dir> [--locales es,fr,...]
+
+Examples:
+  - All locales present:
+      python3 export_xcstrings_csv.py bitchat/Localization/Localizable.xcstrings localization_exports
+  - Specific locales only:
+      python3 export_xcstrings_csv.py bitchat/Localization/Localizable.xcstrings localization_exports --locales es,fr
+
+Dependencies: Python 3 standard library only (json, csv, pathlib).
 """
 import csv
 import json
-import os
 import sys
 from pathlib import Path
 
-def main(path: str, out_dir: str, locales_csv: str | None) -> int:
-    p = Path(path)
+def main(xcstrings: str, out_dir: str, locales_csv: str | None) -> int:
+    p = Path(xcstrings)
     if not p.exists():
         print(f"❌ File not found: {p}", file=sys.stderr)
         return 2
@@ -28,32 +34,31 @@ def main(path: str, out_dir: str, locales_csv: str | None) -> int:
 
     all_locales = set()
     for e in strings.values():
-        all_locales.update(e.get('localizations', {}).keys())
+        all_locales.update((e.get('localizations') or {}).keys())
     all_locales.discard('en')
+    targets = [s.strip() for s in (locales_csv or '').split(',') if s.strip()] or sorted(all_locales)
 
-    targets = [s.strip() for s in locales_csv.split(',')] if locales_csv else sorted(all_locales)
     for loc in targets:
         rows = []
         for key, e in strings.items():
             locs = e.get('localizations', {})
-            en = locs.get('en', {}).get('stringUnit', {}).get('value', '')
-            val = locs.get(loc, {}).get('stringUnit', {}).get('value', '')
+            en = (locs.get('en') or {}).get('stringUnit', {}).get('value', '')
+            val = (locs.get(loc) or {}).get('stringUnit', {}).get('value', '')
             rows.append((key, en, val))
         out_file = out / f"{loc}.csv"
         with out_file.open('w', newline='', encoding='utf-8') as fh:
             w = csv.writer(fh)
-            w.writerow(['key','en',loc])
-            for r in rows:
-                w.writerow(r)
+            w.writerow(['key', 'en', loc])
+            w.writerows(rows)
         print(f"📤 Wrote {out_file} ({len(rows)} rows)")
     return 0
 
 if __name__ == '__main__':
     if len(sys.argv) < 3:
         print('Usage: export_xcstrings_csv.py <xcstrings> <out_dir> [--locales a,b,c]', file=sys.stderr)
-        sys.exit(2)
+        raise SystemExit(2)
     locales = None
     if len(sys.argv) == 5 and sys.argv[3] == '--locales':
         locales = sys.argv[4]
-    sys.exit(main(sys.argv[1], sys.argv[2], locales))
+    raise SystemExit(main(sys.argv[1], sys.argv[2], locales))
 

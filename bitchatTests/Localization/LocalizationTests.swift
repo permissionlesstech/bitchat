@@ -17,7 +17,8 @@ final class LocalizationTests: XCTestCase {
     }
 
     func testLocalizedStringsResolveForEachLocale() {
-        let locales = ["Base", "es", "zh-Hans", "ar", "fr", "hi", "bn", "pt-BR", "ru"]
+        var locales = Bundle.main.localizations
+        if !locales.contains("Base") { locales.append("Base") }
         for locale in locales {
             let b = bundle(for: locale)
             let keys = [
@@ -41,7 +42,8 @@ final class LocalizationTests: XCTestCase {
     }
 
     func testCommandMetaLocalizationResolves() {
-        let locales = ["Base", "es", "zh-Hans", "ar", "fr", "hi", "bn", "pt-BR", "ru"]
+        var locales = Bundle.main.localizations
+        if !locales.contains("Base") { locales.append("Base") }
         for locale in locales {
             let b = bundle(for: locale)
             for meta in CommandRegistry.all {

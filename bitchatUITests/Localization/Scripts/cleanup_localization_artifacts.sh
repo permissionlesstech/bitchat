@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -euo pipefail
 
 # cleanup_localization_artifacts.sh — remove temporary localization exports/artifacts
@@ -24,4 +24,3 @@ cleanup() {
 }
 
 cleanup
-

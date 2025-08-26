@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -euo pipefail
 
 # test-sim-locale.sh — helper for simulator locale + localization tests

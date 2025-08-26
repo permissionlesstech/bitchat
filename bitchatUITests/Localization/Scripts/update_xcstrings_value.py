@@ -2,14 +2,22 @@
 """
 update_xcstrings_value.py — Update a single locale value for a key in a .xcstrings file.
 
+Purpose:
+  Sets the value for a given key and locale, marking the unit as translated.
+
 Usage:
-  python3 scripts/update_xcstrings_value.py <file> <key> <locale> <value>
+  ./bitchatUITests/Localization/Scripts/update_xcstrings_value.py <file> <key> <locale> <value>
+
+Example:
+  python3 update_xcstrings_value.py bitchat/Localization/Localizable.xcstrings accessibility.add_favorite es "Añadir a favoritos"
+
+Dependencies: Python 3 standard library only (json, pathlib).
 """
 import json
 import sys
 from pathlib import Path
 
-def main(file, key, locale, value):
+def main(file: str, key: str, locale: str, value: str) -> int:
     p = Path(file)
     if not p.exists():
         print(f"❌ File not found: {p}", file=sys.stderr)
@@ -29,7 +37,7 @@ def main(file, key, locale, value):
 
 if __name__ == '__main__':
     if len(sys.argv) < 5:
-        print("Usage: update_xcstrings_value.py <file> <key> <locale> <value>", file=sys.stderr)
-        sys.exit(2)
-    sys.exit(main(sys.argv[1], sys.argv[2], sys.argv[3], ' '.join(sys.argv[4:])))
+        print('Usage: update_xcstrings_value.py <file> <key> <locale> <value>', file=sys.stderr)
+        raise SystemExit(2)
+    raise SystemExit(main(sys.argv[1], sys.argv[2], sys.argv[3], ' '.join(sys.argv[4:])))
 
