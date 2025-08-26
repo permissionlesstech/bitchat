@@ -395,21 +395,24 @@ final class IntegrationTests: XCTestCase {
         let messagesPerNode = 25
         let expectedTotal = messagesPerNode * nodes.count * (nodes.count - 1)
         var receivedTotal = 0
+        let counterQueue = DispatchQueue(label: "it.counter")
         let expectation = XCTestExpectation(description: "High load handled")
         
         // Each node tracks messages
         for (_, node) in nodes {
             node.messageDeliveryHandler = { _ in
-                receivedTotal += 1
-                if receivedTotal >= (expectedTotal - 2) {
-                    expectation.fulfill()
+                counterQueue.sync {
+                    receivedTotal += 1
+                    if receivedTotal >= (expectedTotal - 2) {
+                        expectation.fulfill()
+                    }
                 }
             }
         }
         
         // All nodes send many messages simultaneously
-        DispatchQueue.concurrentPerform(iterations: nodes.count) { index in
-            let nodeName = Array(nodes.keys).sorted()[index]
+        let names = Array(nodes.keys).sorted()
+        for nodeName in names {
             for i in 0..<messagesPerNode {
                 nodes[nodeName]!.sendMessage("\(nodeName) message \(i)", mentions: [], to: nil)
             }

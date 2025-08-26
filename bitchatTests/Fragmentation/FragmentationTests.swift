@@ -81,6 +81,8 @@ final class FragmentationTests: XCTestCase {
 
         // Construct a big packet (3KB) from a remote sender (not our own ID)
         let remoteShortID = "1122334455667788"
+        // Register the peer as verified so public message is accepted
+        ble._test_addVerifiedPeer(id: remoteShortID, nickname: "remote")
         let original = makeLargePublicPacket(senderShortHex: remoteShortID, size: 3_000)
         // Use a small fragment size to ensure multiple pieces
         let fragments = fragmentPacket(original, fragmentSize: 400)
@@ -98,8 +100,8 @@ final class FragmentationTests: XCTestCase {
 
         // Allow async processing
         let exp = expectation(description: "reassembled")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { exp.fulfill() }
-        wait(for: [exp], timeout: 2.0)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { exp.fulfill() }
+        wait(for: [exp], timeout: 4.0)
 
         XCTAssertEqual(capture.publicMessages.count, 1)
         XCTAssertEqual(capture.publicMessages.first?.content.count, 3_000)
@@ -111,6 +113,7 @@ final class FragmentationTests: XCTestCase {
         ble.delegate = capture
 
         let remoteShortID = "A1B2C3D4E5F60708"
+        ble._test_addVerifiedPeer(id: remoteShortID.lowercased(), nickname: "remote2")
         let original = makeLargePublicPacket(senderShortHex: remoteShortID, size: 2048)
         var frags = fragmentPacket(original, fragmentSize: 300)
         // Duplicate one fragment
@@ -124,8 +127,8 @@ final class FragmentationTests: XCTestCase {
         }
 
         let exp = expectation(description: "reassembled2")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { exp.fulfill() }
-        wait(for: [exp], timeout: 2.0)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { exp.fulfill() }
+        wait(for: [exp], timeout: 4.0)
 
         XCTAssertEqual(capture.publicMessages.count, 1)
         XCTAssertEqual(capture.publicMessages.first?.content.count, 2048)

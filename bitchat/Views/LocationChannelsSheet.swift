@@ -1,10 +1,7 @@
 import SwiftUI
-import CoreLocation
+
 #if os(iOS)
 import UIKit
-#else
-import AppKit
-#endif
 struct LocationChannelsSheet: View {
     @Binding var isPresented: Bool
     @ObservedObject private var manager = LocationChannelManager.shared
@@ -16,9 +13,9 @@ struct LocationChannelsSheet: View {
     var body: some View {
         NavigationView {
             VStack(alignment: .leading, spacing: 12) {
-                Text("#location channels")
+                Text(LocalizedStringKey("nav.location_channels"))
                     .font(.system(size: 18, design: .monospaced))
-                Text("chat with people near you using geohash channels. only a coarse geohash is shared, never exact gps.")
+                Text(LocalizedStringKey("location.about"))
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundColor(.secondary)
 
@@ -26,7 +23,7 @@ struct LocationChannelsSheet: View {
                     switch manager.permissionState {
                     case LocationChannelManager.PermissionState.notDetermined:
                         Button(action: { manager.enableLocationChannels() }) {
-                            Text("get location and my geohashes")
+                            Text(LocalizedStringKey("location.enable_action"))
                                 .font(.system(size: 12, design: .monospaced))
                                 .foregroundColor(standardGreen)
                                 .frame(maxWidth: .infinity)
@@ -37,10 +34,14 @@ struct LocationChannelsSheet: View {
                         .buttonStyle(.plain)
                     case LocationChannelManager.PermissionState.denied, LocationChannelManager.PermissionState.restricted:
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("location permission denied. enable in settings to use location channels.")
+                            Text(LocalizedStringKey("location.permission_denied"))
                                 .font(.system(size: 12, design: .monospaced))
                                 .foregroundColor(.secondary)
-                            Button("open settings") { openSystemLocationSettings() }
+                            Button(String(localized: "common.open_settings")) {
+                                if let url = URL(string: UIApplication.openSettingsURLString) {
+                                    UIApplication.shared.open(url)
+                                }
+                            }
                             .buttonStyle(.plain)
                         }
                     case LocationChannelManager.PermissionState.authorized:
@@ -53,29 +54,15 @@ struct LocationChannelsSheet: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("close") { isPresented = false }
+                    Button(String(localized: "common.close")) { isPresented = false }
                         .font(.system(size: 14, design: .monospaced))
                 }
             }
-            #else
-            .toolbar {
-                ToolbarItem(placement: .automatic) {
-                    Button("close") { isPresented = false }
-                        .font(.system(size: 14, design: .monospaced))
-                }
-            }
-            #endif
         }
-        #if os(iOS)
         .presentationDetents([.large])
-        #endif
-        #if os(macOS)
-        .frame(minWidth: 420, minHeight: 520)
-        #endif
         .onAppear {
             // Refresh channels when opening
             if manager.permissionState == LocationChannelManager.PermissionState.authorized {
@@ -129,7 +116,7 @@ struct LocationChannelsSheet: View {
             } else {
                 HStack {
                     ProgressView()
-                    Text("finding nearby channels…")
+                    Text(LocalizedStringKey("location.finding"))
                         .font(.system(size: 12, design: .monospaced))
                 }
             }
@@ -140,13 +127,11 @@ struct LocationChannelsSheet: View {
                     Text("#")
                         .font(.system(size: 14, design: .monospaced))
                         .foregroundColor(.secondary)
-                    TextField("geohash", text: $customGeohash)
-                        #if os(iOS)
+                    TextField(String(localized: "placeholder.geohash"), text: $customGeohash)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled(true)
-                        .keyboardType(.asciiCapable)
-                        #endif
                         .font(.system(size: 14, design: .monospaced))
+                        .keyboardType(.asciiCapable)
                         .onChange(of: customGeohash) { newValue in
                             // Allow only geohash base32 characters, strip '#', limit length
                             let allowed = Set("0123456789bcdefghjkmnpqrstuvwxyz")
@@ -164,7 +149,7 @@ struct LocationChannelsSheet: View {
                     let isValid = validateGeohash(normalized)
                     Button(action: {
                         let gh = normalized
-                        guard isValid else { customError = "invalid geohash"; return }
+                        guard isValid else { customError = String(localized: "errors.invalid_geohash"); return }
                         let level = levelForLength(gh.count)
                         let ch = GeohashChannel(level: level, geohash: gh)
                         // Mark this selection as a manual teleport
@@ -173,7 +158,7 @@ struct LocationChannelsSheet: View {
                         isPresented = false
                     }) {
                         HStack(spacing: 6) {
-                            Text("teleport")
+                            Text(LocalizedStringKey("location.teleport"))
                                 .font(.system(size: 14, design: .monospaced))
                             Image(systemName: "face.dashed")
                                 .font(.system(size: 14))
@@ -198,9 +183,11 @@ struct LocationChannelsSheet: View {
             // Footer action inside the list
             if manager.permissionState == LocationChannelManager.PermissionState.authorized {
                 Button(action: {
-                    openSystemLocationSettings()
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
                 }) {
-                    Text("remove location access")
+                    Text(LocalizedStringKey("location.remove_access"))
                         .font(.system(size: 12, design: .monospaced))
                         .foregroundColor(Color(red: 0.75, green: 0.1, blue: 0.1))
                         .frame(maxWidth: .infinity)
@@ -284,8 +271,10 @@ struct LocationChannelsSheet: View {
     private func meshTitleWithCount() -> String {
         // Count currently connected mesh peers (excluding self)
         let meshCount = meshCount()
-        let noun = meshCount == 1 ? "person" : "people"
-        return "mesh [\(meshCount) \(noun)]"
+        let fmt = String(localized: "accessibility.people_count")
+        let people = String.localizedStringWithFormat(fmt, meshCount)
+        let meshLabel = String(localized: "location.mesh")
+        return "\(meshLabel) [\(people)]"
     }
 
     private func meshCount() -> Int {
@@ -299,8 +288,9 @@ struct LocationChannelsSheet: View {
     private func geohashTitleWithCount(for channel: GeohashChannel) -> String {
         // Use ViewModel's 5-minute activity counts; may be 0 for non-selected channels
         let count = viewModel.geohashParticipantCount(for: channel.geohash)
-        let noun = count == 1 ? "person" : "people"
-        return "\(channel.level.displayName.lowercased()) [\(count) \(noun)]"
+        let fmt = String(localized: "accessibility.people_count")
+        let people = String.localizedStringWithFormat(fmt, count)
+        return "\(channel.level.displayName.lowercased()) [\(people)]"
     }
 
     private func validateGeohash(_ s: String) -> Bool {
@@ -311,8 +301,8 @@ struct LocationChannelsSheet: View {
 
     private func levelForLength(_ len: Int) -> GeohashChannelLevel {
         switch len {
-        case 0...2: return .region
-        case 3...4: return .province
+        case 0...2: return .country
+        case 3...4: return .region
         case 5: return .city
         case 6: return .neighborhood
         case 7: return .block
@@ -356,7 +346,7 @@ extension LocationChannelsSheet {
         }()
 
         let usesMetric: Bool = {
-            if #available(iOS 16.0, macOS 13.0, *) {
+            if #available(iOS 16.0, *) {
                 return Locale.current.measurementSystem == .metric
             } else {
                 return Locale.current.usesMetricSystem
@@ -379,7 +369,7 @@ extension LocationChannelsSheet {
 
     private func bluetoothRangeString() -> String {
         let usesMetric: Bool = {
-            if #available(iOS 16.0, macOS 13.0, *) {
+            if #available(iOS 16.0, *) {
                 return Locale.current.measurementSystem == .metric
             } else {
                 return Locale.current.usesMetricSystem
@@ -395,7 +385,7 @@ extension LocationChannelsSheet {
 
     private func formattedNamePrefix(for level: GeohashChannelLevel) -> String {
         switch level {
-        case .region:
+        case .country:
             return ""
         default:
             return "~"
@@ -403,17 +393,4 @@ extension LocationChannelsSheet {
     }
 }
 
-// MARK: - Open Settings helper
-private func openSystemLocationSettings() {
-    #if os(iOS)
-    if let url = URL(string: UIApplication.openSettingsURLString) {
-        UIApplication.shared.open(url)
-    }
-    #else
-    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices") {
-        NSWorkspace.shared.open(url)
-    } else if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security") {
-        NSWorkspace.shared.open(url)
-    }
-    #endif
-}
+#endif

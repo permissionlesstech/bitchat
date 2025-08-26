@@ -48,10 +48,10 @@ class NostrRelayManager: ObservableObject {
     private let messageQueueLock = NSLock()
     
     // Exponential backoff configuration
-    private let initialBackoffInterval: TimeInterval = TransportConfig.nostrRelayInitialBackoffSeconds
-    private let maxBackoffInterval: TimeInterval = TransportConfig.nostrRelayMaxBackoffSeconds
-    private let backoffMultiplier: Double = TransportConfig.nostrRelayBackoffMultiplier
-    private let maxReconnectAttempts = TransportConfig.nostrRelayMaxReconnectAttempts
+    private let initialBackoffInterval: TimeInterval = 1.0  // Start with 1 second
+    private let maxBackoffInterval: TimeInterval = 300.0    // Max 5 minutes
+    private let backoffMultiplier: Double = 2.0            // Double each time
+    private let maxReconnectAttempts = 10                  // Stop after 10 attempts
     
     // Reconnection timer
     private var reconnectionTimer: Timer?
@@ -78,23 +78,9 @@ class NostrRelayManager: ObservableObject {
         updateConnectionStatus()
     }
     
-    /// Ensure connections exist to the given relay URLs (idempotent).
-    func ensureConnections(to relayUrls: [String]) {
-        let existing = Set(relays.map { $0.url })
-        for url in Set(relayUrls) {
-            if !existing.contains(url) {
-                relays.append(Relay(url: url))
-            }
-            if connections[url] == nil {
-                connectToRelay(url)
-            }
-        }
-    }
-
     /// Send an event to specified relays (or all if none specified)
     func sendEvent(_ event: NostrEvent, to relayUrls: [String]? = nil) {
-        let targetRelays = relayUrls ?? Self.defaultRelays
-        ensureConnections(to: targetRelays)
+        let targetRelays = relayUrls ?? relays.map { $0.url }
         
         // Add to queue for reliability
         messageQueueLock.lock()
@@ -109,11 +95,10 @@ class NostrRelayManager: ObservableObject {
         }
     }
     
-    /// Subscribe to events matching a filter. If `relayUrls` provided, targets only those relays.
+    /// Subscribe to events matching a filter
     func subscribe(
         filter: NostrFilter,
         id: String = UUID().uuidString,
-        relayUrls: [String]? = nil,
         handler: @escaping (NostrEvent) -> Void
     ) {
         messageHandlers[id] = handler
@@ -135,14 +120,8 @@ class NostrRelayManager: ObservableObject {
             // SecureLogger.log("📋 Subscription filter JSON: \(messageString.prefix(200))...", 
             //                 category: SecureLogger.session, level: .debug)
             
-            // Target specific relays if provided; else all connections
-            let urls = relayUrls ?? Self.defaultRelays
-            ensureConnections(to: urls)
-            let targets: [(String, URLSessionWebSocketTask)] = urls.compactMap { url in
-                connections[url].map { (url, $0) }
-            }
-
-            for (relayUrl, connection) in targets {
+            // Send subscription to all connected relays
+            for (relayUrl, connection) in connections {
                 connection.send(.string(messageString)) { error in
                     if let error = error {
                         SecureLogger.log("❌ Failed to send subscription to \(relayUrl): \(error)", 
@@ -289,7 +268,7 @@ class NostrRelayManager: ObservableObject {
                         
                         // Only log non-gift-wrap events to reduce noise
                         if event.kind != 1059 {
-                            SecureLogger.log("📥 Event kind=\(event.kind) id=\(event.id.prefix(16))… relay=\(relayUrl)",
+                            SecureLogger.log("📥 Received Nostr event (kind: \(event.kind)) from relay: \(relayUrl)", 
                                             category: SecureLogger.session, level: .debug)
                         }
                         
@@ -321,11 +300,11 @@ class NostrRelayManager: ObservableObject {
                         let reason = array.count >= 4 ? (array[3] as? String ?? "no reason given") : "no reason given"
                         if success {
                             _ = Self.pendingGiftWrapIDs.remove(eventId)
-                            SecureLogger.log("✅ Accepted id=\(eventId.prefix(16))… relay=\(relayUrl)",
+                            SecureLogger.log("✅ Event accepted id=\(eventId.prefix(16))... by relay: \(relayUrl)",
                                             category: SecureLogger.session, level: .debug)
                         } else {
                             let isGiftWrap = Self.pendingGiftWrapIDs.remove(eventId) != nil
-                            SecureLogger.log("📮 Rejected id=\(eventId.prefix(16))… reason=\(reason)", 
+                            SecureLogger.log("📮 Event \(eventId.prefix(16))... rejected by relay: \(reason)", 
                                             category: SecureLogger.session, level: isGiftWrap ? .warning : .error)
                         }
                     }
@@ -353,7 +332,7 @@ class NostrRelayManager: ObservableObject {
             let data = try encoder.encode(req)
             let message = String(data: data, encoding: .utf8) ?? ""
             
-            SecureLogger.log("📤 Send kind=\(event.kind) id=\(event.id.prefix(16))… relay=\(relayUrl)", 
+            SecureLogger.log("📤 Sending Nostr event (kind: \(event.kind)) to relay: \(relayUrl)", 
                             category: SecureLogger.session, level: .debug)
             
             connection.send(.string(message)) { [weak self] error in
@@ -568,7 +547,7 @@ struct NostrFilter: Encodable {
         filter.kinds = [1059] // Gift wrap kind
         filter.since = since?.timeIntervalSince1970.toInt()
         filter.tagFilters = ["p": [pubkey]]
-        filter.limit = TransportConfig.nostrRelayDefaultFetchLimit // reasonable limit
+        filter.limit = 100 // Add a reasonable limit
         return filter
     }
 

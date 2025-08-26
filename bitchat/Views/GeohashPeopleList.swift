@@ -1,60 +1,60 @@
 import SwiftUI
 
+#if os(iOS)
 struct GeohashPeopleList: View {
     @ObservedObject var viewModel: ChatViewModel
     let textColor: Color
     let secondaryTextColor: Color
     let onTapPerson: () -> Void
     @Environment(\.colorScheme) var colorScheme
-    @State private var orderedIDs: [String] = []
 
     var body: some View {
-        if viewModel.visibleGeohashPeople().isEmpty {
-            VStack(alignment: .leading, spacing: 0) {
-                Text("nobody around...")
+        Group {
+            if viewModel.visibleGeohashPeople().isEmpty {
+                Text(LocalizedStringKey("people.none_around"))
                     .font(.system(size: 14, design: .monospaced))
                     .foregroundColor(secondaryTextColor)
                     .padding(.horizontal)
                     .padding(.top, 12)
-            }
-        } else {
-            let myHex: String? = {
-                if case .location(let ch) = LocationChannelManager.shared.selectedChannel,
-                   let id = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
-                    return id.publicKeyHex.lowercased()
+            } else {
+                let myHex: String? = {
+                    if case .location(let ch) = LocationChannelManager.shared.selectedChannel,
+                       let id = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
+                        return id.publicKeyHex.lowercased()
+                    }
+                    return nil
+                }()
+                let ordered = viewModel.visibleGeohashPeople().sorted { a, b in
+                    if let me = myHex {
+                        if a.id == me && b.id != me { return true }
+                        if b.id == me && a.id != me { return false }
+                    }
+                    return a.lastSeen > b.lastSeen
                 }
-                return nil
-            }()
-            let people = viewModel.visibleGeohashPeople()
-            let currentIDs = people.map { $0.id }
-
-            let teleportedSet = Set(viewModel.teleportedGeo.map { $0.lowercased() })
-            let isTeleportedID: (String) -> Bool = { id in
-                if teleportedSet.contains(id.lowercased()) { return true }
-                if let me = myHex, id == me, LocationChannelManager.shared.teleported { return true }
-                return false
-            }
-
-            let displayIDs = orderedIDs.filter { currentIDs.contains($0) } + currentIDs.filter { !orderedIDs.contains($0) }
-            let nonTele = displayIDs.filter { !isTeleportedID($0) }
-            let tele = displayIDs.filter { isTeleportedID($0) }
-            let finalOrder: [String] = nonTele + tele
-            let firstID = finalOrder.first
-            let personByID = Dictionary(uniqueKeysWithValues: people.map { ($0.id, $0) })
-
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(finalOrder.filter { personByID[$0] != nil }, id: \.self) { pid in
-                    let person = personByID[pid]!
+                let firstID = ordered.first?.id
+                ForEach(ordered) { person in
                     HStack(spacing: 4) {
-                        let isMe = (person.id == myHex)
-                        let teleported = viewModel.teleportedGeo.contains(person.id.lowercased()) || (isMe && LocationChannelManager.shared.teleported)
-                        let icon = teleported ? "face.dashed" : "mappin.and.ellipse"
-                        let assignedColor = viewModel.colorForNostrPubkey(person.id, isDark: colorScheme == .dark)
-                        let rowColor: Color = isMe ? .orange : assignedColor
-                        Image(systemName: icon).font(.system(size: 12)).foregroundColor(rowColor)
-
+                        let convKey = "nostr_" + String(person.id.prefix(16))
+                        if viewModel.unreadPrivateMessages.contains(convKey) {
+                            Image(systemName: "envelope.fill").font(.system(size: 12)).foregroundColor(.orange)
+                        } else {
+                            // For the local user, use a different face icon when teleported
+                            let isMe = (person.id == myHex)
+                            #if os(iOS)
+                            // Consider either the per-session tag (for any peer) or the manager flag for self
+                            let teleported = viewModel.teleportedGeo.contains(person.id.lowercased()) || (isMe && LocationChannelManager.shared.teleported)
+                            #else
+                            let teleported = false
+                            #endif
+                            let icon = teleported ? "face.dashed" : "face.smiling"
+                            let rowColor: Color = isMe ? .orange : textColor
+                            Image(systemName: icon).font(.system(size: 12)).foregroundColor(rowColor)
+                        }
                         let (base, suffix) = splitSuffix(from: person.displayName)
+                        let isMe = person.id == myHex
+                        let assignedColor = viewModel.colorForNostrPubkey(person.id, isDark: colorScheme == .dark)
                         HStack(spacing: 0) {
+                            let rowColor: Color = isMe ? .orange : assignedColor
                             Text(base)
                                 .font(.system(size: 14, design: .monospaced))
                                 .fontWeight(isMe ? .bold : .regular)
@@ -66,17 +66,18 @@ struct GeohashPeopleList: View {
                                     .foregroundColor(suffixColor)
                             }
                             if isMe {
-                                Text(" (you)")
+                                Text(LocalizedStringKey("label.you_suffix"))
                                     .font(.system(size: 14, design: .monospaced))
                                     .foregroundColor(rowColor)
                             }
                         }
+                        // Blocked indicator for geohash users
                         if let me = myHex, person.id != me {
                             if viewModel.isGeohashUserBlocked(pubkeyHexLowercased: person.id) {
                                 Image(systemName: "nosign")
                                     .font(.system(size: 10))
                                     .foregroundColor(.red)
-                                    .help("Blocked in geochash")
+                                    .help(String(localized: "peer.blocked_geohash"))
                             }
                         }
                         Spacer()
@@ -97,29 +98,21 @@ struct GeohashPeopleList: View {
                         } else {
                             let blocked = viewModel.isGeohashUserBlocked(pubkeyHexLowercased: person.id)
                             if blocked {
-                                Button("Unblock") { viewModel.unblockGeohashUser(pubkeyHexLowercased: person.id, displayName: person.displayName) }
+                                Button(String(localized: "actions.unblock")) { viewModel.unblockGeohashUser(pubkeyHexLowercased: person.id, displayName: person.displayName) }
                             } else {
-                                Button("Block") { viewModel.blockGeohashUser(pubkeyHexLowercased: person.id, displayName: person.displayName) }
+                                Button(String(localized: "actions.block")) { viewModel.blockGeohashUser(pubkeyHexLowercased: person.id, displayName: person.displayName) }
                             }
                         }
                     }
                 }
             }
-            // Seed and update order outside result builder
-            .onAppear {
-                orderedIDs = currentIDs
-            }
-            .onChange(of: currentIDs) { ids in
-                var newOrder = orderedIDs
-                newOrder.removeAll { !ids.contains($0) }
-                for id in ids where !newOrder.contains(id) { newOrder.append(id) }
-                if newOrder != orderedIDs { orderedIDs = newOrder }
-            }
         }
     }
 }
+#endif
 
 // Helper to split a trailing #abcd suffix
+#if os(iOS)
 private func splitSuffix(from name: String) -> (String, String) {
     guard name.count >= 5 else { return (name, "") }
     let suffix = String(name.suffix(5))
@@ -131,3 +124,4 @@ private func splitSuffix(from name: String) -> (String, String) {
     }
     return (name, "")
 }
+#endif

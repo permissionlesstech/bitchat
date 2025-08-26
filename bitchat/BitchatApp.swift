@@ -20,9 +20,14 @@ struct BitchatApp: App {
     #endif
     
     init() {
-        UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
-        // Warm up georelay directory and refresh if stale (once/day)
-        GeoRelayDirectory.shared.prefetchIfNeeded()
+        // Avoid initializing notification center in tests (unit or UI) or when not running as an app bundle
+        let env = ProcessInfo.processInfo.environment
+        let isRunningTests = env["XCTestConfigurationFilePath"] != nil
+        let isUITests = env["UITests"] == "1"
+        let isAppBundle = (Bundle.main.bundleIdentifier != nil) && (Bundle.main.bundleURL.pathExtension == "app")
+        if !isRunningTests && !isUITests && isAppBundle {
+            UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
+        }
     }
     
     var body: some Scene {
@@ -31,17 +36,17 @@ struct BitchatApp: App {
                 .environmentObject(chatViewModel)
                 .onAppear {
                     NotificationDelegate.shared.chatViewModel = chatViewModel
-                    // Inject live Noise service into VerificationService to avoid creating new BLE instances
-                    VerificationService.shared.configure(with: chatViewModel.meshService.getNoiseService())
-                    // Prewarm Nostr identity and QR to make first VERIFY sheet fast
-                    DispatchQueue.global(qos: .utility).async {
-                        let npub = try? NostrIdentityBridge.getCurrentNostrIdentity()?.npub
-                        _ = VerificationService.shared.buildMyQRString(nickname: chatViewModel.nickname, npub: npub)
-                    }
                     #if os(iOS)
                     appDelegate.chatViewModel = chatViewModel
                     #elseif os(macOS)
                     appDelegate.chatViewModel = chatViewModel
+                    #endif
+                    #if os(iOS)
+                    // In UI tests, avoid first-run nickname prompt by seeding a nickname
+                    let env = ProcessInfo.processInfo.environment
+                    if env["UITests"] == "1" && chatViewModel.nickname.isEmpty {
+                        chatViewModel.nickname = "tester"
+                    }
                     #endif
                     // Check for shared content
                     checkForSharedContent()
@@ -99,18 +104,30 @@ struct BitchatApp: App {
             return
         }
         
-        // Only process if shared within configured window
-        if Date().timeIntervalSince(sharedDate) < TransportConfig.uiShareAcceptWindowSeconds {
+        // Only process if shared within last 30 seconds
+        if Date().timeIntervalSince(sharedDate) < 30 {
             let contentType = userDefaults.string(forKey: "sharedContentType") ?? "text"
             
             // Clear the shared content
             userDefaults.removeObject(forKey: "sharedContent")
             userDefaults.removeObject(forKey: "sharedContentType")
             userDefaults.removeObject(forKey: "sharedContentDate")
-            // No need to force synchronize here
+            userDefaults.synchronize()
             
-            // Send the shared content immediately on the main queue
+            // Show notification about shared content
             DispatchQueue.main.async {
+                // Add system message about sharing
+                let systemMessage = BitchatMessage(
+                    sender: "system",
+                    content: "preparing to share \(contentType)...",
+                    timestamp: Date(),
+                    isRelay: false
+                )
+                self.chatViewModel.messages.append(systemMessage)
+            }
+            
+            // Send the shared content after a short delay
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                 if contentType == "url" {
                     // Try to parse as JSON first
                     if let data = sharedContent.data(using: .utf8),

@@ -10,8 +10,6 @@
 	</array>
 	<key>com.apple.security.device.bluetooth</key>
 	<true/>
-	<key>com.apple.security.personal-information.location</key>
-	<true/>
 	<key>com.apple.security.network.client</key>
 	<true/>
 </dict>
