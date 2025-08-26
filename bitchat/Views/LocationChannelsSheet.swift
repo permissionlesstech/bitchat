@@ -83,24 +83,17 @@ struct LocationChannelsSheet: View {
             }
             // Begin periodic refresh while sheet is open
             manager.beginLiveRefresh()
-            // Begin multi-channel sampling for counts
-            let ghs = manager.availableChannels.map { $0.geohash }
-            viewModel.beginGeohashSampling(for: ghs)
+            // Geohash sampling is now managed by ChatViewModel globally
         }
         .onDisappear {
             manager.endLiveRefresh()
-            viewModel.endGeohashSampling()
         }
         .onChange(of: manager.permissionState) { newValue in
             if newValue == LocationChannelManager.PermissionState.authorized {
                 manager.refreshChannels()
             }
         }
-        .onChange(of: manager.availableChannels) { newValue in
-            // Keep sampling list in sync with available channels as they refresh live
-            let ghs = newValue.map { $0.geohash }
-            viewModel.beginGeohashSampling(for: ghs)
-        }
+        .onChange(of: manager.availableChannels) { _ in }
     }
 
     private var channelList: some View {
@@ -289,9 +282,10 @@ struct LocationChannelsSheet: View {
     }
 
     private func meshCount() -> Int {
+        // Count mesh-connected OR mesh-reachable peers (exclude self)
         let myID = viewModel.meshService.myPeerID
         return viewModel.allPeers.reduce(0) { acc, peer in
-            if peer.id != myID && peer.isConnected { return acc + 1 }
+            if peer.id != myID && (peer.isConnected || peer.isReachable) { return acc + 1 }
             return acc
         }
     }

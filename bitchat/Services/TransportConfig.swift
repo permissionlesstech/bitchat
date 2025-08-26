@@ -100,7 +100,13 @@ enum TransportConfig {
 
     // Location
     static let locationDistanceFilterMeters: Double = 1000
+    // Live (channel sheet open) distance threshold for meaningful updates
+    static let locationDistanceFilterLiveMeters: Double = 21.0
     static let locationLiveRefreshInterval: TimeInterval = 5.0
+
+    // Notifications (geohash)
+    static let uiGeoNotifyCooldownSeconds: TimeInterval = 60.0
+    static let uiGeoNotifySnippetMaxLen: Int = 80
 
     // Nostr geohash
     static let nostrGeohashInitialLookbackSeconds: TimeInterval = 3600
@@ -169,6 +175,10 @@ enum TransportConfig {
     // UI color tuning
     static let uiColorHueAvoidanceDelta: Double = 0.05
     static let uiColorHueOffset: Double = 0.12
+    // Peer list palette
+    static let uiPeerPaletteSlots: Int = 36
+    static let uiPeerPaletteRingBrightnessDeltaLight: Double = 0.07
+    static let uiPeerPaletteRingBrightnessDeltaDark: Double = -0.07
 
     // UI windowing (infinite scroll)
     static let uiWindowInitialCountPublic: Int = 300

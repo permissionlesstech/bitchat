@@ -173,6 +173,14 @@ class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
                 }
             }
         }
+        // Handle deeplink (e.g., geohash activity)
+        if let deep = userInfo["deeplink"] as? String, let url = URL(string: deep) {
+            #if os(iOS)
+            DispatchQueue.main.async { UIApplication.shared.open(url) }
+            #else
+            DispatchQueue.main.async { NSWorkspace.shared.open(url) }
+            #endif
+        }
         
         completionHandler()
     }
@@ -190,6 +198,15 @@ class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
                     completionHandler([])
                     return
                 }
+            }
+        }
+        // Suppress geohash activity notification if we're already in that geohash channel
+        if identifier.hasPrefix("geo-activity-"),
+           let deep = userInfo["deeplink"] as? String,
+           let gh = deep.components(separatedBy: "/").last {
+            if case .location(let ch) = LocationChannelManager.shared.selectedChannel, ch.geohash == gh {
+                completionHandler([])
+                return
             }
         }
         

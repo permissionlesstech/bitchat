@@ -92,23 +92,30 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
         }
     }
 
-    /// Begin periodic one-shot location refreshes while a selector UI is visible.
+    /// Begin continuous, distance-filtered updates while the channel sheet is visible.
+    /// Uses a 21m filter (configurable) to only refresh on meaningful movement.
     func beginLiveRefresh(interval: TimeInterval = TransportConfig.locationLiveRefreshInterval) {
         guard permissionState == .authorized else { return }
-        // Switch to a lightweight periodic one-shot request (polling) while the sheet is open
+        // Stop any previous polling timer
         refreshTimer?.invalidate()
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
-            self?.requestOneShotLocation()
-        }
-        // Kick off immediately
+        refreshTimer = nil
+        // Tighten accuracy and distance filter for live view
+        cl.desiredAccuracy = kCLLocationAccuracyNearestTenMeters
+        cl.distanceFilter = TransportConfig.locationDistanceFilterLiveMeters
+        // Start continuous updates
+        cl.startUpdatingLocation()
+        // Request an immediate fix to populate UI without waiting for movement
         requestOneShotLocation()
     }
 
-    /// Stop periodic refreshes when selector UI is dismissed.
+    /// Stop continuous refreshes when selector UI is dismissed.
     func endLiveRefresh() {
         refreshTimer?.invalidate()
         refreshTimer = nil
         cl.stopUpdatingLocation()
+        // Restore more relaxed defaults for background/idle state
+        cl.desiredAccuracy = kCLLocationAccuracyHundredMeters
+        cl.distanceFilter = TransportConfig.locationDistanceFilterMeters
     }
 
     func select(_ channel: ChannelID) {

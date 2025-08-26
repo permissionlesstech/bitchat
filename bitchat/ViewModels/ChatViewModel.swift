@@ -402,6 +402,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     @Published private(set) var teleportedGeo: Set<String> = []  // lowercased pubkey hex
     // Sampling subscriptions for multiple geohashes (when channel sheet is open)
     private var geoSamplingSubs: [String: String] = [:] // subID -> geohash
+    private var lastGeoNotificationAt: [String: Date] = [:] // geohash -> last notify time
     
     // MARK: - Message Delivery Tracking
     
@@ -609,6 +610,30 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         Task { @MainActor in
             self.switchLocationChannel(to: LocationChannelManager.shared.selectedChannel)
         }
+
+        // Background: keep sampling nearby geohashes for notifications even when sheet is closed
+        LocationChannelManager.shared.$availableChannels
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] channels in
+                guard let self = self else { return }
+                let ghs = channels.map { $0.geohash }
+                Task { @MainActor in
+                    self.beginGeohashSampling(for: ghs)
+                }
+            }
+            .store(in: &cancellables)
+        // Kick off initial sampling if we already have channels
+        if !LocationChannelManager.shared.availableChannels.isEmpty {
+            let ghs = LocationChannelManager.shared.availableChannels.map { $0.geohash }
+            Task { @MainActor in self.beginGeohashSampling(for: ghs) }
+        }
+        // Refresh channels once when authorized to seed sampling
+        LocationChannelManager.shared.$permissionState
+            .receive(on: DispatchQueue.main)
+            .sink { state in
+                if state == .authorized { LocationChannelManager.shared.refreshChannels() }
+            }
+            .store(in: &cancellables)
         
         // Request notification permission
         NotificationService.shared.requestAuthorization()
@@ -1743,6 +1768,39 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 guard event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue else { return }
                 // Update participants for this specific geohash
                 self.recordGeoParticipant(pubkeyHex: event.pubkey, geohash: gh)
+                // Notify on new message activity in this geohash (sampling across channels)
+                let content = event.content.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !content.isEmpty else { return }
+                // Respect geohash blocks
+                if SecureIdentityStateManager.shared.isNostrBlocked(pubkeyHexLowercased: event.pubkey.lowercased()) { return }
+                // Skip self identity for this geohash
+                if let my = try? NostrIdentityBridge.deriveIdentity(forGeohash: gh), my.publicKeyHex.lowercased() == event.pubkey.lowercased() { return }
+                // Foreground policy: allow if it's a different geohash than the one currently open
+                // Suppress only when app is active AND we're already in this same geohash channel
+                #if os(iOS)
+                if UIApplication.shared.applicationState == .active {
+                    if case .location(let ch) = self.activeChannel, ch.geohash == gh { return }
+                }
+                #elseif os(macOS)
+                if NSApplication.shared.isActive {
+                    if case .location(let ch) = self.activeChannel, ch.geohash == gh { return }
+                }
+                #endif
+                // Cooldown per geohash
+                let now = Date()
+                let last = self.lastGeoNotificationAt[gh] ?? .distantPast
+                if now.timeIntervalSince(last) < TransportConfig.uiGeoNotifyCooldownSeconds { return }
+                // Compose a short preview
+                let preview: String = {
+                    let maxLen = TransportConfig.uiGeoNotifySnippetMaxLen
+                    if content.count <= maxLen { return content }
+                    let idx = content.index(content.startIndex, offsetBy: maxLen)
+                    return String(content[..<idx]) + "…"
+                }()
+                Task { @MainActor in
+                    self.lastGeoNotificationAt[gh] = now
+                    NotificationService.shared.sendGeohashActivityNotification(geohash: gh, bodyPreview: preview)
+                }
             }
         }
     }
@@ -3035,8 +3093,29 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 for mr in mentionRanges { if NSIntersectionRange(r, mr).length > 0 { return true } }
                 return false
             }
+            // Helper: check if a hashtag is immediately attached to a preceding @mention (e.g., @name#abcd)
+            func attachedToMention(_ r: NSRange) -> Bool {
+                if let nsRange = Range(r, in: content), nsRange.lowerBound > content.startIndex {
+                    var i = content.index(before: nsRange.lowerBound)
+                    while true {
+                        let ch = content[i]
+                        if ch.isWhitespace || ch.isNewline { break }
+                        if ch == "@" { return true }
+                        if i == content.startIndex { break }
+                        i = content.index(before: i)
+                    }
+                }
+                return false
+            }
+            // Helper: ensure '#' starts a new token (start-of-line or whitespace before '#')
+            func isStandaloneHashtag(_ r: NSRange) -> Bool {
+                guard let nsRange = Range(r, in: content) else { return false }
+                if nsRange.lowerBound == content.startIndex { return true }
+                let prev = content.index(before: nsRange.lowerBound)
+                return content[prev].isWhitespace || content[prev].isNewline
+            }
             var allMatches: [(range: NSRange, type: String)] = []
-            for match in hashtagMatches where !overlapsMention(match.range(at: 0)) {
+            for match in hashtagMatches where !overlapsMention(match.range(at: 0)) && !attachedToMention(match.range(at: 0)) && isStandaloneHashtag(match.range(at: 0)) {
                 allMatches.append((match.range(at: 0), "hashtag"))
             }
             for match in mentionMatches {
@@ -3144,12 +3223,18 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                                 }
                                 return false
                             }()
+                            // Also require the '#' to start a new token (whitespace or start-of-line before '#')
+                            let standalone: Bool = {
+                                if nsRange.lowerBound == content.startIndex { return true }
+                                let prev = content.index(before: nsRange.lowerBound)
+                                return content[prev].isWhitespace || content[prev].isNewline
+                            }()
                             var tagStyle = AttributeContainer()
                             tagStyle.font = isSelf
                                 ? .system(size: 14, weight: .bold, design: .monospaced)
                                 : .system(size: 14, design: .monospaced)
                             tagStyle.foregroundColor = baseColor
-                            if isGeohash && !attachedToMention, let url = URL(string: "bitchat://geohash/\(token)") {
+                            if isGeohash && !attachedToMention && standalone, let url = URL(string: "bitchat://geohash/\(token)") {
                                 tagStyle.link = url
                                 tagStyle.underlineStyle = .single
                             }
@@ -3488,14 +3573,20 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     func colorForPeerSeed(_ seed: String, isDark: Bool) -> Color {
         let cacheKey = seed + (isDark ? "|dark" : "|light")
         if let cached = peerColorCache[cacheKey] { return cached }
-        var hue = Double(djb2(seed) % 360) / 360.0
-        // Avoid orange (~30°) reserved for self
+        let h = djb2(seed)
+        var hue = Double(h % 1000) / 1000.0
         let orange = 30.0 / 360.0
         if abs(hue - orange) < TransportConfig.uiColorHueAvoidanceDelta {
             hue = fmod(hue + TransportConfig.uiColorHueOffset, 1.0)
         }
-        let saturation: Double = isDark ? 0.80 : 0.70
-        let brightness: Double = isDark ? 0.75 : 0.45
+        let sRand = Double((h >> 17) & 0x3FF) / 1023.0
+        let bRand = Double((h >> 27) & 0x3FF) / 1023.0
+        let sBase: Double = isDark ? 0.80 : 0.70
+        let sRange: Double = 0.20
+        let bBase: Double = isDark ? 0.75 : 0.45
+        let bRange: Double = isDark ? 0.16 : 0.14
+        let saturation = min(1.0, max(0.50, sBase + (sRand - 0.5) * sRange))
+        let brightness = min(1.0, max(0.35, bBase + (bRand - 0.5) * bRange))
         let c = Color(hue: hue, saturation: saturation, brightness: brightness)
         peerColorCache[cacheKey] = c
         return c
@@ -3503,47 +3594,311 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
 
     @MainActor
     private func peerColor(for message: BitchatMessage, isDark: Bool) -> Color {
-        var seed: String
         if let spid = message.senderPeerID {
             if spid.hasPrefix("nostr:") || spid.hasPrefix("nostr_") {
-                // Normalize to the bare short id, then prefer full mapping when available
                 let bare: String = {
                     if spid.hasPrefix("nostr:") { return String(spid.dropFirst(6)) }
                     if spid.hasPrefix("nostr_") { return String(spid.dropFirst(6)) }
                     return spid
                 }()
                 let full = nostrKeyMapping[spid]?.lowercased() ?? bare.lowercased()
-                seed = "nostr:" + full
-            } else if spid.count == 16, let full = getNoiseKeyForShortID(spid)?.lowercased() {
-                seed = "noise:" + full
+                return getNostrPaletteColor(for: full, isDark: isDark)
+            } else if spid.count == 16 {
+                // Mesh short ID
+                return getPeerPaletteColor(for: spid, isDark: isDark)
             } else {
-                seed = spid.lowercased()
+                return getPeerPaletteColor(for: spid.lowercased(), isDark: isDark)
             }
-        } else {
-            seed = message.sender.lowercased()
         }
-        return colorForPeerSeed(seed, isDark: isDark)
+        // Fallback when we only have a display name
+        return colorForPeerSeed(message.sender.lowercased(), isDark: isDark)
     }
 
     // Public helpers for views to color peers consistently in lists
     @MainActor
     func colorForNostrPubkey(_ pubkeyHexLowercased: String, isDark: Bool) -> Color {
-        return colorForPeerSeed("nostr:" + pubkeyHexLowercased.lowercased(), isDark: isDark)
+        return getNostrPaletteColor(for: pubkeyHexLowercased.lowercased(), isDark: isDark)
     }
 
     @MainActor
     func colorForMeshPeer(id peerID: String, isDark: Bool) -> Color {
-        // Mirror message coloring: prefer stable full noise key mapping when available, else short ID
-        if let full = getNoiseKeyForShortID(peerID)?.lowercased() {
-            return colorForPeerSeed("noise:" + full, isDark: isDark)
-        }
-        return colorForPeerSeed(peerID.lowercased(), isDark: isDark)
+        return getPeerPaletteColor(for: peerID, isDark: isDark)
     }
 
     private func trimMeshTimelineIfNeeded() {
         if meshTimeline.count > meshTimelineCap {
             meshTimeline = Array(meshTimeline.suffix(meshTimelineCap))
         }
+    }
+
+    // MARK: - Peer List Minimal-Distance Palette
+    private var peerPaletteLight: [String: (slot: Int, ring: Int, hue: Double)] = [:]
+    private var peerPaletteDark: [String: (slot: Int, ring: Int, hue: Double)] = [:]
+    private var peerPaletteSeeds: [String: String] = [:] // peerID -> seed used
+
+    @MainActor
+    private func meshSeed(for peerID: String) -> String {
+        if let full = getNoiseKeyForShortID(peerID)?.lowercased() {
+            return "noise:" + full
+        }
+        return peerID.lowercased()
+    }
+
+    @MainActor
+    private func getPeerPaletteColor(for peerID: String, isDark: Bool) -> Color {
+        // Ensure palette up to date for current peer set and seeds
+        rebuildPeerPaletteIfNeeded()
+
+        let entry = (isDark ? peerPaletteDark[peerID] : peerPaletteLight[peerID])
+        let orange = Color.orange
+        if peerID == meshService.myPeerID { return orange }
+        let saturation: Double = isDark ? 0.80 : 0.70
+        let baseBrightness: Double = isDark ? 0.75 : 0.45
+        let ringDelta = isDark ? TransportConfig.uiPeerPaletteRingBrightnessDeltaDark : TransportConfig.uiPeerPaletteRingBrightnessDeltaLight
+        if let e = entry {
+            let brightness = min(1.0, max(0.0, baseBrightness + ringDelta * Double(e.ring)))
+            return Color(hue: e.hue, saturation: saturation, brightness: brightness)
+        }
+        // Fallback to seed color if not in palette (e.g., transient)
+        let seed = meshSeed(for: peerID)
+        return colorForPeerSeed(seed, isDark: isDark)
+    }
+
+    @MainActor
+    private func rebuildPeerPaletteIfNeeded() {
+        // Build current peer->seed map (excluding self)
+        let myID = meshService.myPeerID
+        var currentSeeds: [String: String] = [:]
+        for p in allPeers where p.id != myID {
+            currentSeeds[p.id] = meshSeed(for: p.id)
+        }
+        // If seeds unchanged and palette exists for both themes, skip
+        if currentSeeds == peerPaletteSeeds,
+           peerPaletteLight.keys.count == currentSeeds.count,
+           peerPaletteDark.keys.count == currentSeeds.count {
+            return
+        }
+        peerPaletteSeeds = currentSeeds
+
+        // Generate evenly spaced hue slots avoiding self-orange range
+        let slotCount = max(8, TransportConfig.uiPeerPaletteSlots)
+        let avoidCenter = 30.0 / 360.0
+        let avoidDelta = TransportConfig.uiColorHueAvoidanceDelta
+        var slots: [Double] = []
+        for i in 0..<slotCount {
+            let hue = Double(i) / Double(slotCount)
+            if abs(hue - avoidCenter) < avoidDelta { continue }
+            slots.append(hue)
+        }
+        if slots.isEmpty {
+            // Safety: if avoidance consumed all (shouldn't happen), fall back to full slots
+            for i in 0..<slotCount { slots.append(Double(i) / Double(slotCount)) }
+        }
+
+        // Helper to compute circular distance
+        func circDist(_ a: Double, _ b: Double) -> Double {
+            let d = abs(a - b)
+            return d > 0.5 ? 1.0 - d : d
+        }
+
+        // Assign slots to peers to maximize minimal distance, deterministically
+        let peers = currentSeeds.keys.sorted() // stable order
+        // Preferred slot index by seed (wrapping to available slots)
+        let prefIndex: [String: Int] = Dictionary(uniqueKeysWithValues: peers.map { id in
+            let h = djb2(currentSeeds[id] ?? id)
+            // Map to available slot range deterministically
+            let idx = Int(h % UInt64(slots.count))
+            return (id, idx)
+        })
+
+        func assign(for seeds: [String: String]) -> [String: (slot: Int, ring: Int, hue: Double)] {
+            var mapping: [String: (slot: Int, ring: Int, hue: Double)] = [:]
+            var usedSlots = Set<Int>()
+            var usedHues: [Double] = []
+
+            // Keep previous assignments if still valid to minimize churn
+            let prev = peerPaletteLight.isEmpty ? peerPaletteDark : peerPaletteLight
+            for (id, entry) in prev {
+                if seeds.keys.contains(id), entry.slot < slots.count { // slot index still valid
+                    mapping[id] = (entry.slot, entry.ring, slots[entry.slot])
+                    usedSlots.insert(entry.slot)
+                    usedHues.append(slots[entry.slot])
+                }
+            }
+
+            // First ring assignment using free slots
+            let unassigned = peers.filter { mapping[$0] == nil }
+            for id in unassigned {
+                // If a preferred slot free, take it
+                let preferred = prefIndex[id] ?? 0
+                if !usedSlots.contains(preferred) && preferred < slots.count {
+                    mapping[id] = (preferred, 0, slots[preferred])
+                    usedSlots.insert(preferred)
+                    usedHues.append(slots[preferred])
+                    continue
+                }
+                // Choose free slot maximizing minimal distance to used hues
+                var bestSlot: Int? = nil
+                var bestScore: Double = -1
+                for sIdx in 0..<slots.count where !usedSlots.contains(sIdx) {
+                    let hue = slots[sIdx]
+                    let minDist = usedHues.isEmpty ? 1.0 : usedHues.map { circDist(hue, $0) }.min() ?? 1.0
+                    // Bias toward preferred index for stability
+                    let bias = 1.0 - (Double((abs(sIdx - (prefIndex[id] ?? 0)) % slots.count)) / Double(slots.count))
+                    let score = minDist + 0.05 * bias
+                    if score > bestScore { bestScore = score; bestSlot = sIdx }
+                }
+                if let s = bestSlot {
+                    mapping[id] = (s, 0, slots[s])
+                    usedSlots.insert(s)
+                    usedHues.append(slots[s])
+                }
+            }
+
+            // Overflow peers: assign additional rings by reusing slots with stable preference
+            let stillUnassigned = peers.filter { mapping[$0] == nil }
+            if !stillUnassigned.isEmpty {
+                for (idx, id) in stillUnassigned.enumerated() {
+                    let preferred = prefIndex[id] ?? 0
+                    // Spread over slots by rotating from preferred with a golden-step
+                    let goldenStep = 7 // small prime step for dispersion
+                    let s = (preferred + idx * goldenStep) % slots.count
+                    mapping[id] = (s, 1, slots[s])
+                }
+            }
+
+            return mapping
+        }
+
+        let mapping = assign(for: currentSeeds)
+        peerPaletteLight = mapping
+        peerPaletteDark = mapping
+    }
+
+    // MARK: - Nostr People Minimal-Distance Palette (same algo)
+    private var nostrPaletteLight: [String: (slot: Int, ring: Int, hue: Double)] = [:]
+    private var nostrPaletteDark: [String: (slot: Int, ring: Int, hue: Double)] = [:]
+    private var nostrPaletteSeeds: [String: String] = [:] // pubkey -> seed used
+
+    @MainActor
+    private func getNostrPaletteColor(for pubkeyHexLowercased: String, isDark: Bool) -> Color {
+        rebuildNostrPaletteIfNeeded()
+        let entry = (isDark ? nostrPaletteDark[pubkeyHexLowercased] : nostrPaletteLight[pubkeyHexLowercased])
+        let myHex: String? = {
+            if case .location(let ch) = LocationChannelManager.shared.selectedChannel,
+               let id = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
+                return id.publicKeyHex.lowercased()
+            }
+            return nil
+        }()
+        if let me = myHex, pubkeyHexLowercased == me { return .orange }
+        let saturation: Double = isDark ? 0.80 : 0.70
+        let baseBrightness: Double = isDark ? 0.75 : 0.45
+        let ringDelta = isDark ? TransportConfig.uiPeerPaletteRingBrightnessDeltaDark : TransportConfig.uiPeerPaletteRingBrightnessDeltaLight
+        if let e = entry {
+            let brightness = min(1.0, max(0.0, baseBrightness + ringDelta * Double(e.ring)))
+            return Color(hue: e.hue, saturation: saturation, brightness: brightness)
+        }
+        // Fallback to seed color if not in palette (e.g., transient)
+        return colorForPeerSeed("nostr:" + pubkeyHexLowercased, isDark: isDark)
+    }
+
+    @MainActor
+    private func rebuildNostrPaletteIfNeeded() {
+        // Build seeds map from currently visible geohash people (excluding self)
+        let myHex: String? = {
+            if case .location(let ch) = LocationChannelManager.shared.selectedChannel,
+               let id = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
+                return id.publicKeyHex.lowercased()
+            }
+            return nil
+        }()
+        let people = visibleGeohashPeople()
+        var currentSeeds: [String: String] = [:]
+        for p in people where p.id != myHex { currentSeeds[p.id] = "nostr:" + p.id }
+
+        if currentSeeds == nostrPaletteSeeds,
+           nostrPaletteLight.keys.count == currentSeeds.count,
+           nostrPaletteDark.keys.count == currentSeeds.count {
+            return
+        }
+        nostrPaletteSeeds = currentSeeds
+
+        let slotCount = max(8, TransportConfig.uiPeerPaletteSlots)
+        let avoidCenter = 30.0 / 360.0
+        let avoidDelta = TransportConfig.uiColorHueAvoidanceDelta
+        var slots: [Double] = []
+        for i in 0..<slotCount {
+            let hue = Double(i) / Double(slotCount)
+            if abs(hue - avoidCenter) < avoidDelta { continue }
+            slots.append(hue)
+        }
+        if slots.isEmpty {
+            for i in 0..<slotCount { slots.append(Double(i) / Double(slotCount)) }
+        }
+
+        func circDist(_ a: Double, _ b: Double) -> Double {
+            let d = abs(a - b)
+            return d > 0.5 ? 1.0 - d : d
+        }
+
+        let peers = currentSeeds.keys.sorted()
+        let prefIndex: [String: Int] = Dictionary(uniqueKeysWithValues: peers.map { id in
+            let h = djb2(currentSeeds[id] ?? id)
+            let idx = Int(h % UInt64(slots.count))
+            return (id, idx)
+        })
+
+        var mapping: [String: (slot: Int, ring: Int, hue: Double)] = [:]
+        var usedSlots = Set<Int>()
+        var usedHues: [Double] = []
+
+        let prev = nostrPaletteLight.isEmpty ? nostrPaletteDark : nostrPaletteLight
+        for (id, entry) in prev {
+            if peers.contains(id), entry.slot < slots.count {
+                mapping[id] = (entry.slot, entry.ring, slots[entry.slot])
+                usedSlots.insert(entry.slot)
+                usedHues.append(slots[entry.slot])
+            }
+        }
+
+        let unassigned = peers.filter { mapping[$0] == nil }
+        for id in unassigned {
+            let preferred = prefIndex[id] ?? 0
+            if !usedSlots.contains(preferred) && preferred < slots.count {
+                mapping[id] = (preferred, 0, slots[preferred])
+                usedSlots.insert(preferred)
+                usedHues.append(slots[preferred])
+                continue
+            }
+            var bestSlot: Int? = nil
+            var bestScore: Double = -1
+            for sIdx in 0..<slots.count where !usedSlots.contains(sIdx) {
+                let hue = slots[sIdx]
+                let minDist = usedHues.isEmpty ? 1.0 : usedHues.map { circDist(hue, $0) }.min() ?? 1.0
+                let bias = 1.0 - (Double((abs(sIdx - (prefIndex[id] ?? 0)) % slots.count)) / Double(slots.count))
+                let score = minDist + 0.05 * bias
+                if score > bestScore { bestScore = score; bestSlot = sIdx }
+            }
+            if let s = bestSlot {
+                mapping[id] = (s, 0, slots[s])
+                usedSlots.insert(s)
+                usedHues.append(slots[s])
+            }
+        }
+
+        let stillUnassigned = peers.filter { mapping[$0] == nil }
+        if !stillUnassigned.isEmpty {
+            for (idx, id) in stillUnassigned.enumerated() {
+                let preferred = prefIndex[id] ?? 0
+                let goldenStep = 7
+                let s = (preferred + idx * goldenStep) % slots.count
+                mapping[id] = (s, 1, slots[s])
+            }
+        }
+
+        nostrPaletteLight = mapping
+        nostrPaletteDark = mapping
     }
 
     // Clear the current public channel's timeline (visible + persistent buffer)
@@ -4106,9 +4461,9 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 // Cancel any pending reset if peers are back
                 self.networkResetTimer?.invalidate()
                 self.networkResetTimer = nil
-                // Only count mesh peers (actually connected via Bluetooth)
+                // Count mesh peers that are connected OR recently reachable via mesh relays
                 let meshPeers = peers.filter { peerID in
-                    self.meshService.isPeerConnected(peerID)
+                    self.meshService.isPeerConnected(peerID) || self.meshService.isPeerReachable(peerID)
                 }
                 
                 // Check if we have new mesh peers we haven't seen recently
@@ -5338,7 +5693,12 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 if now.timeIntervalSince(lastNotified) >= 60 {
                     let title = activeChannelDisplayName()
                     let body = "new chats!"
-                    NotificationService.shared.sendLocalNotification(title: title, body: body, identifier: "channel-activity-\(channelKey)-\(now.timeIntervalSince1970)")
+                    if case .location(let ch) = activeChannel {
+                        // Attach deep link to open this geohash directly
+                        NotificationService.shared.sendGeohashActivityNotification(geohash: ch.geohash, titlePrefix: title + " ", bodyPreview: body)
+                    } else {
+                        NotificationService.shared.sendLocalNotification(title: title, body: body, identifier: "channel-activity-\(channelKey)-\(now.timeIntervalSince1970)")
+                    }
                     lastPublicActivityNotifyAt[channelKey] = now
                 }
             }
