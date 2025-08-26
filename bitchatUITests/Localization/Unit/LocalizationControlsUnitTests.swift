@@ -38,7 +38,8 @@ final class LocalizationControlsUnitTests: XCTestCase {
         "es": "Enviar mensaje", // if not present, fall back to Base assertion
         "fr": "Envoyer le message",
         "zh-Hans": "发送消息",
-        "ar": "إرسال رسالة"
+        "ar": "إرسال رسالة",
+        "ru": "Отправить сообщение"
     ]
 
     // Helper to get expected fallback (Base) for labels when we don't specify a locale value

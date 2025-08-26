@@ -1,4 +1,3 @@
-/* Localized Info.plist strings (Base/English) */
-"NSBluetoothAlwaysUsageDescription" = "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users.";
-"NSBluetoothPeripheralUsageDescription" = "bitchat uses Bluetooth to discover and connect with other bitchat users nearby.";
-
+/* لوکلائزڈ Info.plist سٹرنگز (پنجابی – شاہ مکھی) */
+"NSBluetoothAlwaysUsageDescription" = "bitchat ‏Bluetooth استعمال کر کے نزدیکی صارفین نال گَل بات لئی محفوظ mesh نیٹ ورک بناندی اے۔";
+"NSBluetoothPeripheralUsageDescription" = "bitchat ‏Bluetooth استعمال کر کے نزدیکی ہور bitchat صارفین نوں لبھدی تے نال جوڑ دی اے۔";
