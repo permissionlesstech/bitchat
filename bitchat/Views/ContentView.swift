@@ -1036,9 +1036,8 @@ struct ContentView: View {
         case .mesh:
             let counts = viewModel.allPeers.reduce(into: (others: 0, mesh: 0)) { counts, peer in
                 guard peer.id != viewModel.meshService.myPeerID else { return }
-                let isMeshConnected = peer.isConnected
-                if isMeshConnected { counts.mesh += 1; counts.others += 1 }
-                else if peer.isMutualFavorite { counts.others += 1 }
+                if peer.isConnected { counts.mesh += 1; counts.others += 1 }
+                else if peer.isReachable { counts.others += 1 }
             }
             let meshBlue = Color(hue: 0.60, saturation: 0.85, brightness: 0.82)
             let color: Color = counts.mesh > 0 ? meshBlue : Color.secondary
@@ -1181,20 +1180,11 @@ struct ContentView: View {
     
     @ViewBuilder
     private func privateHeaderContent(for privatePeerID: String) -> some View {
-        // Prefer short (mesh) ID when mesh-connected (radio). Only use full Noise key when not connected (globe).
+        // Prefer short (mesh) ID whenever available for encryption/session status; keep stable key for display resolution only.
         let headerPeerID: String = {
-            if privatePeerID.count == 16 {
-                let isMeshConnected = viewModel.meshService.isPeerConnected(privatePeerID) || viewModel.connectedPeers.contains(privatePeerID)
-                if !isMeshConnected, let stable = viewModel.getNoiseKeyForShortID(privatePeerID) {
-                    return stable
-                }
-            } else if privatePeerID.count == 64 {
-                // If we have a full Noise key and a corresponding short ID is currently mesh-connected, prefer short ID
-                if let short = viewModel.getShortIDForNoiseKey(privatePeerID) {
-                    if viewModel.meshService.isPeerConnected(short) || viewModel.connectedPeers.contains(short) {
-                        return short
-                    }
-                }
+            if privatePeerID.count == 64 {
+                // Map stable Noise key to short ID if we know it (even if not directly connected)
+                if let short = viewModel.getShortIDForNoiseKey(privatePeerID) { return short }
             }
             return privatePeerID
         }()
@@ -1209,10 +1199,29 @@ struct ContentView: View {
                     return "#\(ch.geohash)/@\(disp)"
                 }
             }
-            return peer?.displayName ?? 
-                   viewModel.meshService.peerNickname(peerID: headerPeerID) ??
-                   FavoritesPersistenceService.shared.getFavoriteStatus(for: Data(hexString: headerPeerID) ?? Data())?.peerNickname ?? 
-                   "Unknown"
+            // Try mesh/unified peer display
+            if let name = peer?.displayName { return name }
+            // Try direct mesh nickname (connected-only)
+            if let name = viewModel.meshService.peerNickname(peerID: headerPeerID) { return name }
+            // Try favorite nickname by stable Noise key
+            if let fav = FavoritesPersistenceService.shared.getFavoriteStatus(for: Data(hexString: headerPeerID) ?? Data()),
+               !fav.peerNickname.isEmpty { return fav.peerNickname }
+            // Fallback: resolve from persisted social identity via fingerprint mapping
+            if headerPeerID.count == 16 {
+                let candidates = SecureIdentityStateManager.shared.getCryptoIdentitiesByPeerIDPrefix(headerPeerID)
+                if let id = candidates.first,
+                   let social = SecureIdentityStateManager.shared.getSocialIdentity(for: id.fingerprint) {
+                    if let pet = social.localPetname, !pet.isEmpty { return pet }
+                    if !social.claimedNickname.isEmpty { return social.claimedNickname }
+                }
+            } else if headerPeerID.count == 64, let keyData = Data(hexString: headerPeerID) {
+                let fp = keyData.sha256Fingerprint()
+                if let social = SecureIdentityStateManager.shared.getSocialIdentity(for: fp) {
+                    if let pet = social.localPetname, !pet.isEmpty { return pet }
+                    if !social.claimedNickname.isEmpty { return social.claimedNickname }
+                }
+            }
+            return "Unknown"
         }()
         let isNostrAvailable: Bool = {
             guard let connectionState = peer?.connectionState else { 
@@ -1247,6 +1256,12 @@ struct ContentView: View {
                                         .font(.system(size: 14))
                                         .foregroundColor(textColor)
                                         .accessibilityLabel("Connected via mesh")
+                                case .meshReachable:
+                                    // point.3 filled icon for reachable via mesh (not directly connected)
+                                    Image(systemName: "point.3.filled.connected.trianglepath.dotted")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(textColor)
+                                        .accessibilityLabel("Reachable via mesh")
                                 case .nostrAvailable:
                                     // Purple globe for Nostr
                                     Image(systemName: "globe")
@@ -1257,6 +1272,12 @@ struct ContentView: View {
                                     // Should not happen for PM header, but handle gracefully
                                     EmptyView()
                                 }
+                            } else if viewModel.meshService.isPeerReachable(headerPeerID) {
+                                // Fallback: reachable via mesh but not in current peer list
+                                Image(systemName: "point.3.filled.connected.trianglepath.dotted")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(textColor)
+                                    .accessibilityLabel("Reachable via mesh")
                             } else if isNostrAvailable {
                                 // Fallback to Nostr if peer not in list but is mutual favorite
                                 Image(systemName: "globe")
@@ -1275,7 +1296,14 @@ struct ContentView: View {
                                 .font(.system(size: 16, weight: .medium, design: .monospaced))
                                 .foregroundColor(textColor)                            // Dynamic encryption status icon (hide for geohash DMs)
                             if !privatePeerID.hasPrefix("nostr_") {
-                                let encryptionStatus = viewModel.getEncryptionStatus(for: headerPeerID)
+                                // Use short peer ID if available for encryption status (sessions keyed by short ID)
+                                let statusPeerID: String = {
+                                    if privatePeerID.count == 64, let short = viewModel.getShortIDForNoiseKey(privatePeerID) {
+                                        return short
+                                    }
+                                    return headerPeerID
+                                }()
+                                let encryptionStatus = viewModel.getEncryptionStatus(for: statusPeerID)
                                 if let icon = encryptionStatus.icon {
                                     Image(systemName: icon)
                                         .font(.system(size: 14))

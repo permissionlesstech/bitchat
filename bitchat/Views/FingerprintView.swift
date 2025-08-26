@@ -41,9 +41,27 @@ struct FingerprintView: View {
             .padding()
             
             VStack(alignment: .leading, spacing: 16) {
-                // Peer info
-                let peerNickname = viewModel.meshService.peerNickname(peerID: peerID) ?? "Unknown"
-                let encryptionStatus = viewModel.getEncryptionStatus(for: peerID)
+                // Prefer short mesh ID for session/encryption status
+                let statusPeerID: String = {
+                    if peerID.count == 64, let short = viewModel.getShortIDForNoiseKey(peerID) { return short }
+                    return peerID
+                }()
+                // Resolve a friendly name
+                let peerNickname: String = {
+                    if let p = viewModel.getPeer(byID: statusPeerID) { return p.displayName }
+                    if let name = viewModel.meshService.peerNickname(peerID: statusPeerID) { return name }
+                    if peerID.count == 64, let data = Data(hexString: peerID) {
+                        if let fav = FavoritesPersistenceService.shared.getFavoriteStatus(for: data), !fav.peerNickname.isEmpty { return fav.peerNickname }
+                        let fp = data.sha256Fingerprint()
+                        if let social = SecureIdentityStateManager.shared.getSocialIdentity(for: fp) {
+                            if let pet = social.localPetname, !pet.isEmpty { return pet }
+                            if !social.claimedNickname.isEmpty { return social.claimedNickname }
+                        }
+                    }
+                    return "Unknown"
+                }()
+                // Accurate encryption state based on short ID session
+                let encryptionStatus = viewModel.getEncryptionStatus(for: statusPeerID)
                 
                 HStack {
                     if let icon = encryptionStatus.icon {
@@ -74,7 +92,7 @@ struct FingerprintView: View {
                         .font(.system(size: 12, weight: .bold, design: .monospaced))
                         .foregroundColor(textColor.opacity(0.7))
                     
-                    if let fingerprint = viewModel.getFingerprint(for: peerID) {
+                    if let fingerprint = viewModel.getFingerprint(for: statusPeerID) {
                         Text(formatFingerprint(fingerprint))
                             .font(.system(size: 14, design: .monospaced))
                             .foregroundColor(textColor)

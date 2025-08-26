@@ -37,11 +37,11 @@ final class MessageRouter {
     }
 
     func sendPrivate(_ content: String, to peerID: String, recipientNickname: String, messageID: String) {
-        let hasMesh = mesh.isPeerConnected(peerID)
-        let hasEstablished = mesh.getNoiseService().hasEstablishedSession(with: peerID)
-        if hasMesh && hasEstablished {
-            SecureLogger.log("Routing PM via mesh to \(peerID.prefix(8))… id=\(messageID.prefix(8))…",
+        let reachableMesh = mesh.isPeerReachable(peerID)
+        if reachableMesh {
+            SecureLogger.log("Routing PM via mesh (reachable) to \(peerID.prefix(8))… id=\(messageID.prefix(8))…",
                             category: SecureLogger.session, level: .debug)
+            // BLEService will initiate a handshake if needed and queue the message
             mesh.sendPrivateMessage(content, to: peerID, recipientNickname: recipientNickname, messageID: messageID)
         } else if canSendViaNostr(peerID: peerID) {
             SecureLogger.log("Routing PM via Nostr to \(peerID.prefix(8))… id=\(messageID.prefix(8))…",
@@ -57,9 +57,9 @@ final class MessageRouter {
     }
 
     func sendReadReceipt(_ receipt: ReadReceipt, to peerID: String) {
-        // Prefer mesh only if a Noise session is established; else use Nostr to avoid handshakeRequired spam
-        if mesh.isPeerConnected(peerID) && mesh.getNoiseService().hasEstablishedSession(with: peerID) {
-            SecureLogger.log("Routing READ ack via mesh to \(peerID.prefix(8))… id=\(receipt.originalMessageID.prefix(8))…",
+        // Prefer mesh for reachable peers; BLE will queue if handshake is needed
+        if mesh.isPeerReachable(peerID) {
+            SecureLogger.log("Routing READ ack via mesh (reachable) to \(peerID.prefix(8))… id=\(receipt.originalMessageID.prefix(8))…",
                             category: SecureLogger.session, level: .debug)
             mesh.sendReadReceipt(receipt, to: peerID)
         } else {
@@ -70,7 +70,9 @@ final class MessageRouter {
     }
 
     func sendDeliveryAck(_ messageID: String, to peerID: String) {
-        if mesh.isPeerConnected(peerID) && mesh.getNoiseService().hasEstablishedSession(with: peerID) {
+        if mesh.isPeerReachable(peerID) {
+            SecureLogger.log("Routing DELIVERED ack via mesh (reachable) to \(peerID.prefix(8))… id=\(messageID.prefix(8))…",
+                            category: SecureLogger.session, level: .debug)
             mesh.sendDeliveryAck(for: messageID, to: peerID)
         } else {
             nostr.sendDeliveryAck(for: messageID, to: peerID)
@@ -101,7 +103,7 @@ final class MessageRouter {
                         category: SecureLogger.session, level: .debug)
         // Prefer mesh if connected; else try Nostr if mapping exists
         for (content, nickname, messageID) in queued {
-            if mesh.isPeerConnected(peerID) {
+            if mesh.isPeerReachable(peerID) {
                 SecureLogger.log("Outbox -> mesh for \(peerID.prefix(8))… id=\(messageID.prefix(8))…",
                                 category: SecureLogger.session, level: .debug)
                 mesh.sendPrivateMessage(content, to: peerID, recipientNickname: nickname, messageID: messageID)

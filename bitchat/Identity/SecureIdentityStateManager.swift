@@ -229,6 +229,91 @@ class SecureIdentityStateManager {
             return cache.socialIdentities[fingerprint]
         }
     }
+
+    // MARK: - Cryptographic Identities
+
+    /// Insert or update a cryptographic identity and optionally persist its signing key and claimed nickname.
+    /// - Parameters:
+    ///   - fingerprint: SHA-256 hex of the Noise static public key
+    ///   - noisePublicKey: Noise static public key data
+    ///   - signingPublicKey: Optional Ed25519 signing public key for authenticating public messages
+    ///   - claimedNickname: Optional latest claimed nickname to persist into social identity
+    func upsertCryptographicIdentity(fingerprint: String, noisePublicKey: Data, signingPublicKey: Data?, claimedNickname: String? = nil) {
+        queue.async(flags: .barrier) {
+            let now = Date()
+            if var existing = self.cryptographicIdentities[fingerprint] {
+                // Update keys if changed
+                if existing.publicKey != noisePublicKey {
+                    existing = CryptographicIdentity(
+                        fingerprint: fingerprint,
+                        publicKey: noisePublicKey,
+                        signingPublicKey: signingPublicKey ?? existing.signingPublicKey,
+                        firstSeen: existing.firstSeen,
+                        lastHandshake: now
+                    )
+                    self.cryptographicIdentities[fingerprint] = existing
+                } else {
+                    // Update signing key and lastHandshake
+                    existing.signingPublicKey = signingPublicKey ?? existing.signingPublicKey
+                    let updated = CryptographicIdentity(
+                        fingerprint: existing.fingerprint,
+                        publicKey: existing.publicKey,
+                        signingPublicKey: existing.signingPublicKey,
+                        firstSeen: existing.firstSeen,
+                        lastHandshake: now
+                    )
+                    self.cryptographicIdentities[fingerprint] = updated
+                }
+                // Persist updated state (already assigned in branches above)
+            } else {
+                // New entry
+                let entry = CryptographicIdentity(
+                    fingerprint: fingerprint,
+                    publicKey: noisePublicKey,
+                    signingPublicKey: signingPublicKey,
+                    firstSeen: now,
+                    lastHandshake: now
+                )
+                self.cryptographicIdentities[fingerprint] = entry
+            }
+
+            // Optionally persist claimed nickname into social identity
+            if let claimed = claimedNickname {
+                var identity = self.cache.socialIdentities[fingerprint] ?? SocialIdentity(
+                    fingerprint: fingerprint,
+                    localPetname: nil,
+                    claimedNickname: claimed,
+                    trustLevel: .unknown,
+                    isFavorite: false,
+                    isBlocked: false,
+                    notes: nil
+                )
+                // Update claimed nickname if changed
+                if identity.claimedNickname != claimed {
+                    identity.claimedNickname = claimed
+                    self.cache.socialIdentities[fingerprint] = identity
+                } else if self.cache.socialIdentities[fingerprint] == nil {
+                    self.cache.socialIdentities[fingerprint] = identity
+                }
+            }
+
+            self.saveIdentityCache()
+        }
+    }
+
+    /// Retrieve cryptographic identity by fingerprint
+    func getCryptographicIdentity(for fingerprint: String) -> CryptographicIdentity? {
+        queue.sync { cryptographicIdentities[fingerprint] }
+    }
+
+    /// Find cryptographic identities whose fingerprint prefix matches a peerID (16-hex) short ID
+    func getCryptoIdentitiesByPeerIDPrefix(_ peerID: String) -> [CryptographicIdentity] {
+        queue.sync {
+            // Defensive: ensure hex and correct length
+            guard peerID.count == 16, peerID.allSatisfy({ $0.isHexDigit }) else { return [] }
+            return cryptographicIdentities.values.filter { $0.fingerprint.hasPrefix(peerID) }
+        }
+    }
     
     func getAllSocialIdentities() -> [SocialIdentity] {
         queue.sync {

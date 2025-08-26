@@ -8,6 +8,7 @@ struct BitchatPeer: Identifiable, Equatable {
     let nickname: String
     let lastSeen: Date
     let isConnected: Bool
+    let isReachable: Bool
     
     // Favorite-related properties
     var favoriteStatus: FavoritesPersistenceService.FavoriteRelationship?
@@ -18,6 +19,7 @@ struct BitchatPeer: Identifiable, Equatable {
     // Connection state
     enum ConnectionState {
         case bluetoothConnected
+        case meshReachable      // Seen via mesh recently, not directly connected
         case nostrAvailable     // Mutual favorite, reachable via Nostr
         case offline            // Not connected via any transport
     }
@@ -25,6 +27,8 @@ struct BitchatPeer: Identifiable, Equatable {
     var connectionState: ConnectionState {
         if isConnected {
             return .bluetoothConnected
+        } else if isReachable {
+            return .meshReachable
         } else if favoriteStatus?.isMutual == true {
             // Mutual favorites can communicate via Nostr when offline
             return .nostrAvailable
@@ -54,6 +58,8 @@ struct BitchatPeer: Identifiable, Equatable {
         switch connectionState {
         case .bluetoothConnected:
             return "📻" // Radio icon for mesh connection
+        case .meshReachable:
+            return "📡" // Antenna for mesh reachable
         case .nostrAvailable:
             return "🌐" // Purple globe for Nostr
         case .offline:
@@ -71,13 +77,15 @@ struct BitchatPeer: Identifiable, Equatable {
         noisePublicKey: Data,
         nickname: String,
         lastSeen: Date = Date(),
-        isConnected: Bool = false
+        isConnected: Bool = false,
+        isReachable: Bool = false
     ) {
         self.id = id
         self.noisePublicKey = noisePublicKey
         self.nickname = nickname
         self.lastSeen = lastSeen
         self.isConnected = isConnected
+        self.isReachable = isReachable
         
         // Load favorite status - will be set later by the manager
         self.favoriteStatus = nil
