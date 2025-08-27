@@ -459,7 +459,13 @@ struct ContentView: View {
                 }
                 let level = levelForLength(gh.count)
                 let ch = GeohashChannel(level: level, geohash: gh)
-                LocationChannelManager.shared.markTeleported(for: gh, true)
+                // Do not mark teleported when opening a geohash that is in our regional set.
+                // If availableChannels is empty (e.g., cold start), defer marking and let
+                // LocationChannelManager compute teleported based on actual location.
+                let inRegional = LocationChannelManager.shared.availableChannels.contains { $0.geohash == gh }
+                if !inRegional && !LocationChannelManager.shared.availableChannels.isEmpty {
+                    LocationChannelManager.shared.markTeleported(for: gh, true)
+                }
                 LocationChannelManager.shared.select(ChannelID.location(ch))
             }
             .onTapGesture(count: 3) {
