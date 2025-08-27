@@ -50,10 +50,8 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
            let arr = try? JSONDecoder().decode([String].self, from: data) {
             teleportedSet = Set(arr)
         }
-        // Initialize teleported flag from persisted state if a location channel is selected
-        if case .location(let ch) = selectedChannel {
-            teleported = teleportedSet.contains(ch.geohash)
-        }
+        // Do not eagerly mark teleported on startup; wait for location to compute regional set.
+        // This avoids showing teleported for in-region channels during cold start.
         let status: CLAuthorizationStatus
         if #available(iOS 14.0, macOS 11.0, *) {
             status = cl.authorizationStatus
@@ -61,6 +59,15 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
             status = CLLocationManager.authorizationStatus()
         }
         updatePermissionState(from: status)
+        // If we don't have location authorization at startup, fall back to persisted teleport state
+        switch status {
+        case .authorizedAlways, .authorizedWhenInUse, .authorized:
+            break // will compute from location
+        default:
+            if case .location(let ch) = selectedChannel {
+                teleported = teleportedSet.contains(ch.geohash)
+            }
+        }
     }
 
     // MARK: - Public API
@@ -129,7 +136,21 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
             case .mesh:
                 self.teleported = false
             case .location(let ch):
-                self.teleported = self.teleportedSet.contains(ch.geohash)
+                // If this geohash is in our current regional set, do NOT mark teleported.
+                let inRegional = self.availableChannels.contains { $0.geohash == ch.geohash }
+                if inRegional {
+                    self.teleported = false
+                    // Clear persisted teleport for this geohash to keep future selections clean
+                    if self.teleportedSet.contains(ch.geohash) {
+                        self.teleportedSet.remove(ch.geohash)
+                        if let data = try? JSONEncoder().encode(Array(self.teleportedSet)) {
+                            UserDefaults.standard.set(data, forKey: self.teleportedStoreKey)
+                        }
+                    }
+                } else {
+                    // Fall back to persisted mark (set by deep link or manual teleport)
+                    self.teleported = self.teleportedSet.contains(ch.geohash)
+                }
             }
         }
     }
@@ -202,14 +223,25 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
         }
         Task { @MainActor in
             self.availableChannels = result
-            // Recompute teleported status based on persisted state OR current location vs selected channel
+            // Recompute teleported status based on whether the selected geohash is in our regional set
             switch self.selectedChannel {
             case .mesh:
                 self.teleported = false
             case .location(let ch):
-                let persisted = self.teleportedSet.contains(ch.geohash)
-                let currentGH = Geohash.encode(latitude: coord.latitude, longitude: coord.longitude, precision: ch.level.precision)
-                self.teleported = persisted || (currentGH != ch.geohash)
+                // Membership check using freshly computed regional channels; avoids precision/rename drift
+                let inRegional = result.contains { $0.geohash == ch.geohash }
+                if inRegional {
+                    self.teleported = false
+                    // Clear persisted teleport flag if present
+                    if self.teleportedSet.contains(ch.geohash) {
+                        self.teleportedSet.remove(ch.geohash)
+                        if let data = try? JSONEncoder().encode(Array(self.teleportedSet)) {
+                            UserDefaults.standard.set(data, forKey: self.teleportedStoreKey)
+                        }
+                    }
+                } else {
+                    self.teleported = true
+                }
             }
         }
     }
