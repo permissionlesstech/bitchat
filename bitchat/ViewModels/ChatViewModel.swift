@@ -3263,7 +3263,11 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                             if type == "url" {
                                 matchStyle.foregroundColor = isSelf ? .orange : .blue
                                 matchStyle.underlineStyle = .single
-                                if let url = URL(string: matchText) {
+                                if let url = URL(string: matchText),
+                                   let host = url.host,
+                                   !host.isEmpty,
+                                   ["http", "https"].contains(url.scheme?.lowercased() ?? ""),
+                                   host.count >= 4 {
                                     matchStyle.link = url
                                 }
                             }
