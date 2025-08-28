@@ -304,22 +304,17 @@ struct LocationChannelsSheet: View {
                                 .foregroundColor(.secondary)
                         }
                     }
-                    HStack(spacing: 0) {
-                        Text(subtitlePrefix)
-                            .font(.system(size: 12, design: .monospaced))
-                            .foregroundColor(.secondary)
-                        if let name = subtitleName {
-                            Text(" • ")
-                                .font(.system(size: 12, design: .monospaced))
-                                .foregroundColor(.secondary)
-                            Text(name)
-                                .font(.system(size: 12, design: .monospaced))
-                                .fontWeight(subtitleNameBold ? .bold : .regular)
-                                .foregroundColor(.secondary)
-                                .lineLimit(1)
-                                .truncationMode(.tail)
-                        }
+                let subtitleFull: String = {
+                    if let name = subtitleName, !name.isEmpty {
+                        return subtitlePrefix + " • " + name
                     }
+                    return subtitlePrefix
+                }()
+                Text(subtitleFull)
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                 }
                 Spacer()
                 if isSelected {
