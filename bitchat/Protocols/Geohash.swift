@@ -87,4 +87,28 @@ enum Geohash {
         let lon = (lonInterval.0 + lonInterval.1) / 2
         return (lat, lon)
     }
+
+    /// Decodes a geohash into its latitude and longitude bounds.
+    /// - Parameter geohash: Base32 geohash string.
+    /// - Returns: (latMin, latMax, lonMin, lonMax)
+    static func decodeBounds(_ geohash: String) -> (latMin: Double, latMax: Double, lonMin: Double, lonMax: Double) {
+        var latInterval: (Double, Double) = (-90.0, 90.0)
+        var lonInterval: (Double, Double) = (-180.0, 180.0)
+
+        var isEven = true
+        for ch in geohash.lowercased() {
+            guard let cd = base32Map[ch] else { continue }
+            for mask in [16, 8, 4, 2, 1] {
+                if isEven {
+                    let mid = (lonInterval.0 + lonInterval.1) / 2
+                    if (cd & mask) != 0 { lonInterval.0 = mid } else { lonInterval.1 = mid }
+                } else {
+                    let mid = (latInterval.0 + latInterval.1) / 2
+                    if (cd & mask) != 0 { latInterval.0 = mid } else { latInterval.1 = mid }
+                }
+                isEven.toggle()
+            }
+        }
+        return (latInterval.0, latInterval.1, lonInterval.0, lonInterval.1)
+    }
 }
