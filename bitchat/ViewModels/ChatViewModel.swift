@@ -3043,8 +3043,10 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         let mentionRegex = try? NSRegularExpression(pattern: mentionPattern, options: [])
         let hashtagRegex = try? NSRegularExpression(pattern: hashtagPattern, options: [])
         
-        let mentionMatches = mentionRegex?.matches(in: contentText, options: [], range: NSRange(location: 0, length: contentText.count)) ?? []
-        let hashtagMatches = hashtagRegex?.matches(in: contentText, options: [], range: NSRange(location: 0, length: contentText.count)) ?? []
+        let nsContent = contentText as NSString
+        let nsLen = nsContent.length
+        let mentionMatches = mentionRegex?.matches(in: contentText, options: [], range: NSRange(location: 0, length: nsLen)) ?? []
+        let hashtagMatches = hashtagRegex?.matches(in: contentText, options: [], range: NSRange(location: 0, length: nsLen)) ?? []
         
         // Combine and sort all matches
         var allMatches: [(range: NSRange, type: String)] = []
@@ -3061,12 +3063,14 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         for (matchRange, matchType) in allMatches {
             // Add text before the match
             if let range = Range(matchRange, in: contentText) {
-                let beforeText = String(contentText[lastEndIndex..<range.lowerBound])
-                if !beforeText.isEmpty {
-                    var normalStyle = AttributeContainer()
-                    normalStyle.font = .system(size: 14, design: .monospaced)
-                    normalStyle.foregroundColor = isDark ? Color.white : Color.black
-                    processedContent.append(AttributedString(beforeText).mergingAttributes(normalStyle))
+                if lastEndIndex < range.lowerBound {
+                    let beforeText = String(contentText[lastEndIndex..<range.lowerBound])
+                    if !beforeText.isEmpty {
+                        var normalStyle = AttributeContainer()
+                        normalStyle.font = .system(size: 14, design: .monospaced)
+                        normalStyle.foregroundColor = isDark ? Color.white : Color.black
+                        processedContent.append(AttributedString(beforeText).mergingAttributes(normalStyle))
+                    }
                 }
                 
                 // Add the match with appropriate styling
@@ -3084,7 +3088,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 
                 processedContent.append(AttributedString(matchText).mergingAttributes(matchStyle))
                 
-                lastEndIndex = range.upperBound
+                if lastEndIndex < range.upperBound { lastEndIndex = range.upperBound }
             }
         }
         
@@ -3484,19 +3488,23 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             // Regular expression to find @mentions
             let pattern = "@([\\p{L}0-9_]+)"
             let regex = try? NSRegularExpression(pattern: pattern, options: [])
-            let matches = regex?.matches(in: contentText, options: [], range: NSRange(location: 0, length: contentText.count)) ?? []
+            let nsContent = contentText as NSString
+            let nsLen = nsContent.length
+            let matches = regex?.matches(in: contentText, options: [], range: NSRange(location: 0, length: nsLen)) ?? []
             
             var lastEndIndex = contentText.startIndex
             
             for match in matches {
                 // Add text before the mention
                 if let range = Range(match.range(at: 0), in: contentText) {
-                    let beforeText = String(contentText[lastEndIndex..<range.lowerBound])
-                    if !beforeText.isEmpty {
-                        var normalStyle = AttributeContainer()
-                        normalStyle.font = .system(size: 14, design: .monospaced)
-                        normalStyle.foregroundColor = isDark ? Color.white : Color.black
-                        processedContent.append(AttributedString(beforeText).mergingAttributes(normalStyle))
+                    if lastEndIndex < range.lowerBound {
+                        let beforeText = String(contentText[lastEndIndex..<range.lowerBound])
+                        if !beforeText.isEmpty {
+                            var normalStyle = AttributeContainer()
+                            normalStyle.font = .system(size: 14, design: .monospaced)
+                            normalStyle.foregroundColor = isDark ? Color.white : Color.black
+                            processedContent.append(AttributedString(beforeText).mergingAttributes(normalStyle))
+                        }
                     }
                     
                     // Add the mention with highlight
@@ -3506,7 +3514,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     mentionStyle.foregroundColor = Color.orange
                     processedContent.append(AttributedString(mentionText).mergingAttributes(mentionStyle))
                     
-                    lastEndIndex = range.upperBound
+                    if lastEndIndex < range.upperBound { lastEndIndex = range.upperBound }
                 }
             }
             
@@ -4704,7 +4712,9 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         // Allow optional disambiguation suffix '#abcd' for duplicate nicknames
         let pattern = "@([\\p{L}0-9_]+(?:#[a-fA-F0-9]{4})?)"
         let regex = try? NSRegularExpression(pattern: pattern, options: [])
-        let matches = regex?.matches(in: content, options: [], range: NSRange(location: 0, length: content.count)) ?? []
+        let nsContent = content as NSString
+        let nsLen = nsContent.length
+        let matches = regex?.matches(in: content, options: [], range: NSRange(location: 0, length: nsLen)) ?? []
         
         var mentions: [String] = []
         let peerNicknames = meshService.getPeerNicknames()
