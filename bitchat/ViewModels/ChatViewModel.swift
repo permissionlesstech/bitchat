@@ -3161,9 +3161,12 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             
             // For extremely long content, render as plain text to avoid heavy regex/layout work,
             // unless the content includes Cashu tokens we want to chip-render below
+            // Compute NSString-backed length for regex/nsrange correctness with multi-byte characters
+            let nsContent = content as NSString
+            let nsLen = nsContent.length
             let containsCashuEarly: Bool = {
                 let rx = Regexes.quickCashuPresence
-                return rx.numberOfMatches(in: content, options: [], range: NSRange(location: 0, length: content.count)) > 0
+                return rx.numberOfMatches(in: content, options: [], range: NSRange(location: 0, length: nsLen)) > 0
             }()
             if (content.count > 4000 || content.hasVeryLongToken(threshold: 1024)) && !containsCashuEarly {
                 var plainStyle = AttributeContainer()
@@ -3181,8 +3184,6 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             let lnurlRegex = Regexes.lnurl
             let lightningSchemeRegex = Regexes.lightningScheme
             let detector = Regexes.linkDetector
-            
-            let nsLen = content.count
             let hasMentionsHint = content.contains("@")
             let hasHashtagsHint = content.contains("#")
             let hasURLHint = content.contains("://") || content.contains("www.") || content.contains("http")
@@ -3262,17 +3263,19 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             for (range, type) in allMatches {
                 // Add text before match
                 if let nsRange = Range(range, in: content) {
-                    let beforeText = String(content[lastEnd..<nsRange.lowerBound])
-                    if !beforeText.isEmpty {
-                        var beforeStyle = AttributeContainer()
-                        beforeStyle.foregroundColor = baseColor
-                        beforeStyle.font = isSelf
-                            ? .system(size: 14, weight: .bold, design: .monospaced)
-                            : .system(size: 14, design: .monospaced)
-                        if isMentioned {
-                            beforeStyle.font = beforeStyle.font?.bold()
+                    if lastEnd < nsRange.lowerBound {
+                        let beforeText = String(content[lastEnd..<nsRange.lowerBound])
+                        if !beforeText.isEmpty {
+                            var beforeStyle = AttributeContainer()
+                            beforeStyle.foregroundColor = baseColor
+                            beforeStyle.font = isSelf
+                                ? .system(size: 14, weight: .bold, design: .monospaced)
+                                : .system(size: 14, design: .monospaced)
+                            if isMentioned {
+                                beforeStyle.font = beforeStyle.font?.bold()
+                            }
+                            result.append(AttributedString(beforeText).mergingAttributes(beforeStyle))
                         }
-                        result.append(AttributedString(beforeText).mergingAttributes(beforeStyle))
                     }
                     
                     // Add styled match
@@ -3380,7 +3383,10 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                             result.append(AttributedString(matchText).mergingAttributes(matchStyle))
                         }
                     }
-                    lastEnd = nsRange.upperBound
+                    // Advance lastEnd safely in case of overlaps
+                    if lastEnd < nsRange.upperBound {
+                        lastEnd = nsRange.upperBound
+                    }
                 }
             }
             
