@@ -7,7 +7,8 @@
           "alpha" : "1.000",
           "blue" : "0.000",
           "green" : "1.000",
-          "red" : "0.000"
+          "red" : "0.000",
+          "purple" : "1.000"
         }
       },
       "idiom" : "universal"
