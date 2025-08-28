@@ -24,6 +24,7 @@ struct ContentView: View {
     
     @EnvironmentObject var viewModel: ChatViewModel
     @ObservedObject private var locationManager = LocationChannelManager.shared
+    @ObservedObject private var bookmarks = GeohashBookmarksStore.shared
     @State private var messageText = ""
     @State private var textFieldSelection: NSRange? = nil
     @FocusState private var isTextFieldFocused: Bool
@@ -1117,6 +1118,15 @@ struct ContentView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Open unread private chat")
+                }
+                // Bookmark toggle for current geohash (not shown for mesh)
+                if case .location(let ch) = locationManager.selectedChannel {
+                    Button(action: { GeohashBookmarksStore.shared.toggle(ch.geohash) }) {
+                        Image(systemName: GeohashBookmarksStore.shared.isBookmarked(ch.geohash) ? "bookmark.fill" : "bookmark")
+                            .font(.system(size: 12))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Toggle bookmark for #\(ch.geohash)")
                 }
                 // Location channels button '#'
                 Button(action: { showLocationChannelsSheet = true }) {

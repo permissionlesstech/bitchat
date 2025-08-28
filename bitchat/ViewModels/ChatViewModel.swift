@@ -586,6 +586,11 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                         if connected {
                             Task { @MainActor in
                                 self.resubscribeCurrentGeohash()
+                                // Re-init sampling for regional + bookmarked geohashes after reconnect
+                                let regional = LocationChannelManager.shared.availableChannels.map { $0.geohash }
+                                let bookmarks = GeohashBookmarksStore.shared.bookmarks
+                                let union = Array(Set(regional).union(bookmarks))
+                                self.beginGeohashSampling(for: union)
                             }
                         }
                     }
@@ -611,21 +616,41 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             self.switchLocationChannel(to: LocationChannelManager.shared.selectedChannel)
         }
 
-        // Background: keep sampling nearby geohashes for notifications even when sheet is closed
+        // Background: keep sampling nearby geohashes + bookmarks for notifications even when sheet is closed
         LocationChannelManager.shared.$availableChannels
             .receive(on: DispatchQueue.main)
             .sink { [weak self] channels in
                 guard let self = self else { return }
-                let ghs = channels.map { $0.geohash }
+                let regional = channels.map { $0.geohash }
+                let bookmarks = GeohashBookmarksStore.shared.bookmarks
+                let union = Array(Set(regional).union(bookmarks))
                 Task { @MainActor in
-                    self.beginGeohashSampling(for: ghs)
+                    self.beginGeohashSampling(for: union)
                 }
             }
             .store(in: &cancellables)
-        // Kick off initial sampling if we already have channels
-        if !LocationChannelManager.shared.availableChannels.isEmpty {
-            let ghs = LocationChannelManager.shared.availableChannels.map { $0.geohash }
-            Task { @MainActor in self.beginGeohashSampling(for: ghs) }
+
+        // Also observe bookmark changes to update sampling
+        GeohashBookmarksStore.shared.$bookmarks
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] bookmarks in
+                guard let self = self else { return }
+                let regional = LocationChannelManager.shared.availableChannels.map { $0.geohash }
+                let union = Array(Set(regional).union(bookmarks))
+                Task { @MainActor in
+                    self.beginGeohashSampling(for: union)
+                }
+            }
+            .store(in: &cancellables)
+
+        // Kick off initial sampling if we have regional channels or bookmarks
+        do {
+            let regional = LocationChannelManager.shared.availableChannels.map { $0.geohash }
+            let bookmarks = GeohashBookmarksStore.shared.bookmarks
+            let union = Array(Set(regional).union(bookmarks))
+            if !union.isEmpty {
+                Task { @MainActor in self.beginGeohashSampling(for: union) }
+            }
         }
         // Refresh channels once when authorized to seed sampling
         LocationChannelManager.shared.$permissionState
@@ -1838,7 +1863,6 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 let eventTime = Date(timeIntervalSince1970: TimeInterval(event.created_at))
                 if Date().timeIntervalSince(eventTime) > 30 { return }
                 // Foreground policy: allow if it's a different geohash than the one currently open
-                // Suppress only when app is active AND we're already in this same geohash channel
                 #if os(iOS)
                 if UIApplication.shared.applicationState == .active {
                     if case .location(let ch) = self.activeChannel, ch.geohash == gh { return }
@@ -1861,6 +1885,30 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 }()
                 Task { @MainActor in
                     self.lastGeoNotificationAt[gh] = now
+                    // Pre-populate the target geohash timeline so the triggering message appears when user opens it
+                    var arr = self.geoTimelines[gh] ?? []
+                    let senderSuffix = String(event.pubkey.suffix(4))
+                    let nick = self.geoNicknames[event.pubkey.lowercased()]
+                    let senderName = (nick?.isEmpty == false ? nick! : "anon") + "#" + senderSuffix
+                    let ts = Date(timeIntervalSince1970: TimeInterval(event.created_at))
+                    let mentions = self.parseMentions(from: content)
+                    let msg = BitchatMessage(
+                        id: event.id,
+                        sender: senderName,
+                        content: content,
+                        timestamp: ts,
+                        isRelay: false,
+                        originalSender: nil,
+                        isPrivate: false,
+                        recipientNickname: nil,
+                        senderPeerID: "nostr:\(event.pubkey.prefix(TransportConfig.nostrShortKeyDisplayLength))",
+                        mentions: mentions.isEmpty ? nil : mentions
+                    )
+                    if !arr.contains(where: { $0.id == msg.id }) {
+                        arr.append(msg)
+                        if arr.count > self.geoTimelineCap { arr = Array(arr.suffix(self.geoTimelineCap)) }
+                        self.geoTimelines[gh] = arr
+                    }
                     NotificationService.shared.sendGeohashActivityNotification(geohash: gh, bodyPreview: preview)
                 }
             }
@@ -4529,14 +4577,10 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     self.meshService.isPeerConnected(peerID) || self.meshService.isPeerReachable(peerID)
                 }
                 
-                // Check if we have new mesh peers we haven't seen recently
+                // Rising-edge only: previously zero peers, now > 0 peers
                 let currentPeerSet = Set(meshPeers)
-                let newPeers = currentPeerSet.subtracting(self.recentlySeenPeers)
-                // Send notification if:
-                // 1. We have mesh peers (not just Nostr-only)
-                // 2. There are new peers we haven't seen (rising-edge)
-                // 3. We haven't already notified since the last sustained-empty period
-                if meshPeers.count > 0 && !newPeers.isEmpty && !self.hasNotifiedNetworkAvailable {
+                let hadNone = self.recentlySeenPeers.isEmpty
+                if meshPeers.count > 0 && hadNone && !self.hasNotifiedNetworkAvailable {
                     self.hasNotifiedNetworkAvailable = true
                     self.lastNetworkNotificationTime = Date()
                     self.recentlySeenPeers = currentPeerSet
@@ -4545,16 +4589,14 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                                    category: SecureLogger.session, level: .info)
                 }
             } else {
-                // No peers - schedule a graceful reset to avoid refiring on brief drops
-                if self.networkResetTimer == nil {
-                    self.networkResetTimer = Timer.scheduledTimer(withTimeInterval: self.networkResetGraceSeconds, repeats: false) { [weak self] _ in
-                        guard let self = self else { return }
-                        self.hasNotifiedNetworkAvailable = false
-                        self.recentlySeenPeers.removeAll()
-                        self.networkResetTimer = nil
-                        SecureLogger.log("⏳ Mesh empty for \(Int(self.networkResetGraceSeconds))s — reset network notification state", category: SecureLogger.session, level: .debug)
-                    }
+                // No peers — immediately reset to allow next rising-edge to notify
+                self.hasNotifiedNetworkAvailable = false
+                self.recentlySeenPeers.removeAll()
+                if self.networkResetTimer != nil {
+                    self.networkResetTimer?.invalidate()
+                    self.networkResetTimer = nil
                 }
+                SecureLogger.log("⏳ Mesh empty — reset network notification state", category: SecureLogger.session, level: .debug)
             }
             
             // Register ephemeral sessions for all connected peers
@@ -5740,11 +5782,13 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
 
         guard channelMatches else { return }
 
-        
+        // Removed background nudge notification for generic "new chats!"
 
-        // Append via batching buffer (skip empty content)
+        // Append via batching buffer (skip empty content) with simple dedup by ID
         if !finalMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            enqueuePublic(finalMessage)
+            if !messages.contains(where: { $0.id == finalMessage.id }) {
+                enqueuePublic(finalMessage)
+            }
         }
     }
 
