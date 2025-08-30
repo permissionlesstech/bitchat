@@ -796,6 +796,17 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             guard event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue else { return }
             if self.processedNostrEvents.contains(event.id) { return }
             self.processedNostrEvents.insert(event.id)
+            // PoW filter: require local difficulty for this geohash
+            let ghFromTag: String? = event.tags.first(where: { $0.first?.lowercased() == "g" && $0.count >= 2 })?.dropFirst().first
+            let ghValue = ghFromTag ?? ch.geohash
+            if let idData = Data(hexString: event.id) {
+                let powBits = NostrPoW.leadingZeroBits(idData)
+                let required = PowPolicy.requiredBits(forGeohash: ghValue)
+                if powBits < required {
+                    // Drop low PoW event
+                    return
+                }
+            }
             if let gh = self.currentGeohash,
                let myGeoIdentity = try? NostrIdentityBridge.deriveIdentity(forGeohash: gh),
                myGeoIdentity.publicKeyHex.lowercased() == event.pubkey.lowercased() {
@@ -813,8 +824,11 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             let key8 = "nostr:" + String(event.pubkey.prefix(TransportConfig.nostrShortKeyDisplayLength))
             self.nostrKeyMapping[key8] = event.pubkey
 
-            // Update participants last-seen for this pubkey
-            self.recordGeoParticipant(pubkeyHex: event.pubkey)
+            // Update participants last-seen for this pubkey with observed PoW bits
+            if let idData = Data(hexString: event.id) {
+                let powBits = NostrPoW.leadingZeroBits(idData)
+                self.recordGeoParticipant(pubkeyHex: event.pubkey, geohash: ch.geohash, powBits: powBits)
+            }
             
             // Track teleported tag (only our format ["t","teleport"]) for icon state
             let hasTeleportTag = event.tags.contains(where: { tag in
@@ -1320,7 +1334,11 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 isPrivate: false,
                 recipientNickname: nil,
                 senderPeerID: localSenderPeerID,
-                mentions: mentions.isEmpty ? nil : mentions
+                mentions: mentions.isEmpty ? nil : mentions,
+                deliveryStatus: nil,
+                isMiningPow: {
+                    if case .location(_) = activeChannel { return true } else { return nil }
+                }()
             )
             
             // Add to main messages immediately for user feedback
@@ -1353,17 +1371,42 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             }
             
             if case .location(let ch) = activeChannel {
-                // Send to geohash channel via Nostr ephemeral
-                Task { @MainActor in
+                // Send to geohash channel via Nostr ephemeral with PoW
+                let msgID = message.id
+                let contentToSend = trimmed
+                Task {@MainActor in
                     do {
                         let identity = try NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash)
-                        let event = try NostrProtocol.createEphemeralGeohashEvent(
-                            content: trimmed,
-                            geohash: ch.geohash,
-                            senderIdentity: identity,
-                            nickname: self.nickname,
-                            teleported: LocationChannelManager.shared.teleported
+                        let createdAt = Int(message.timestamp.timeIntervalSince1970)
+                        var baseTags = [["g", ch.geohash]]
+                        if !self.nickname.isEmpty { baseTags.append(["n", self.nickname]) }
+                        if LocationChannelManager.shared.teleported { baseTags.append(["t", "teleport"]) }
+                        let bits = PowPolicy.requiredBits(forGeohash: ch.geohash)
+                        // Mine off the main thread
+                        let (nonce, _) = await withCheckedContinuation { (cont: CheckedContinuation<(UInt64, String), Never>) in
+                            DispatchQueue.global(qos: .utility).async {
+                                let res = NostrPoW.mine(pubkey: identity.publicKeyHex,
+                                                        createdAt: createdAt,
+                                                        kind: NostrProtocol.EventKind.ephemeralEvent.rawValue,
+                                                        baseTags: baseTags,
+                                                        content: contentToSend,
+                                                        targetBits: bits)
+                                cont.resume(returning: (res.nonce, res.idHex))
+                            }
+                        }
+                        // Build final event with nonce tag and sign
+                        var tags = baseTags
+                        tags.append(["nonce", String(nonce), String(bits)])
+                        var event = NostrEvent(
+                            pubkey: identity.publicKeyHex,
+                            createdAt: message.timestamp,
+                            kind: .ephemeralEvent,
+                            tags: tags,
+                            content: contentToSend
                         )
+                        let schnorrKey = try identity.schnorrSigningKey()
+                        event = try event.sign(with: schnorrKey)
+
                         let targetRelays = GeoRelayDirectory.shared.closestRelays(
                             toGeohash: ch.geohash,
                             count: TransportConfig.nostrGeoRelayCount
@@ -1373,12 +1416,22 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                         } else {
                             NostrRelayManager.shared.sendEvent(event, to: targetRelays)
                         }
-                        // Track ourselves as active participant
-                        self.recordGeoParticipant(pubkeyHex: identity.publicKeyHex)
-                        SecureLogger.log("GeoTeleport: sent geo message pub=\(identity.publicKeyHex.prefix(8))… teleported=\(LocationChannelManager.shared.teleported)",
-                                        category: SecureLogger.session, level: .debug)
-                        // If we tagged this as teleported, also mark our pubkey in teleportedGeo for UI
-                        // Only when not in our regional set (and regional list is known)
+                        // Track ourselves as active participant with PoW record
+                        if let idData = Data(hexString: event.id) {
+                            let powBits = NostrPoW.leadingZeroBits(idData)
+                            self.recordGeoParticipant(pubkeyHex: identity.publicKeyHex, geohash: ch.geohash, powBits: powBits)
+                        } else {
+                            self.recordGeoParticipant(pubkeyHex: identity.publicKeyHex)
+                        }
+                        SecureLogger.log("Geo: sent geo event id=\(event.id.prefix(12))… bits=\(bits) nonce=\(String(nonce))", category: SecureLogger.session, level: .debug)
+                        // Reveal timestamp / stop animation
+                        if let idx = self.messages.firstIndex(where: { $0.id == msgID }) {
+                            self.messages[idx].isMiningPow = false
+                            self.messages[idx].clearCachedFormattedText()
+                            // Trigger UI refresh so timestamp appears
+                            self.objectWillChange.send()
+                        }
+                        // If teleported and outside regional set, mark self teleported
                         let hasRegional = !LocationChannelManager.shared.availableChannels.isEmpty
                         let inRegional = LocationChannelManager.shared.availableChannels.contains { $0.geohash == ch.geohash }
                         if LocationChannelManager.shared.teleported && hasRegional && !inRegional {
@@ -1390,6 +1443,11 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     } catch {
                         SecureLogger.log("❌ Failed to send geohash message: \(error)", category: SecureLogger.session, level: .error)
                         self.addSystemMessage("failed to send to location channel")
+                        if let idx = self.messages.firstIndex(where: { $0.id == msgID }) {
+                            self.messages[idx].isMiningPow = false
+                            self.messages[idx].clearCachedFormattedText()
+                            self.objectWillChange.send()
+                        }
                     }
                 }
             } else {
@@ -1491,6 +1549,16 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             // Deduplicate
             if self.processedNostrEvents.contains(event.id) { return }
             self.recordProcessedEvent(event.id)
+            // PoW filter for geohash events
+            let ghFromTag: String? = event.tags.first(where: { $0.first?.lowercased() == "g" && $0.count >= 2 })?.dropFirst().first
+            let ghValue = ghFromTag ?? ch.geohash
+            if let idData = Data(hexString: event.id) {
+                let powBits = NostrPoW.leadingZeroBits(idData)
+                let required = PowPolicy.requiredBits(forGeohash: ghValue)
+                if powBits < required {
+                    return
+                }
+            }
             // Log incoming tags for diagnostics
             let tagSummary = event.tags.map { "[" + $0.joined(separator: ",") + "]" }.joined(separator: ",")
             SecureLogger.log("GeoTeleport: recv pub=\(event.pubkey.prefix(8))… tags=\(tagSummary)",
@@ -1537,8 +1605,11 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             self.nostrKeyMapping[key16] = event.pubkey
             let key8 = "nostr:" + String(event.pubkey.prefix(TransportConfig.nostrShortKeyDisplayLength))
             self.nostrKeyMapping[key8] = event.pubkey
-            // Update participants last-seen for this pubkey
-            self.recordGeoParticipant(pubkeyHex: event.pubkey)
+            // Update participants last-seen for this pubkey with observed PoW bits
+            if let idData = Data(hexString: event.id) {
+                let powBits = NostrPoW.leadingZeroBits(idData)
+                self.recordGeoParticipant(pubkeyHex: event.pubkey, geohash: ch.geohash, powBits: powBits)
+            }
             
             let senderName = self.displayNameForNostrPubkey(event.pubkey)
             let content = event.content
@@ -1723,6 +1794,24 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         }
     }
 
+    // Track last observed PoW bits per participant per geohash
+    private var geoParticipantPowBits: [String: [String: Int]] = [:] // geohash -> (pubkeyLower -> bits)
+
+    private func recordGeoParticipant(pubkeyHex: String, geohash: String, powBits: Int?) {
+        let key = pubkeyHex.lowercased()
+        var map = geoParticipants[geohash] ?? [:]
+        map[key] = Date()
+        geoParticipants[geohash] = map
+        if let bits = powBits {
+            var powMap = geoParticipantPowBits[geohash] ?? [:]
+            powMap[key] = bits
+            geoParticipantPowBits[geohash] = powMap
+        }
+        if currentGeohash == geohash {
+            refreshGeohashPeople()
+        }
+    }
+
     private func refreshGeohashPeople() {
         guard let gh = currentGeohash else { geohashPeople = []; return }
         let cutoff = Date().addingTimeInterval(-TransportConfig.uiRecentCutoffFiveMinutesSeconds)
@@ -1731,6 +1820,17 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         map = map.filter { $0.value >= cutoff }
         // Remove blocked Nostr pubkeys
         map = map.filter { !SecureIdentityStateManager.shared.isNostrBlocked(pubkeyHexLowercased: $0.key) }
+        // Enforce PoW threshold for peer list as well
+        let required = PowPolicy.requiredBits(forGeohash: gh)
+        let myHex: String? = (try? NostrIdentityBridge.deriveIdentity(forGeohash: gh))?.publicKeyHex.lowercased()
+        let powMap = geoParticipantPowBits[gh] ?? [:]
+        map = map.filter { (pub, _) in
+            if let bits = powMap[pub] { return bits >= required }
+            // Always allow self even if no PoW record yet
+            if let me = myHex, pub == me { return true }
+            // Otherwise, if no PoW info, hide until we see an acceptable event
+            return false
+        }
         geoParticipants[gh] = map
         // Build display list
         let people = map
@@ -1761,9 +1861,17 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     func visibleGeohashPeople() -> [GeoPerson] {
         guard let gh = currentGeohash else { return [] }
         let cutoff = Date().addingTimeInterval(-TransportConfig.uiRecentCutoffFiveMinutesSeconds)
+        let required = PowPolicy.requiredBits(forGeohash: gh)
+        let myHex: String? = (try? NostrIdentityBridge.deriveIdentity(forGeohash: gh))?.publicKeyHex.lowercased()
+        let powMap = geoParticipantPowBits[gh] ?? [:]
         let map = (geoParticipants[gh] ?? [:])
             .filter { $0.value >= cutoff }
             .filter { !SecureIdentityStateManager.shared.isNostrBlocked(pubkeyHexLowercased: $0.key) }
+            .filter { (pub, _) in
+                if let bits = powMap[pub] { return bits >= required }
+                if let me = myHex, pub == me { return true }
+                return false
+            }
         let people = map
             .map { (pub, seen) in GeoPerson(id: pub, displayName: displayNameForNostrPubkey(pub), lastSeen: seen) }
             .sorted { $0.lastSeen > $1.lastSeen }
@@ -1865,6 +1973,12 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             NostrRelayManager.shared.subscribe(filter: filter, id: subID, relayUrls: subRelays) { [weak self] event in
                 guard let self = self else { return }
                 guard event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue else { return }
+                // Enforce PoW for sampled geohashes too
+                if let idData = Data(hexString: event.id) {
+                    let powBits = NostrPoW.leadingZeroBits(idData)
+                    let required = PowPolicy.requiredBits(forGeohash: gh)
+                    if powBits < required { return }
+                }
                 // Compute current participant count (5-minute window) BEFORE updating with this event
                 let cutoff = Date().addingTimeInterval(-TransportConfig.uiRecentCutoffFiveMinutesSeconds)
                 let existingCount: Int = {
@@ -1872,7 +1986,12 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                     return map.values.filter { $0 >= cutoff }.count
                 }()
                 // Update participants for this specific geohash
-                self.recordGeoParticipant(pubkeyHex: event.pubkey, geohash: gh)
+                if let idData = Data(hexString: event.id) {
+                    let powBits = NostrPoW.leadingZeroBits(idData)
+                    self.recordGeoParticipant(pubkeyHex: event.pubkey, geohash: gh, powBits: powBits)
+                } else {
+                    self.recordGeoParticipant(pubkeyHex: event.pubkey, geohash: gh)
+                }
                 // Notify only on rising-edge: previously zero people, now someone sends a chat
                 let content = event.content.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !content.isEmpty else { return }
@@ -3137,6 +3256,59 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         
         return processedContent
     }
+
+    // MARK: - Helpers for mining UI
+    @MainActor
+    func isSelfMessage(_ message: BitchatMessage) -> Bool {
+        let isSelf: Bool = {
+            if let spid = message.senderPeerID {
+                if spid == meshService.myPeerID { return true }
+                if case .location(let ch) = activeChannel,
+                   let id = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
+                    if spid.hasPrefix("nostr:") || spid.hasPrefix("nostr_") {
+                        let bare: String = spid.hasPrefix("nostr:") ? String(spid.dropFirst(6)) : String(spid.dropFirst(6))
+                        return bare.lowercased().hasPrefix(id.publicKeyHex.lowercased().prefix(TransportConfig.nostrShortKeyDisplayLength))
+                    }
+                }
+                return spid == meshService.myPeerID
+            }
+            if message.sender == nickname { return true }
+            if message.sender.hasPrefix(nickname + "#") { return true }
+            return false
+        }()
+        return isSelf
+    }
+
+    @MainActor
+    func baseColorForMessage(_ message: BitchatMessage, colorScheme: ColorScheme) -> Color {
+        let isDark = colorScheme == .dark
+        return isSelfMessage(message) ? .orange : peerColor(for: message, isDark: isDark)
+    }
+
+    @MainActor
+    func formatSenderPrefix(_ message: BitchatMessage, colorScheme: ColorScheme) -> AttributedString {
+        let isSelf = isSelfMessage(message)
+        let isDark = colorScheme == .dark
+        let baseColor: Color = isSelf ? .orange : peerColor(for: message, isDark: isDark)
+        let (baseName, suffix) = splitSuffix(from: message.sender)
+        var senderStyle = AttributeContainer()
+        senderStyle.foregroundColor = baseColor
+        let fontWeight: Font.Weight = isSelf ? .bold : .medium
+        senderStyle.font = .system(size: 14, weight: fontWeight, design: .monospaced)
+        if let spid = message.senderPeerID, let url = URL(string: "bitchat://user/\(spid.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? spid)") {
+            senderStyle.link = url
+        }
+        var prefix = AttributedString()
+        prefix.append(AttributedString("<@").mergingAttributes(senderStyle))
+        prefix.append(AttributedString(baseName).mergingAttributes(senderStyle))
+        if !suffix.isEmpty {
+            var suffixStyle = senderStyle
+            suffixStyle.foregroundColor = baseColor.opacity(0.6)
+            prefix.append(AttributedString(suffix).mergingAttributes(suffixStyle))
+        }
+        prefix.append(AttributedString("> ").mergingAttributes(senderStyle))
+        return prefix
+    }
     
     @MainActor
     func formatMessageAsText(_ message: BitchatMessage, colorScheme: ColorScheme) -> AttributedString {
@@ -3443,12 +3615,15 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             }
             }
             
-            // Add timestamp at the end (smaller, light grey)
-            let timestamp = AttributedString(" [\(formatTimestamp(message.timestamp))]")
-            var timestampStyle = AttributeContainer()
-            timestampStyle.foregroundColor = Color.gray.opacity(0.7)
-            timestampStyle.font = .system(size: 10, design: .monospaced)
-            result.append(timestamp.mergingAttributes(timestampStyle))
+            // Add timestamp at the end (hide while PoW mining)
+            let hideTimestamp = (message.isMiningPow ?? false)
+            if !hideTimestamp {
+                let timestamp = AttributedString(" [\(formatTimestamp(message.timestamp))]")
+                var timestampStyle = AttributeContainer()
+                timestampStyle.foregroundColor = Color.gray.opacity(0.7)
+                timestampStyle.font = .system(size: 10, design: .monospaced)
+                result.append(timestamp.mergingAttributes(timestampStyle))
+            }
         } else {
             // System message
             var contentStyle = AttributeContainer()
