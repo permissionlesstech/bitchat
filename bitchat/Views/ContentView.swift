@@ -168,6 +168,9 @@ struct ContentView: View {
                 .onAppear { viewModel.isAppInfoPresented = true }
                 .onDisappear { viewModel.isAppInfoPresented = false }
         }
+        .sheet(isPresented: $viewModel.showRelayPreferencesSheet) {
+            RelayPreferencesView(relayManager: NostrRelayManager.shared)
+        }
         .sheet(isPresented: Binding(
             get: { viewModel.showingFingerprintFor != nil },
             set: { _ in viewModel.showingFingerprintFor = nil }

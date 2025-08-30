@@ -400,6 +400,18 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         }
     }
     
+    // Relay preferences sheet
+    @Published var showRelayPreferencesSheet: Bool = false
+    
+    // Privacy settings
+    @Published var isReadReceiptCoalescingEnabled: Bool = TransportConfig.readReceiptCoalescingEnabled {
+        didSet {
+            // Log privacy setting change
+            SecureLogger.log("📚 Read receipt coalescing \(isReadReceiptCoalescingEnabled ? "enabled" : "disabled")", 
+                           category: SecureLogger.security, level: .info)
+        }
+    }
+    
     // Messages are naturally ephemeral - no persistent storage
     // Persist mesh public timeline across channel switches
     private var meshTimeline: [BitchatMessage] = []

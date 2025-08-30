@@ -133,6 +133,10 @@ enum TransportConfig {
     // Message deduplication
     static let messageDedupMaxAgeSeconds: TimeInterval = 300
     static let messageDedupMaxCount: Int = 1000
+    
+    // Read receipt coalescing (privacy enhancement)
+    static let readReceiptCoalescingEnabled: Bool = true
+    static let readReceiptCoalescingThreshold: Int = 2  // Minimum messages to trigger coalescing
 
     // Verification QR
     static let verificationQRMaxAgeSeconds: TimeInterval = 5 * 60
