@@ -30,6 +30,9 @@ DerivedData/
 *.perspectivev3
 !default.perspectivev3
 
+## Idea
+./idea
+
 ## Gcc Patch
 /*.gcno
 

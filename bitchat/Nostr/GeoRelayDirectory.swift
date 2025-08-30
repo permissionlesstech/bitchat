@@ -1,5 +1,5 @@
 import Foundation
-
+import TorManager
 /// Directory of online Nostr relays with approximate GPS locations, used for geohash routing.
 @MainActor
 final class GeoRelayDirectory {
@@ -45,12 +45,20 @@ final class GeoRelayDirectory {
         let now = Date()
         let last = UserDefaults.standard.object(forKey: lastFetchKey) as? Date ?? .distantPast
         guard now.timeIntervalSince(last) >= fetchInterval else { return }
+        // If Tor is enabled but not yet connected, defer to avoid non-Tor fetch
+        if TorSettings.shared.isEnabled && !TorManager.shared.connected {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                self?.prefetchIfNeeded()
+            }
+            return
+        }
         fetchRemote()
     }
 
     private func fetchRemote() {
         let req = URLRequest(url: remoteURL, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
-        let task = URLSession.shared.dataTask(with: req) { [weak self] data, _, error in
+        let session = URLSession.torEnabledSession()
+        let task = session.dataTask(with: req) { [weak self] data, _, error in
             guard let self = self else { return }
             if let data = data, error == nil, let text = String(data: data, encoding: .utf8) {
                 let parsed = GeoRelayDirectory.parseCSV(text)

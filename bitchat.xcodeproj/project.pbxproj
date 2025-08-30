@@ -33,7 +33,7 @@
 		3EA8279F12C05DC2CE42AF05 /* MockBLEService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 568577CDDE5EC8B1A52F8CA0 /* MockBLEService.swift */; };
 		3EB848E57515ACA257FA05BC /* VerificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B3346C98058A0B632BEB1B2 /* VerificationService.swift */; };
 		3EE336D150427F736F32B56C /* P256K in Frameworks */ = {isa = PBXBuildFile; productRef = B1D9136AA0083366353BFA2F /* P256K */; };
-		3EF8BEF73D0C14DABB34DE27 /* TorService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22B3F7BA5BA2DD8AB3DD81FE /* TorService.swift */; };
+		3EF8BEF73D0C14DABB34DE27 /* .swift in Sources */ = {isa = PBXBuildFile; fileRef = 22B3F7BA5BA2DD8AB3DD81FE /* .swift */; };
 		429C568B42C2E4460045C795 /* CommandProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB10107B2A552E56B94C0AA4 /* CommandProcessor.swift */; };
 		438E81C9D07DABC9D6B86AD7 /* UnifiedPeerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D90CBA19E19728938700953D /* UnifiedPeerService.swift */; };
 		44AD79B0EBD4678690E3DEB6 /* MessageDeduplicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0BF581F9D98C90EA9867BCF /* MessageDeduplicator.swift */; };
@@ -81,7 +81,7 @@
 		8A06DC9D003C4041E1C8884A /* GeohashBookmarksStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58950BE7879543DBF3F5339A /* GeohashBookmarksStore.swift */; };
 		8A14ADADF5CD7A79919CB655 /* NoiseSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AB6BE4ABD7F5088E9865E56 /* NoiseSession.swift */; };
 		8C1AB0F2D48207E0755DA91A /* NoiseProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43613045E63D21D429396805 /* NoiseProtocol.swift */; };
-		8C26EA2CFEE900023DD0C0CA /* TorService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22B3F7BA5BA2DD8AB3DD81FE /* TorService.swift */; };
+		8C26EA2CFEE900023DD0C0CA /* .swift in Sources */ = {isa = PBXBuildFile; fileRef = 22B3F7BA5BA2DD8AB3DD81FE /* .swift */; };
 		8CE446C9364F54DF89E7A364 /* PublicChatE2ETests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D22BF09A49010947CEFE45E2 /* PublicChatE2ETests.swift */; };
 		8D0196EAEE56973679F6A655 /* TestConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC75901A0F0073B5BB8356E7 /* TestConstants.swift */; };
 		8F282E9CCA5AE1ECC001D2E4 /* IntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BC5AB43F4A8FB62C935CD74 /* IntegrationTests.swift */; };
@@ -212,7 +212,7 @@
 		1B4809E690DE48B9AEE36279 /* NostrTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NostrTransport.swift; sourceTree = "<group>"; };
 		1F6B06DDD6D82D60B073A8B7 /* XChaCha20Poly1305Compat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XChaCha20Poly1305Compat.swift; sourceTree = "<group>"; };
 		229F17B68CFF7AB1BC91C847 /* BitchatProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitchatProtocol.swift; sourceTree = "<group>"; };
-		22B3F7BA5BA2DD8AB3DD81FE /* TorService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TorService.swift; sourceTree = "<group>"; };
+		22B3F7BA5BA2DD8AB3DD81FE /* .swift */ = {isa = PBXFileReference; lastKnownFileType = text; path = .swift; sourceTree = "<group>"; };
 		259F214DC1197CD705F2FA7B /* GeoRelayDirectory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeoRelayDirectory.swift; sourceTree = "<group>"; };
 		28472CF48DAE200A6359E4A6 /* Geohash.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Geohash.swift; sourceTree = "<group>"; };
 		2C82877869239E1E02FF9A88 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
@@ -355,7 +355,7 @@
 				EF625BB3AD919322C01A46B2 /* BitchatApp.swift */,
 				EA706D8E5097785414646A8E /* Info.plist */,
 				95F16C3A4A5621C74461D8D3 /* LaunchScreen.storyboard */,
-				22B3F7BA5BA2DD8AB3DD81FE /* TorService.swift */,
+				22B3F7BA5BA2DD8AB3DD81FE /* .swift */,
 				C845B6F5D25AEEA0B9FE557F /* Identity */,
 				0575DCBD15C7C719ADDCB67E /* Models */,
 				637EDFDD042BDB5F2569A501 /* Noise */,
@@ -913,7 +913,7 @@
 				07A73CEDC6D73043C6BE4D96 /* RelayController.swift in Sources */,
 				E2DCF7817344F1CCDB8B7B2F /* SecureIdentityStateManager.swift in Sources */,
 				D111988977C3BC246AB27FA4 /* SecureLogger.swift in Sources */,
-				8C26EA2CFEE900023DD0C0CA /* TorService.swift in Sources */,
+				8C26EA2CFEE900023DD0C0CA /* .swift in Sources */,
 				20216EA81EFDC3632F8DB19F /* Transport.swift in Sources */,
 				D200A05B319933FFD93B2C73 /* TransportConfig.swift in Sources */,
 				C06685965753B4F8A3120998 /* UnifiedPeerService.swift in Sources */,
@@ -975,7 +975,7 @@
 				2E02905CBE350A2A168362E1 /* RelayController.swift in Sources */,
 				68C4BE564735F6E7915274A2 /* SecureIdentityStateManager.swift in Sources */,
 				EC5241969D2550B97629EBD0 /* SecureLogger.swift in Sources */,
-				3EF8BEF73D0C14DABB34DE27 /* TorService.swift in Sources */,
+				3EF8BEF73D0C14DABB34DE27 /* .swift in Sources */,
 				778592DC0729708A653D6B9A /* Transport.swift in Sources */,
 				6DE24385FD4339F392927D0E /* TransportConfig.swift in Sources */,
 				438E81C9D07DABC9D6B86AD7 /* UnifiedPeerService.swift in Sources */,

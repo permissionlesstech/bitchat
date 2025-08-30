@@ -23,6 +23,7 @@ struct ContentView: View {
     // MARK: - Properties
     
     @EnvironmentObject var viewModel: ChatViewModel
+    @EnvironmentObject var torSettings: TorSettings // observe Tor status for reactive UI updates
     @ObservedObject private var locationManager = LocationChannelManager.shared
     @ObservedObject private var bookmarks = GeohashBookmarksStore.shared
     @State private var messageText = ""
@@ -1111,6 +1112,27 @@ struct ContentView: View {
             }()
 
             HStack(spacing: 10) {
+                // Tor toggle button
+                Button(action: {
+                    torSettings.toggleTor()
+                }) {
+                    Image(systemName: torSettings.isConnected ? "lock.shield.fill" : 
+                                   torSettings.isConnecting ? "lock.shield" : "lock.shield")
+                        .font(.system(size: 12))
+                        .foregroundColor(torSettings.isEnabled ? 
+                                       (torSettings.isConnected ? Color.green : 
+                                       torSettings.isConnecting ? Color.orange : Color.red) : Color.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(torSettings.isEnabled ? 
+                                  (torSettings.isConnected ? "Tor enabled and connected" : 
+                                  torSettings.isConnecting ? "Tor connecting" : "Tor enabled but not connected") : 
+                                  "Tor disabled")
+                .help(torSettings.isEnabled ? 
+                     (torSettings.isConnected ? "Tor is enabled and connected" : 
+                     torSettings.isConnecting ? "Tor is connecting..." : "Tor is enabled but not connected") : 
+                     "Tor is disabled. Tap to enable")
+
                 // Unread icon immediately to the left of the channel badge (independent from channel button)
                 
                 // Unread indicator (now shown on iOS and macOS)

@@ -8,11 +8,12 @@
 
 import SwiftUI
 import UserNotifications
-import TorManager  // Add this import
+import TorManager
 
 @main
 struct BitchatApp: App {
     @StateObject private var chatViewModel = ChatViewModel()
+    @StateObject private var torSettings = TorSettings.shared
     #if os(iOS)
     @Environment(\.scenePhase) var scenePhase
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
@@ -24,12 +25,21 @@ struct BitchatApp: App {
         UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
         // Warm up georelay directory and refresh if stale (once/day)
         GeoRelayDirectory.shared.prefetchIfNeeded()
+        
+        // Initialize Tor if enabled
+        if TorSettings.shared.isEnabled {
+            TorSettings.shared.startTor()
+        } else {
+            // Ensure Tor routing is disabled but do not stop Tor thread (not started yet anyway)
+            TorSettings.shared.updateConnectionStatus()
+        }
     }
     
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(chatViewModel)
+                .environmentObject(torSettings)
                 .onAppear {
                     NotificationDelegate.shared.chatViewModel = chatViewModel
                     // Inject live Noise service into VerificationService to avoid creating new BLE instances
@@ -46,14 +56,6 @@ struct BitchatApp: App {
                     #endif
                     // Check for shared content
                     checkForSharedContent()
-                    // Start Tor via TorManager
-                 TorManager.shared.start { error in
-                     if let error = error {
-                         print("TorManager failed: \(error)")
-                     } else {
-                         print("TorManager started")
-                     }
-                 }
                 }
                 .onOpenURL { url in
                     handleURL(url)
@@ -68,6 +70,8 @@ struct BitchatApp: App {
                         // Restart services when becoming active
                         chatViewModel.meshService.startServices()
                         checkForSharedContent()
+                        // Update Tor status
+                        torSettings.updateConnectionStatus()
                     case .inactive:
                         break
                     @unknown default:
@@ -77,10 +81,14 @@ struct BitchatApp: App {
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
                     // Check for shared content when app becomes active
                     checkForSharedContent()
+                    // Update Tor status
+                    torSettings.updateConnectionStatus()
                 }
                 #elseif os(macOS)
                 .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
                     // App became active
+                    // Update Tor status
+                    torSettings.updateConnectionStatus()
                 }
                 #endif
         }
