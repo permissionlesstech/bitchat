@@ -164,7 +164,7 @@ struct ContentView: View {
             }
         }
         .sheet(isPresented: $showAppInfo) {
-            AppInfoView()
+            AppInfoView(chatViewModel: viewModel)
                 .onAppear { viewModel.isAppInfoPresented = true }
                 .onDisappear { viewModel.isAppInfoPresented = false }
         }

@@ -3,6 +3,7 @@ import SwiftUI
 struct AppInfoView: View {
     @Environment(\.dismiss) var dismiss
     @Environment(\.colorScheme) var colorScheme
+    @ObservedObject var chatViewModel: ChatViewModel
     
     private var backgroundColor: Color {
         colorScheme == .dark ? Color.black : Color.white
@@ -156,6 +157,40 @@ struct AppInfoView: View {
                 FeatureRow(icon: Strings.Privacy.panic.0,
                           title: Strings.Privacy.panic.1,
                           description: Strings.Privacy.panic.2)
+                
+                // Low-visibility mode toggle
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Image(systemName: "eye.slash.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(textColor)
+                            .frame(width: 30)
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("low-visibility mode")
+                                .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                                .foregroundColor(textColor)
+                            
+                            Text("reduces scanning aggressiveness for enhanced privacy")
+                                .font(.system(size: 12, design: .monospaced))
+                                .foregroundColor(secondaryTextColor)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        
+                        Spacer()
+                        
+                        Toggle("", isOn: $chatViewModel.isLowVisibilityModeEnabled)
+                            .toggleStyle(SwitchToggleStyle(tint: textColor))
+                            .labelsHidden()
+                    }
+                    
+                    if chatViewModel.isLowVisibilityModeEnabled {
+                        Text("🔒 Active: Scanning reduced, less frequent announces")
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundColor(textColor.opacity(0.8))
+                            .padding(.leading, 42)
+                    }
+                }
             }
             
             // How to Use
