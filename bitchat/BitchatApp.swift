@@ -8,6 +8,7 @@
 
 import SwiftUI
 import UserNotifications
+import TorManager  // Add this import
 
 @main
 struct BitchatApp: App {
@@ -45,6 +46,14 @@ struct BitchatApp: App {
                     #endif
                     // Check for shared content
                     checkForSharedContent()
+                    // Start Tor via TorManager
+                 TorManager.shared.start { error in
+                     if let error = error {
+                         print("TorManager failed: \(error)")
+                     } else {
+                         print("TorManager started")
+                     }
+                 }
                 }
                 .onOpenURL { url in
                     handleURL(url)

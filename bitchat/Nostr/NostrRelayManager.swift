@@ -27,6 +27,7 @@ class NostrRelayManager: ObservableObject {
     
     // Default relay list (can be customized)
     private static let defaultRelays = [
+        "wss://relay.8333.space:1234",
         "wss://relay.damus.io",
         "wss://nos.lol",
         "wss://relay.primal.net",
