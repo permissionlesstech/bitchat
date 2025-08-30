@@ -159,8 +159,27 @@ class PrivateChatManager: ObservableObject {
         
         // Send read receipts for unread messages that haven't been sent yet
         if let messages = privateChats[peerID] {
-            for message in messages {
-                if message.senderPeerID == peerID && !message.isRelay && !sentReadReceipts.contains(message.id) {
+            let unreadMessages = messages.filter { message in
+                message.senderPeerID == peerID && !message.isRelay && !sentReadReceipts.contains(message.id)
+            }
+            
+            if TransportConfig.readReceiptCoalescingEnabled && 
+               unreadMessages.count >= TransportConfig.readReceiptCoalescingThreshold {
+                // Coalesced behavior: only send READ receipt for the latest message
+                // This reduces metadata exposure when entering chats with many unread messages
+                if let latestMessage = unreadMessages.max(by: { $0.timestamp < $1.timestamp }) {
+                    SecureLogger.log("📚 Coalesced READ behavior: \(unreadMessages.count) unread messages, sending receipt only for latest (id: \(latestMessage.id.prefix(8))…)",
+                                   category: SecureLogger.session, level: .info)
+                    sendReadReceipt(for: latestMessage)
+                    
+                    // Mark all messages as read locally without sending receipts
+                    for message in unreadMessages {
+                        sentReadReceipts.insert(message.id)
+                    }
+                }
+            } else {
+                // Standard behavior: send receipt for single message
+                for message in unreadMessages {
                     sendReadReceipt(for: message)
                 }
             }

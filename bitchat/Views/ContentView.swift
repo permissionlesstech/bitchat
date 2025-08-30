@@ -164,9 +164,12 @@ struct ContentView: View {
             }
         }
         .sheet(isPresented: $showAppInfo) {
-            AppInfoView()
+            AppInfoView(chatViewModel: viewModel)
                 .onAppear { viewModel.isAppInfoPresented = true }
                 .onDisappear { viewModel.isAppInfoPresented = false }
+        }
+        .sheet(isPresented: $viewModel.showRelayPreferencesSheet) {
+            RelayPreferencesView(relayManager: NostrRelayManager.shared)
         }
         .sheet(isPresented: Binding(
             get: { viewModel.showingFingerprintFor != nil },
