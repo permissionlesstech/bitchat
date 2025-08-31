@@ -35,7 +35,7 @@ class TorSettings: ObservableObject {
     
 
     func updateConnectionStatus() {
-        let connected = TorManager.shared.connected && self.isEnabled
+        let connected = TorManager.shared.connected && self.isEnabled && TorManager.shared.torSocks5ProxyConf != nil
         if Thread.isMainThread {
             self.isConnected = connected
         } else {
@@ -149,8 +149,18 @@ class TorSettings: ObservableObject {
 extension URLSession {
     static func torEnabledSession() -> URLSession {
         let config = URLSessionConfiguration.default
-        if TorSettings.shared.isEnabled && TorManager.shared.connected {
-            config.connectionProxyDictionary = TorManager.shared.torSocks5ProxyConf
+        if TorSettings.shared.isEnabled {
+            if TorManager.shared.connected, let conf = TorManager.shared.torSocks5ProxyConf {
+                config.connectionProxyDictionary = conf
+            } else {
+                // Fallback to default Tor proxy settings if enabled but not fully connected/configured
+                config.connectionProxyDictionary = [
+                    kCFProxyTypeKey: kCFProxyTypeSOCKS,
+                    kCFStreamPropertySOCKSVersion: kCFStreamSocketSOCKSVersion5,
+                    kCFStreamPropertySOCKSProxyHost: "127.0.0.1",
+                    kCFStreamPropertySOCKSProxyPort: 9050
+                ]
+            }
         }
         return URLSession(configuration: config)
     }
