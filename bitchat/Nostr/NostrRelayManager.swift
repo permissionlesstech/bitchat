@@ -28,7 +28,6 @@ class NostrRelayManager: ObservableObject {
     
     // Default relay list (can be customized)
     private static let defaultRelays = [
-        "wss://relay.8333.space:1234",
         "wss://relay.damus.io",
         "wss://nos.lol",
         "wss://relay.primal.net",
@@ -201,7 +200,7 @@ class NostrRelayManager: ObservableObject {
             SecureLogger.log("Invalid relay URL: \(urlString)", category: SecureLogger.session, level: .warning)
             return 
         }
-        
+
         // If Tor is enabled but not connected yet, defer connecting to avoid direct leaks.
         if TorSettings.shared.isEnabled && !TorManager.shared.connected {
             SecureLogger.log("⏳ Deferring relay connect until Tor is connected: \(urlString)", category: SecureLogger.session, level: .info)
@@ -210,7 +209,7 @@ class NostrRelayManager: ObservableObject {
             }
             return
         }
-        
+
         // Skip if we already have a connection object
         if connections[urlString] != nil {
             return
