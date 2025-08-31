@@ -96,10 +96,11 @@ For detailed protocol documentation, see the [Technical Whitepaper](WHITEPAPER.m
 
 ### Option 1: Using XcodeGen (Recommended)
 
-1. Install XcodeGen if you haven't already:
+1. Install XcodeGen and [CocoaPods](https://cocoapods.org/) if you haven't already:
 
    ```bash
    brew install xcodegen
+   sudo gem install cocoapods
    ```
 
 2. Generate the Xcode project:
@@ -107,32 +108,22 @@ For detailed protocol documentation, see the [Technical Whitepaper](WHITEPAPER.m
    ```bash
    cd bitchat
    xcodegen generate
+   pod install
    ```
 
 3. Open the generated project:
    ```bash
-   open bitchat.xcodeproj
+   open bitchat.xcworkspace
    ```
 
-### Option 2: Using Swift Package Manager
-
-1. Open the project in Xcode:
-
-   ```bash
-   cd bitchat
-   open Package.swift
-   ```
-
-2. Select your target device and run
-
-### Option 3: Manual Xcode Project
+### Option 2: Manual Xcode Project
 
 1. Open Xcode and create a new iOS/macOS App
 2. Copy all Swift files from the `bitchat` directory into your project
 3. Update Info.plist with Bluetooth permissions
 4. Set deployment target to iOS 16.0 / macOS 13.0
 
-### Option 4: just
+### Option 3: just
 
 Want to try this on macos: `just run` will set it up and run from source.
 Run `just clean` afterwards to restore things to original state for mobile app building and development.
