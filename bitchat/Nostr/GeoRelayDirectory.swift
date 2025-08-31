@@ -50,7 +50,8 @@ final class GeoRelayDirectory {
 
     private func fetchRemote() {
         let req = URLRequest(url: remoteURL, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
-        let task = URLSession.shared.dataTask(with: req) { [weak self] data, _, error in
+        // Fetch via Tor if enabled
+        let task = URLSession.torEnabledSession().dataTask(with: req) { [weak self] data, _, error in
             guard let self = self else { return }
             if let data = data, error == nil, let text = String(data: data, encoding: .utf8) {
                 let parsed = GeoRelayDirectory.parseCSV(text)

@@ -200,6 +200,15 @@ class NostrRelayManager: ObservableObject {
             return 
         }
         
+        // If Tor is enabled but not connected yet, defer connecting to avoid clearnet leaks.
+        if TorService.shared.isEnabled && !TorService.shared.isConnected {
+            SecureLogger.log("⏳ Deferring relay connect until Tor is connected: \(urlString)", category: SecureLogger.session, level: .info)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                self?.connectToRelay(urlString)
+            }
+            return
+        }
+        
         // Skip if we already have a connection object
         if connections[urlString] != nil {
             return
@@ -207,7 +216,8 @@ class NostrRelayManager: ObservableObject {
         
         // Attempting to connect to Nostr relay
         
-        let session = URLSession(configuration: .default)
+        // Use Tor-enabled session if Tor is enabled
+        let session = URLSession.torEnabledSession()
         let task = session.webSocketTask(with: url)
         
         connections[urlString] = task

@@ -19,10 +19,12 @@ struct BitchatApp: App {
     @NSApplicationDelegateAdaptor(MacAppDelegate.self) var appDelegate
     #endif
     
+    // Start Tor if enabled
     init() {
         UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
         // Warm up georelay directory and refresh if stale (once/day)
         GeoRelayDirectory.shared.prefetchIfNeeded()
+        TorService.shared.startIfEnabled()
     }
     
     var body: some Scene {
@@ -59,6 +61,9 @@ struct BitchatApp: App {
                         // Restart services when becoming active
                         chatViewModel.meshService.startServices()
                         checkForSharedContent()
+                        TorService.shared.startIfEnabled()
+                        TorService.shared.verifyTorOnResume()
+                        TorService.shared.scheduleActiveHealthCheck()
                     case .inactive:
                         break
                     @unknown default:
@@ -68,10 +73,16 @@ struct BitchatApp: App {
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
                     // Check for shared content when app becomes active
                     checkForSharedContent()
+                    TorService.shared.startIfEnabled()
+                    TorService.shared.verifyTorOnResume()
+                    TorService.shared.scheduleActiveHealthCheck()
                 }
                 #elseif os(macOS)
                 .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
                     // App became active
+                    TorService.shared.startIfEnabled()
+                    TorService.shared.verifyTorOnResume()
+                    TorService.shared.scheduleActiveHealthCheck()
                 }
                 #endif
         }

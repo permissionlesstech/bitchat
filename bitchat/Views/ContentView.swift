@@ -25,6 +25,8 @@ struct ContentView: View {
     @EnvironmentObject var viewModel: ChatViewModel
     @ObservedObject private var locationManager = LocationChannelManager.shared
     @ObservedObject private var bookmarks = GeohashBookmarksStore.shared
+    @ObservedObject private var tor = TorService.shared
+
     @State private var messageText = ""
     @State private var textFieldSelection: NSRange? = nil
     @FocusState private var isTextFieldFocused: Bool
@@ -1123,6 +1125,15 @@ struct ContentView: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("Open unread private chat")
                 }
+                // Tor toggle button
+                Button(action: { tor.toggle() }) {
+                    Image(systemName: tor.isEnabled ? (tor.isConnected ? "lock.shield.fill" : "lock.shield") : "lock.slash")
+                        .font(.system(size: 12))
+                        .foregroundColor(tor.isEnabled ? (tor.isConnected ? Color.green : Color.orange) : Color.secondary)
+                }
+                .buttonStyle(.plain)
+                .help(tor.isEnabled ? (tor.isConnected ? "Tor is enabled and connected" : "Tor is enabled (connecting)") : "Tor is disabled")
+                .accessibilityLabel(tor.isEnabled ? (tor.isConnected ? "Tor on" : "Tor connecting") : "Tor off")
                 // Bookmark toggle for current geohash (not shown for mesh)
                 if case .location(let ch) = locationManager.selectedChannel {
                     Button(action: { GeohashBookmarksStore.shared.toggle(ch.geohash) }) {
