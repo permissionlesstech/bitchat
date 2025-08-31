@@ -115,6 +115,8 @@ For detailed protocol documentation, see the [Technical Whitepaper](WHITEPAPER.m
    ```bash
    open bitchat.xcworkspace
    ```
+   
+If you see linking issues in Xcode, try running `rm -rf ~/Library/Developer/Xcode/DerivedData/*`.
 
 ### Option 2: Manual Xcode Project
 

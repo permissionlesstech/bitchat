@@ -70,8 +70,8 @@ struct BitchatApp: App {
                         // Restart services when becoming active
                         chatViewModel.meshService.startServices()
                         checkForSharedContent()
-                        // Update Tor status
-                        torSettings.updateConnectionStatus()
+                        // Verify Tor connection status after returning from background
+                        torSettings.verifyTorConnection()
                     case .inactive:
                         break
                     @unknown default:
@@ -81,14 +81,14 @@ struct BitchatApp: App {
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
                     // Check for shared content when app becomes active
                     checkForSharedContent()
-                    // Update Tor status
-                    torSettings.updateConnectionStatus()
+                    // Verify Tor connection status when app becomes active
+                    torSettings.verifyTorConnection()
                 }
                 #elseif os(macOS)
                 .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
                     // App became active
-                    // Update Tor status
-                    torSettings.updateConnectionStatus()
+                    // Verify Tor connection status when app becomes active
+                    torSettings.verifyTorConnection()
                 }
                 #endif
         }
