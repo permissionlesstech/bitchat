@@ -87,6 +87,7 @@
 		6DE056E1EE9850E9FBF50157 /* BitchatProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 229F17B68CFF7AB1BC91C847 /* BitchatProtocol.swift */; };
 		6E7761E21C99F28AE2F9BE5F /* BitchatApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF625BB3AD919322C01A46B2 /* BitchatApp.swift */; };
 		6F94D3B32E64F51F002948FD /* SwiftTor in Frameworks */ = {isa = PBXBuildFile; productRef = 6F94D3B22E64F51F002948FD /* SwiftTor */; };
+		6F94D3B72E64F61B002948FD /* SwiftTor in Frameworks */ = {isa = PBXBuildFile; productRef = 6F94D3B22E64F51F002948FD /* SwiftTor */; };
 		6F94D3B52E64F61B002948FD /* TorService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F94D3B42E64F61B002948FD /* TorService.swift */; };
 		6F94D3B62E64F61B002948FD /* TorService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F94D3B42E64F61B002948FD /* TorService.swift */; };
 		7241FFD6CFFB875B864FA223 /* InputValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90CB7A5CD1D1A521CD31F380 /* InputValidator.swift */; };
@@ -293,6 +294,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				3EE336D150427F736F32B56C /* P256K in Frameworks */,
+				6F94D3B72E64F61B002948FD /* SwiftTor in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -585,6 +587,7 @@
 			name = bitchat_macOS;
 			packageProductDependencies = (
 				B1D9136AA0083366353BFA2F /* P256K */,
+				6F94D3B22E64F51F002948FD /* SwiftTor */,
 			);
 			productName = bitchat_macOS;
 			productReference = 8F3A7C058C2C8E1A06C8CF8B /* bitchat.app */;

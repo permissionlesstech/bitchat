@@ -523,7 +523,30 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         
         // Start mesh service immediately
         meshService.startServices()
-        
+
+        // Early user feedback before Tor fully initializes
+        if TorService.shared.isEnabled && !TorService.shared.isConnected {
+            addPublicSystemMessage("tor: starting…")
+        }
+
+        // Observe Tor connection progress and announce in public chat
+        TorService.shared.$progress
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] p in
+                guard let self = self else { return }
+                self.handleTorProgress(p)
+            }
+            .store(in: &cancellables)
+
+        TorService.shared.$isConnected
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] connected in
+                guard let self = self else { return }
+                if connected { self.handleTorProgress(100) }
+            }
+            .store(in: &cancellables)
+
         // Initialize Nostr services
         Task { @MainActor in
             nostrRelayManager = NostrRelayManager.shared
@@ -761,6 +784,32 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             object: nil
         )
         #endif
+    }
+
+    // MARK: - Tor Progress Announcements
+    private var lastTorProgressPosted: Int = 0
+    private func handleTorProgress(_ p: Int) {
+        // Only announce upward transitions at key thresholds
+        let thresholds = [33, 66, 100]
+        for t in thresholds.sorted() {
+            if p >= t && lastTorProgressPosted < t {
+                switch t {
+                case 33:
+                    Task { @MainActor in self.addPublicSystemMessage("tor: connecting (33%)") }
+                case 66:
+                    Task { @MainActor in self.addPublicSystemMessage("tor: establishing circuits (66%)") }
+                case 100:
+                    Task { @MainActor in self.addPublicSystemMessage("tor: connected (100%)") }
+                default:
+                    break
+                }
+                lastTorProgressPosted = t
+            }
+        }
+        if p == 0 {
+            // Reset when fully stopped or before a new cycle
+            lastTorProgressPosted = 0
+        }
     }
     
     // MARK: - Deinitialization
@@ -1475,6 +1524,12 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 teleportedGeo.remove(key)
             }
         }
+        // If Tor is required but not yet connected, delay subscription until connected
+        if TorService.shared.isEnabled && !TorService.shared.isConnected {
+            addPublicSystemMessage("tor: waiting to connect before joining #\(ch.geohash)")
+            return
+        }
+
         let subID = "geo-\(ch.geohash)"
         geoSubscriptionID = subID
         startGeoParticipantsTimer()
@@ -1840,6 +1895,10 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     /// Begin sampling multiple geohashes (used by channel sheet) without changing active channel.
     @MainActor
     func beginGeohashSampling(for geohashes: [String]) {
+        // Do not subscribe to any relays until Tor is connected
+        if TorService.shared.isEnabled && !TorService.shared.isConnected {
+            return
+        }
         // Determine which to add and which to remove
         let desired = Set(geohashes)
         let current = Set(geoSamplingSubs.values)

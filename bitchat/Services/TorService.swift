@@ -7,12 +7,13 @@ import SwiftTor
 final class TorService: ObservableObject {
     static let shared = TorService()
     
-    @Published var isEnabled: Bool = UserDefaults.standard.bool(forKey: "torEnabled") {
-        didSet { UserDefaults.standard.set(isEnabled, forKey: "torEnabled") }
-    }
+    // Tor is now required and always enabled
+    @Published var isEnabled: Bool = true
     
     @Published private(set) var isConnected: Bool = false
     @Published private(set) var isConnecting: Bool = false
+    // Simple staged progress for UI (0, 33, 66, 100)
+    @Published private(set) var progress: Int = 0
     
     // Underlying SwiftTor instance (manages Tor process and URLSession)
     private var tor: SwiftTor?
@@ -21,29 +22,25 @@ final class TorService: ObservableObject {
     // Restart/stop coordination to avoid multiple TORThread instances
     private var isStopping = false
     private var restartWorkItem: DispatchWorkItem?
+    private var restartInFlight = false
+    private var lastRestartAt: Date = .distantPast
     
-    private init() {}
-    
-    func startIfEnabled() {
-        guard isEnabled, !isStopping else { return }
-        if tor == nil { startTor() } else { updateConnectionFlags(from: tor?.state ?? .none) }
+    private init() {
+        // Force-enable tor regardless of any previous persisted setting
+        UserDefaults.standard.set(true, forKey: "torEnabled")
     }
     
-    func toggle() {
-        isEnabled.toggle()
-        if isEnabled {
-            startTor()
-        } else {
-            // Cleanly stop Tor thread and reconnect without Tor
-            stopTor()
-            NostrRelayManager.shared.resetAllConnections()
-        }
+    func startIfEnabled() {
+        // Always start; Tor is required
+        guard !isStopping else { return }
+        if tor == nil { startTor() } else { updateConnectionFlags(from: tor?.state ?? .none) }
     }
     
     func startTor() {
         guard tor == nil, !isStopping else { return }
         isConnecting = true
         isConnected = false
+        progress = 33
         
         let instance = SwiftTor(start: true)
         self.tor = instance
@@ -60,32 +57,35 @@ final class TorService: ObservableObject {
     
     /// Safely restart Tor avoiding multiple TORThread instances.
     func restartTor() {
-        guard let tor = tor else { startTor(); return }
+        // Avoid overlapping restarts or restarts while connecting/stopping
+        guard !restartInFlight else { return }
         guard !isStopping else { return }
+        guard !isConnecting else { return }
+        lastRestartAt = Date()
+        restartInFlight = true
         isStopping = true
         isConnecting = true
         isConnected = false
-        
-        // Stop current Tor thread
-        tor.tor.resign()
-        tor.started = false
-        
-        // Coalesce restarts and wait briefly for TORThread to fully teardown
+        progress = max(progress, 33)
+
+        // Cleanly stop and fully release prior Tor instance
         restartWorkItem?.cancel()
+        cancellables.removeAll()
+        if let st = tor {
+            st.tor.resign()
+            st.started = false
+        }
+        tor = nil
+
+        // Wait longer to ensure previous TORThread tears down
         let work = DispatchWorkItem { [weak self] in
             guard let self = self else { return }
-            // Reinitialize the underlying TorHelper and start
-            if let st = self.tor {
-                st.tor = TorHelper()
-                st.start()
-            } else {
-                self.tor = SwiftTor(start: true)
-            }
             self.isStopping = false
+            self.restartInFlight = false
+            self.startTor()
         }
         restartWorkItem = work
-        // Give TORThread time to fully cancel before starting a new one
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5, execute: work)
     }
     
     func stopTor() {
@@ -100,9 +100,21 @@ final class TorService: ObservableObject {
         isConnecting = false
         isConnected = false
         isStopping = false
+        progress = 0
     }
     
     private func updateConnectionFlags(from state: TorState) {
+        // Map TorState to simple staged progress for chat
+        switch state {
+        case .started:
+            progress = max(progress, 33)
+        case .refreshing:
+            progress = max(progress, 66)
+        case .connected:
+            progress = 100
+        case .stopped, .none:
+            if !isEnabled { progress = 0 }
+        }
         switch state {
         case .connected:
             let wasConnected = isConnected
@@ -122,21 +134,19 @@ final class TorService: ObservableObject {
     
     /// Returns the URLSession to use for network/WebSocket traffic respecting Tor setting.
     func networkSession() -> URLSession {
-        if isEnabled {
-            var port = 19050
-            #if targetEnvironment(simulator)
-            port = 19052
-            #endif
-            let config = URLSessionConfiguration.default
-            config.connectionProxyDictionary = [
-                kCFProxyTypeKey: kCFProxyTypeSOCKS,
-                kCFStreamPropertySOCKSVersion: kCFStreamSocketSOCKSVersion5,
-                kCFStreamPropertySOCKSProxyHost: "127.0.0.1",
-                kCFStreamPropertySOCKSProxyPort: port
-            ] as [AnyHashable: Any]
-            return URLSession(configuration: config)
-        }
-        return URLSession(configuration: .default)
+        // Always route via Tor SOCKS proxy
+        var port = 19050
+        #if targetEnvironment(simulator)
+        port = 19052
+        #endif
+        let config = URLSessionConfiguration.default
+        config.connectionProxyDictionary = [
+            kCFProxyTypeKey: kCFProxyTypeSOCKS,
+            kCFStreamPropertySOCKSVersion: kCFStreamSocketSOCKSVersion5,
+            kCFStreamPropertySOCKSProxyHost: "127.0.0.1",
+            kCFStreamPropertySOCKSProxyPort: port
+        ] as [AnyHashable: Any]
+        return URLSession(configuration: config)
     }
     
     // MARK: - Health probe
@@ -161,6 +171,10 @@ final class TorService: ObservableObject {
     func verifyTorOnResume() {
         guard isEnabled else { return }
         guard !isStopping else { return }
+        // Don't probe while connecting; give Tor time to come up
+        guard !isConnecting else { return }
+        // Throttle restarts to at most once per 10 seconds
+        if Date().timeIntervalSince(lastRestartAt) < 10 { return }
         probeTorConnectivity { [weak self] ok in
             Task { @MainActor [weak self] in
                 guard let self = self else { return }

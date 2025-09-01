@@ -63,6 +63,11 @@ class NostrRelayManager: ObservableObject {
     
     /// Connect to all configured relays
     func connect() {
+        // If Tor is required but not connected yet, do nothing now.
+        if TorService.shared.isEnabled && !TorService.shared.isConnected {
+            SecureLogger.log("⏳ Skipping relay connect until Tor is connected", category: SecureLogger.session, level: .info)
+            return
+        }
         SecureLogger.log("🌐 Connecting to \(relays.count) Nostr relays", category: SecureLogger.session, level: .debug)
         for relay in relays {
             connectToRelay(relay.url)
@@ -200,12 +205,9 @@ class NostrRelayManager: ObservableObject {
             return 
         }
         
-        // If Tor is enabled but not connected yet, defer connecting to avoid clearnet leaks.
+        // If Tor is enabled but not connected yet, do not attempt or schedule a connection.
         if TorService.shared.isEnabled && !TorService.shared.isConnected {
-            SecureLogger.log("⏳ Deferring relay connect until Tor is connected: \(urlString)", category: SecureLogger.session, level: .info)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-                self?.connectToRelay(urlString)
-            }
+            SecureLogger.log("⛔️ Not connecting to relay before Tor is connected: \(urlString)", category: SecureLogger.session, level: .info)
             return
         }
         

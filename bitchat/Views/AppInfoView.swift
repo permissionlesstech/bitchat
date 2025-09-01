@@ -5,35 +5,6 @@ struct AppInfoView: View {
     @Environment(\.colorScheme) var colorScheme
     
 
-private struct TorToggleView: View {
-    @ObservedObject var tor = TorService.shared
-    @Environment(\.colorScheme) var colorScheme
-
-    private var textColor: Color {
-        colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("tor")
-                    .font(.system(size: 16, weight: .bold, design: .monospaced))
-                    .foregroundColor(textColor)
-                Spacer()
-                Text(tor.isConnected ? "connected" : (tor.isEnabled ? "connecting…" : "off"))
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundColor(tor.isConnected ? .green : .secondary)
-            }
-            Toggle(isOn: Binding(get: { tor.isEnabled }, set: { _ in tor.toggle() })) {
-                Text("route nostr via tor")
-                    .font(.system(size: 12, design: .monospaced))
-            }
-            .toggleStyle(SwitchToggleStyle(tint: .green))
-        }
-        .padding(.vertical, 8)
-    }
-}
-
     private var backgroundColor: Color {
         colorScheme == .dark ? Color.black : Color.white
     }
@@ -146,7 +117,7 @@ private struct TorToggleView: View {
             VStack(alignment: .leading, spacing: 16) {
                 SectionHeader(Strings.Features.title)
                 
-                TorToggleView()
+                // Tor is required by default; no toggle in settings
                 
                 FeatureRow(icon: Strings.Features.offlineComm.0, 
                           title: Strings.Features.offlineComm.1,

@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 
 /// Directory of online Nostr relays with approximate GPS locations, used for geohash routing.
 @MainActor
@@ -15,6 +16,8 @@ final class GeoRelayDirectory {
     private let lastFetchKey = "georelay.lastFetchAt"
     private let remoteURL = URL(string: "https://raw.githubusercontent.com/permissionlesstech/georelays/refs/heads/main/nostr_relays.csv")!
     private let fetchInterval: TimeInterval = TransportConfig.geoRelayFetchIntervalSeconds // 24h
+    private var cancellables = Set<AnyCancellable>()
+    private var waitingForTor = false
 
     private init() {
         // Load cached or bundled data synchronously
@@ -45,6 +48,22 @@ final class GeoRelayDirectory {
         let now = Date()
         let last = UserDefaults.standard.object(forKey: lastFetchKey) as? Date ?? .distantPast
         guard now.timeIntervalSince(last) >= fetchInterval else { return }
+        // If Tor is required but not connected yet, delay prefetch until connected.
+        if TorService.shared.isEnabled && !TorService.shared.isConnected {
+            guard !waitingForTor else { return }
+            waitingForTor = true
+            TorService.shared.$isConnected
+                .filter { $0 }
+                .prefix(1)
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] _ in
+                    guard let self = self else { return }
+                    self.waitingForTor = false
+                    self.fetchRemote()
+                }
+                .store(in: &cancellables)
+            return
+        }
         fetchRemote()
     }
 
