@@ -251,6 +251,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     private let privateChatManager: PrivateChatManager
     private let unifiedPeerService: UnifiedPeerService
     private let autocompleteService: AutocompleteService
+    // Track 'waiting to connect' status message to avoid repeats per geohash
+    private var torWaitingPostedForGeohash: Set<String> = []
     
     // Computed properties for compatibility
     @MainActor
@@ -807,6 +809,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             }()
             Task { @MainActor in self.addPublicSystemMessage("tor: bootstrapped \(t)% (\(label))") }
             lastTorProgressPosted = t
+            if t == 100 { torWaitingPostedForGeohash.removeAll() }
         }
         if p == 0 && lastTorProgressPosted == 100 { lastTorProgressPosted = -1 }
     }
@@ -1525,7 +1528,10 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         }
         // If Tor is required but not yet connected, delay subscription until connected
         if TorService.shared.isEnabled && !TorService.shared.isConnected {
-            addPublicSystemMessage("tor: waiting to connect before joining #\(ch.geohash)")
+            if !torWaitingPostedForGeohash.contains(ch.geohash) {
+                addPublicSystemMessage("tor: waiting to connect before joining #\(ch.geohash)")
+                torWaitingPostedForGeohash.insert(ch.geohash)
+            }
             return
         }
 

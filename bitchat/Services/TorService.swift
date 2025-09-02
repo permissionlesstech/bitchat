@@ -207,6 +207,8 @@ final class TorService: ObservableObject {
     func verifyTorOnResume() {
         guard isEnabled else { return }
         guard !isStopping else { return }
+        // If Tor is already connected, do not probe/restart unnecessarily
+        if isConnected { return }
         // Don't probe while connecting; give Tor time to come up
         guard !isConnecting else { return }
         // Throttle restarts to at most once per 10 seconds
