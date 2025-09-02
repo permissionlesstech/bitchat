@@ -44,7 +44,7 @@ final class TorService: ObservableObject {
         guard tor == nil, !isStopping else { return }
         isConnecting = true
         isConnected = false
-        progress = 33
+        progress = 0
         if let mb = MemoryUtil.residentSizeMB() {
             SecureLogger.log("TorService: startTor() app RSS=\(mb) MB", category: SecureLogger.session, level: .debug)
         } else {
@@ -120,14 +120,14 @@ final class TorService: ObservableObject {
     }
     
     private func updateConnectionFlags(from state: TorState) {
-        // Map TorState to simple staged progress for chat
+        // Map TorState to simple staged progress for chat (bootstrapped-like)
         switch state {
         case .started:
-            progress = max(progress, 33)
+            if progress < 10 { progress = 10 } // conn
         case .refreshing:
-            progress = max(progress, 66)
+            if progress < 90 { progress = 90 } // ap_handshake_done
         case .connected:
-            progress = 100
+            progress = 100 // done
             // Log RSS on transition and occasionally if it changes significantly
             if let mb = MemoryUtil.residentSizeMB() {
                 let now = Date()

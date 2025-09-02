@@ -787,29 +787,24 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     }
 
     // MARK: - Tor Progress Announcements
-    private var lastTorProgressPosted: Int = 0
+    private var lastTorProgressPosted: Int = -1
     private func handleTorProgress(_ p: Int) {
-        // Only announce upward transitions at key thresholds
-        let thresholds = [33, 66, 100]
-        for t in thresholds.sorted() {
-            if p >= t && lastTorProgressPosted < t {
+        // Emit bootstrapped-style thresholds we can observe
+        let thresholds = [0, 10, 90, 100]
+        for t in thresholds where p >= t && lastTorProgressPosted < t {
+            let label: String = {
                 switch t {
-                case 33:
-                    Task { @MainActor in self.addPublicSystemMessage("tor: connecting (33%)") }
-                case 66:
-                    Task { @MainActor in self.addPublicSystemMessage("tor: establishing circuits (66%)") }
-                case 100:
-                    Task { @MainActor in self.addPublicSystemMessage("tor: connected (100%)") }
-                default:
-                    break
+                case 0: return "starting"
+                case 10: return "conn"
+                case 90: return "ap_handshake_done"
+                case 100: return "done"
+                default: return "progress"
                 }
-                lastTorProgressPosted = t
-            }
+            }()
+            Task { @MainActor in self.addPublicSystemMessage("tor: bootstrapped \(t)% (\(label))") }
+            lastTorProgressPosted = t
         }
-        if p == 0 {
-            // Reset when fully stopped or before a new cycle
-            lastTorProgressPosted = 0
-        }
+        if p <= 0 { lastTorProgressPosted = -1 }
     }
     
     // MARK: - Deinitialization
