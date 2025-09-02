@@ -150,6 +150,10 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     private let contentBucketCapacity: Double = TransportConfig.uiContentRateBucketCapacity
     private let contentBucketRefill: Double = TransportConfig.uiContentRateBucketRefillPerSec // tokens per second
 
+    // Deduplicate identical system messages within a short window to avoid spam
+    private var recentSystemMessages: [String: Date] = [:]
+    private let systemMessageDedupWindowSeconds: TimeInterval = 3
+
     @MainActor
     private func normalizedSenderKey(for message: BitchatMessage) -> String {
         if let spid = message.senderPeerID {
@@ -795,16 +799,16 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             let label: String = {
                 switch t {
                 case 0: return "starting"
-                case 10: return "conn"
-                case 90: return "ap_handshake_done"
-                case 100: return "done"
+                case 10: return "connecting"
+                case 90: return "building circuits"
+                case 100: return "ready"
                 default: return "progress"
                 }
             }()
             Task { @MainActor in self.addPublicSystemMessage("tor: bootstrapped \(t)% (\(label))") }
             lastTorProgressPosted = t
         }
-        if p <= 0 { lastTorProgressPosted = -1 }
+        if p == 0 && lastTorProgressPosted == 100 { lastTorProgressPosted = -1 }
     }
     
     // MARK: - Deinitialization
@@ -4930,6 +4934,13 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     /// Public helper to add a system message to the public chat timeline
     @MainActor
     func addPublicSystemMessage(_ content: String) {
+        // De-duplicate identical content posted very close together
+        let now = Date()
+        if let last = recentSystemMessages[content], now.timeIntervalSince(last) < systemMessageDedupWindowSeconds {
+            return
+        }
+        recentSystemMessages[content] = now
+
         let msg = addSystemMessage(content)
         // Persist system message into the active public timeline so it isn't lost on timeline refresh
         switch activeChannel {
