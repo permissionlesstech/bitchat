@@ -42,6 +42,8 @@ class NostrRelayManager: ObservableObject {
     private var subscriptions: [String: Set<String>] = [:] // relay URL -> subscription IDs
     private var messageHandlers: [String: (NostrEvent) -> Void] = [:]
     private var cancellables = Set<AnyCancellable>()
+    // Queue subscriptions if Tor not yet connected
+    private var pendingSubscriptions: [(id: String, filter: NostrFilter, urls: [String])] = []
     
     // Message queue for reliability
     private var messageQueue: [(event: NostrEvent, relayUrls: [String])] = []
@@ -71,6 +73,10 @@ class NostrRelayManager: ObservableObject {
         SecureLogger.log("🌐 Connecting to \(relays.count) Nostr relays", category: SecureLogger.session, level: .debug)
         for relay in relays {
             connectToRelay(relay.url)
+        }
+        // Try to flush any pending subscriptions now that we're connecting
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            self?.flushPendingSubscriptions()
         }
     }
     
@@ -122,6 +128,14 @@ class NostrRelayManager: ObservableObject {
         handler: @escaping (NostrEvent) -> Void
     ) {
         messageHandlers[id] = handler
+
+        // If Tor is enabled but not connected, queue subscription and return quietly
+        if TorService.shared.isEnabled && !TorService.shared.isConnected {
+            let urls = relayUrls ?? Self.defaultRelays
+            pendingSubscriptions.append((id: id, filter: filter, urls: urls))
+            SecureLogger.log("🕒 Deferring subscription id=\(id) until Tor connects", category: SecureLogger.session, level: .info)
+            return
+        }
         
         SecureLogger.log("📡 Subscribing to Nostr filter id=\(id) kinds=\(filter.kinds ?? []) since=\(filter.since ?? 0)", 
                         category: SecureLogger.session, level: .debug)
@@ -174,6 +188,20 @@ class NostrRelayManager: ObservableObject {
                             category: SecureLogger.session, level: .error)
         }
     }
+
+    private func flushPendingSubscriptions() {
+        guard TorService.shared.isConnected else { return }
+        guard !pendingSubscriptions.isEmpty else { return }
+        // Deduplicate by id, keep last entry
+        var latestByID: [String: (NostrFilter, [String])] = [:]
+        for item in pendingSubscriptions { latestByID[item.id] = (item.filter, item.urls) }
+        pendingSubscriptions.removeAll()
+
+        for (id, (filter, urls)) in latestByID {
+            SecureLogger.log("📡 Flushing deferred subscription id=\(id) to \(urls.count) relays", category: SecureLogger.session, level: .info)
+            subscribe(filter: filter, id: id, relayUrls: urls, handler: messageHandlers[id] ?? { _ in })
+        }
+    }
     
     /// Unsubscribe from a subscription
     func unsubscribe(id: String) {
@@ -218,7 +246,7 @@ class NostrRelayManager: ObservableObject {
         
         // Attempting to connect to Nostr relay
         let viaTor = TorService.shared.isEnabled
-        SecureLogger.log("🔌 Initiating WebSocket to \(urlString) viaTor=\(viaTor) connected=\(TorService.shared.isConnected)",
+        SecureLogger.log("🔌 Initiating WebSocket to \(urlString) viaTor=\(viaTor)",
                          category: SecureLogger.session, level: .debug)
         // Use Tor-enabled session only
         let session = URLSession.torEnabledSession()
@@ -399,6 +427,8 @@ class NostrRelayManager: ObservableObject {
                 relays[index].lastConnectedAt = Date()
                 relays[index].reconnectAttempts = 0  // Reset on successful connection
                 relays[index].nextReconnectTime = nil
+                // If at least one relay is up, try flushing any deferred subscriptions
+                flushPendingSubscriptions()
             } else {
                 relays[index].lastDisconnectedAt = Date()
             }

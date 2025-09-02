@@ -24,6 +24,10 @@ final class TorService: ObservableObject {
     private var restartWorkItem: DispatchWorkItem?
     private var restartInFlight = false
     private var lastRestartAt: Date = .distantPast
+    private var lastState: TorState = .none
+    private var lastRSSLogAt: Date = .distantPast
+    private var lastRSSMB: Double = 0
+    private var hasLoggedSessionConfig = false
     
     private init() {
         // Force-enable tor regardless of any previous persisted setting
@@ -111,6 +115,8 @@ final class TorService: ObservableObject {
         if let mb = MemoryUtil.residentSizeMB() {
             SecureLogger.log("TorService: stopTor() app RSS=\(mb) MB", category: SecureLogger.session, level: .debug)
         }
+        // Proactively drop any Nostr sockets while Tor is down
+        NostrRelayManager.shared.disconnect()
     }
     
     private func updateConnectionFlags(from state: TorState) {
@@ -122,12 +128,25 @@ final class TorService: ObservableObject {
             progress = max(progress, 66)
         case .connected:
             progress = 100
+            // Log RSS on transition and occasionally if it changes significantly
             if let mb = MemoryUtil.residentSizeMB() {
-                SecureLogger.log("TorService: connected; app RSS=\(mb) MB", category: SecureLogger.session, level: .info)
+                let now = Date()
+                if lastState != .connected || now.timeIntervalSince(lastRSSLogAt) > 30 || abs(mb - lastRSSMB) > 10 {
+                    SecureLogger.log("TorService: connected; app RSS=\(mb) MB", category: SecureLogger.session, level: .info)
+                    lastRSSLogAt = now
+                    lastRSSMB = mb
+                }
             }
         case .stopped, .none:
             if !isEnabled { progress = 0 }
+            // Log one-time when transitioning away from connected
+            if lastState == .connected {
+                if let mb = MemoryUtil.residentSizeMB() {
+                    SecureLogger.log("TorService: stopped; app RSS=\(mb) MB", category: SecureLogger.session, level: .info)
+                }
+            }
         }
+        lastState = state
         switch state {
         case .connected:
             let wasConnected = isConnected
@@ -159,7 +178,10 @@ final class TorService: ObservableObject {
             kCFStreamPropertySOCKSProxyHost: "127.0.0.1",
             kCFStreamPropertySOCKSProxyPort: port
         ] as [AnyHashable: Any]
-        SecureLogger.log("TorService: created URLSession with SOCKS 127.0.0.1:\(port)", category: SecureLogger.session, level: .debug)
+        if !hasLoggedSessionConfig {
+            SecureLogger.log("TorService: using SOCKS proxy 127.0.0.1:\(port) for all HTTP/WebSocket", category: SecureLogger.session, level: .info)
+            hasLoggedSessionConfig = true
+        }
         return URLSession(configuration: config)
     }
     
