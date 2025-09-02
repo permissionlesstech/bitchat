@@ -50,6 +50,7 @@ final class GeoRelayDirectory {
         guard now.timeIntervalSince(last) >= fetchInterval else { return }
         // If Tor is required but not connected yet, delay prefetch until connected.
         if TorService.shared.isEnabled && !TorService.shared.isConnected {
+            SecureLogger.log("GeoRelayDirectory: waiting for Tor before remote fetch", category: SecureLogger.session, level: .info)
             guard !waitingForTor else { return }
             waitingForTor = true
             TorService.shared.$isConnected
@@ -59,6 +60,7 @@ final class GeoRelayDirectory {
                 .sink { [weak self] _ in
                     guard let self = self else { return }
                     self.waitingForTor = false
+                    SecureLogger.log("GeoRelayDirectory: Tor connected, fetching remote directory", category: SecureLogger.session, level: .info)
                     self.fetchRemote()
                 }
                 .store(in: &cancellables)

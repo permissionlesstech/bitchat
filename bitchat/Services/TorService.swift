@@ -41,9 +41,15 @@ final class TorService: ObservableObject {
         isConnecting = true
         isConnected = false
         progress = 33
+        if let mb = MemoryUtil.residentSizeMB() {
+            SecureLogger.log("TorService: startTor() app RSS=\(mb) MB", category: SecureLogger.session, level: .debug)
+        } else {
+            SecureLogger.log("TorService: startTor() app RSS unavailable", category: SecureLogger.session, level: .debug)
+        }
         
         let instance = SwiftTor(start: true)
         self.tor = instance
+        SecureLogger.log("TorService: SwiftTor instance created; starting TOR thread", category: SecureLogger.session, level: .info)
         
         // Observe Tor state changes
         instance.$state
@@ -76,6 +82,7 @@ final class TorService: ObservableObject {
             st.started = false
         }
         tor = nil
+        SecureLogger.log("TorService: restartTor() tearing down previous instance", category: SecureLogger.session, level: .info)
 
         // Wait longer to ensure previous TORThread tears down
         let work = DispatchWorkItem { [weak self] in
@@ -101,6 +108,9 @@ final class TorService: ObservableObject {
         isConnected = false
         isStopping = false
         progress = 0
+        if let mb = MemoryUtil.residentSizeMB() {
+            SecureLogger.log("TorService: stopTor() app RSS=\(mb) MB", category: SecureLogger.session, level: .debug)
+        }
     }
     
     private func updateConnectionFlags(from state: TorState) {
@@ -112,6 +122,9 @@ final class TorService: ObservableObject {
             progress = max(progress, 66)
         case .connected:
             progress = 100
+            if let mb = MemoryUtil.residentSizeMB() {
+                SecureLogger.log("TorService: connected; app RSS=\(mb) MB", category: SecureLogger.session, level: .info)
+            }
         case .stopped, .none:
             if !isEnabled { progress = 0 }
         }
@@ -146,6 +159,7 @@ final class TorService: ObservableObject {
             kCFStreamPropertySOCKSProxyHost: "127.0.0.1",
             kCFStreamPropertySOCKSProxyPort: port
         ] as [AnyHashable: Any]
+        SecureLogger.log("TorService: created URLSession with SOCKS 127.0.0.1:\(port)", category: SecureLogger.session, level: .debug)
         return URLSession(configuration: config)
     }
     

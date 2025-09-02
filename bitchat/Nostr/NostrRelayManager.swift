@@ -217,8 +217,10 @@ class NostrRelayManager: ObservableObject {
         }
         
         // Attempting to connect to Nostr relay
-        
-        // Use Tor-enabled session if Tor is enabled
+        let viaTor = TorService.shared.isEnabled
+        SecureLogger.log("🔌 Initiating WebSocket to \(urlString) viaTor=\(viaTor) connected=\(TorService.shared.isConnected)",
+                         category: SecureLogger.session, level: .debug)
+        // Use Tor-enabled session only
         let session = URLSession.torEnabledSession()
         let task = session.webSocketTask(with: url)
         
@@ -232,7 +234,8 @@ class NostrRelayManager: ObservableObject {
         task.sendPing { [weak self] error in
             DispatchQueue.main.async {
                 if error == nil {
-                    SecureLogger.log("✅ Connected to Nostr relay: \(urlString)", 
+                    let viaTor = TorService.shared.isEnabled
+                    SecureLogger.log("✅ Connected to Nostr relay: \(urlString) (via tor=\(viaTor))", 
                                    category: SecureLogger.session, level: .debug)
                     self?.updateRelayStatus(urlString, isConnected: true)
                 } else {
