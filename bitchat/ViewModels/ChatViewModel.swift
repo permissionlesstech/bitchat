@@ -614,6 +614,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             // Resubscribe geohash on relay reconnect
             if let relayMgr = self.nostrRelayManager {
                 relayMgr.$isConnected
+                    .removeDuplicates()
                     .receive(on: DispatchQueue.main)
                     .sink { [weak self] connected in
                         guard let self = self else { return }
@@ -1925,7 +1926,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 since: Date().addingTimeInterval(-TransportConfig.nostrGeohashSampleLookbackSeconds),
                 limit: TransportConfig.nostrGeohashSampleLimit
             )
-            let subRelays = GeoRelayDirectory.shared.closestRelays(toGeohash: gh, count: 5)
+            let subRelays = GeoRelayDirectory.shared.closestRelays(toGeohash: gh, count: 3)
             NostrRelayManager.shared.subscribe(filter: filter, id: subID, relayUrls: subRelays) { [weak self] event in
                 guard let self = self else { return }
                 guard event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue else { return }

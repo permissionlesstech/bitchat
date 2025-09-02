@@ -41,6 +41,8 @@ class NostrRelayManager: ObservableObject {
     private var connections: [String: URLSessionWebSocketTask] = [:]
     private var subscriptions: [String: Set<String>] = [:] // relay URL -> subscription IDs
     private var messageHandlers: [String: (NostrEvent) -> Void] = [:]
+    // Track active subscriptions so we can re-send to newly connected relays
+    private var activeSubscriptions: [String: (filter: NostrFilter, urls: [String])] = [:]
     private var cancellables = Set<AnyCancellable>()
     // Queue subscriptions if Tor not yet connected
     private var pendingSubscriptions: [(id: String, filter: NostrFilter, urls: [String])] = []
@@ -132,6 +134,7 @@ class NostrRelayManager: ObservableObject {
         // If Tor is enabled but not connected, queue subscription and return quietly
         if TorService.shared.isEnabled && !TorService.shared.isConnected {
             let urls = relayUrls ?? Self.defaultRelays
+            activeSubscriptions[id] = (filter, urls)
             pendingSubscriptions.append((id: id, filter: filter, urls: urls))
             SecureLogger.log("🕒 Deferring subscription id=\(id) until Tor connects", category: SecureLogger.session, level: .info)
             return
@@ -266,6 +269,10 @@ class NostrRelayManager: ObservableObject {
                     SecureLogger.log("✅ Connected to Nostr relay: \(urlString) (via tor=\(viaTor))", 
                                    category: SecureLogger.session, level: .debug)
                     self?.updateRelayStatus(urlString, isConnected: true)
+                    // Send any active subscriptions to this new relay
+                    if let conn = self?.connections[urlString] {
+                        self?.sendActiveSubscriptions(to: urlString, over: conn)
+                    }
                 } else {
                     SecureLogger.log("❌ Failed to connect to Nostr relay \(urlString): \(error?.localizedDescription ?? "Unknown error")", 
                                    category: SecureLogger.session, level: .error)
@@ -273,6 +280,31 @@ class NostrRelayManager: ObservableObject {
                     // Trigger disconnection handler for proper backoff
                     self?.handleDisconnection(relayUrl: urlString, error: error ?? NSError(domain: "NostrRelay", code: -1, userInfo: nil))
                 }
+            }
+        }
+    }
+
+    private func sendActiveSubscriptions(to relayUrl: String, over connection: URLSessionWebSocketTask) {
+        let current = subscriptions[relayUrl] ?? Set<String>()
+        for (id, entry) in activeSubscriptions {
+            if !entry.urls.contains(relayUrl) { continue }
+            if current.contains(id) { continue }
+            do {
+                let encoder = JSONEncoder()
+                encoder.outputFormatting = .sortedKeys
+                let req = NostrRequest.subscribe(id: id, filters: [entry.filter])
+                let data = try encoder.encode(req)
+                if let msg = String(data: data, encoding: .utf8) {
+                    connection.send(.string(msg)) { [weak self] _ in
+                        Task { @MainActor in
+                            var set = self?.subscriptions[relayUrl] ?? Set<String>()
+                            set.insert(id)
+                            self?.subscriptions[relayUrl] = set
+                        }
+                    }
+                }
+            } catch {
+                SecureLogger.log("❌ Failed to encode resubscription id=\(id): \(error)", category: SecureLogger.session, level: .error)
             }
         }
     }
@@ -330,8 +362,8 @@ class NostrRelayManager: ObservableObject {
                         
                         let event = try NostrEvent(from: eventDict)
                         
-                        // Only log non-gift-wrap events to reduce noise
-                        if event.kind != 1059 {
+                        // Reduce noise: do not log common geohash (20000) or gift-wrap (1059) events
+                        if event.kind != 1059 && event.kind != 20000 {
                             SecureLogger.log("📥 Event kind=\(event.kind) id=\(event.id.prefix(16))… relay=\(relayUrl)",
                                             category: SecureLogger.session, level: .debug)
                         }
