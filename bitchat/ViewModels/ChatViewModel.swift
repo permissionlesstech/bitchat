@@ -4915,7 +4915,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     }
     
     // MARK: - Helper for System Messages
-    private func addSystemMessage(_ content: String, timestamp: Date = Date()) {
+    @discardableResult
+    private func addSystemMessage(_ content: String, timestamp: Date = Date()) -> BitchatMessage {
         let systemMessage = BitchatMessage(
             sender: "system",
             content: content,
@@ -4923,12 +4924,24 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             isRelay: false
         )
         messages.append(systemMessage)
+        return systemMessage
     }
 
     /// Public helper to add a system message to the public chat timeline
     @MainActor
     func addPublicSystemMessage(_ content: String) {
-        addSystemMessage(content)
+        let msg = addSystemMessage(content)
+        // Persist system message into the active public timeline so it isn't lost on timeline refresh
+        switch activeChannel {
+        case .mesh:
+            meshTimeline.append(msg)
+            if meshTimeline.count > meshTimelineCap { meshTimeline = Array(meshTimeline.suffix(meshTimelineCap)) }
+        case .location(let ch):
+            var arr = geoTimelines[ch.geohash] ?? []
+            arr.append(msg)
+            if arr.count > geoTimelineCap { arr = Array(arr.suffix(geoTimelineCap)) }
+            geoTimelines[ch.geohash] = arr
+        }
         objectWillChange.send()
     }
     // Send a public message without adding a local user echo.
