@@ -2,6 +2,7 @@ import Foundation
 import Combine
 import SwiftUI
 import SwiftTor
+import Darwin
 
 @MainActor
 final class TorService: ObservableObject {
@@ -28,6 +29,8 @@ final class TorService: ObservableObject {
     private var lastRSSLogAt: Date = .distantPast
     private var lastRSSMB: Double = 0
     private var hasLoggedSessionConfig = false
+    // Port-collision retry
+    private var portRetryWorkItem: DispatchWorkItem?
     // Connectivity probe coordination
     private var connectivityProbeInFlight = false
     private var lastConnectivityProbeAt: Date = .distantPast
@@ -84,6 +87,22 @@ final class TorService: ObservableObject {
             SecureLogger.log("TorService: startTor() app RSS unavailable", category: SecureLogger.session, level: .debug)
         }
         
+        // Preflight: ensure our listener ports are free; if not, delay and retry instead of failing at 10%
+        var socksPort = 19050
+        #if targetEnvironment(simulator)
+        socksPort = 19052
+        #endif
+        let dnsPort = 12345
+        if !isLocalPortAvailable(socksPort) || !isLocalPortAvailable(dnsPort) {
+            SecureLogger.log("TorService: required ports busy (SOCKS \(socksPort) or DNS \(dnsPort)); retrying shortly…",
+                             category: SecureLogger.session, level: .warning)
+            portRetryWorkItem?.cancel()
+            let work = DispatchWorkItem { [weak self] in self?.startTor() }
+            portRetryWorkItem = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0, execute: work)
+            return
+        }
+
         let instance = SwiftTor(start: true)
         self.tor = instance
         SecureLogger.log("TorService: SwiftTor instance created; starting TOR thread", category: SecureLogger.session, level: .info)
@@ -96,6 +115,38 @@ final class TorService: ObservableObject {
                 self.updateConnectionFlags(from: state)
             }
             .store(in: &cancellables)
+    }
+
+    // Attempt to bind the requested local TCP port to detect if it's already in use.
+    // Returns true if the port appears free (bind succeeds then immediately closes), false if in use or on error.
+    private func isLocalPortAvailable(_ port: Int) -> Bool {
+        let sock = socket(AF_INET, SOCK_STREAM, 0)
+        if sock < 0 { return false }
+        var yes: Int32 = 1
+        _ = withUnsafePointer(to: &yes) { ptr in
+            ptr.withMemoryRebound(to: Int32.self, capacity: 1) { p in
+                setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, p, socklen_t(MemoryLayout<Int32>.size))
+            }
+        }
+        var addr = sockaddr_in()
+        addr.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+        addr.sin_family = sa_family_t(AF_INET)
+        addr.sin_port = in_port_t(UInt16(port).bigEndian)
+        addr.sin_addr = in_addr(s_addr: inet_addr("127.0.0.1"))
+        let result = withUnsafePointer(to: &addr) { ptr -> Int32 in
+            return ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { p in
+                bind(sock, p, socklen_t(MemoryLayout<sockaddr_in>.size))
+            }
+        }
+        let ok = (result == 0)
+        // If we managed to bind, immediately close; the port will be free for Tor to claim.
+        if ok {
+            _ = close(sock)
+            return true
+        } else {
+            _ = close(sock)
+            return false
+        }
     }
     
     /// Safely restart Tor avoiding multiple TORThread instances.
@@ -239,12 +290,12 @@ final class TorService: ObservableObject {
 
         let task = session.dataTask(with: request) { data, response, error in
             let ok = (error == nil) && (response as? HTTPURLResponse)?.statusCode == 200 && (data?.isEmpty == false)
-            finish(ok)
+            Task { @MainActor in finish(ok) }
         }
         task.resume()
         // Fallback timeout guard (non-cancelling, returns false if not completed earlier)
         DispatchQueue.global().asyncAfter(deadline: .now() + timeout + 2) {
-            finish(false)
+            Task { @MainActor in finish(false) }
         }
     }
     
