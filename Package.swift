@@ -31,6 +31,9 @@ let package = Package(
                 "bitchat.entitlements",
                 "bitchat-macOS.entitlements",
                 "LaunchScreen.storyboard"
+            ],
+            resources: [
+                .process("Localizable.xcstrings")
             ]
         ),
     ]
