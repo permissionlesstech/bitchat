@@ -89,10 +89,19 @@ final class MessageRouter {
 
     // MARK: - Outbox Management
     private func canSendViaNostr(peerID: String) -> Bool {
-        guard let noiseKey = Data(hexString: peerID) else { return false }
-        if let fav = FavoritesPersistenceService.shared.getFavoriteStatus(for: noiseKey),
-           fav.peerNostrPublicKey != nil {
-            return true
+        // Two forms are supported:
+        // - 64-hex Noise public key (32 bytes)
+        // - 16-hex short peer ID (derived from Noise pubkey)
+        if peerID.count == 64, let noiseKey = Data(hexString: peerID) {
+            if let fav = FavoritesPersistenceService.shared.getFavoriteStatus(for: noiseKey),
+               fav.peerNostrPublicKey != nil {
+                return true
+            }
+        } else if peerID.count == 16 {
+            if let fav = FavoritesPersistenceService.shared.getFavoriteStatus(forPeerID: peerID),
+               fav.peerNostrPublicKey != nil {
+                return true
+            }
         }
         return false
     }
@@ -101,6 +110,7 @@ final class MessageRouter {
         guard let queued = outbox[peerID], !queued.isEmpty else { return }
         SecureLogger.log("Flushing outbox for \(peerID.prefix(8))… count=\(queued.count)",
                         category: SecureLogger.session, level: .debug)
+        var remaining: [(content: String, nickname: String, messageID: String)] = []
         // Prefer mesh if connected; else try Nostr if mapping exists
         for (content, nickname, messageID) in queued {
             if mesh.isPeerReachable(peerID) {
@@ -112,14 +122,19 @@ final class MessageRouter {
                                 category: SecureLogger.session, level: .debug)
                 nostr.sendPrivateMessage(content, to: peerID, recipientNickname: nickname, messageID: messageID)
             } else {
-                continue
+                // Keep unsent items queued
+                remaining.append((content, nickname, messageID))
             }
         }
-        // Remove all flushed items (remaining ones, if any, will be re-queued on next call)
-        outbox[peerID]?.removeAll()
+        // Persist only items we could not send
+        if remaining.isEmpty {
+            outbox.removeValue(forKey: peerID)
+        } else {
+            outbox[peerID] = remaining
+        }
     }
 
     func flushAllOutbox() {
-        for key in outbox.keys { flushOutbox(for: key) }
+        for key in Array(outbox.keys) { flushOutbox(for: key) }
     }
 }

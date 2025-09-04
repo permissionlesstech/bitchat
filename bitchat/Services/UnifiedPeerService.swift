@@ -27,6 +27,7 @@ class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
     private var peerIndex: [String: BitchatPeer] = [:]
     private var fingerprintCache: [String: String] = [:]  // peerID -> fingerprint
     private let meshService: Transport
+    weak var messageRouter: MessageRouter?
     private let favoritesService = FavoritesPersistenceService.shared
     private var cancellables = Set<AnyCancellable>()
     
@@ -330,8 +331,13 @@ class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         SecureLogger.log("⭐️ Toggled favorite for '\(finalNickname)' (peerID: \(peerID), was: \(wasFavorite), now: \(!wasFavorite))",
                        category: SecureLogger.session, level: .debug)
         
-        // Send favorite notification to the peer
-        meshService.sendFavoriteNotification(to: peerID, isFavorite: !wasFavorite)
+        // Send favorite notification to the peer via router (mesh or Nostr)
+        if let router = messageRouter {
+            router.sendFavoriteNotification(to: peerID, isFavorite: !wasFavorite)
+        } else {
+            // Fallback to mesh-only if router not yet wired
+            meshService.sendFavoriteNotification(to: peerID, isFavorite: !wasFavorite)
+        }
         
         // Force update of peers to reflect the change
         updatePeers()

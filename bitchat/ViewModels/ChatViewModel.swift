@@ -492,6 +492,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         self.messageRouter = MessageRouter(mesh: meshService, nostr: nostrTransport)
         // Route receipts from PrivateChatManager through MessageRouter
         self.privateChatManager.messageRouter = self.messageRouter
+        // Allow UnifiedPeerService to route favorite notifications via mesh/Nostr
+        self.unifiedPeerService.messageRouter = self.messageRouter
         self.autocompleteService = AutocompleteService()
         
         // Wire up dependencies
