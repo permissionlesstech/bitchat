@@ -88,6 +88,22 @@ final class BLEService: NSObject {
     var myPeerID: String = ""
     var myNickname: String = "anon"
     private let noiseService = NoiseEncryptionService()
+    
+    // MARK: - Privacy Settings
+    
+    /// Low-visibility mode reduces scanning aggressiveness for enhanced privacy
+    /// This mode is useful in sensitive contexts where minimizing RF footprint is important
+    @Published var isLowVisibilityModeEnabled: Bool = false {
+        didSet {
+            if isLowVisibilityModeEnabled {
+                SecureLogger.log("🔒 Low-visibility mode enabled", category: SecureLogger.security, level: .info)
+                applyLowVisibilitySettings()
+            } else {
+                SecureLogger.log("🔓 Low-visibility mode disabled", category: SecureLogger.security, level: .info)
+                applyStandardSettings()
+            }
+        }
+    }
 
     // MARK: - Advertising Privacy
     // No Local Name by default for maximum privacy. No rotating alias.
@@ -140,6 +156,51 @@ final class BLEService: NSObject {
     
     private var maintenanceTimer: DispatchSourceTimer?  // Single timer for all maintenance tasks
     private var maintenanceCounter = 0  // Track maintenance cycles
+    
+    // MARK: - Privacy Mode Management
+    
+    /// Apply low-visibility mode settings for enhanced privacy
+    private func applyLowVisibilitySettings() {
+        bleQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            // Update duty cycle for less aggressive scanning
+            self.dutyOnDuration = TransportConfig.bleLowVisibilityDutyOnDuration
+            self.dutyOffDuration = TransportConfig.bleLowVisibilityDutyOffDuration
+            
+            // Reduce connection limits
+            // Note: We can't change maxCentralLinks dynamically, but we can be more selective
+            
+            // Restart scanning with new settings
+            if self.centralManager?.isScanning == true {
+                self.centralManager?.stopScan()
+                self.startScanning()
+            }
+            
+            // Restart duty cycle timer with new settings
+            self.restartDutyCycleTimer()
+        }
+    }
+    
+    /// Apply standard scanning settings
+    private func applyStandardSettings() {
+        bleQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            // Restore standard duty cycle
+            self.dutyOnDuration = TransportConfig.bleDutyOnDuration
+            self.dutyOffDuration = TransportConfig.bleDutyOffDuration
+            
+            // Restart scanning with standard settings
+            if self.centralManager?.isScanning == true {
+                self.centralManager?.stopScan()
+                self.startScanning()
+            }
+            
+            // Restart duty cycle timer with standard settings
+            self.restartDutyCycleTimer()
+        }
+    }
 
     // MARK: - Connection budget & scheduling (central role)
     private let maxCentralLinks = TransportConfig.bleMaxCentralLinks
@@ -459,6 +520,12 @@ final class BLEService: NSObject {
     }
     
     // MARK: - Core Public API
+    
+    /// Enable or disable low-visibility mode for enhanced privacy
+    /// This mode reduces scanning aggressiveness and announce frequency
+    func setLowVisibilityMode(_ enabled: Bool) {
+        isLowVisibilityModeEnabled = enabled
+    }
     
     func startServices() {
         // Start BLE services if not already running
@@ -1816,8 +1883,16 @@ final class BLEService: NSObject {
         let now = Date()
         let timeSinceLastAnnounce = now.timeIntervalSince(lastAnnounceSent)
         
+        // Determine announce interval based on privacy mode
+        let announceInterval: TimeInterval
+        if isLowVisibilityModeEnabled {
+            announceInterval = TransportConfig.bleLowVisibilityAnnounceInterval
+        } else {
+            announceInterval = announceMinInterval
+        }
+        
         // Even forced sends should respect a minimum interval to avoid overwhelming BLE
-        let minInterval = forceSend ? TransportConfig.bleForceAnnounceMinIntervalSeconds : announceMinInterval
+        let minInterval = forceSend ? TransportConfig.bleForceAnnounceMinIntervalSeconds : announceInterval
         
         if timeSinceLastAnnounce < minInterval {
             // Skipping announce (rate limited)
@@ -2252,20 +2327,30 @@ extension BLEService: CBCentralManagerDelegate {
               central.state == .poweredOn,
               !central.isScanning else { return }
         
-        // Use allow duplicates = true for faster discovery in foreground
-        // This gives us discovery events immediately instead of coalesced
-        #if os(iOS)
-        let allowDuplicates = isAppActive  // Use our tracked state (thread-safe)
-        #else
-        let allowDuplicates = true  // macOS doesn't have background restrictions
-        #endif
+        // Determine scanning options based on privacy mode and app state
+        var scanOptions: [String: Any] = [:]
+        
+        if isLowVisibilityModeEnabled {
+            // Low-visibility mode: no duplicates, more conservative scanning
+            scanOptions[CBCentralManagerScanOptionAllowDuplicatesKey] = TransportConfig.bleLowVisibilityScanAllowDuplicates
+        } else {
+            // Standard mode: use allow duplicates for faster discovery in foreground
+            #if os(iOS)
+            let allowDuplicates = isAppActive  // Use our tracked state (thread-safe)
+            #else
+            let allowDuplicates = true  // macOS doesn't have background restrictions
+            #endif
+            scanOptions[CBCentralManagerScanOptionAllowDuplicatesKey] = allowDuplicates
+        }
         
         central.scanForPeripherals(
-                withServices: [BLEService.serviceUUID],
-            options: [CBCentralManagerScanOptionAllowDuplicatesKey: allowDuplicates]
+            withServices: [BLEService.serviceUUID],
+            options: scanOptions
         )
         
-        // Started BLE scanning
+        // Log scanning mode for debugging
+        SecureLogger.log("🔍 Started BLE scanning (low-visibility: \(isLowVisibilityModeEnabled))", 
+                        category: SecureLogger.session, level: .debug)
     }
     
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) {

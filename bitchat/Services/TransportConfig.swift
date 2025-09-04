@@ -25,6 +25,13 @@ enum TransportConfig {
     static let bleDutyOnDuration: TimeInterval = 5.0
     static let bleDutyOffDuration: TimeInterval = 10.0
     static let bleAnnounceMinInterval: TimeInterval = 1.0
+    
+    // Low-visibility mode (privacy-focused scanning)
+    static let bleLowVisibilityDutyOnDuration: TimeInterval = 2.0      // Shorter active scanning
+    static let bleLowVisibilityDutyOffDuration: TimeInterval = 30.0    // Longer inactive periods
+    static let bleLowVisibilityAnnounceInterval: TimeInterval = 8.0    // Less frequent announces
+    static let bleLowVisibilityScanAllowDuplicates: Bool = false       // No duplicate scanning
+    static let bleLowVisibilityMaxCentralLinks: Int = 3                // Fewer connections
 
     // BLE discovery/quality thresholds
     static let bleDynamicRSSIThresholdDefault: Int = -90
@@ -126,6 +133,10 @@ enum TransportConfig {
     // Message deduplication
     static let messageDedupMaxAgeSeconds: TimeInterval = 300
     static let messageDedupMaxCount: Int = 1000
+    
+    // Read receipt coalescing (privacy enhancement)
+    static let readReceiptCoalescingEnabled: Bool = true
+    static let readReceiptCoalescingThreshold: Int = 2  // Minimum messages to trigger coalescing
 
     // Verification QR
     static let verificationQRMaxAgeSeconds: TimeInterval = 5 * 60

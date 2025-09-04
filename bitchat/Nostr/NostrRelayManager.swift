@@ -2,6 +2,12 @@ import Foundation
 import Network
 import Combine
 
+/// Preferences for Nostr relay selection
+struct RelayPreferences: Codable {
+    let selectionMode: NostrRelayManager.RelaySelectionMode
+    let trustedRelays: [String]
+}
+
 /// Manages WebSocket connections to Nostr relays
 @MainActor
 class NostrRelayManager: ObservableObject {
@@ -12,9 +18,33 @@ class NostrRelayManager: ObservableObject {
         pendingGiftWrapIDs.insert(id)
     }
     
-    struct Relay: Identifiable {
+    /// Categories for different types of Nostr relays
+    enum RelayCategory: String, CaseIterable, Codable {
+        case public = "public"           // Standard public relays
+        case private = "private"         // Private/trusted relays
+        case trusted = "trusted"         // User's personal trusted relays
+        
+        var displayName: String {
+            switch self {
+            case .public: return "Public"
+            case .private: return "Private"
+            case .trusted: return "Trusted"
+            }
+        }
+        
+        var description: String {
+            switch self {
+            case .public: return "Standard public relays (default)"
+            case .private: return "Private/trusted relays only"
+            case .trusted: return "Your personal trusted relay list"
+            }
+        }
+    }
+    
+    struct Relay: Identifiable, Codable {
         let id = UUID()
         let url: String
+        let category: RelayCategory
         var isConnected: Bool = false
         var lastError: Error?
         var lastConnectedAt: Date?
@@ -23,10 +53,15 @@ class NostrRelayManager: ObservableObject {
         var reconnectAttempts: Int = 0
         var lastDisconnectedAt: Date?
         var nextReconnectTime: Date?
+        
+        init(url: String, category: RelayCategory = .public) {
+            self.url = url
+            self.category = category
+        }
     }
     
-    // Default relay list (can be customized)
-    private static let defaultRelays = [
+    // Default relay lists by category
+    private static let defaultPublicRelays = [
         "wss://relay.damus.io",
         "wss://nos.lol",
         "wss://relay.primal.net",
@@ -35,8 +70,58 @@ class NostrRelayManager: ObservableObject {
         // For local testing, you can add: "ws://localhost:8080"
     ]
     
+    private static let defaultPrivateRelays = [
+        "wss://relay.private.nostr.com",
+        "wss://relay.trusted.nostr.net",
+        "wss://relay.secure.nostr.org"
+    ]
+    
+    // User's personal trusted relays (stored in UserDefaults)
+    private static let trustedRelaysKey = "bitchat.trusted.nostr.relays"
+    
     @Published private(set) var relays: [Relay] = []
     @Published private(set) var isConnected = false
+    
+    // User preferences for relay selection
+    @Published var relaySelectionMode: RelaySelectionMode = .all {
+        didSet {
+            updateRelayList()
+            saveRelayPreferences()
+        }
+    }
+    
+    @Published var userTrustedRelays: [String] = [] {
+        didSet {
+            updateRelayList()
+            saveRelayPreferences()
+        }
+    }
+    
+    /// How the user wants to select relays
+    enum RelaySelectionMode: String, CaseIterable, Codable {
+        case all = "all"                 // All relays (public + private + trusted)
+        case privateOnly = "private"      // Private relays only
+        case trustedOnly = "trusted"      // User's trusted relays only
+        case custom = "custom"            // Custom selection
+        
+        var displayName: String {
+            switch self {
+            case .all: return "All Relays"
+            case .privateOnly: return "Private Only"
+            case .trustedOnly: return "Trusted Only"
+            case .custom: return "Custom"
+            }
+        }
+        
+        var description: String {
+            switch self {
+            case .all: return "Connect to all available relays"
+            case .privateOnly: return "Use only private/trusted relays"
+            case .trustedOnly: return "Use only your personal trusted relays"
+            case .custom: return "Manually select which relays to use"
+            }
+        }
+    }
     
     private var connections: [String: URLSessionWebSocketTask] = [:]
     private var subscriptions: [String: Set<String>] = [:] // relay URL -> subscription IDs
@@ -62,14 +147,109 @@ class NostrRelayManager: ObservableObject {
     private var reconnectionTimer: Timer?
     
     init() {
+        // Load user preferences
+        loadRelayPreferences()
+        
         // Initialize with default relays
-        self.relays = Self.defaultRelays.map { Relay(url: $0) }
+        updateRelayList()
+    }
+    
+    // MARK: - Relay Management
+    
+    /// Update the relay list based on user preferences
+    private func updateRelayList() {
+        var newRelays: [Relay] = []
+        
+        switch relaySelectionMode {
+        case .all:
+            // Add all relay types
+            newRelays.append(contentsOf: Self.defaultPublicRelays.map { Relay(url: $0, category: .public) })
+            newRelays.append(contentsOf: Self.defaultPrivateRelays.map { Relay(url: $0, category: .private) })
+            newRelays.append(contentsOf: userTrustedRelays.map { Relay(url: $0, category: .trusted) })
+            
+        case .privateOnly:
+            // Only private and trusted relays
+            newRelays.append(contentsOf: Self.defaultPrivateRelays.map { Relay(url: $0, category: .private) })
+            newRelays.append(contentsOf: userTrustedRelays.map { Relay(url: $0, category: .trusted) })
+            
+        case .trustedOnly:
+            // Only user's trusted relays
+            newRelays.append(contentsOf: userTrustedRelays.map { Relay(url: $0, category: .trusted) })
+            
+        case .custom:
+            // Use current selection (for manual management)
+            break
+        }
+        
+        // Update relays and reconnect if needed
+        let wasConnected = isConnected
+        relays = newRelays
+        
+        if wasConnected {
+            // Reconnect with new relay list
+            disconnect()
+            connect()
+        }
+    }
+    
+    /// Add a new trusted relay
+    func addTrustedRelay(_ url: String) {
+        guard !userTrustedRelays.contains(url) else { return }
+        userTrustedRelays.append(url)
+    }
+    
+    /// Remove a trusted relay
+    func removeTrustedRelay(_ url: String) {
+        userTrustedRelays.removeAll { $0 == url }
+    }
+    
+    /// Save relay preferences to UserDefaults
+    private func saveRelayPreferences() {
+        let preferences = RelayPreferences(
+            selectionMode: relaySelectionMode,
+            trustedRelays: userTrustedRelays
+        )
+        
+        if let data = try? JSONEncoder().encode(preferences) {
+            UserDefaults.standard.set(data, forKey: Self.trustedRelaysKey)
+        }
+    }
+    
+    /// Load relay preferences from UserDefaults
+    private func loadRelayPreferences() {
+        guard let data = UserDefaults.standard.data(forKey: Self.trustedRelaysKey),
+              let preferences = try? JSONDecoder().decode(RelayPreferences.self, from: data) else {
+            // Use defaults if no preferences saved
+            relaySelectionMode = .all
+            userTrustedRelays = []
+            return
+        }
+        
+        relaySelectionMode = preferences.selectionMode
+        userTrustedRelays = preferences.trustedRelays
+    }
+    
+    /// Get available relays for the current selection mode
+    func getAvailableRelays() -> [Relay] {
+        switch relaySelectionMode {
+        case .all:
+            return relays
+        case .privateOnly:
+            return relays.filter { $0.category == .private || $0.category == .trusted }
+        case .trustedOnly:
+            return relays.filter { $0.category == .trusted }
+        case .custom:
+            return relays
+        }
     }
     
     /// Connect to all configured relays
     func connect() {
-        SecureLogger.log("🌐 Connecting to \(relays.count) Nostr relays", category: SecureLogger.session, level: .debug)
-        for relay in relays {
+        let availableRelays = getAvailableRelays()
+        SecureLogger.log("🌐 Connecting to \(availableRelays.count) Nostr relays (mode: \(relaySelectionMode.rawValue))", 
+                        category: SecureLogger.session, level: .debug)
+        
+        for relay in availableRelays {
             connectToRelay(relay.url)
         }
     }
@@ -98,7 +278,7 @@ class NostrRelayManager: ObservableObject {
 
     /// Send an event to specified relays (or all if none specified)
     func sendEvent(_ event: NostrEvent, to relayUrls: [String]? = nil) {
-        let targetRelays = relayUrls ?? Self.defaultRelays
+        let targetRelays = relayUrls ?? getAvailableRelays().map { $0.url }
         ensureConnections(to: targetRelays)
 
         // Attempt immediate send to relays with active connections; queue the rest
@@ -181,8 +361,8 @@ class NostrRelayManager: ObservableObject {
             // SecureLogger.log("📋 Subscription filter JSON: \(messageString.prefix(200))...", 
             //                 category: SecureLogger.session, level: .debug)
             
-            // Target specific relays if provided; else all connections
-            let urls = relayUrls ?? Self.defaultRelays
+            // Target specific relays if provided; else use available relays
+            let urls = relayUrls ?? getAvailableRelays().map { $0.url }
             ensureConnections(to: urls)
             let targets: [(String, URLSessionWebSocketTask)] = urls.compactMap { url in
                 connections[url].map { (url, $0) }

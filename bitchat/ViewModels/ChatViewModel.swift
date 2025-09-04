@@ -388,6 +388,30 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     @Published var isAppInfoPresented: Bool = false
     @Published var showScreenshotPrivacyWarning: Bool = false
     
+    // Privacy settings
+    @Published var isLowVisibilityModeEnabled: Bool = false {
+        didSet {
+            // Apply low-visibility mode to BLE service
+            meshService.setLowVisibilityMode(isLowVisibilityModeEnabled)
+            
+            // Log privacy mode change
+            SecureLogger.log("🔒 Low-visibility mode \(isLowVisibilityModeEnabled ? "enabled" : "disabled")", 
+                           category: SecureLogger.security, level: .info)
+        }
+    }
+    
+    // Relay preferences sheet
+    @Published var showRelayPreferencesSheet: Bool = false
+    
+    // Privacy settings
+    @Published var isReadReceiptCoalescingEnabled: Bool = TransportConfig.readReceiptCoalescingEnabled {
+        didSet {
+            // Log privacy setting change
+            SecureLogger.log("📚 Read receipt coalescing \(isReadReceiptCoalescingEnabled ? "enabled" : "disabled")", 
+                           category: SecureLogger.security, level: .info)
+        }
+    }
+    
     // Messages are naturally ephemeral - no persistent storage
     // Persist mesh public timeline across channel switches
     private var meshTimeline: [BitchatMessage] = []
