@@ -45,6 +45,7 @@
 		4B747085D07A1BCE0F5BA612 /* BinaryProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2136C3E22D02D4A8DBE7EAB /* BinaryProtocol.swift */; };
 		4F2F1893E90C1B13D388CEA9 /* LocationChannelsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15B067FEF619D9D3D14782BA /* LocationChannelsTests.swift */; };
 		501BC56B1A08C0327A09AAF1 /* NoiseEncryptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 394E8A1AC76EFAE352075BE9 /* NoiseEncryptionService.swift */; };
+		596C1C7CC5B8CD6805FF532F /* UIInteractionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F26F32A1A2EE8CC838267B8B /* UIInteractionTests.swift */; };
 		5A0B730FCFACABE31EC6B402 /* LocationChannelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 935361F3BDD8F966DB207BF7 /* LocationChannelManager.swift */; };
 		5C93B4FDD0C448C3EDDBF8AE /* FavoritesPersistenceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 419BFFF209EBA93F410E9E9F /* FavoritesPersistenceService.swift */; };
 		5EE49E150BBF0488E7473687 /* NoiseEncryptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 394E8A1AC76EFAE352075BE9 /* NoiseEncryptionService.swift */; };
@@ -98,7 +99,6 @@
 		A0A1C26EFBFDD5B8EFEEDE57 /* PublicChatE2ETests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D22BF09A49010947CEFE45E2 /* PublicChatE2ETests.swift */; };
 		A0F4471D8974C5D3A317F6EC /* VerificationViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A9D538710EEF999CC0C2E6F /* VerificationViews.swift */; };
 		A1A32ACB18165DD04A5EC540 /* PeerID.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC0569D3728519ED53CD9D7E /* PeerID.swift */; };
-		A1F8A7223F1CFE7206D2F966 /* LocalizationUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4030C88620072D88106992AB /* LocalizationUITests.swift */; };
 		A527724B5E85B310946ADC59 /* Localization.swift in Sources */ = {isa = PBXBuildFile; fileRef = C53B4FE130946D425BE680BD /* Localization.swift */; };
 		A7187D48B07C6857DE01D0ED /* NoiseProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43613045E63D21D429396805 /* NoiseProtocol.swift */; };
 		A92C00F64DBFA588476765A6 /* NostrEmbeddedBitChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3A1756A6D49A9B037F31A23 /* NostrEmbeddedBitChat.swift */; };
@@ -141,6 +141,7 @@
 		D782AB596DDB5C846554F7C3 /* NostrIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F8043995007F0D84438EDD9 /* NostrIdentity.swift */; };
 		DC005562A203778E5A58ACA0 /* GeohashBookmarksStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E113B867C7531E4603F7118 /* GeohashBookmarksStoreTests.swift */; };
 		DD6C921ABE8BB47B131C018B /* GeohashPeopleList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AE0E8536824D5431E879831 /* GeohashPeopleList.swift */; };
+		DE656B099A7F09D39C26A099 /* LocalizationValidationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 752674A49BEA558572A9AFAF /* LocalizationValidationTests.swift */; };
 		DFE6C88F3C487BB0FF4A330F /* XChaCha20Poly1305Compat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F6B06DDD6D82D60B073A8B7 /* XChaCha20Poly1305Compat.swift */; };
 		E1510B9FC6528BB22E21CAC5 /* XChaCha20Poly1305Compat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F6B06DDD6D82D60B073A8B7 /* XChaCha20Poly1305Compat.swift */; };
 		E2DCF7817344F1CCDB8B7B2F /* SecureIdentityStateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDC18D910D6FF2E8B1B6C885 /* SecureIdentityStateManager.swift */; };
@@ -235,7 +236,6 @@
 		394E8A1AC76EFAE352075BE9 /* NoiseEncryptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoiseEncryptionService.swift; sourceTree = "<group>"; };
 		3A556661F74B7D5AE2F0521B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		3A69677D382F1C3D5ED03F7D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		4030C88620072D88106992AB /* LocalizationUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizationUITests.swift; sourceTree = "<group>"; };
 		419BFFF209EBA93F410E9E9F /* FavoritesPersistenceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoritesPersistenceService.swift; sourceTree = "<group>"; };
 		43613045E63D21D429396805 /* NoiseProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoiseProtocol.swift; sourceTree = "<group>"; };
 		43B4548DAFC9F7AA8873DA53 /* NoiseSecurityConsiderations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoiseSecurityConsiderations.swift; sourceTree = "<group>"; };
@@ -256,6 +256,7 @@
 		63B23F0624A8297F993ADF46 /* TransportConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransportConfig.swift; sourceTree = "<group>"; };
 		6CFBF7162BBFF8184561FC64 /* RelayController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayController.swift; sourceTree = "<group>"; };
 		6E113B867C7531E4603F7118 /* GeohashBookmarksStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeohashBookmarksStoreTests.swift; sourceTree = "<group>"; };
+		752674A49BEA558572A9AFAF /* LocalizationValidationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizationValidationTests.swift; sourceTree = "<group>"; };
 		763E0DBA9492A654FC0CDCB9 /* AppInfoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppInfoView.swift; sourceTree = "<group>"; };
 		78595178957244CBDF7E79B6 /* NostrRelayManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NostrRelayManager.swift; sourceTree = "<group>"; };
 		79FF0C79C2DD20AC04C5E75E /* Base */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = Base; path = Base.lproj/InfoPlist.strings; sourceTree = "<group>"; };
@@ -303,6 +304,7 @@
 		EC0569D3728519ED53CD9D7E /* PeerID.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerID.swift; sourceTree = "<group>"; };
 		EE7EFB209C86BBD956B749EC /* SecureLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureLogger.swift; sourceTree = "<group>"; };
 		EF625BB3AD919322C01A46B2 /* BitchatApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitchatApp.swift; sourceTree = "<group>"; };
+		F26F32A1A2EE8CC838267B8B /* UIInteractionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIInteractionTests.swift; sourceTree = "<group>"; };
 		F27C85DB05C7FB4ADDA3E11D /* LocationChannelsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationChannelsSheet.swift; sourceTree = "<group>"; };
 		FC75901A0F0073B5BB8356E7 /* TestConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestConstants.swift; sourceTree = "<group>"; };
 		FDC18D910D6FF2E8B1B6C885 /* SecureIdentityStateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureIdentityStateManager.swift; sourceTree = "<group>"; };
@@ -393,7 +395,8 @@
 			isa = PBXGroup;
 			children = (
 				94A360F09FFB3B0B24318D18 /* Info.plist */,
-				4030C88620072D88106992AB /* LocalizationUITests.swift */,
+				752674A49BEA558572A9AFAF /* LocalizationValidationTests.swift */,
+				F26F32A1A2EE8CC838267B8B /* UIInteractionTests.swift */,
 			);
 			path = bitchatUITests;
 			sourceTree = "<group>";
@@ -857,7 +860,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A1F8A7223F1CFE7206D2F966 /* LocalizationUITests.swift in Sources */,
+				DE656B099A7F09D39C26A099 /* LocalizationValidationTests.swift in Sources */,
+				596C1C7CC5B8CD6805FF532F /* UIInteractionTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

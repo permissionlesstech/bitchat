@@ -62,7 +62,7 @@ struct AppInfoView: View {
             // Custom header for macOS
             HStack {
                 Spacer()
-                Button("DONE") {
+                Button(String(localized: "nav.done")) {
                     dismiss()
                 }
                 .buttonStyle(.plain)
@@ -86,7 +86,7 @@ struct AppInfoView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("close") {
+                    Button(String(localized: "nav.close")) {
                         dismiss()
                     }
                     .foregroundColor(textColor)
