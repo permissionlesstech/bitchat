@@ -1,0 +1,4 @@
+/* 本地化的 Info.plist 字符串（简体中文） */
+"NSBluetoothAlwaysUsageDescription" = "bitchat 使用蓝牙创建用于与附近用户聊天的安全网状网络。";
+"NSBluetoothPeripheralUsageDescription" = "bitchat 使用蓝牙发现并连接附近的其他 bitchat 用户。";
+

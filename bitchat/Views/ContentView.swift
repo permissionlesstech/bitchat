@@ -177,11 +177,11 @@ struct ContentView: View {
             }
         }
         .confirmationDialog(
-            selectedMessageSender.map { "@\($0)" } ?? "Actions",
+            selectedMessageSender.map { "@\($0)" } ?? String(localized: "actions.title"),
             isPresented: $showMessageActions,
             titleVisibility: .visible
         ) {
-            Button("mention") {
+            Button(String(localized: "actions.mention")) {
                 if let sender = selectedMessageSender {
                     // Pre-fill the input with an @mention and focus the field
                     messageText = "@\(sender) "
@@ -189,7 +189,7 @@ struct ContentView: View {
                 }
             }
 
-            Button("direct message") {
+            Button(String(localized: "actions.private_message")) {
                 if let peerID = selectedMessageSenderID {
                     if peerID.hasPrefix("nostr:") {
                         if let full = viewModel.fullNostrHex(forSenderPeerID: peerID) {
@@ -205,19 +205,19 @@ struct ContentView: View {
                 }
             }
             
-            Button("hug") {
+            Button(String(localized: "actions.hug")) {
                 if let sender = selectedMessageSender {
                     viewModel.sendMessage("/hug @\(sender)")
                 }
             }
             
-            Button("slap") {
+            Button(String(localized: "actions.slap")) {
                 if let sender = selectedMessageSender {
                     viewModel.sendMessage("/slap @\(sender)")
                 }
             }
             
-            Button("BLOCK", role: .destructive) {
+            Button(String(localized: "actions.block"), role: .destructive) {
                 // Prefer direct geohash block when we have a Nostr sender ID
                 if let peerID = selectedMessageSenderID, peerID.hasPrefix("nostr:"),
                    let full = viewModel.fullNostrHex(forSenderPeerID: peerID),
@@ -228,17 +228,17 @@ struct ContentView: View {
                 }
             }
             
-            Button("cancel", role: .cancel) {}
+            Button(String(localized: "common.cancel"), role: .cancel) {}
         }
-        .alert("Bluetooth Required", isPresented: $viewModel.showBluetoothAlert) {
-            Button("Settings") {
+        .alert(String(localized: "alert.bluetooth_required"), isPresented: $viewModel.showBluetoothAlert) {
+            Button(String(localized: "common.settings")) {
                 #if os(iOS)
                 if let url = URL(string: UIApplication.openSettingsURLString) {
                     UIApplication.shared.open(url)
                 }
                 #endif
             }
-            Button("OK", role: .cancel) {}
+            Button(String(localized: "common.ok"), role: .cancel) {}
         } message: {
             Text(viewModel.bluetoothAlertMessage)
         }
@@ -319,7 +319,7 @@ struct ContentView: View {
                                     // Expand/Collapse for very long messages
                                     if (message.content.count > TransportConfig.uiLongMessageLengthThreshold || message.content.hasVeryLongToken(threshold: TransportConfig.uiVeryLongTokenThreshold)) && cashuTokens.isEmpty {
                                         let isExpanded = expandedMessageIDs.contains(message.id)
-                                        Button(isExpanded ? "show less" : "show more") {
+                                        Button(isExpanded ? String(localized: "common.show_less") : String(localized: "common.show_more")) {
                                             if isExpanded { expandedMessageIDs.remove(message.id) }
                                             else { expandedMessageIDs.insert(message.id) }
                                         }
@@ -421,7 +421,7 @@ struct ContentView: View {
                             }
                         }
                         .contextMenu {
-                            Button("Copy message") {
+                            Button(String(localized: "actions.copy_message")) {
                                 #if os(iOS)
                                 UIPasteboard.general.string = message.content
                                 #else
@@ -778,7 +778,7 @@ struct ContentView: View {
             }
             
             HStack(alignment: .center, spacing: 4) {
-            TextField("type a message...", text: $messageText)
+            TextField(String(localized: "placeholder.type_message"), text: $messageText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 14, design: .monospaced))
                 .foregroundColor(textColor)
@@ -862,7 +862,7 @@ struct ContentView: View {
             }
             .buttonStyle(.plain)
             .padding(.trailing, 12)
-            .accessibilityLabel("Send message")
+            .accessibilityLabel(String(localized: "accessibility.send_message"))
             .accessibilityHint(messageText.isEmpty ? "Enter a message to send" : "Double tap to send")
             }
             .padding(.vertical, 8)
@@ -895,7 +895,7 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 0) {
                 // Header - match main toolbar height
                 HStack {
-                    Text("PEOPLE")
+                    Text(String(localized: "nav.people"))
                         .font(.system(size: 16, weight: .bold, design: .monospaced))
                         .foregroundColor(textColor)
                     Spacer()
@@ -1076,7 +1076,7 @@ struct ContentView: View {
                     .font(.system(size: 14, design: .monospaced))
                     .foregroundColor(secondaryTextColor)
                 
-                TextField("nickname", text: $viewModel.nickname)
+                TextField(String(localized: "placeholder.nickname"), text: $viewModel.nickname)
                     .textFieldStyle(.plain)
                     .font(.system(size: 14, design: .monospaced))
                     .frame(maxWidth: 100)
@@ -1121,7 +1121,7 @@ struct ContentView: View {
                             .foregroundColor(Color.orange)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Open unread private chat")
+                    .accessibilityLabel(String(localized: "accessibility.open_unread_private_chat"))
                 }
                 // Bookmark toggle for current geohash (not shown for mesh)
                 if case .location(let ch) = locationManager.selectedChannel {
@@ -1154,7 +1154,7 @@ struct ContentView: View {
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
                         .layoutPriority(2)
-                        .accessibilityLabel("location channels")
+                        .accessibilityLabel(String(localized: "accessibility.location_channels"))
                 }
                 .buttonStyle(.plain)
 
@@ -1162,7 +1162,7 @@ struct ContentView: View {
                     // People icon with count
                     Image(systemName: "person.2.fill")
                         .font(.system(size: 11))
-                        .accessibilityLabel("\(headerOtherPeersCount) people")
+                        .accessibilityLabel(String.localizedStringWithFormat(String(localized: "accessibility.people_count"), headerOtherPeersCount))
                     Text("\(headerOtherPeersCount)")
                         .font(.system(size: 12, design: .monospaced))
                         .accessibilityHidden(true)
@@ -1189,10 +1189,10 @@ struct ContentView: View {
                 .onAppear { viewModel.isLocationChannelsSheetPresented = true }
                 .onDisappear { viewModel.isLocationChannelsSheetPresented = false }
         }
-        .alert("heads up", isPresented: $viewModel.showScreenshotPrivacyWarning) {
-            Button("ok", role: .cancel) {}
+        .alert(String(localized: "alert.heads_up"), isPresented: $viewModel.showScreenshotPrivacyWarning) {
+            Button(String(localized: "common.ok"), role: .cancel) {}
         } message: {
-            Text("screenshots of location channels will reveal your location. think before sharing publicly.")
+            Text(String(localized: "alert.screenshot_warning"))
         }
         .background(backgroundColor.opacity(0.95))
     }
@@ -1282,19 +1282,19 @@ struct ContentView: View {
                                     Image(systemName: "dot.radiowaves.left.and.right")
                                         .font(.system(size: 14))
                                         .foregroundColor(textColor)
-                                        .accessibilityLabel("Connected via mesh")
+                                        .accessibilityLabel(String(localized: "accessibility.connected_mesh"))
                                 case .meshReachable:
                                     // point.3 filled icon for reachable via mesh (not directly connected)
                                     Image(systemName: "point.3.filled.connected.trianglepath.dotted")
                                         .font(.system(size: 14))
                                         .foregroundColor(textColor)
-                                        .accessibilityLabel("Reachable via mesh")
+                                        .accessibilityLabel(String(localized: "accessibility.reachable_mesh"))
                                 case .nostrAvailable:
                                     // Purple globe for Nostr
                                     Image(systemName: "globe")
                                         .font(.system(size: 14))
                                         .foregroundColor(.purple)
-                                        .accessibilityLabel("Available via Nostr")
+                                        .accessibilityLabel(String(localized: "accessibility.available_nostr"))
                                 case .offline:
                                     // Should not happen for PM header, but handle gracefully
                                     EmptyView()
@@ -1361,7 +1361,7 @@ struct ContentView: View {
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("Back to main chat")
+                        .accessibilityLabel(String(localized: "accessibility.back_to_main"))
                         
                         Spacer()
                         

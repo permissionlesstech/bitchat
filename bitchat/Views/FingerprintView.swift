@@ -26,7 +26,7 @@ struct FingerprintView: View {
         VStack(spacing: 20) {
             // Header
             HStack {
-                Text("SECURITY VERIFICATION")
+                Text(String(localized: "fp.title"))
                     .font(.system(size: 16, weight: .bold, design: .monospaced))
                     .foregroundColor(textColor)
                 
@@ -58,7 +58,7 @@ struct FingerprintView: View {
                             if !social.claimedNickname.isEmpty { return social.claimedNickname }
                         }
                     }
-                    return "Unknown"
+                    return String(localized: "common.unknown")
                 }()
                 // Accurate encryption state based on short ID session
                 let encryptionStatus = viewModel.getEncryptionStatus(for: statusPeerID)
@@ -88,7 +88,7 @@ struct FingerprintView: View {
                 
                 // Their fingerprint
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("THEIR FINGERPRINT:")
+                    Text(String(localized: "fp.their_fingerprint"))
                         .font(.system(size: 12, weight: .bold, design: .monospaced))
                         .foregroundColor(textColor.opacity(0.7))
                     
@@ -104,7 +104,7 @@ struct FingerprintView: View {
                             .background(Color.gray.opacity(0.1))
                             .cornerRadius(8)
                             .contextMenu {
-                                Button("Copy") {
+                                Button(String(localized: "common.copy")) {
                                     #if os(iOS)
                                     UIPasteboard.general.string = fingerprint
                                     #else
@@ -114,7 +114,7 @@ struct FingerprintView: View {
                                 }
                             }
                     } else {
-                        Text("not available - handshake in progress")
+                        Text(String(localized: "fp.not_available"))
                             .font(.system(size: 14, design: .monospaced))
                             .foregroundColor(Color.orange)
                             .padding()
@@ -123,7 +123,7 @@ struct FingerprintView: View {
                 
                 // My fingerprint
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("YOUR FINGERPRINT:")
+                    Text(String(localized: "fp.your_fingerprint"))
                         .font(.system(size: 12, weight: .bold, design: .monospaced))
                         .foregroundColor(textColor.opacity(0.7))
                     
@@ -139,7 +139,7 @@ struct FingerprintView: View {
                         .background(Color.gray.opacity(0.1))
                         .cornerRadius(8)
                         .contextMenu {
-                            Button("Copy") {
+                            Button(String(localized: "common.copy")) {
                                 #if os(iOS)
                                 UIPasteboard.general.string = myFingerprint
                                 #else
@@ -155,7 +155,7 @@ struct FingerprintView: View {
                     let isVerified = encryptionStatus == .noiseVerified
                     
                     VStack(spacing: 12) {
-                        Text(isVerified ? "✓ VERIFIED" : "⚠️ NOT VERIFIED")
+                        Text(isVerified ? String(localized: "fp.verified") : String(localized: "fp.not_verified"))
                             .font(.system(size: 14, weight: .bold, design: .monospaced))
                             .foregroundColor(isVerified ? Color.green : Color.orange)
                             .frame(maxWidth: .infinity)
@@ -175,7 +175,7 @@ struct FingerprintView: View {
                                 viewModel.verifyFingerprint(for: peerID)
                                 dismiss()
                             }) {
-                                Text("MARK AS VERIFIED")
+                                Text(String(localized: "fp.mark_verified"))
                                     .font(.system(size: 14, weight: .bold, design: .monospaced))
                                     .foregroundColor(.white)
                                     .padding(.horizontal, 20)

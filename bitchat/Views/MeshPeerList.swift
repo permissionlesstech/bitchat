@@ -14,7 +14,7 @@ struct MeshPeerList: View {
     var body: some View {
         if viewModel.allPeers.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
-                Text("nobody around...")
+                Text(String(localized: "people.none_around"))
                     .font(.system(size: 14, design: .monospaced))
                     .foregroundColor(secondaryTextColor)
                     .padding(.horizontal)

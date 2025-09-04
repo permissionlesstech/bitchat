@@ -11,7 +11,7 @@ struct GeohashPeopleList: View {
     var body: some View {
         if viewModel.visibleGeohashPeople().isEmpty {
             VStack(alignment: .leading, spacing: 0) {
-                Text("nobody around...")
+                Text(String(localized: "people.none_around"))
                     .font(.system(size: 14, design: .monospaced))
                     .foregroundColor(secondaryTextColor)
                     .padding(.horizontal)
@@ -66,7 +66,7 @@ struct GeohashPeopleList: View {
                                     .foregroundColor(suffixColor)
                             }
                             if isMe {
-                                Text(" (you)")
+                                Text(String(localized: "people.you_indicator"))
                                     .font(.system(size: 14, design: .monospaced))
                                     .foregroundColor(rowColor)
                             }
@@ -97,9 +97,9 @@ struct GeohashPeopleList: View {
                         } else {
                             let blocked = viewModel.isGeohashUserBlocked(pubkeyHexLowercased: person.id)
                             if blocked {
-                                Button("Unblock") { viewModel.unblockGeohashUser(pubkeyHexLowercased: person.id, displayName: person.displayName) }
+                                Button(String(localized: "geohash.unblock")) { viewModel.unblockGeohashUser(pubkeyHexLowercased: person.id, displayName: person.displayName) }
                             } else {
-                                Button("Block") { viewModel.blockGeohashUser(pubkeyHexLowercased: person.id, displayName: person.displayName) }
+                                Button(String(localized: "geohash.block")) { viewModel.blockGeohashUser(pubkeyHexLowercased: person.id, displayName: person.displayName) }
                             }
                         }
                     }
