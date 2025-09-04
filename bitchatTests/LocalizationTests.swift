@@ -26,14 +26,13 @@ final class LocalizationTests: XCTestCase {
     }
 
     func testFallbackToBaseWhenKeyMissingInLocale() {
-        // "test.baseOnly" exists only in Base.lproj
+        // In .xcstrings format, all languages have all keys with fallback to English values
         let spanish = bundle(for: "es")
         let valueDirect = NSLocalizedString("test.baseOnly", tableName: nil, bundle: spanish, value: "", comment: "")
-
-        // Direct lookup in a language-only bundle may return the key if missing; our helper should fallback to Base
         let valueViaHelper = Localization.localized("test.baseOnly", locale: "es")
 
-        XCTAssertTrue(valueDirect == "test.baseOnly" || valueDirect.isEmpty)
+        // Both should now return the base value since .xcstrings ensures all languages have all keys
+        XCTAssertEqual(valueDirect, "Base Fallback")
         XCTAssertEqual(valueViaHelper, "Base Fallback")
     }
 
