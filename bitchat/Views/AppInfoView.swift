@@ -105,7 +105,7 @@ struct AppInfoView: View {
                     .font(.system(size: 32, weight: .bold, design: .monospaced))
                     .foregroundColor(textColor)
                 
-                Text(Strings.tagline)
+                Text(String(localized: "appinfo.tagline"))
                     .font(.system(size: 16, design: .monospaced))
                     .foregroundColor(secondaryTextColor)
             }
@@ -114,15 +114,15 @@ struct AppInfoView: View {
             
             // Features
             VStack(alignment: .leading, spacing: 16) {
-                SectionHeader(Strings.Features.title)
+                SectionHeader(String(localized: "appinfo.features.title"))
                 
-                FeatureRow(icon: Strings.Features.offlineComm.0, 
-                          title: Strings.Features.offlineComm.1,
-                          description: Strings.Features.offlineComm.2)
+                FeatureRow(icon: "wifi.slash", 
+                          title: String(localized: "appinfo.features.offline.title"),
+                          description: String(localized: "appinfo.features.offline.desc"))
                 
-                FeatureRow(icon: Strings.Features.encryption.0,
-                          title: Strings.Features.encryption.1,
-                          description: Strings.Features.encryption.2)
+                FeatureRow(icon: "lock.shield",
+                          title: String(localized: "appinfo.features.encryption.title"),
+                          description: String(localized: "appinfo.features.encryption.desc"))
                 
                 FeatureRow(icon: Strings.Features.extendedRange.0,
                           title: Strings.Features.extendedRange.1,
@@ -143,7 +143,7 @@ struct AppInfoView: View {
             
             // Privacy
             VStack(alignment: .leading, spacing: 16) {
-                SectionHeader(Strings.Privacy.title)
+                SectionHeader(String(localized: "appinfo.privacy.title"))
                 
                 FeatureRow(icon: Strings.Privacy.noTracking.0,
                           title: Strings.Privacy.noTracking.1,
@@ -160,7 +160,7 @@ struct AppInfoView: View {
             
             // How to Use
             VStack(alignment: .leading, spacing: 16) {
-                SectionHeader(Strings.HowToUse.title)
+                SectionHeader(String(localized: "appinfo.howto.title"))
                 
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(Strings.HowToUse.instructions, id: \.self) { instruction in
@@ -173,10 +173,10 @@ struct AppInfoView: View {
             
             // Warning
             VStack(alignment: .leading, spacing: 6) {
-                SectionHeader(Strings.Warning.title)
+                SectionHeader(String(localized: "appinfo.warning.title"))
                     .foregroundColor(Color.red)
                 
-                Text(Strings.Warning.message)
+                Text(String(localized: "appinfo.warning.message"))
                     .font(.system(size: 14, design: .monospaced))
                     .foregroundColor(Color.red)
                     .fixedSize(horizontal: false, vertical: true)

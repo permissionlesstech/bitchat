@@ -1391,7 +1391,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                         }
                     } catch {
                         SecureLogger.log("❌ Failed to send geohash message: \(error)", category: SecureLogger.session, level: .error)
-                        self.addSystemMessage("failed to send to location channel")
+                        self.addSystemMessage(String(localized: "system.failed_send_location"))
                     }
                 }
             } else {
@@ -1831,12 +1831,12 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         // Remove mapping keys pointing to this pubkey to avoid accidental resolution
         for (k, v) in nostrKeyMapping where v.lowercased() == hex { nostrKeyMapping.removeValue(forKey: k) }
         
-        addSystemMessage("blocked \(displayName) in geohash chats")
+        addSystemMessage(String.localizedStringWithFormat(String(localized: "system.blocked_geohash_user"), displayName))
     }
     @MainActor
     func unblockGeohashUser(pubkeyHexLowercased: String, displayName: String) {
         SecureIdentityStateManager.shared.setNostrBlocked(pubkeyHexLowercased, isBlocked: false)
-        addSystemMessage("unblocked \(displayName) in geohash chats")
+        addSystemMessage(String.localizedStringWithFormat(String(localized: "system.unblocked_geohash_user"), displayName))
     }
 
     /// Begin sampling multiple geohashes (used by channel sheet) without changing active channel.
@@ -2000,7 +2000,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         // Geohash DM routing: conversation keys start with "nostr_"
         if peerID.hasPrefix("nostr_") {
             guard case .location(let ch) = activeChannel else {
-                addSystemMessage("cannot send: not in a location channel")
+                addSystemMessage(String(localized: "system.not_in_location_channel"))
                 return
             }
             let messageID = UUID().uuidString
@@ -2035,7 +2035,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 if let msgIdx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
                     privateChats[peerID]?[msgIdx].deliveryStatus = .failed(reason: "user is blocked")
                 }
-                addSystemMessage("cannot send message: user is blocked.")
+                addSystemMessage(String(localized: "system.user_blocked_generic"))
                 return
             }
             // Send via Nostr using per-geohash identity
@@ -2646,7 +2646,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             // Show local notification immediately as system message (only in chat)
             let localNotification = BitchatMessage(
                 sender: "system",
-                content: "you took a screenshot",
+                content: String(localized: "system.screenshot_taken"),
                 timestamp: Date(),
                 isRelay: false,
                 originalSender: nil,
@@ -2688,7 +2688,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                         self.recordGeoParticipant(pubkeyHex: identity.publicKeyHex)
                     } catch {
                         SecureLogger.log("❌ Failed to send geohash screenshot message: \(error)", category: SecureLogger.session, level: .error)
-                        self.addSystemMessage("failed to send to location channel")
+                        self.addSystemMessage(String(localized: "system.failed_send_location"))
                     }
                 }
             }
@@ -2697,7 +2697,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             // Show local notification immediately as system message (only in chat)
             let localNotification = BitchatMessage(
                 sender: "system",
-                content: "you took a screenshot",
+                content: String(localized: "system.screenshot_taken"),
                 timestamp: Date(),
                 isRelay: false
             )

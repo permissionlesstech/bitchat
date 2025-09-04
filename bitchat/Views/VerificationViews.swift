@@ -15,7 +15,7 @@ struct MyQRView: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            Text("scan to verify me")
+            Text(String(localized: "verify.scan_to_verify"))
                 .font(.system(size: 16, weight: .bold, design: .monospaced))
 
             VStack(spacing: 10) {
@@ -59,7 +59,7 @@ struct QRCodeImage: View {
                     .stroke(Color.gray.opacity(0.5), lineWidth: 1)
                     .frame(width: size, height: size)
                     .overlay(
-                        Text("qr unavailable")
+                        Text(String(localized: "verify.qr_unavailable"))
                             .font(.system(size: 12, design: .monospaced))
                             .foregroundColor(.gray)
                     )
@@ -118,12 +118,12 @@ struct QRScanView: View {
             .frame(height: 260)
             .clipShape(RoundedRectangle(cornerRadius: 8))
             #else
-            Text("paste qr content to validate:")
+            Text(String(localized: "verify.paste_content"))
                 .font(.system(size: 14, weight: .medium, design: .monospaced))
             TextEditor(text: $input)
                 .frame(height: 100)
                 .border(Color.gray.opacity(0.4))
-            Button("validate") {
+            Button(String(localized: "verify.validate")) {
                 if let qr = VerificationService.shared.verifyScannedQR(input) {
                     let ok = viewModel.beginQRVerification(with: qr)
                     result = ok ? "verification requested for \(qr.nickname)" : "could not find matching peer"
@@ -254,7 +254,7 @@ struct VerificationSheetView: View {
         VStack(spacing: 0) {
             // Top header (always at top)
             HStack {
-                Text("VERIFY")
+                Text(String(localized: "verify.verify_button"))
                     .font(.system(size: 14, weight: .bold, design: .monospaced))
                     .foregroundColor(accentColor)
                 Spacer()
@@ -278,7 +278,7 @@ struct VerificationSheetView: View {
             Group {
                 if showingScanner {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("scan a friend's qr")
+                        Text(String(localized: "verify.scan_friend_qr"))
                             .font(.system(size: 16, weight: .bold, design: .monospaced))
                             .frame(maxWidth: .infinity)
                             .multilineTextAlignment(.center)

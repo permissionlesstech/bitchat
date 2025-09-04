@@ -189,7 +189,7 @@ struct FingerprintView: View {
                                 viewModel.unverifyFingerprint(for: peerID)
                                 dismiss()
                             }) {
-                                Text("REMOVE VERIFICATION")
+                                Text(String(localized: "fp.remove_verification_button"))
                                     .font(.system(size: 14, weight: .bold, design: .monospaced))
                                     .foregroundColor(.white)
                                     .padding(.horizontal, 20)
