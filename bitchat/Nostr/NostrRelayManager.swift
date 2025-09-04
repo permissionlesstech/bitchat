@@ -1,4 +1,5 @@
 import Foundation
+
 import Network
 import Combine
 
@@ -60,49 +61,15 @@ class NostrRelayManager: ObservableObject {
     // Reconnection timer
     private var reconnectionTimer: Timer?
     
+    // Debounce global resets to avoid unnecessary reconnect storms
+    private var lastGlobalResetAt: Date = .distantPast
+    private let minResetInterval: TimeInterval = 5
+    
     init() {
         // Initialize with default relays
         self.relays = Self.defaultRelays.map { Relay(url: $0) }
     }
     
-    /// Connect to all configured relays
-    func connect() {
-        // If Tor is required but not connected yet, do nothing now.
-        if TorService.shared.isEnabled && !TorService.shared.isConnected {
-            SecureLogger.log("⏳ Skipping relay connect until Tor is connected", category: SecureLogger.session, level: .info)
-            return
-        }
-        SecureLogger.log("🌐 Connecting to \(relays.count) Nostr relays", category: SecureLogger.session, level: .debug)
-        for relay in relays {
-            connectToRelay(relay.url)
-        }
-        // Try to flush any pending subscriptions now that we're connecting
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-            self?.flushPendingSubscriptions()
-        }
-    }
-    
-    /// Disconnect from all relays
-    func disconnect() {
-        for (_, task) in connections {
-            task.cancel(with: .goingAway, reason: nil)
-        }
-        connections.removeAll()
-        updateConnectionStatus()
-    }
-    
-    /// Ensure connections exist to the given relay URLs (idempotent).
-    func ensureConnections(to relayUrls: [String]) {
-        let existing = Set(relays.map { $0.url })
-        for url in Set(relayUrls) {
-            if !existing.contains(url) {
-                relays.append(Relay(url: url))
-            }
-            if connections[url] == nil {
-                connectToRelay(url)
-            }
-        }
-    }
 
     /// Send an event to specified relays (or all if none specified)
     func sendEvent(_ event: NostrEvent, to relayUrls: [String]? = nil) {
@@ -122,6 +89,78 @@ class NostrRelayManager: ObservableObject {
         }
     }
     
+    /// Returns true if all configured relays are currently down and have attempted at least once.
+    private func allRelaysHavingTrouble() -> Bool {
+        guard !relays.isEmpty else { return false }
+        return relays.allSatisfy { !$0.isConnected && (($0.reconnectAttempts > 0) || ($0.lastDisconnectedAt != nil)) }
+    }
+
+    private func requestGlobalResetDebounced() {
+        let now = Date()
+        if now.timeIntervalSince(lastGlobalResetAt) < minResetInterval { return }
+        lastGlobalResetAt = now
+        resetAllConnections()
+    }
+
+    private func maybeProbeTorIfAllRelaysDown(context: String) {
+        guard TorService.shared.isEnabled else { return }
+        if allRelaysHavingTrouble() {
+            TorService.shared.checkTorConnectivityAndRecoverIfNeeded(trigger: context) { [weak self] ok in
+                guard let self = self else { return }
+                if !ok {
+                    // If Tor probe failed, we restart Tor inside TorService and we also reset all relay connections here
+                    // Debounced to prevent reconnect storms
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                        self.requestGlobalResetDebounced()
+                    }
+                }
+            }
+        }
+    }
+
+    /// Connect to all configured relays
+    func connect() {
+        // If Tor is required but not connected yet, do nothing now.
+        if TorService.shared.isEnabled && !TorService.shared.isConnected {
+            SecureLogger.log("⏳ Skipping relay connect until Tor is connected", category: SecureLogger.session, level: .info)
+            return
+        }
+        SecureLogger.log("🌐 Connecting to \(relays.count) Nostr relays", category: SecureLogger.session, level: .debug)
+        for relay in relays {
+            connectToRelay(relay.url)
+        }
+        // Try to flush any pending subscriptions now that we're connecting
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            self?.flushPendingSubscriptions()
+        }
+        // If after a short grace period we still have zero connections, probe Tor (once, throttled internally)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+            self?.maybeProbeTorIfAllRelaysDown(context: "post-connect")
+        }
+    }
+
+    /// Disconnect from all relays
+    func disconnect() {
+        for (_, task) in connections {
+            task.cancel(with: .goingAway, reason: nil)
+        }
+        connections.removeAll()
+        updateConnectionStatus()
+    }
+
+    /// Ensure connections exist to the given relay URLs (idempotent).
+    func ensureConnections(to relayUrls: [String]) {
+        let existing = Set(relays.map { $0.url })
+        for url in Set(relayUrls) {
+            if !existing.contains(url) {
+                relays.append(Relay(url: url))
+            }
+            if connections[url] == nil {
+                connectToRelay(url)
+            }
+        }
+    }
+
     /// Subscribe to events matching a filter. If `relayUrls` provided, targets only those relays.
     func subscribe(
         filter: NostrFilter,
@@ -129,6 +168,7 @@ class NostrRelayManager: ObservableObject {
         relayUrls: [String]? = nil,
         handler: @escaping (NostrEvent) -> Void
     ) {
+
         messageHandlers[id] = handler
 
         // If Tor is enabled but not connected, queue subscription and return quietly
@@ -470,6 +510,10 @@ class NostrRelayManager: ObservableObject {
     
     private func updateConnectionStatus() {
         isConnected = relays.contains { $0.isConnected }
+        if !isConnected {
+            // If all relays are down concurrently, verify Tor path and recover if needed
+            maybeProbeTorIfAllRelaysDown(context: "update-connection-status")
+        }
     }
     
     private func handleDisconnection(relayUrl: String, error: Error) {

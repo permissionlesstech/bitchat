@@ -28,6 +28,39 @@ final class TorService: ObservableObject {
     private var lastRSSLogAt: Date = .distantPast
     private var lastRSSMB: Double = 0
     private var hasLoggedSessionConfig = false
+    // Connectivity probe coordination
+    private var connectivityProbeInFlight = false
+    private var lastConnectivityProbeAt: Date = .distantPast
+    private let minProbeInterval: TimeInterval = 10
+    private let probeTimeout: TimeInterval = 8
+    
+    /// Public helper: probe Tor connectivity and recover if needed.
+    /// - Parameters:
+    ///   - trigger: For logging context (who asked for probe)
+    ///   - completion: Called with true if connectivity OK, false if recovery attempted
+    func checkTorConnectivityAndRecoverIfNeeded(trigger: String, completion: ((Bool) -> Void)? = nil) {
+        // Throttle probes
+        let now = Date()
+        if connectivityProbeInFlight { return }
+        if now.timeIntervalSince(lastConnectivityProbeAt) < minProbeInterval { return }
+        connectivityProbeInFlight = true
+        lastConnectivityProbeAt = now
+        probeTorConnectivity(timeout: probeTimeout) { [weak self] ok in
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                self.connectivityProbeInFlight = false
+                if ok {
+                    SecureLogger.log("TorService: connectivity probe OK", category: SecureLogger.session, level: .debug)
+                    completion?(true)
+                } else {
+                    SecureLogger.log("TorService: connectivity probe FAILED — restarting Tor", category: SecureLogger.session, level: .error)
+                    // Restart tor; NostrRelayManager reset will be triggered once Tor transitions to connected
+                    self.restartTor()
+                    completion?(false)
+                }
+            }
+        }
+    }
     
     private init() {
         // Force-enable tor regardless of any previous persisted setting
@@ -188,18 +221,30 @@ final class TorService: ObservableObject {
     // MARK: - Health probe
     private func probeTorConnectivity(timeout: TimeInterval = 8, completion: @escaping (Bool) -> Void) {
         // Use Tor-enabled session regardless of state, to test proxy path
+
         let session = networkSession()
         guard let url = URL(string: "https://check.torproject.org/api/ip") else { completion(false); return }
         var request = URLRequest(url: url)
         request.timeoutInterval = timeout
+
+        let lock = DispatchQueue(label: "TorService.probe.lock")
+        var finished = false
+        func finish(_ ok: Bool) {
+            lock.sync {
+                if finished { return }
+                finished = true
+                completion(ok)
+            }
+        }
+
         let task = session.dataTask(with: request) { data, response, error in
             let ok = (error == nil) && (response as? HTTPURLResponse)?.statusCode == 200 && (data?.isEmpty == false)
-            completion(ok)
+            finish(ok)
         }
         task.resume()
         // Fallback timeout guard (non-cancelling, returns false if not completed earlier)
         DispatchQueue.global().asyncAfter(deadline: .now() + timeout + 2) {
-            completion(false)
+            finish(false)
         }
     }
     
