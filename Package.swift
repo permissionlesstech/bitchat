@@ -16,6 +16,7 @@ let package = Package(
     ],
     dependencies:[
         .package(url: "https://github.com/21-DOT-DEV/swift-secp256k1", exact: "0.21.1"),
+        .package(url: "https://github.com/FlorianHubl/SwiftTor.git", branch: "main")
     ],
     targets: [
         .executableTarget(

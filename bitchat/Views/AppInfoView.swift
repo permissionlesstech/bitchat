@@ -4,6 +4,7 @@ struct AppInfoView: View {
     @Environment(\.dismiss) var dismiss
     @Environment(\.colorScheme) var colorScheme
     
+
     private var backgroundColor: Color {
         colorScheme == .dark ? Color.black : Color.white
     }
@@ -115,6 +116,8 @@ struct AppInfoView: View {
             // Features
             VStack(alignment: .leading, spacing: 16) {
                 SectionHeader(Strings.Features.title)
+                
+                // Tor is required by default; no toggle in settings
                 
                 FeatureRow(icon: Strings.Features.offlineComm.0, 
                           title: Strings.Features.offlineComm.1,

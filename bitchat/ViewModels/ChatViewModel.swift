@@ -150,6 +150,10 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     private let contentBucketCapacity: Double = TransportConfig.uiContentRateBucketCapacity
     private let contentBucketRefill: Double = TransportConfig.uiContentRateBucketRefillPerSec // tokens per second
 
+    // Deduplicate identical system messages within a short window to avoid spam
+    private var recentSystemMessages: [String: Date] = [:]
+    private let systemMessageDedupWindowSeconds: TimeInterval = 3
+
     @MainActor
     private func normalizedSenderKey(for message: BitchatMessage) -> String {
         if let spid = message.senderPeerID {
@@ -247,6 +251,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     private let privateChatManager: PrivateChatManager
     private let unifiedPeerService: UnifiedPeerService
     private let autocompleteService: AutocompleteService
+    // Track 'waiting to connect' status message to avoid repeats per geohash
+    private var torWaitingPostedForGeohash: Set<String> = []
     
     // Computed properties for compatibility
     @MainActor
@@ -525,7 +531,30 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         
         // Start mesh service immediately
         meshService.startServices()
-        
+
+        // Early user feedback before Tor fully initializes
+        if TorService.shared.isEnabled && !TorService.shared.isConnected {
+            addPublicSystemMessage("tor: starting…")
+        }
+
+        // Observe Tor connection progress and announce in public chat
+        TorService.shared.$progress
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] p in
+                guard let self = self else { return }
+                self.handleTorProgress(p)
+            }
+            .store(in: &cancellables)
+
+        TorService.shared.$isConnected
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] connected in
+                guard let self = self else { return }
+                if connected { self.handleTorProgress(100) }
+            }
+            .store(in: &cancellables)
+
         // Initialize Nostr services
         Task { @MainActor in
             nostrRelayManager = NostrRelayManager.shared
@@ -587,6 +616,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             // Resubscribe geohash on relay reconnect
             if let relayMgr = self.nostrRelayManager {
                 relayMgr.$isConnected
+                    .removeDuplicates()
                     .receive(on: DispatchQueue.main)
                     .sink { [weak self] connected in
                         guard let self = self else { return }
@@ -763,6 +793,28 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             object: nil
         )
         #endif
+    }
+
+    // MARK: - Tor Progress Announcements
+    private var lastTorProgressPosted: Int = -1
+    private func handleTorProgress(_ p: Int) {
+        // Emit bootstrapped-style thresholds we can observe
+        let thresholds = [0, 10, 90, 100]
+        for t in thresholds where p >= t && lastTorProgressPosted < t {
+            let label: String = {
+                switch t {
+                case 0: return "starting"
+                case 10: return "connecting"
+                case 90: return "building circuits"
+                case 100: return "ready"
+                default: return "progress"
+                }
+            }()
+            Task { @MainActor in self.addPublicSystemMessage("tor: bootstrapped \(t)% (\(label))") }
+            lastTorProgressPosted = t
+            if t == 100 { torWaitingPostedForGeohash.removeAll() }
+        }
+        if p == 0 && lastTorProgressPosted == 100 { lastTorProgressPosted = -1 }
     }
     
     // MARK: - Deinitialization
@@ -1477,6 +1529,15 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 teleportedGeo.remove(key)
             }
         }
+        // If Tor is required but not yet connected, delay subscription until connected
+        if TorService.shared.isEnabled && !TorService.shared.isConnected {
+            if !torWaitingPostedForGeohash.contains(ch.geohash) {
+                addPublicSystemMessage("tor: waiting to connect before joining #\(ch.geohash)")
+                torWaitingPostedForGeohash.insert(ch.geohash)
+            }
+            return
+        }
+
         let subID = "geo-\(ch.geohash)"
         geoSubscriptionID = subID
         startGeoParticipantsTimer()
@@ -1842,6 +1903,10 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     /// Begin sampling multiple geohashes (used by channel sheet) without changing active channel.
     @MainActor
     func beginGeohashSampling(for geohashes: [String]) {
+        // Do not subscribe to any relays until Tor is connected
+        if TorService.shared.isEnabled && !TorService.shared.isConnected {
+            return
+        }
         // Determine which to add and which to remove
         let desired = Set(geohashes)
         let current = Set(geoSamplingSubs.values)
@@ -1863,7 +1928,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 since: Date().addingTimeInterval(-TransportConfig.nostrGeohashSampleLookbackSeconds),
                 limit: TransportConfig.nostrGeohashSampleLimit
             )
-            let subRelays = GeoRelayDirectory.shared.closestRelays(toGeohash: gh, count: 5)
+            let subRelays = GeoRelayDirectory.shared.closestRelays(toGeohash: gh, count: 3)
             NostrRelayManager.shared.subscribe(filter: filter, id: subID, relayUrls: subRelays) { [weak self] event in
                 guard let self = self else { return }
                 guard event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue else { return }
@@ -4863,7 +4928,8 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     }
     
     // MARK: - Helper for System Messages
-    private func addSystemMessage(_ content: String, timestamp: Date = Date()) {
+    @discardableResult
+    private func addSystemMessage(_ content: String, timestamp: Date = Date()) -> BitchatMessage {
         let systemMessage = BitchatMessage(
             sender: "system",
             content: content,
@@ -4871,12 +4937,31 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             isRelay: false
         )
         messages.append(systemMessage)
+        return systemMessage
     }
 
     /// Public helper to add a system message to the public chat timeline
     @MainActor
     func addPublicSystemMessage(_ content: String) {
-        addSystemMessage(content)
+        // De-duplicate identical content posted very close together
+        let now = Date()
+        if let last = recentSystemMessages[content], now.timeIntervalSince(last) < systemMessageDedupWindowSeconds {
+            return
+        }
+        recentSystemMessages[content] = now
+
+        let msg = addSystemMessage(content)
+        // Persist system message into the active public timeline so it isn't lost on timeline refresh
+        switch activeChannel {
+        case .mesh:
+            meshTimeline.append(msg)
+            if meshTimeline.count > meshTimelineCap { meshTimeline = Array(meshTimeline.suffix(meshTimelineCap)) }
+        case .location(let ch):
+            var arr = geoTimelines[ch.geohash] ?? []
+            arr.append(msg)
+            if arr.count > geoTimelineCap { arr = Array(arr.suffix(geoTimelineCap)) }
+            geoTimelines[ch.geohash] = arr
+        }
         objectWillChange.send()
     }
     // Send a public message without adding a local user echo.
