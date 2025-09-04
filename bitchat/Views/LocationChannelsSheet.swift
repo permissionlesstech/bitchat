@@ -19,6 +19,7 @@ struct LocationChannelsSheet: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text(String(localized: "location.title"))
                     .font(.system(size: 18, design: .monospaced))
+                    .accessibilityIdentifier("location-sheet-title")
                 Text(String(localized: "location.about"))
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundColor(.secondary)
@@ -60,6 +61,7 @@ struct LocationChannelsSheet: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(String(localized: "nav.close")) { isPresented = false }
                         .font(.system(size: 14, design: .monospaced))
+                        .accessibilityIdentifier("location-sheet-close")
                 }
             }
             #else
@@ -67,6 +69,7 @@ struct LocationChannelsSheet: View {
                 ToolbarItem(placement: .automatic) {
                     Button(String(localized: "nav.close")) { isPresented = false }
                         .font(.system(size: 14, design: .monospaced))
+                        .accessibilityIdentifier("location-sheet-close")
                 }
             }
             #endif
@@ -149,6 +152,7 @@ struct LocationChannelsSheet: View {
                         .font(.system(size: 14, design: .monospaced))
                         .foregroundColor(.secondary)
                     TextField(String(localized: "placeholder.geohash"), text: $customGeohash)
+                        .accessibilityIdentifier("geohash-input")
                         #if os(iOS)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled(true)

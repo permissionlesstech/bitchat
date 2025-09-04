@@ -784,6 +784,7 @@ struct ContentView: View {
                 .foregroundColor(textColor)
                 .focused($isTextFieldFocused)
                 .padding(.leading, 12)
+                .accessibilityIdentifier("message-input")
                 // iOS keyboard autocomplete and capitalization enabled by default
                 .onChange(of: messageText) { newValue in
                     // Cancel previous debounce timer
@@ -863,6 +864,7 @@ struct ContentView: View {
             .buttonStyle(.plain)
             .padding(.trailing, 12)
             .accessibilityLabel(String(localized: "accessibility.send_message"))
+            .accessibilityIdentifier("send-button")
             .accessibilityHint(messageText.isEmpty ? "Enter a message to send" : "Double tap to send")
             }
             .padding(.vertical, 8)
@@ -898,6 +900,7 @@ struct ContentView: View {
                     Text(String(localized: "nav.people"))
                         .font(.system(size: 16, weight: .bold, design: .monospaced))
                         .foregroundColor(textColor)
+                        .accessibilityIdentifier("sidebar-people-header")
                     Spacer()
                     // Show QR in mesh on all platforms
                     if case .mesh = locationManager.selectedChannel {
@@ -971,6 +974,7 @@ struct ContentView: View {
         }
         .background(backgroundColor)
         .foregroundColor(textColor)
+        .accessibilityIdentifier("main-chat-view")
         .gesture(
             DragGesture()
                 .onChanged { value in
@@ -1155,6 +1159,7 @@ struct ContentView: View {
                         .fixedSize(horizontal: true, vertical: false)
                         .layoutPriority(2)
                         .accessibilityLabel(String(localized: "accessibility.location_channels"))
+                        .accessibilityIdentifier("channel-button")
                 }
                 .buttonStyle(.plain)
 

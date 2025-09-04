@@ -186,6 +186,23 @@ targets:
       CODE_SIGNING_ALLOWED: YES
       DEVELOPMENT_TEAM: L3N5LHJD5Y
 
+  bitchatUITests_iOS:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - bitchatUITests
+    dependencies:
+      - target: bitchat_iOS
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: chat.bitchat.uitests
+      INFOPLIST_FILE: bitchatUITests/Info.plist
+      SWIFT_VERSION: 5.0
+      IPHONEOS_DEPLOYMENT_TARGET: 16.0
+      CODE_SIGN_STYLE: Automatic
+      CODE_SIGNING_REQUIRED: YES
+      CODE_SIGNING_ALLOWED: YES
+      DEVELOPMENT_TEAM: L3N5LHJD5Y
+
 schemes:
   bitchat (iOS):
     build:
@@ -199,6 +216,7 @@ schemes:
       config: Debug
       targets:
         - bitchatTests_iOS
+        - bitchatUITests_iOS
     profile:
       config: Release
       executable: bitchat_iOS
