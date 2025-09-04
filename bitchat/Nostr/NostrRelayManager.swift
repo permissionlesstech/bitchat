@@ -44,7 +44,12 @@ class NostrRelayManager: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     
     // Message queue for reliability
-    private var messageQueue: [(event: NostrEvent, relayUrls: [String])] = []
+    // Pending sends held only for relays that are not yet connected.
+    private struct PendingSend {
+        var event: NostrEvent
+        var pendingRelays: Set<String>
+    }
+    private var messageQueue: [PendingSend] = []
     private let messageQueueLock = NSLock()
     
     // Exponential backoff configuration
@@ -95,16 +100,57 @@ class NostrRelayManager: ObservableObject {
     func sendEvent(_ event: NostrEvent, to relayUrls: [String]? = nil) {
         let targetRelays = relayUrls ?? Self.defaultRelays
         ensureConnections(to: targetRelays)
-        
-        // Add to queue for reliability
-        messageQueueLock.lock()
-        messageQueue.append((event, targetRelays))
-        messageQueueLock.unlock()
-        
-        // Attempt immediate send
+
+        // Attempt immediate send to relays with active connections; queue the rest
+        var stillPending = Set<String>()
         for relayUrl in targetRelays {
             if let connection = connections[relayUrl] {
                 sendToRelay(event: event, connection: connection, relayUrl: relayUrl)
+            } else {
+                stillPending.insert(relayUrl)
+            }
+        }
+        if !stillPending.isEmpty {
+            messageQueueLock.lock()
+            messageQueue.append(PendingSend(event: event, pendingRelays: stillPending))
+            messageQueueLock.unlock()
+        }
+    }
+
+    /// Try to flush any queued messages for relays that are now connected.
+    private func flushMessageQueue(for relayUrl: String? = nil) {
+        messageQueueLock.lock()
+        defer { messageQueueLock.unlock() }
+        guard !messageQueue.isEmpty else { return }
+        if let target = relayUrl {
+            // Flush only for a specific relay
+            for i in (0..<messageQueue.count).reversed() {
+                var item = messageQueue[i]
+                if item.pendingRelays.contains(target), let conn = connections[target] {
+                    sendToRelay(event: item.event, connection: conn, relayUrl: target)
+                    item.pendingRelays.remove(target)
+                    if item.pendingRelays.isEmpty {
+                        messageQueue.remove(at: i)
+                    } else {
+                        messageQueue[i] = item
+                    }
+                }
+            }
+        } else {
+            // Flush for any relays that now have connections
+            for i in (0..<messageQueue.count).reversed() {
+                var item = messageQueue[i]
+                for url in item.pendingRelays {
+                    if let conn = connections[url] {
+                        sendToRelay(event: item.event, connection: conn, relayUrl: url)
+                        item.pendingRelays.remove(url)
+                    }
+                }
+                if item.pendingRelays.isEmpty {
+                    messageQueue.remove(at: i)
+                } else {
+                    messageQueue[i] = item
+                }
             }
         }
     }
@@ -389,6 +435,10 @@ class NostrRelayManager: ObservableObject {
             }
         }
         updateConnectionStatus()
+        // If we just connected to this relay, flush any queued sends targeting it
+        if isConnected {
+            flushMessageQueue(for: url)
+        }
     }
     
     private func updateConnectionStatus() {

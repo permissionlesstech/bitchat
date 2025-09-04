@@ -223,7 +223,30 @@ final class BLEService: NSObject {
                 peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
             } else {
                 self.collectionsQueue.async(flags: .barrier) {
-                    self.pendingPeripheralWrites[uuid, default: []].append(data)
+                    var queue = self.pendingPeripheralWrites[uuid] ?? []
+                    let capBytes = TransportConfig.blePendingWriteBufferCapBytes
+                    let newSize = data.count
+                    // If single chunk exceeds cap, drop it immediately
+                    if newSize > capBytes {
+                        SecureLogger.log("⚠️ Dropping oversized write chunk (\(newSize)B) for peripheral \(uuid)",
+                                         category: SecureLogger.session, level: .warning)
+                    } else {
+                        // Append and trim from the front to respect cap
+                        var total = queue.reduce(0) { $0 + $1.count }
+                        queue.append(data)
+                        total += newSize
+                        if total > capBytes {
+                            var removedBytes = 0
+                            while total > capBytes && !queue.isEmpty {
+                                let removed = queue.removeFirst()
+                                removedBytes += removed.count
+                                total -= removed.count
+                            }
+                            SecureLogger.log("📉 Trimmed pending write buffer for \(uuid) by \(removedBytes)B to \(total)B",
+                                             category: SecureLogger.session, level: .warning)
+                        }
+                        self.pendingPeripheralWrites[uuid] = queue.isEmpty ? nil : queue
+                    }
                 }
             }
         }
