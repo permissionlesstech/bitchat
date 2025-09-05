@@ -5,6 +5,10 @@ options:
     iOS: 16.0
     macOS: 13.0
   createIntermediateGroups: true
+  developmentLanguage: en
+  knownRegions:
+    - en
+    - tr
   
 settings:
   MARKETING_VERSION: 1.0.0
@@ -24,6 +28,7 @@ targets:
     resources:
       - bitchat/Assets.xcassets
       - bitchat/LaunchScreen.storyboard
+      - bitchat/Localizations
     info:
       path: bitchat/Info.plist
       properties:
@@ -76,6 +81,7 @@ targets:
       - bitchat
     resources:
       - bitchat/Assets.xcassets
+      - bitchat/Localizations
     info:
       path: bitchat/Info.plist
       properties:

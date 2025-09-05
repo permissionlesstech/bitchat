@@ -1,0 +1,131 @@
+/* 
+  Localizable.strings
+  bitchat
+
+  Created for internationalization support.
+*/
+
+// App Info
+"app.name" = "bitchat";
+"app.tagline" = "sidegroupchat";
+
+// Features Section
+"features.title" = "FEATURES";
+"features.offline_communication" = "offline communication";
+"features.offline_communication.description" = "works without internet using Bluetooth low energy";
+"features.encryption" = "end-to-end encryption";
+"features.encryption.description" = "private messages encrypted with noise protocol";
+"features.extended_range" = "extended range";
+"features.extended_range.description" = "messages relay through peers, going the distance";
+"features.mentions" = "mentions";
+"features.mentions.description" = "use @nickname to notify specific people";
+"features.favorites" = "favorites";
+"features.favorites.description" = "get notified when your favorite people join";
+"features.geohash" = "local channels";
+"features.geohash.description" = "geohash channels to chat with people in nearby regions over decentralized anonymous relays";
+
+// Privacy Section
+"privacy.title" = "PRIVACY";
+"privacy.no_tracking" = "no tracking";
+"privacy.no_tracking.description" = "no servers, accounts, or data collection";
+"privacy.ephemeral" = "ephemeral identity";
+"privacy.ephemeral.description" = "new peer ID generated regularly";
+"privacy.panic" = "panic mode";
+"privacy.panic.description" = "triple-tap logo to instantly clear all data";
+
+// How to Use Section
+"how_to_use.title" = "HOW TO USE";
+"how_to_use.instruction.nickname" = "• set your nickname by tapping it";
+"how_to_use.instruction.channels" = "• tap #mesh to change channels";
+"how_to_use.instruction.sidebar" = "• tap people icon for sidebar";
+"how_to_use.instruction.dm" = "• tap a peer's name to start a DM";
+"how_to_use.instruction.clear" = "• triple-tap chat to clear";
+"how_to_use.instruction.commands" = "• type / for commands";
+
+// Warning Section
+"warning.title" = "WARNING";
+"warning.message" = "private message security has not yet been fully audited. do not use for critical situations until this warning disappears.";
+
+// UI Elements
+"ui.close" = "close";
+"ui.done" = "DONE";
+"ui.cancel" = "cancel";
+"ui.ok" = "OK";
+"ui.settings" = "Settings";
+
+// Location Channels
+"location_channels.title" = "#location channels";
+"location_channels.description" = "chat with people near you using geohash channels. only a coarse geohash is shared, never exact gps.";
+"location_channels.get_location" = "get location and my geohashes";
+"location_channels.permission_denied" = "location permission denied. enable in settings to use location channels.";
+"location_channels.open_settings" = "open settings";
+"location_channels.remove_access" = "remove location access";
+"location_channels.teleport" = "teleport";
+"location_channels.bookmarked" = "bookmarked";
+"location_channels.finding_channels" = "finding nearby channels…";
+"location_channels.geohash_placeholder" = "geohash";
+"location_channels.invalid_geohash" = "invalid geohash";
+
+// Chat UI
+"chat.input_placeholder" = "type a message...";
+"chat.people_title" = "PEOPLE";
+"chat.nickname_placeholder" = "nickname";
+
+// Channel Types
+"channel.mesh" = "mesh";
+"channel.people_count.singular" = "%d person";
+"channel.people_count.plural" = "%d people";
+
+// Geohash Levels
+"geohash.level.region" = "region";
+"geohash.level.province" = "province";
+"geohash.level.city" = "city";
+"geohash.level.neighborhood" = "neighborhood";
+"geohash.level.block" = "block";
+
+// Bluetooth
+"bluetooth.required.title" = "Bluetooth Required";
+"bluetooth.range.metric" = "~10–50 m";
+"bluetooth.range.imperial" = "~30–160 ft";
+
+// Message Actions
+"action.mention" = "mention";
+"action.direct_message" = "direct message";
+"action.hug" = "hug";
+"action.slap" = "slap";
+"action.block" = "BLOCK";
+"action.copy_message" = "Copy message";
+
+// Buttons and Actions
+"button.show_more" = "show more";
+"button.show_less" = "show less";
+
+// Payment
+"payment.lightning" = "pay via lightning";
+"payment.cashu" = "pay via cashu";
+
+// Screenshot Warning
+"screenshot.privacy.title" = "heads up";
+"screenshot.privacy.message" = "screenshots of location channels will reveal your location. think before sharing publicly.";
+
+// Accessibility
+"accessibility.send_message" = "Send message";
+"accessibility.send_message_hint.empty" = "Enter a message to send";
+"accessibility.send_message_hint.ready" = "Double tap to send";
+"accessibility.location_channels" = "location channels";
+"accessibility.people_count" = "%d people";
+"accessibility.connected_mesh" = "Connected via mesh";
+"accessibility.reachable_mesh" = "Reachable via mesh";
+"accessibility.available_nostr" = "Available via Nostr";
+"accessibility.back_to_main" = "Back to main chat";
+"accessibility.encryption_status.verified" = "Encryption status: verified";
+"accessibility.encryption_status.secured" = "Encryption status: secured";
+"accessibility.encryption_status.not_encrypted" = "Encryption status: not encrypted";
+"accessibility.private_chat" = "Private chat with %@";
+"accessibility.view_fingerprint" = "Tap to view encryption fingerprint";
+"accessibility.add_favorite" = "Add to favorites";
+"accessibility.remove_favorite" = "Remove from favorites";
+"accessibility.toggle_favorite" = "Double tap to toggle favorite status";
+"accessibility.bookmark_toggle" = "Toggle bookmark for #%@";
+"accessibility.verification_qr" = "Verification: show my QR or scan a friend";
+"accessibility.unread_private_chat" = "Open unread private chat";
