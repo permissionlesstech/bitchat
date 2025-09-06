@@ -139,6 +139,11 @@ struct BinaryProtocol {
         }
         
         // Header
+        // Reserve capacity to reduce reallocations. Estimate base size conservatively.
+        // header(13) + sender(8) + opt recipient(8) + opt originalSize(2) + payload + opt signature(64) + up to 255 pad
+        let estimatedPayload = payload.count + (isCompressed ? 2 : 0)
+        let estimated = headerSize + senderIDSize + (packet.recipientID == nil ? 0 : recipientIDSize) + estimatedPayload + (packet.signature == nil ? 0 : signatureSize) + 255
+        data.reserveCapacity(estimated)
         data.append(packet.version)
         data.append(packet.type)
         data.append(packet.ttl)
@@ -222,135 +227,105 @@ struct BinaryProtocol {
 
     // Core decoding implementation used by decode(_:) with and without padding removal
     private static func decodeCore(_ raw: Data) -> BitchatPacket? {
-        // Minimum size check: header + senderID
-        guard raw.count >= headerSize + senderIDSize else { 
-            return nil 
-        }
-        
-        // Convert to array for safer indexed access
-        let dataArray = Array(raw)
-        var offset = 0
-        
-        // Header parsing with bounds checks
-        guard offset < dataArray.count else { return nil }
-        let version = dataArray[offset]; offset += 1
-        
-        // Check if version is 1 (only supported version)
-        guard version == 1 else { 
-            return nil 
-        }
-        
-        guard offset < dataArray.count else { return nil }
-        let type = dataArray[offset]; offset += 1
-        
-        guard offset < dataArray.count else { return nil }
-        let ttl = dataArray[offset]; offset += 1
-        
-        // Timestamp - need 8 bytes
-        guard offset + 8 <= dataArray.count else { return nil }
-        let timestampData = Data(dataArray[offset..<offset+8])
-        let timestamp = timestampData.reduce(0) { result, byte in
-            (result << 8) | UInt64(byte)
-        }
-        offset += 8
-        
-        // Flags
-        guard offset < dataArray.count else { return nil }
-        let flags = dataArray[offset]; offset += 1
-        let hasRecipient = (flags & Flags.hasRecipient) != 0
-        let hasSignature = (flags & Flags.hasSignature) != 0
-        let isCompressed = (flags & Flags.isCompressed) != 0
-        
-        // Payload length - need 2 bytes
-        guard offset + 2 <= dataArray.count else { return nil }
-        let payloadLengthData = Data(dataArray[offset..<offset+2])
-        let payloadLength = payloadLengthData.reduce(0) { result, byte in
-            (result << 8) | UInt16(byte)
-        }
-        offset += 2
-        
-        // Validate payloadLength is reasonable (prevent integer overflow)
-        guard payloadLength <= 65535 else { return nil }
-        
-        // SenderID - need 8 bytes
-        guard offset + senderIDSize <= dataArray.count else { return nil }
-        let senderID = Data(dataArray[offset..<offset+senderIDSize])
-        offset += senderIDSize
-        
-        // RecipientID if present
-        var recipientID: Data?
-        if hasRecipient {
-            guard offset + recipientIDSize <= dataArray.count else { return nil }
-            recipientID = Data(dataArray[offset..<offset+recipientIDSize])
-            offset += recipientIDSize
-        }
-        
-        // Payload handling with comprehensive bounds checking
-        let payload: Data
-        if isCompressed {
-            // Compressed payload needs at least 2 bytes for original size
-            guard Int(payloadLength) >= 2 else { return nil }
-            
-            // Check we have enough data for the original size prefix
-            guard offset + 2 <= dataArray.count else { return nil }
-            let originalSizeData = Data(dataArray[offset..<offset+2])
-            let originalSize = Int(originalSizeData.reduce(0) { result, byte in
-                (result << 8) | UInt16(byte)
-            })
-            offset += 2
-            
-            // Validate original size is reasonable
-            guard originalSize >= 0 && originalSize <= 1048576 else { return nil } // Max 1MB
-            
-            // Check we have enough data for the compressed payload
-            let compressedPayloadSize = Int(payloadLength) - 2
-            guard compressedPayloadSize >= 0 && offset + compressedPayloadSize <= dataArray.count else { 
-                return nil 
+        // Minimum size: header + senderID
+        guard raw.count >= headerSize + senderIDSize else { return nil }
+
+        return raw.withUnsafeBytes { (buf: UnsafeRawBufferPointer) -> BitchatPacket? in
+            guard let base = buf.baseAddress else { return nil }
+            var offset = 0
+            func require(_ n: Int) -> Bool { offset + n <= buf.count }
+            // Read single byte
+            func read8() -> UInt8? {
+                guard require(1) else { return nil }
+                let v = base.advanced(by: offset).assumingMemoryBound(to: UInt8.self).pointee
+                offset += 1
+                return v
             }
-            
-            let compressedPayload = Data(dataArray[offset..<offset+compressedPayloadSize])
-            offset += compressedPayloadSize
-            
-            // Decompress with error handling
-            guard let decompressedPayload = CompressionUtil.decompress(compressedPayload, originalSize: originalSize) else {
-                return nil
+            // Read big-endian 16-bit
+            func read16() -> UInt16? {
+                guard require(2) else { return nil }
+                let p = base.advanced(by: offset).assumingMemoryBound(to: UInt8.self)
+                let v = (UInt16(p[0]) << 8) | UInt16(p[1])
+                offset += 2
+                return v
             }
-            
-            // Verify decompressed size matches expected
-            guard decompressedPayload.count == originalSize else {
-                return nil
+            // Copy N bytes into Data
+            func readData(_ n: Int) -> Data? {
+                guard require(n) else { return nil }
+                let ptr = base.advanced(by: offset)
+                let d = Data(bytes: ptr, count: n)
+                offset += n
+                return d
             }
-            
-            payload = decompressedPayload
-        } else {
-            // Uncompressed payload
-            guard Int(payloadLength) >= 0 && offset + Int(payloadLength) <= dataArray.count else { 
-                return nil 
+
+            // Version
+            guard let version = read8(), version == 1 else { return nil }
+            guard let type = read8() else { return nil }
+            guard let ttl = read8() else { return nil }
+
+            // Timestamp 8 bytes BE
+            guard require(8) else { return nil }
+            var ts: UInt64 = 0
+            for _ in 0..<8 {
+                guard let b = read8() else { return nil }
+                ts = (ts << 8) | UInt64(b)
             }
-            payload = Data(dataArray[offset..<offset+Int(payloadLength)])
-            offset += Int(payloadLength)
+
+            // Flags
+            guard let flags = read8() else { return nil }
+            let hasRecipient = (flags & Flags.hasRecipient) != 0
+            let hasSignature = (flags & Flags.hasSignature) != 0
+            let isCompressed = (flags & Flags.isCompressed) != 0
+
+            // Payload length
+            guard let payloadLen = read16(), payloadLen <= 65535 else { return nil }
+
+            // SenderID
+            guard let senderID = readData(senderIDSize) else { return nil }
+
+            // Recipient
+            var recipientID: Data? = nil
+            if hasRecipient {
+                recipientID = readData(recipientIDSize)
+                if recipientID == nil { return nil }
+            }
+
+            // Payload
+            let payload: Data
+            if isCompressed {
+                // Need original size (2 bytes)
+                guard let origSize16 = read16() else { return nil }
+                let originalSize = Int(origSize16)
+                guard originalSize >= 0 && originalSize <= 1_048_576 else { return nil }
+                let compSize = Int(payloadLen) - 2
+                guard compSize >= 0, let compressed = readData(compSize) else { return nil }
+                guard let decompressed = CompressionUtil.decompress(compressed, originalSize: originalSize),
+                      decompressed.count == originalSize else { return nil }
+                payload = decompressed
+            } else {
+                guard let p = readData(Int(payloadLen)) else { return nil }
+                payload = p
+            }
+
+            // Signature
+            var signature: Data? = nil
+            if hasSignature {
+                signature = readData(signatureSize)
+                if signature == nil { return nil }
+            }
+
+            guard offset <= buf.count else { return nil }
+
+            return BitchatPacket(
+                type: type,
+                senderID: senderID,
+                recipientID: recipientID,
+                timestamp: ts,
+                payload: payload,
+                signature: signature,
+                ttl: ttl
+            )
         }
-        
-        // Signature if present
-        var signature: Data?
-        if hasSignature {
-            guard offset + signatureSize <= dataArray.count else { return nil }
-            signature = Data(dataArray[offset..<offset+signatureSize])
-            offset += signatureSize
-        }
-        
-        // Final validation: ensure we haven't gone past the end
-        guard offset <= dataArray.count else { return nil }
-        
-        return BitchatPacket(
-            type: type,
-            senderID: senderID,
-            recipientID: recipientID,
-            timestamp: timestamp,
-            payload: payload,
-            signature: signature,
-            ttl: ttl
-        )
     }
 }
 

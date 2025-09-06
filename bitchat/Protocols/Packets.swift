@@ -15,6 +15,8 @@ struct AnnouncementPacket {
 
     func encode() -> Data? {
         var data = Data()
+        // Reserve: TLVs for nickname (2 + n), noise key (2 + 32), signing key (2 + 32)
+        data.reserveCapacity(2 + min(nickname.count, 255) + 2 + noisePublicKey.count + 2 + signingPublicKey.count)
 
         // TLV for nickname
         guard let nicknameData = nickname.data(using: .utf8), nicknameData.count <= 255 else { return nil }
@@ -88,6 +90,7 @@ struct PrivateMessagePacket {
 
     func encode() -> Data? {
         var data = Data()
+        data.reserveCapacity(2 + min(messageID.count, 255) + 2 + min(content.count, 255))
 
         // TLV for messageID
         guard let messageIDData = messageID.data(using: .utf8), messageIDData.count <= 255 else { return nil }

@@ -9,6 +9,7 @@ final class MessageDeduplicator {
     }
 
     private var entries: [Entry] = []
+    private var head: Int = 0
     private var lookup = Set<String>()
     private let lock = NSLock()
     private let maxAge: TimeInterval = TransportConfig.messageDedupMaxAgeSeconds  // 5 minutes
@@ -28,10 +29,18 @@ final class MessageDeduplicator {
         entries.append(Entry(messageID: messageID, timestamp: Date()))
         lookup.insert(messageID)
 
-        if entries.count > maxCount {
-            let toRemove = entries.prefix(100)
-            toRemove.forEach { lookup.remove($0.messageID) }
-            entries.removeFirst(100)
+        // Soft-cap and advance head by a chunk to avoid O(n) shifting
+        if (entries.count - head) > maxCount {
+            let removeCount = min(100, entries.count - head)
+            for i in head..<(head + removeCount) {
+                lookup.remove(entries[i].messageID)
+            }
+            head += removeCount
+            // Periodically compact to reclaim memory
+            if head > entries.count / 2 {
+                entries.removeFirst(head)
+                head = 0
+            }
         }
 
         return false
@@ -61,6 +70,7 @@ final class MessageDeduplicator {
         defer { lock.unlock() }
 
         entries.removeAll()
+        head = 0
         lookup.removeAll()
     }
 
@@ -78,9 +88,13 @@ final class MessageDeduplicator {
 
     private func cleanupOldEntries() {
         let cutoff = Date().addingTimeInterval(-maxAge)
-        while let first = entries.first, first.timestamp < cutoff {
-            lookup.remove(first.messageID)
-            entries.removeFirst()
+        while head < entries.count, entries[head].timestamp < cutoff {
+            lookup.remove(entries[head].messageID)
+            head += 1
+        }
+        if head > 0 && head > entries.count / 2 {
+            entries.removeFirst(head)
+            head = 0
         }
     }
 }

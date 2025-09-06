@@ -140,11 +140,11 @@ class SecureLogger {
     }
     
     /// Log general messages with automatic sensitive data filtering
-    static func log(_ message: String, category: OSLog = noise, level: LogLevel = .debug,
+    static func log(_ message: @autoclosure () -> String, category: OSLog = noise, level: LogLevel = .debug,
                     file: String = #file, line: Int = #line, function: String = #function) {
         guard shouldLog(level) else { return }
         let location = formatLocation(file: file, line: line, function: function)
-        let sanitized = sanitize("\(location) \(message)")
+        let sanitized = sanitize("\(location) \(message())")
         
         #if DEBUG
         os_log("%{public}@", log: category, type: level.osLogType, sanitized)
@@ -157,10 +157,10 @@ class SecureLogger {
     }
     
     /// Log errors with context
-    static func logError(_ error: Error, context: String, category: OSLog = noise,
+    static func logError(_ error: Error, context: @autoclosure () -> String, category: OSLog = noise,
                         file: String = #file, line: Int = #line, function: String = #function) {
         let location = formatLocation(file: file, line: line, function: function)
-        let sanitized = sanitize(context)
+        let sanitized = sanitize(context())
         let errorDesc = sanitize(error.localizedDescription)
         
         #if DEBUG

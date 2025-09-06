@@ -63,8 +63,9 @@ final class BLEService: NSObject {
     private let messageDeduplicator = MessageDeduplicator()
     
     // 5. Fragment Reassembly (necessary for messages > MTU)
-    private var incomingFragments: [String: [Int: Data]] = [:]
-    private var fragmentMetadata: [String: (type: UInt8, total: Int, timestamp: Date)] = [:]
+    private struct FragmentKey: Hashable { let sender: UInt64; let id: UInt64 }
+    private var incomingFragments: [FragmentKey: [Int: Data]] = [:]
+    private var fragmentMetadata: [FragmentKey: (type: UInt8, total: Int, timestamp: Date)] = [:]
     // Backoff for peripherals that recently timed out connecting
     private var recentConnectTimeouts: [String: Date] = [:] // Peripheral UUID -> last timeout
     
@@ -88,6 +89,7 @@ final class BLEService: NSObject {
     var myPeerID: String = ""
     var myNickname: String = "anon"
     private let noiseService = NoiseEncryptionService()
+    private var myPeerIDData: Data = Data()
 
     // MARK: - Advertising Privacy
     // No Local Name by default for maximum privacy. No rotating alias.
@@ -331,6 +333,7 @@ final class BLEService: NSObject {
         // Derive stable peer ID from Noise static public key fingerprint (first 8 bytes → 16 hex chars)
         let fingerprint = noiseService.getIdentityFingerprint() // 64 hex chars
         self.myPeerID = String(fingerprint.prefix(16))
+        self.myPeerIDData = Data(hexString: myPeerID) ?? Data()
         
         // Set queue key for identification
         messageQueue.setSpecific(key: messageQueueKey, value: ())
@@ -397,7 +400,7 @@ final class BLEService: NSObject {
         maintenanceTimer = timer
         
         // Publish initial empty state
-        publishFullPeerData()
+        requestPeerDataPublish()
     }
     
     func setNickname(_ nickname: String) {
@@ -486,7 +489,7 @@ final class BLEService: NSObject {
         // Send leave message synchronously to ensure delivery
         let leavePacket = BitchatPacket(
             type: MessageType.leave.rawValue,
-            senderID: Data(hexString: myPeerID) ?? Data(),
+            senderID: myPeerIDData,
             recipientID: nil,
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
             payload: Data(),
@@ -614,7 +617,7 @@ final class BLEService: NSObject {
                 let encrypted = try noiseService.encrypt(payload, for: peerID)
                 let packet = BitchatPacket(
                     type: MessageType.noiseEncrypted.rawValue,
-                    senderID: Data(hexString: myPeerID) ?? Data(),
+                    senderID: myPeerIDData,
                     recipientID: Data(hexString: peerID),
                     timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                     payload: encrypted,
@@ -666,7 +669,7 @@ final class BLEService: NSObject {
             let encrypted = try noiseService.encrypt(typedPayload, for: peerID)
             let packet = BitchatPacket(
                 type: MessageType.noiseEncrypted.rawValue,
-                senderID: Data(hexString: myPeerID) ?? Data(),
+                senderID: myPeerIDData,
                 recipientID: Data(hexString: peerID),
                 timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                 payload: encrypted,
@@ -823,7 +826,7 @@ final class BLEService: NSObject {
                 
             let packet = BitchatPacket(
                 type: MessageType.noiseEncrypted.rawValue,
-                senderID: Data(hexString: myPeerID) ?? Data(),
+                senderID: myPeerIDData,
                 recipientID: recipientData,
                 timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                 payload: encrypted,
@@ -877,7 +880,7 @@ final class BLEService: NSObject {
             // Send handshake init
             let packet = BitchatPacket(
                 type: MessageType.noiseHandshake.rawValue,
-                senderID: Data(hexString: myPeerID) ?? Data(),
+                senderID: myPeerIDData,
                 recipientID: Data(hexString: peerID),
                 timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                 payload: handshakeData,
@@ -927,7 +930,7 @@ final class BLEService: NSObject {
 
                 let packet = BitchatPacket(
                     type: MessageType.noiseEncrypted.rawValue,
-                    senderID: Data(hexString: myPeerID) ?? Data(),
+                    senderID: myPeerIDData,
                     recipientID: Data(hexString: peerID),
                     timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                     payload: encrypted,
@@ -1270,8 +1273,11 @@ final class BLEService: NSObject {
         // Minimum header: 8 bytes ID + 2 index + 2 total + 1 type
         guard packet.payload.count >= 13 else { return }
 
-        let senderHex = packet.senderID.hexEncodedString()
-        let fragmentID = packet.payload[0..<8].map { String(format: "%02x", $0) }.joined()
+        // Compute compact fragment key (sender: 8 bytes, id: 8 bytes), big-endian
+        var senderU64: UInt64 = 0
+        for b in packet.senderID.prefix(8) { senderU64 = (senderU64 << 8) | UInt64(b) }
+        var fragU64: UInt64 = 0
+        for b in packet.payload.prefix(8) { fragU64 = (fragU64 << 8) | UInt64(b) }
         // Parse big-endian UInt16 safely without alignment assumptions
         let idxHi = UInt16(packet.payload[8])
         let idxLo = UInt16(packet.payload[9])
@@ -1286,7 +1292,7 @@ final class BLEService: NSObject {
         guard total > 0 && index >= 0 && index < total else { return }
 
         // Store fragment
-        let key = "\(senderHex):\(fragmentID)"
+        let key = FragmentKey(sender: senderU64, id: fragU64)
         if incomingFragments[key] == nil {
             // Cap in-flight assemblies to prevent memory/battery blowups
             if incomingFragments.count >= maxInFlightAssemblies {
@@ -1458,7 +1464,21 @@ final class BLEService: NSObject {
         }
         
         // Suppress announce logs to reduce noise
-        
+
+        // Precompute signature verification outside barrier to reduce contention
+        let existingPeerForVerify = collectionsQueue.sync { peers[peerID] }
+        var verifiedAnnounce = false
+        if packet.signature != nil {
+            verifiedAnnounce = noiseService.verifyPacketSignature(packet, publicKey: announcement.signingPublicKey)
+            if !verifiedAnnounce {
+                SecureLogger.log("⚠️ Signature verification for announce failed \(peerID.prefix(8))", category: SecureLogger.security, level: .warning)
+            }
+        }
+        if let existingKey = existingPeerForVerify?.noisePublicKey, existingKey != announcement.noisePublicKey {
+            SecureLogger.log("⚠️ Announce key mismatch for \(peerID.prefix(8))… — keeping unverified", category: SecureLogger.security, level: .warning)
+            verifiedAnnounce = false
+        }
+
         // Track if this is a new or reconnected peer
         var isNewPeer = false
         var isReconnectedPeer = false
@@ -1483,21 +1503,8 @@ final class BLEService: NSObject {
             isNewPeer = (existingPeer == nil)
             isReconnectedPeer = wasDisconnected
             
-            // Verify packet signature using the announced signing public key
-            var verified = false
-            if packet.signature != nil {
-                // Verify that the packet was signed by the signing private key corresponding to the announced signing public key
-                verified = noiseService.verifyPacketSignature(packet, publicKey: announcement.signingPublicKey)
-                if !verified {
-                    SecureLogger.log("⚠️ Signature verification for announce failed \(peerID.prefix(8))", category: SecureLogger.security, level: .warning)
-                }
-            }
-
-            // If existing peer has a different noise public key, do not consider this verified
-            if let existing = existingPeer, let existingKey = existing.noisePublicKey, existingKey != announcement.noisePublicKey {
-                SecureLogger.log("⚠️ Announce key mismatch for \(peerID.prefix(8))… — keeping unverified", category: SecureLogger.security, level: .warning)
-                verified = false
-            }
+            // Use precomputed verification result
+            let verified = verifiedAnnounce
 
             // Require verified announce; ignore otherwise (no backward compatibility)
             if !verified {
@@ -1588,7 +1595,7 @@ final class BLEService: NSObject {
                 self.delegate?.didConnectToPeer(peerID)
             }
             
-            self.publishFullPeerData()
+            self.requestPeerDataPublish()
             self.delegate?.didUpdatePeerList(currentPeerIDs)
         }
         
@@ -1689,7 +1696,7 @@ final class BLEService: NSObject {
                     // Send response
                     let responsePacket = BitchatPacket(
                         type: MessageType.noiseHandshake.rawValue,
-                        senderID: Data(hexString: myPeerID) ?? Data(),
+                        senderID: myPeerIDData,
                         recipientID: Data(hexString: peerID),
                         timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                         payload: response,
@@ -1845,7 +1852,7 @@ final class BLEService: NSObject {
         // Create packet with signature using the noise private key
         let packet = BitchatPacket(
             type: MessageType.announce.rawValue,
-            senderID: Data(hexString: myPeerID) ?? Data(),
+            senderID: myPeerIDData,
             recipientID: nil,
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
             payload: payload,
@@ -1879,7 +1886,7 @@ final class BLEService: NSObject {
                 let encrypted = try noiseService.encrypt(payload, for: peerID)
                 let packet = BitchatPacket(
                     type: MessageType.noiseEncrypted.rawValue,
-                    senderID: Data(hexString: myPeerID) ?? Data(),
+                    senderID: myPeerIDData,
                     recipientID: Data(hexString: peerID),
                     timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                     payload: encrypted,
@@ -1916,7 +1923,7 @@ final class BLEService: NSObject {
                 let encrypted = try noiseService.encrypt(payload, for: peerID)
                 let packet = BitchatPacket(
                     type: MessageType.noiseEncrypted.rawValue,
-                    senderID: Data(hexString: myPeerID) ?? Data(),
+                    senderID: myPeerIDData,
                     recipientID: Data(hexString: peerID),
                     timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                     payload: encrypted,
@@ -1980,6 +1987,28 @@ final class BLEService: NSObject {
         // Notify UI on MainActor via delegate
         Task { @MainActor [weak self] in
             self?.peerEventsDelegate?.didUpdatePeerSnapshots(transportPeers)
+        }
+    }
+
+    // Debounced publish to coalesce rapid changes
+    private var lastPeerPublishAt: Date = .distantPast
+    private var peerPublishPending: Bool = false
+    private let peerPublishMinInterval: TimeInterval = 0.1
+    private func requestPeerDataPublish() {
+        let now = Date()
+        let elapsed = now.timeIntervalSince(lastPeerPublishAt)
+        if elapsed >= peerPublishMinInterval {
+            lastPeerPublishAt = now
+            publishFullPeerData()
+        } else if !peerPublishPending {
+            peerPublishPending = true
+            let delay = peerPublishMinInterval - elapsed
+            messageQueue.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self = self else { return }
+                self.lastPeerPublishAt = Date()
+                self.peerPublishPending = false
+                self.publishFullPeerData()
+            }
         }
     }
     
@@ -2095,7 +2124,7 @@ final class BLEService: NSObject {
                     self.delegate?.didDisconnectFromPeer(peerID)
                 }
                 // Publish snapshots so UnifiedPeerService updates connection/reachability icons
-                self.publishFullPeerData()
+                self.requestPeerDataPublish()
                 self.delegate?.didUpdatePeerList(currentPeerIDs)
             }
         }
@@ -2477,7 +2506,7 @@ func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeriph
             if let peerID = peerID {
                 self.notifyPeerDisconnectedDebounced(peerID)
             }
-            self.publishFullPeerData()
+            self.requestPeerDataPublish()
             self.delegate?.didUpdatePeerList(currentPeerIDs)
         }
     }
@@ -2878,7 +2907,7 @@ extension BLEService: CBPeripheralManagerDelegate {
                 
                 self.notifyPeerDisconnectedDebounced(peerID)
                 // Publish snapshots so UnifiedPeerService can refresh icons promptly
-                self.publishFullPeerData()
+                self.requestPeerDataPublish()
                 self.delegate?.didUpdatePeerList(currentPeerIDs)
             }
         }
