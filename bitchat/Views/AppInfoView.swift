@@ -18,41 +18,41 @@ struct AppInfoView: View {
     
     // MARK: - Constants
     private enum Strings {
-        static let appName = "bitchat"
-        static let tagline = "sidegroupchat"
+        static let appName = LocalizedStrings.App.name
+        static let tagline = LocalizedStrings.App.tagline
         
         enum Features {
-            static let title = "FEATURES"
-            static let offlineComm = ("wifi.slash", "offline communication", "works without internet using Bluetooth low energy")
-            static let encryption = ("lock.shield", "end-to-end encryption", "private messages encrypted with noise protocol")
-            static let extendedRange = ("antenna.radiowaves.left.and.right", "extended range", "messages relay through peers, going the distance")
-            static let mentions = ("at", "mentions", "use @nickname to notify specific people")
-            static let favorites = ("star.fill", "favorites", "get notified when your favorite people join")
-            static let geohash = ("number", "local channels", "geohash channels to chat with people in nearby regions over decentralized anonymous relays")
+            static let title = LocalizedStrings.Features.title
+            static let offlineComm = ("wifi.slash", LocalizedStrings.Features.offlineCommunication, LocalizedStrings.Features.offlineCommunicationDescription)
+            static let encryption = ("lock.shield", LocalizedStrings.Features.encryption, LocalizedStrings.Features.encryptionDescription)
+            static let extendedRange = ("antenna.radiowaves.left.and.right", LocalizedStrings.Features.extendedRange, LocalizedStrings.Features.extendedRangeDescription)
+            static let mentions = ("at", LocalizedStrings.Features.mentions, LocalizedStrings.Features.mentionsDescription)
+            static let favorites = ("star.fill", LocalizedStrings.Features.favorites, LocalizedStrings.Features.favoritesDescription)
+            static let geohash = ("number", LocalizedStrings.Features.geohash, LocalizedStrings.Features.geohashDescription)
         }
         
         enum Privacy {
-            static let title = "PRIVACY"
-            static let noTracking = ("eye.slash", "no tracking", "no servers, accounts, or data collection")
-            static let ephemeral = ("shuffle", "ephemeral identity", "new peer ID generated regularly")
-            static let panic = ("hand.raised.fill", "panic mode", "triple-tap logo to instantly clear all data")
+            static let title = LocalizedStrings.Privacy.title
+            static let noTracking = ("eye.slash", LocalizedStrings.Privacy.noTracking, LocalizedStrings.Privacy.noTrackingDescription)
+            static let ephemeral = ("shuffle", LocalizedStrings.Privacy.ephemeral, LocalizedStrings.Privacy.ephemeralDescription)
+            static let panic = ("hand.raised.fill", LocalizedStrings.Privacy.panic, LocalizedStrings.Privacy.panicDescription)
         }
         
         enum HowToUse {
-            static let title = "HOW TO USE"
+            static let title = LocalizedStrings.HowToUse.title
             static let instructions = [
-                "• set your nickname by tapping it",
-                "• tap #mesh to change channels",
-                "• tap people icon for sidebar",
-                "• tap a peer's name to start a DM",
-                "• triple-tap chat to clear",
-                "• type / for commands"
+                LocalizedStrings.HowToUse.instructionNickname,
+                LocalizedStrings.HowToUse.instructionChannels,
+                LocalizedStrings.HowToUse.instructionSidebar,
+                LocalizedStrings.HowToUse.instructionDM,
+                LocalizedStrings.HowToUse.instructionClear,
+                LocalizedStrings.HowToUse.instructionCommands
             ]
         }
         
         enum Warning {
-            static let title = "WARNING"
-            static let message = "private message security has not yet been fully audited. do not use for critical situations until this warning disappears."
+            static let title = LocalizedStrings.Warning.title
+            static let message = LocalizedStrings.Warning.message
         }
     }
     
@@ -62,7 +62,7 @@ struct AppInfoView: View {
             // Custom header for macOS
             HStack {
                 Spacer()
-                Button("DONE") {
+                Button(LocalizedStrings.UI.done) {
                     dismiss()
                 }
                 .buttonStyle(.plain)
@@ -86,7 +86,7 @@ struct AppInfoView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("close") {
+                    Button(LocalizedStrings.UI.close) {
                         dismiss()
                     }
                     .foregroundColor(textColor)

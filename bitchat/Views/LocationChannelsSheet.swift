@@ -17,9 +17,9 @@ struct LocationChannelsSheet: View {
     var body: some View {
         NavigationView {
             VStack(alignment: .leading, spacing: 12) {
-                Text("#location channels")
+                Text(LocalizedStrings.LocationChannels.title)
                     .font(.system(size: 18, design: .monospaced))
-                Text("chat with people near you using geohash channels. only a coarse geohash is shared, never exact gps.")
+                Text(LocalizedStrings.LocationChannels.description)
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundColor(.secondary)
 
@@ -27,7 +27,7 @@ struct LocationChannelsSheet: View {
                     switch manager.permissionState {
                     case LocationChannelManager.PermissionState.notDetermined:
                         Button(action: { manager.enableLocationChannels() }) {
-                            Text("get location and my geohashes")
+                            Text(LocalizedStrings.LocationChannels.getLocation)
                                 .font(.system(size: 12, design: .monospaced))
                                 .foregroundColor(standardGreen)
                                 .frame(maxWidth: .infinity)
@@ -38,10 +38,10 @@ struct LocationChannelsSheet: View {
                         .buttonStyle(.plain)
                     case LocationChannelManager.PermissionState.denied, LocationChannelManager.PermissionState.restricted:
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("location permission denied. enable in settings to use location channels.")
+                            Text(LocalizedStrings.LocationChannels.permissionDenied)
                                 .font(.system(size: 12, design: .monospaced))
                                 .foregroundColor(.secondary)
-                            Button("open settings") { openSystemLocationSettings() }
+                            Button(LocalizedStrings.LocationChannels.openSettings) { openSystemLocationSettings() }
                             .buttonStyle(.plain)
                         }
                     case LocationChannelManager.PermissionState.authorized:
@@ -58,14 +58,14 @@ struct LocationChannelsSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("close") { isPresented = false }
+                    Button(LocalizedStrings.UI.close) { isPresented = false }
                         .font(.system(size: 14, design: .monospaced))
                 }
             }
             #else
             .toolbar {
                 ToolbarItem(placement: .automatic) {
-                    Button("close") { isPresented = false }
+                    Button(LocalizedStrings.UI.close) { isPresented = false }
                         .font(.system(size: 14, design: .monospaced))
                 }
             }
@@ -137,7 +137,7 @@ struct LocationChannelsSheet: View {
             } else {
                 HStack {
                     ProgressView()
-                    Text("finding nearby channels…")
+                    Text(LocalizedStrings.LocationChannels.findingChannels)
                         .font(.system(size: 12, design: .monospaced))
                 }
             }
@@ -148,7 +148,7 @@ struct LocationChannelsSheet: View {
                     Text("#")
                         .font(.system(size: 14, design: .monospaced))
                         .foregroundColor(.secondary)
-                    TextField("geohash", text: $customGeohash)
+                    TextField(LocalizedStrings.LocationChannels.geohashPlaceholder, text: $customGeohash)
                         #if os(iOS)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled(true)
@@ -172,7 +172,7 @@ struct LocationChannelsSheet: View {
                     let isValid = validateGeohash(normalized)
                     Button(action: {
                         let gh = normalized
-                        guard isValid else { customError = "invalid geohash"; return }
+                        guard isValid else { customError = LocalizedStrings.LocationChannels.invalidGeohash; return }
                         let level = levelForLength(gh.count)
                         let ch = GeohashChannel(level: level, geohash: gh)
                         // Mark this selection as a manual teleport
@@ -181,7 +181,7 @@ struct LocationChannelsSheet: View {
                         isPresented = false
                     }) {
                         HStack(spacing: 6) {
-                            Text("teleport")
+                            Text(LocalizedStrings.LocationChannels.teleport)
                                 .font(.system(size: 14, design: .monospaced))
                             Image(systemName: "face.dashed")
                                 .font(.system(size: 14))
@@ -206,7 +206,7 @@ struct LocationChannelsSheet: View {
             // Bookmarked geohashes
             if !bookmarks.bookmarks.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("bookmarked")
+                    Text(LocalizedStrings.LocationChannels.bookmarked)
                         .font(.system(size: 12, design: .monospaced))
                         .foregroundColor(.secondary)
                 }
@@ -250,7 +250,7 @@ struct LocationChannelsSheet: View {
                 Button(action: {
                     openSystemLocationSettings()
                 }) {
-                    Text("remove location access")
+                    Text(LocalizedStrings.LocationChannels.removeAccess)
                         .font(.system(size: 12, design: .monospaced))
                         .foregroundColor(Color(red: 0.75, green: 0.1, blue: 0.1))
                         .frame(maxWidth: .infinity)

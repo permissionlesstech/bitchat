@@ -181,7 +181,7 @@ struct ContentView: View {
             isPresented: $showMessageActions,
             titleVisibility: .visible
         ) {
-            Button("mention") {
+            Button(LocalizedStrings.Actions.mention) {
                 if let sender = selectedMessageSender {
                     // Pre-fill the input with an @mention and focus the field
                     messageText = "@\(sender) "
@@ -189,7 +189,7 @@ struct ContentView: View {
                 }
             }
 
-            Button("direct message") {
+            Button(LocalizedStrings.Actions.directMessage) {
                 if let peerID = selectedMessageSenderID {
                     if peerID.hasPrefix("nostr:") {
                         if let full = viewModel.fullNostrHex(forSenderPeerID: peerID) {
@@ -205,19 +205,19 @@ struct ContentView: View {
                 }
             }
             
-            Button("hug") {
+            Button(LocalizedStrings.Actions.hug) {
                 if let sender = selectedMessageSender {
                     viewModel.sendMessage("/hug @\(sender)")
                 }
             }
             
-            Button("slap") {
+            Button(LocalizedStrings.Actions.slap) {
                 if let sender = selectedMessageSender {
                     viewModel.sendMessage("/slap @\(sender)")
                 }
             }
             
-            Button("BLOCK", role: .destructive) {
+            Button(LocalizedStrings.Actions.block, role: .destructive) {
                 // Prefer direct geohash block when we have a Nostr sender ID
                 if let peerID = selectedMessageSenderID, peerID.hasPrefix("nostr:"),
                    let full = viewModel.fullNostrHex(forSenderPeerID: peerID),
@@ -228,17 +228,17 @@ struct ContentView: View {
                 }
             }
             
-            Button("cancel", role: .cancel) {}
+            Button(LocalizedStrings.UI.cancel, role: .cancel) {}
         }
-        .alert("Bluetooth Required", isPresented: $viewModel.showBluetoothAlert) {
-            Button("Settings") {
+        .alert(LocalizedStrings.Bluetooth.requiredTitle, isPresented: $viewModel.showBluetoothAlert) {
+            Button(LocalizedStrings.UI.settings) {
                 #if os(iOS)
                 if let url = URL(string: UIApplication.openSettingsURLString) {
                     UIApplication.shared.open(url)
                 }
                 #endif
             }
-            Button("OK", role: .cancel) {}
+            Button(LocalizedStrings.UI.ok, role: .cancel) {}
         } message: {
             Text(viewModel.bluetoothAlertMessage)
         }
@@ -318,8 +318,8 @@ struct ContentView: View {
                                     
                                     // Expand/Collapse for very long messages
                                     if (message.content.count > TransportConfig.uiLongMessageLengthThreshold || message.content.hasVeryLongToken(threshold: TransportConfig.uiVeryLongTokenThreshold)) && cashuTokens.isEmpty {
-                                        let isExpanded = expandedMessageIDs.contains(message.id)
-                                        Button(isExpanded ? "show less" : "show more") {
+                                                                let isExpanded = expandedMessageIDs.contains(message.id)
+                        Button(isExpanded ? LocalizedStrings.Buttons.showLess : LocalizedStrings.Buttons.showMore) {
                                             if isExpanded { expandedMessageIDs.remove(message.id) }
                                             else { expandedMessageIDs.insert(message.id) }
                                         }
@@ -335,7 +335,7 @@ struct ContentView: View {
                                                 let link = lightningLinks[i]
                                                 PaymentChipView(
                                                     emoji: "⚡",
-                                                    label: "pay via lightning",
+                                                    label: LocalizedStrings.Payment.lightning,
                                                     colorScheme: colorScheme
                                                 ) {
                                                     #if os(iOS)
@@ -351,7 +351,7 @@ struct ContentView: View {
                                                 let urlStr = "cashu:\(enc)"
                                                 PaymentChipView(
                                                     emoji: "🥜",
-                                                    label: "pay via cashu",
+                                                    label: LocalizedStrings.Payment.cashu,
                                                     colorScheme: colorScheme
                                                 ) {
                                                     #if os(iOS)
@@ -421,7 +421,7 @@ struct ContentView: View {
                             }
                         }
                         .contextMenu {
-                            Button("Copy message") {
+                            Button(LocalizedStrings.Actions.copyMessage) {
                                 #if os(iOS)
                                 UIPasteboard.general.string = message.content
                                 #else
@@ -778,7 +778,7 @@ struct ContentView: View {
             }
             
             HStack(alignment: .center, spacing: 4) {
-            TextField("type a message...", text: $messageText)
+            TextField(LocalizedStrings.Chat.inputPlaceholder, text: $messageText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 14, design: .monospaced))
                 .foregroundColor(textColor)
@@ -895,7 +895,7 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 0) {
                 // Header - match main toolbar height
                 HStack {
-                    Text("PEOPLE")
+                    Text(LocalizedStrings.Chat.peopleTitle)
                         .font(.system(size: 16, weight: .bold, design: .monospaced))
                         .foregroundColor(textColor)
                     Spacer()
@@ -1076,7 +1076,7 @@ struct ContentView: View {
                     .font(.system(size: 14, design: .monospaced))
                     .foregroundColor(secondaryTextColor)
                 
-                TextField("nickname", text: $viewModel.nickname)
+                TextField(LocalizedStrings.Chat.nicknamePlaceholder, text: $viewModel.nickname)
                     .textFieldStyle(.plain)
                     .font(.system(size: 14, design: .monospaced))
                     .frame(maxWidth: 100)

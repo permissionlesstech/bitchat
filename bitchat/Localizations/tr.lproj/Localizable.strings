@@ -1,0 +1,131 @@
+/* 
+  Localizable.strings
+  bitchat
+
+  Turkish localization
+*/
+
+// App Info
+"app.name" = "bitchat";
+"app.tagline" = "yan grup sohbeti";
+
+// Features Section
+"features.title" = "ÖZELLİKLER";
+"features.offline_communication" = "çevrimdışı iletişim";
+"features.offline_communication.description" = "düşük enerjili Bluetooth kullanarak internetsiz çalışır";
+"features.encryption" = "uçtan uca şifreleme";
+"features.encryption.description" = "özel mesajlar noise protokolü ile şifrelenir";
+"features.extended_range" = "genişletilmiş menzil";
+"features.extended_range.description" = "mesajlar eşler aracılığıyla aktarılır, uzaklara ulaşır";
+"features.mentions" = "bahsetmeler";
+"features.mentions.description" = "belirli kişileri bilgilendirmek için @kullanıcıadı kullanın";
+"features.favorites" = "favoriler";
+"features.favorites.description" = "favori insanlarınız katıldığında bildirim alın";
+"features.geohash" = "yerel kanallar";
+"features.geohash.description" = "merkezi olmayan anonim röleler üzerinden yakın bölgelerdeki insanlarla sohbet etmek için geohash kanalları";
+
+// Privacy Section
+"privacy.title" = "GİZLİLİK";
+"privacy.no_tracking" = "takip yok";
+"privacy.no_tracking.description" = "sunucu, hesap veya veri toplama yok";
+"privacy.ephemeral" = "geçici kimlik";
+"privacy.ephemeral.description" = "düzenli olarak yeni eş kimliği oluşturulur";
+"privacy.panic" = "panik modu";
+"privacy.panic.description" = "tüm verileri anında temizlemek için logoya üç kez dokunun";
+
+// How to Use Section
+"how_to_use.title" = "NASIL KULLANILIR";
+"how_to_use.instruction.nickname" = "• kullanıcı adınızı dokunarak ayarlayın";
+"how_to_use.instruction.channels" = "• kanal değiştirmek için #mesh'e dokunun";
+"how_to_use.instruction.sidebar" = "• kenar çubuğu için kişiler simgesine dokunun";
+"how_to_use.instruction.dm" = "• özel mesaj başlatmak için eş adına dokunun";
+"how_to_use.instruction.clear" = "• temizlemek için sohbete üç kez dokunun";
+"how_to_use.instruction.commands" = "• komutlar için / yazın";
+
+// Warning Section
+"warning.title" = "UYARI";
+"warning.message" = "özel mesaj güvenliği henüz tam olarak denetlenmedi. bu uyarı kaybolana kadar kritik durumlar için kullanmayın.";
+
+// UI Elements
+"ui.close" = "kapat";
+"ui.done" = "TAMAM";
+"ui.cancel" = "iptal";
+"ui.ok" = "TAMAM";
+"ui.settings" = "Ayarlar";
+
+// Location Channels
+"location_channels.title" = "#konum kanalları";
+"location_channels.description" = "geohash kanallarını kullanarak yakınınızdaki insanlarla sohbet edin. sadece kaba geohash paylaşılır, kesin gps asla.";
+"location_channels.get_location" = "konumu al ve geohashlerimi bul";
+"location_channels.permission_denied" = "konum izni reddedildi. konum kanallarını kullanmak için ayarlardan etkinleştirin.";
+"location_channels.open_settings" = "ayarları aç";
+"location_channels.remove_access" = "konum erişimini kaldır";
+"location_channels.teleport" = "ışınlan";
+"location_channels.bookmarked" = "yer imlerine eklenen";
+"location_channels.finding_channels" = "yakın kanallar aranıyor…";
+"location_channels.geohash_placeholder" = "geohash";
+"location_channels.invalid_geohash" = "geçersiz geohash";
+
+// Chat UI
+"chat.input_placeholder" = "bir mesaj yazın...";
+"chat.people_title" = "KİŞİLER";
+"chat.nickname_placeholder" = "kullanıcı adı";
+
+// Channel Types
+"channel.mesh" = "ağ";
+"channel.people_count.singular" = "%d kişi";
+"channel.people_count.plural" = "%d kişi";
+
+// Geohash Levels
+"geohash.level.region" = "bölge";
+"geohash.level.province" = "il";
+"geohash.level.city" = "şehir";
+"geohash.level.neighborhood" = "mahalle";
+"geohash.level.block" = "blok";
+
+// Bluetooth
+"bluetooth.required.title" = "Bluetooth Gerekli";
+"bluetooth.range.metric" = "~10–50 m";
+"bluetooth.range.imperial" = "~30–160 ft";
+
+// Message Actions
+"action.mention" = "bahset";
+"action.direct_message" = "özel mesaj";
+"action.hug" = "sarıl";
+"action.slap" = "tokat";
+"action.block" = "ENGELLE";
+"action.copy_message" = "Mesajı kopyala";
+
+// Buttons and Actions
+"button.show_more" = "daha fazla göster";
+"button.show_less" = "daha az göster";
+
+// Payment
+"payment.lightning" = "lightning ile öde";
+"payment.cashu" = "cashu ile öde";
+
+// Screenshot Warning
+"screenshot.privacy.title" = "dikkat";
+"screenshot.privacy.message" = "konum kanallarının ekran görüntüleri konumunuzu açığa çıkarır. herkese açık paylaşmadan önce düşünün.";
+
+// Accessibility
+"accessibility.send_message" = "Mesaj gönder";
+"accessibility.send_message_hint.empty" = "Göndermek için bir mesaj girin";
+"accessibility.send_message_hint.ready" = "Göndermek için iki kez dokunun";
+"accessibility.location_channels" = "konum kanalları";
+"accessibility.people_count" = "%d kişi";
+"accessibility.connected_mesh" = "Ağ üzerinden bağlı";
+"accessibility.reachable_mesh" = "Ağ üzerinden ulaşılabilir";
+"accessibility.available_nostr" = "Nostr üzerinden mevcut";
+"accessibility.back_to_main" = "Ana sohbete geri dön";
+"accessibility.encryption_status.verified" = "Şifreleme durumu: doğrulandı";
+"accessibility.encryption_status.secured" = "Şifreleme durumu: güvenli";
+"accessibility.encryption_status.not_encrypted" = "Şifreleme durumu: şifrelenmemiş";
+"accessibility.private_chat" = "%@ ile özel sohbet";
+"accessibility.view_fingerprint" = "Şifreleme parmak izini görüntülemek için dokunun";
+"accessibility.add_favorite" = "Favorilere ekle";
+"accessibility.remove_favorite" = "Favorilerden çıkar";
+"accessibility.toggle_favorite" = "Favori durumunu değiştirmek için iki kez dokunun";
+"accessibility.bookmark_toggle" = "#%@ için yer imi durumunu değiştir";
+"accessibility.verification_qr" = "Doğrulama: QR kodumu göster veya arkadaş tara";
+"accessibility.unread_private_chat" = "Okunmamış özel sohbeti aç";
