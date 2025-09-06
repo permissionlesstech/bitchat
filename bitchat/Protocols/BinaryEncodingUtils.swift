@@ -40,23 +40,23 @@ extension Data {
 extension Data {
     // MARK: Writing
     
-    mutating func appendUInt8(_ value: UInt8) {
+    @inlinable mutating func appendUInt8(_ value: UInt8) {
         self.append(value)
     }
     
-    mutating func appendUInt16(_ value: UInt16) {
+    @inlinable mutating func appendUInt16(_ value: UInt16) {
         self.append(UInt8((value >> 8) & 0xFF))
         self.append(UInt8(value & 0xFF))
     }
     
-    mutating func appendUInt32(_ value: UInt32) {
+    @inlinable mutating func appendUInt32(_ value: UInt32) {
         self.append(UInt8((value >> 24) & 0xFF))
         self.append(UInt8((value >> 16) & 0xFF))
         self.append(UInt8((value >> 8) & 0xFF))
         self.append(UInt8(value & 0xFF))
     }
     
-    mutating func appendUInt64(_ value: UInt64) {
+    @inlinable mutating func appendUInt64(_ value: UInt64) {
         for i in (0..<8).reversed() {
             self.append(UInt8((value >> (i * 8)) & 0xFF))
         }
@@ -113,21 +113,21 @@ extension Data {
     
     // MARK: Reading
     
-    func readUInt8(at offset: inout Int) -> UInt8? {
+    @inlinable func readUInt8(at offset: inout Int) -> UInt8? {
         guard offset >= 0 && offset < self.count else { return nil }
         let value = self[offset]
         offset += 1
         return value
     }
     
-    func readUInt16(at offset: inout Int) -> UInt16? {
+    @inlinable func readUInt16(at offset: inout Int) -> UInt16? {
         guard offset + 2 <= self.count else { return nil }
         let value = UInt16(self[offset]) << 8 | UInt16(self[offset + 1])
         offset += 2
         return value
     }
     
-    func readUInt32(at offset: inout Int) -> UInt32? {
+    @inlinable func readUInt32(at offset: inout Int) -> UInt32? {
         guard offset + 4 <= self.count else { return nil }
         let value = UInt32(self[offset]) << 24 |
                    UInt32(self[offset + 1]) << 16 |
@@ -137,7 +137,7 @@ extension Data {
         return value
     }
     
-    func readUInt64(at offset: inout Int) -> UInt64? {
+    @inlinable func readUInt64(at offset: inout Int) -> UInt64? {
         guard offset + 8 <= self.count else { return nil }
         var value: UInt64 = 0
         for i in 0..<8 {
@@ -220,4 +220,3 @@ extension Data {
         return data
     }
 }
-
