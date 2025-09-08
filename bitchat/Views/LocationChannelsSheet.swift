@@ -148,7 +148,7 @@ struct LocationChannelsSheet: View {
             // Custom geohash teleport
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 2) {
-                    Text("#")
+                    Text(String(localized: "ui.hash_symbol"))
                         .font(.system(size: 14, design: .monospaced))
                         .foregroundColor(.secondary)
                     TextField(String(localized: "placeholder.geohash"), text: $customGeohash)
@@ -322,7 +322,7 @@ struct LocationChannelsSheet: View {
                 }
                 Spacer()
                 if isSelected {
-                    Text("✔︎")
+                    Text(String(localized: "ui.checkmark"))
                         .font(.system(size: 16, design: .monospaced))
                         .foregroundColor(standardGreen)
                 }

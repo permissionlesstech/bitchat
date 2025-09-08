@@ -20,7 +20,7 @@ struct MyQRView: View {
 
             VStack(spacing: 10) {
                 QRCodeImage(data: qrString, size: 240)
-                    .accessibilityLabel("verification qr code")
+                    .accessibilityLabel(String(localized: "accessibility.verification_qr"))
 
                 // Non-scrolling, fully visible URL (wraps across lines)
                 Text(qrString)

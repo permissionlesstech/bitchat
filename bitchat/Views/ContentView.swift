@@ -1063,7 +1063,7 @@ struct ContentView: View {
     
     private var mainHeaderView: some View {
         HStack(spacing: 0) {
-            Text("bitchat/")
+            Text(String(localized: "app.title_prefix"))
                 .font(.system(size: 18, weight: .medium, design: .monospaced))
                 .foregroundColor(textColor)
                 .onTapGesture(count: 3) {
@@ -1076,7 +1076,7 @@ struct ContentView: View {
                 }
             
             HStack(spacing: 0) {
-                Text("@")
+                Text(String(localized: "ui.at_symbol"))
                     .font(.system(size: 14, design: .monospaced))
                     .foregroundColor(secondaryTextColor)
                 
@@ -1134,7 +1134,7 @@ struct ContentView: View {
                             .font(.system(size: 12))
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Toggle bookmark for #\(ch.geohash)")
+                    .accessibilityLabel(String.localizedStringWithFormat(String(localized: "accessibility.bookmark_toggle_geohash"), ch.geohash))
                 }
                 // Location channels button '#'
                 Button(action: { showLocationChannelsSheet = true }) {
@@ -1167,7 +1167,7 @@ struct ContentView: View {
                     // People icon with count
                     Image(systemName: "person.2.fill")
                         .font(.system(size: 11))
-                        .accessibilityLabel(String.localizedStringWithFormat(String(localized: "accessibility.people_count"), headerOtherPeersCount))
+                        .accessibilityLabel(String.localizedStringWithFormat(NSLocalizedString("accessibility.people_count", comment: "People count with plural forms"), headerOtherPeersCount))
                     Text("\(headerOtherPeersCount)")
                         .font(.system(size: 12, design: .monospaced))
                         .accessibilityHidden(true)
@@ -1309,13 +1309,13 @@ struct ContentView: View {
                                 Image(systemName: "point.3.filled.connected.trianglepath.dotted")
                                     .font(.system(size: 14))
                                     .foregroundColor(textColor)
-                                    .accessibilityLabel("Reachable via mesh")
+                                    .accessibilityLabel(String(localized: "accessibility.reachable_mesh"))
                             } else if isNostrAvailable {
                                 // Fallback to Nostr if peer not in list but is mutual favorite
                                 Image(systemName: "globe")
                                     .font(.system(size: 14))
                                     .foregroundColor(.purple)
-                                    .accessibilityLabel("Available via Nostr")
+                                    .accessibilityLabel(String(localized: "accessibility.available_nostr"))
                             } else if viewModel.meshService.isPeerConnected(headerPeerID) || viewModel.connectedPeers.contains(headerPeerID) {
                                 // Fallback: if peer lookup is missing but mesh reports connected, show radio
                                 Image(systemName: "dot.radiowaves.left.and.right")
