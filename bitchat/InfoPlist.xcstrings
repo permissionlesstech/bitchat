@@ -1,0 +1,364 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "NSBluetoothAlwaysUsageDescription": {
+      "comment": "Permission description for Bluetooth access to create mesh network",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يستخدم bitchat البلوتوث لإنشاء شبكة آمنة للمحادثة مع المستخدمين القريبين."
+          }
+        },
+        "arz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
+          }
+        },
+        "bn": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat verwendet Bluetooth, um ein sicheres Mesh-Netzwerk für Chats mit Benutzern in der Nähe zu erstellen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat usa Bluetooth para crear una red segura para chatear con usuarios cercanos."
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat utilise Bluetooth pour créer un réseau maillé sécurisé pour discuter avec les utilisateurs proches."
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
+          }
+        },
+        "id": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchatは近くのユーザーとチャットするための安全なメッシュネットワークを作成するためにBluetoothを使用します。"
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat использует Bluetooth для создания безопасной ячеистой сети для общения с близлежащими пользователями."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat 使用蓝牙创建安全的网状网络，与附近用户聊天。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
+          }
+        }
+      }
+    },
+    "NSBluetoothPeripheralUsageDescription": {
+      "comment": "Permission description for Bluetooth peripheral mode to be discoverable",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يستخدم bitchat البلوتوث لاكتشاف والاتصال مع مستخدمي bitchat القريبين."
+          }
+        },
+        "arz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
+          }
+        },
+        "bn": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat verwendet Bluetooth, um andere bitchat-Benutzer in der Nähe zu entdecken und sich mit ihnen zu verbinden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat usa Bluetooth para descubrir y conectarse con otros usuarios de bitchat cercanos."
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat utilise Bluetooth pour découvrir et se connecter avec d'autres utilisateurs bitchat à proximité."
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
+          }
+        },
+        "id": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchatは近くの他のbitchatユーザーを発見し、接続するためにBluetoothを使用します。"
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat использует Bluetooth для обнаружения и подключения к другим пользователям bitchat поблизости."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat 使用蓝牙发现并连接附近的其他 bitchat 用户。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

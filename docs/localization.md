@@ -1,200 +1,64 @@
 # Localization Guide
 
-BitChat supports comprehensive internationalization with 29 languages, following Apple's modern best practices using the `.xcstrings` format.
+This document summarizes how localization is organized in Bitchat and how to add, edit, and validate translations.
 
-## Supported Languages (29 Total)
+## Structure
 
-### Major World Languages
-- **English (en)** - Base language
-- **Spanish (es)** - 500M+ speakers
-- **Chinese Simplified (zh-Hans)** - 918M speakers
-- **Chinese Traditional (zh-Hant)** - 75M speakers  
-- **Chinese Hong Kong (zh-HK)** - 7M speakers
-- **Hindi (hi)** - 600M+ speakers
-- **Arabic (ar)** - 400M+ speakers
-- **Portuguese (pt)** - 260M speakers
-- **Brazilian Portuguese (pt-BR)** - 215M speakers
-- **Bengali (bn)** - 300M speakers
-- **Russian (ru)** - 258M speakers
-- **Japanese (ja)** - 125M speakers
-- **German (de)** - 100M speakers
-- **French (fr)** - 280M speakers
-- **Urdu (ur)** - 230M speakers
-- **Turkish (tr)** - 80M speakers
-- **Vietnamese (vi)** - 95M speakers
-- **Indonesian (id)** - 270M speakers
+- `bitchat/Localization/Localizable.xcstrings` — Main string catalog (Base/en + locales).
+- `bitchat/Localization/<locale>.lproj/InfoPlist.strings` — Permission prompt strings per locale.
+- Tests:
+  - `bitchatTests/Localization` — Unit tests validating keys across locales.
+  - `bitchatUITests/Localization` — UI tests asserting labels resolve from the bundle.
+- Scripts (Python stdlib only): `bitchatUITests/Localization/Scripts` with a Makefile.
 
-### Regional & Cultural Languages
-- **Egyptian Arabic (arz)** - 100M speakers
-- **Filipino (fil)** - 45M speakers
-- **Tagalog (tl)** - 45M speakers
-- **Cantonese (yue)** - 85M speakers
-- **Tamil (ta)** - 75M speakers
-- **Telugu (te)** - 95M speakers
-- **Marathi (mr)** - 83M speakers
-- **Swahili (sw)** - 200M speakers
-- **Hausa (ha)** - 70M speakers
-- **Nigerian Pidgin (pcm)** - 75M speakers
-- **Punjabi (pnb)** - 130M speakers
+## Common Tasks (Makefile)
 
-## File Structure
+Run these in `bitchatUITests/Localization/Scripts`:
 
-```
-bitchat/
-├── Localizable.xcstrings          # Single file containing all 29 languages
-├── Utils/
-│   └── Localization.swift         # Localization utility functions
-└── */InfoPlist.strings            # Platform permission strings
-```
+- `make help` — list tasks/variables.
+- `make audit` — heuristic audit of the `.xcstrings` file.
+- `make export LOCALES=es,fr OUT=localization_exports` — export CSVs.
+- `make import CSV=localization_exports/es.csv LOCALE=es` — import a CSV update.
+- `make sync` — fill missing/empty locale values with Base (en) while preserving existing translations.
+- `make reset LOCALES=es,fr` — copy English to specific locales (or all when LOCALES is omitted).
+- `make update KEY=… LOCALE=… VALUE=…` — set a single key/locale value.
+- `make check-required` — verify required locales have no missing keys.
+- `make ui-test SCHEME="bitchat (iOS)" DEST="platform=iOS Simulator,name=iPhone 15,OS=latest"` — run UI tests.
 
-## Development Workflow
+All Python scripts include `--help` style usage in their headers.
 
-### Adding New Localizable Strings
+## Adding a New Locale
 
-1. **Never use hardcoded strings in UI code:**
-   ```swift
-   // ❌ Wrong
-   Button("Save") { ... }
-   
-   // ✅ Correct  
-   Button(String(localized: "common.save")) { ... }
-   ```
+1) InfoPlist strings
+   - Create `bitchat/Localization/<locale>.lproj/InfoPlist.strings`.
+   - Copy keys from `Base.lproj/InfoPlist.strings` and translate both values.
 
-2. **Add the key to `Localizable.xcstrings`** using Xcode's String Catalog editor
+2) Seed catalog
+   - Option A: run `make sync` to seed missing entries with Base (en). Then update values for the new locale.
+   - Option B: export/import CSV flow:
+     - `make export LOCALES=<locale> OUT=localization_exports`
+     - Translate `<locale>.csv` externally.
+     - `make import CSV=localization_exports/<locale>.csv LOCALE=<locale>`
 
-3. **Sync all languages:**
-   ```bash
-   ./scripts/sync-localization.sh
-   ```
+3) Tests
+   - Unit tests iterate across `Bundle.main.localizations`, so the new locale will be covered automatically.
+   - Run `swift build -c release` then your preferred xcodebuild test invocations.
 
-4. **Commit changes including the updated .xcstrings file**
+## Editing Keys
 
-### Key Naming Conventions
+- Update Base/en first in `Localizable.xcstrings`.
+- Run `make sync` to fill gaps in other locales (preserves any existing translation values).
+- For surgical edits, use `make update KEY=… LOCALE=… VALUE=…`.
 
-Use hierarchical naming with dots for organization:
+## Validation Checklist
 
-```
-nav.people              # Navigation elements
-common.save             # Common actions  
-actions.mention         # Message actions
-placeholder.nickname    # Input placeholders
-alert.bluetooth_required # Alert titles
-accessibility.send_message # Accessibility labels
-fp.verified            # Security/fingerprint features
-location.teleport      # Location-specific features
-```
+- `make check-required` (required locales must not have missing values).
+- `make audit` to catch possible wrong-locale strings.
+- iOS tests: run on a Simulator (set via `test-sim-locale.sh` if desired).
+- Visual QA for RTL and CJK locales where appropriate.
 
-### Translation Guidelines
+## Conventions
 
-- **Preserve technical terms**: Keep "#mesh", "/msg", "BitChat", "Nostr" untranslated
-- **Maintain UI consistency**: Use the same terms across related features
-- **Consider context**: Some words have different meanings in different UI contexts
-- **RTL languages**: Arabic and Urdu require right-to-left layout consideration
-- **Cultural adaptation**: Some concepts may need cultural adaptation beyond literal translation
-
-## Scripts & Tooling
-
-### `scripts/sync-localization.sh`
-Primary script to maintain language parity:
-```bash
-./scripts/sync-localization.sh
-```
-- Ensures all 29 languages have identical key sets
-- Fills missing keys with English values for translation
-- Run after adding new localization keys
-
-### `scripts/localization/sync_xcstrings.py` 
-Low-level Python utility that powers the sync functionality:
-```bash
-python3 scripts/localization/sync_xcstrings.py bitchat/Localizable.xcstrings
-```
-
-### Pre-Commit Hook (Optional)
-Validates localization integrity before commits:
-```bash
-# Enable validation
-cp scripts/localization-pre-commit-hook.sh .git/hooks/pre-commit
-chmod +x .git/hooks/pre-commit
-
-# Disable temporarily
-git commit --no-verify
-```
-
-## Testing
-
-The localization system includes comprehensive test coverage:
-
-- **LocalizationTests.swift** - Validates key resolution and fallback behavior
-- **Bundle resolution testing** - Ensures proper locale-specific bundle loading  
-- **Key completeness verification** - Validates all languages have all keys
-
-Run tests:
-```bash
-# Swift Package Manager
-swift build && swift test
-
-# Xcode
-xcodebuild test -scheme bitchatTests_iOS
-```
-
-## Accessibility
-
-All localized strings include comprehensive accessibility support:
-- Screen reader labels with `accessibility.` prefixed keys
-- Localized hints for complex UI interactions
-- Multi-language accessibility testing coverage
-
-## Technical Details
-
-### Modern .xcstrings Format
-- Single JSON file vs. multiple `.strings` files
-- Native Xcode String Catalog integration
-- Better version control and merge handling
-- Automatic plural form support
-- State tracking (translated/needs review)
-
-### Language Fallback Chain
-1. User's preferred language (e.g., `zh-HK`)
-2. Language family fallback (e.g., `zh-Hans`)
-3. English base (`en`)
-4. Key name as last resort
-
-### Right-to-Left (RTL) Support
-Languages with RTL support: Arabic (`ar`, `arz`), Urdu (`ur`), Punjabi (`pnb`)
-- Text alignment automatically handled by SwiftUI
-- Consider UI layout for RTL languages during design
-
-## Troubleshooting
-
-### Build Warnings
-If you see localization-related build warnings:
-1. Run `./scripts/sync-localization.sh`
-2. Ensure `Localizable.xcstrings` is in project resources
-3. Verify `Package.swift` includes proper resource declarations
-
-### Missing Translations
-If strings appear in English in non-English locales:
-1. Check the key exists in `Localizable.xcstrings`
-2. Verify the target language has a value (not empty/null)
-3. Test with iOS Simulator in different languages
-
-### Adding a New Language
-1. Add the language code to `scripts/localization/sync_xcstrings.py`
-2. Run sync script to populate with English placeholders
-3. Translate the values in `Localizable.xcstrings`
-4. Test with a device/simulator set to that language
-
-## Contributing
-
-When contributing localized strings:
-1. Use semantic, hierarchical key names
-2. Test in multiple languages before submitting
-3. Run the sync script to maintain parity
-4. Include accessibility keys for all interactive elements
-5. Consider cultural context, not just literal translation
-
-## Resources
-
-- [Apple Localization Guide](https://developer.apple.com/documentation/xcode/localizing-and-varying-text-with-a-string-catalog)
-- [String Catalog Documentation](https://developer.apple.com/documentation/xcode/localizing-and-varying-text-with-a-string-catalog)
-- [iOS Accessibility Guidelines](https://developer.apple.com/accessibility/ios/)
+- Keep command/brand/tech tokens literal: `/msg`, `/block`, `#mesh`, `bitchat`, `Geohash`, `Nostr`, `Lightning`, `Cashu`.
+- Keep `test.baseOnly` in English (unit test sentinel).
+- Plural rules are anchored at `accessibility.people_count` (forms translated per locale).

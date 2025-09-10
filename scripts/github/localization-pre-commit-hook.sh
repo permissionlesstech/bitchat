@@ -6,7 +6,7 @@
 # and ensures localization keys are properly synchronized.
 #
 # To enable this hook:
-#   cp scripts/localization-pre-commit-hook.sh .git/hooks/pre-commit
+#   cp scripts/Localization/localization-pre-commit-hook.sh .git/hooks/pre-commit
 #   chmod +x .git/hooks/pre-commit
 #
 # To disable temporarily: 
@@ -94,7 +94,7 @@ if [[ -n "$VIOLATIONS" ]]; then
     echo ""
     echo "To fix:"
     echo "1. Replace hardcoded strings with String(localized: \"key\")"
-    echo "2. Run: ./scripts/sync-localization.sh"
+    echo "2. Run: ./scripts/Localization/sync-localization.sh"
     echo "3. Add new keys to Localizable.xcstrings if needed"
     echo ""
     echo "To bypass (not recommended): git commit --no-verify"

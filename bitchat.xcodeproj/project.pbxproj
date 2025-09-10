@@ -20,12 +20,10 @@
 		1BD3295CA4D57C93C0A6522C /* FragmentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F2899A34E217B55CA551A29 /* FragmentationTests.swift */; };
 		1D9674FA5F998503831DC281 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A08E03AA0C63E97C91749AEC /* ContentView.swift */; };
 		20216EA81EFDC3632F8DB19F /* Transport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 556018DFA405705E5B00E982 /* Transport.swift */; };
-		24CA5CCED931CC120BEFFFC2 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 65B5EA6D271DEAC2FB238EC2 /* InfoPlist.strings */; };
 		292F514FE3A38B9E6704DBD6 /* GeoRelayDirectory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 259F214DC1197CD705F2FA7B /* GeoRelayDirectory.swift */; };
 		2AEE8483F5828230982178C3 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 5C3C996A83C29B32B9A2069F /* Localizable.xcstrings */; };
 		2E02905CBE350A2A168362E1 /* RelayController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CFBF7162BBFF8184561FC64 /* RelayController.swift */; };
 		2EFCCAA297B16FA2B56747C7 /* TestConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC75901A0F0073B5BB8356E7 /* TestConstants.swift */; };
-		31C3F59B77350F610B7F558B /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 65B5EA6D271DEAC2FB238EC2 /* InfoPlist.strings */; };
 		33F91269305DEBFBC87489C9 /* PeerIDResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 321954679F94D55EBD0979DF /* PeerIDResolver.swift */; };
 		34542C84E4BFA98FC567B533 /* PeerDisplayNameResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C08ADEA9AEE89122C19D158 /* PeerDisplayNameResolver.swift */; };
 		34A341E43FC48F4C19B4F805 /* AutocompleteService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C39BB75BC8C2A36039F00613 /* AutocompleteService.swift */; };
@@ -50,6 +48,7 @@
 		5C93B4FDD0C448C3EDDBF8AE /* FavoritesPersistenceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 419BFFF209EBA93F410E9E9F /* FavoritesPersistenceService.swift */; };
 		5EE49E150BBF0488E7473687 /* NoiseEncryptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 394E8A1AC76EFAE352075BE9 /* NoiseEncryptionService.swift */; };
 		61C81ED5F679D5E973EE0C07 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3448F84BF86A42A3CC4A9379 /* NotificationService.swift */; };
+		623255A2D3C4E5F73939766E /* InfoPlist.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 965081285B6852C4B1F98044 /* InfoPlist.xcstrings */; };
 		64EC4775F91BD64093F16CEE /* Localization.swift in Sources */ = {isa = PBXBuildFile; fileRef = C53B4FE130946D425BE680BD /* Localization.swift */; };
 		65A68CE8842A98D9C655E0AA /* MessageRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38D19E155BC6E68B1F331015 /* MessageRouter.swift */; };
 		6775EF2B889D38C1919239C4 /* BLEService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7229DDDE75E1FC21DE3947B /* BLEService.swift */; };
@@ -164,6 +163,7 @@
 		F92C79FB0CB94B39D697178A /* MessageTextHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96B168C6EF326302855D9B71 /* MessageTextHelpers.swift */; };
 		FB8819B4C84FAFEF5C36B216 /* KeychainManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 136696FC4436A02D98CE6A77 /* KeychainManager.swift */; };
 		FBC409E105493C491531B59A /* NostrProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E5A9FF4AEA8A923317ED26A /* NostrProtocol.swift */; };
+		FE0A1BB2EE4FF45624DC2D3B /* InfoPlist.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 965081285B6852C4B1F98044 /* InfoPlist.xcstrings */; };
 		FEE6E6E573E23A1DF6B2B74C /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 5C3C996A83C29B32B9A2069F /* Localizable.xcstrings */; };
 /* End PBXBuildFile section */
 
@@ -246,7 +246,6 @@
 		556018DFA405705E5B00E982 /* Transport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Transport.swift; sourceTree = "<group>"; };
 		5670E854CD3772439BD68C2C /* LocationChannel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationChannel.swift; sourceTree = "<group>"; };
 		568577CDDE5EC8B1A52F8CA0 /* MockBLEService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockBLEService.swift; sourceTree = "<group>"; };
-		576F4A13D33D902D4AB0EA28 /* es */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = es; path = es.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		58950BE7879543DBF3F5339A /* GeohashBookmarksStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeohashBookmarksStore.swift; sourceTree = "<group>"; };
 		5BC5AB43F4A8FB62C935CD74 /* IntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntegrationTests.swift; sourceTree = "<group>"; };
 		5C3C996A83C29B32B9A2069F /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
@@ -259,7 +258,6 @@
 		752674A49BEA558572A9AFAF /* LocalizationValidationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizationValidationTests.swift; sourceTree = "<group>"; };
 		763E0DBA9492A654FC0CDCB9 /* AppInfoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppInfoView.swift; sourceTree = "<group>"; };
 		78595178957244CBDF7E79B6 /* NostrRelayManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NostrRelayManager.swift; sourceTree = "<group>"; };
-		79FF0C79C2DD20AC04C5E75E /* Base */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = Base; path = Base.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		7A9D538710EEF999CC0C2E6F /* VerificationViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerificationViews.swift; sourceTree = "<group>"; };
 		7D68C285B6A35B6C74F34529 /* BinaryProtocolPaddingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BinaryProtocolPaddingTests.swift; sourceTree = "<group>"; };
 		8A262EDDC04B7D7B5E31F321 /* PrivateChatE2ETests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivateChatE2ETests.swift; sourceTree = "<group>"; };
@@ -270,6 +268,7 @@
 		935361F3BDD8F966DB207BF7 /* LocationChannelManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationChannelManager.swift; sourceTree = "<group>"; };
 		94A360F09FFB3B0B24318D18 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		95F16C3A4A5621C74461D8D3 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
+		965081285B6852C4B1F98044 /* InfoPlist.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = InfoPlist.xcstrings; sourceTree = "<group>"; };
 		96B168C6EF326302855D9B71 /* MessageTextHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageTextHelpers.swift; sourceTree = "<group>"; };
 		96D0D41CA19EE5A772AA8434 /* bitchat_iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = bitchat_iOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9AB6BE4ABD7F5088E9865E56 /* NoiseSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoiseSession.swift; sourceTree = "<group>"; };
@@ -279,8 +278,6 @@
 		A08E03AA0C63E97C91749AEC /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		A2136C3E22D02D4A8DBE7EAB /* BinaryProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BinaryProtocol.swift; sourceTree = "<group>"; };
 		A3A1756A6D49A9B037F31A23 /* NostrEmbeddedBitChat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NostrEmbeddedBitChat.swift; sourceTree = "<group>"; };
-		A4CE949121EB02A9133EE21B /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
-		AE32D8CB60668883DB64A494 /* fr */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = fr; path = fr.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		B0BF581F9D98C90EA9867BCF /* MessageDeduplicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageDeduplicator.swift; sourceTree = "<group>"; };
 		B1D6A89B36A3D31E590B94E5 /* NoiseHandshakeCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoiseHandshakeCoordinator.swift; sourceTree = "<group>"; };
 		BBBE703671F760C81FA36C49 /* LocalizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizationTests.swift; sourceTree = "<group>"; };
@@ -296,7 +293,6 @@
 		D7229DDDE75E1FC21DE3947B /* BLEService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BLEService.swift; sourceTree = "<group>"; };
 		D90CBA19E19728938700953D /* UnifiedPeerService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnifiedPeerService.swift; sourceTree = "<group>"; };
 		DB10107B2A552E56B94C0AA4 /* CommandProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandProcessor.swift; sourceTree = "<group>"; };
-		DBC55AFA60C8CDF07D765F25 /* ar */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ar; path = ar.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		DF5DFD04E7B9B4949DF2420E /* InputValidatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputValidatorTests.swift; sourceTree = "<group>"; };
 		E6B8F7B7D55092C2540A7996 /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModel.swift; sourceTree = "<group>"; };
 		E95DBE6A48626C5AE287245E /* NoiseProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoiseProtocolTests.swift; sourceTree = "<group>"; };
@@ -367,7 +363,7 @@
 				527EB217EFDFAD4CF1C91F07 /* bitchat.entitlements */,
 				EF625BB3AD919322C01A46B2 /* BitchatApp.swift */,
 				EA706D8E5097785414646A8E /* Info.plist */,
-				65B5EA6D271DEAC2FB238EC2 /* InfoPlist.strings */,
+				965081285B6852C4B1F98044 /* InfoPlist.xcstrings */,
 				95F16C3A4A5621C74461D8D3 /* LaunchScreen.storyboard */,
 				5C3C996A83C29B32B9A2069F /* Localizable.xcstrings */,
 				C845B6F5D25AEEA0B9FE557F /* Identity */,
@@ -820,7 +816,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				7DD72D928FF9DD3CA81B46B0 /* Assets.xcassets in Resources */,
-				31C3F59B77350F610B7F558B /* InfoPlist.strings in Resources */,
+				623255A2D3C4E5F73939766E /* InfoPlist.xcstrings in Resources */,
 				46E1E1013CC18AB66105DB27 /* LaunchScreen.storyboard in Resources */,
 				2AEE8483F5828230982178C3 /* Localizable.xcstrings in Resources */,
 			);
@@ -847,7 +843,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				BCCFEDC1EBE59323C3C470BF /* Assets.xcassets in Resources */,
-				24CA5CCED931CC120BEFFFC2 /* InfoPlist.strings in Resources */,
+				FE0A1BB2EE4FF45624DC2D3B /* InfoPlist.xcstrings in Resources */,
 				E65BBB6544FE0159F3C6C3A8 /* LaunchScreen.storyboard in Resources */,
 				FEE6E6E573E23A1DF6B2B74C /* Localizable.xcstrings in Resources */,
 			);
@@ -1067,21 +1063,6 @@
 			targetProxy = 99D085C7451B87A24B5AC480 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
-
-/* Begin PBXVariantGroup section */
-		65B5EA6D271DEAC2FB238EC2 /* InfoPlist.strings */ = {
-			isa = PBXVariantGroup;
-			children = (
-				DBC55AFA60C8CDF07D765F25 /* ar */,
-				79FF0C79C2DD20AC04C5E75E /* Base */,
-				576F4A13D33D902D4AB0EA28 /* es */,
-				AE32D8CB60668883DB64A494 /* fr */,
-				A4CE949121EB02A9133EE21B /* zh-Hans */,
-			);
-			name = InfoPlist.strings;
-			sourceTree = "<group>";
-		};
-/* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
 		077A5203074247CF8F766E2F /* Debug */ = {
