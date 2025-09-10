@@ -335,7 +335,7 @@ struct ContentView: View {
                                                 let link = lightningLinks[i]
                                                 PaymentChipView(
                                                     emoji: "⚡",
-                                                    label: "pay via lightning",
+                                                    label: String(localized: "actions.pay_lightning"),
                                                     colorScheme: colorScheme
                                                 ) {
                                                     #if os(iOS)
@@ -351,7 +351,7 @@ struct ContentView: View {
                                                 let urlStr = "cashu:\(enc)"
                                                 PaymentChipView(
                                                     emoji: "🥜",
-                                                    label: "pay via cashu",
+                                                    label: String(localized: "actions.pay_cashu"),
                                                     colorScheme: colorScheme
                                                 ) {
                                                     #if os(iOS)
@@ -865,7 +865,7 @@ struct ContentView: View {
             .padding(.trailing, 12)
             .accessibilityLabel(String(localized: "accessibility.send_message"))
             .accessibilityIdentifier("send-button")
-            .accessibilityHint(messageText.isEmpty ? "Enter a message to send" : "Double tap to send")
+            .accessibilityHint(messageText.isEmpty ? String(localized: "accessibility.enter_message_to_send") : String(localized: "accessibility.double_tap_to_send"))
             }
             .padding(.vertical, 8)
             .background(backgroundColor.opacity(0.95))
@@ -909,7 +909,7 @@ struct ContentView: View {
                                 .font(.system(size: 14))
                         }
                         .buttonStyle(.plain)
-                        .help("Verification: show my QR or scan a friend")
+                        .help(String(localized: "help.verification_qr"))
                     }
                 }
                 .frame(height: 44) // Match header height
@@ -1253,7 +1253,7 @@ struct ContentView: View {
                     if !social.claimedNickname.isEmpty { return social.claimedNickname }
                 }
             }
-            return "Unknown"
+            return String(localized: "common.unknown")
         }()
         let isNostrAvailable: Bool = {
             guard let connectionState = peer?.connectionState else { 
@@ -1383,7 +1383,7 @@ struct ContentView: View {
                                     .foregroundColor(viewModel.isFavorite(peerID: headerPeerID) ? Color.yellow : textColor)
                             }
                             .buttonStyle(.plain)
-                            .accessibilityLabel(viewModel.isFavorite(peerID: privatePeerID) ? "Remove from favorites" : "Add to favorites")
+                            .accessibilityLabel(viewModel.isFavorite(peerID: privatePeerID) ? String(localized: "accessibility.remove_favorite") : String(localized: "accessibility.add_favorite"))
                             .accessibilityHint(String(localized: "accessibility.favorite_toggle_hint"))
                         }
                     }

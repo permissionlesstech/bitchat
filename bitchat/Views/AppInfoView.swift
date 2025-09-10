@@ -40,14 +40,6 @@ struct AppInfoView: View {
         
         enum HowToUse {
             static let title = "HOW TO USE"
-            static let instructions = [
-                "• set your nickname by tapping it",
-                "• tap #mesh to change channels",
-                "• tap people icon for sidebar",
-                "• tap a peer's name to start a DM",
-                "• triple-tap chat to clear",
-                "• type / for commands"
-            ]
         }
         
         enum Warning {
@@ -125,20 +117,20 @@ struct AppInfoView: View {
                           description: String(localized: "appinfo.features.encryption.desc"))
                 
                 FeatureRow(icon: Strings.Features.extendedRange.0,
-                          title: Strings.Features.extendedRange.1,
-                          description: Strings.Features.extendedRange.2)
+                          title: String(localized: "appinfo.features.extended_range.title"),
+                          description: String(localized: "appinfo.features.extended_range.desc"))
                 
                 FeatureRow(icon: Strings.Features.favorites.0,
-                          title: Strings.Features.favorites.1,
-                          description: Strings.Features.favorites.2)
+                          title: String(localized: "appinfo.features.favorites.title"),
+                          description: String(localized: "appinfo.features.favorites.desc"))
                 
                 FeatureRow(icon: Strings.Features.geohash.0,
-                          title: Strings.Features.geohash.1,
-                          description: Strings.Features.geohash.2)
+                          title: String(localized: "appinfo.features.geohash.title"),
+                          description: String(localized: "appinfo.features.geohash.desc"))
                 
                 FeatureRow(icon: Strings.Features.mentions.0,
-                          title: Strings.Features.mentions.1,
-                          description: Strings.Features.mentions.2)
+                          title: String(localized: "appinfo.features.mentions.title"),
+                          description: String(localized: "appinfo.features.mentions.desc"))
             }
             
             // Privacy
@@ -146,16 +138,16 @@ struct AppInfoView: View {
                 SectionHeader(String(localized: "appinfo.privacy.title"))
                 
                 FeatureRow(icon: Strings.Privacy.noTracking.0,
-                          title: Strings.Privacy.noTracking.1,
-                          description: Strings.Privacy.noTracking.2)
+                          title: String(localized: "appinfo.privacy.no_tracking.title"),
+                          description: String(localized: "appinfo.privacy.no_tracking.desc"))
                 
                 FeatureRow(icon: Strings.Privacy.ephemeral.0,
-                          title: Strings.Privacy.ephemeral.1,
-                          description: Strings.Privacy.ephemeral.2)
+                          title: String(localized: "appinfo.privacy.ephemeral.title"),
+                          description: String(localized: "appinfo.privacy.ephemeral.desc"))
                 
                 FeatureRow(icon: Strings.Privacy.panic.0,
-                          title: Strings.Privacy.panic.1,
-                          description: Strings.Privacy.panic.2)
+                          title: String(localized: "appinfo.privacy.panic.title"),
+                          description: String(localized: "appinfo.privacy.panic.desc"))
             }
             
             // How to Use
@@ -163,9 +155,12 @@ struct AppInfoView: View {
                 SectionHeader(String(localized: "appinfo.howto.title"))
                 
                 VStack(alignment: .leading, spacing: 8) {
-                    ForEach(Strings.HowToUse.instructions, id: \.self) { instruction in
-                        Text(instruction)
-                    }
+                    Text(String(localized: "appinfo.howto.set_nickname"))
+                    Text(String(localized: "appinfo.howto.tap_mesh"))
+                    Text(String(localized: "appinfo.howto.open_sidebar"))
+                    Text(String(localized: "appinfo.howto.start_dm"))
+                    Text(String(localized: "appinfo.howto.clear_chat"))
+                    Text(String(localized: "appinfo.howto.commands"))
                 }
                 .font(.system(size: 14, design: .monospaced))
                 .foregroundColor(textColor)

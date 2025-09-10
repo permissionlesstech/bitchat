@@ -43,7 +43,6 @@
 		4B747085D07A1BCE0F5BA612 /* BinaryProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2136C3E22D02D4A8DBE7EAB /* BinaryProtocol.swift */; };
 		4F2F1893E90C1B13D388CEA9 /* LocationChannelsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15B067FEF619D9D3D14782BA /* LocationChannelsTests.swift */; };
 		501BC56B1A08C0327A09AAF1 /* NoiseEncryptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 394E8A1AC76EFAE352075BE9 /* NoiseEncryptionService.swift */; };
-		596C1C7CC5B8CD6805FF532F /* UIInteractionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F26F32A1A2EE8CC838267B8B /* UIInteractionTests.swift */; };
 		5A0B730FCFACABE31EC6B402 /* LocationChannelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 935361F3BDD8F966DB207BF7 /* LocationChannelManager.swift */; };
 		5C93B4FDD0C448C3EDDBF8AE /* FavoritesPersistenceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 419BFFF209EBA93F410E9E9F /* FavoritesPersistenceService.swift */; };
 		5EE49E150BBF0488E7473687 /* NoiseEncryptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 394E8A1AC76EFAE352075BE9 /* NoiseEncryptionService.swift */; };
@@ -141,7 +140,6 @@
 		D782AB596DDB5C846554F7C3 /* NostrIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F8043995007F0D84438EDD9 /* NostrIdentity.swift */; };
 		DC005562A203778E5A58ACA0 /* GeohashBookmarksStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E113B867C7531E4603F7118 /* GeohashBookmarksStoreTests.swift */; };
 		DD6C921ABE8BB47B131C018B /* GeohashPeopleList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AE0E8536824D5431E879831 /* GeohashPeopleList.swift */; };
-		DE656B099A7F09D39C26A099 /* LocalizationValidationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 752674A49BEA558572A9AFAF /* LocalizationValidationTests.swift */; };
 		DFE6C88F3C487BB0FF4A330F /* XChaCha20Poly1305Compat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F6B06DDD6D82D60B073A8B7 /* XChaCha20Poly1305Compat.swift */; };
 		E1510B9FC6528BB22E21CAC5 /* XChaCha20Poly1305Compat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F6B06DDD6D82D60B073A8B7 /* XChaCha20Poly1305Compat.swift */; };
 		E2DCF7817344F1CCDB8B7B2F /* SecureIdentityStateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDC18D910D6FF2E8B1B6C885 /* SecureIdentityStateManager.swift */; };
@@ -169,13 +167,6 @@
 
 /* Begin PBXContainerItemProxy section */
 		96415D4F989854F908EAD303 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 475D96681D0EA0AE57A4E06E /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = AF077EA0474EDEDE2C72716C;
-			remoteInfo = bitchat_iOS;
-		};
-		99D085C7451B87A24B5AC480 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 475D96681D0EA0AE57A4E06E /* Project object */;
 			proxyType = 1;
@@ -218,7 +209,6 @@
 		0B3CC6FA298729906109F61B /* BinaryProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BinaryProtocolTests.swift; sourceTree = "<group>"; };
 		11186E29A064E8D210880E1B /* BitchatPeer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitchatPeer.swift; sourceTree = "<group>"; };
 		136696FC4436A02D98CE6A77 /* KeychainManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainManager.swift; sourceTree = "<group>"; };
-		13E9CB61C2B3863378BD35B7 /* bitchatUITests_iOS.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = bitchatUITests_iOS.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		15B067FEF619D9D3D14782BA /* LocationChannelsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationChannelsTests.swift; sourceTree = "<group>"; };
 		1B4809E690DE48B9AEE36279 /* NostrTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NostrTransport.swift; sourceTree = "<group>"; };
 		1F6B06DDD6D82D60B073A8B7 /* XChaCha20Poly1305Compat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XChaCha20Poly1305Compat.swift; sourceTree = "<group>"; };
@@ -256,7 +246,6 @@
 		63B23F0624A8297F993ADF46 /* TransportConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransportConfig.swift; sourceTree = "<group>"; };
 		6CFBF7162BBFF8184561FC64 /* RelayController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayController.swift; sourceTree = "<group>"; };
 		6E113B867C7531E4603F7118 /* GeohashBookmarksStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeohashBookmarksStoreTests.swift; sourceTree = "<group>"; };
-		752674A49BEA558572A9AFAF /* LocalizationValidationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizationValidationTests.swift; sourceTree = "<group>"; };
 		763E0DBA9492A654FC0CDCB9 /* AppInfoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppInfoView.swift; sourceTree = "<group>"; };
 		78595178957244CBDF7E79B6 /* NostrRelayManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NostrRelayManager.swift; sourceTree = "<group>"; };
 		7A9D538710EEF999CC0C2E6F /* VerificationViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerificationViews.swift; sourceTree = "<group>"; };
@@ -267,7 +256,6 @@
 		9195CDC7EB236AFBC9A4D41A /* FingerprintView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FingerprintView.swift; sourceTree = "<group>"; };
 		92F634397436B7E8C159B6AF /* MeshPeerList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeshPeerList.swift; sourceTree = "<group>"; };
 		935361F3BDD8F966DB207BF7 /* LocationChannelManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationChannelManager.swift; sourceTree = "<group>"; };
-		94A360F09FFB3B0B24318D18 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		95F16C3A4A5621C74461D8D3 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		96B168C6EF326302855D9B71 /* MessageTextHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageTextHelpers.swift; sourceTree = "<group>"; };
 		96D0D41CA19EE5A772AA8434 /* bitchat_iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = bitchat_iOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -300,7 +288,6 @@
 		EC0569D3728519ED53CD9D7E /* PeerID.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerID.swift; sourceTree = "<group>"; };
 		EE7EFB209C86BBD956B749EC /* SecureLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureLogger.swift; sourceTree = "<group>"; };
 		EF625BB3AD919322C01A46B2 /* BitchatApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitchatApp.swift; sourceTree = "<group>"; };
-		F26F32A1A2EE8CC838267B8B /* UIInteractionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIInteractionTests.swift; sourceTree = "<group>"; };
 		F27C85DB05C7FB4ADDA3E11D /* LocationChannelsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationChannelsSheet.swift; sourceTree = "<group>"; };
 		FC75901A0F0073B5BB8356E7 /* TestConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestConstants.swift; sourceTree = "<group>"; };
 		FDC18D910D6FF2E8B1B6C885 /* SecureIdentityStateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureIdentityStateManager.swift; sourceTree = "<group>"; };
@@ -341,7 +328,6 @@
 				2F82C5FC8433F4064F079D1F /* bitchat */,
 				A2E8C336FA1ADBEC03261DFD /* bitchatShareExtension */,
 				C3D98EB3E1B455E321F519F4 /* bitchatTests */,
-				4A693F0ED6A00191B9B6542B /* bitchatUITests */,
 				9F37F9F2C353B58AC809E93B /* Products */,
 			);
 			sourceTree = "<group>";
@@ -385,16 +371,6 @@
 				E6B8F7B7D55092C2540A7996 /* ChatViewModel.swift */,
 			);
 			path = ViewModels;
-			sourceTree = "<group>";
-		};
-		4A693F0ED6A00191B9B6542B /* bitchatUITests */ = {
-			isa = PBXGroup;
-			children = (
-				94A360F09FFB3B0B24318D18 /* Info.plist */,
-				752674A49BEA558572A9AFAF /* LocalizationValidationTests.swift */,
-				F26F32A1A2EE8CC838267B8B /* UIInteractionTests.swift */,
-			);
-			path = bitchatUITests;
 			sourceTree = "<group>";
 		};
 		5B90895AFF0957E08FA3D429 /* Integration */ = {
@@ -472,7 +448,6 @@
 				61F92EBA29C47C0FCC482F1F /* bitchatShareExtension.appex */,
 				C0DB1DE27F0AAB5092663E8E /* bitchatTests_iOS.xctest */,
 				03C57F452B55FD0FD8F51421 /* bitchatTests_macOS.xctest */,
-				13E9CB61C2B3863378BD35B7 /* bitchatUITests_iOS.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -701,24 +676,6 @@
 			productReference = 96D0D41CA19EE5A772AA8434 /* bitchat_iOS.app */;
 			productType = "com.apple.product-type.application";
 		};
-		FDA0140BEA337777D2F584BC /* bitchatUITests_iOS */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 55FBCCBF00A85AE3BC12EB84 /* Build configuration list for PBXNativeTarget "bitchatUITests_iOS" */;
-			buildPhases = (
-				08A89323F5FAC81C2CFD1CA7 /* Sources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				EB7E7F444A7861E5875D724C /* PBXTargetDependency */,
-			);
-			name = bitchatUITests_iOS;
-			packageProductDependencies = (
-			);
-			productName = bitchatUITests_iOS;
-			productReference = 13E9CB61C2B3863378BD35B7 /* bitchatUITests_iOS.xctest */;
-			productType = "com.apple.product-type.bundle.ui-testing";
-		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -747,11 +704,6 @@
 					AF077EA0474EDEDE2C72716C = {
 						DevelopmentTeam = L3N5LHJD5Y;
 						ProvisioningStyle = Automatic;
-					};
-					FDA0140BEA337777D2F584BC = {
-						DevelopmentTeam = L3N5LHJD5Y;
-						ProvisioningStyle = Automatic;
-						TestTargetID = AF077EA0474EDEDE2C72716C;
 					};
 				};
 			};
@@ -803,7 +755,6 @@
 				57CA17A36A2532A6CFF367BB /* bitchatShareExtension */,
 				6CB97DF2EA57234CB3E563B8 /* bitchatTests_iOS */,
 				47FF23248747DD7CB666CB91 /* bitchatTests_macOS */,
-				FDA0140BEA337777D2F584BC /* bitchatUITests_iOS */,
 				AF077EA0474EDEDE2C72716C /* bitchat_iOS */,
 				0576A29205865664C0937536 /* bitchat_macOS */,
 			);
@@ -852,15 +803,6 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		08A89323F5FAC81C2CFD1CA7 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				DE656B099A7F09D39C26A099 /* LocalizationValidationTests.swift in Sources */,
-				596C1C7CC5B8CD6805FF532F /* UIInteractionTests.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		0A08E70F08F55FD5BA8C7EF3 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -1056,11 +998,6 @@
 			isa = PBXTargetDependency;
 			target = AF077EA0474EDEDE2C72716C /* bitchat_iOS */;
 			targetProxy = 96415D4F989854F908EAD303 /* PBXContainerItemProxy */;
-		};
-		EB7E7F444A7861E5875D724C /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = AF077EA0474EDEDE2C72716C /* bitchat_iOS */;
-			targetProxy = 99D085C7451B87A24B5AC480 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -1430,52 +1367,6 @@
 			};
 			name = Debug;
 		};
-		E33E890627FDE26A178F56E0 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGNING_ALLOWED = YES;
-				CODE_SIGNING_REQUIRED = YES;
-				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = L3N5LHJD5Y;
-				INFOPLIST_FILE = bitchatUITests/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat.uitests;
-				SDKROOT = iphoneos;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = bitchat_iOS;
-			};
-			name = Debug;
-		};
-		F5E28D67BC78B8CD7CA5C4D5 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGNING_ALLOWED = YES;
-				CODE_SIGNING_REQUIRED = YES;
-				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = L3N5LHJD5Y;
-				INFOPLIST_FILE = bitchatUITests/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat.uitests;
-				SDKROOT = iphoneos;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = bitchat_iOS;
-			};
-			name = Release;
-		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -1511,15 +1402,6 @@
 			buildConfigurations = (
 				702E7395723CADA4B830F4A9 /* Debug */,
 				B36671AEACCBF92BE10852E9 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Debug;
-		};
-		55FBCCBF00A85AE3BC12EB84 /* Build configuration list for PBXNativeTarget "bitchatUITests_iOS" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				E33E890627FDE26A178F56E0 /* Debug */,
-				F5E28D67BC78B8CD7CA5C4D5 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

@@ -87,7 +87,7 @@ struct MeshPeerList: View {
                             Image(systemName: "nosign")
                                 .font(.system(size: 10))
                                 .foregroundColor(.red)
-                                .help("Blocked")
+                                .help(String(localized: "status.blocked"))
                         }
 
                         if !isMe {
@@ -120,7 +120,7 @@ struct MeshPeerList: View {
                             Image(systemName: "envelope.fill")
                                 .font(.system(size: 10))
                                 .foregroundColor(.orange)
-                                .help("New messages")
+                                .help(String(localized: "status.new_messages"))
                         }
 
                         if !isMe {
