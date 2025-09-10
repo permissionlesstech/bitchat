@@ -4442,6 +4442,14 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                         updateEncryptionStatus(for: peerID)
                     }
                 }
+            case .fileInline:
+                // Forward inline file payload to UI via notification with TLV data
+                // UI will parse TLV and present Save/Share actions
+                NotificationCenter.default.post(name: Notification.Name("BitChatIncomingInlineFile"), object: nil, userInfo: [
+                    "peerID": peerID,
+                    "timestamp": timestamp,
+                    "tlv": payload
+                ])
             }
         }
     }

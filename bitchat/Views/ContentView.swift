@@ -11,6 +11,7 @@ import SwiftUI
 import UIKit
 #endif
 import UniformTypeIdentifiers
+import Photos
 
 // MARK: - Supporting Types
 
@@ -57,6 +58,12 @@ struct ContentView: View {
     // Minimal file attach state
     @State private var showFileImporter = false
     @State private var fileImportError: String? = nil
+    
+    // Incoming file presentation state
+    @State private var incomingFileData: Data? = nil
+    @State private var incomingFilename: String = ""
+    @State private var incomingMime: String = "application/octet-stream"
+    @State private var showShareSheet: Bool = false
     
     // MARK: - Computed Properties
     
@@ -336,7 +343,7 @@ struct ContentView: View {
                                     // Render payment chips (Lightning / Cashu) with rounded background
                                     if !lightningLinks.isEmpty || !cashuTokens.isEmpty {
                                         HStack(spacing: 8) {
-                                            ForEach(Array(lightningLinks.prefix(3)).indices, id: \.self) { i in
+                                            ForEach(Array(lightningLinks.prefix(3).indices), id: \.self) { i in
                                                 let link = lightningLinks[i]
                                                 PaymentChipView(
                                                     emoji: "⚡",
@@ -350,7 +357,7 @@ struct ContentView: View {
                                                     #endif
                                                 }
                                             }
-                                            ForEach(Array(cashuTokens.prefix(3)).indices, id: \.self) { i in
+                                            ForEach(Array(cashuTokens.prefix(3).indices), id: \.self) { i in
                                                 let token = cashuTokens[i]
                                                 let enc = token.addingPercentEncoding(withAllowedCharacters: .alphanumerics.union(CharacterSet(charactersIn: "-_"))) ?? token
                                                 let urlStr = "cashu:\(enc)"
@@ -893,8 +900,8 @@ struct ContentView: View {
                 guard let url = urls.first else { return }
                 do {
                     let data = try Data(contentsOf: url)
-                    guard data.count > 0 && data.count <= 65535 else {
-                        fileImportError = "File too large. Max 64KB for inline transfer."
+                    guard data.count > 0 && data.count <= NoiseSecurityConstants.maxMessageSize else {
+                        fileImportError = "File too large. Max \(NoiseSecurityConstants.maxMessageSize / (1024 * 1024))MB for inline transfer."
                         return
                     }
                     guard let peerID = viewModel.selectedPrivateChatPeer else {
@@ -928,6 +935,33 @@ struct ContentView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + TransportConfig.uiReadReceiptRetryShortSeconds) {
                 isTextFieldFocused = true
             }
+            NotificationCenter.default.addObserver(forName: Notification.Name("BitChatIncomingInlineFile"), object: nil, queue: .main) { note in
+                if let tlv = note.userInfo?["tlv"] as? Data,
+                   let parsed = parseInlineTLV(tlv) {
+                    incomingFilename = parsed.filename
+                    incomingMime = parsed.mime
+                    incomingFileData = parsed.bytes
+                    // If image/* → offer Save to Photos; else → share sheet
+                    if incomingMime.starts(with: "image/") {
+                        // Show confirmation dialog to save
+                        // Immediately save for MVP (or we could prompt)
+                        saveImageToPhotos(parsed.bytes)
+                    } else {
+                        showShareSheet = true
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $showShareSheet, onDismiss: {
+            incomingFileData = nil
+        }) {
+            if let data = incomingFileData {
+                let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + (incomingFilename.isEmpty ? "" : "_" + incomingFilename))
+                try? data.write(to: tmp)
+                ShareSheet(activityItems: [tmp])
+            } else {
+                EmptyView()
+            }
         }
     }
     
@@ -942,6 +976,69 @@ struct ContentView: View {
     private struct LocalizedErrorWrapper: Identifiable {
         let id = UUID()
         let message: String
+    }
+    
+    // MARK: - Inline File Helpers
+    
+    struct ShareSheet: UIViewControllerRepresentable {
+        let activityItems: [Any]
+        func makeUIViewController(context: Context) -> UIActivityViewController {
+            UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+        }
+        func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+    }
+    
+    private func parseInlineTLV(_ data: Data) -> (filename: String, mime: String, bytes: Data)? {
+        var offset = 0
+        func readU16() -> UInt16? {
+            guard offset + 2 <= data.count else { return nil }
+            let v = (UInt16(data[offset]) << 8) | UInt16(data[offset+1])
+            offset += 2
+            return v
+        }
+        func readU32() -> UInt32? {
+            guard offset + 4 <= data.count else { return nil }
+            let v = (UInt32(data[offset]) << 24) | (UInt32(data[offset+1]) << 16) | (UInt32(data[offset+2]) << 8) | UInt32(data[offset+3])
+            offset += 4
+            return v
+        }
+        guard let fLen = readU16(), offset + Int(fLen) <= data.count else { return nil }
+        let fname = String(data: data[offset..<(offset+Int(fLen))], encoding: .utf8) ?? "file"
+        offset += Int(fLen)
+        guard let mLen = readU16(), offset + Int(mLen) <= data.count else { return nil }
+        let mime = String(data: data[offset..<(offset+Int(mLen))], encoding: .utf8) ?? "application/octet-stream"
+        offset += Int(mLen)
+        guard let dLen = readU32(), offset + Int(dLen) <= data.count else { return nil }
+        let bytes = data[offset..<(offset+Int(dLen))]
+        return (fname, mime, Data(bytes))
+    }
+    
+    private func saveImageToPhotos(_ imageData: Data) {
+        let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
+        let proceed: () -> Void = {
+            PHPhotoLibrary.shared().performChanges({
+                if let uiImage = UIImage(data: imageData) {
+                    _ = PHAssetChangeRequest.creationRequestForAsset(from: uiImage)
+                } else {
+                    // Fallback via temporary file if decoding fails
+                    let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".jpg")
+                    try? imageData.write(to: tmp)
+                    _ = PHAssetChangeRequest.creationRequestForAssetFromImage(atFileURL: tmp)
+                }
+            }) { success, error in
+                // Could add toast/alert here if needed
+            }
+        }
+        switch status {
+        case .authorized, .limited:
+            proceed()
+        case .notDetermined:
+            PHPhotoLibrary.requestAuthorization(for: .addOnly) { newStatus in
+                if newStatus == .authorized || newStatus == .limited { proceed() }
+            }
+        default:
+            break
+        }
     }
     
     // MARK: - Sidebar View

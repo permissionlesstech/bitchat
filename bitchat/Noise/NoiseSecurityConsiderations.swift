@@ -13,7 +13,10 @@ import CryptoKit
 
 enum NoiseSecurityConstants {
     // Maximum message size to prevent memory exhaustion
-    static let maxMessageSize = 65535 // 64KB as per Noise spec
+    // Raised from 64KB to 5MB to allow larger encrypted payloads (e.g., file transfers).
+    // BLEService fragmentation and relay pacing still apply at transport level.
+    // Note: Very large messages will take longer to traverse the mesh and may impact battery/network.
+    static let maxMessageSize = 5 * 1024 * 1024 // 5 MB
     
     // Maximum handshake message size
     static let maxHandshakeMessageSize = 2048 // 2KB to accommodate XX pattern
