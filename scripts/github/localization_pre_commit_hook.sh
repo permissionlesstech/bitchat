@@ -125,8 +125,8 @@ ensure_comments_or_fail "bitchat/Localizable.xcstrings"
 ensure_comments_or_fail "bitchat/Infoplist.xcstrings"
 
 # Check if localization keys need sync
-if command -v python3 >/dev/null 2>&1 && [[ -f "scripts/localization/sync_xcstrings.py" ]]; then
-    SYNC_OUTPUT=$(python3 scripts/localization/sync_xcstrings.py bitchat/Localizable.xcstrings 2>&1)
+if command -v python3 >/dev/null 2>&1 && [[ -f "scripts/localization/tools/helper_sync_xcstrings.py" ]]; then
+    SYNC_OUTPUT=$(python3 scripts/localization/tools/helper_sync_xcstrings.py bitchat/Localizable.xcstrings 2>&1)
     if echo "$SYNC_OUTPUT" | grep -q "Filled [1-9]"; then
         echo "⚠️  Localization keys are out of sync:"
         echo "$SYNC_OUTPUT"

@@ -122,30 +122,50 @@ nuke:
 # Pass-through to set simulator locale. Example:
 #   just set-locale --lang fr --region FR --restart
 set-locale *args:
-    @./scripts/localization/simulator_set_locale.sh {{args}}
+    @./scripts/localization/simulator.sh locale {{args}}
 
 # Sync both UI and InfoPlist catalogs. Example:
 #   just sync-all --dry-run
 sync-all *args:
-    @./scripts/localization/sync_all_localizations.sh {{args}}
+    @./scripts/localization/sync.sh all {{args}}
 
 # UI catalog only. Example:
 
 # Sync developer comments only. Example:
 #   just sync-comments --dry-run
 sync-comments *args:
-    @./scripts/localization/sync_comments.sh {{args}}
+    @./scripts/localization/add.sh comments {{args}}
 
 # Coverage report. Example:
 #   just locale-report
 locale-report:
-    @bash ./scripts/localization/locale_report.sh
+    @bash ./scripts/localization/report.sh locales
+
+# Per-locale coverage report. Example:
+#   just locale-report-code en
+locale-report-code CODE:
+    @bash ./scripts/localization/report.sh locale {{CODE}}
 
 # Validate localization build. Example:
 #   just validate-localization --dry-run
 validate-localization *args:
-    @./scripts/localization/validate_localization_build.sh {{args}}
+    @./scripts/localization/validate.sh build {{args}}
 
 # Install pre-commit hook.
 install-pre-commit:
     @cp scripts/github/localization_pre_commit_hook.sh .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit && echo "✅ Installed pre-commit hook"
+
+
+# Export CSVs for all locales (UI + InfoPlist). Example:
+#   just export-csv --locales en,es
+export-csv *args:
+    @./scripts/localization/export.sh all {{args}}
+
+# Import per-locale CSV back into a catalog. Examples:
+#   just import-csv-localizable en --file scripts/localization/tmp/localizable/en-translated.csv
+#   just import-csv-infoplist en --file scripts/localization/tmp/infoplist/en-translated.csv
+import-csv-localizable LOCALE *args:
+    @./scripts/localization/import.sh localizable {{LOCALE}} {{args}}
+
+import-csv-infoplist LOCALE *args:
+    @./scripts/localization/import.sh infoplist {{LOCALE}} {{args}}

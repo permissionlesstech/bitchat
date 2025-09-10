@@ -2,20 +2,20 @@ Localization Scripts
 
 Overview of common localization tasks with concise, consistent commands. All scripts are bash, produce clean output, and support --dry-run.
 
-1) Set Simulator Locale
-- Script: `scripts/localization/simulator_set_locale.sh`
+1) Simulator (all simulator-related commands)
+- Script: `scripts/localization/simulator.sh`
 - Usage:
-  - `./scripts/localization/simulator_set_locale.sh --lang fr --region FR --restart`
-  - `./scripts/localization/simulator_set_locale.sh --lang es --device <UDID> --launch com.bundle.id`
-  - `./scripts/localization/simulator_set_locale.sh --lang de --boot --restart --dry-run`
+  - `./scripts/localization/simulator.sh locale --lang fr --region FR --restart`
+  - `./scripts/localization/simulator.sh locale --lang es --device <UDID> --launch com.bundle.id`
+  - `./scripts/localization/simulator.sh locale --lang de --boot --restart --dry-run`
   - Just: `just set-locale --lang fr --region FR --restart`
 - Notes: Auto-detects single booted device; `--boot` picks and boots an iPhone; `--launch` overrides app language without reboot.
 
-2) Sync All Localizations (UI + InfoPlist)
- - Script: `scripts/localization/sync_all_localizations.sh`
- - Usage: `./scripts/localization/sync_all_localizations.sh [--dry-run]`
+2) Sync (all sync-related commands)
+ - Script: `scripts/localization/sync.sh`
+ - Usage: `./scripts/localization/sync.sh all [--dry-run]`
    - Just: `just sync-all --dry-run`
-- Does: Ensures parity for both `Localizable.xcstrings` and `Infoplist.xcstrings`, adds developer comments, marks non-English auto-filled entries as `needs_review`.
+ - Does: Ensures parity for both `Localizable.xcstrings` and `Infoplist.xcstrings`, adds developer comments, marks non-English auto-filled entries as `needs_review`.
 
 3) Pre-Commit Hook
 - Script: `scripts/github/localization_pre_commit_hook.sh`
@@ -23,25 +23,33 @@ Overview of common localization tasks with concise, consistent commands. All scr
   - `cp scripts/github/localization_pre_commit_hook.sh .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit`
 - Does: Checks for hardcoded UI strings, validates xcstrings JSON/parity, ensures comments exist (auto-adds if missing).
 
-4) Sync Comments Only
- - Script: `scripts/localization/sync_comments.sh`
- - Usage: `./scripts/localization/sync_comments.sh [--dry-run]`
-   - Just: `just sync-comments --dry-run`
-- Does: Adds concise developer comments to both catalogs without touching values.
-
-5) Locale Report
- - Script: `scripts/localization/locale_report.sh`
- - Usage: `./scripts/localization/locale_report.sh`
-   - Just: `just locale-report`
-- Does: Reports total keys, languages, per-language coverage, and keys missing in any locale.
-
-6) Validate Localization Build
- - Script: `scripts/localization/validate_localization_build.sh`
- - Usage: `./scripts/localization/validate_localization_build.sh [--dry-run]`
+4) Validate (all validation commands)
+ - Script: `scripts/localization/validate.sh`
+ - Usage: `./scripts/localization/validate.sh build [--dry-run]`
    - Just: `just validate-localization --dry-run`
-- Does: Detects hardcoded UI strings, validates String Catalog integrity, language parity, and presence of comments.
+ - Does: Hardcoded string scan + catalog integrity/parity/comments.
 
-7) (Optional) Developer Helpers
-- Internal tools like `add_missing_comments.py` and `sync_xcstrings.py` power the sync scripts.
-- For advanced seeding tasks during development, see tools in `scripts/localization/tools/`.
-- Does: Syncs `Localizable.xcstrings` and adds developer comments (UI strings only).
+5) Seed (dev-only) — Removed
+ - Seeding helpers were removed to keep the surface minimal.
+
+6) Add (add missing comments/values)
+ - Script: `scripts/localization/add.sh`
+ - Usage: `./scripts/localization/add.sh comments|values [--dry-run]`
+ - Does: Adds missing developer comments and/or fills missing values from English.
+
+7) Report (coverage for all or a specific locale)
+ - Script: `scripts/localization/report.sh`
+ - Usage: `./scripts/localization/report.sh locales | locale <code>`
+ - Just: `just locale-report` (all) or `just locale-report-code en` (one locale)
+
+
+8) CSV Export/Import workflow
+ - Export all locales to CSVs:
+   - Script: `./scripts/localization/export.sh all [--locales all|en,es,...]`
+   - Output: `scripts/localization/tmp/localizable/<locale>.csv` and `tmp/infoplist/<locale>.csv`
+ - Import a translated CSV (per catalog/locale):
+   - Script: `./scripts/localization/import.sh localizable <locale> [--file path] [--dry-run]`
+   - Script: `./scripts/localization/import.sh infoplist  <locale> [--file path] [--dry-run]`
+ - Conventions:
+   - Column order: key,en,localized,comment,status
+   - Plurals are encoded as separate rows with key suffix: `(<variant>)` e.g., `messages.count (plural:one)`

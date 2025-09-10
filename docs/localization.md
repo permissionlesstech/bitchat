@@ -70,7 +70,7 @@ Why both exist:
 
 2. **Sync all languages and comments:**
    ```bash
-   ./scripts/localization/sync_all_localizations.sh [--dry-run]
+   just sync-all [--dry-run]
    ```
    - Ensures 29-language parity and fills gaps with English
    - Auto-adds concise developer comments for any keys missing context
@@ -97,7 +97,7 @@ location.teleport      # Location-specific features
 
 ### Main Sync Script
 ```bash
-   ./scripts/localization/sync_all_localizations.sh [--dry-run]
+just sync-all [--dry-run]
 ```
 - Syncs both Localizable.xcstrings AND Infoplist.xcstrings
 - Ensures all 29 languages have complete coverage
@@ -108,16 +108,16 @@ location.teleport      # Location-specific features
 ### Simulator Locale Helper
 ```bash
 # Use the only booted Simulator
-./scripts/localization/simulator_set_locale.sh --lang fr --region FR --restart
+just set-locale --lang fr --region FR --restart
 
 # Specify a device UDID explicitly
-./scripts/localization/simulator_set_locale.sh --lang es --device <UDID>
+just set-locale --lang es --device <UDID>
 
 # Launch an app with per-launch overrides (no reboot)
-./scripts/localization/simulator_set_locale.sh --lang zh-Hans --region CN --device <UDID> --launch com.your.bundleid
+just set-locale --lang zh-Hans --region CN --device <UDID> --launch com.your.bundleid
 
 # Auto-boot an available iPhone if none booted
-./scripts/localization/simulator_set_locale.sh --lang de --boot --restart
+just set-locale --lang de --boot --restart
 ```
 - Auto-detects the single booted Simulator if `--device` is omitted.
 - Writes device-wide AppleLanguages and AppleLocale; `--restart` reboots to apply system-wide.
@@ -125,13 +125,13 @@ location.teleport      # Location-specific features
  - `--boot` selects and boots the first available iPhone device if no single booted device is found.
 
 ### Other Commands
-- `./scripts/localization/sync_comments.sh [--dry-run]` — Comments only
-- `./scripts/localization/locale_report.sh` — Coverage and missing report
-- Pre-commit hook: `cp scripts/github/localization_pre_commit_hook.sh .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit`
+- `just sync-comments [--dry-run]` — Add missing comments
+- `just locale-report` — Coverage report
+- Pre-commit hook: `just install-pre-commit`
 
 ### Build-Time Validation
 ```bash
-./scripts/localization/validate_localization_build.sh
+just validate-localization
 ```
 - Prevents hardcoded strings in commits
 - Validates .xcstrings file integrity
@@ -141,7 +141,7 @@ location.teleport      # Location-specific features
 ### Pre-Commit Hook (Optional)
 ```bash
 # Enable validation
-cp scripts/github/localization_pre_commit_hook.sh .git/hooks/pre-commit
+just install-pre-commit
 chmod +x .git/hooks/pre-commit
 ```
 What it enforces:
@@ -151,7 +151,7 @@ What it enforces:
 
 Behavior:
 - If comments are missing, the hook attempts to auto-add them using
-  `scripts/localization/add_missing_comments.py`, then asks you to review and
+  `just sync-comments`, then asks you to review and
   stage the changes.
  - Note: There is no separate polishing step; `add_missing_comments.py` is the
    sole source of comment generation.
@@ -219,20 +219,20 @@ Languages: Arabic (`ar`, `arz`), Urdu (`ur`), Punjabi (`pnb`)
 xcodegen generate
 
 # Validate localization integrity  
-./scripts/localization/validate_localization_build.sh
+just validate-localization
 ```
 
 ### Missing Translations
 ```bash
 # Sync all languages to ensure parity
-./scripts/localization/sync_all_localizations.sh [--dry-run]
+just sync-all [--dry-run]
 
 # Check for English fallbacks in major languages
 # Edit Localizable.xcstrings in Xcode String Catalog editor
 ```
 
 ### Adding New Languages
-1. Add language code to `scripts/localization/sync_xcstrings.py`
+1. Add language code to `scripts/localization/tools/helper_sync_xcstrings.py`
 2. Run sync script to populate with English placeholders  
 3. Translate values in both .xcstrings files
 4. Test with iOS Simulator set to that language
@@ -240,10 +240,9 @@ xcodegen generate
 ## Quality Assurance
 
 ### Other Commands
-- `./scripts/localization/sync_localization.sh [--dry-run]` — UI catalog only
-- `./scripts/localization/sync_comments.sh [--dry-run]` — Comments only
-- `./scripts/localization/locale_report.sh` — Coverage and missing report
-- Pre-commit hook: `cp scripts/github/localization_pre_commit_hook.sh .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit`
+- `just sync-comments [--dry-run]` — Comments only
+- `just locale-report` — Coverage and missing report
+- Pre-commit hook: `just install-pre-commit`
 
 ### Build-Time Validation
 - Automatic detection of hardcoded UI strings

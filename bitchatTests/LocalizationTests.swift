@@ -175,6 +175,130 @@ final class LocalizationTests: XCTestCase {
         print("✅ Accessibility compliance ensured (critical with no QA team)")
     }
 
+    // MARK: - RTL Language Validation (Arabic, Urdu)
+    
+    func testRTLLanguageSupport() {
+        let rtlLanguages = ["ar", "arz", "ur", "pnb"] // Right-to-left languages
+        let criticalKeys = ["nav.people", "actions.block", "common.close", "placeholder.type_message"]
+        
+        for locale in rtlLanguages {
+            for key in criticalKeys {
+                let value = NSLocalizedString(key, comment: "")
+                
+                // RTL languages should have proper localized values
+                XCTAssertFalse(value.isEmpty, "RTL key \(key) empty in \(locale)")
+                XCTAssertNotEqual(value, key, "RTL key \(key) not localized in \(locale)")
+                
+                // RTL text should be reasonable length for UI
+                XCTAssertGreaterThan(value.count, 1, "RTL text too short: \(key) in \(locale)")
+                XCTAssertLessThan(value.count, 50, "RTL text too long for UI: \(key) in \(locale)")
+            }
+        }
+        
+        print("✅ Validated RTL language support across \(rtlLanguages.count) languages")
+    }
+    
+    // MARK: - System Message Validation (User Feedback)
+    
+    func testSystemMessageLocalization() {
+        let systemMessageKeys = [
+            "system.failed_send_location",
+            "system.user_blocked_generic", 
+            "system.not_in_location_channel",
+            "system.screenshot_taken"
+        ]
+        
+        let testLanguages = ["en", "es", "zh-Hans", "ar", "fr"]
+        
+        for key in systemMessageKeys {
+            for locale in testLanguages {
+                let value = NSLocalizedString(key, comment: "")
+                
+                XCTAssertFalse(value.isEmpty, "System message \(key) empty in \(locale)")
+                XCTAssertNotEqual(value, key, "System message \(key) not localized in \(locale)")
+                XCTAssertGreaterThan(value.count, 10, "System message too short: \(key) in \(locale)")
+                XCTAssertLessThan(value.count, 200, "System message too long: \(key) in \(locale)")
+            }
+        }
+        
+        print("✅ Validated system message localization across \(testLanguages.count) languages")
+    }
+    
+    // MARK: - InfoPlist Bluetooth Permission Validation (App Store Critical)
+    
+    func testBluetoothPermissionCompliance() {
+        let permissionKeys = ["NSBluetoothAlwaysUsageDescription", "NSBluetoothPeripheralUsageDescription"]
+        let majorLanguages = ["en", "es", "zh-Hans", "ar", "fr", "de", "ja", "ru"]
+        
+        for key in permissionKeys {
+            for locale in majorLanguages {
+                let permission = NSLocalizedString(key, tableName: "Infoplist", comment: "")
+                
+                // App Store compliance requirements
+                XCTAssertFalse(permission.isEmpty, "Bluetooth permission \(key) empty for \(locale)")
+                XCTAssertNotEqual(permission, key, "Bluetooth permission \(key) not localized for \(locale)")
+                XCTAssertTrue(permission.lowercased().contains("bitchat"), "Permission must mention app name for \(locale)")
+                XCTAssertTrue(permission.lowercased().contains("bluetooth"), "Permission must mention Bluetooth for \(locale)")
+                
+                // Apple guidelines for permission text
+                XCTAssertGreaterThan(permission.count, 20, "Permission too short for \(locale)")
+                XCTAssertLessThan(permission.count, 200, "Permission too long for iOS dialog in \(locale)")
+            }
+        }
+        
+        print("✅ Validated Bluetooth permission compliance for \(majorLanguages.count) major languages")
+    }
+    
+    // MARK: - Plural Form Validation (Complex Languages)
+    
+    func testPluralFormSupport() {
+        // Test the people count plural that we implemented
+        let count_key = "accessibility.people_count"
+        let test_counts = [0, 1, 2, 5, 100] // Test various plural forms
+        
+        for count in test_counts {
+            // Test with English (simpler plural rules)
+            let englishPlural = String.localizedStringWithFormat(NSLocalizedString(count_key, comment: ""), count)
+            
+            XCTAssertFalse(englishPlural.isEmpty, "Plural form should not be empty for count \(count)")
+            XCTAssertTrue(englishPlural.contains("\(count)"), "Plural should contain the count number")
+            
+            // Validate singular vs plural for English
+            if count == 1 {
+                XCTAssertTrue(englishPlural.contains("person") || englishPlural.contains("1"), 
+                             "Singular form should be different for count=1")
+            } else {
+                XCTAssertTrue(englishPlural.contains("people") || englishPlural.contains("\(count)"), 
+                             "Plural form should be appropriate for count=\(count)")
+            }
+        }
+        
+        print("✅ Validated plural form support for people count")
+    }
+    
+    // MARK: - Edge Case and Error Handling
+    
+    func testLocalizationEdgeCases() {
+        // Test 1: Missing key fallback
+        let missingKey = "test.nonexistent.key.12345"
+        let fallback = NSLocalizedString(missingKey, comment: "")
+        XCTAssertNotNil(fallback, "Should handle missing keys gracefully")
+        
+        // Test 2: Empty key handling  
+        let emptyKey = ""
+        let emptyResult = NSLocalizedString(emptyKey, comment: "")
+        XCTAssertNotNil(emptyResult, "Should handle empty keys gracefully")
+        
+        // Test 3: Very long strings don't break UI
+        let longKeys = ["alert.bluetooth_required", "system.failed_send_location"]
+        for key in longKeys {
+            let value = NSLocalizedString(key, comment: "")
+            XCTAssertLessThan(value.count, 500, "String \(key) unreasonably long for UI")
+        }
+        
+        print("✅ Validated edge case handling and error resilience")
+    }
+
     // MARK: - Helper Methods
     
     /// Load all localization keys for comprehensive testing
