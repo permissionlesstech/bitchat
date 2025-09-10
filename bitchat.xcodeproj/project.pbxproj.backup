@@ -9,7 +9,6 @@
 /* Begin PBXBuildFile section */
 		026A4104B2B4588A88283DB5 /* PrivateChatManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E7C4CA419510D61C4FE47B2 /* PrivateChatManager.swift */; };
 		03B8B21F0F40DD0BF98D397B /* FragmentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F2899A34E217B55CA551A29 /* FragmentationTests.swift */; };
-		064E1DB9D0CAD27E810828DD /* Info.plist.backup in Resources */ = {isa = PBXBuildFile; fileRef = 92B75E0496E71956EFA57A23 /* Info.plist.backup */; };
 		07A73CEDC6D73043C6BE4D96 /* RelayController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CFBF7162BBFF8184561FC64 /* RelayController.swift */; };
 		08AE06DD4B2F7049047F54E4 /* Geohash.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28472CF48DAE200A6359E4A6 /* Geohash.swift */; };
 		0AE840940F21AFC07C226636 /* PrivateChatE2ETests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A262EDDC04B7D7B5E31F321 /* PrivateChatE2ETests.swift */; };
@@ -38,8 +37,8 @@
 		438E81C9D07DABC9D6B86AD7 /* UnifiedPeerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D90CBA19E19728938700953D /* UnifiedPeerService.swift */; };
 		44AD79B0EBD4678690E3DEB6 /* MessageDeduplicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0BF581F9D98C90EA9867BCF /* MessageDeduplicator.swift */; };
 		465F776816537C720DEB8600 /* BLEServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9D911BB2E1F2CBF6BCB2D2F /* BLEServiceTests.swift */; };
+		46E1E1013CC18AB66105DB27 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 95F16C3A4A5621C74461D8D3 /* LaunchScreen.storyboard */; };
 		4B747085D07A1BCE0F5BA612 /* BinaryProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2136C3E22D02D4A8DBE7EAB /* BinaryProtocol.swift */; };
-		4DC6562C882AAC5F80DB1246 /* LaunchScreen.storyboard.ios in Resources */ = {isa = PBXBuildFile; fileRef = D112DB3FB47481D2837C763D /* LaunchScreen.storyboard.ios */; };
 		4F2F1893E90C1B13D388CEA9 /* LocationChannelsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15B067FEF619D9D3D14782BA /* LocationChannelsTests.swift */; };
 		501BC56B1A08C0327A09AAF1 /* NoiseEncryptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 394E8A1AC76EFAE352075BE9 /* NoiseEncryptionService.swift */; };
 		5A0B730FCFACABE31EC6B402 /* LocationChannelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 935361F3BDD8F966DB207BF7 /* LocationChannelManager.swift */; };
@@ -107,7 +106,6 @@
 		B27258BDC071D980D051B65F /* CommandProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB10107B2A552E56B94C0AA4 /* CommandProcessor.swift */; };
 		B45AD5BF95220A0289216D32 /* TestHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E346DF8E026FD34EE3DD038 /* TestHelpers.swift */; };
 		B909706CD38FC56C0C8EB7BF /* IdentityModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05BA20BC0F123F1507C5C247 /* IdentityModels.swift */; };
-		BC28BE9D0792847556BFC457 /* Info.plist.backup in Resources */ = {isa = PBXBuildFile; fileRef = 92B75E0496E71956EFA57A23 /* Info.plist.backup */; };
 		BC4DC75F4FB823FF40569676 /* NoiseProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E95DBE6A48626C5AE287245E /* NoiseProtocolTests.swift */; };
 		BCCFEDC1EBE59323C3C470BF /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3A69677D382F1C3D5ED03F7D /* Assets.xcassets */; };
 		BCD0EBACD82AF5E55C2CB2B9 /* NostrRelayManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78595178957244CBDF7E79B6 /* NostrRelayManager.swift */; };
@@ -140,8 +138,8 @@
 		E1510B9FC6528BB22E21CAC5 /* XChaCha20Poly1305Compat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F6B06DDD6D82D60B073A8B7 /* XChaCha20Poly1305Compat.swift */; };
 		E2DCF7817344F1CCDB8B7B2F /* SecureIdentityStateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDC18D910D6FF2E8B1B6C885 /* SecureIdentityStateManager.swift */; };
 		E41F5DB8BC5ED0E8F31C0C02 /* BinaryProtocolPaddingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D68C285B6A35B6C74F34529 /* BinaryProtocolPaddingTests.swift */; };
+		E65BBB6544FE0159F3C6C3A8 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 95F16C3A4A5621C74461D8D3 /* LaunchScreen.storyboard */; };
 		E70F5AF3077C98B2E6A064E6 /* NostrTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B4809E690DE48B9AEE36279 /* NostrTransport.swift */; };
-		EA763998F218C8E0C8F5679D /* LaunchScreen.storyboard.ios in Resources */ = {isa = PBXBuildFile; fileRef = D112DB3FB47481D2837C763D /* LaunchScreen.storyboard.ios */; };
 		EC4532B00C7B9F78B9D488DE /* PeerID.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC0569D3728519ED53CD9D7E /* PeerID.swift */; };
 		EC5241969D2550B97629EBD0 /* SecureLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE7EFB209C86BBD956B749EC /* SecureLogger.swift */; };
 		EC5DD95163C59DF82C7AAE6B /* MessageRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38D19E155BC6E68B1F331015 /* MessageRouter.swift */; };
@@ -246,9 +244,9 @@
 		8F3A7C058C2C8E1A06C8CF8B /* bitchat_macOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = bitchat_macOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		90CB7A5CD1D1A521CD31F380 /* InputValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputValidator.swift; sourceTree = "<group>"; };
 		9195CDC7EB236AFBC9A4D41A /* FingerprintView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FingerprintView.swift; sourceTree = "<group>"; };
-		92B75E0496E71956EFA57A23 /* Info.plist.backup */ = {isa = PBXFileReference; path = Info.plist.backup; sourceTree = "<group>"; };
 		92F634397436B7E8C159B6AF /* MeshPeerList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeshPeerList.swift; sourceTree = "<group>"; };
 		935361F3BDD8F966DB207BF7 /* LocationChannelManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationChannelManager.swift; sourceTree = "<group>"; };
+		95F16C3A4A5621C74461D8D3 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		96B168C6EF326302855D9B71 /* MessageTextHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageTextHelpers.swift; sourceTree = "<group>"; };
 		96D0D41CA19EE5A772AA8434 /* bitchat_iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = bitchat_iOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9AB6BE4ABD7F5088E9865E56 /* NoiseSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoiseSession.swift; sourceTree = "<group>"; };
@@ -266,7 +264,6 @@
 		C27328EE574221395B2B8E87 /* MockBluetoothMeshService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockBluetoothMeshService.swift; sourceTree = "<group>"; };
 		C39BB75BC8C2A36039F00613 /* AutocompleteService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutocompleteService.swift; sourceTree = "<group>"; };
 		C9D911BB2E1F2CBF6BCB2D2F /* BLEServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BLEServiceTests.swift; sourceTree = "<group>"; };
-		D112DB3FB47481D2837C763D /* LaunchScreen.storyboard.ios */ = {isa = PBXFileReference; path = LaunchScreen.storyboard.ios; sourceTree = "<group>"; };
 		D22BF09A49010947CEFE45E2 /* PublicChatE2ETests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicChatE2ETests.swift; sourceTree = "<group>"; };
 		D69A18D27F9A565FD6041E12 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		D7229DDDE75E1FC21DE3947B /* BLEService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BLEService.swift; sourceTree = "<group>"; };
@@ -340,8 +337,7 @@
 				527EB217EFDFAD4CF1C91F07 /* bitchat.entitlements */,
 				EF625BB3AD919322C01A46B2 /* BitchatApp.swift */,
 				EA706D8E5097785414646A8E /* Info.plist */,
-				92B75E0496E71956EFA57A23 /* Info.plist.backup */,
-				D112DB3FB47481D2837C763D /* LaunchScreen.storyboard.ios */,
+				95F16C3A4A5621C74461D8D3 /* LaunchScreen.storyboard */,
 				C845B6F5D25AEEA0B9FE557F /* Identity */,
 				0575DCBD15C7C719ADDCB67E /* Models */,
 				637EDFDD042BDB5F2569A501 /* Noise */,
@@ -727,8 +723,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				7DD72D928FF9DD3CA81B46B0 /* Assets.xcassets in Resources */,
-				BC28BE9D0792847556BFC457 /* Info.plist.backup in Resources */,
-				EA763998F218C8E0C8F5679D /* LaunchScreen.storyboard.ios in Resources */,
+				46E1E1013CC18AB66105DB27 /* LaunchScreen.storyboard in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -753,8 +748,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				BCCFEDC1EBE59323C3C470BF /* Assets.xcassets in Resources */,
-				064E1DB9D0CAD27E810828DD /* Info.plist.backup in Resources */,
-				4DC6562C882AAC5F80DB1246 /* LaunchScreen.storyboard.ios in Resources */,
+				E65BBB6544FE0159F3C6C3A8 /* LaunchScreen.storyboard in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

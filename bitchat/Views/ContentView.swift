@@ -10,6 +10,7 @@ import SwiftUI
 #if os(iOS)
 import UIKit
 #endif
+import UniformTypeIdentifiers
 
 // MARK: - Supporting Types
 
@@ -52,6 +53,10 @@ struct ContentView: View {
     // Window sizes for rendering (infinite scroll up)
     @State private var windowCountPublic: Int = 300
     @State private var windowCountPrivate: [String: Int] = [:]
+    
+    // Minimal file attach state
+    @State private var showFileImporter = false
+    @State private var fileImportError: String? = nil
     
     // MARK: - Computed Properties
     
@@ -867,6 +872,56 @@ struct ContentView: View {
             }
             .padding(.vertical, 8)
             .background(backgroundColor.opacity(0.95))
+            // Attach button and file importer
+            .overlay(
+                HStack {
+                    Button(action: { showFileImporter = true }) {
+                        Image(systemName: "paperclip.circle.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(viewModel.selectedPrivateChatPeer != nil ? Color.blue : Color.gray)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.leading, 12)
+                    .disabled(viewModel.selectedPrivateChatPeer == nil)
+                    Spacer()
+                }
+            )
+        }
+        .fileImporter(isPresented: $showFileImporter, allowedContentTypes: [UTType.item], allowsMultipleSelection: false) { result in
+            switch result {
+            case .success(let urls):
+                guard let url = urls.first else { return }
+                do {
+                    let data = try Data(contentsOf: url)
+                    guard data.count > 0 && data.count <= 65535 else {
+                        fileImportError = "File too large. Max 64KB for inline transfer."
+                        return
+                    }
+                    guard let peerID = viewModel.selectedPrivateChatPeer else {
+                        fileImportError = "Select a private chat first."
+                        return
+                    }
+                    let filename = url.lastPathComponent
+                    let mime = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? "application/octet-stream"
+                    // Send via mesh service (BLE)
+                    viewModel.meshService.getNoiseService() // touch to ensure Noise available
+                    if let ble = viewModel.meshService as? BLEService {
+                        ble.sendInlineFile(to: peerID, filename: filename, mimeType: mime, data: data)
+                    } else {
+                        // Fallback: attempt through Transport if later exposed
+                        fileImportError = "Inline file send not supported on current transport."
+                    }
+                } catch {
+                    fileImportError = "Failed to read file: \(error.localizedDescription)"
+                }
+            case .failure(let err):
+                fileImportError = err.localizedDescription
+            }
+        }
+        .alert(item: Binding(get: {
+            fileImportError.map { LocalizedErrorWrapper(message: $0) }
+        }, set: { _ in fileImportError = nil })) { wrapper in
+            Alert(title: Text("Attach Error"), message: Text(wrapper.message), dismissButton: .default(Text("OK")))
         }
         .onAppear {
             // Delay keyboard focus to avoid iOS constraint warnings
@@ -881,6 +936,12 @@ struct ContentView: View {
     private func sendMessage() {
         viewModel.sendMessage(messageText)
         messageText = ""
+    }
+    
+    // Helper for alert binding
+    private struct LocalizedErrorWrapper: Identifiable {
+        let id = UUID()
+        let message: String
     }
     
     // MARK: - Sidebar View

@@ -1771,6 +1771,12 @@ final class BLEService: NSObject {
                 notifyUI { [weak self] in
                     self?.delegate?.didReceiveNoisePayload(from: peerID, type: .verifyResponse, payload: Data(payloadData), timestamp: ts)
                 }
+            case .fileInline:
+                let ts = Date(timeIntervalSince1970: Double(packet.timestamp) / 1000)
+                // Surface raw TLV to delegate; UI/service can parse filename/mime/data
+                notifyUI { [weak self] in
+                    self?.delegate?.didReceiveNoisePayload(from: peerID, type: .fileInline, payload: Data(payloadData), timestamp: ts)
+                }
             default:
                 SecureLogger.log("⚠️ Unknown noise payload type: \(payloadType)", category: SecureLogger.noise, level: .warning)
             }
@@ -2263,6 +2269,64 @@ final class BLEService: NSObject {
             threshold = max(threshold, TransportConfig.bleRSSIHighTimeoutThreshold)
         }
         dynamicRSSIThreshold = threshold
+    }
+    
+    // MARK: - Minimal Inline File Send (<=64KB encrypted payload)
+    
+    /// Send a small file inline to a specific peer. The entire file payload must be <= 64KB before Noise encryption.
+    /// This relies on BLEService's existing fragmentation if the outer packet exceeds MTU.
+    func sendInlineFile(to recipientPeerID: String, filename: String, mimeType: String, data fileData: Data) {
+        // Validate size constraint per NoiseSecurityValidator (<= 65535 before encryption)
+        guard fileData.count > 0 && fileData.count <= NoiseSecurityConstants.maxMessageSize else {
+            SecureLogger.log("Inline file exceeds max allowed size (\(fileData.count) bytes)", category: SecureLogger.session, level: .error)
+            return
+        }
+        
+        messageQueue.async { [weak self] in
+            guard let self = self else { return }
+            // Ensure session
+            guard self.noiseService.hasEstablishedSession(with: recipientPeerID) else {
+                // Queue handshake and drop for now (minimal impl). A robust version would queue the send.
+                self.noiseService.onHandshakeRequired?(recipientPeerID)
+                SecureLogger.log("Handshake required before sending inline file", category: SecureLogger.noise, level: .warning)
+                return
+            }
+            
+            // Build a naive TLV: [filenameLen(2)][filename][mimeLen(2)][mime][dataLen(4)][bytes]
+            var payloadData = Data()
+            let fnameBytes = Array(filename.utf8)
+            let mimeBytes = Array(mimeType.utf8)
+            var fLen = UInt16(min(fnameBytes.count, 1024)).bigEndian
+            var mLen = UInt16(min(mimeBytes.count, 256)).bigEndian
+            var dLen = UInt32(fileData.count).bigEndian
+            withUnsafeBytes(of: &fLen) { payloadData.append(contentsOf: $0) }
+            payloadData.append(contentsOf: fnameBytes.prefix(Int(UInt16(bigEndian: fLen))))
+            withUnsafeBytes(of: &mLen) { payloadData.append(contentsOf: $0) }
+            payloadData.append(contentsOf: mimeBytes.prefix(Int(UInt16(bigEndian: mLen))))
+            withUnsafeBytes(of: &dLen) { payloadData.append(contentsOf: $0) }
+            payloadData.append(fileData)
+            
+            // Prefix with type byte for Noise payload
+            var typedPayload = Data([NoisePayloadType.fileInline.rawValue])
+            typedPayload.append(payloadData)
+            
+            do {
+                let encrypted = try self.noiseService.encrypt(typedPayload, for: recipientPeerID)
+                let packet = BitchatPacket(
+                    type: MessageType.noiseEncrypted.rawValue,
+                    senderID: self.myPeerIDData,
+                    recipientID: Data(hexString: recipientPeerID),
+                    timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                    payload: encrypted,
+                    signature: nil,
+                    ttl: self.messageTTL
+                )
+                self.broadcastPacket(packet)
+                SecureLogger.log("📦 Sent inline file \(filename) (\(fileData.count) bytes) to \(recipientPeerID.prefix(8))…", category: SecureLogger.session, level: .info)
+            } catch {
+                SecureLogger.log("Failed to encrypt/send inline file: \(error)", category: SecureLogger.noise, level: .error)
+            }
+        }
     }
 }
 
