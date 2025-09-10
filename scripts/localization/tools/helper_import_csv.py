@@ -33,7 +33,7 @@ def parse_key(k):
         return base, suf
     return k, None
 
-def import_csv(cat_path: Path, csv_path: Path, locale: str, dry: bool=False) -> int:
+def import_csv(cat_path: Path, csv_path: Path, locale: str, dry: bool=False, force_status: str=None) -> int:
     data = json.loads(cat_path.read_text(encoding='utf-8'))
     strings = data.get('strings', {})
     applied = 0
@@ -43,6 +43,8 @@ def import_csv(cat_path: Path, csv_path: Path, locale: str, dry: bool=False) -> 
             key = row.get('key')
             loc_val = row.get('localized')
             status = (row.get('status') or '').strip() or 'translated'
+            if force_status:
+                status = force_status
             if key is None or loc_val is None:
                 continue
             base, variant = parse_key(key)
@@ -62,9 +64,13 @@ def import_csv(cat_path: Path, csv_path: Path, locale: str, dry: bool=False) -> 
 
 if __name__ == '__main__':
     if len(sys.argv) < 4:
-        print('Usage: helper_import_csv.py <path-to-.xcstrings> <locale> <csv-file> [--dry-run]')
+        print('Usage: helper_import_csv.py <path-to-.xcstrings> <locale> <csv-file> [--dry-run] [--force-status needs_review|translated]')
         raise SystemExit(2)
     p = Path(sys.argv[1]); loc=sys.argv[2]; csvf=Path(sys.argv[3])
     dry = '--dry-run' in sys.argv or '--check' in sys.argv
-    raise SystemExit(import_csv(p, csvf, loc, dry))
-
+    force = None
+    if '--force-status' in sys.argv:
+        idx = sys.argv.index('--force-status')
+        if idx+1 < len(sys.argv):
+            force = sys.argv[idx+1]
+    raise SystemExit(import_csv(p, csvf, loc, dry, force))
