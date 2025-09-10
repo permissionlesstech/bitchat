@@ -258,7 +258,7 @@ final class LocalizationTests: XCTestCase {
         
         for count in test_counts {
             // Test with English (simpler plural rules)
-            let englishPlural = String.localizedStringWithFormat(NSLocalizedString(count_key, comment: ""), count)
+            let englishPlural = String(format: String(localized: count_key), locale: .current, count)
             
             XCTAssertFalse(englishPlural.isEmpty, "Plural form should not be empty for count \(count)")
             XCTAssertTrue(englishPlural.contains("\(count)"), "Plural should contain the count number")

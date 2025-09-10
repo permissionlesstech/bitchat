@@ -1134,7 +1134,7 @@ struct ContentView: View {
                             .font(.system(size: 12))
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(String.localizedStringWithFormat(String(localized: "accessibility.bookmark_toggle_geohash"), ch.geohash))
+                    .accessibilityLabel(String(format: String(localized: "accessibility.bookmark_toggle_geohash"), locale: .current, ch.geohash))
                 }
                 // Location channels button '#'
                 Button(action: { showLocationChannelsSheet = true }) {
@@ -1167,7 +1167,7 @@ struct ContentView: View {
                     // People icon with count
                     Image(systemName: "person.2.fill")
                         .font(.system(size: 11))
-                        .accessibilityLabel(String.localizedStringWithFormat(NSLocalizedString("accessibility.people_count", comment: "People count with plural forms"), headerOtherPeersCount))
+                        .accessibilityLabel(String(format: String(localized: "accessibility.people_count"), locale: .current, headerOtherPeersCount))
                     Text("\(headerOtherPeersCount)")
                         .font(.system(size: 12, design: .monospaced))
                         .accessibilityHidden(true)
@@ -1344,12 +1344,18 @@ struct ContentView: View {
                                                        Color.red)
                                         .accessibilityLabel({
                                             let statusText = encryptionStatus == .noiseVerified ? String(localized: "accessibility.encryption_status_verified") : encryptionStatus == .noiseSecured ? String(localized: "accessibility.encryption_status_secured") : String(localized: "accessibility.encryption_status_unencrypted")
-                                            return String.localizedStringWithFormat(String(localized: "accessibility.encryption_status_dynamic"), statusText)
+                                            return String(format: String(localized: "accessibility.encryption_status_dynamic"), locale: .current, statusText)
                                         }())
                                 }
                             }
                         }
-                        .accessibilityLabel("\(String(localized: "accessibility.private_chat_with_user")): \(privatePeerNick)")
+                        .accessibilityLabel(
+                            String(
+                                format: String(localized: "accessibility.private_chat_with_user_name"),
+                                locale: .current,
+                                privatePeerNick
+                            )
+                        )
                         .accessibilityHint(String(localized: "accessibility.private_chat_hint"))
                     }
                     .buttonStyle(.plain)
@@ -1474,7 +1480,7 @@ struct DeliveryStatusView: View {
                     .font(.system(size: 10))
             }
             .foregroundColor(textColor.opacity(0.8))
-            .help(String.localizedStringWithFormat(String(localized: "help.delivered_to_name"), nickname))
+            .help(String(format: String(localized: "help.delivered_to_name"), locale: .current, nickname))
             
         case .read(let nickname, _):
             HStack(spacing: -2) {
@@ -1484,23 +1490,23 @@ struct DeliveryStatusView: View {
                     .font(.system(size: 10, weight: .bold))
             }
             .foregroundColor(Color(red: 0.0, green: 0.478, blue: 1.0))  // Bright blue
-            .help(String.localizedStringWithFormat(String(localized: "help.read_by_name"), nickname))
+            .help(String(format: String(localized: "help.read_by_name"), locale: .current, nickname))
             
         case .failed(let reason):
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 10))
                 .foregroundColor(Color.red.opacity(0.8))
-                .help(String.localizedStringWithFormat(String(localized: "help.failed_reason"), reason))
+                .help(String(format: String(localized: "help.failed_reason"), locale: .current, reason))
             
         case .partiallyDelivered(let reached, let total):
             HStack(spacing: 1) {
                 Image(systemName: "checkmark")
                     .font(.system(size: 10))
-                Text(String.localizedStringWithFormat(String(localized: "ui.delivery_ratio"), reached, total))
+                Text(String(format: String(localized: "ui.delivery_ratio"), locale: .current, reached, total))
                     .font(.system(size: 10, design: .monospaced))
             }
             .foregroundColor(secondaryTextColor.opacity(0.6))
-            .help(String.localizedStringWithFormat(String(localized: "help.delivered_group_members"), reached, total))
+            .help(String(format: String(localized: "help.delivered_group_members"), locale: .current, reached, total))
         }
     }
 }

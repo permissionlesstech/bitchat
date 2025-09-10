@@ -1831,12 +1831,12 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         // Remove mapping keys pointing to this pubkey to avoid accidental resolution
         for (k, v) in nostrKeyMapping where v.lowercased() == hex { nostrKeyMapping.removeValue(forKey: k) }
         
-        addSystemMessage(String.localizedStringWithFormat(String(localized: "system.blocked_geohash_user"), displayName))
+        addSystemMessage(String(format: String(localized: "system.blocked_geohash_user"), locale: .current, displayName))
     }
     @MainActor
     func unblockGeohashUser(pubkeyHexLowercased: String, displayName: String) {
         SecureIdentityStateManager.shared.setNostrBlocked(pubkeyHexLowercased, isBlocked: false)
-        addSystemMessage(String.localizedStringWithFormat(String(localized: "system.unblocked_geohash_user"), displayName))
+        addSystemMessage(String(format: String(localized: "system.unblocked_geohash_user"), locale: .current, displayName))
     }
 
     /// Begin sampling multiple geohashes (used by channel sheet) without changing active channel.
@@ -2067,7 +2067,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         // Check if blocked
         if unifiedPeerService.isBlocked(peerID) {
             let nickname = meshService.peerNickname(peerID: peerID) ?? "user"
-            addSystemMessage(String.localizedStringWithFormat(String(localized: "system.cannot_send_blocked"), nickname))
+            addSystemMessage(String(format: String(localized: "system.cannot_send_blocked"), locale: .current, nickname))
             return
         }
         
@@ -2126,7 +2126,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             if let index = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
                 privateChats[peerID]?[index].deliveryStatus = .failed(reason: "Peer not reachable")
             }
-            addSystemMessage(String.localizedStringWithFormat(String(localized: "system.cannot_send_unreachable"), recipientNickname ?? String(localized: "common.user")))
+            addSystemMessage(String(format: String(localized: "system.cannot_send_unreachable"), locale: .current, recipientNickname ?? String(localized: "common.user")))
         }
     }
 
@@ -2220,14 +2220,14 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         
         // Check if the peer is blocked
         if unifiedPeerService.isBlocked(peerID) {
-            addSystemMessage(String.localizedStringWithFormat(String(localized: "system.cannot_start_chat_blocked"), peerNickname))
+            addSystemMessage(String(format: String(localized: "system.cannot_start_chat_blocked"), locale: .current, peerNickname))
             return
         }
         
         // Check mutual favorites for offline messaging
         if let peer = unifiedPeerService.getPeer(by: peerID),
            peer.isFavorite && !peer.theyFavoritedUs && !peer.isConnected {
-            addSystemMessage(String.localizedStringWithFormat(String(localized: "system.mutual_favorite_required"), peerNickname))
+            addSystemMessage(String(format: String(localized: "system.mutual_favorite_required"), locale: .current, peerNickname))
             return
         }
         
@@ -5295,9 +5295,9 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         
         // Show system message
         if isFavorite {
-            addSystemMessage(String.localizedStringWithFormat(String(localized: "system.user_action_favorited"), senderNickname))
+            addSystemMessage(String(format: String(localized: "system.user_action_favorited"), locale: .current, senderNickname))
         } else {
-            addSystemMessage(String.localizedStringWithFormat(String(localized: "system.user_action_unfavorited"), senderNickname))
+            addSystemMessage(String(format: String(localized: "system.user_action_unfavorited"), locale: .current, senderNickname))
         }
     }
     

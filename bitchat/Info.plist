@@ -40,8 +40,6 @@
 		<string>bluetooth-central</string>
 		<string>bluetooth-peripheral</string>
 	</array>
-	<key>UILaunchStoryboardName</key>
-	<string>LaunchScreen</string>
 	<key>UIRequiresFullScreen</key>
 	<true/>
 	<key>UISupportedInterfaceOrientations</key>

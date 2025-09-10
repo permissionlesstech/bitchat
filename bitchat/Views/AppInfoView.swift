@@ -16,37 +16,6 @@ struct AppInfoView: View {
         colorScheme == .dark ? Color.green.opacity(0.8) : Color(red: 0, green: 0.5, blue: 0).opacity(0.8)
     }
     
-    // MARK: - Constants
-    private enum Strings {
-        static let appName = "bitchat"
-        static let tagline = "sidegroupchat"
-        
-        enum Features {
-            static let title = "FEATURES"
-            static let offlineComm = ("wifi.slash", "offline communication", "works without internet using Bluetooth low energy")
-            static let encryption = ("lock.shield", "end-to-end encryption", "private messages encrypted with noise protocol")
-            static let extendedRange = ("antenna.radiowaves.left.and.right", "extended range", "messages relay through peers, going the distance")
-            static let mentions = ("at", "mentions", "use @nickname to notify specific people")
-            static let favorites = ("star.fill", "favorites", "get notified when your favorite people join")
-            static let geohash = ("number", "local channels", "geohash channels to chat with people in nearby regions over decentralized anonymous relays")
-        }
-        
-        enum Privacy {
-            static let title = "PRIVACY"
-            static let noTracking = ("eye.slash", "no tracking", "no servers, accounts, or data collection")
-            static let ephemeral = ("shuffle", "ephemeral identity", "new peer ID generated regularly")
-            static let panic = ("hand.raised.fill", "panic mode", "triple-tap logo to instantly clear all data")
-        }
-        
-        enum HowToUse {
-            static let title = "HOW TO USE"
-        }
-        
-        enum Warning {
-            static let title = "WARNING"
-            static let message = "private message security has not yet been fully audited. do not use for critical situations until this warning disappears."
-        }
-    }
     
     var body: some View {
         #if os(macOS)
@@ -93,7 +62,7 @@ struct AppInfoView: View {
         VStack(alignment: .leading, spacing: 24) {
             // Header
             VStack(alignment: .center, spacing: 8) {
-                Text(Strings.appName)
+                Text("bitchat")
                     .font(.system(size: 32, weight: .bold, design: .monospaced))
                     .foregroundColor(textColor)
                 
@@ -116,19 +85,19 @@ struct AppInfoView: View {
                           title: String(localized: "appinfo.features.encryption.title"),
                           description: String(localized: "appinfo.features.encryption.desc"))
                 
-                FeatureRow(icon: Strings.Features.extendedRange.0,
+                FeatureRow(icon: "antenna.radiowaves.left.and.right",
                           title: String(localized: "appinfo.features.extended_range.title"),
                           description: String(localized: "appinfo.features.extended_range.desc"))
                 
-                FeatureRow(icon: Strings.Features.favorites.0,
+                FeatureRow(icon: "star.fill",
                           title: String(localized: "appinfo.features.favorites.title"),
                           description: String(localized: "appinfo.features.favorites.desc"))
                 
-                FeatureRow(icon: Strings.Features.geohash.0,
+                FeatureRow(icon: "number",
                           title: String(localized: "appinfo.features.geohash.title"),
                           description: String(localized: "appinfo.features.geohash.desc"))
                 
-                FeatureRow(icon: Strings.Features.mentions.0,
+                FeatureRow(icon: "at",
                           title: String(localized: "appinfo.features.mentions.title"),
                           description: String(localized: "appinfo.features.mentions.desc"))
             }
@@ -137,15 +106,15 @@ struct AppInfoView: View {
             VStack(alignment: .leading, spacing: 16) {
                 SectionHeader(String(localized: "appinfo.privacy.title"))
                 
-                FeatureRow(icon: Strings.Privacy.noTracking.0,
+                FeatureRow(icon: "eye.slash",
                           title: String(localized: "appinfo.privacy.no_tracking.title"),
                           description: String(localized: "appinfo.privacy.no_tracking.desc"))
                 
-                FeatureRow(icon: Strings.Privacy.ephemeral.0,
+                FeatureRow(icon: "shuffle",
                           title: String(localized: "appinfo.privacy.ephemeral.title"),
                           description: String(localized: "appinfo.privacy.ephemeral.desc"))
                 
-                FeatureRow(icon: Strings.Privacy.panic.0,
+                FeatureRow(icon: "hand.raised.fill",
                           title: String(localized: "appinfo.privacy.panic.title"),
                           description: String(localized: "appinfo.privacy.panic.desc"))
             }

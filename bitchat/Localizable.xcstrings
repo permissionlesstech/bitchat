@@ -33869,6 +33869,364 @@
           }
         }
       }
+    },
+    "app.name": {
+      "comment": "App name (brand; usually not localized)",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bitchat"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bitchat"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bitchat"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bitchat"
+          }
+        },
+        "arz": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bitchat"
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bitchat"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bitchat"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bitchat"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bitchat"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bitchat"
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bitchat"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bitchat"
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bitchat"
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bitchat"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bitchat"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bitchat"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bitchat"
+          }
+        },
+        "bn": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bitchat"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bitchat"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bitchat"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bitchat"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bitchat"
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bitchat"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bitchat"
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bitchat"
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bitchat"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bitchat"
+          }
+        },
+        "id": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "bitchat"
+          }
+        }
+      }
+    },
+    "accessibility.private_chat_with_user_name": {
+      "comment": "Screen reader label: Private chat with user name (use with String(format:..., %@ = display name))",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Private chat with %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Private chat with %@"
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Private chat with %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Private chat with %@"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Private chat with %@"
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Private chat with %@"
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Private chat with %@"
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Private chat with %@"
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Private chat with %@"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Private chat with %@"
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Private chat with %@"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Private chat with %@"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Private chat with %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Private chat with %@"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Private chat with %@"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Private chat with %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Private chat with %@"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Private chat with %@"
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Private chat with %@"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Private chat with %@"
+          }
+        },
+        "bn": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Private chat with %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Private chat with %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Private chat with %@"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Private chat with %@"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Private chat with %@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Private chat with %@"
+          }
+        },
+        "id": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Private chat with %@"
+          }
+        },
+        "arz": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Private chat with %@"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Private chat with %@"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

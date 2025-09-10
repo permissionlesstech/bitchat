@@ -54,7 +54,7 @@ class NotificationService {
     }
     
     func sendMentionNotification(from sender: String, message: String) {
-        let title = String.localizedStringWithFormat(String(localized: "notifications.mention.title"), sender)
+        let title = String(format: String(localized: "notifications.mention.title"), locale: .current, sender)
         let body = message
         let identifier = "mention-\(UUID().uuidString)"
         
@@ -62,7 +62,7 @@ class NotificationService {
     }
     
     func sendPrivateMessageNotification(from sender: String, message: String, peerID: String) {
-        let title = String.localizedStringWithFormat(String(localized: "notifications.private_message.title"), sender)
+        let title = String(format: String(localized: "notifications.private_message.title"), locale: .current, sender)
         let body = message
         let identifier = "private-\(UUID().uuidString)"
         let userInfo = ["peerID": peerID, "senderName": sender]
@@ -74,7 +74,7 @@ class NotificationService {
         // Send directly without checking app state for favorites
         DispatchQueue.main.async {
             let content = UNMutableNotificationContent()
-            content.title = String.localizedStringWithFormat(String(localized: "notifications.favorite_online.title"), nickname)
+            content.title = String(format: String(localized: "notifications.favorite_online.title"), locale: .current, nickname)
             content.body = String(localized: "notifications.favorite_online.body")
             content.sound = .default
             
@@ -101,7 +101,7 @@ class NotificationService {
 
     func sendNetworkAvailableNotification(peerCount: Int) {
         let title = String(localized: "notifications.network_available.title")
-        let body = String.localizedStringWithFormat(NSLocalizedString("notifications.network_available.body", comment: "Pluralized nearby people count"), peerCount)
+        let body = String(format: String(localized: "notifications.network_available.body"), locale: .current, peerCount)
         let identifier = "network-available-\(Date().timeIntervalSince1970)"
         
         // For network notifications, we want to show them even in foreground

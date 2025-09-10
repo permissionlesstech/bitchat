@@ -19,8 +19,11 @@ targets:
   bitchat_iOS:
     type: application
     platform: iOS
-    sources: 
-      - bitchat
+    sources:
+      - path: bitchat
+        includes:
+          - "*.swift"
+          - "**/*.swift"
     resources:
       - bitchat/Assets.xcassets
       - bitchat/LaunchScreen.storyboard
@@ -37,7 +40,6 @@ targets:
         UIBackgroundModes:
           - bluetooth-central
           - bluetooth-peripheral
-        UILaunchStoryboardName: LaunchScreen
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         UISupportedInterfaceOrientations~ipad:
@@ -74,8 +76,10 @@ targets:
   bitchat_macOS:
     type: application
     platform: macOS
-    sources: 
-      - bitchat
+    sources:
+      - path: bitchat
+        excludes:
+          - "**/LaunchScreen.storyboard"
     resources:
       - bitchat/Assets.xcassets
       - bitchat/Localizable.xcstrings
@@ -96,7 +100,6 @@ targets:
         UIBackgroundModes:
           - bluetooth-central
           - bluetooth-peripheral
-        UILaunchStoryboardName: LaunchScreen
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         UIRequiresFullScreen: true
