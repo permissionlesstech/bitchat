@@ -1321,7 +1321,7 @@ struct ContentView: View {
                                 Image(systemName: "dot.radiowaves.left.and.right")
                                     .font(.system(size: 14))
                                     .foregroundColor(textColor)
-                                    .accessibilityLabel("Connected via mesh")
+                                    .accessibilityLabel(String(localized: "accessibility.connected_via_mesh"))
                             }
                             
                             Text("\(privatePeerNick)")
@@ -1342,12 +1342,15 @@ struct ContentView: View {
                                         .foregroundColor(encryptionStatus == .noiseVerified ? textColor : 
                                                        encryptionStatus == .noiseSecured ? textColor :
                                                        Color.red)
-                                        .accessibilityLabel("Encryption status: \(encryptionStatus == .noiseVerified ? "verified" : encryptionStatus == .noiseSecured ? "secured" : "not encrypted")")
+                                        .accessibilityLabel({
+                                            let statusText = encryptionStatus == .noiseVerified ? String(localized: "accessibility.encryption_status_verified") : encryptionStatus == .noiseSecured ? String(localized: "accessibility.encryption_status_secured") : String(localized: "accessibility.encryption_status_unencrypted")
+                                            return String.localizedStringWithFormat(String(localized: "accessibility.encryption_status_dynamic"), statusText)
+                                        }())
                                 }
                             }
                         }
-                        .accessibilityLabel("Private chat with \(privatePeerNick)")
-                        .accessibilityHint("Tap to view encryption fingerprint")
+                        .accessibilityLabel(String.localizedStringWithFormat(String(localized: "accessibility.private_chat_with_user"), privatePeerNick))
+                        .accessibilityHint(String(localized: "accessibility.private_chat_hint"))
                     }
                     .buttonStyle(.plain)
                     
@@ -1381,7 +1384,7 @@ struct ContentView: View {
                             }
                             .buttonStyle(.plain)
                             .accessibilityLabel(viewModel.isFavorite(peerID: privatePeerID) ? "Remove from favorites" : "Add to favorites")
-                            .accessibilityHint("Double tap to toggle favorite status")
+                            .accessibilityHint(String(localized: "accessibility.favorite_toggle_hint"))
                         }
                     }
                 }
@@ -1493,7 +1496,7 @@ struct DeliveryStatusView: View {
             HStack(spacing: 1) {
                 Image(systemName: "checkmark")
                     .font(.system(size: 10))
-                Text("\(reached)/\(total)")
+                Text(String.localizedStringWithFormat(String(localized: "ui.delivery_ratio"), reached, total))
                     .font(.system(size: 10, design: .monospaced))
             }
             .foregroundColor(secondaryTextColor.opacity(0.6))

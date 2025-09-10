@@ -2067,7 +2067,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         // Check if blocked
         if unifiedPeerService.isBlocked(peerID) {
             let nickname = meshService.peerNickname(peerID: peerID) ?? "user"
-            addSystemMessage("cannot send message to \(nickname): user is blocked.")
+            addSystemMessage(String.localizedStringWithFormat(String(localized: "system.cannot_send_blocked"), nickname))
             return
         }
         
@@ -2126,7 +2126,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             if let index = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
                 privateChats[peerID]?[index].deliveryStatus = .failed(reason: "Peer not reachable")
             }
-            addSystemMessage("Cannot send message to \(recipientNickname ?? "user") - peer is not reachable via mesh or Nostr.")
+            addSystemMessage(String.localizedStringWithFormat(String(localized: "system.cannot_send_unreachable"), recipientNickname ?? String(localized: "common.user")))
         }
     }
 
@@ -2220,14 +2220,14 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         
         // Check if the peer is blocked
         if unifiedPeerService.isBlocked(peerID) {
-            addSystemMessage("cannot start chat with \(peerNickname): user is blocked.")
+            addSystemMessage(String.localizedStringWithFormat(String(localized: "system.cannot_start_chat_blocked"), peerNickname))
             return
         }
         
         // Check mutual favorites for offline messaging
         if let peer = unifiedPeerService.getPeer(by: peerID),
            peer.isFavorite && !peer.theyFavoritedUs && !peer.isConnected {
-            addSystemMessage("cannot start chat with \(peerNickname): mutual favorite required for offline messaging.")
+            addSystemMessage(String.localizedStringWithFormat(String(localized: "system.mutual_favorite_required"), peerNickname))
             return
         }
         
@@ -5294,8 +5294,11 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         }
         
         // Show system message
-        let action = isFavorite ? "favorited" : "unfavorited"
-        addSystemMessage("\(senderNickname) \(action) you")
+        if isFavorite {
+            addSystemMessage(String.localizedStringWithFormat(String(localized: "system.user_action_favorited"), senderNickname))
+        } else {
+            addSystemMessage(String.localizedStringWithFormat(String(localized: "system.user_action_unfavorited"), senderNickname))
+        }
     }
     
     @MainActor

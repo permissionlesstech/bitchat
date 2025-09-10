@@ -9,14 +9,14 @@ echo "🔍 Validating localization compliance..."
 
 # Patterns to catch hardcoded UI strings
 FORBIDDEN_PATTERNS=(
-    'Text\s*\(\s*"[^"]*"'
-    'Button\s*\(\s*"[^"]*"'
-    'TextField\s*\(\s*"[^"]*"'
-    'Alert\s*\(\s*"[^"]*"'
-    'Label\s*\(\s*"[^"]*"'
-    '\.accessibilityLabel\s*\(\s*"[^"]*"'
-    '\.accessibilityHint\s*\(\s*"[^"]*"'
-    'addSystemMessage\s*\(\s*"[^"]*"'
+    'Text\s*\(\s*"[A-Za-z][^"]*"'       # Text with actual words (not just symbols/numbers)
+    'Button\s*\(\s*"[A-Za-z][^"]*"'     # Button with actual text
+    'TextField\s*\(\s*"[A-Za-z][^"]*"'  # TextField with text placeholder
+    'Alert\s*\(\s*"[A-Za-z][^"]*"'      # Alert with text
+    'Label\s*\(\s*"[A-Za-z][^"]*"'      # Label with text
+    '\.accessibilityLabel\s*\(\s*"[A-Za-z][^"]*"'  # Accessibility with text
+    '\.accessibilityHint\s*\(\s*"[A-Za-z][^"]*"'   # Accessibility hint with text
+    'addSystemMessage\s*\(\s*"[A-Za-z][^"]*"'       # System message with text
 )
 
 VIOLATIONS=()
