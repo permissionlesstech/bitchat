@@ -6,7 +6,7 @@
 # and ensures localization keys are properly synchronized.
 #
 # To enable this hook:
-#   cp scripts/Localization/localization-pre-commit-hook.sh .git/hooks/pre-commit
+#   cp scripts/github/localization-pre-commit-hook.sh .git/hooks/pre-commit
 #   chmod +x .git/hooks/pre-commit
 #
 # To disable temporarily: 
@@ -79,7 +79,7 @@ fi
 # Enforce developer comments on all keys (context for translators)
 check_comments() {
     local file="$1"
-    python3 - "$file" << 'PY' || exit 1
+    python3 - "$file" << 'PY' || return 1
 import json, sys
 p = sys.argv[1]
 with open(p, 'r', encoding='utf-8') as f:

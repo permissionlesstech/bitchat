@@ -64,6 +64,7 @@ def main(path: str) -> int:
         all_locales.update((entry.get('localizations') or {}).keys())
 
     added = 0
+    retagged = 0
     touched_keys = 0
     for key, entry in strings.items():
         locs = entry.setdefault('localizations', {})
@@ -73,19 +74,26 @@ def main(path: str) -> int:
         before = len(locs)
         for loc in all_locales:
             if loc not in locs:
-                locs[loc] = { 'stringUnit': { 'state': 'translated', 'value': base } }
+                # New locale: English marked translated; others need review
+                state = 'translated' if loc == 'en' else 'needs_review'
+                locs[loc] = { 'stringUnit': { 'state': state, 'value': base } }
                 added += 1
             else:
                 su = locs[loc].setdefault('stringUnit', {})
                 if not su.get('value'):
                     su['value'] = base
-                    su['state'] = 'translated'
+                    su['state'] = 'translated' if loc == 'en' else 'needs_review'
                     added += 1
+                else:
+                    # If non-English matches base and previously marked translated, mark as needs_review
+                    if loc != 'en' and su.get('value') == base and su.get('state') in (None, 'translated'):
+                        su['state'] = 'needs_review'
+                        retagged += 1
         if len(locs) != before:
             touched_keys += 1
 
     p.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding='utf-8')
-    print(f"✅ Filled {added} missing entries across {touched_keys} keys.")
+    print(f"✅ Filled {added} missing entries; marked {retagged} entries as needs_review across {touched_keys} keys.")
     return 0
 
 if __name__ == '__main__':
@@ -93,4 +101,3 @@ if __name__ == '__main__':
         print('Usage: sync_xcstrings.py <path-to-.xcstrings>', file=sys.stderr)
         raise SystemExit(2)
     raise SystemExit(main(sys.argv[1]))
-

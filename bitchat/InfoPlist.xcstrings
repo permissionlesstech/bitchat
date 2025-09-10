@@ -12,13 +12,13 @@
         },
         "arz": {
           "stringUnit": {
-            "state": "translated",
+            "state": "needs_review",
             "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
           }
         },
         "bn": {
           "stringUnit": {
-            "state": "translated",
+            "state": "needs_review",
             "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
           }
         },
@@ -42,7 +42,7 @@
         },
         "fil": {
           "stringUnit": {
-            "state": "translated",
+            "state": "needs_review",
             "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
           }
         },
@@ -54,19 +54,19 @@
         },
         "ha": {
           "stringUnit": {
-            "state": "translated",
+            "state": "needs_review",
             "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
           }
         },
         "hi": {
           "stringUnit": {
-            "state": "translated",
+            "state": "needs_review",
             "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
           }
         },
         "id": {
           "stringUnit": {
-            "state": "translated",
+            "state": "needs_review",
             "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
           }
         },
@@ -78,31 +78,31 @@
         },
         "mr": {
           "stringUnit": {
-            "state": "translated",
+            "state": "needs_review",
             "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
           }
         },
         "pcm": {
           "stringUnit": {
-            "state": "translated",
+            "state": "needs_review",
             "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
           }
         },
         "pnb": {
           "stringUnit": {
-            "state": "translated",
+            "state": "needs_review",
             "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
           }
         },
         "pt": {
           "stringUnit": {
-            "state": "translated",
+            "state": "needs_review",
             "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
           }
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "translated",
+            "state": "needs_review",
             "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
           }
         },
@@ -114,55 +114,55 @@
         },
         "sw": {
           "stringUnit": {
-            "state": "translated",
+            "state": "needs_review",
             "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
           }
         },
         "ta": {
           "stringUnit": {
-            "state": "translated",
+            "state": "needs_review",
             "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
           }
         },
         "te": {
           "stringUnit": {
-            "state": "translated",
+            "state": "needs_review",
             "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
           }
         },
         "tl": {
           "stringUnit": {
-            "state": "translated",
+            "state": "needs_review",
             "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
           }
         },
         "tr": {
           "stringUnit": {
-            "state": "translated",
+            "state": "needs_review",
             "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
           }
         },
         "ur": {
           "stringUnit": {
-            "state": "translated",
+            "state": "needs_review",
             "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
           }
         },
         "vi": {
           "stringUnit": {
-            "state": "translated",
+            "state": "needs_review",
             "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
           }
         },
         "yue": {
           "stringUnit": {
-            "state": "translated",
+            "state": "needs_review",
             "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
           }
         },
         "zh-HK": {
           "stringUnit": {
-            "state": "translated",
+            "state": "needs_review",
             "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
           }
         },
@@ -174,7 +174,7 @@
         },
         "zh-Hant": {
           "stringUnit": {
-            "state": "translated",
+            "state": "needs_review",
             "value": "bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users."
           }
         }
@@ -191,13 +191,13 @@
         },
         "arz": {
           "stringUnit": {
-            "state": "translated",
+            "state": "needs_review",
             "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
           }
         },
         "bn": {
           "stringUnit": {
-            "state": "translated",
+            "state": "needs_review",
             "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
           }
         },
@@ -221,7 +221,7 @@
         },
         "fil": {
           "stringUnit": {
-            "state": "translated",
+            "state": "needs_review",
             "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
           }
         },
@@ -233,19 +233,19 @@
         },
         "ha": {
           "stringUnit": {
-            "state": "translated",
+            "state": "needs_review",
             "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
           }
         },
         "hi": {
           "stringUnit": {
-            "state": "translated",
+            "state": "needs_review",
             "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
           }
         },
         "id": {
           "stringUnit": {
-            "state": "translated",
+            "state": "needs_review",
             "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
           }
         },
@@ -257,31 +257,31 @@
         },
         "mr": {
           "stringUnit": {
-            "state": "translated",
+            "state": "needs_review",
             "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
           }
         },
         "pcm": {
           "stringUnit": {
-            "state": "translated",
+            "state": "needs_review",
             "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
           }
         },
         "pnb": {
           "stringUnit": {
-            "state": "translated",
+            "state": "needs_review",
             "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
           }
         },
         "pt": {
           "stringUnit": {
-            "state": "translated",
+            "state": "needs_review",
             "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
           }
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "translated",
+            "state": "needs_review",
             "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
           }
         },
@@ -293,55 +293,55 @@
         },
         "sw": {
           "stringUnit": {
-            "state": "translated",
+            "state": "needs_review",
             "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
           }
         },
         "ta": {
           "stringUnit": {
-            "state": "translated",
+            "state": "needs_review",
             "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
           }
         },
         "te": {
           "stringUnit": {
-            "state": "translated",
+            "state": "needs_review",
             "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
           }
         },
         "tl": {
           "stringUnit": {
-            "state": "translated",
+            "state": "needs_review",
             "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
           }
         },
         "tr": {
           "stringUnit": {
-            "state": "translated",
+            "state": "needs_review",
             "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
           }
         },
         "ur": {
           "stringUnit": {
-            "state": "translated",
+            "state": "needs_review",
             "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
           }
         },
         "vi": {
           "stringUnit": {
-            "state": "translated",
+            "state": "needs_review",
             "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
           }
         },
         "yue": {
           "stringUnit": {
-            "state": "translated",
+            "state": "needs_review",
             "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
           }
         },
         "zh-HK": {
           "stringUnit": {
-            "state": "translated",
+            "state": "needs_review",
             "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
           }
         },
@@ -353,8 +353,1082 @@
         },
         "zh-Hant": {
           "stringUnit": {
-            "state": "translated",
+            "state": "needs_review",
             "value": "bitchat uses Bluetooth to discover and connect with other bitchat users nearby."
+          }
+        }
+      }
+    },
+    "NSCameraUsageDescription": {
+      "comment": "Permission description for camera access to capture photos or video",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Take photos or video to share in chat."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Take photos or video to share in chat."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Take photos or video to share in chat."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Take photos or video to share in chat."
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Take photos or video to share in chat."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Take photos or video to share in chat."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Take photos or video to share in chat."
+          }
+        },
+        "bn": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Take photos or video to share in chat."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Take photos or video to share in chat."
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Take photos or video to share in chat."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Take photos or video to share in chat."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Take photos or video to share in chat."
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Take photos or video to share in chat."
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Take photos or video to share in chat."
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Take photos or video to share in chat."
+          }
+        },
+        "arz": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Take photos or video to share in chat."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Take photos or video to share in chat."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Take photos or video to share in chat."
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Take photos or video to share in chat."
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Take photos or video to share in chat."
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Take photos or video to share in chat."
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Take photos or video to share in chat."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Take photos or video to share in chat."
+          }
+        },
+        "id": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Take photos or video to share in chat."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Take photos or video to share in chat."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Take photos or video to share in chat."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Take photos or video to share in chat."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Take photos or video to share in chat."
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Take photos or video to share in chat."
+          }
+        }
+      }
+    },
+    "NSMicrophoneUsageDescription": {
+      "comment": "Permission description for microphone access to record audio",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Record audio messages."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Record audio messages."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Record audio messages."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Record audio messages."
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Record audio messages."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Record audio messages."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Record audio messages."
+          }
+        },
+        "bn": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Record audio messages."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Record audio messages."
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Record audio messages."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Record audio messages."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Record audio messages."
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Record audio messages."
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Record audio messages."
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Record audio messages."
+          }
+        },
+        "arz": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Record audio messages."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Record audio messages."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Record audio messages."
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Record audio messages."
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Record audio messages."
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Record audio messages."
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Record audio messages."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Record audio messages."
+          }
+        },
+        "id": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Record audio messages."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Record audio messages."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Record audio messages."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Record audio messages."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Record audio messages."
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Record audio messages."
+          }
+        }
+      }
+    },
+    "NSPhotoLibraryUsageDescription": {
+      "comment": "Permission description for reading from the photo library",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose photos or videos to share."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Choose photos or videos to share."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Choose photos or videos to share."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Choose photos or videos to share."
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Choose photos or videos to share."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Choose photos or videos to share."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Choose photos or videos to share."
+          }
+        },
+        "bn": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Choose photos or videos to share."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Choose photos or videos to share."
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Choose photos or videos to share."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Choose photos or videos to share."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Choose photos or videos to share."
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Choose photos or videos to share."
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Choose photos or videos to share."
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Choose photos or videos to share."
+          }
+        },
+        "arz": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Choose photos or videos to share."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Choose photos or videos to share."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Choose photos or videos to share."
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Choose photos or videos to share."
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Choose photos or videos to share."
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Choose photos or videos to share."
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Choose photos or videos to share."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Choose photos or videos to share."
+          }
+        },
+        "id": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Choose photos or videos to share."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Choose photos or videos to share."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Choose photos or videos to share."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Choose photos or videos to share."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Choose photos or videos to share."
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Choose photos or videos to share."
+          }
+        }
+      }
+    },
+    "NSPhotoLibraryAddUsageDescription": {
+      "comment": "Permission description for adding/saving to the photo library",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save images or videos from chat to your library."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Save images or videos from chat to your library."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Save images or videos from chat to your library."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Save images or videos from chat to your library."
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Save images or videos from chat to your library."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Save images or videos from chat to your library."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Save images or videos from chat to your library."
+          }
+        },
+        "bn": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Save images or videos from chat to your library."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Save images or videos from chat to your library."
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Save images or videos from chat to your library."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Save images or videos from chat to your library."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Save images or videos from chat to your library."
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Save images or videos from chat to your library."
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Save images or videos from chat to your library."
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Save images or videos from chat to your library."
+          }
+        },
+        "arz": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Save images or videos from chat to your library."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Save images or videos from chat to your library."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Save images or videos from chat to your library."
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Save images or videos from chat to your library."
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Save images or videos from chat to your library."
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Save images or videos from chat to your library."
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Save images or videos from chat to your library."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Save images or videos from chat to your library."
+          }
+        },
+        "id": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Save images or videos from chat to your library."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Save images or videos from chat to your library."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Save images or videos from chat to your library."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Save images or videos from chat to your library."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Save images or videos from chat to your library."
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Save images or videos from chat to your library."
+          }
+        }
+      }
+    },
+    "NSLocationWhenInUseUsageDescription": {
+      "comment": "Permission description for using location while app is in use",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show nearby channels and location-based features."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Show nearby channels and location-based features."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Show nearby channels and location-based features."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Show nearby channels and location-based features."
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Show nearby channels and location-based features."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Show nearby channels and location-based features."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Show nearby channels and location-based features."
+          }
+        },
+        "bn": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Show nearby channels and location-based features."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Show nearby channels and location-based features."
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Show nearby channels and location-based features."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Show nearby channels and location-based features."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Show nearby channels and location-based features."
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Show nearby channels and location-based features."
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Show nearby channels and location-based features."
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Show nearby channels and location-based features."
+          }
+        },
+        "arz": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Show nearby channels and location-based features."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Show nearby channels and location-based features."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Show nearby channels and location-based features."
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Show nearby channels and location-based features."
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Show nearby channels and location-based features."
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Show nearby channels and location-based features."
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Show nearby channels and location-based features."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Show nearby channels and location-based features."
+          }
+        },
+        "id": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Show nearby channels and location-based features."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Show nearby channels and location-based features."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Show nearby channels and location-based features."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Show nearby channels and location-based features."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Show nearby channels and location-based features."
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Show nearby channels and location-based features."
+          }
+        }
+      }
+    },
+    "NSLocalNetworkUsageDescription": {
+      "comment": "Permission description for discovering and connecting on the local network",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Find and connect to devices on your local network."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Find and connect to devices on your local network."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Find and connect to devices on your local network."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Find and connect to devices on your local network."
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Find and connect to devices on your local network."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Find and connect to devices on your local network."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Find and connect to devices on your local network."
+          }
+        },
+        "bn": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Find and connect to devices on your local network."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Find and connect to devices on your local network."
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Find and connect to devices on your local network."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Find and connect to devices on your local network."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Find and connect to devices on your local network."
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Find and connect to devices on your local network."
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Find and connect to devices on your local network."
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Find and connect to devices on your local network."
+          }
+        },
+        "arz": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Find and connect to devices on your local network."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Find and connect to devices on your local network."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Find and connect to devices on your local network."
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Find and connect to devices on your local network."
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Find and connect to devices on your local network."
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Find and connect to devices on your local network."
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Find and connect to devices on your local network."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Find and connect to devices on your local network."
+          }
+        },
+        "id": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Find and connect to devices on your local network."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Find and connect to devices on your local network."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Find and connect to devices on your local network."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Find and connect to devices on your local network."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Find and connect to devices on your local network."
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Find and connect to devices on your local network."
           }
         }
       }
