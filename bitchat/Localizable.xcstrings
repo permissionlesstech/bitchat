@@ -3918,7 +3918,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "BLOCK"
+            "value": "حظر"
           }
         },
         "arz": {
@@ -3948,7 +3948,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "BLOCK"
+            "value": "BLOQUEAR"
           }
         },
         "fil": {
@@ -3960,7 +3960,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "BLOCK"
+            "value": "BLOQUER"
           }
         },
         "ha": {
@@ -4080,7 +4080,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "BLOCK"
+            "value": "屏蔽"
           }
         },
         "zh-Hant": {
@@ -4275,7 +4275,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "hug"
+            "value": "عناق"
           }
         },
         "arz": {
@@ -4305,7 +4305,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "hug"
+            "value": "abrazo"
           }
         },
         "fil": {
@@ -4317,7 +4317,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "hug"
+            "value": "câlin"
           }
         },
         "ha": {
@@ -4437,7 +4437,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "hug"
+            "value": "拥抱"
           }
         },
         "zh-Hant": {
@@ -4454,7 +4454,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "mention"
+            "value": "إشارة"
           }
         },
         "arz": {
@@ -4484,7 +4484,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "mention"
+            "value": "mencionar"
           }
         },
         "fil": {
@@ -4496,7 +4496,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "mention"
+            "value": "mentionner"
           }
         },
         "ha": {
@@ -4616,7 +4616,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "mention"
+            "value": "提及"
           }
         },
         "zh-Hant": {
@@ -4633,7 +4633,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "direct message"
+            "value": "رسالة خاصة"
           }
         },
         "arz": {
@@ -4663,7 +4663,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "direct message"
+            "value": "mensaje directo"
           }
         },
         "fil": {
@@ -4675,7 +4675,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "direct message"
+            "value": "message privé"
           }
         },
         "ha": {
@@ -4795,7 +4795,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "direct message"
+            "value": "私信"
           }
         },
         "zh-Hant": {
@@ -4812,7 +4812,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "slap"
+            "value": "صفعة"
           }
         },
         "arz": {
@@ -4842,7 +4842,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "slap"
+            "value": "golpe"
           }
         },
         "fil": {
@@ -4854,7 +4854,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "slap"
+            "value": "tape"
           }
         },
         "ha": {
@@ -4974,7 +4974,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "slap"
+            "value": "拍打"
           }
         },
         "zh-Hant": {
@@ -5348,7 +5348,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bluetooth Required"
+            "value": "البلوتوث مطلوب"
           }
         },
         "arz": {
@@ -5378,7 +5378,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bluetooth Required"
+            "value": "Bluetooth Requerido"
           }
         },
         "fil": {
@@ -5390,7 +5390,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bluetooth Required"
+            "value": "Bluetooth Requis"
           }
         },
         "ha": {
@@ -5510,7 +5510,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bluetooth Required"
+            "value": "需要蓝牙"
           }
         },
         "zh-Hant": {
@@ -5884,7 +5884,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "heads up"
+            "value": "انتباه"
           }
         },
         "arz": {
@@ -5914,7 +5914,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "heads up"
+            "value": "atención"
           }
         },
         "fil": {
@@ -5926,7 +5926,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "heads up"
+            "value": "attention"
           }
         },
         "ha": {
@@ -6046,7 +6046,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "heads up"
+            "value": "注意"
           }
         },
         "zh-Hant": {
@@ -11758,7 +11758,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "cancel"
+            "value": "إلغاء"
           }
         },
         "arz": {
@@ -11788,7 +11788,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "cancel"
+            "value": "cancelar"
           }
         },
         "fil": {
@@ -11800,7 +11800,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "cancel"
+            "value": "annuler"
           }
         },
         "ha": {
@@ -11920,7 +11920,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "cancel"
+            "value": "取消"
           }
         },
         "zh-Hant": {
@@ -11936,7 +11936,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "close"
+            "value": "إغلاق"
           }
         },
         "arz": {
@@ -11966,7 +11966,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "close"
+            "value": "cerrar"
           }
         },
         "fil": {
@@ -11978,7 +11978,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "close"
+            "value": "fermer"
           }
         },
         "ha": {
@@ -12098,7 +12098,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "close"
+            "value": "关闭"
           }
         },
         "zh-Hant": {
@@ -12114,7 +12114,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "Copy"
+            "value": "نسخ"
           }
         },
         "arz": {
@@ -12144,7 +12144,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Copy"
+            "value": "copiar"
           }
         },
         "fil": {
@@ -12156,7 +12156,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Copy"
+            "value": "copier"
           }
         },
         "ha": {
@@ -12276,7 +12276,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "Copy"
+            "value": "复制"
           }
         },
         "zh-Hant": {
@@ -17102,7 +17102,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "PEOPLE"
+            "value": "الأشخاص"
           }
         },
         "arz": {
@@ -17132,7 +17132,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "PEOPLE"
+            "value": "PERSONAS"
           }
         },
         "fil": {
@@ -17144,7 +17144,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "PEOPLE"
+            "value": "PERSONNES"
           }
         },
         "ha": {
@@ -17264,7 +17264,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "PEOPLE"
+            "value": "人员"
           }
         },
         "zh-Hant": {
@@ -17815,7 +17815,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "nickname"
+            "value": "اسم مستعار"
           }
         },
         "arz": {
@@ -17845,7 +17845,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "nickname"
+            "value": "apodo"
           }
         },
         "fil": {
@@ -17857,7 +17857,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "nickname"
+            "value": "pseudo"
           }
         },
         "ha": {
@@ -17977,7 +17977,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "nickname"
+            "value": "昵称"
           }
         },
         "zh-Hant": {
@@ -17994,7 +17994,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "type a message..."
+            "value": "اكتب رسالة..."
           }
         },
         "arz": {
@@ -18024,7 +18024,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "type a message..."
+            "value": "escribe un mensaje..."
           }
         },
         "fil": {
@@ -18036,7 +18036,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "type a message..."
+            "value": "tapez un message..."
           }
         },
         "ha": {
@@ -18156,7 +18156,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "type a message..."
+            "value": "输入消息..."
           }
         },
         "zh-Hant": {
