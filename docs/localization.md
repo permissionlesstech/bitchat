@@ -60,10 +60,12 @@ bitchat/
    Button(String(localized: "common.save")) { ... }
    ```
 
-2. **Sync all languages:**
+2. **Sync all languages and comments:**
    ```bash
    ./scripts/localization/sync-all-localizations.sh
    ```
+   - Ensures 29-language parity and fills gaps with English
+   - Auto-adds concise developer comments for any keys missing context
 
 3. **Add translation context** for translators in Xcode String Catalog comments
 
@@ -91,6 +93,26 @@ location.teleport      # Location-specific features
 - Syncs both Localizable.xcstrings AND Infoplist.xcstrings
 - Ensures all 29 languages have complete coverage
 - Fills missing keys with English values for translation
+- Adds concise developer comments where missing
+
+### Simulator Locale Helper
+```bash
+# Use the only booted Simulator
+./scripts/simulator/set-locale.sh --lang fr --region FR --restart
+
+# Specify a device UDID explicitly
+./scripts/simulator/set-locale.sh --lang es --device <UDID>
+
+# Launch an app with per-launch overrides (no reboot)
+./scripts/simulator/set-locale.sh --lang zh-Hans --region CN --device <UDID> --launch com.your.bundleid
+
+# Auto-boot an available iPhone if none booted
+./scripts/simulator/set-locale.sh --lang de --boot --restart
+```
+- Auto-detects the single booted Simulator if `--device` is omitted.
+- Writes device-wide AppleLanguages and AppleLocale; `--restart` reboots to apply system-wide.
+- `--launch` starts an app with `-AppleLanguages`/`-AppleLocale` arguments for fast spot checks.
+ - `--boot` selects and boots the first available iPhone device if no single booted device is found.
 
 ### Build-Time Validation
 ```bash
@@ -99,6 +121,7 @@ location.teleport      # Location-specific features
 - Prevents hardcoded strings in commits
 - Validates .xcstrings file integrity
 - Checks language parity across all 29 languages
+- Confirms every key has a developer comment for translator context
 
 ### Pre-Commit Hook (Optional)
 ```bash
@@ -106,6 +129,17 @@ location.teleport      # Location-specific features
 cp scripts/github/localization-pre-commit-hook.sh .git/hooks/pre-commit
 chmod +x .git/hooks/pre-commit
 ```
+What it enforces:
+- No hardcoded UI strings in Swift files
+- Valid `.xcstrings` JSON and 29-language parity
+- Every key has a concise developer comment
+
+Behavior:
+- If comments are missing, the hook attempts to auto-add them using
+  `scripts/localization/add_missing_comments.py`, then asks you to review and
+  stage the changes.
+ - Note: There is no separate polishing step; `add_missing_comments.py` is the
+   sole source of comment generation.
 
 ## Testing
 

@@ -74,6 +74,16 @@ try:
     else:
         print('✅ All 29 languages present with parity')
 
+    # Check developer comments exist for all keys
+    missing = [k for k,v in strings.items() if not (isinstance(v.get('comment'), str) and v.get('comment').strip())]
+    if missing:
+        print('❌ Missing developer comments for {} keys'.format(len(missing)))
+        for k in missing[:5]:
+            print('   -', k)
+        sys.exit(1)
+    else:
+        print('✅ All keys have developer comments')
+
 except Exception as e:
     print('❌ xcstrings validation failed: {}'.format(e))
     sys.exit(1)

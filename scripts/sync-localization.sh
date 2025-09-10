@@ -16,6 +16,8 @@ if [[ -f "scripts/localization/add_missing_comments.py" ]]; then
   python3 "$(dirname "$0")/localization/add_missing_comments.py" bitchat/Localizable.xcstrings
 fi
 
+# Polish comments for pluralization and placeholders
+
 echo "✅ Localization sync complete!"
 echo ""
 echo "📝 Usage tips:"

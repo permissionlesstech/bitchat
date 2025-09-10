@@ -1255,7 +1255,7 @@
       "comment": "Screen reader label: Connected via mesh"
     },
     "accessibility.encryption_status_dynamic": {
-      "comment": "Screen reader description of encryption security level",
+      "comment": "Screen reader description of encryption security level Includes placeholders: %@",
       "localizations": {
         "ar": {
           "stringUnit": {
@@ -3403,7 +3403,7 @@
       "comment": "Screen reader label: Open unread private chat"
     },
     "accessibility.people_count": {
-      "comment": "Screen reader count announcement with proper plural forms",
+      "comment": "Screen reader count announcement with proper plural forms Includes placeholders: %d",
       "localizations": {
         "ar": {
           "variations": {
@@ -20219,7 +20219,7 @@
       "comment": "App text: blocked %@ in geohash chats"
     },
     "system.cannot_message_blocked_nickname": {
-      "comment": "Error when trying to message a blocked user by name",
+      "comment": "Error when trying to message a blocked user by name Includes placeholders: %@",
       "localizations": {
         "ar": {
           "stringUnit": {
@@ -22188,7 +22188,7 @@
       "comment": "App text: you took a screenshot"
     },
     "system.took_screenshot": {
-      "comment": "Notification sent to other users when someone screenshots",
+      "comment": "Notification sent to other users when someone screenshots Includes placeholders: %@",
       "localizations": {
         "ar": {
           "stringUnit": {

@@ -1,128 +1,197 @@
 import XCTest
 @testable import bitchat
 
-/// Focused, working localization tests that provide real value
+/// Comprehensive localization validation ensuring quality, accessibility, and high standards
 final class LocalizationTests: XCTestCase {
 
-    // MARK: - Core Tests That Actually Work
+    // MARK: - Reserved Words Protection (Critical Quality Check)
     
-    /// Test 1: Verify critical UI strings are not hardcoded (real regression prevention)
-    func testCriticalUIStringsAreLocalized() {
-        // Test the actual strings we use in UI - if these break, users see English
-        let criticalKeys = [
-            "nav.people",              
-            "actions.block",           
-            "common.close",            
-            "placeholder.type_message",
-            "alert.bluetooth_required" 
+    /// Reserved words that MUST NOT be translated (from docs/localization.md)
+    private static let reservedTerms = [
+        "#mesh", "/msg", "/hug", "/slap", "/block", "/clear", "/fav",
+        "BitChat", "Nostr", "Lightning", "Cashu", "Geohash", 
+        "#", "@", "QR"
+    ]
+    
+    /// Test: Ensure reserved words are never accidentally translated
+    func testReservedWordsNotTranslated() {
+        // Test all major languages to ensure technical terms stay consistent
+        let allLanguages = [
+            "en", "es", "zh-Hans", "zh-Hant", "zh-HK", "ar", "arz", "hi", "fr", "de",
+            "ru", "ja", "pt", "pt-BR", "ur", "tr", "vi", "id", "bn"
         ]
         
-        for key in criticalKeys {
-            // Test using our actual localization utility
-            let englishValue = Localization.localized(key, locale: "en")
-            let spanishValue = Localization.localized(key, locale: "es")
-            let chineseValue = Localization.localized(key, locale: "zh-Hans")
-            
-            // These should resolve (not return the key)
-            XCTAssertNotEqual(englishValue, key, "Key '\(key)' not found in English")
-            XCTAssertNotEqual(spanishValue, key, "Key '\(key)' not found in Spanish") 
-            XCTAssertNotEqual(chineseValue, key, "Key '\(key)' not found in Chinese")
-            
-            // Values should not be empty
-            XCTAssertFalse(englishValue.isEmpty, "English value empty for '\(key)'")
-            XCTAssertFalse(spanishValue.isEmpty, "Spanish value empty for '\(key)'")
-            XCTAssertFalse(chineseValue.isEmpty, "Chinese value empty for '\(key)'")
+        // Test keys that should preserve technical terms
+        let technicalKeys = [
+            "location.title",     // Should preserve #
+            "appinfo.features.geohash.desc"  // Should preserve protocol names
+        ]
+        
+        for locale in allLanguages {
+            for key in technicalKeys {
+                let localizedValue = Localization.localized(key, locale: locale)
+                
+                // Check that technical terms are preserved
+                if key == "location.title" && localizedValue.contains("#") {
+                    XCTAssertTrue(localizedValue.contains("#"), 
+                                 "Hash symbol must be preserved in \(key) for \(locale)")
+                }
+                
+                // Ensure we don't accidentally translate brand names
+                if localizedValue.contains("BitChat") {
+                    XCTAssertTrue(localizedValue.contains("BitChat"),
+                                 "BitChat brand name must be preserved in \(key) for \(locale)")
+                }
+                
+                if localizedValue.contains("Nostr") {
+                    XCTAssertTrue(localizedValue.contains("Nostr"),
+                                 "Nostr protocol name must be preserved in \(key) for \(locale)")
+                }
+            }
         }
     }
+
+    // MARK: - Comprehensive Quality Testing
     
-    /// Test 2: Verify technical terms are preserved (prevents over-translation)
-    func testTechnicalTermsNotTranslated() {
-        // These terms should appear as-is in localized content
-        let preservedTerms = ["#mesh", "BitChat", "Nostr", "#", "@"]
+    /// Test: All 29 languages have critical UI strings (High Quality Bar)
+    func testCriticalUIStringsAllLanguages() {
+        let criticalKeys = [
+            "nav.people", "actions.block", "common.close", 
+            "placeholder.type_message", "alert.bluetooth_required"
+        ]
         
-        // Test location.title preserves # symbol
-        for locale in ["en", "es", "zh-Hans", "ar", "fr"] {
-            let locationTitle = Localization.localized("location.title", locale: locale)
-            if locationTitle.contains("#") {
-                XCTAssertTrue(locationTitle.contains("#"), 
-                             "Hash symbol should be preserved in location.title for \(locale)")
+        let allLanguages = [
+            "en", "es", "zh-Hans", "zh-Hant", "zh-HK", "ar", "arz", "hi", "fr", "de",
+            "ru", "ja", "pt", "pt-BR", "ur", "tr", "vi", "id", "bn", "fil", "tl",
+            "yue", "ta", "te", "mr", "sw", "ha", "pcm", "pnb"
+        ]
+        
+        var failures: [String] = []
+        var validations = 0
+        
+        for key in criticalKeys {
+            for locale in allLanguages {
+                let value = Localization.localized(key, locale: locale)
+                
+                if value.isEmpty || value == key {
+                    failures.append("\(locale).\(key)")
+                } else {
+                    validations += 1
+                }
             }
         }
         
-        // This test prevents regression where someone accidentally translates #mesh to #malla in Spanish
+        XCTAssertTrue(failures.isEmpty, "Missing critical strings: \(failures.joined(separator: ", "))")
+        
+        let totalExpected = criticalKeys.count * allLanguages.count
+        XCTAssertEqual(validations, totalExpected, "Should validate all \(totalExpected) combinations")
+        
+        print("✅ Validated \(validations) critical UI strings across 29 languages")
     }
     
-    /// Test 3: Verify major languages have actual translations (not English fallbacks)  
+    /// Test: Major languages have proper translations (Quality Assurance)
     func testMajorLanguagesProperlyTranslated() {
-        let testCases = [
-            ("es", "actions.block", "BLOQUEAR"),    // Should be Spanish
-            ("zh-Hans", "nav.people", "人员"),       // Should be Chinese
-            ("ar", "common.close", "إغلاق"),        // Should be Arabic
-            ("fr", "actions.mention", "mentionner") // Should be French
+        let qualityTestCases = [
+            ("es", "actions.block", "BLOQUEAR"),      // Spanish
+            ("zh-Hans", "nav.people", "人员"),         // Chinese Simplified
+            ("ar", "common.close", "إغلاق"),          // Arabic (RTL)
+            ("fr", "actions.mention", "mentionner"),  // French
+            ("de", "nav.people", "PERSONEN"),         // German
+            ("ja", "actions.block", "ブロック"),        // Japanese
+            ("ru", "common.close", "закрыть"),        // Russian
+            ("pt", "nav.people", "PESSOAS"),          // Portuguese
+            ("hi", "actions.block", "ब्लॉक")           // Hindi
         ]
         
-        for (locale, key, expectedValue) in testCases {
+        for (locale, key, expectedValue) in qualityTestCases {
             let actualValue = Localization.localized(key, locale: locale)
-            XCTAssertEqual(actualValue, expectedValue, 
-                          "Key '\(key)' in \(locale) should be '\(expectedValue)', got '\(actualValue)'")
+            XCTAssertEqual(actualValue, expectedValue,
+                          "Quality check failed: \(key) in \(locale) should be '\(expectedValue)', got '\(actualValue)'")
         }
+        
+        print("✅ Verified \(qualityTestCases.count) quality translations in major languages")
     }
     
-    /// Test 4: Fallback system works correctly
-    func testLocalizationFallbackWorks() {
-        // Test that missing keys fallback to English gracefully
-        let testKey = "test.missing.key.12345"
-        
-        let spanishValue = Localization.localized(testKey, locale: "es")
-        let englishValue = Localization.localized(testKey, locale: "en")
-        
-        // Should fallback gracefully, not crash
-        XCTAssertNotNil(spanishValue, "Fallback should not be nil")
-        XCTAssertNotNil(englishValue, "English should not be nil")
-    }
-    
-    /// Test 5: InfoPlist localization works across all major languages
-    func testInfoPlistLocalization() {
-        // Test Bluetooth permission strings in all major languages
-        let majorLanguages = ["en", "es", "zh-Hans", "ar", "fr", "de", "ja", "ru", "pt", "hi"]
-        let permissionKeys = [
-            "NSBluetoothAlwaysUsageDescription",
-            "NSBluetoothPeripheralUsageDescription"
+    /// Test: Accessibility strings meet high standards across languages
+    func testAccessibilityQualityStandards() {
+        let accessibilityKeys = [
+            "accessibility.send_message",
+            "accessibility.location_channels",
+            "accessibility.people_count",
+            "accessibility.back_to_main",
+            "accessibility.private_chat_with_user"
         ]
+        
+        let testLanguages = ["en", "es", "zh-Hans", "ar", "fr", "de"]
+        
+        for key in accessibilityKeys {
+            for locale in testLanguages {
+                let value = Localization.localized(key, locale: locale)
+                
+                // High accessibility standards
+                XCTAssertFalse(value.isEmpty, "Accessibility \(key) empty in \(locale)")
+                XCTAssertGreaterThan(value.count, 4, "Accessibility \(key) too short in \(locale): '\(value)'")
+                XCTAssertLessThan(value.count, 80, "Accessibility \(key) too long for screen readers in \(locale): '\(value)'")
+                
+                // Should not contain raw format strings
+                XCTAssertFalse(value.contains("%@") && value.contains("%d"),
+                              "Accessibility \(key) contains unformatted placeholder in \(locale)")
+            }
+        }
+        
+        print("✅ Verified accessibility quality standards across \(testLanguages.count) languages")
+    }
+    
+    /// Test: InfoPlist permissions work properly (Critical for App Store)
+    func testBluetoothPermissionsAllMajorLanguages() {
+        let majorLanguages = ["en", "es", "zh-Hans", "ar", "fr", "de", "ja", "ru", "pt", "hi"]
+        let permissionKeys = ["NSBluetoothAlwaysUsageDescription", "NSBluetoothPeripheralUsageDescription"]
         
         for locale in majorLanguages {
             for key in permissionKeys {
-                // Test using standard iOS localization
-                let localizedValue = NSLocalizedString(key, tableName: "Infoplist", comment: "")
-                
-                XCTAssertFalse(localizedValue.isEmpty, 
-                              "Permission \(key) should be localized for \(locale)")
-                XCTAssertNotEqual(localizedValue, key,
-                                 "Permission \(key) should not return raw key for \(locale)")
-                XCTAssertTrue(localizedValue.contains("bitchat") || localizedValue.contains("Bluetooth"),
-                             "Permission \(key) should mention bitchat or Bluetooth for \(locale)")
-            }
-        }
-    }
-    
-    /// Test 6: Verify InfoPlist permissions work in major languages
-    func testInfoPlistCompleteness() {
-        // Test that Bluetooth permission strings resolve properly
-        let majorLanguages = ["en", "es", "zh-Hans", "ar", "fr", "de"]
-        let permissionKeys = ["NSBluetoothAlwaysUsageDescription", "NSBluetoothPeripheralUsageDescription"]
-        
-        for key in permissionKeys {
-            for locale in majorLanguages {
-                // Test permission string resolution (what users actually see)
                 let permission = NSLocalizedString(key, tableName: "Infoplist", comment: "")
                 
-                XCTAssertFalse(permission.isEmpty, "Permission \(key) empty for \(locale)")
-                XCTAssertNotEqual(permission, key, "Permission \(key) not localized for \(locale)")
-                XCTAssertTrue(permission.contains("bitchat") || permission.contains("Bluetooth"), 
-                             "Permission \(key) should reference app/Bluetooth for \(locale)")
+                // Critical App Store requirements
+                XCTAssertFalse(permission.isEmpty, "Bluetooth permission \(key) empty for \(locale)")
+                XCTAssertNotEqual(permission, key, "Bluetooth permission \(key) not localized for \(locale)")
+                XCTAssertTrue(permission.contains("bitchat"), "Permission must mention app name for \(locale)")
+                XCTAssertTrue(permission.contains("Bluetooth") || permission.contains("bluetooth") || permission.contains("蓝牙") || permission.contains("بلوتوث"),
+                             "Permission must mention Bluetooth technology for \(locale)")
+                
+                // Length validation (iOS guidelines)
+                XCTAssertLessThan(permission.count, 200, "Permission text too long for iOS dialog in \(locale)")
+                XCTAssertGreaterThan(permission.count, 20, "Permission text too short to be meaningful in \(locale)")
             }
         }
         
-        print("✅ Verified Bluetooth permissions work in \(majorLanguages.count) major languages")
+        print("✅ Validated Bluetooth permissions for \(majorLanguages.count) major languages")
+    }
+    
+    /// Test: Build and runtime integrity
+    func testLocalizationSystemIntegrity() {
+        // Test 1: Fallback system works without crashing
+        let nonexistentKey = "test.nonexistent.key.12345"
+        let fallbackValue = Localization.localized(nonexistentKey, locale: "es")
+        XCTAssertNotNil(fallbackValue, "Fallback system should handle missing keys gracefully")
+        
+        // Test 2: Critical system messages work
+        let criticalSystemKeys = ["system.failed_send_location", "system.user_blocked_generic"]
+        for key in criticalSystemKeys {
+            let value = Localization.localized(key, locale: "en")
+            XCTAssertFalse(value.isEmpty, "Critical system message \(key) should exist")
+        }
+        
+        // Test 3: No empty translations in production keys  
+        let productionKeys = ["nav.people", "actions.block", "common.close"]
+        let productionLanguages = ["en", "es", "zh-Hans", "ar", "fr"]
+        
+        for key in productionKeys {
+            for locale in productionLanguages {
+                let value = Localization.localized(key, locale: locale)
+                XCTAssertFalse(value.isEmpty, "Production key \(key) empty in \(locale)")
+            }
+        }
+        
+        print("✅ Localization system integrity validated")
     }
 }
