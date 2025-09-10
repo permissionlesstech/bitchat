@@ -1,0 +1,9 @@
+key,en,localized,comment,status
+NSBluetoothAlwaysUsageDescription,bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users.,bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users.,Permission description for Bluetooth access to create mesh network,needs_review
+NSBluetoothPeripheralUsageDescription,bitchat uses Bluetooth to discover and connect with other bitchat users nearby.,bitchat uses Bluetooth to discover and connect with other bitchat users nearby.,Permission description for Bluetooth peripheral mode to be discoverable,needs_review
+NSCameraUsageDescription,Take photos or video to share in chat.,Take photos or video to share in chat.,Permission description for camera access to capture photos or video,needs_review
+NSMicrophoneUsageDescription,Record audio messages.,Record audio messages.,Permission description for microphone access to record audio,needs_review
+NSPhotoLibraryUsageDescription,Choose photos or videos to share.,Choose photos or videos to share.,Permission description for reading from the photo library,needs_review
+NSPhotoLibraryAddUsageDescription,Save images or videos from chat to your library.,Save images or videos from chat to your library.,Permission description for adding/saving to the photo library,needs_review
+NSLocationWhenInUseUsageDescription,Show nearby channels and location-based features.,Show nearby channels and location-based features.,Permission description for using location while app is in use,needs_review
+NSLocalNetworkUsageDescription,Find and connect to devices on your local network.,Find and connect to devices on your local network.,Permission description for discovering and connecting on the local network,needs_review

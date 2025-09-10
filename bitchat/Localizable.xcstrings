@@ -3769,13 +3769,13 @@
             "plural": {
               "one": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d person"
                 }
               },
               "other": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d people"
                 }
               }
@@ -3788,13 +3788,13 @@
             "plural": {
               "one": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d person"
                 }
               },
               "other": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d people"
                 }
               }
@@ -3807,13 +3807,13 @@
             "plural": {
               "one": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d person"
                 }
               },
               "other": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d people"
                 }
               }
@@ -3826,13 +3826,13 @@
             "plural": {
               "one": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d person"
                 }
               },
               "other": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d people"
                 }
               }
@@ -3864,13 +3864,13 @@
             "plural": {
               "one": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d person"
                 }
               },
               "other": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d people"
                 }
               }
@@ -3883,13 +3883,13 @@
             "plural": {
               "one": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d person"
                 }
               },
               "other": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d people"
                 }
               }
@@ -3902,13 +3902,13 @@
             "plural": {
               "one": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d person"
                 }
               },
               "other": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d people"
                 }
               }
@@ -3921,13 +3921,13 @@
             "plural": {
               "one": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d person"
                 }
               },
               "other": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d people"
                 }
               }
@@ -3940,13 +3940,13 @@
             "plural": {
               "one": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d person"
                 }
               },
               "other": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d people"
                 }
               }
@@ -3959,13 +3959,13 @@
             "plural": {
               "one": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d person"
                 }
               },
               "other": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d people"
                 }
               }
@@ -3978,13 +3978,13 @@
             "plural": {
               "one": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d person"
                 }
               },
               "other": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d people"
                 }
               }
@@ -3997,13 +3997,13 @@
             "plural": {
               "one": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d person"
                 }
               },
               "other": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d people"
                 }
               }
@@ -4016,13 +4016,13 @@
             "plural": {
               "one": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d person"
                 }
               },
               "other": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d people"
                 }
               }
@@ -4035,13 +4035,13 @@
             "plural": {
               "one": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d person"
                 }
               },
               "other": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d people"
                 }
               }
@@ -4054,13 +4054,13 @@
             "plural": {
               "one": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d person"
                 }
               },
               "other": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d people"
                 }
               }
@@ -4073,13 +4073,13 @@
             "plural": {
               "one": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d person"
                 }
               },
               "other": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d people"
                 }
               }
@@ -4092,13 +4092,13 @@
             "plural": {
               "one": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d person"
                 }
               },
               "other": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d people"
                 }
               }
@@ -4111,13 +4111,13 @@
             "plural": {
               "one": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d person"
                 }
               },
               "other": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d people"
                 }
               }
@@ -4130,13 +4130,13 @@
             "plural": {
               "one": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d person"
                 }
               },
               "other": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d people"
                 }
               }
@@ -4149,13 +4149,13 @@
             "plural": {
               "one": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d person"
                 }
               },
               "other": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d people"
                 }
               }
@@ -4168,13 +4168,13 @@
             "plural": {
               "one": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d person"
                 }
               },
               "other": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d people"
                 }
               }
@@ -4187,13 +4187,13 @@
             "plural": {
               "one": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d person"
                 }
               },
               "other": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d people"
                 }
               }
@@ -4206,13 +4206,13 @@
             "plural": {
               "one": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d person"
                 }
               },
               "other": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d people"
                 }
               }
@@ -4225,13 +4225,13 @@
             "plural": {
               "one": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d person"
                 }
               },
               "other": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d people"
                 }
               }
@@ -4244,13 +4244,13 @@
             "plural": {
               "one": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d person"
                 }
               },
               "other": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d people"
                 }
               }
@@ -4263,13 +4263,13 @@
             "plural": {
               "one": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d person"
                 }
               },
               "other": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d people"
                 }
               }
@@ -4282,13 +4282,13 @@
             "plural": {
               "one": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d person"
                 }
               },
               "other": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d people"
                 }
               }
@@ -4301,13 +4301,13 @@
             "plural": {
               "one": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d person"
                 }
               },
               "other": {
                 "stringUnit": {
-                  "state": "translated",
+                  "state": "needs_review",
                   "value": "%d people"
                 }
               }
@@ -4680,25 +4680,25 @@
         "ar": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with"
+            "value": "Private chat with user"
           }
         },
         "arz": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with"
+            "value": "Private chat with user"
           }
         },
         "bn": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with"
+            "value": "Private chat with user"
           }
         },
         "de": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with"
+            "value": "Private chat with user"
           }
         },
         "en": {
@@ -4710,145 +4710,145 @@
         "es": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with"
+            "value": "Private chat with user"
           }
         },
         "fil": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with"
+            "value": "Private chat with user"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with"
+            "value": "Private chat with user"
           }
         },
         "ha": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with"
+            "value": "Private chat with user"
           }
         },
         "hi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with"
+            "value": "Private chat with user"
           }
         },
         "id": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with"
+            "value": "Private chat with user"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with"
+            "value": "Private chat with user"
           }
         },
         "mr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with"
+            "value": "Private chat with user"
           }
         },
         "pcm": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with"
+            "value": "Private chat with user"
           }
         },
         "pnb": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with"
+            "value": "Private chat with user"
           }
         },
         "pt": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with"
+            "value": "Private chat with user"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with"
+            "value": "Private chat with user"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with"
+            "value": "Private chat with user"
           }
         },
         "sw": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with"
+            "value": "Private chat with user"
           }
         },
         "ta": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with"
+            "value": "Private chat with user"
           }
         },
         "te": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with"
+            "value": "Private chat with user"
           }
         },
         "tl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with"
+            "value": "Private chat with user"
           }
         },
         "tr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with"
+            "value": "Private chat with user"
           }
         },
         "ur": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with"
+            "value": "Private chat with user"
           }
         },
         "vi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with"
+            "value": "Private chat with user"
           }
         },
         "yue": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with"
+            "value": "Private chat with user"
           }
         },
         "zh-HK": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with"
+            "value": "Private chat with user"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with"
+            "value": "Private chat with user"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with"
+            "value": "Private chat with user"
           }
         }
       }
@@ -5395,8 +5395,8 @@
       "localizations": {
         "ar": {
           "stringUnit": {
-            "state": "translated",
-            "value": "حظر"
+            "state": "needs_review",
+            "value": "BLOCK"
           }
         },
         "arz": {
@@ -5413,8 +5413,8 @@
         },
         "de": {
           "stringUnit": {
-            "state": "translated",
-            "value": "BLOCKIEREN"
+            "state": "needs_review",
+            "value": "BLOCK"
           }
         },
         "en": {
@@ -5425,8 +5425,8 @@
         },
         "es": {
           "stringUnit": {
-            "state": "translated",
-            "value": "BLOQUEAR"
+            "state": "needs_review",
+            "value": "BLOCK"
           }
         },
         "fil": {
@@ -5437,8 +5437,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "translated",
-            "value": "BLOQUER"
+            "state": "needs_review",
+            "value": "BLOCK"
           }
         },
         "ha": {
@@ -5449,8 +5449,8 @@
         },
         "hi": {
           "stringUnit": {
-            "state": "translated",
-            "value": "ब्लॉक"
+            "state": "needs_review",
+            "value": "BLOCK"
           }
         },
         "id": {
@@ -5461,8 +5461,8 @@
         },
         "ja": {
           "stringUnit": {
-            "state": "translated",
-            "value": "ブロック"
+            "state": "needs_review",
+            "value": "BLOCK"
           }
         },
         "mr": {
@@ -5485,8 +5485,8 @@
         },
         "pt": {
           "stringUnit": {
-            "state": "translated",
-            "value": "BLOQUEAR"
+            "state": "needs_review",
+            "value": "BLOCK"
           }
         },
         "pt-BR": {
@@ -5497,8 +5497,8 @@
         },
         "ru": {
           "stringUnit": {
-            "state": "translated",
-            "value": "ЗАБЛОКИРОВАТЬ"
+            "state": "needs_review",
+            "value": "BLOCK"
           }
         },
         "sw": {
@@ -5557,8 +5557,8 @@
         },
         "zh-Hans": {
           "stringUnit": {
-            "state": "translated",
-            "value": "屏蔽"
+            "state": "needs_review",
+            "value": "BLOCK"
           }
         },
         "zh-Hant": {
@@ -5753,8 +5753,8 @@
       "localizations": {
         "ar": {
           "stringUnit": {
-            "state": "translated",
-            "value": "عناق"
+            "state": "needs_review",
+            "value": "hug"
           }
         },
         "arz": {
@@ -5783,8 +5783,8 @@
         },
         "es": {
           "stringUnit": {
-            "state": "translated",
-            "value": "abrazo"
+            "state": "needs_review",
+            "value": "hug"
           }
         },
         "fil": {
@@ -5795,8 +5795,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "translated",
-            "value": "câlin"
+            "state": "needs_review",
+            "value": "hug"
           }
         },
         "ha": {
@@ -5915,8 +5915,8 @@
         },
         "zh-Hans": {
           "stringUnit": {
-            "state": "translated",
-            "value": "拥抱"
+            "state": "needs_review",
+            "value": "hug"
           }
         },
         "zh-Hant": {
@@ -5932,8 +5932,8 @@
       "localizations": {
         "ar": {
           "stringUnit": {
-            "state": "translated",
-            "value": "إشارة"
+            "state": "needs_review",
+            "value": "mention"
           }
         },
         "arz": {
@@ -5950,8 +5950,8 @@
         },
         "de": {
           "stringUnit": {
-            "state": "translated",
-            "value": "erwähnen"
+            "state": "needs_review",
+            "value": "mention"
           }
         },
         "en": {
@@ -5962,8 +5962,8 @@
         },
         "es": {
           "stringUnit": {
-            "state": "translated",
-            "value": "mencionar"
+            "state": "needs_review",
+            "value": "mention"
           }
         },
         "fil": {
@@ -5974,8 +5974,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "translated",
-            "value": "mentionner"
+            "state": "needs_review",
+            "value": "mention"
           }
         },
         "ha": {
@@ -5998,8 +5998,8 @@
         },
         "ja": {
           "stringUnit": {
-            "state": "translated",
-            "value": "メンション"
+            "state": "needs_review",
+            "value": "mention"
           }
         },
         "mr": {
@@ -6034,8 +6034,8 @@
         },
         "ru": {
           "stringUnit": {
-            "state": "translated",
-            "value": "упомянуть"
+            "state": "needs_review",
+            "value": "mention"
           }
         },
         "sw": {
@@ -6094,8 +6094,8 @@
         },
         "zh-Hans": {
           "stringUnit": {
-            "state": "translated",
-            "value": "提及"
+            "state": "needs_review",
+            "value": "mention"
           }
         },
         "zh-Hant": {
@@ -6469,8 +6469,8 @@
       "localizations": {
         "ar": {
           "stringUnit": {
-            "state": "translated",
-            "value": "رسالة خاصة"
+            "state": "needs_review",
+            "value": "direct message"
           }
         },
         "arz": {
@@ -6499,8 +6499,8 @@
         },
         "es": {
           "stringUnit": {
-            "state": "translated",
-            "value": "mensaje directo"
+            "state": "needs_review",
+            "value": "direct message"
           }
         },
         "fil": {
@@ -6511,8 +6511,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "translated",
-            "value": "message privé"
+            "state": "needs_review",
+            "value": "direct message"
           }
         },
         "ha": {
@@ -6631,8 +6631,8 @@
         },
         "zh-Hans": {
           "stringUnit": {
-            "state": "translated",
-            "value": "私信"
+            "state": "needs_review",
+            "value": "direct message"
           }
         },
         "zh-Hant": {
@@ -6648,8 +6648,8 @@
       "localizations": {
         "ar": {
           "stringUnit": {
-            "state": "translated",
-            "value": "صفعة"
+            "state": "needs_review",
+            "value": "slap"
           }
         },
         "arz": {
@@ -6678,8 +6678,8 @@
         },
         "es": {
           "stringUnit": {
-            "state": "translated",
-            "value": "golpe"
+            "state": "needs_review",
+            "value": "slap"
           }
         },
         "fil": {
@@ -6690,8 +6690,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "translated",
-            "value": "tape"
+            "state": "needs_review",
+            "value": "slap"
           }
         },
         "ha": {
@@ -6810,8 +6810,8 @@
         },
         "zh-Hans": {
           "stringUnit": {
-            "state": "translated",
-            "value": "拍打"
+            "state": "needs_review",
+            "value": "slap"
           }
         },
         "zh-Hant": {
@@ -7185,8 +7185,8 @@
       "localizations": {
         "ar": {
           "stringUnit": {
-            "state": "translated",
-            "value": "البلوتوث مطلوب"
+            "state": "needs_review",
+            "value": "Bluetooth Required"
           }
         },
         "arz": {
@@ -7203,8 +7203,8 @@
         },
         "de": {
           "stringUnit": {
-            "state": "translated",
-            "value": "Bluetooth Erforderlich"
+            "state": "needs_review",
+            "value": "Bluetooth Required"
           }
         },
         "en": {
@@ -7215,8 +7215,8 @@
         },
         "es": {
           "stringUnit": {
-            "state": "translated",
-            "value": "Bluetooth Requerido"
+            "state": "needs_review",
+            "value": "Bluetooth Required"
           }
         },
         "fil": {
@@ -7227,8 +7227,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "translated",
-            "value": "Bluetooth Requis"
+            "state": "needs_review",
+            "value": "Bluetooth Required"
           }
         },
         "ha": {
@@ -7239,8 +7239,8 @@
         },
         "hi": {
           "stringUnit": {
-            "state": "translated",
-            "value": "ब्लूटूथ आवश्यक"
+            "state": "needs_review",
+            "value": "Bluetooth Required"
           }
         },
         "id": {
@@ -7251,8 +7251,8 @@
         },
         "ja": {
           "stringUnit": {
-            "state": "translated",
-            "value": "Bluetoothが必要"
+            "state": "needs_review",
+            "value": "Bluetooth Required"
           }
         },
         "mr": {
@@ -7275,8 +7275,8 @@
         },
         "pt": {
           "stringUnit": {
-            "state": "translated",
-            "value": "Bluetooth Necessário"
+            "state": "needs_review",
+            "value": "Bluetooth Required"
           }
         },
         "pt-BR": {
@@ -7287,8 +7287,8 @@
         },
         "ru": {
           "stringUnit": {
-            "state": "translated",
-            "value": "Требуется Bluetooth"
+            "state": "needs_review",
+            "value": "Bluetooth Required"
           }
         },
         "sw": {
@@ -7347,8 +7347,8 @@
         },
         "zh-Hans": {
           "stringUnit": {
-            "state": "translated",
-            "value": "需要蓝牙"
+            "state": "needs_review",
+            "value": "Bluetooth Required"
           }
         },
         "zh-Hant": {
@@ -7722,8 +7722,8 @@
       "localizations": {
         "ar": {
           "stringUnit": {
-            "state": "translated",
-            "value": "انتباه"
+            "state": "needs_review",
+            "value": "heads up"
           }
         },
         "arz": {
@@ -7752,8 +7752,8 @@
         },
         "es": {
           "stringUnit": {
-            "state": "translated",
-            "value": "atención"
+            "state": "needs_review",
+            "value": "heads up"
           }
         },
         "fil": {
@@ -7764,8 +7764,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "translated",
-            "value": "attention"
+            "state": "needs_review",
+            "value": "heads up"
           }
         },
         "ha": {
@@ -7884,8 +7884,8 @@
         },
         "zh-Hans": {
           "stringUnit": {
-            "state": "translated",
-            "value": "注意"
+            "state": "needs_review",
+            "value": "heads up"
           }
         },
         "zh-Hant": {
@@ -14703,8 +14703,8 @@
       "localizations": {
         "ar": {
           "stringUnit": {
-            "state": "translated",
-            "value": "إلغاء"
+            "state": "needs_review",
+            "value": "cancel"
           }
         },
         "arz": {
@@ -14733,8 +14733,8 @@
         },
         "es": {
           "stringUnit": {
-            "state": "translated",
-            "value": "cancelar"
+            "state": "needs_review",
+            "value": "cancel"
           }
         },
         "fil": {
@@ -14745,8 +14745,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "translated",
-            "value": "annuler"
+            "state": "needs_review",
+            "value": "cancel"
           }
         },
         "ha": {
@@ -14865,8 +14865,8 @@
         },
         "zh-Hans": {
           "stringUnit": {
-            "state": "translated",
-            "value": "取消"
+            "state": "needs_review",
+            "value": "cancel"
           }
         },
         "zh-Hant": {
@@ -14882,8 +14882,8 @@
       "localizations": {
         "ar": {
           "stringUnit": {
-            "state": "translated",
-            "value": "إغلاق"
+            "state": "needs_review",
+            "value": "close"
           }
         },
         "arz": {
@@ -14900,8 +14900,8 @@
         },
         "de": {
           "stringUnit": {
-            "state": "translated",
-            "value": "schließen"
+            "state": "needs_review",
+            "value": "close"
           }
         },
         "en": {
@@ -14912,8 +14912,8 @@
         },
         "es": {
           "stringUnit": {
-            "state": "translated",
-            "value": "cerrar"
+            "state": "needs_review",
+            "value": "close"
           }
         },
         "fil": {
@@ -14924,8 +14924,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "translated",
-            "value": "fermer"
+            "state": "needs_review",
+            "value": "close"
           }
         },
         "ha": {
@@ -14936,8 +14936,8 @@
         },
         "hi": {
           "stringUnit": {
-            "state": "translated",
-            "value": "बंद करें"
+            "state": "needs_review",
+            "value": "close"
           }
         },
         "id": {
@@ -14948,8 +14948,8 @@
         },
         "ja": {
           "stringUnit": {
-            "state": "translated",
-            "value": "閉じる"
+            "state": "needs_review",
+            "value": "close"
           }
         },
         "mr": {
@@ -14972,8 +14972,8 @@
         },
         "pt": {
           "stringUnit": {
-            "state": "translated",
-            "value": "fechar"
+            "state": "needs_review",
+            "value": "close"
           }
         },
         "pt-BR": {
@@ -14984,8 +14984,8 @@
         },
         "ru": {
           "stringUnit": {
-            "state": "translated",
-            "value": "закрыть"
+            "state": "needs_review",
+            "value": "close"
           }
         },
         "sw": {
@@ -15044,8 +15044,8 @@
         },
         "zh-Hans": {
           "stringUnit": {
-            "state": "translated",
-            "value": "关闭"
+            "state": "needs_review",
+            "value": "close"
           }
         },
         "zh-Hant": {
@@ -15061,8 +15061,8 @@
       "localizations": {
         "ar": {
           "stringUnit": {
-            "state": "translated",
-            "value": "نسخ"
+            "state": "needs_review",
+            "value": "Copy"
           }
         },
         "arz": {
@@ -15091,8 +15091,8 @@
         },
         "es": {
           "stringUnit": {
-            "state": "translated",
-            "value": "copiar"
+            "state": "needs_review",
+            "value": "Copy"
           }
         },
         "fil": {
@@ -15103,8 +15103,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "translated",
-            "value": "copier"
+            "state": "needs_review",
+            "value": "Copy"
           }
         },
         "ha": {
@@ -15223,8 +15223,8 @@
         },
         "zh-Hans": {
           "stringUnit": {
-            "state": "translated",
-            "value": "复制"
+            "state": "needs_review",
+            "value": "Copy"
           }
         },
         "zh-Hant": {
@@ -23832,8 +23832,8 @@
       "localizations": {
         "ar": {
           "stringUnit": {
-            "state": "translated",
-            "value": "الأشخاص"
+            "state": "needs_review",
+            "value": "PEOPLE"
           }
         },
         "arz": {
@@ -23850,8 +23850,8 @@
         },
         "de": {
           "stringUnit": {
-            "state": "translated",
-            "value": "PERSONEN"
+            "state": "needs_review",
+            "value": "PEOPLE"
           }
         },
         "en": {
@@ -23862,8 +23862,8 @@
         },
         "es": {
           "stringUnit": {
-            "state": "translated",
-            "value": "PERSONAS"
+            "state": "needs_review",
+            "value": "PEOPLE"
           }
         },
         "fil": {
@@ -23874,8 +23874,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "translated",
-            "value": "PERSONNES"
+            "state": "needs_review",
+            "value": "PEOPLE"
           }
         },
         "ha": {
@@ -23886,8 +23886,8 @@
         },
         "hi": {
           "stringUnit": {
-            "state": "translated",
-            "value": "लोग"
+            "state": "needs_review",
+            "value": "PEOPLE"
           }
         },
         "id": {
@@ -23898,8 +23898,8 @@
         },
         "ja": {
           "stringUnit": {
-            "state": "translated",
-            "value": "人々"
+            "state": "needs_review",
+            "value": "PEOPLE"
           }
         },
         "mr": {
@@ -23922,8 +23922,8 @@
         },
         "pt": {
           "stringUnit": {
-            "state": "translated",
-            "value": "PESSOAS"
+            "state": "needs_review",
+            "value": "PEOPLE"
           }
         },
         "pt-BR": {
@@ -23934,8 +23934,8 @@
         },
         "ru": {
           "stringUnit": {
-            "state": "translated",
-            "value": "ЛЮДИ"
+            "state": "needs_review",
+            "value": "PEOPLE"
           }
         },
         "sw": {
@@ -23994,8 +23994,8 @@
         },
         "zh-Hans": {
           "stringUnit": {
-            "state": "translated",
-            "value": "人员"
+            "state": "needs_review",
+            "value": "PEOPLE"
           }
         },
         "zh-Hant": {
@@ -24547,6 +24547,7 @@
       "comment": "Pluralized body: nearby people count; %d is count",
       "localizations": {
         "ar": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -24562,10 +24563,10 @@
                 }
               }
             }
-          },
-          "stringUnit": {}
+          }
         },
         "arz": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -24581,10 +24582,10 @@
                 }
               }
             }
-          },
-          "stringUnit": {}
+          }
         },
         "bn": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -24600,10 +24601,10 @@
                 }
               }
             }
-          },
-          "stringUnit": {}
+          }
         },
         "de": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -24619,8 +24620,7 @@
                 }
               }
             }
-          },
-          "stringUnit": {}
+          }
         },
         "en": {
           "stringUnit": {},
@@ -24642,6 +24642,7 @@
           }
         },
         "es": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -24657,10 +24658,10 @@
                 }
               }
             }
-          },
-          "stringUnit": {}
+          }
         },
         "fil": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -24676,10 +24677,10 @@
                 }
               }
             }
-          },
-          "stringUnit": {}
+          }
         },
         "fr": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -24695,10 +24696,10 @@
                 }
               }
             }
-          },
-          "stringUnit": {}
+          }
         },
         "ha": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -24714,10 +24715,10 @@
                 }
               }
             }
-          },
-          "stringUnit": {}
+          }
         },
         "hi": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -24733,10 +24734,10 @@
                 }
               }
             }
-          },
-          "stringUnit": {}
+          }
         },
         "id": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -24752,10 +24753,10 @@
                 }
               }
             }
-          },
-          "stringUnit": {}
+          }
         },
         "ja": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -24771,10 +24772,10 @@
                 }
               }
             }
-          },
-          "stringUnit": {}
+          }
         },
         "mr": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -24790,10 +24791,10 @@
                 }
               }
             }
-          },
-          "stringUnit": {}
+          }
         },
         "pcm": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -24809,10 +24810,10 @@
                 }
               }
             }
-          },
-          "stringUnit": {}
+          }
         },
         "pnb": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -24828,10 +24829,10 @@
                 }
               }
             }
-          },
-          "stringUnit": {}
+          }
         },
         "pt": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -24847,10 +24848,10 @@
                 }
               }
             }
-          },
-          "stringUnit": {}
+          }
         },
         "pt-BR": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -24866,10 +24867,10 @@
                 }
               }
             }
-          },
-          "stringUnit": {}
+          }
         },
         "ru": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -24885,10 +24886,10 @@
                 }
               }
             }
-          },
-          "stringUnit": {}
+          }
         },
         "sw": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -24904,10 +24905,10 @@
                 }
               }
             }
-          },
-          "stringUnit": {}
+          }
         },
         "ta": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -24923,10 +24924,10 @@
                 }
               }
             }
-          },
-          "stringUnit": {}
+          }
         },
         "te": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -24942,10 +24943,10 @@
                 }
               }
             }
-          },
-          "stringUnit": {}
+          }
         },
         "tl": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -24961,10 +24962,10 @@
                 }
               }
             }
-          },
-          "stringUnit": {}
+          }
         },
         "tr": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -24980,10 +24981,10 @@
                 }
               }
             }
-          },
-          "stringUnit": {}
+          }
         },
         "ur": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -24999,10 +25000,10 @@
                 }
               }
             }
-          },
-          "stringUnit": {}
+          }
         },
         "vi": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -25018,10 +25019,10 @@
                 }
               }
             }
-          },
-          "stringUnit": {}
+          }
         },
         "yue": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -25037,10 +25038,10 @@
                 }
               }
             }
-          },
-          "stringUnit": {}
+          }
         },
         "zh-HK": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -25056,10 +25057,10 @@
                 }
               }
             }
-          },
-          "stringUnit": {}
+          }
         },
         "zh-Hans": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -25075,10 +25076,10 @@
                 }
               }
             }
-          },
-          "stringUnit": {}
+          }
         },
         "zh-Hant": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -25094,8 +25095,7 @@
                 }
               }
             }
-          },
-          "stringUnit": {}
+          }
         }
       }
     },
@@ -25999,8 +25999,8 @@
       "localizations": {
         "ar": {
           "stringUnit": {
-            "state": "translated",
-            "value": "اسم مستعار"
+            "state": "needs_review",
+            "value": "nickname"
           }
         },
         "arz": {
@@ -26029,8 +26029,8 @@
         },
         "es": {
           "stringUnit": {
-            "state": "translated",
-            "value": "apodo"
+            "state": "needs_review",
+            "value": "nickname"
           }
         },
         "fil": {
@@ -26041,8 +26041,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "translated",
-            "value": "pseudo"
+            "state": "needs_review",
+            "value": "nickname"
           }
         },
         "ha": {
@@ -26161,8 +26161,8 @@
         },
         "zh-Hans": {
           "stringUnit": {
-            "state": "translated",
-            "value": "昵称"
+            "state": "needs_review",
+            "value": "nickname"
           }
         },
         "zh-Hant": {
@@ -26178,8 +26178,8 @@
       "localizations": {
         "ar": {
           "stringUnit": {
-            "state": "translated",
-            "value": "اكتب رسالة..."
+            "state": "needs_review",
+            "value": "type a message..."
           }
         },
         "arz": {
@@ -26196,8 +26196,8 @@
         },
         "de": {
           "stringUnit": {
-            "state": "translated",
-            "value": "Nachricht eingeben..."
+            "state": "needs_review",
+            "value": "type a message..."
           }
         },
         "en": {
@@ -26208,8 +26208,8 @@
         },
         "es": {
           "stringUnit": {
-            "state": "translated",
-            "value": "escribe un mensaje..."
+            "state": "needs_review",
+            "value": "type a message..."
           }
         },
         "fil": {
@@ -26220,8 +26220,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "translated",
-            "value": "tapez un message..."
+            "state": "needs_review",
+            "value": "type a message..."
           }
         },
         "ha": {
@@ -26232,8 +26232,8 @@
         },
         "hi": {
           "stringUnit": {
-            "state": "translated",
-            "value": "संदेश टाइप करें..."
+            "state": "needs_review",
+            "value": "type a message..."
           }
         },
         "id": {
@@ -26244,8 +26244,8 @@
         },
         "ja": {
           "stringUnit": {
-            "state": "translated",
-            "value": "メッセージを入力..."
+            "state": "needs_review",
+            "value": "type a message..."
           }
         },
         "mr": {
@@ -26268,8 +26268,8 @@
         },
         "pt": {
           "stringUnit": {
-            "state": "translated",
-            "value": "digite uma mensagem..."
+            "state": "needs_review",
+            "value": "type a message..."
           }
         },
         "pt-BR": {
@@ -26280,8 +26280,8 @@
         },
         "ru": {
           "stringUnit": {
-            "state": "translated",
-            "value": "введите сообщение..."
+            "state": "needs_review",
+            "value": "type a message..."
           }
         },
         "sw": {
@@ -26340,8 +26340,8 @@
         },
         "zh-Hans": {
           "stringUnit": {
-            "state": "translated",
-            "value": "输入消息..."
+            "state": "needs_review",
+            "value": "type a message..."
           }
         },
         "zh-Hant": {

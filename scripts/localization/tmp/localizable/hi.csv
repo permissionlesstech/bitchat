@@ -1,0 +1,188 @@
+key,en,localized,comment,status
+accessibility.add_favorite,Add to favorites,Add to favorites,Screen reader label: Add to favorites,needs_review
+accessibility.available_nostr,Available via Nostr,Available via Nostr,Screen reader label: Available via Nostr,needs_review
+accessibility.back_to_main,Back to main chat,Back to main chat,Screen reader label: Back to main chat,needs_review
+accessibility.bookmark_toggle,Toggle bookmark for #%@,Toggle bookmark for #%@,Screen reader label: Toggle bookmark for #%@,needs_review
+accessibility.bookmark_toggle_geohash,Toggle bookmark for #%@,Toggle bookmark for #%@,Screen reader label: Toggle bookmark for #%@,needs_review
+accessibility.connected_mesh,Connected via mesh,Connected via mesh,Screen reader label: Connected via mesh,needs_review
+accessibility.connected_via_mesh,Connected via mesh,Connected via mesh,Screen reader label: Connected via mesh,needs_review
+accessibility.double_tap_to_send,Double tap to send,Double tap to send,Accessibility hint when input has content,needs_review
+accessibility.encryption_status_dynamic,Encryption status: %@,Encryption status: %@,Screen reader description of encryption security level Includes placeholders: %@,needs_review
+accessibility.encryption_status_secured,secured,secured,Screen reader announcement: secured,needs_review
+accessibility.encryption_status_unencrypted,not encrypted,not encrypted,Screen reader announcement: not encrypted,needs_review
+accessibility.encryption_status_verified,verified,verified,Screen reader announcement: verified,needs_review
+accessibility.enter_message_to_send,Enter a message to send,Enter a message to send,Accessibility hint when input is empty,needs_review
+accessibility.favorite_toggle,Double tap to toggle favorite status,Double tap to toggle favorite status,Screen reader label: Double tap to toggle favorite status,needs_review
+accessibility.favorite_toggle_hint,Double tap to toggle favorite status,Double tap to toggle favorite status,Screen reader label: Double tap to toggle favorite status,needs_review
+accessibility.fingerprint_hint,Tap to view encryption fingerprint,Tap to view encryption fingerprint,Screen reader label: Tap to view encryption fingerprint,needs_review
+accessibility.fingerprint_tap_hint,Tap to view encryption fingerprint,Tap to view encryption fingerprint,Screen reader label: Tap to view encryption fingerprint,needs_review
+accessibility.location_channels,location channels,location channels,Screen reader label: location channels,needs_review
+accessibility.mesh_connected,Connected via mesh,Connected via mesh,Screen reader label: Connected via mesh,needs_review
+accessibility.mesh_reachable,Reachable via mesh,Reachable via mesh,Screen reader label: Reachable via mesh,needs_review
+accessibility.open_unread_private_chat,Open unread private chat,Open unread private chat,Screen reader label: Open unread private chat,needs_review
+accessibility.people_count (plural:one),%d person,%d person,Screen reader count announcement with proper plural forms Includes placeholders: %d,translated
+accessibility.people_count (plural:other),%d people,%d people,Screen reader count announcement with proper plural forms Includes placeholders: %d,translated
+accessibility.private_chat_hint,Tap to view encryption fingerprint,Tap to view encryption fingerprint,Screen reader label: Tap to view encryption fingerprint,needs_review
+accessibility.private_chat_with,Private chat with %@,Private chat with %@,Screen reader label: Private chat with %@,needs_review
+accessibility.private_chat_with_user,Private chat with user,Private chat with,Base accessibility text for private chat - use with String.localizedStringWithFormat,needs_review
+accessibility.remove_favorite,Remove from favorites,Remove from favorites,Screen reader label to remove a peer from favorites,needs_review
+accessibility.send_message,Send message,Send message,Screen reader label for send message button,needs_review
+accessibility.verification_help,Verification: show my QR or scan a friend,Verification: show my QR or scan a friend,Screen reader label: Verification: show my QR or scan a friend,needs_review
+actions.block,BLOCK,ब्लॉक,Button to block/ban a user from chat,translated
+actions.copy_message,Copy message,Copy message,Button label: Copy message,needs_review
+actions.hug,hug,hug,Fun social action - send virtual hug to another user,needs_review
+actions.mention,mention,mention,Action to mention/tag another user in a message,needs_review
+actions.pay_cashu,pay via cashu,pay via cashu,Button label for Cashu token link,needs_review
+actions.pay_lightning,pay via lightning,pay via lightning,Button label for Lightning payment link,needs_review
+actions.private_message,direct message,direct message,Action to start a private/direct message with someone,needs_review
+actions.slap,slap,slap,Fun social action - playful slap with trout (internet meme),needs_review
+actions.title,Actions,Actions,Action label: Actions,needs_review
+alert.bluetooth_off,Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat.,Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat.,Error message when Bluetooth is disabled system-wide,needs_review
+alert.bluetooth_required,Bluetooth Required,ब्लूटूथ आवश्यक,Alert title when Bluetooth permission is needed,translated
+alert.bluetooth_unauthorized,BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings.,BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings.,Error message when app lacks Bluetooth permission,needs_review
+alert.bluetooth_unsupported,This device does not support Bluetooth. BitChat requires Bluetooth to function.,This device does not support Bluetooth. BitChat requires Bluetooth to function.,Error message when device lacks Bluetooth hardware,needs_review
+alert.heads_up,heads up,heads up,App text: heads up,needs_review
+alert.screenshot_warning,screenshots of location channels will reveal your location. think before sharing publicly.,screenshots of location channels will reveal your location. think before sharing publicly.,App text: screenshots of location channels will reveal your location. think before sharing publicly.,needs_review
+app.title_prefix,bitchat/,bitchat/,App text: bitchat/,needs_review
+appinfo.features.encryption.desc,private messages encrypted with noise protocol,private messages encrypted with noise protocol,App text: private messages encrypted with noise protocol,needs_review
+appinfo.features.encryption.title,end-to-end encryption,end-to-end encryption,App text: end-to-end encryption,needs_review
+appinfo.features.extended_range.desc,"messages relay through peers, going the distance","messages relay through peers, going the distance","App text: messages relay through peers, going the distance",needs_review
+appinfo.features.extended_range.title,extended range,extended range,App text: extended range,needs_review
+appinfo.features.favorites.desc,get notified when your favorite people join,get notified when your favorite people join,App text: get notified when your favorite people join,needs_review
+appinfo.features.favorites.title,favorites,favorites,App text: favorites,needs_review
+appinfo.features.geohash.desc,geohash channels to chat with people in nearby regions over decentralized anonymous relays,geohash channels to chat with people in nearby regions over decentralized anonymous relays,App text: geohash channels to chat with people in nearby regions over decentralized anonymous relays,needs_review
+appinfo.features.geohash.title,local channels,local channels,App text: local channels,needs_review
+appinfo.features.mentions.desc,use @nickname to notify specific people,use @nickname to notify specific people,App text: use @nickname to notify specific people,needs_review
+appinfo.features.mentions.title,mentions,mentions,App text: mentions,needs_review
+appinfo.features.offline.desc,works without internet using Bluetooth low energy,works without internet using Bluetooth low energy,App text: works without internet using Bluetooth low energy,needs_review
+appinfo.features.offline.title,offline communication,offline communication,App text: offline communication,needs_review
+appinfo.features.title,FEATURES,FEATURES,App text: FEATURES,needs_review
+appinfo.howto.clear_chat,• triple-tap chat to clear,• triple-tap chat to clear,How-to instruction bullet,needs_review
+appinfo.howto.commands,• type / for commands,• type / for commands,How-to instruction bullet with / token,needs_review
+appinfo.howto.open_sidebar,• tap people icon for sidebar,• tap people icon for sidebar,How-to instruction bullet,needs_review
+appinfo.howto.set_nickname,• set your nickname by tapping it,• set your nickname by tapping it,How-to instruction bullet,needs_review
+appinfo.howto.start_dm,• tap a peer's name to start a DM,• tap a peer's name to start a DM,How-to instruction bullet,needs_review
+appinfo.howto.tap_mesh,• tap #mesh to change channels,• tap #mesh to change channels,How-to instruction bullet with #mesh token,needs_review
+appinfo.howto.title,HOW TO USE,HOW TO USE,App text: HOW TO USE,needs_review
+appinfo.instructions.change_channels,• tap #mesh to change channels,• tap #mesh to change channels,App text: • tap #mesh to change channels,needs_review
+appinfo.instructions.clear,• triple-tap chat to clear,• triple-tap chat to clear,App text: • triple-tap chat to clear,needs_review
+appinfo.instructions.commands,• type / for commands,• type / for commands,App text: • type / for commands,needs_review
+appinfo.instructions.dm,• tap a peer's name to start a DM,• tap a peer's name to start a DM,App text: • tap a peer's name to start a DM,needs_review
+appinfo.instructions.set_nickname,• set your nickname by tapping it,• set your nickname by tapping it,App text: • set your nickname by tapping it,needs_review
+appinfo.instructions.sidebar,• tap people icon for sidebar,• tap people icon for sidebar,App text: • tap people icon for sidebar,needs_review
+appinfo.privacy.ephemeral.desc,new peer ID generated regularly,new peer ID generated regularly,App text: new peer ID generated regularly,needs_review
+appinfo.privacy.ephemeral.title,ephemeral identity,ephemeral identity,App text: ephemeral identity,needs_review
+appinfo.privacy.no_tracking.desc,"no servers, accounts, or data collection","no servers, accounts, or data collection","App text: no servers, accounts, or data collection",needs_review
+appinfo.privacy.no_tracking.title,no tracking,no tracking,App text: no tracking,needs_review
+appinfo.privacy.panic.desc,triple-tap logo to instantly clear all data,triple-tap logo to instantly clear all data,App text: triple-tap logo to instantly clear all data,needs_review
+appinfo.privacy.panic.title,panic mode,panic mode,App text: panic mode,needs_review
+appinfo.privacy.title,PRIVACY,PRIVACY,App text: PRIVACY,needs_review
+appinfo.tagline,sidegroupchat,sidegroupchat,App text: sidegroupchat,needs_review
+appinfo.warning.message,private message security has not yet been fully audited. do not use for critical situations until this warning disappears.,private message security has not yet been fully audited. do not use for critical situations until this warning disappears.,App text: private message security has not yet been fully audited. do not use for critical situations until this warning disappears.,needs_review
+appinfo.warning.title,WARNING,WARNING,App text: WARNING,needs_review
+common.cancel,cancel,cancel,Button label: cancel,needs_review
+common.close,close,बंद करें,Common label: close,translated
+common.copy,Copy,Copy,Button label: Copy,needs_review
+common.done,DONE,DONE,Common label: DONE,needs_review
+common.ok,OK,OK,Button label: OK,needs_review
+common.open_settings,open settings,open settings,Button label: open settings,needs_review
+common.settings,Settings,Settings,Common label: Settings,needs_review
+common.show_less,show less,show less,Button label: show less,needs_review
+common.show_more,show more,show more,Button label: show more,needs_review
+common.unknown,Unknown,Unknown,Common label: Unknown,needs_review
+common.user,user,user,Common label: user,needs_review
+error.cannot_message_yourself,cannot message yourself,cannot message yourself,Error message: cannot message yourself,needs_review
+error.no_reason_given,no reason given,no reason given,Error message: no reason given,needs_review
+error.peer_not_reachable,Peer not reachable,Peer not reachable,Error when trying to message someone who is offline,needs_review
+error.send_error,send error,send error,Button label: send error,needs_review
+error.unknown_recipient,unknown recipient,unknown recipient,Error message: unknown recipient,needs_review
+error.user_blocked,user is blocked,user is blocked,Error message: user is blocked,needs_review
+errors.could_not_find_peer,could not find matching peer,could not find matching peer,App text: could not find matching peer,needs_review
+errors.invalid_expired_qr,invalid or expired qr payload,invalid or expired qr payload,App text: invalid or expired qr payload,needs_review
+errors.invalid_geohash,invalid geohash,invalid geohash,App text: invalid geohash,needs_review
+errors.verification_requested,verification requested for %@,verification requested for %@,App text: verification requested for %@,needs_review
+fp.compare_fingerprints_with_name,compare these fingerprints with %@ using a secure channel.,compare these fingerprints with %@ using a secure channel.,Instruction to compare fingerprints; %@ is the peer's display name,needs_review
+fp.remove_verification_button,REMOVE VERIFICATION,REMOVE VERIFICATION,App text: REMOVE VERIFICATION,needs_review
+fp.title,SECURITY VERIFICATION,SECURITY VERIFICATION,Title for cryptographic fingerprint verification screen,needs_review
+fp.verified_message,you have verified this person's identity.,you have verified this person's identity.,Status message shown when fingerprints are verified,needs_review
+geohash.block,Block,Block,App text: Block,needs_review
+geohash.unblock,Unblock,Unblock,App text: Unblock,needs_review
+help.blocked_peer,Blocked,Blocked,App text: Blocked,needs_review
+help.command.block,block or list blocked peers,block or list blocked peers,Command description for /block,needs_review
+help.command.clear,clear chat messages,clear chat messages,Command description for /clear,needs_review
+help.command.fav_add,add to favorites,add to favorites,Command description for /fav,needs_review
+help.command.fav_remove,remove from favorites,remove from favorites,Command description for /unfav,needs_review
+help.command.hug,send someone a warm hug,send someone a warm hug,Command description for /hug,needs_review
+help.command.msg,send private message,send private message,Command description for /m or /msg,needs_review
+help.command.online,see who's online,see who's online,Command description for /w,needs_review
+help.command.slap,slap someone with a trout,slap someone with a trout,Command description for /slap,needs_review
+help.command.unblock,unblock a peer,unblock a peer,Command description for /unblock,needs_review
+help.delivered_group_members,Delivered to %d of %d members,Delivered to %d of %d members,"Tooltip: group delivery status; first %d is reached, second %d is total",needs_review
+help.delivered_to,Delivered to %@,Delivered to %@,App text: Delivered to %@,needs_review
+help.delivered_to_name,Delivered to %@,Delivered to %@,Tooltip: delivered to a person; %@ is nickname,needs_review
+help.delivery_failed,Failed: %@,Failed: %@,App text: Failed: %@,needs_review
+help.failed_reason,Failed: %@,Failed: %@,Tooltip: failure with reason; %@ is reason text,needs_review
+help.new_messages,New messages,New messages,App text: New messages,needs_review
+help.partial_delivery,Delivered to %d of %d members,Delivered to %d of %d members,App text: Delivered to %d of %d members,needs_review
+help.read_by,Read by %@,Read by %@,App text: Read by %@,needs_review
+help.read_by_name,Read by %@,Read by %@,Tooltip: read by a person; %@ is nickname,needs_review
+help.verification_qr,Verification: show my QR or scan a friend,Verification: show my QR or scan a friend,Tooltip for verification action,needs_review
+location.remove_access_action,remove location access,remove location access,Location feature text: remove location access,needs_review
+location.title,#location channels,#location channels,Title for location-based chat channels feature,needs_review
+nav.close,close,close,Navigation title: close,needs_review
+nav.done,DONE,DONE,Navigation title: DONE,needs_review
+nav.people,PEOPLE,लोग,Navigation header for user/peer list sidebar,translated
+notifications.favorite_online.body,wanna get in there?,wanna get in there?,Local notification body when favorite comes online (casual tone),needs_review
+notifications.favorite_online.title,⭐ %@ is online!,⭐ %@ is online!,Local notification title when a favorite comes online; %@ is nickname,needs_review
+notifications.mention.title,🫵 you were mentioned by %@,🫵 you were mentioned by %@,Local notification title for mentions; %@ is sender name,needs_review
+notifications.network_available.body (plural:one),%d person around,%d person around,Pluralized body: nearby people count; %d is count,needs_review
+notifications.network_available.body (plural:other),%d people around,%d people around,Pluralized body: nearby people count; %d is count,needs_review
+notifications.network_available.title,People nearby!,People nearby!,Local notification title when peers are nearby,needs_review
+notifications.private_message.title,🔒 private message from %@,🔒 private message from %@,Local notification title for private messages; %@ is sender name,needs_review
+people.none_around,nobody around...,nobody around...,App text: nobody around...,needs_review
+people.you_indicator, (you), (you),App text:  (you),needs_review
+placeholder.geohash,geohash,geohash,Input placeholder: geohash,needs_review
+placeholder.nickname,nickname,nickname,Input field placeholder for user nickname/display name,needs_review
+placeholder.type_message,type a message...,संदेश टाइप करें...,Input field placeholder for composing chat messages,translated
+status.blocked,Blocked,Blocked,Status indicator for blocked peer,needs_review
+status.blocked_geohash,Blocked in geohash,Blocked in geohash,Status indicator for geohash user blocked,needs_review
+status.new_messages,New messages,New messages,Status indicator for unread messages,needs_review
+system.blocked_geohash_user,blocked %@ in geohash chats,blocked %@ in geohash chats,App text: blocked %@ in geohash chats,needs_review
+system.cannot_message_blocked_nickname,cannot send message to %@: user is blocked.,cannot send message to %@: user is blocked.,Error when trying to message a blocked user by name Includes placeholders: %@,needs_review
+system.cannot_message_blocked_user,cannot send message to %@: user is blocked.,cannot send message to %@: user is blocked.,App text: cannot send message to %@: user is blocked.,needs_review
+system.cannot_send_blocked,cannot send message to %@: user is blocked.,cannot send message to %@: user is blocked.,App text: cannot send message to %@: user is blocked.,needs_review
+system.cannot_send_unreachable,Cannot send message to %@ - peer is not reachable via mesh or Nostr.,Cannot send message to %@ - peer is not reachable via mesh or Nostr.,App text: Cannot send message to %@ - peer is not reachable via mesh or Nostr.,needs_review
+system.cannot_start_chat_blocked,cannot start chat with %@: user is blocked.,cannot start chat with %@: user is blocked.,App text: cannot start chat with %@: user is blocked.,needs_review
+system.failed_send_location,failed to send to location channel,failed to send to location channel,Error message when sending to location channel fails,needs_review
+system.favorited_you,favorited,favorited,Action word when someone favorites you,needs_review
+system.mutual_favorite_required,cannot start chat with %@: mutual favorite required for offline messaging.,cannot start chat with %@: mutual favorite required for offline messaging.,App text: cannot start chat with %@: mutual favorite required for offline messaging.,needs_review
+system.not_in_location_channel,cannot send: not in a location channel,cannot send: not in a location channel,App text: cannot send: not in a location channel,needs_review
+system.peer_not_reachable,Cannot send message to %@ - peer is not reachable via mesh or Nostr.,Cannot send message to %@ - peer is not reachable via mesh or Nostr.,App text: Cannot send message to %@ - peer is not reachable via mesh or Nostr.,needs_review
+system.screenshot_taken,you took a screenshot,you took a screenshot,App text: you took a screenshot,needs_review
+system.took_screenshot,* %@ took a screenshot *,* %@ took a screenshot *,Notification sent to other users when someone screenshots Includes placeholders: %@,needs_review
+system.unblocked_geohash_user,unblocked %@ in geohash chats,unblocked %@ in geohash chats,App text: unblocked %@ in geohash chats,needs_review
+system.unfavorited_you,unfavorited,unfavorited,App text: unfavorited,needs_review
+system.user_action,%@ %@ you,%@ %@ you,App text: %@ %@ you,needs_review
+system.user_action_favorited,%@ favorited you,%@ favorited you,App text: %@ favorited you,needs_review
+system.user_action_unfavorited,%@ unfavorited you,%@ unfavorited you,App text: %@ unfavorited you,needs_review
+system.user_action_you,%@ %@ you,%@ %@ you,App text: %@ %@ you,needs_review
+system.user_blocked_generic,cannot send message: user is blocked.,cannot send message: user is blocked.,Error message when trying to message a blocked user,needs_review
+test.baseOnly,Base Fallback,Base Fallback,App text: Base Fallback,needs_review
+ui.at_symbol,@,@,At symbol used for @mentions and @nickname,needs_review
+ui.checkmark,✔︎,✔︎,Checkmark symbol indicating selection or completion,needs_review
+ui.delivery_ratio,%d/%d,%d/%d,UI label: %d/%d,needs_review
+ui.hash_symbol,#,#,Hash symbol used in channel names like #mesh,needs_review
+ui.mesh_with_count,mesh [%@],mesh [%@],UI label: mesh [%@],needs_review
+ui.people_plural,people,people,UI label: people,needs_review
+ui.person_singular,person,person,UI label: person,needs_review
+verify.could_not_find_peer,could not find matching peer,could not find matching peer,Error when verification cannot match a peer,needs_review
+verify.invalid_or_expired_qr,invalid or expired qr payload,invalid or expired qr payload,Error when pasted QR content is invalid,needs_review
+verify.paste_content,paste qr content to validate:,paste qr content to validate:,App text: paste qr content to validate:,needs_review
+verify.qr_unavailable,qr unavailable,qr unavailable,App text: qr unavailable,needs_review
+verify.remove_verification_action,remove verification,remove verification,App text: remove verification,needs_review
+verify.requested_for,verification requested for %@,verification requested for %@,Status after requesting verification; %@ is nickname,needs_review
+verify.scan_friend_qr,scan a friend's qr,scan a friend's qr,App text: scan a friend's qr,needs_review
+verify.scan_someone_qr,scan someone else's qr,scan someone else's qr,App text: scan someone else's qr,needs_review
+verify.scan_to_verify,scan to verify me,scan to verify me,App text: scan to verify me,needs_review
+verify.show_my_qr,show my qr,show my qr,App text: show my qr,needs_review
+verify.verify_button,VERIFY,VERIFY,App text: VERIFY,needs_review
