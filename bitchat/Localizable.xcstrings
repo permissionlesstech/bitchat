@@ -2693,6 +2693,42 @@
             }
           }
         },
+        "arz": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d person"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d people"
+                }
+              }
+            }
+          }
+        },
+        "bn": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d person"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d people"
+                }
+              }
+            }
+          }
+        },
         "de": {
           "variations": {
             "plural": {
@@ -2747,6 +2783,24 @@
             }
           }
         },
+        "fil": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d person"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d people"
+                }
+              }
+            }
+          }
+        },
         "fr": {
           "variations": {
             "plural": {
@@ -2765,7 +2819,367 @@
             }
           }
         },
+        "ha": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d person"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d people"
+                }
+              }
+            }
+          }
+        },
+        "hi": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d person"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d people"
+                }
+              }
+            }
+          }
+        },
+        "id": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d person"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d people"
+                }
+              }
+            }
+          }
+        },
+        "ja": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d person"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d people"
+                }
+              }
+            }
+          }
+        },
+        "mr": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d person"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d people"
+                }
+              }
+            }
+          }
+        },
+        "pcm": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d person"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d people"
+                }
+              }
+            }
+          }
+        },
+        "pnb": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d person"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d people"
+                }
+              }
+            }
+          }
+        },
+        "pt": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d person"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d people"
+                }
+              }
+            }
+          }
+        },
+        "pt-BR": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d person"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d people"
+                }
+              }
+            }
+          }
+        },
+        "ru": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d person"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d people"
+                }
+              }
+            }
+          }
+        },
+        "sw": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d person"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d people"
+                }
+              }
+            }
+          }
+        },
+        "ta": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d person"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d people"
+                }
+              }
+            }
+          }
+        },
+        "te": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d person"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d people"
+                }
+              }
+            }
+          }
+        },
+        "tl": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d person"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d people"
+                }
+              }
+            }
+          }
+        },
+        "tr": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d person"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d people"
+                }
+              }
+            }
+          }
+        },
+        "ur": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d person"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d people"
+                }
+              }
+            }
+          }
+        },
+        "vi": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d person"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d people"
+                }
+              }
+            }
+          }
+        },
+        "yue": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d person"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d people"
+                }
+              }
+            }
+          }
+        },
+        "zh-HK": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d person"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d people"
+                }
+              }
+            }
+          }
+        },
         "zh-Hans": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d person"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d people"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hant": {
           "variations": {
             "plural": {
               "one": {
@@ -4752,55 +5166,7 @@
     "alert.bluetooth_off": {
       "comment": "Error message when Bluetooth is disabled system-wide",
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
-          }
-        },
-        "yue": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
-          }
-        },
         "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
-          }
-        },
-        "tl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
-          }
-        },
-        "pnb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
-          }
-        },
-        "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
@@ -4812,85 +5178,7 @@
             "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
           }
         },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
-          }
-        },
-        "tr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
-          }
-        },
-        "ha": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
-          }
-        },
         "bn": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
-          }
-        },
-        "fil": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
-          }
-        },
-        "ur": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
-          }
-        },
-        "ta": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
-          }
-        },
-        "pcm": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
-          }
-        },
-        "hi": {
           "stringUnit": {
             "state": "translated",
             "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
@@ -4902,13 +5190,37 @@
             "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
           }
         },
-        "mr": {
+        "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
           }
         },
-        "te": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
+          }
+        },
+        "hi": {
           "stringUnit": {
             "state": "translated",
             "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
@@ -4920,7 +5232,109 @@
             "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
           }
         },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
+          }
+        },
         "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
+          }
+        },
+        "zh-Hant": {
           "stringUnit": {
             "state": "translated",
             "value": "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
@@ -5110,55 +5524,7 @@
     "alert.bluetooth_unauthorized": {
       "comment": "Error message when app lacks Bluetooth permission",
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
-          }
-        },
-        "yue": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
-          }
-        },
         "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
-          }
-        },
-        "tl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
-          }
-        },
-        "pnb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
-          }
-        },
-        "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
@@ -5170,85 +5536,7 @@
             "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
           }
         },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
-          }
-        },
-        "tr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
-          }
-        },
-        "ha": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
-          }
-        },
         "bn": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
-          }
-        },
-        "fil": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
-          }
-        },
-        "ur": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
-          }
-        },
-        "ta": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
-          }
-        },
-        "pcm": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
-          }
-        },
-        "hi": {
           "stringUnit": {
             "state": "translated",
             "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
@@ -5260,13 +5548,37 @@
             "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
           }
         },
-        "mr": {
+        "en": {
           "stringUnit": {
             "state": "translated",
             "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
           }
         },
-        "te": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
+          }
+        },
+        "hi": {
           "stringUnit": {
             "state": "translated",
             "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
@@ -5278,7 +5590,109 @@
             "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
           }
         },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
+          }
+        },
         "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
+          }
+        },
+        "zh-Hant": {
           "stringUnit": {
             "state": "translated",
             "value": "BitChat needs Bluetooth permission to connect with nearby devices. Please enable Bluetooth access in Settings."
@@ -5289,55 +5703,7 @@
     "alert.bluetooth_unsupported": {
       "comment": "Error message when device lacks Bluetooth hardware",
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
-          }
-        },
-        "yue": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
-          }
-        },
         "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
-          }
-        },
-        "tl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
-          }
-        },
-        "pnb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
-          }
-        },
-        "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
@@ -5349,85 +5715,7 @@
             "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
           }
         },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
-          }
-        },
-        "tr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
-          }
-        },
-        "ha": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
-          }
-        },
         "bn": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
-          }
-        },
-        "fil": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
-          }
-        },
-        "ur": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
-          }
-        },
-        "ta": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
-          }
-        },
-        "pcm": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
-          }
-        },
-        "hi": {
           "stringUnit": {
             "state": "translated",
             "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
@@ -5439,13 +5727,37 @@
             "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
           }
         },
-        "mr": {
+        "en": {
           "stringUnit": {
             "state": "translated",
             "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
           }
         },
-        "te": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
+          }
+        },
+        "hi": {
           "stringUnit": {
             "state": "translated",
             "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
@@ -5457,7 +5769,109 @@
             "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
           }
         },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
+          }
+        },
         "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
+          }
+        },
+        "zh-Hant": {
           "stringUnit": {
             "state": "translated",
             "value": "This device does not support Bluetooth. BitChat requires Bluetooth to function."
@@ -13121,55 +13535,7 @@
     },
     "error.cannot_message_yourself": {
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cannot message yourself"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cannot message yourself"
-          }
-        },
-        "yue": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cannot message yourself"
-          }
-        },
         "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cannot message yourself"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cannot message yourself"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cannot message yourself"
-          }
-        },
-        "tl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cannot message yourself"
-          }
-        },
-        "pnb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cannot message yourself"
-          }
-        },
-        "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "cannot message yourself"
@@ -13181,85 +13547,7 @@
             "value": "cannot message yourself"
           }
         },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cannot message yourself"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cannot message yourself"
-          }
-        },
-        "tr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cannot message yourself"
-          }
-        },
-        "ha": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cannot message yourself"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cannot message yourself"
-          }
-        },
         "bn": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cannot message yourself"
-          }
-        },
-        "fil": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cannot message yourself"
-          }
-        },
-        "ur": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cannot message yourself"
-          }
-        },
-        "ta": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cannot message yourself"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cannot message yourself"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cannot message yourself"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cannot message yourself"
-          }
-        },
-        "pcm": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cannot message yourself"
-          }
-        },
-        "hi": {
           "stringUnit": {
             "state": "translated",
             "value": "cannot message yourself"
@@ -13271,13 +13559,37 @@
             "value": "cannot message yourself"
           }
         },
-        "mr": {
+        "en": {
           "stringUnit": {
             "state": "translated",
             "value": "cannot message yourself"
           }
         },
-        "te": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot message yourself"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot message yourself"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot message yourself"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot message yourself"
+          }
+        },
+        "hi": {
           "stringUnit": {
             "state": "translated",
             "value": "cannot message yourself"
@@ -13289,7 +13601,109 @@
             "value": "cannot message yourself"
           }
         },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot message yourself"
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot message yourself"
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot message yourself"
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot message yourself"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot message yourself"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot message yourself"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot message yourself"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot message yourself"
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot message yourself"
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot message yourself"
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot message yourself"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot message yourself"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot message yourself"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot message yourself"
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot message yourself"
+          }
+        },
         "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot message yourself"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot message yourself"
+          }
+        },
+        "zh-Hant": {
           "stringUnit": {
             "state": "translated",
             "value": "cannot message yourself"
@@ -13299,55 +13713,7 @@
     },
     "error.no_reason_given": {
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "no reason given"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "no reason given"
-          }
-        },
-        "yue": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "no reason given"
-          }
-        },
         "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "no reason given"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "no reason given"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "no reason given"
-          }
-        },
-        "tl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "no reason given"
-          }
-        },
-        "pnb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "no reason given"
-          }
-        },
-        "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "no reason given"
@@ -13359,85 +13725,7 @@
             "value": "no reason given"
           }
         },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "no reason given"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "no reason given"
-          }
-        },
-        "tr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "no reason given"
-          }
-        },
-        "ha": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "no reason given"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "no reason given"
-          }
-        },
         "bn": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "no reason given"
-          }
-        },
-        "fil": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "no reason given"
-          }
-        },
-        "ur": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "no reason given"
-          }
-        },
-        "ta": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "no reason given"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "no reason given"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "no reason given"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "no reason given"
-          }
-        },
-        "pcm": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "no reason given"
-          }
-        },
-        "hi": {
           "stringUnit": {
             "state": "translated",
             "value": "no reason given"
@@ -13449,13 +13737,37 @@
             "value": "no reason given"
           }
         },
-        "mr": {
+        "en": {
           "stringUnit": {
             "state": "translated",
             "value": "no reason given"
           }
         },
-        "te": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "no reason given"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "no reason given"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "no reason given"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "no reason given"
+          }
+        },
+        "hi": {
           "stringUnit": {
             "state": "translated",
             "value": "no reason given"
@@ -13467,7 +13779,109 @@
             "value": "no reason given"
           }
         },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "no reason given"
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "no reason given"
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "no reason given"
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "no reason given"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "no reason given"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "no reason given"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "no reason given"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "no reason given"
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "no reason given"
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "no reason given"
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "no reason given"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "no reason given"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "no reason given"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "no reason given"
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "no reason given"
+          }
+        },
         "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "no reason given"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "no reason given"
+          }
+        },
+        "zh-Hant": {
           "stringUnit": {
             "state": "translated",
             "value": "no reason given"
@@ -13478,55 +13892,7 @@
     "error.peer_not_reachable": {
       "comment": "Error when trying to message someone who is offline",
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Peer not reachable"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Peer not reachable"
-          }
-        },
-        "yue": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Peer not reachable"
-          }
-        },
         "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Peer not reachable"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Peer not reachable"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Peer not reachable"
-          }
-        },
-        "tl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Peer not reachable"
-          }
-        },
-        "pnb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Peer not reachable"
-          }
-        },
-        "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Peer not reachable"
@@ -13538,85 +13904,7 @@
             "value": "Peer not reachable"
           }
         },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Peer not reachable"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Peer not reachable"
-          }
-        },
-        "tr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Peer not reachable"
-          }
-        },
-        "ha": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Peer not reachable"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Peer not reachable"
-          }
-        },
         "bn": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Peer not reachable"
-          }
-        },
-        "fil": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Peer not reachable"
-          }
-        },
-        "ur": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Peer not reachable"
-          }
-        },
-        "ta": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Peer not reachable"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Peer not reachable"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Peer not reachable"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Peer not reachable"
-          }
-        },
-        "pcm": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Peer not reachable"
-          }
-        },
-        "hi": {
           "stringUnit": {
             "state": "translated",
             "value": "Peer not reachable"
@@ -13628,13 +13916,37 @@
             "value": "Peer not reachable"
           }
         },
-        "mr": {
+        "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Peer not reachable"
           }
         },
-        "te": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Peer not reachable"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Peer not reachable"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Peer not reachable"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Peer not reachable"
+          }
+        },
+        "hi": {
           "stringUnit": {
             "state": "translated",
             "value": "Peer not reachable"
@@ -13646,7 +13958,109 @@
             "value": "Peer not reachable"
           }
         },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Peer not reachable"
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Peer not reachable"
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Peer not reachable"
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Peer not reachable"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Peer not reachable"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Peer not reachable"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Peer not reachable"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Peer not reachable"
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Peer not reachable"
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Peer not reachable"
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Peer not reachable"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Peer not reachable"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Peer not reachable"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Peer not reachable"
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Peer not reachable"
+          }
+        },
         "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Peer not reachable"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Peer not reachable"
+          }
+        },
+        "zh-Hant": {
           "stringUnit": {
             "state": "translated",
             "value": "Peer not reachable"
@@ -13656,55 +14070,7 @@
     },
     "error.send_error": {
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "send error"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "send error"
-          }
-        },
-        "yue": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "send error"
-          }
-        },
         "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "send error"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "send error"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "send error"
-          }
-        },
-        "tl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "send error"
-          }
-        },
-        "pnb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "send error"
-          }
-        },
-        "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "send error"
@@ -13716,85 +14082,7 @@
             "value": "send error"
           }
         },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "send error"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "send error"
-          }
-        },
-        "tr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "send error"
-          }
-        },
-        "ha": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "send error"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "send error"
-          }
-        },
         "bn": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "send error"
-          }
-        },
-        "fil": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "send error"
-          }
-        },
-        "ur": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "send error"
-          }
-        },
-        "ta": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "send error"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "send error"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "send error"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "send error"
-          }
-        },
-        "pcm": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "send error"
-          }
-        },
-        "hi": {
           "stringUnit": {
             "state": "translated",
             "value": "send error"
@@ -13806,13 +14094,37 @@
             "value": "send error"
           }
         },
-        "mr": {
+        "en": {
           "stringUnit": {
             "state": "translated",
             "value": "send error"
           }
         },
-        "te": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "send error"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "send error"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "send error"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "send error"
+          }
+        },
+        "hi": {
           "stringUnit": {
             "state": "translated",
             "value": "send error"
@@ -13824,7 +14136,109 @@
             "value": "send error"
           }
         },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "send error"
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "send error"
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "send error"
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "send error"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "send error"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "send error"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "send error"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "send error"
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "send error"
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "send error"
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "send error"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "send error"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "send error"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "send error"
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "send error"
+          }
+        },
         "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "send error"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "send error"
+          }
+        },
+        "zh-Hant": {
           "stringUnit": {
             "state": "translated",
             "value": "send error"
@@ -13834,55 +14248,7 @@
     },
     "error.unknown_recipient": {
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unknown recipient"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unknown recipient"
-          }
-        },
-        "yue": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unknown recipient"
-          }
-        },
         "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unknown recipient"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unknown recipient"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unknown recipient"
-          }
-        },
-        "tl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unknown recipient"
-          }
-        },
-        "pnb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unknown recipient"
-          }
-        },
-        "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "unknown recipient"
@@ -13894,85 +14260,7 @@
             "value": "unknown recipient"
           }
         },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unknown recipient"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unknown recipient"
-          }
-        },
-        "tr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unknown recipient"
-          }
-        },
-        "ha": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unknown recipient"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unknown recipient"
-          }
-        },
         "bn": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unknown recipient"
-          }
-        },
-        "fil": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unknown recipient"
-          }
-        },
-        "ur": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unknown recipient"
-          }
-        },
-        "ta": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unknown recipient"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unknown recipient"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unknown recipient"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unknown recipient"
-          }
-        },
-        "pcm": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unknown recipient"
-          }
-        },
-        "hi": {
           "stringUnit": {
             "state": "translated",
             "value": "unknown recipient"
@@ -13984,13 +14272,37 @@
             "value": "unknown recipient"
           }
         },
-        "mr": {
+        "en": {
           "stringUnit": {
             "state": "translated",
             "value": "unknown recipient"
           }
         },
-        "te": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unknown recipient"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unknown recipient"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unknown recipient"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unknown recipient"
+          }
+        },
+        "hi": {
           "stringUnit": {
             "state": "translated",
             "value": "unknown recipient"
@@ -14002,7 +14314,109 @@
             "value": "unknown recipient"
           }
         },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unknown recipient"
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unknown recipient"
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unknown recipient"
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unknown recipient"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unknown recipient"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unknown recipient"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unknown recipient"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unknown recipient"
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unknown recipient"
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unknown recipient"
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unknown recipient"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unknown recipient"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unknown recipient"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unknown recipient"
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unknown recipient"
+          }
+        },
         "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unknown recipient"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unknown recipient"
+          }
+        },
+        "zh-Hant": {
           "stringUnit": {
             "state": "translated",
             "value": "unknown recipient"
@@ -14012,55 +14426,7 @@
     },
     "error.user_blocked": {
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "user is blocked"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "user is blocked"
-          }
-        },
-        "yue": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "user is blocked"
-          }
-        },
         "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "user is blocked"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "user is blocked"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "user is blocked"
-          }
-        },
-        "tl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "user is blocked"
-          }
-        },
-        "pnb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "user is blocked"
-          }
-        },
-        "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "user is blocked"
@@ -14072,85 +14438,7 @@
             "value": "user is blocked"
           }
         },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "user is blocked"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "user is blocked"
-          }
-        },
-        "tr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "user is blocked"
-          }
-        },
-        "ha": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "user is blocked"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "user is blocked"
-          }
-        },
         "bn": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "user is blocked"
-          }
-        },
-        "fil": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "user is blocked"
-          }
-        },
-        "ur": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "user is blocked"
-          }
-        },
-        "ta": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "user is blocked"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "user is blocked"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "user is blocked"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "user is blocked"
-          }
-        },
-        "pcm": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "user is blocked"
-          }
-        },
-        "hi": {
           "stringUnit": {
             "state": "translated",
             "value": "user is blocked"
@@ -14162,13 +14450,37 @@
             "value": "user is blocked"
           }
         },
-        "mr": {
+        "en": {
           "stringUnit": {
             "state": "translated",
             "value": "user is blocked"
           }
         },
-        "te": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "user is blocked"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "user is blocked"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "user is blocked"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "user is blocked"
+          }
+        },
+        "hi": {
           "stringUnit": {
             "state": "translated",
             "value": "user is blocked"
@@ -14180,7 +14492,109 @@
             "value": "user is blocked"
           }
         },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "user is blocked"
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "user is blocked"
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "user is blocked"
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "user is blocked"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "user is blocked"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "user is blocked"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "user is blocked"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "user is blocked"
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "user is blocked"
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "user is blocked"
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "user is blocked"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "user is blocked"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "user is blocked"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "user is blocked"
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "user is blocked"
+          }
+        },
         "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "user is blocked"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "user is blocked"
+          }
+        },
+        "zh-Hant": {
           "stringUnit": {
             "state": "translated",
             "value": "user is blocked"
@@ -18290,55 +18704,7 @@
     },
     "system.cannot_send_blocked": {
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cannot send message to %@: user is blocked."
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cannot send message to %@: user is blocked."
-          }
-        },
-        "yue": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cannot send message to %@: user is blocked."
-          }
-        },
         "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cannot send message to %@: user is blocked."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cannot send message to %@: user is blocked."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cannot send message to %@: user is blocked."
-          }
-        },
-        "tl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cannot send message to %@: user is blocked."
-          }
-        },
-        "pnb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cannot send message to %@: user is blocked."
-          }
-        },
-        "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "cannot send message to %@: user is blocked."
@@ -18350,85 +18716,7 @@
             "value": "cannot send message to %@: user is blocked."
           }
         },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cannot send message to %@: user is blocked."
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cannot send message to %@: user is blocked."
-          }
-        },
-        "tr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cannot send message to %@: user is blocked."
-          }
-        },
-        "ha": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cannot send message to %@: user is blocked."
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cannot send message to %@: user is blocked."
-          }
-        },
         "bn": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cannot send message to %@: user is blocked."
-          }
-        },
-        "fil": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cannot send message to %@: user is blocked."
-          }
-        },
-        "ur": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cannot send message to %@: user is blocked."
-          }
-        },
-        "ta": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cannot send message to %@: user is blocked."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cannot send message to %@: user is blocked."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cannot send message to %@: user is blocked."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cannot send message to %@: user is blocked."
-          }
-        },
-        "pcm": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cannot send message to %@: user is blocked."
-          }
-        },
-        "hi": {
           "stringUnit": {
             "state": "translated",
             "value": "cannot send message to %@: user is blocked."
@@ -18440,13 +18728,37 @@
             "value": "cannot send message to %@: user is blocked."
           }
         },
-        "mr": {
+        "en": {
           "stringUnit": {
             "state": "translated",
             "value": "cannot send message to %@: user is blocked."
           }
         },
-        "te": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot send message to %@: user is blocked."
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot send message to %@: user is blocked."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot send message to %@: user is blocked."
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot send message to %@: user is blocked."
+          }
+        },
+        "hi": {
           "stringUnit": {
             "state": "translated",
             "value": "cannot send message to %@: user is blocked."
@@ -18458,7 +18770,109 @@
             "value": "cannot send message to %@: user is blocked."
           }
         },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot send message to %@: user is blocked."
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot send message to %@: user is blocked."
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot send message to %@: user is blocked."
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot send message to %@: user is blocked."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot send message to %@: user is blocked."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot send message to %@: user is blocked."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot send message to %@: user is blocked."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot send message to %@: user is blocked."
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot send message to %@: user is blocked."
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot send message to %@: user is blocked."
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot send message to %@: user is blocked."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot send message to %@: user is blocked."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot send message to %@: user is blocked."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot send message to %@: user is blocked."
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot send message to %@: user is blocked."
+          }
+        },
         "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot send message to %@: user is blocked."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cannot send message to %@: user is blocked."
+          }
+        },
+        "zh-Hant": {
           "stringUnit": {
             "state": "translated",
             "value": "cannot send message to %@: user is blocked."
@@ -18468,55 +18882,7 @@
     },
     "system.cannot_send_unreachable": {
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
-          }
-        },
-        "yue": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
-          }
-        },
         "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
-          }
-        },
-        "tl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
-          }
-        },
-        "pnb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
-          }
-        },
-        "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
@@ -18528,85 +18894,7 @@
             "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
           }
         },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
-          }
-        },
-        "tr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
-          }
-        },
-        "ha": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
-          }
-        },
         "bn": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
-          }
-        },
-        "fil": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
-          }
-        },
-        "ur": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
-          }
-        },
-        "ta": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
-          }
-        },
-        "pcm": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
-          }
-        },
-        "hi": {
           "stringUnit": {
             "state": "translated",
             "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
@@ -18618,13 +18906,37 @@
             "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
           }
         },
-        "mr": {
+        "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
           }
         },
-        "te": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
+          }
+        },
+        "hi": {
           "stringUnit": {
             "state": "translated",
             "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
@@ -18636,7 +18948,109 @@
             "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
           }
         },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
+          }
+        },
         "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
+          }
+        },
+        "zh-Hant": {
           "stringUnit": {
             "state": "translated",
             "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
@@ -19004,55 +19418,7 @@
     "system.favorited_you": {
       "comment": "Action word when someone favorites you",
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "favorited"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "favorited"
-          }
-        },
-        "yue": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "favorited"
-          }
-        },
         "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "favorited"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "favorited"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "favorited"
-          }
-        },
-        "tl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "favorited"
-          }
-        },
-        "pnb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "favorited"
-          }
-        },
-        "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "favorited"
@@ -19064,85 +19430,7 @@
             "value": "favorited"
           }
         },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "favorited"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "favorited"
-          }
-        },
-        "tr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "favorited"
-          }
-        },
-        "ha": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "favorited"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "favorited"
-          }
-        },
         "bn": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "favorited"
-          }
-        },
-        "fil": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "favorited"
-          }
-        },
-        "ur": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "favorited"
-          }
-        },
-        "ta": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "favorited"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "favorited"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "favorited"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "favorited"
-          }
-        },
-        "pcm": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "favorited"
-          }
-        },
-        "hi": {
           "stringUnit": {
             "state": "translated",
             "value": "favorited"
@@ -19154,13 +19442,37 @@
             "value": "favorited"
           }
         },
-        "mr": {
+        "en": {
           "stringUnit": {
             "state": "translated",
             "value": "favorited"
           }
         },
-        "te": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "favorited"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "favorited"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "favorited"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "favorited"
+          }
+        },
+        "hi": {
           "stringUnit": {
             "state": "translated",
             "value": "favorited"
@@ -19172,7 +19484,109 @@
             "value": "favorited"
           }
         },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "favorited"
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "favorited"
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "favorited"
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "favorited"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "favorited"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "favorited"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "favorited"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "favorited"
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "favorited"
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "favorited"
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "favorited"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "favorited"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "favorited"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "favorited"
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "favorited"
+          }
+        },
         "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "favorited"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "favorited"
+          }
+        },
+        "zh-Hant": {
           "stringUnit": {
             "state": "translated",
             "value": "favorited"
@@ -19895,55 +20309,7 @@
     "system.took_screenshot": {
       "comment": "Notification sent to other users when someone screenshots",
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "* %@ took a screenshot *"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "* %@ took a screenshot *"
-          }
-        },
-        "yue": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "* %@ took a screenshot *"
-          }
-        },
         "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "* %@ took a screenshot *"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "* %@ took a screenshot *"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "* %@ took a screenshot *"
-          }
-        },
-        "tl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "* %@ took a screenshot *"
-          }
-        },
-        "pnb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "* %@ took a screenshot *"
-          }
-        },
-        "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "* %@ took a screenshot *"
@@ -19955,85 +20321,7 @@
             "value": "* %@ took a screenshot *"
           }
         },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "* %@ took a screenshot *"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "* %@ took a screenshot *"
-          }
-        },
-        "tr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "* %@ took a screenshot *"
-          }
-        },
-        "ha": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "* %@ took a screenshot *"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "* %@ took a screenshot *"
-          }
-        },
         "bn": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "* %@ took a screenshot *"
-          }
-        },
-        "fil": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "* %@ took a screenshot *"
-          }
-        },
-        "ur": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "* %@ took a screenshot *"
-          }
-        },
-        "ta": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "* %@ took a screenshot *"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "* %@ took a screenshot *"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "* %@ took a screenshot *"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "* %@ took a screenshot *"
-          }
-        },
-        "pcm": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "* %@ took a screenshot *"
-          }
-        },
-        "hi": {
           "stringUnit": {
             "state": "translated",
             "value": "* %@ took a screenshot *"
@@ -20045,13 +20333,37 @@
             "value": "* %@ took a screenshot *"
           }
         },
-        "mr": {
+        "en": {
           "stringUnit": {
             "state": "translated",
             "value": "* %@ took a screenshot *"
           }
         },
-        "te": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "* %@ took a screenshot *"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "* %@ took a screenshot *"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "* %@ took a screenshot *"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "* %@ took a screenshot *"
+          }
+        },
+        "hi": {
           "stringUnit": {
             "state": "translated",
             "value": "* %@ took a screenshot *"
@@ -20063,7 +20375,109 @@
             "value": "* %@ took a screenshot *"
           }
         },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "* %@ took a screenshot *"
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "* %@ took a screenshot *"
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "* %@ took a screenshot *"
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "* %@ took a screenshot *"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "* %@ took a screenshot *"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "* %@ took a screenshot *"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "* %@ took a screenshot *"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "* %@ took a screenshot *"
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "* %@ took a screenshot *"
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "* %@ took a screenshot *"
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "* %@ took a screenshot *"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "* %@ took a screenshot *"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "* %@ took a screenshot *"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "* %@ took a screenshot *"
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "* %@ took a screenshot *"
+          }
+        },
         "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "* %@ took a screenshot *"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "* %@ took a screenshot *"
+          }
+        },
+        "zh-Hant": {
           "stringUnit": {
             "state": "translated",
             "value": "* %@ took a screenshot *"
@@ -20251,55 +20665,7 @@
     },
     "system.unfavorited_you": {
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unfavorited"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unfavorited"
-          }
-        },
-        "yue": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unfavorited"
-          }
-        },
         "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unfavorited"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unfavorited"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unfavorited"
-          }
-        },
-        "tl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unfavorited"
-          }
-        },
-        "pnb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unfavorited"
-          }
-        },
-        "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "unfavorited"
@@ -20311,85 +20677,7 @@
             "value": "unfavorited"
           }
         },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unfavorited"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unfavorited"
-          }
-        },
-        "tr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unfavorited"
-          }
-        },
-        "ha": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unfavorited"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unfavorited"
-          }
-        },
         "bn": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unfavorited"
-          }
-        },
-        "fil": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unfavorited"
-          }
-        },
-        "ur": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unfavorited"
-          }
-        },
-        "ta": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unfavorited"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unfavorited"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unfavorited"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unfavorited"
-          }
-        },
-        "pcm": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "unfavorited"
-          }
-        },
-        "hi": {
           "stringUnit": {
             "state": "translated",
             "value": "unfavorited"
@@ -20401,13 +20689,37 @@
             "value": "unfavorited"
           }
         },
-        "mr": {
+        "en": {
           "stringUnit": {
             "state": "translated",
             "value": "unfavorited"
           }
         },
-        "te": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unfavorited"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unfavorited"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unfavorited"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unfavorited"
+          }
+        },
+        "hi": {
           "stringUnit": {
             "state": "translated",
             "value": "unfavorited"
@@ -20419,7 +20731,109 @@
             "value": "unfavorited"
           }
         },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unfavorited"
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unfavorited"
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unfavorited"
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unfavorited"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unfavorited"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unfavorited"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unfavorited"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unfavorited"
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unfavorited"
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unfavorited"
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unfavorited"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unfavorited"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unfavorited"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unfavorited"
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unfavorited"
+          }
+        },
         "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unfavorited"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unfavorited"
+          }
+        },
+        "zh-Hant": {
           "stringUnit": {
             "state": "translated",
             "value": "unfavorited"
@@ -20429,55 +20843,7 @@
     },
     "system.user_action": {
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ %@ you"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ %@ you"
-          }
-        },
-        "yue": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ %@ you"
-          }
-        },
         "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ %@ you"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ %@ you"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ %@ you"
-          }
-        },
-        "tl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ %@ you"
-          }
-        },
-        "pnb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ %@ you"
-          }
-        },
-        "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "%@ %@ you"
@@ -20489,85 +20855,7 @@
             "value": "%@ %@ you"
           }
         },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ %@ you"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ %@ you"
-          }
-        },
-        "tr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ %@ you"
-          }
-        },
-        "ha": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ %@ you"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ %@ you"
-          }
-        },
         "bn": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ %@ you"
-          }
-        },
-        "fil": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ %@ you"
-          }
-        },
-        "ur": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ %@ you"
-          }
-        },
-        "ta": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ %@ you"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ %@ you"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ %@ you"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ %@ you"
-          }
-        },
-        "pcm": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ %@ you"
-          }
-        },
-        "hi": {
           "stringUnit": {
             "state": "translated",
             "value": "%@ %@ you"
@@ -20579,13 +20867,37 @@
             "value": "%@ %@ you"
           }
         },
-        "mr": {
+        "en": {
           "stringUnit": {
             "state": "translated",
             "value": "%@ %@ you"
           }
         },
-        "te": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ %@ you"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ %@ you"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ %@ you"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ %@ you"
+          }
+        },
+        "hi": {
           "stringUnit": {
             "state": "translated",
             "value": "%@ %@ you"
@@ -20597,7 +20909,109 @@
             "value": "%@ %@ you"
           }
         },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ %@ you"
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ %@ you"
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ %@ you"
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ %@ you"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ %@ you"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ %@ you"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ %@ you"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ %@ you"
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ %@ you"
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ %@ you"
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ %@ you"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ %@ you"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ %@ you"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ %@ you"
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ %@ you"
+          }
+        },
         "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ %@ you"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ %@ you"
+          }
+        },
+        "zh-Hant": {
           "stringUnit": {
             "state": "translated",
             "value": "%@ %@ you"
