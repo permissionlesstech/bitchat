@@ -136,3 +136,21 @@ For detailed protocol documentation, see the [Technical Whitepaper](WHITEPAPER.m
 
 Want to try this on macos: `just run` will set it up and run from source.
 Run `just clean` afterwards to restore things to original state for mobile app building and development.
+
+### Sending Files
+
+BitChat now supports sending small files (up to 5MB pre-encryption) directly within private chats. 
+
+**To send a file:**
+
+1.  **Start a Private Chat:** Ensure you have an active private chat open with the recipient peer. The "Attach" button (paperclip icon) will only be enabled when a private chat is selected.
+2.  **Tap the Attach Button:** Locate the paperclip icon next to the message input field and tap it.
+3.  **Select a File:** Choose a file from your device using the system file picker. The current size limit for inline transfers is 5MB. If you select a larger file, an error message will appear.
+4.  **Automatic Transfer:** Once selected, the file will be automatically encrypted and sent to your peer via the mesh network.
+
+**Receiving Files:**
+
+When you receive an inline file:
+
+*   **Images:** If the received file is an image (e.g., JPEG, PNG), it will be automatically saved to your iPhone's camera roll (you may be prompted for Photo Library access the first time).
+*   **Other Files:** For other file types (e.g., documents, PDFs), a system share sheet will appear, allowing you to save the file to your Files app or open it in another compatible application.
