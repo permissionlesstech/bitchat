@@ -76,7 +76,7 @@ struct GeohashPeopleList: View {
                                 Image(systemName: "nosign")
                                     .font(.system(size: 10))
                                     .foregroundColor(.red)
-                                    .help("Blocked in geochash")
+                                    .help(String(localized: "status.blocked_geohash"))
                             }
                         }
                         Spacer()

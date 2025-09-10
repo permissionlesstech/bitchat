@@ -710,19 +710,19 @@ struct ContentView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     // Define commands with aliases and syntax
                     let baseInfo: [(commands: [String], syntax: String?, description: String)] = [
-                        (["/block"], "[nickname]", "block or list blocked peers"),
-                        (["/clear"], nil, "clear chat messages"),
-                        (["/hug"], "<nickname>", "send someone a warm hug"),
-                        (["/m", "/msg"], "<nickname> [message]", "send private message"),
-                        (["/slap"], "<nickname>", "slap someone with a trout"),
-                        (["/unblock"], "<nickname>", "unblock a peer"),
-                        (["/w"], nil, "see who's online")
+                        (["/block"], "[nickname]", String(localized: "help.command.block")),
+                        (["/clear"], nil, String(localized: "help.command.clear")),
+                        (["/hug"], "<nickname>", String(localized: "help.command.hug")),
+                        (["/m", "/msg"], "<nickname> [message]", String(localized: "help.command.msg")),
+                        (["/slap"], "<nickname>", String(localized: "help.command.slap")),
+                        (["/unblock"], "<nickname>", String(localized: "help.command.unblock")),
+                        (["/w"], nil, String(localized: "help.command.online"))
                     ]
                     let isGeoPublic: Bool = { if case .location = locationManager.selectedChannel { return true }; return false }()
                     let isGeoDM: Bool = (viewModel.selectedPrivateChatPeer?.hasPrefix("nostr_") == true)
                     let favInfo: [(commands: [String], syntax: String?, description: String)] = [
-                        (["/fav"], "<nickname>", "add to favorites"),
-                        (["/unfav"], "<nickname>", "remove from favorites")
+                        (["/fav"], "<nickname>", String(localized: "help.command.fav_add")),
+                        (["/unfav"], "<nickname>", String(localized: "help.command.fav_remove"))
                     ]
                     let commandInfo = baseInfo + ((isGeoPublic || isGeoDM) ? [] : favInfo)
                     
@@ -806,18 +806,18 @@ struct ContentView: View {
                         }()
                         let isGeoDM: Bool = (viewModel.selectedPrivateChatPeer?.hasPrefix("nostr_") == true)
                         var commandDescriptions = [
-                            ("/block", "block or list blocked peers"),
-                            ("/clear", "clear chat messages"),
-                            ("/hug", "send someone a warm hug"),
-                            ("/m", "send private message"),
-                            ("/slap", "slap someone with a trout"),
-                            ("/unblock", "unblock a peer"),
-                            ("/w", "see who's online")
+                            ("/block", String(localized: "help.command.block")),
+                            ("/clear", String(localized: "help.command.clear")),
+                            ("/hug", String(localized: "help.command.hug")),
+                            ("/m", String(localized: "help.command.msg")),
+                            ("/slap", String(localized: "help.command.slap")),
+                            ("/unblock", String(localized: "help.command.unblock")),
+                            ("/w", String(localized: "help.command.online"))
                         ]
                         // Only show favorites commands when not in geohash context
                         if !(isGeoPublic || isGeoDM) {
-                            commandDescriptions.append(("/fav", "add to favorites"))
-                            commandDescriptions.append(("/unfav", "remove from favorites"))
+                            commandDescriptions.append(("/fav", String(localized: "help.command.fav_add")))
+                            commandDescriptions.append(("/unfav", String(localized: "help.command.fav_remove")))
                         }
                         
                         let input = newValue.lowercased()
@@ -1474,7 +1474,7 @@ struct DeliveryStatusView: View {
                     .font(.system(size: 10))
             }
             .foregroundColor(textColor.opacity(0.8))
-            .help("Delivered to \(nickname)")
+            .help(String.localizedStringWithFormat(String(localized: "help.delivered_to_name"), nickname))
             
         case .read(let nickname, _):
             HStack(spacing: -2) {
@@ -1484,13 +1484,13 @@ struct DeliveryStatusView: View {
                     .font(.system(size: 10, weight: .bold))
             }
             .foregroundColor(Color(red: 0.0, green: 0.478, blue: 1.0))  // Bright blue
-            .help("Read by \(nickname)")
+            .help(String.localizedStringWithFormat(String(localized: "help.read_by_name"), nickname))
             
         case .failed(let reason):
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 10))
                 .foregroundColor(Color.red.opacity(0.8))
-                .help("Failed: \(reason)")
+                .help(String.localizedStringWithFormat(String(localized: "help.failed_reason"), reason))
             
         case .partiallyDelivered(let reached, let total):
             HStack(spacing: 1) {
@@ -1500,7 +1500,7 @@ struct DeliveryStatusView: View {
                     .font(.system(size: 10, design: .monospaced))
             }
             .foregroundColor(secondaryTextColor.opacity(0.6))
-            .help("Delivered to \(reached) of \(total) members")
+            .help(String.localizedStringWithFormat(String(localized: "help.delivered_group_members"), reached, total))
         }
     }
 }

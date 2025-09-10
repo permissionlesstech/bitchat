@@ -54,7 +54,7 @@ class NotificationService {
     }
     
     func sendMentionNotification(from sender: String, message: String) {
-        let title = "🫵 you were mentioned by \(sender)"
+        let title = String.localizedStringWithFormat(String(localized: "notifications.mention.title"), sender)
         let body = message
         let identifier = "mention-\(UUID().uuidString)"
         
@@ -62,7 +62,7 @@ class NotificationService {
     }
     
     func sendPrivateMessageNotification(from sender: String, message: String, peerID: String) {
-        let title = "🔒 private message from \(sender)"
+        let title = String.localizedStringWithFormat(String(localized: "notifications.private_message.title"), sender)
         let body = message
         let identifier = "private-\(UUID().uuidString)"
         let userInfo = ["peerID": peerID, "senderName": sender]
@@ -74,8 +74,8 @@ class NotificationService {
         // Send directly without checking app state for favorites
         DispatchQueue.main.async {
             let content = UNMutableNotificationContent()
-            content.title = "⭐ \(nickname) is online!"
-            content.body = "wanna get in there?"
+            content.title = String.localizedStringWithFormat(String(localized: "notifications.favorite_online.title"), nickname)
+            content.body = String(localized: "notifications.favorite_online.body")
             content.sound = .default
             
             let request = UNNotificationRequest(
@@ -100,8 +100,8 @@ class NotificationService {
     }
 
     func sendNetworkAvailableNotification(peerCount: Int) {
-        let title = "👥 bitchatters nearby!"
-        let body = peerCount == 1 ? "1 person around" : "\(peerCount) people around"
+        let title = String(localized: "notifications.network_available.title")
+        let body = String.localizedStringWithFormat(NSLocalizedString("notifications.network_available.body", comment: "Pluralized nearby people count"), peerCount)
         let identifier = "network-available-\(Date().timeIntervalSince1970)"
         
         // For network notifications, we want to show them even in foreground

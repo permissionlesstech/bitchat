@@ -126,9 +126,9 @@ struct QRScanView: View {
             Button(String(localized: "verify.validate")) {
                 if let qr = VerificationService.shared.verifyScannedQR(input) {
                     let ok = viewModel.beginQRVerification(with: qr)
-                    result = ok ? "verification requested for \(qr.nickname)" : "could not find matching peer"
+                    result = ok ? String.localizedStringWithFormat(String(localized: "verify.requested_for"), qr.nickname) : String(localized: "verify.could_not_find_peer")
                 } else {
-                    result = "invalid or expired qr payload"
+                    result = String(localized: "verify.invalid_or_expired_qr")
                 }
             }
             .buttonStyle(.bordered)

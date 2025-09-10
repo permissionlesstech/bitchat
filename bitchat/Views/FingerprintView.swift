@@ -160,9 +160,9 @@ struct FingerprintView: View {
                             .foregroundColor(isVerified ? Color.green : Color.orange)
                             .frame(maxWidth: .infinity)
                         
-                        Text(isVerified ? 
-                             "you have verified this person's identity." :
-                             "compare these fingerprints with \(peerNickname) using a secure channel.")
+                        Text(isVerified ?
+                             String(localized: "fp.verified_message") :
+                             String.localizedStringWithFormat(String(localized: "fp.compare_fingerprints_with_name"), peerNickname))
                             .font(.system(size: 12, design: .monospaced))
                             .foregroundColor(textColor.opacity(0.7))
                             .multilineTextAlignment(.center)
