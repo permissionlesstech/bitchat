@@ -3764,6 +3764,7 @@
       "comment": "Screen reader count announcement with proper plural forms Includes placeholders: %d",
       "localizations": {
         "ar": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -3782,6 +3783,7 @@
           }
         },
         "arz": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -3800,6 +3802,7 @@
           }
         },
         "bn": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -3818,6 +3821,7 @@
           }
         },
         "de": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -3836,6 +3840,7 @@
           }
         },
         "en": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -3854,6 +3859,7 @@
           }
         },
         "es": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -3872,6 +3878,7 @@
           }
         },
         "fil": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -3890,6 +3897,7 @@
           }
         },
         "fr": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -3908,6 +3916,7 @@
           }
         },
         "ha": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -3926,6 +3935,7 @@
           }
         },
         "hi": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -3944,6 +3954,7 @@
           }
         },
         "id": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -3962,6 +3973,7 @@
           }
         },
         "ja": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -3980,6 +3992,7 @@
           }
         },
         "mr": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -3998,6 +4011,7 @@
           }
         },
         "pcm": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -4016,6 +4030,7 @@
           }
         },
         "pnb": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -4034,6 +4049,7 @@
           }
         },
         "pt": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -4052,6 +4068,7 @@
           }
         },
         "pt-BR": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -4070,6 +4087,7 @@
           }
         },
         "ru": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -4088,6 +4106,7 @@
           }
         },
         "sw": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -4106,6 +4125,7 @@
           }
         },
         "ta": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -4124,6 +4144,7 @@
           }
         },
         "te": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -4142,6 +4163,7 @@
           }
         },
         "tl": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -4160,6 +4182,7 @@
           }
         },
         "tr": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -4178,6 +4201,7 @@
           }
         },
         "ur": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -4196,6 +4220,7 @@
           }
         },
         "vi": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -4214,6 +4239,7 @@
           }
         },
         "yue": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -4232,6 +4258,7 @@
           }
         },
         "zh-HK": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -4250,6 +4277,7 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -4268,6 +4296,7 @@
           }
         },
         "zh-Hant": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -4646,180 +4675,180 @@
       }
     },
     "accessibility.private_chat_with_user": {
-      "comment": "Screen reader label: Private chat with %@",
+      "comment": "Base accessibility text for private chat - use with String.localizedStringWithFormat",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with %@"
+            "value": "Private chat with"
           }
         },
         "arz": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with %@"
+            "value": "Private chat with"
           }
         },
         "bn": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with %@"
+            "value": "Private chat with"
           }
         },
         "de": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with %@"
+            "value": "Private chat with"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Private chat with %@"
+            "value": "Private chat with user"
           }
         },
         "es": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with %@"
+            "value": "Private chat with"
           }
         },
         "fil": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with %@"
+            "value": "Private chat with"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with %@"
+            "value": "Private chat with"
           }
         },
         "ha": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with %@"
+            "value": "Private chat with"
           }
         },
         "hi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with %@"
+            "value": "Private chat with"
           }
         },
         "id": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with %@"
+            "value": "Private chat with"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with %@"
+            "value": "Private chat with"
           }
         },
         "mr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with %@"
+            "value": "Private chat with"
           }
         },
         "pcm": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with %@"
+            "value": "Private chat with"
           }
         },
         "pnb": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with %@"
+            "value": "Private chat with"
           }
         },
         "pt": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with %@"
+            "value": "Private chat with"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with %@"
+            "value": "Private chat with"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with %@"
+            "value": "Private chat with"
           }
         },
         "sw": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with %@"
+            "value": "Private chat with"
           }
         },
         "ta": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with %@"
+            "value": "Private chat with"
           }
         },
         "te": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with %@"
+            "value": "Private chat with"
           }
         },
         "tl": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with %@"
+            "value": "Private chat with"
           }
         },
         "tr": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with %@"
+            "value": "Private chat with"
           }
         },
         "ur": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with %@"
+            "value": "Private chat with"
           }
         },
         "vi": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with %@"
+            "value": "Private chat with"
           }
         },
         "yue": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with %@"
+            "value": "Private chat with"
           }
         },
         "zh-HK": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with %@"
+            "value": "Private chat with"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with %@"
+            "value": "Private chat with"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "needs_review",
-            "value": "Private chat with %@"
+            "value": "Private chat with"
           }
         }
       }
@@ -18428,6 +18457,185 @@
         }
       }
     },
+    "fp.compare_fingerprints_with_name": {
+      "comment": "Instruction to compare fingerprints; %@ is the peer's display name",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "compare these fingerprints with %@ using a secure channel."
+          }
+        },
+        "arz": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "compare these fingerprints with %@ using a secure channel."
+          }
+        },
+        "bn": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "compare these fingerprints with %@ using a secure channel."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "compare these fingerprints with %@ using a secure channel."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "compare these fingerprints with %@ using a secure channel."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "compare these fingerprints with %@ using a secure channel."
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "compare these fingerprints with %@ using a secure channel."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "compare these fingerprints with %@ using a secure channel."
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "compare these fingerprints with %@ using a secure channel."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "compare these fingerprints with %@ using a secure channel."
+          }
+        },
+        "id": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "compare these fingerprints with %@ using a secure channel."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "compare these fingerprints with %@ using a secure channel."
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "compare these fingerprints with %@ using a secure channel."
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "compare these fingerprints with %@ using a secure channel."
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "compare these fingerprints with %@ using a secure channel."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "compare these fingerprints with %@ using a secure channel."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "compare these fingerprints with %@ using a secure channel."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "compare these fingerprints with %@ using a secure channel."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "compare these fingerprints with %@ using a secure channel."
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "compare these fingerprints with %@ using a secure channel."
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "compare these fingerprints with %@ using a secure channel."
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "compare these fingerprints with %@ using a secure channel."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "compare these fingerprints with %@ using a secure channel."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "compare these fingerprints with %@ using a secure channel."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "compare these fingerprints with %@ using a secure channel."
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "compare these fingerprints with %@ using a secure channel."
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "compare these fingerprints with %@ using a secure channel."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "compare these fingerprints with %@ using a secure channel."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "compare these fingerprints with %@ using a secure channel."
+          }
+        }
+      }
+    },
     "fp.remove_verification_button": {
       "comment": "App text: REMOVE VERIFICATION",
       "localizations": {
@@ -18782,6 +18990,185 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "SECURITY VERIFICATION"
+          }
+        }
+      }
+    },
+    "fp.verified_message": {
+      "comment": "Status message shown when fingerprints are verified",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "you have verified this person's identity."
+          }
+        },
+        "arz": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "you have verified this person's identity."
+          }
+        },
+        "bn": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "you have verified this person's identity."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "you have verified this person's identity."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "you have verified this person's identity."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "you have verified this person's identity."
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "you have verified this person's identity."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "you have verified this person's identity."
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "you have verified this person's identity."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "you have verified this person's identity."
+          }
+        },
+        "id": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "you have verified this person's identity."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "you have verified this person's identity."
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "you have verified this person's identity."
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "you have verified this person's identity."
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "you have verified this person's identity."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "you have verified this person's identity."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "you have verified this person's identity."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "you have verified this person's identity."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "you have verified this person's identity."
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "you have verified this person's identity."
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "you have verified this person's identity."
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "you have verified this person's identity."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "you have verified this person's identity."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "you have verified this person's identity."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "you have verified this person's identity."
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "you have verified this person's identity."
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "you have verified this person's identity."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "you have verified this person's identity."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "you have verified this person's identity."
           }
         }
       }
@@ -24159,7 +24546,80 @@
     "notifications.network_available.body": {
       "comment": "Pluralized body: nearby people count; %d is count",
       "localizations": {
+        "ar": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d person around"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d people around"
+                }
+              }
+            }
+          }
+        },
+        "arz": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d person around"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d people around"
+                }
+              }
+            }
+          }
+        },
+        "bn": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d person around"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d people around"
+                }
+              }
+            }
+          }
+        },
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d person around"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d people around"
+                }
+              }
+            }
+          }
+        },
         "en": {
+          "stringUnit": {},
           "variations": {
             "plural": {
               "one": {
@@ -24171,6 +24631,438 @@
               "other": {
                 "stringUnit": {
                   "state": "translated",
+                  "value": "%d people around"
+                }
+              }
+            }
+          }
+        },
+        "es": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d person around"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d people around"
+                }
+              }
+            }
+          }
+        },
+        "fil": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d person around"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d people around"
+                }
+              }
+            }
+          }
+        },
+        "fr": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d person around"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d people around"
+                }
+              }
+            }
+          }
+        },
+        "ha": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d person around"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d people around"
+                }
+              }
+            }
+          }
+        },
+        "hi": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d person around"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d people around"
+                }
+              }
+            }
+          }
+        },
+        "id": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d person around"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d people around"
+                }
+              }
+            }
+          }
+        },
+        "ja": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d person around"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d people around"
+                }
+              }
+            }
+          }
+        },
+        "mr": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d person around"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d people around"
+                }
+              }
+            }
+          }
+        },
+        "pcm": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d person around"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d people around"
+                }
+              }
+            }
+          }
+        },
+        "pnb": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d person around"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d people around"
+                }
+              }
+            }
+          }
+        },
+        "pt": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d person around"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d people around"
+                }
+              }
+            }
+          }
+        },
+        "pt-BR": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d person around"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d people around"
+                }
+              }
+            }
+          }
+        },
+        "ru": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d person around"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d people around"
+                }
+              }
+            }
+          }
+        },
+        "sw": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d person around"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d people around"
+                }
+              }
+            }
+          }
+        },
+        "ta": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d person around"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d people around"
+                }
+              }
+            }
+          }
+        },
+        "te": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d person around"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d people around"
+                }
+              }
+            }
+          }
+        },
+        "tl": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d person around"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d people around"
+                }
+              }
+            }
+          }
+        },
+        "tr": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d person around"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d people around"
+                }
+              }
+            }
+          }
+        },
+        "ur": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d person around"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d people around"
+                }
+              }
+            }
+          }
+        },
+        "vi": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d person around"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d people around"
+                }
+              }
+            }
+          }
+        },
+        "yue": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d person around"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d people around"
+                }
+              }
+            }
+          }
+        },
+        "zh-HK": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d person around"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d people around"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d person around"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d people around"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hant": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "needs_review",
+                  "value": "%d person around"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "needs_review",
                   "value": "%d people around"
                 }
               }
@@ -32949,364 +33841,6 @@
           }
         }
       }
-    },
-    "fp.verified_message": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "value": "you have verified this person's identity.",
-            "state": "translated"
-          }
-        },
-        "id": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "you have verified this person's identity."
-          }
-        },
-        "tr": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "you have verified this person's identity."
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "you have verified this person's identity."
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "you have verified this person's identity."
-          }
-        },
-        "pcm": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "you have verified this person's identity."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "you have verified this person's identity."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "you have verified this person's identity."
-          }
-        },
-        "fil": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "you have verified this person's identity."
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "you have verified this person's identity."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "you have verified this person's identity."
-          }
-        },
-        "ar": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "you have verified this person's identity."
-          }
-        },
-        "bn": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "you have verified this person's identity."
-          }
-        },
-        "te": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "you have verified this person's identity."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "you have verified this person's identity."
-          }
-        },
-        "pnb": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "you have verified this person's identity."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "you have verified this person's identity."
-          }
-        },
-        "mr": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "you have verified this person's identity."
-          }
-        },
-        "ha": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "you have verified this person's identity."
-          }
-        },
-        "tl": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "you have verified this person's identity."
-          }
-        },
-        "ur": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "you have verified this person's identity."
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "you have verified this person's identity."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "you have verified this person's identity."
-          }
-        },
-        "ta": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "you have verified this person's identity."
-          }
-        },
-        "yue": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "you have verified this person's identity."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "you have verified this person's identity."
-          }
-        },
-        "arz": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "you have verified this person's identity."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "you have verified this person's identity."
-          }
-        },
-        "zh-HK": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "you have verified this person's identity."
-          }
-        }
-      },
-      "comment": "Status message shown when fingerprints are verified"
-    },
-    "fp.compare_fingerprints_with_name": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "value": "compare these fingerprints with %@ using a secure channel.",
-            "state": "translated"
-          }
-        },
-        "id": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "compare these fingerprints with %@ using a secure channel."
-          }
-        },
-        "tr": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "compare these fingerprints with %@ using a secure channel."
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "compare these fingerprints with %@ using a secure channel."
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "compare these fingerprints with %@ using a secure channel."
-          }
-        },
-        "pcm": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "compare these fingerprints with %@ using a secure channel."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "compare these fingerprints with %@ using a secure channel."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "compare these fingerprints with %@ using a secure channel."
-          }
-        },
-        "fil": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "compare these fingerprints with %@ using a secure channel."
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "compare these fingerprints with %@ using a secure channel."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "compare these fingerprints with %@ using a secure channel."
-          }
-        },
-        "ar": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "compare these fingerprints with %@ using a secure channel."
-          }
-        },
-        "bn": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "compare these fingerprints with %@ using a secure channel."
-          }
-        },
-        "te": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "compare these fingerprints with %@ using a secure channel."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "compare these fingerprints with %@ using a secure channel."
-          }
-        },
-        "pnb": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "compare these fingerprints with %@ using a secure channel."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "compare these fingerprints with %@ using a secure channel."
-          }
-        },
-        "mr": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "compare these fingerprints with %@ using a secure channel."
-          }
-        },
-        "ha": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "compare these fingerprints with %@ using a secure channel."
-          }
-        },
-        "tl": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "compare these fingerprints with %@ using a secure channel."
-          }
-        },
-        "ur": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "compare these fingerprints with %@ using a secure channel."
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "compare these fingerprints with %@ using a secure channel."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "compare these fingerprints with %@ using a secure channel."
-          }
-        },
-        "ta": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "compare these fingerprints with %@ using a secure channel."
-          }
-        },
-        "yue": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "compare these fingerprints with %@ using a secure channel."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "compare these fingerprints with %@ using a secure channel."
-          }
-        },
-        "arz": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "compare these fingerprints with %@ using a secure channel."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "compare these fingerprints with %@ using a secure channel."
-          }
-        },
-        "zh-HK": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "compare these fingerprints with %@ using a secure channel."
-          }
-        }
-      },
-      "comment": "Instruction to compare fingerprints; %@ is the peer's display name"
     }
   },
   "version": "1.0"

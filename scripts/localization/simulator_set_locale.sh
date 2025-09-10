@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# set-locale.sh — Quickly set Simulator language/locale
+# simulator_set_locale.sh — Quickly set Simulator language/locale
 #
 # Usage:
 #   ./scripts/simulator/set-locale.sh --lang fr --region FR [--device <udid>] [--restart]
@@ -20,6 +20,7 @@ UDID=""
 RESTART=false
 BOOT_ON_DEMAND=false
 LAUNCH_BUNDLE=""
+DRY_RUN=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -35,6 +36,8 @@ while [[ $# -gt 0 ]]; do
       BOOT_ON_DEMAND=true; shift;;
     --launch)
       LAUNCH_BUNDLE="$2"; shift 2;;
+    --dry-run|--check)
+      DRY_RUN=true; shift;;
     -h|--help)
       echo "Usage: $0 --lang <code> [--region <CC>] [--device <udid>] [--restart] [--launch <bundle>]"; exit 0;;
     *)
@@ -80,8 +83,8 @@ if [[ -z "$UDID" ]]; then
         echo "❌ Failed to parse UDID from: $DEV_LINE"; exit 2
       fi
       echo "🔧 Booting $UDID"
-      xcrun simctl boot "$UDID" || true
-      xcrun simctl bootstatus "$UDID" -b
+      run xcrun simctl boot "$UDID" || true
+      run xcrun simctl bootstatus "$UDID" -b
     else
       echo "❌ Specify --device <udid> (found ${#BOOTED[@]} booted devices). Or pass --boot to auto-boot one."
       xcrun simctl list devices | sed -n '1,160p'
@@ -94,23 +97,29 @@ echo "📱 Target device: $UDID"
 echo "🌐 Setting language: $LANG_CODE, locale: $LOCALE"
 
 # Device-wide settings via defaults
-xcrun simctl spawn "$UDID" defaults write -g AppleLanguages -array "$LANG_CODE"
-xcrun simctl spawn "$UDID" defaults write -g AppleLocale "$LOCALE"
+run xcrun simctl spawn "$UDID" defaults write -g AppleLanguages -array "$LANG_CODE"
+run xcrun simctl spawn "$UDID" defaults write -g AppleLocale "$LOCALE"
 
 # Nudge cfprefsd so changes pick up faster
-xcrun simctl spawn "$UDID" killall -u mobile cfprefsd || true
+run xcrun simctl spawn "$UDID" killall -u mobile cfprefsd || true
 
 if [[ -n "$LAUNCH_BUNDLE" ]]; then
   echo "🚀 Launching $LAUNCH_BUNDLE with overrides"
   # Per-app launch overrides: no reboot required
-  xcrun simctl launch "$UDID" "$LAUNCH_BUNDLE" -AppleLanguages "(\"$LANG_CODE\")" -AppleLocale "$LOCALE" || true
+  run xcrun simctl launch "$UDID" "$LAUNCH_BUNDLE" -AppleLanguages "(\"$LANG_CODE\")" -AppleLocale "$LOCALE" || true
 fi
 
 if [[ "$RESTART" == true ]]; then
   echo "🔁 Restarting Simulator device to apply system-wide settings"
-  xcrun simctl shutdown "$UDID" || true
-  xcrun simctl boot "$UDID"
-  xcrun simctl bootstatus "$UDID" -b
+  run xcrun simctl shutdown "$UDID" || true
+  run xcrun simctl boot "$UDID"
+  run xcrun simctl bootstatus "$UDID" -b
 fi
 
-echo "✅ Locale applied. Language=$LANG_CODE, Locale=$LOCALE"
+echo "✅ Locale ${DRY_RUN:+(dry-run) }applied. Language=$LANG_CODE, Locale=$LOCALE"
+run() {
+  echo "$*"
+  if [[ "$DRY_RUN" == false ]]; then
+    eval "$@"
+  fi
+}

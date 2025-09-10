@@ -1,11 +1,20 @@
 #!/bin/bash
 
-# Build-time localization validation script
+# validate_localization_build.sh — Build-time localization validation script
 # Enforces that all user-facing strings use proper localization
 
 set -e
 
-echo "🔍 Validating localization compliance..."
+DRY_RUN=false
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run|--check) DRY_RUN=true ;;
+    -h|--help) echo "Usage: $0 [--dry-run]"; exit 0 ;;
+    *) echo "Unknown argument: $arg"; exit 2 ;;
+  esac
+done
+
+echo "🔍 Validating localization compliance...${DRY_RUN:+ (dry-run)}"
 
 # Patterns to catch hardcoded UI strings
 FORBIDDEN_PATTERNS=(

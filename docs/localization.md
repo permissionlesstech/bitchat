@@ -70,7 +70,7 @@ Why both exist:
 
 2. **Sync all languages and comments:**
    ```bash
-   ./scripts/localization/sync-all-localizations.sh
+   ./scripts/localization/sync_all_localizations.sh [--dry-run]
    ```
    - Ensures 29-language parity and fills gaps with English
    - Auto-adds concise developer comments for any keys missing context
@@ -97,36 +97,41 @@ location.teleport      # Location-specific features
 
 ### Main Sync Script
 ```bash
-./scripts/localization/sync-all-localizations.sh
+   ./scripts/localization/sync_all_localizations.sh [--dry-run]
 ```
 - Syncs both Localizable.xcstrings AND Infoplist.xcstrings
 - Ensures all 29 languages have complete coverage
 - Fills missing keys with English values for translation
 - Adds concise developer comments where missing
- - Flags non-English entries copied from English as `needs_review`
+- Flags non-English entries copied from English as `needs_review`
 
 ### Simulator Locale Helper
 ```bash
 # Use the only booted Simulator
-./scripts/simulator/set-locale.sh --lang fr --region FR --restart
+./scripts/localization/simulator_set_locale.sh --lang fr --region FR --restart
 
 # Specify a device UDID explicitly
-./scripts/simulator/set-locale.sh --lang es --device <UDID>
+./scripts/localization/simulator_set_locale.sh --lang es --device <UDID>
 
 # Launch an app with per-launch overrides (no reboot)
-./scripts/simulator/set-locale.sh --lang zh-Hans --region CN --device <UDID> --launch com.your.bundleid
+./scripts/localization/simulator_set_locale.sh --lang zh-Hans --region CN --device <UDID> --launch com.your.bundleid
 
 # Auto-boot an available iPhone if none booted
-./scripts/simulator/set-locale.sh --lang de --boot --restart
+./scripts/localization/simulator_set_locale.sh --lang de --boot --restart
 ```
 - Auto-detects the single booted Simulator if `--device` is omitted.
 - Writes device-wide AppleLanguages and AppleLocale; `--restart` reboots to apply system-wide.
 - `--launch` starts an app with `-AppleLanguages`/`-AppleLocale` arguments for fast spot checks.
  - `--boot` selects and boots the first available iPhone device if no single booted device is found.
 
+### Other Commands
+- `./scripts/localization/sync_comments.sh [--dry-run]` — Comments only
+- `./scripts/localization/locale_report.sh` — Coverage and missing report
+- Pre-commit hook: `cp scripts/github/localization_pre_commit_hook.sh .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit`
+
 ### Build-Time Validation
 ```bash
-./scripts/localization/validate-localization-build.sh
+./scripts/localization/validate_localization_build.sh
 ```
 - Prevents hardcoded strings in commits
 - Validates .xcstrings file integrity
@@ -136,7 +141,7 @@ location.teleport      # Location-specific features
 ### Pre-Commit Hook (Optional)
 ```bash
 # Enable validation
-cp scripts/github/localization-pre-commit-hook.sh .git/hooks/pre-commit
+cp scripts/github/localization_pre_commit_hook.sh .git/hooks/pre-commit
 chmod +x .git/hooks/pre-commit
 ```
 What it enforces:
@@ -214,13 +219,13 @@ Languages: Arabic (`ar`, `arz`), Urdu (`ur`), Punjabi (`pnb`)
 xcodegen generate
 
 # Validate localization integrity  
-./scripts/localization/validate-localization-build.sh
+./scripts/localization/validate_localization_build.sh
 ```
 
 ### Missing Translations
 ```bash
 # Sync all languages to ensure parity
-./scripts/localization/sync-all-localizations.sh
+./scripts/localization/sync_all_localizations.sh [--dry-run]
 
 # Check for English fallbacks in major languages
 # Edit Localizable.xcstrings in Xcode String Catalog editor
@@ -233,6 +238,12 @@ xcodegen generate
 4. Test with iOS Simulator set to that language
 
 ## Quality Assurance
+
+### Other Commands
+- `./scripts/localization/sync_localization.sh [--dry-run]` — UI catalog only
+- `./scripts/localization/sync_comments.sh [--dry-run]` — Comments only
+- `./scripts/localization/locale_report.sh` — Coverage and missing report
+- Pre-commit hook: `cp scripts/github/localization_pre_commit_hook.sh .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit`
 
 ### Build-Time Validation
 - Automatic detection of hardcoded UI strings

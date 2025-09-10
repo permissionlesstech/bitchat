@@ -143,7 +143,7 @@ def generate_comment(key: str, value_hint: Optional[str]) -> str:
     return "App text"
 
 
-def main(path: str) -> int:
+def main(path: str, dry_run: bool = False) -> int:
     p = Path(path)
     if not p.exists():
         print(f"❌ File not found: {p}", file=sys.stderr)
@@ -163,14 +163,24 @@ def main(path: str) -> int:
         entry['comment'] = comment
         updated += 1
 
-    p.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding='utf-8')
-    print(f"✅ Added comments to {updated}/{total} keys in {p}")
+    if not dry_run:
+        p.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding='utf-8')
+    print(f"{'[DRY-RUN] ' if dry_run else ''}✅ Added comments to {updated}/{total} keys in {p}")
     return 0
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 2:
-        print('Usage: add_missing_comments.py <path-to-.xcstrings>', file=sys.stderr)
+    if len(sys.argv) < 2:
+        print('Usage: add_missing_comments.py <path-to-.xcstrings> [--dry-run]', file=sys.stderr)
         raise SystemExit(2)
-    raise SystemExit(main(sys.argv[1]))
-
+    path = None
+    dry = False
+    for arg in sys.argv[1:]:
+        if arg == '--dry-run' or arg == '--check':
+            dry = True
+        else:
+            path = arg
+    if not path:
+        print('Usage: add_missing_comments.py <path-to-.xcstrings> [--dry-run]', file=sys.stderr)
+        raise SystemExit(2)
+    raise SystemExit(main(path, dry))

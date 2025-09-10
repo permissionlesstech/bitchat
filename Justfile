@@ -114,3 +114,38 @@ nuke:
     @if [ -f bitchat/LaunchScreen.storyboard.ios ]; then mv bitchat/LaunchScreen.storyboard.ios bitchat/LaunchScreen.storyboard; fi
     @git checkout -- project.yml bitchat.xcodeproj/project.pbxproj bitchat/Info.plist 2>/dev/null || echo "⚠️  Not a git repo or no changes to restore"
     @echo "✅ Nuclear clean complete"
+
+# =============================
+# Localization Convenience Tasks
+# =============================
+
+# Pass-through to set simulator locale. Example:
+#   just set-locale --lang fr --region FR --restart
+set-locale *args:
+    @./scripts/localization/simulator_set_locale.sh {{args}}
+
+# Sync both UI and InfoPlist catalogs. Example:
+#   just sync-all --dry-run
+sync-all *args:
+    @./scripts/localization/sync_all_localizations.sh {{args}}
+
+# UI catalog only. Example:
+
+# Sync developer comments only. Example:
+#   just sync-comments --dry-run
+sync-comments *args:
+    @./scripts/localization/sync_comments.sh {{args}}
+
+# Coverage report. Example:
+#   just locale-report
+locale-report:
+    @bash ./scripts/localization/locale_report.sh
+
+# Validate localization build. Example:
+#   just validate-localization --dry-run
+validate-localization *args:
+    @./scripts/localization/validate_localization_build.sh {{args}}
+
+# Install pre-commit hook.
+install-pre-commit:
+    @cp scripts/github/localization_pre_commit_hook.sh .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit && echo "✅ Installed pre-commit hook"

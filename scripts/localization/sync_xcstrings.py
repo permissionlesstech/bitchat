@@ -18,7 +18,7 @@ import json
 import sys
 from pathlib import Path
 
-def main(path: str) -> int:
+def main(path: str, check: bool = False) -> int:
     p = Path(path)
     if not p.exists():
         print(f"❌ File not found: {p}", file=sys.stderr)
@@ -69,35 +69,72 @@ def main(path: str) -> int:
     for key, entry in strings.items():
         locs = entry.setdefault('localizations', {})
         base = (locs.get('en') or {}).get('stringUnit', {}).get('value')
-        if not base:
+        en_variations = ((locs.get('en') or {}).get('variations') or {}).get('plural') or None
+        if not base and not en_variations:
             continue
         before = len(locs)
         for loc in all_locales:
             if loc not in locs:
-                # New locale: English marked translated; others need review
-                state = 'translated' if loc == 'en' else 'needs_review'
-                locs[loc] = { 'stringUnit': { 'state': state, 'value': base } }
-                added += 1
+                if base:
+                    state = 'translated' if loc == 'en' else 'needs_review'
+                    locs[loc] = { 'stringUnit': { 'state': state, 'value': base } }
+                    added += 1
+                elif en_variations:
+                    # Seed plural variations for missing locale by copying English
+                    seeded = { 'plural': {} }
+                    for cat, branch in en_variations.items():
+                        val = ((branch or {}).get('stringUnit') or {}).get('value')
+                        if val is None:
+                            continue
+                        seeded['plural'][cat] = { 'stringUnit': { 'state': 'translated' if loc=='en' else 'needs_review', 'value': val } }
+                    if seeded['plural']:
+                        locs[loc] = { 'variations': seeded }
+                        added += 1
             else:
                 su = locs[loc].setdefault('stringUnit', {})
-                if not su.get('value'):
+                if base and not su.get('value'):
                     su['value'] = base
                     su['state'] = 'translated' if loc == 'en' else 'needs_review'
                     added += 1
+                elif en_variations:
+                    # Ensure plural variations exist
+                    var = locs[loc].setdefault('variations', {})
+                    plural = var.setdefault('plural', {})
+                    changed=False
+                    for cat, branch in en_variations.items():
+                        if cat not in plural:
+                            val = ((branch or {}).get('stringUnit') or {}).get('value')
+                            if val is None:
+                                continue
+                            plural[cat] = { 'stringUnit': { 'state': 'translated' if loc=='en' else 'needs_review', 'value': val } }
+                            changed=True
+                    if changed:
+                        added += 1
                 else:
                     # If non-English matches base and previously marked translated, mark as needs_review
-                    if loc != 'en' and su.get('value') == base and su.get('state') in (None, 'translated'):
+                    if base and loc != 'en' and su.get('value') == base and su.get('state') in (None, 'translated'):
                         su['state'] = 'needs_review'
                         retagged += 1
         if len(locs) != before:
             touched_keys += 1
 
-    p.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding='utf-8')
-    print(f"✅ Filled {added} missing entries; marked {retagged} entries as needs_review across {touched_keys} keys.")
+    if not check:
+        p.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding='utf-8')
+    print(f"{'[DRY-RUN] ' if check else ''}✅ Filled {added} missing entries; marked {retagged} entries as needs_review across {touched_keys} keys.")
     return 0
 
 if __name__ == '__main__':
-    if len(sys.argv) != 2:
-        print('Usage: sync_xcstrings.py <path-to-.xcstrings>', file=sys.stderr)
+    if len(sys.argv) < 2:
+        print('Usage: sync_xcstrings.py <path-to-.xcstrings> [--check]', file=sys.stderr)
         raise SystemExit(2)
-    raise SystemExit(main(sys.argv[1]))
+    path = None
+    check = False
+    for arg in sys.argv[1:]:
+        if arg == '--check' or arg == '--dry-run':
+            check = True
+        else:
+            path = arg
+    if not path:
+        print('Usage: sync_xcstrings.py <path-to-.xcstrings> [--check]', file=sys.stderr)
+        raise SystemExit(2)
+    raise SystemExit(main(path, check))

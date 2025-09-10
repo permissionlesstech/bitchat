@@ -1349,7 +1349,7 @@ struct ContentView: View {
                                 }
                             }
                         }
-                        .accessibilityLabel(String.localizedStringWithFormat(String(localized: "accessibility.private_chat_with_user"), privatePeerNick))
+                        .accessibilityLabel("\(String(localized: "accessibility.private_chat_with_user")): \(privatePeerNick)")
                         .accessibilityHint(String(localized: "accessibility.private_chat_hint"))
                     }
                     .buttonStyle(.plain)
