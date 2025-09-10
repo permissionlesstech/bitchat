@@ -11,6 +11,11 @@ echo ""
 
 python3 "$(dirname "$0")/localization/sync_xcstrings.py" bitchat/Localizable.xcstrings
 
+# Ensure concise developer comments exist for every key
+if [[ -f "scripts/localization/add_missing_comments.py" ]]; then
+  python3 "$(dirname "$0")/localization/add_missing_comments.py" bitchat/Localizable.xcstrings
+fi
+
 echo "✅ Localization sync complete!"
 echo ""
 echo "📝 Usage tips:"

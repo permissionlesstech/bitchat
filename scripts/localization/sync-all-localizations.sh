@@ -10,11 +10,17 @@ echo "Languages: en, es, zh-Hans, zh-Hant, zh-HK, ar, arz, hi, fr, de, ru, ja, p
 echo ""
 
 echo "📱 Syncing Localizable.xcstrings (App UI strings)..."
-python3 "$(dirname "$0")/localization/sync_xcstrings.py" bitchat/Localizable.xcstrings
+python3 "$(dirname "$0")/sync_xcstrings.py" bitchat/Localizable.xcstrings
+if [[ -f "$(dirname "$0")/add_missing_comments.py" ]]; then
+  python3 "$(dirname "$0")/add_missing_comments.py" bitchat/Localizable.xcstrings
+fi
 
 echo ""
 echo "📋 Syncing InfoPlist.xcstrings (System permission strings)..."
-python3 "$(dirname "$0")/localization/sync_xcstrings.py" bitchat/InfoPlist.xcstrings
+python3 "$(dirname "$0")/sync_xcstrings.py" bitchat/Infoplist.xcstrings
+if [[ -f "$(dirname "$0")/add_missing_comments.py" ]]; then
+  python3 "$(dirname "$0")/add_missing_comments.py" bitchat/Infoplist.xcstrings
+fi
 
 echo ""
 echo "✅ Complete localization sync finished!"

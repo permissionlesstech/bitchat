@@ -177,7 +177,8 @@
             "value": "Add to favorites"
           }
         }
-      }
+      },
+      "comment": "Screen reader label: Add to favorites"
     },
     "accessibility.available_nostr": {
       "localizations": {
@@ -355,7 +356,8 @@
             "value": "Available via Nostr"
           }
         }
-      }
+      },
+      "comment": "Screen reader label: Available via Nostr"
     },
     "accessibility.back_to_main": {
       "localizations": {
@@ -533,7 +535,8 @@
             "value": "Back to main chat"
           }
         }
-      }
+      },
+      "comment": "Screen reader label: Back to main chat"
     },
     "accessibility.bookmark_toggle": {
       "localizations": {
@@ -711,7 +714,8 @@
             "value": "Toggle bookmark for #%@"
           }
         }
-      }
+      },
+      "comment": "Screen reader label: Toggle bookmark for #%@"
     },
     "accessibility.bookmark_toggle_geohash": {
       "localizations": {
@@ -889,7 +893,8 @@
             "value": "Toggle bookmark for #%@"
           }
         }
-      }
+      },
+      "comment": "Screen reader label: Toggle bookmark for #%@"
     },
     "accessibility.connected_mesh": {
       "localizations": {
@@ -1067,7 +1072,8 @@
             "value": "Connected via mesh"
           }
         }
-      }
+      },
+      "comment": "Screen reader label: Connected via mesh"
     },
     "accessibility.connected_via_mesh": {
       "localizations": {
@@ -1245,7 +1251,8 @@
             "value": "Connected via mesh"
           }
         }
-      }
+      },
+      "comment": "Screen reader label: Connected via mesh"
     },
     "accessibility.encryption_status_dynamic": {
       "comment": "Screen reader description of encryption security level",
@@ -1602,7 +1609,8 @@
             "value": "secured"
           }
         }
-      }
+      },
+      "comment": "Screen reader announcement: secured"
     },
     "accessibility.encryption_status_unencrypted": {
       "localizations": {
@@ -1780,7 +1788,8 @@
             "value": "not encrypted"
           }
         }
-      }
+      },
+      "comment": "Screen reader announcement: not encrypted"
     },
     "accessibility.encryption_status_verified": {
       "localizations": {
@@ -1958,7 +1967,8 @@
             "value": "verified"
           }
         }
-      }
+      },
+      "comment": "Screen reader announcement: verified"
     },
     "accessibility.favorite_toggle": {
       "localizations": {
@@ -2136,7 +2146,8 @@
             "value": "Double tap to toggle favorite status"
           }
         }
-      }
+      },
+      "comment": "Screen reader label: Double tap to toggle favorite status"
     },
     "accessibility.favorite_toggle_hint": {
       "localizations": {
@@ -2314,7 +2325,8 @@
             "value": "Double tap to toggle favorite status"
           }
         }
-      }
+      },
+      "comment": "Screen reader label: Double tap to toggle favorite status"
     },
     "accessibility.fingerprint_hint": {
       "localizations": {
@@ -2492,7 +2504,8 @@
             "value": "Tap to view encryption fingerprint"
           }
         }
-      }
+      },
+      "comment": "Screen reader label: Tap to view encryption fingerprint"
     },
     "accessibility.fingerprint_tap_hint": {
       "localizations": {
@@ -2670,7 +2683,8 @@
             "value": "Tap to view encryption fingerprint"
           }
         }
-      }
+      },
+      "comment": "Screen reader label: Tap to view encryption fingerprint"
     },
     "accessibility.location_channels": {
       "localizations": {
@@ -2848,7 +2862,8 @@
             "value": "location channels"
           }
         }
-      }
+      },
+      "comment": "Screen reader label: location channels"
     },
     "accessibility.mesh_connected": {
       "localizations": {
@@ -3026,7 +3041,8 @@
             "value": "Connected via mesh"
           }
         }
-      }
+      },
+      "comment": "Screen reader label: Connected via mesh"
     },
     "accessibility.mesh_reachable": {
       "localizations": {
@@ -3204,7 +3220,8 @@
             "value": "Reachable via mesh"
           }
         }
-      }
+      },
+      "comment": "Screen reader label: Reachable via mesh"
     },
     "accessibility.open_unread_private_chat": {
       "localizations": {
@@ -3382,7 +3399,8 @@
             "value": "Open unread private chat"
           }
         }
-      }
+      },
+      "comment": "Screen reader label: Open unread private chat"
     },
     "accessibility.people_count": {
       "comment": "Screen reader count announcement with proper plural forms",
@@ -4087,7 +4105,8 @@
             "value": "Tap to view encryption fingerprint"
           }
         }
-      }
+      },
+      "comment": "Screen reader label: Tap to view encryption fingerprint"
     },
     "accessibility.private_chat_with": {
       "localizations": {
@@ -4265,7 +4284,8 @@
             "value": "Private chat with %@"
           }
         }
-      }
+      },
+      "comment": "Screen reader label: Private chat with %@"
     },
     "accessibility.private_chat_with_user": {
       "localizations": {
@@ -4443,7 +4463,8 @@
             "value": "Private chat with %@"
           }
         }
-      }
+      },
+      "comment": "Screen reader label: Private chat with %@"
     },
     "accessibility.send_message": {
       "comment": "Screen reader label for send message button",
@@ -4800,7 +4821,8 @@
             "value": "Verification: show my QR or scan a friend"
           }
         }
-      }
+      },
+      "comment": "Screen reader label: Verification: show my QR or scan a friend"
     },
     "actions.block": {
       "comment": "Button to block/ban a user from chat",
@@ -4862,7 +4884,7 @@
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "BLOCK"
+            "value": "ब्लॉक"
           }
         },
         "id": {
@@ -4898,7 +4920,7 @@
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "BLOCK"
+            "value": "BLOQUEAR"
           }
         },
         "pt-BR": {
@@ -5157,7 +5179,8 @@
             "value": "Copy message"
           }
         }
-      }
+      },
+      "comment": "Button label: Copy message"
     },
     "actions.hug": {
       "comment": "Fun social action - send virtual hug to another user",
@@ -6051,7 +6074,8 @@
             "value": "Actions"
           }
         }
-      }
+      },
+      "comment": "Action label: Actions"
     },
     "alert.bluetooth_off": {
       "comment": "Error message when Bluetooth is disabled system-wide",
@@ -6292,7 +6316,7 @@
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bluetooth Required"
+            "value": "ब्लूटूथ आवश्यक"
           }
         },
         "id": {
@@ -6328,7 +6352,7 @@
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bluetooth Required"
+            "value": "Bluetooth Necessário"
           }
         },
         "pt-BR": {
@@ -6945,7 +6969,8 @@
             "value": "heads up"
           }
         }
-      }
+      },
+      "comment": "App text: heads up"
     },
     "alert.screenshot_warning": {
       "localizations": {
@@ -7123,7 +7148,8 @@
             "value": "screenshots of location channels will reveal your location. think before sharing publicly."
           }
         }
-      }
+      },
+      "comment": "App text: screenshots of location channels will reveal your location. think before sharing publicly."
     },
     "app.title_prefix": {
       "localizations": {
@@ -7301,7 +7327,8 @@
             "value": "bitchat/"
           }
         }
-      }
+      },
+      "comment": "App text: bitchat/"
     },
     "appinfo.features.encryption.desc": {
       "localizations": {
@@ -7479,7 +7506,8 @@
             "value": "private messages encrypted with noise protocol"
           }
         }
-      }
+      },
+      "comment": "App text: private messages encrypted with noise protocol"
     },
     "appinfo.features.encryption.title": {
       "localizations": {
@@ -7657,7 +7685,8 @@
             "value": "end-to-end encryption"
           }
         }
-      }
+      },
+      "comment": "App text: end-to-end encryption"
     },
     "appinfo.features.extended_range.desc": {
       "localizations": {
@@ -7835,7 +7864,8 @@
             "value": "messages relay through peers, going the distance"
           }
         }
-      }
+      },
+      "comment": "App text: messages relay through peers, going the distance"
     },
     "appinfo.features.extended_range.title": {
       "localizations": {
@@ -8013,7 +8043,8 @@
             "value": "extended range"
           }
         }
-      }
+      },
+      "comment": "App text: extended range"
     },
     "appinfo.features.favorites.desc": {
       "localizations": {
@@ -8191,7 +8222,8 @@
             "value": "get notified when your favorite people join"
           }
         }
-      }
+      },
+      "comment": "App text: get notified when your favorite people join"
     },
     "appinfo.features.favorites.title": {
       "localizations": {
@@ -8369,7 +8401,8 @@
             "value": "favorites"
           }
         }
-      }
+      },
+      "comment": "App text: favorites"
     },
     "appinfo.features.geohash.desc": {
       "localizations": {
@@ -8547,7 +8580,8 @@
             "value": "geohash channels to chat with people in nearby regions over decentralized anonymous relays"
           }
         }
-      }
+      },
+      "comment": "App text: geohash channels to chat with people in nearby regions over decentralized anonymous relays"
     },
     "appinfo.features.geohash.title": {
       "localizations": {
@@ -8725,7 +8759,8 @@
             "value": "local channels"
           }
         }
-      }
+      },
+      "comment": "App text: local channels"
     },
     "appinfo.features.mentions.desc": {
       "localizations": {
@@ -8903,7 +8938,8 @@
             "value": "use @nickname to notify specific people"
           }
         }
-      }
+      },
+      "comment": "App text: use @nickname to notify specific people"
     },
     "appinfo.features.mentions.title": {
       "localizations": {
@@ -9081,7 +9117,8 @@
             "value": "mentions"
           }
         }
-      }
+      },
+      "comment": "App text: mentions"
     },
     "appinfo.features.offline.desc": {
       "localizations": {
@@ -9259,7 +9296,8 @@
             "value": "works without internet using Bluetooth low energy"
           }
         }
-      }
+      },
+      "comment": "App text: works without internet using Bluetooth low energy"
     },
     "appinfo.features.offline.title": {
       "localizations": {
@@ -9437,7 +9475,8 @@
             "value": "offline communication"
           }
         }
-      }
+      },
+      "comment": "App text: offline communication"
     },
     "appinfo.features.title": {
       "localizations": {
@@ -9615,7 +9654,8 @@
             "value": "FEATURES"
           }
         }
-      }
+      },
+      "comment": "App text: FEATURES"
     },
     "appinfo.howto.title": {
       "localizations": {
@@ -9793,7 +9833,8 @@
             "value": "HOW TO USE"
           }
         }
-      }
+      },
+      "comment": "App text: HOW TO USE"
     },
     "appinfo.instructions.change_channels": {
       "localizations": {
@@ -9971,7 +10012,8 @@
             "value": "• tap #mesh to change channels"
           }
         }
-      }
+      },
+      "comment": "App text: • tap #mesh to change channels"
     },
     "appinfo.instructions.clear": {
       "localizations": {
@@ -10149,7 +10191,8 @@
             "value": "• triple-tap chat to clear"
           }
         }
-      }
+      },
+      "comment": "App text: • triple-tap chat to clear"
     },
     "appinfo.instructions.commands": {
       "localizations": {
@@ -10327,7 +10370,8 @@
             "value": "• type / for commands"
           }
         }
-      }
+      },
+      "comment": "App text: • type / for commands"
     },
     "appinfo.instructions.dm": {
       "localizations": {
@@ -10505,7 +10549,8 @@
             "value": "• tap a peer's name to start a DM"
           }
         }
-      }
+      },
+      "comment": "App text: • tap a peer's name to start a DM"
     },
     "appinfo.instructions.set_nickname": {
       "localizations": {
@@ -10683,7 +10728,8 @@
             "value": "• set your nickname by tapping it"
           }
         }
-      }
+      },
+      "comment": "App text: • set your nickname by tapping it"
     },
     "appinfo.instructions.sidebar": {
       "localizations": {
@@ -10861,7 +10907,8 @@
             "value": "• tap people icon for sidebar"
           }
         }
-      }
+      },
+      "comment": "App text: • tap people icon for sidebar"
     },
     "appinfo.privacy.ephemeral.desc": {
       "localizations": {
@@ -11039,7 +11086,8 @@
             "value": "new peer ID generated regularly"
           }
         }
-      }
+      },
+      "comment": "App text: new peer ID generated regularly"
     },
     "appinfo.privacy.ephemeral.title": {
       "localizations": {
@@ -11217,7 +11265,8 @@
             "value": "ephemeral identity"
           }
         }
-      }
+      },
+      "comment": "App text: ephemeral identity"
     },
     "appinfo.privacy.no_tracking.desc": {
       "localizations": {
@@ -11395,7 +11444,8 @@
             "value": "no servers, accounts, or data collection"
           }
         }
-      }
+      },
+      "comment": "App text: no servers, accounts, or data collection"
     },
     "appinfo.privacy.no_tracking.title": {
       "localizations": {
@@ -11573,7 +11623,8 @@
             "value": "no tracking"
           }
         }
-      }
+      },
+      "comment": "App text: no tracking"
     },
     "appinfo.privacy.panic.desc": {
       "localizations": {
@@ -11751,7 +11802,8 @@
             "value": "triple-tap logo to instantly clear all data"
           }
         }
-      }
+      },
+      "comment": "App text: triple-tap logo to instantly clear all data"
     },
     "appinfo.privacy.panic.title": {
       "localizations": {
@@ -11929,7 +11981,8 @@
             "value": "panic mode"
           }
         }
-      }
+      },
+      "comment": "App text: panic mode"
     },
     "appinfo.privacy.title": {
       "localizations": {
@@ -12107,7 +12160,8 @@
             "value": "PRIVACY"
           }
         }
-      }
+      },
+      "comment": "App text: PRIVACY"
     },
     "appinfo.tagline": {
       "localizations": {
@@ -12285,7 +12339,8 @@
             "value": "sidegroupchat"
           }
         }
-      }
+      },
+      "comment": "App text: sidegroupchat"
     },
     "appinfo.warning.message": {
       "localizations": {
@@ -12463,7 +12518,8 @@
             "value": "private message security has not yet been fully audited. do not use for critical situations until this warning disappears."
           }
         }
-      }
+      },
+      "comment": "App text: private message security has not yet been fully audited. do not use for critical situations until this warning disappears."
     },
     "appinfo.warning.title": {
       "localizations": {
@@ -12641,7 +12697,8 @@
             "value": "WARNING"
           }
         }
-      }
+      },
+      "comment": "App text: WARNING"
     },
     "common.cancel": {
       "localizations": {
@@ -12819,7 +12876,8 @@
             "value": "cancel"
           }
         }
-      }
+      },
+      "comment": "Button label: cancel"
     },
     "common.close": {
       "localizations": {
@@ -12880,7 +12938,7 @@
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "close"
+            "value": "बंद करें"
           }
         },
         "id": {
@@ -12916,7 +12974,7 @@
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "close"
+            "value": "fechar"
           }
         },
         "pt-BR": {
@@ -12997,7 +13055,8 @@
             "value": "close"
           }
         }
-      }
+      },
+      "comment": "Common label: close"
     },
     "common.copy": {
       "localizations": {
@@ -13175,7 +13234,8 @@
             "value": "Copy"
           }
         }
-      }
+      },
+      "comment": "Button label: Copy"
     },
     "common.done": {
       "localizations": {
@@ -13353,7 +13413,8 @@
             "value": "DONE"
           }
         }
-      }
+      },
+      "comment": "Common label: DONE"
     },
     "common.ok": {
       "localizations": {
@@ -13531,7 +13592,8 @@
             "value": "OK"
           }
         }
-      }
+      },
+      "comment": "Button label: OK"
     },
     "common.open_settings": {
       "localizations": {
@@ -13709,7 +13771,8 @@
             "value": "open settings"
           }
         }
-      }
+      },
+      "comment": "Button label: open settings"
     },
     "common.settings": {
       "localizations": {
@@ -13887,7 +13950,8 @@
             "value": "Settings"
           }
         }
-      }
+      },
+      "comment": "Common label: Settings"
     },
     "common.show_less": {
       "localizations": {
@@ -14065,7 +14129,8 @@
             "value": "show less"
           }
         }
-      }
+      },
+      "comment": "Button label: show less"
     },
     "common.show_more": {
       "localizations": {
@@ -14243,7 +14308,8 @@
             "value": "show more"
           }
         }
-      }
+      },
+      "comment": "Button label: show more"
     },
     "common.unknown": {
       "localizations": {
@@ -14421,7 +14487,8 @@
             "value": "Unknown"
           }
         }
-      }
+      },
+      "comment": "Common label: Unknown"
     },
     "common.user": {
       "localizations": {
@@ -14599,7 +14666,8 @@
             "value": "user"
           }
         }
-      }
+      },
+      "comment": "Common label: user"
     },
     "error.cannot_message_yourself": {
       "localizations": {
@@ -14777,7 +14845,8 @@
             "value": "cannot message yourself"
           }
         }
-      }
+      },
+      "comment": "Error message: cannot message yourself"
     },
     "error.no_reason_given": {
       "localizations": {
@@ -14955,7 +15024,8 @@
             "value": "no reason given"
           }
         }
-      }
+      },
+      "comment": "Error message: no reason given"
     },
     "error.peer_not_reachable": {
       "comment": "Error when trying to message someone who is offline",
@@ -15312,7 +15382,8 @@
             "value": "send error"
           }
         }
-      }
+      },
+      "comment": "Button label: send error"
     },
     "error.unknown_recipient": {
       "localizations": {
@@ -15490,7 +15561,8 @@
             "value": "unknown recipient"
           }
         }
-      }
+      },
+      "comment": "Error message: unknown recipient"
     },
     "error.user_blocked": {
       "localizations": {
@@ -15668,7 +15740,8 @@
             "value": "user is blocked"
           }
         }
-      }
+      },
+      "comment": "Error message: user is blocked"
     },
     "errors.could_not_find_peer": {
       "localizations": {
@@ -15846,7 +15919,8 @@
             "value": "could not find matching peer"
           }
         }
-      }
+      },
+      "comment": "App text: could not find matching peer"
     },
     "errors.invalid_expired_qr": {
       "localizations": {
@@ -16024,7 +16098,8 @@
             "value": "invalid or expired qr payload"
           }
         }
-      }
+      },
+      "comment": "App text: invalid or expired qr payload"
     },
     "errors.invalid_geohash": {
       "localizations": {
@@ -16202,7 +16277,8 @@
             "value": "invalid geohash"
           }
         }
-      }
+      },
+      "comment": "App text: invalid geohash"
     },
     "errors.verification_requested": {
       "localizations": {
@@ -16380,7 +16456,8 @@
             "value": "verification requested for %@"
           }
         }
-      }
+      },
+      "comment": "App text: verification requested for %@"
     },
     "fp.remove_verification_button": {
       "localizations": {
@@ -16558,7 +16635,8 @@
             "value": "REMOVE VERIFICATION"
           }
         }
-      }
+      },
+      "comment": "App text: REMOVE VERIFICATION"
     },
     "fp.title": {
       "comment": "Title for cryptographic fingerprint verification screen",
@@ -16915,7 +16993,8 @@
             "value": "Block"
           }
         }
-      }
+      },
+      "comment": "App text: Block"
     },
     "geohash.unblock": {
       "localizations": {
@@ -17093,7 +17172,8 @@
             "value": "Unblock"
           }
         }
-      }
+      },
+      "comment": "App text: Unblock"
     },
     "help.blocked_peer": {
       "localizations": {
@@ -17271,7 +17351,8 @@
             "value": "Blocked"
           }
         }
-      }
+      },
+      "comment": "App text: Blocked"
     },
     "help.delivered_to": {
       "localizations": {
@@ -17449,7 +17530,8 @@
             "value": "Delivered to %@"
           }
         }
-      }
+      },
+      "comment": "App text: Delivered to %@"
     },
     "help.delivery_failed": {
       "localizations": {
@@ -17627,7 +17709,8 @@
             "value": "Failed: %@"
           }
         }
-      }
+      },
+      "comment": "App text: Failed: %@"
     },
     "help.new_messages": {
       "localizations": {
@@ -17805,7 +17888,8 @@
             "value": "New messages"
           }
         }
-      }
+      },
+      "comment": "App text: New messages"
     },
     "help.partial_delivery": {
       "localizations": {
@@ -17983,7 +18067,8 @@
             "value": "Delivered to %d of %d members"
           }
         }
-      }
+      },
+      "comment": "App text: Delivered to %d of %d members"
     },
     "help.read_by": {
       "localizations": {
@@ -18161,7 +18246,8 @@
             "value": "Read by %@"
           }
         }
-      }
+      },
+      "comment": "App text: Read by %@"
     },
     "location.remove_access_action": {
       "localizations": {
@@ -18339,7 +18425,8 @@
             "value": "remove location access"
           }
         }
-      }
+      },
+      "comment": "Location feature text: remove location access"
     },
     "location.title": {
       "comment": "Title for location-based chat channels feature",
@@ -18696,7 +18783,8 @@
             "value": "close"
           }
         }
-      }
+      },
+      "comment": "Navigation title: close"
     },
     "nav.done": {
       "localizations": {
@@ -18874,7 +18962,8 @@
             "value": "DONE"
           }
         }
-      }
+      },
+      "comment": "Navigation title: DONE"
     },
     "nav.people": {
       "comment": "Navigation header for user/peer list sidebar",
@@ -18936,7 +19025,7 @@
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "PEOPLE"
+            "value": "लोग"
           }
         },
         "id": {
@@ -18972,7 +19061,7 @@
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "PEOPLE"
+            "value": "PESSOAS"
           }
         },
         "pt-BR": {
@@ -19231,7 +19320,8 @@
             "value": "nobody around..."
           }
         }
-      }
+      },
+      "comment": "App text: nobody around..."
     },
     "people.you_indicator": {
       "localizations": {
@@ -19409,7 +19499,8 @@
             "value": " (you)"
           }
         }
-      }
+      },
+      "comment": "App text:  (you)"
     },
     "placeholder.geohash": {
       "localizations": {
@@ -19587,7 +19678,8 @@
             "value": "geohash"
           }
         }
-      }
+      },
+      "comment": "Input placeholder: geohash"
     },
     "placeholder.nickname": {
       "comment": "Input field placeholder for user nickname/display name",
@@ -19828,7 +19920,7 @@
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "type a message..."
+            "value": "संदेश टाइप करें..."
           }
         },
         "id": {
@@ -19864,7 +19956,7 @@
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "type a message..."
+            "value": "digite uma mensagem..."
           }
         },
         "pt-BR": {
@@ -20123,7 +20215,8 @@
             "value": "blocked %@ in geohash chats"
           }
         }
-      }
+      },
+      "comment": "App text: blocked %@ in geohash chats"
     },
     "system.cannot_message_blocked_nickname": {
       "comment": "Error when trying to message a blocked user by name",
@@ -20480,7 +20573,8 @@
             "value": "cannot send message to %@: user is blocked."
           }
         }
-      }
+      },
+      "comment": "App text: cannot send message to %@: user is blocked."
     },
     "system.cannot_send_blocked": {
       "localizations": {
@@ -20658,7 +20752,8 @@
             "value": "cannot send message to %@: user is blocked."
           }
         }
-      }
+      },
+      "comment": "App text: cannot send message to %@: user is blocked."
     },
     "system.cannot_send_unreachable": {
       "localizations": {
@@ -20836,7 +20931,8 @@
             "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
           }
         }
-      }
+      },
+      "comment": "App text: Cannot send message to %@ - peer is not reachable via mesh or Nostr."
     },
     "system.cannot_start_chat_blocked": {
       "localizations": {
@@ -21014,7 +21110,8 @@
             "value": "cannot start chat with %@: user is blocked."
           }
         }
-      }
+      },
+      "comment": "App text: cannot start chat with %@: user is blocked."
     },
     "system.failed_send_location": {
       "comment": "Error message when sending to location channel fails",
@@ -21550,7 +21647,8 @@
             "value": "cannot start chat with %@: mutual favorite required for offline messaging."
           }
         }
-      }
+      },
+      "comment": "App text: cannot start chat with %@: mutual favorite required for offline messaging."
     },
     "system.not_in_location_channel": {
       "localizations": {
@@ -21728,7 +21826,8 @@
             "value": "cannot send: not in a location channel"
           }
         }
-      }
+      },
+      "comment": "App text: cannot send: not in a location channel"
     },
     "system.peer_not_reachable": {
       "localizations": {
@@ -21906,7 +22005,8 @@
             "value": "Cannot send message to %@ - peer is not reachable via mesh or Nostr."
           }
         }
-      }
+      },
+      "comment": "App text: Cannot send message to %@ - peer is not reachable via mesh or Nostr."
     },
     "system.screenshot_taken": {
       "localizations": {
@@ -22084,7 +22184,8 @@
             "value": "you took a screenshot"
           }
         }
-      }
+      },
+      "comment": "App text: you took a screenshot"
     },
     "system.took_screenshot": {
       "comment": "Notification sent to other users when someone screenshots",
@@ -22441,7 +22542,8 @@
             "value": "unblocked %@ in geohash chats"
           }
         }
-      }
+      },
+      "comment": "App text: unblocked %@ in geohash chats"
     },
     "system.unfavorited_you": {
       "localizations": {
@@ -22619,7 +22721,8 @@
             "value": "unfavorited"
           }
         }
-      }
+      },
+      "comment": "App text: unfavorited"
     },
     "system.user_action": {
       "localizations": {
@@ -22797,7 +22900,8 @@
             "value": "%@ %@ you"
           }
         }
-      }
+      },
+      "comment": "App text: %@ %@ you"
     },
     "system.user_action_favorited": {
       "localizations": {
@@ -22975,7 +23079,8 @@
             "value": "%@ favorited you"
           }
         }
-      }
+      },
+      "comment": "App text: %@ favorited you"
     },
     "system.user_action_unfavorited": {
       "localizations": {
@@ -23153,7 +23258,8 @@
             "value": "%@ unfavorited you"
           }
         }
-      }
+      },
+      "comment": "App text: %@ unfavorited you"
     },
     "system.user_action_you": {
       "localizations": {
@@ -23331,7 +23437,8 @@
             "value": "%@ %@ you"
           }
         }
-      }
+      },
+      "comment": "App text: %@ %@ you"
     },
     "system.user_blocked_generic": {
       "comment": "Error message when trying to message a blocked user",
@@ -23688,7 +23795,8 @@
             "value": "Base Fallback"
           }
         }
-      }
+      },
+      "comment": "App text: Base Fallback"
     },
     "ui.at_symbol": {
       "comment": "At symbol used for @mentions and @nickname",
@@ -24224,7 +24332,8 @@
             "value": "%d/%d"
           }
         }
-      }
+      },
+      "comment": "UI label: %d/%d"
     },
     "ui.hash_symbol": {
       "comment": "Hash symbol used in channel names like #mesh",
@@ -24581,7 +24690,8 @@
             "value": "mesh [%@]"
           }
         }
-      }
+      },
+      "comment": "UI label: mesh [%@]"
     },
     "ui.people_plural": {
       "localizations": {
@@ -24759,7 +24869,8 @@
             "value": "people"
           }
         }
-      }
+      },
+      "comment": "UI label: people"
     },
     "ui.person_singular": {
       "localizations": {
@@ -24937,7 +25048,8 @@
             "value": "person"
           }
         }
-      }
+      },
+      "comment": "UI label: person"
     },
     "verify.paste_content": {
       "localizations": {
@@ -25115,7 +25227,8 @@
             "value": "paste qr content to validate:"
           }
         }
-      }
+      },
+      "comment": "App text: paste qr content to validate:"
     },
     "verify.qr_unavailable": {
       "localizations": {
@@ -25293,7 +25406,8 @@
             "value": "qr unavailable"
           }
         }
-      }
+      },
+      "comment": "App text: qr unavailable"
     },
     "verify.remove_verification_action": {
       "localizations": {
@@ -25471,7 +25585,8 @@
             "value": "remove verification"
           }
         }
-      }
+      },
+      "comment": "App text: remove verification"
     },
     "verify.scan_friend_qr": {
       "localizations": {
@@ -25649,7 +25764,8 @@
             "value": "scan a friend's qr"
           }
         }
-      }
+      },
+      "comment": "App text: scan a friend's qr"
     },
     "verify.scan_someone_qr": {
       "localizations": {
@@ -25827,7 +25943,8 @@
             "value": "scan someone else's qr"
           }
         }
-      }
+      },
+      "comment": "App text: scan someone else's qr"
     },
     "verify.scan_to_verify": {
       "localizations": {
@@ -26005,7 +26122,8 @@
             "value": "scan to verify me"
           }
         }
-      }
+      },
+      "comment": "App text: scan to verify me"
     },
     "verify.show_my_qr": {
       "localizations": {
@@ -26183,7 +26301,8 @@
             "value": "show my qr"
           }
         }
-      }
+      },
+      "comment": "App text: show my qr"
     },
     "verify.verify_button": {
       "localizations": {
@@ -26361,7 +26480,8 @@
             "value": "VERIFY"
           }
         }
-      }
+      },
+      "comment": "App text: VERIFY"
     }
   },
   "version": "1.0"
