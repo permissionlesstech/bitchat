@@ -254,7 +254,7 @@ struct LocationChannelsSheet: View {
                 Button(action: {
                     openSystemLocationSettings()
                 }) {
-                    Text("remove location access")
+                    Text(String(localized: "location.remove_access_action"))
                         .font(.system(size: 12, design: .monospaced))
                         .foregroundColor(Color(red: 0.75, green: 0.1, blue: 0.1))
                         .frame(maxWidth: .infinity)
