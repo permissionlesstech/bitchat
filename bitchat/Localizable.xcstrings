@@ -1071,31 +1071,7 @@
     },
     "accessibility.connected_via_mesh": {
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Connected via mesh"
-          }
-        },
-        "pnb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Connected via mesh"
-          }
-        },
-        "ha": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Connected via mesh"
-          }
-        },
         "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Connected via mesh"
-          }
-        },
-        "tr": {
           "stringUnit": {
             "state": "translated",
             "value": "Connected via mesh"
@@ -1107,85 +1083,25 @@
             "value": "Connected via mesh"
           }
         },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Connected via mesh"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Connected via mesh"
-          }
-        },
-        "tl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Connected via mesh"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Connected via mesh"
-          }
-        },
-        "ta": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Connected via mesh"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Connected via mesh"
-          }
-        },
         "bn": {
           "stringUnit": {
             "state": "translated",
             "value": "Connected via mesh"
           }
         },
-        "zh-Hans": {
+        "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Connected via mesh"
           }
         },
-        "pt-BR": {
+        "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Connected via mesh"
           }
         },
-        "mr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Connected via mesh"
-          }
-        },
-        "zh-HK": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Connected via mesh"
-          }
-        },
-        "yue": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Connected via mesh"
-          }
-        },
-        "pcm": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Connected via mesh"
-          }
-        },
-        "ur": {
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Connected via mesh"
@@ -1203,31 +1119,7 @@
             "value": "Connected via mesh"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Connected via mesh"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Connected via mesh"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Connected via mesh"
-          }
-        },
-        "id": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Connected via mesh"
-          }
-        },
-        "te": {
+        "ha": {
           "stringUnit": {
             "state": "translated",
             "value": "Connected via mesh"
@@ -1239,7 +1131,115 @@
             "value": "Connected via mesh"
           }
         },
+        "id": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connected via mesh"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connected via mesh"
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connected via mesh"
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connected via mesh"
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connected via mesh"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connected via mesh"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connected via mesh"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connected via mesh"
+          }
+        },
         "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connected via mesh"
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connected via mesh"
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connected via mesh"
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connected via mesh"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connected via mesh"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connected via mesh"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connected via mesh"
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connected via mesh"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connected via mesh"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connected via mesh"
+          }
+        },
+        "zh-Hant": {
           "stringUnit": {
             "state": "translated",
             "value": "Connected via mesh"
@@ -1428,31 +1428,7 @@
     },
     "accessibility.encryption_status_secured": {
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "secured"
-          }
-        },
-        "pnb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "secured"
-          }
-        },
-        "ha": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "secured"
-          }
-        },
         "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "secured"
-          }
-        },
-        "tr": {
           "stringUnit": {
             "state": "translated",
             "value": "secured"
@@ -1464,85 +1440,25 @@
             "value": "secured"
           }
         },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "secured"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "secured"
-          }
-        },
-        "tl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "secured"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "secured"
-          }
-        },
-        "ta": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "secured"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "secured"
-          }
-        },
         "bn": {
           "stringUnit": {
             "state": "translated",
             "value": "secured"
           }
         },
-        "zh-Hans": {
+        "de": {
           "stringUnit": {
             "state": "translated",
             "value": "secured"
           }
         },
-        "pt-BR": {
+        "en": {
           "stringUnit": {
             "state": "translated",
             "value": "secured"
           }
         },
-        "mr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "secured"
-          }
-        },
-        "zh-HK": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "secured"
-          }
-        },
-        "yue": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "secured"
-          }
-        },
-        "pcm": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "secured"
-          }
-        },
-        "ur": {
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "secured"
@@ -1560,31 +1476,7 @@
             "value": "secured"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "secured"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "secured"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "secured"
-          }
-        },
-        "id": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "secured"
-          }
-        },
-        "te": {
+        "ha": {
           "stringUnit": {
             "state": "translated",
             "value": "secured"
@@ -1596,7 +1488,115 @@
             "value": "secured"
           }
         },
+        "id": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "secured"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "secured"
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "secured"
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "secured"
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "secured"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "secured"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "secured"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "secured"
+          }
+        },
         "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "secured"
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "secured"
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "secured"
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "secured"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "secured"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "secured"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "secured"
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "secured"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "secured"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "secured"
+          }
+        },
+        "zh-Hant": {
           "stringUnit": {
             "state": "translated",
             "value": "secured"
@@ -1606,31 +1606,7 @@
     },
     "accessibility.encryption_status_unencrypted": {
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "not encrypted"
-          }
-        },
-        "pnb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "not encrypted"
-          }
-        },
-        "ha": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "not encrypted"
-          }
-        },
         "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "not encrypted"
-          }
-        },
-        "tr": {
           "stringUnit": {
             "state": "translated",
             "value": "not encrypted"
@@ -1642,85 +1618,25 @@
             "value": "not encrypted"
           }
         },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "not encrypted"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "not encrypted"
-          }
-        },
-        "tl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "not encrypted"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "not encrypted"
-          }
-        },
-        "ta": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "not encrypted"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "not encrypted"
-          }
-        },
         "bn": {
           "stringUnit": {
             "state": "translated",
             "value": "not encrypted"
           }
         },
-        "zh-Hans": {
+        "de": {
           "stringUnit": {
             "state": "translated",
             "value": "not encrypted"
           }
         },
-        "pt-BR": {
+        "en": {
           "stringUnit": {
             "state": "translated",
             "value": "not encrypted"
           }
         },
-        "mr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "not encrypted"
-          }
-        },
-        "zh-HK": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "not encrypted"
-          }
-        },
-        "yue": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "not encrypted"
-          }
-        },
-        "pcm": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "not encrypted"
-          }
-        },
-        "ur": {
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "not encrypted"
@@ -1738,31 +1654,7 @@
             "value": "not encrypted"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "not encrypted"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "not encrypted"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "not encrypted"
-          }
-        },
-        "id": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "not encrypted"
-          }
-        },
-        "te": {
+        "ha": {
           "stringUnit": {
             "state": "translated",
             "value": "not encrypted"
@@ -1774,7 +1666,115 @@
             "value": "not encrypted"
           }
         },
+        "id": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "not encrypted"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "not encrypted"
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "not encrypted"
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "not encrypted"
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "not encrypted"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "not encrypted"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "not encrypted"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "not encrypted"
+          }
+        },
         "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "not encrypted"
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "not encrypted"
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "not encrypted"
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "not encrypted"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "not encrypted"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "not encrypted"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "not encrypted"
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "not encrypted"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "not encrypted"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "not encrypted"
+          }
+        },
+        "zh-Hant": {
           "stringUnit": {
             "state": "translated",
             "value": "not encrypted"
@@ -1784,31 +1784,7 @@
     },
     "accessibility.encryption_status_verified": {
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "verified"
-          }
-        },
-        "pnb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "verified"
-          }
-        },
-        "ha": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "verified"
-          }
-        },
         "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "verified"
-          }
-        },
-        "tr": {
           "stringUnit": {
             "state": "translated",
             "value": "verified"
@@ -1820,85 +1796,25 @@
             "value": "verified"
           }
         },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "verified"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "verified"
-          }
-        },
-        "tl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "verified"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "verified"
-          }
-        },
-        "ta": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "verified"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "verified"
-          }
-        },
         "bn": {
           "stringUnit": {
             "state": "translated",
             "value": "verified"
           }
         },
-        "zh-Hans": {
+        "de": {
           "stringUnit": {
             "state": "translated",
             "value": "verified"
           }
         },
-        "pt-BR": {
+        "en": {
           "stringUnit": {
             "state": "translated",
             "value": "verified"
           }
         },
-        "mr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "verified"
-          }
-        },
-        "zh-HK": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "verified"
-          }
-        },
-        "yue": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "verified"
-          }
-        },
-        "pcm": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "verified"
-          }
-        },
-        "ur": {
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "verified"
@@ -1916,31 +1832,7 @@
             "value": "verified"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "verified"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "verified"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "verified"
-          }
-        },
-        "id": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "verified"
-          }
-        },
-        "te": {
+        "ha": {
           "stringUnit": {
             "state": "translated",
             "value": "verified"
@@ -1952,7 +1844,115 @@
             "value": "verified"
           }
         },
+        "id": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verified"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verified"
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verified"
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verified"
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verified"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verified"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verified"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verified"
+          }
+        },
         "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verified"
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verified"
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verified"
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verified"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verified"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verified"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verified"
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verified"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verified"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verified"
+          }
+        },
+        "zh-Hant": {
           "stringUnit": {
             "state": "translated",
             "value": "verified"
@@ -3913,31 +3913,7 @@
     },
     "accessibility.private_chat_hint": {
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tap to view encryption fingerprint"
-          }
-        },
-        "pnb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tap to view encryption fingerprint"
-          }
-        },
-        "ha": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tap to view encryption fingerprint"
-          }
-        },
         "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tap to view encryption fingerprint"
-          }
-        },
-        "tr": {
           "stringUnit": {
             "state": "translated",
             "value": "Tap to view encryption fingerprint"
@@ -3949,85 +3925,25 @@
             "value": "Tap to view encryption fingerprint"
           }
         },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tap to view encryption fingerprint"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tap to view encryption fingerprint"
-          }
-        },
-        "tl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tap to view encryption fingerprint"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tap to view encryption fingerprint"
-          }
-        },
-        "ta": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tap to view encryption fingerprint"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tap to view encryption fingerprint"
-          }
-        },
         "bn": {
           "stringUnit": {
             "state": "translated",
             "value": "Tap to view encryption fingerprint"
           }
         },
-        "zh-Hans": {
+        "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Tap to view encryption fingerprint"
           }
         },
-        "pt-BR": {
+        "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Tap to view encryption fingerprint"
           }
         },
-        "mr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tap to view encryption fingerprint"
-          }
-        },
-        "zh-HK": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tap to view encryption fingerprint"
-          }
-        },
-        "yue": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tap to view encryption fingerprint"
-          }
-        },
-        "pcm": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tap to view encryption fingerprint"
-          }
-        },
-        "ur": {
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Tap to view encryption fingerprint"
@@ -4045,31 +3961,7 @@
             "value": "Tap to view encryption fingerprint"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tap to view encryption fingerprint"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tap to view encryption fingerprint"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tap to view encryption fingerprint"
-          }
-        },
-        "id": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tap to view encryption fingerprint"
-          }
-        },
-        "te": {
+        "ha": {
           "stringUnit": {
             "state": "translated",
             "value": "Tap to view encryption fingerprint"
@@ -4081,7 +3973,115 @@
             "value": "Tap to view encryption fingerprint"
           }
         },
+        "id": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap to view encryption fingerprint"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap to view encryption fingerprint"
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap to view encryption fingerprint"
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap to view encryption fingerprint"
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap to view encryption fingerprint"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap to view encryption fingerprint"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap to view encryption fingerprint"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap to view encryption fingerprint"
+          }
+        },
         "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap to view encryption fingerprint"
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap to view encryption fingerprint"
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap to view encryption fingerprint"
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap to view encryption fingerprint"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap to view encryption fingerprint"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap to view encryption fingerprint"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap to view encryption fingerprint"
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap to view encryption fingerprint"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap to view encryption fingerprint"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap to view encryption fingerprint"
+          }
+        },
+        "zh-Hant": {
           "stringUnit": {
             "state": "translated",
             "value": "Tap to view encryption fingerprint"
@@ -4826,7 +4826,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "BLOCK"
+            "value": "BLOCKIEREN"
           }
         },
         "en": {
@@ -4874,7 +4874,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "BLOCK"
+            "value": "ブロック"
           }
         },
         "mr": {
@@ -4910,7 +4910,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "BLOCK"
+            "value": "ЗАБЛОКИРОВАТЬ"
           }
         },
         "sw": {
@@ -5362,7 +5362,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "mention"
+            "value": "erwähnen"
           }
         },
         "en": {
@@ -5410,7 +5410,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "mention"
+            "value": "メンション"
           }
         },
         "mr": {
@@ -5446,7 +5446,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "mention"
+            "value": "упомянуть"
           }
         },
         "sw": {
@@ -6256,7 +6256,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bluetooth Required"
+            "value": "Bluetooth Erforderlich"
           }
         },
         "en": {
@@ -6304,7 +6304,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bluetooth Required"
+            "value": "Bluetoothが必要"
           }
         },
         "mr": {
@@ -6340,7 +6340,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bluetooth Required"
+            "value": "Требуется Bluetooth"
           }
         },
         "sw": {
@@ -12844,7 +12844,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "close"
+            "value": "schließen"
           }
         },
         "en": {
@@ -12892,7 +12892,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "close"
+            "value": "閉じる"
           }
         },
         "mr": {
@@ -12928,7 +12928,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "close"
+            "value": "закрыть"
           }
         },
         "sw": {
@@ -14425,31 +14425,7 @@
     },
     "common.user": {
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "user"
-          }
-        },
-        "pnb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "user"
-          }
-        },
-        "ha": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "user"
-          }
-        },
         "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "user"
-          }
-        },
-        "tr": {
           "stringUnit": {
             "state": "translated",
             "value": "user"
@@ -14461,85 +14437,25 @@
             "value": "user"
           }
         },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "user"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "user"
-          }
-        },
-        "tl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "user"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "user"
-          }
-        },
-        "ta": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "user"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "user"
-          }
-        },
         "bn": {
           "stringUnit": {
             "state": "translated",
             "value": "user"
           }
         },
-        "zh-Hans": {
+        "de": {
           "stringUnit": {
             "state": "translated",
             "value": "user"
           }
         },
-        "pt-BR": {
+        "en": {
           "stringUnit": {
             "state": "translated",
             "value": "user"
           }
         },
-        "mr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "user"
-          }
-        },
-        "zh-HK": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "user"
-          }
-        },
-        "yue": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "user"
-          }
-        },
-        "pcm": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "user"
-          }
-        },
-        "ur": {
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "user"
@@ -14557,31 +14473,7 @@
             "value": "user"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "user"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "user"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "user"
-          }
-        },
-        "id": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "user"
-          }
-        },
-        "te": {
+        "ha": {
           "stringUnit": {
             "state": "translated",
             "value": "user"
@@ -14593,7 +14485,115 @@
             "value": "user"
           }
         },
+        "id": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "user"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "user"
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "user"
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "user"
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "user"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "user"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "user"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "user"
+          }
+        },
         "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "user"
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "user"
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "user"
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "user"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "user"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "user"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "user"
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "user"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "user"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "user"
+          }
+        },
+        "zh-Hant": {
           "stringUnit": {
             "state": "translated",
             "value": "user"
@@ -15666,6 +15666,718 @@
           "stringUnit": {
             "state": "translated",
             "value": "user is blocked"
+          }
+        }
+      }
+    },
+    "errors.could_not_find_peer": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "could not find matching peer"
+          }
+        },
+        "arz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "could not find matching peer"
+          }
+        },
+        "bn": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "could not find matching peer"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "could not find matching peer"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "could not find matching peer"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "could not find matching peer"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "could not find matching peer"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "could not find matching peer"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "could not find matching peer"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "could not find matching peer"
+          }
+        },
+        "id": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "could not find matching peer"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "could not find matching peer"
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "could not find matching peer"
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "could not find matching peer"
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "could not find matching peer"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "could not find matching peer"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "could not find matching peer"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "could not find matching peer"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "could not find matching peer"
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "could not find matching peer"
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "could not find matching peer"
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "could not find matching peer"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "could not find matching peer"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "could not find matching peer"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "could not find matching peer"
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "could not find matching peer"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "could not find matching peer"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "could not find matching peer"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "could not find matching peer"
+          }
+        }
+      }
+    },
+    "errors.invalid_expired_qr": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid or expired qr payload"
+          }
+        },
+        "arz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid or expired qr payload"
+          }
+        },
+        "bn": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid or expired qr payload"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid or expired qr payload"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid or expired qr payload"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid or expired qr payload"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid or expired qr payload"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid or expired qr payload"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid or expired qr payload"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid or expired qr payload"
+          }
+        },
+        "id": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid or expired qr payload"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid or expired qr payload"
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid or expired qr payload"
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid or expired qr payload"
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid or expired qr payload"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid or expired qr payload"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid or expired qr payload"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid or expired qr payload"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid or expired qr payload"
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid or expired qr payload"
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid or expired qr payload"
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid or expired qr payload"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid or expired qr payload"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid or expired qr payload"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid or expired qr payload"
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid or expired qr payload"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid or expired qr payload"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid or expired qr payload"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid or expired qr payload"
+          }
+        }
+      }
+    },
+    "errors.invalid_geohash": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid geohash"
+          }
+        },
+        "arz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid geohash"
+          }
+        },
+        "bn": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid geohash"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid geohash"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid geohash"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid geohash"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid geohash"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid geohash"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid geohash"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid geohash"
+          }
+        },
+        "id": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid geohash"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid geohash"
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid geohash"
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid geohash"
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid geohash"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid geohash"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid geohash"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid geohash"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid geohash"
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid geohash"
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid geohash"
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid geohash"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid geohash"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid geohash"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid geohash"
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid geohash"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid geohash"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid geohash"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "invalid geohash"
+          }
+        }
+      }
+    },
+    "errors.verification_requested": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verification requested for %@"
+          }
+        },
+        "arz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verification requested for %@"
+          }
+        },
+        "bn": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verification requested for %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verification requested for %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verification requested for %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verification requested for %@"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verification requested for %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verification requested for %@"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verification requested for %@"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verification requested for %@"
+          }
+        },
+        "id": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verification requested for %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verification requested for %@"
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verification requested for %@"
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verification requested for %@"
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verification requested for %@"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verification requested for %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verification requested for %@"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verification requested for %@"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verification requested for %@"
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verification requested for %@"
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verification requested for %@"
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verification requested for %@"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verification requested for %@"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verification requested for %@"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verification requested for %@"
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verification requested for %@"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verification requested for %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verification requested for %@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verification requested for %@"
           }
         }
       }
@@ -18188,7 +18900,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "PEOPLE"
+            "value": "PERSONEN"
           }
         },
         "en": {
@@ -18236,7 +18948,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "PEOPLE"
+            "value": "人々"
           }
         },
         "mr": {
@@ -18272,7 +18984,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "PEOPLE"
+            "value": "ЛЮДИ"
           }
         },
         "sw": {
@@ -19080,7 +19792,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "type a message..."
+            "value": "Nachricht eingeben..."
           }
         },
         "en": {
@@ -19128,7 +19840,7 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "type a message..."
+            "value": "メッセージを入力..."
           }
         },
         "mr": {
@@ -19164,7 +19876,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "type a message..."
+            "value": "введите сообщение..."
           }
         },
         "sw": {
@@ -22089,31 +22801,7 @@
     },
     "system.user_action_favorited": {
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ favorited you"
-          }
-        },
-        "pnb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ favorited you"
-          }
-        },
-        "ha": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ favorited you"
-          }
-        },
         "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ favorited you"
-          }
-        },
-        "tr": {
           "stringUnit": {
             "state": "translated",
             "value": "%@ favorited you"
@@ -22125,85 +22813,25 @@
             "value": "%@ favorited you"
           }
         },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ favorited you"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ favorited you"
-          }
-        },
-        "tl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ favorited you"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ favorited you"
-          }
-        },
-        "ta": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ favorited you"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ favorited you"
-          }
-        },
         "bn": {
           "stringUnit": {
             "state": "translated",
             "value": "%@ favorited you"
           }
         },
-        "zh-Hans": {
+        "de": {
           "stringUnit": {
             "state": "translated",
             "value": "%@ favorited you"
           }
         },
-        "pt-BR": {
+        "en": {
           "stringUnit": {
             "state": "translated",
             "value": "%@ favorited you"
           }
         },
-        "mr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ favorited you"
-          }
-        },
-        "zh-HK": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ favorited you"
-          }
-        },
-        "yue": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ favorited you"
-          }
-        },
-        "pcm": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ favorited you"
-          }
-        },
-        "ur": {
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "%@ favorited you"
@@ -22221,31 +22849,7 @@
             "value": "%@ favorited you"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ favorited you"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ favorited you"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ favorited you"
-          }
-        },
-        "id": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ favorited you"
-          }
-        },
-        "te": {
+        "ha": {
           "stringUnit": {
             "state": "translated",
             "value": "%@ favorited you"
@@ -22257,7 +22861,115 @@
             "value": "%@ favorited you"
           }
         },
+        "id": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ favorited you"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ favorited you"
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ favorited you"
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ favorited you"
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ favorited you"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ favorited you"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ favorited you"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ favorited you"
+          }
+        },
         "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ favorited you"
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ favorited you"
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ favorited you"
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ favorited you"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ favorited you"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ favorited you"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ favorited you"
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ favorited you"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ favorited you"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ favorited you"
+          }
+        },
+        "zh-Hant": {
           "stringUnit": {
             "state": "translated",
             "value": "%@ favorited you"
@@ -22267,31 +22979,7 @@
     },
     "system.user_action_unfavorited": {
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ unfavorited you"
-          }
-        },
-        "pnb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ unfavorited you"
-          }
-        },
-        "ha": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ unfavorited you"
-          }
-        },
         "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ unfavorited you"
-          }
-        },
-        "tr": {
           "stringUnit": {
             "state": "translated",
             "value": "%@ unfavorited you"
@@ -22303,85 +22991,25 @@
             "value": "%@ unfavorited you"
           }
         },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ unfavorited you"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ unfavorited you"
-          }
-        },
-        "tl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ unfavorited you"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ unfavorited you"
-          }
-        },
-        "ta": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ unfavorited you"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ unfavorited you"
-          }
-        },
         "bn": {
           "stringUnit": {
             "state": "translated",
             "value": "%@ unfavorited you"
           }
         },
-        "zh-Hans": {
+        "de": {
           "stringUnit": {
             "state": "translated",
             "value": "%@ unfavorited you"
           }
         },
-        "pt-BR": {
+        "en": {
           "stringUnit": {
             "state": "translated",
             "value": "%@ unfavorited you"
           }
         },
-        "mr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ unfavorited you"
-          }
-        },
-        "zh-HK": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ unfavorited you"
-          }
-        },
-        "yue": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ unfavorited you"
-          }
-        },
-        "pcm": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ unfavorited you"
-          }
-        },
-        "ur": {
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "%@ unfavorited you"
@@ -22399,31 +23027,7 @@
             "value": "%@ unfavorited you"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ unfavorited you"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ unfavorited you"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ unfavorited you"
-          }
-        },
-        "id": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ unfavorited you"
-          }
-        },
-        "te": {
+        "ha": {
           "stringUnit": {
             "state": "translated",
             "value": "%@ unfavorited you"
@@ -22435,7 +23039,115 @@
             "value": "%@ unfavorited you"
           }
         },
+        "id": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ unfavorited you"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ unfavorited you"
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ unfavorited you"
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ unfavorited you"
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ unfavorited you"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ unfavorited you"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ unfavorited you"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ unfavorited you"
+          }
+        },
         "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ unfavorited you"
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ unfavorited you"
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ unfavorited you"
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ unfavorited you"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ unfavorited you"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ unfavorited you"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ unfavorited you"
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ unfavorited you"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ unfavorited you"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ unfavorited you"
+          }
+        },
+        "zh-Hant": {
           "stringUnit": {
             "state": "translated",
             "value": "%@ unfavorited you"
@@ -23338,31 +24050,7 @@
     },
     "ui.delivery_ratio": {
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%d/%d"
-          }
-        },
-        "pnb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%d/%d"
-          }
-        },
-        "ha": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%d/%d"
-          }
-        },
         "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%d/%d"
-          }
-        },
-        "tr": {
           "stringUnit": {
             "state": "translated",
             "value": "%d/%d"
@@ -23374,85 +24062,25 @@
             "value": "%d/%d"
           }
         },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%d/%d"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%d/%d"
-          }
-        },
-        "tl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%d/%d"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%d/%d"
-          }
-        },
-        "ta": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%d/%d"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%d/%d"
-          }
-        },
         "bn": {
           "stringUnit": {
             "state": "translated",
             "value": "%d/%d"
           }
         },
-        "zh-Hans": {
+        "de": {
           "stringUnit": {
             "state": "translated",
             "value": "%d/%d"
           }
         },
-        "pt-BR": {
+        "en": {
           "stringUnit": {
             "state": "translated",
             "value": "%d/%d"
           }
         },
-        "mr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%d/%d"
-          }
-        },
-        "zh-HK": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%d/%d"
-          }
-        },
-        "yue": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%d/%d"
-          }
-        },
-        "pcm": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%d/%d"
-          }
-        },
-        "ur": {
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "%d/%d"
@@ -23470,31 +24098,7 @@
             "value": "%d/%d"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%d/%d"
-          }
-        },
-        "vi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%d/%d"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%d/%d"
-          }
-        },
-        "id": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%d/%d"
-          }
-        },
-        "te": {
+        "ha": {
           "stringUnit": {
             "state": "translated",
             "value": "%d/%d"
@@ -23506,7 +24110,115 @@
             "value": "%d/%d"
           }
         },
+        "id": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d/%d"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d/%d"
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d/%d"
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d/%d"
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d/%d"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d/%d"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d/%d"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d/%d"
+          }
+        },
         "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d/%d"
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d/%d"
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d/%d"
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d/%d"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d/%d"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d/%d"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d/%d"
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d/%d"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d/%d"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d/%d"
+          }
+        },
+        "zh-Hant": {
           "stringUnit": {
             "state": "translated",
             "value": "%d/%d"
@@ -23689,6 +24401,540 @@
           "stringUnit": {
             "state": "translated",
             "value": "#"
+          }
+        }
+      }
+    },
+    "ui.mesh_with_count": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mesh [%@]"
+          }
+        },
+        "arz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mesh [%@]"
+          }
+        },
+        "bn": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mesh [%@]"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mesh [%@]"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mesh [%@]"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mesh [%@]"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mesh [%@]"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mesh [%@]"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mesh [%@]"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mesh [%@]"
+          }
+        },
+        "id": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mesh [%@]"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mesh [%@]"
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mesh [%@]"
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mesh [%@]"
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mesh [%@]"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mesh [%@]"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mesh [%@]"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mesh [%@]"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mesh [%@]"
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mesh [%@]"
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mesh [%@]"
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mesh [%@]"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mesh [%@]"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mesh [%@]"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mesh [%@]"
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mesh [%@]"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mesh [%@]"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mesh [%@]"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mesh [%@]"
+          }
+        }
+      }
+    },
+    "ui.people_plural": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "people"
+          }
+        },
+        "arz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "people"
+          }
+        },
+        "bn": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "people"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "people"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "people"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "people"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "people"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "people"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "people"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "people"
+          }
+        },
+        "id": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "people"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "people"
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "people"
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "people"
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "people"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "people"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "people"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "people"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "people"
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "people"
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "people"
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "people"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "people"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "people"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "people"
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "people"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "people"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "people"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "people"
+          }
+        }
+      }
+    },
+    "ui.person_singular": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "person"
+          }
+        },
+        "arz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "person"
+          }
+        },
+        "bn": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "person"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "person"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "person"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "person"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "person"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "person"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "person"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "person"
+          }
+        },
+        "id": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "person"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "person"
+          }
+        },
+        "mr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "person"
+          }
+        },
+        "pcm": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "person"
+          }
+        },
+        "pnb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "person"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "person"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "person"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "person"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "person"
+          }
+        },
+        "ta": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "person"
+          }
+        },
+        "te": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "person"
+          }
+        },
+        "tl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "person"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "person"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "person"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "person"
+          }
+        },
+        "yue": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "person"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "person"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "person"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "person"
           }
         }
       }
