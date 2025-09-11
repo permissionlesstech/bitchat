@@ -82,10 +82,10 @@ final class NostrRelayManager: ObservableObject {
             let ready = await TorManager.shared.awaitReady()
             await MainActor.run {
                 if !ready {
-                    SecureLogger.log("❌ Tor not ready; aborting relay connections (fail-closed)", category: SecureLogger.session, level: .error)
+                    SecureLogger.log("❌ Tor not ready; aborting relay connections (fail-closed)", category: .session, level: .error)
                     return
                 }
-                SecureLogger.log("🌐 Connecting to \(self.relays.count) Nostr relays (via Tor)", category: SecureLogger.session, level: .debug)
+                SecureLogger.log("🌐 Connecting to \(self.relays.count) Nostr relays (via Tor)", category: .session, level: .debug)
                 for relay in self.relays {
                     self.connectToRelay(relay.url)
                 }
@@ -231,12 +231,12 @@ final class NostrRelayManager: ObservableObject {
         do {
             let message = try encoder.encode(req)
             guard let messageString = String(data: message, encoding: .utf8) else { 
-                SecureLogger.log("❌ Failed to encode subscription request", category: SecureLogger.session, level: .error)
+                SecureLogger.log("❌ Failed to encode subscription request", category: .session, level: .error)
                 return 
             }
             
             // SecureLogger.log("📋 Subscription filter JSON: \(messageString.prefix(200))...", 
-            //                 category: SecureLogger.session, level: .debug)
+            //                 category: .session, level: .debug)
             
             // Target specific relays if provided; else default. Filter permanently failed relays.
             let baseUrls = relayUrls ?? Self.defaultRelays
@@ -252,7 +252,7 @@ final class NostrRelayManager: ObservableObject {
                 self.pendingSubscriptions[url] = map
             }
             SecureLogger.log("📋 Queued subscription id=\(id) for \(urls.count) relay(s)",
-                             category: SecureLogger.session, level: .debug)
+                             category: .session, level: .debug)
             // Ensure we actually have sockets opening to these relays so queued REQs can flush
             ensureConnections(to: urls)
             // If some targets are already connected, flush immediately for them
@@ -263,7 +263,7 @@ final class NostrRelayManager: ObservableObject {
             }
         } catch {
             SecureLogger.log("❌ Failed to encode subscription request: \(error)", 
-                            category: SecureLogger.session, level: .error)
+                            category: .session, level: .error)
         }
     }
     
@@ -295,7 +295,7 @@ final class NostrRelayManager: ObservableObject {
     
     private func connectToRelay(_ urlString: String) {
         guard let url = URL(string: urlString) else { 
-            SecureLogger.log("Invalid relay URL: \(urlString)", category: SecureLogger.session, level: .warning)
+            SecureLogger.log("Invalid relay URL: \(urlString)", category: .session, level: .warning)
             return 
         }
 
@@ -321,7 +321,7 @@ final class NostrRelayManager: ObservableObject {
                 let ready = await TorManager.shared.awaitReady()
                 await MainActor.run {
                     if ready { self.connectToRelay(urlString) }
-                    else { SecureLogger.log("❌ Tor not ready; skipping connection to \(urlString)", category: SecureLogger.session, level: .error) }
+                    else { SecureLogger.log("❌ Tor not ready; skipping connection to \(urlString)", category: .session, level: .error) }
                 }
             }
             return
@@ -341,13 +341,13 @@ final class NostrRelayManager: ObservableObject {
             DispatchQueue.main.async {
                 if error == nil {
                     SecureLogger.log("✅ Connected to Nostr relay: \(urlString)", 
-                                   category: SecureLogger.session, level: .debug)
+                                   category: .session, level: .debug)
                     self?.updateRelayStatus(urlString, isConnected: true)
                     // Flush any pending subscriptions for this relay
                     self?.flushPendingSubscriptions(for: urlString)
                 } else {
                     SecureLogger.log("❌ Failed to connect to Nostr relay \(urlString): \(error?.localizedDescription ?? "Unknown error")", 
-                                   category: SecureLogger.session, level: .error)
+                                   category: .session, level: .error)
                     self?.updateRelayStatus(urlString, isConnected: false, error: error)
                     // Trigger disconnection handler for proper backoff
                     self?.handleDisconnection(relayUrl: urlString, error: error ?? NSError(domain: "NostrRelay", code: -1, userInfo: nil))
@@ -365,7 +365,7 @@ final class NostrRelayManager: ObservableObject {
             connection.send(.string(messageString)) { error in
                 if let error = error {
                     SecureLogger.log("❌ Failed to send pending subscription to \(relayUrl): \(error)",
-                                    category: SecureLogger.session, level: .error)
+                                    category: .session, level: .error)
                 } else {
                     Task { @MainActor in
                         var subs = self.subscriptions[relayUrl] ?? Set<String>()
@@ -415,7 +415,7 @@ final class NostrRelayManager: ObservableObject {
         case .event(let subId, let event):
             if event.kind != 1059 {
                 SecureLogger.log("📥 Event kind=\(event.kind) id=\(event.id.prefix(16))… relay=\(relayUrl)",
-                                category: SecureLogger.session, level: .debug)
+                                category: .session, level: .debug)
             }
             if let index = self.relays.firstIndex(where: { $0.url == relayUrl }) {
                 self.relays[index].messagesReceived += 1
@@ -424,7 +424,7 @@ final class NostrRelayManager: ObservableObject {
                 handler(event)
             } else {
                 SecureLogger.log("⚠️ No handler for subscription \(subId)", 
-                                category: SecureLogger.session, level: .warning)
+                                category: .session, level: .warning)
             }
         case .eose:
             // No-op for now
@@ -433,11 +433,11 @@ final class NostrRelayManager: ObservableObject {
             if success {
                 _ = Self.pendingGiftWrapIDs.remove(eventId)
                 SecureLogger.log("✅ Accepted id=\(eventId.prefix(16))… relay=\(relayUrl)",
-                                category: SecureLogger.session, level: .debug)
+                                category: .session, level: .debug)
             } else {
                 let isGiftWrap = Self.pendingGiftWrapIDs.remove(eventId) != nil
                 SecureLogger.log("📮 Rejected id=\(eventId.prefix(16))… reason=\(reason)",
-                                category: SecureLogger.session, level: isGiftWrap ? .warning : .error)
+                                category: .session, level: isGiftWrap ? .warning : .error)
             }
         case .notice:
             break
@@ -452,16 +452,16 @@ final class NostrRelayManager: ObservableObject {
             let message = String(data: data, encoding: .utf8) ?? ""
             
             SecureLogger.log("📤 Send kind=\(event.kind) id=\(event.id.prefix(16))… relay=\(relayUrl)", 
-                            category: SecureLogger.session, level: .debug)
+                            category: .session, level: .debug)
             
             connection.send(.string(message)) { [weak self] error in
                 DispatchQueue.main.async {
                     if let error = error {
                         SecureLogger.log("❌ Failed to send event to \(relayUrl): \(error)", 
-                                        category: SecureLogger.session, level: .error)
+                                        category: .session, level: .error)
                     } else {
                         // SecureLogger.log("✅ Event sent to relay: \(relayUrl)", 
-                        //                 category: SecureLogger.session, level: .debug)
+                        //                 category: .session, level: .debug)
                         // Update relay stats
                         if let index = self?.relays.firstIndex(where: { $0.url == relayUrl }) {
                             self?.relays[index].messagesSent += 1
@@ -470,7 +470,7 @@ final class NostrRelayManager: ObservableObject {
                 }
             }
         } catch {
-            SecureLogger.log("Failed to encode event: \(error)", category: SecureLogger.session, level: .error)
+            SecureLogger.log("Failed to encode event: \(error)", category: .session, level: .error)
         }
     }
     
@@ -509,7 +509,7 @@ final class NostrRelayManager: ObservableObject {
            errorDescription.contains("dns") ||
            (ns.domain == NSURLErrorDomain && ns.code == NSURLErrorBadServerResponse) {
             if relays.first(where: { $0.url == relayUrl })?.lastError == nil {
-                SecureLogger.log("Nostr relay permanent failure for \(relayUrl) - not retrying (code=\(ns.code))", category: SecureLogger.session, level: .warning)
+                SecureLogger.log("Nostr relay permanent failure for \(relayUrl) - not retrying (code=\(ns.code))", category: .session, level: .warning)
             }
             if let index = relays.firstIndex(where: { $0.url == relayUrl }) {
                 relays[index].lastError = error
@@ -528,7 +528,7 @@ final class NostrRelayManager: ObservableObject {
         // Stop attempting after max attempts
         if relays[index].reconnectAttempts >= maxReconnectAttempts {
             SecureLogger.log("Max reconnection attempts (\(maxReconnectAttempts)) reached for \(relayUrl)", 
-                           category: SecureLogger.session, level: .warning)
+                           category: .session, level: .warning)
             return
         }
         

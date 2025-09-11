@@ -13,17 +13,6 @@ import os.log
 /// Provides safe logging that filters sensitive data and security events
 final class SecureLogger {
     
-    // MARK: - Log Categories
-    
-    private static let subsystem = "chat.bitchat"
-    
-    static let noise = OSLog(subsystem: subsystem, category: "noise")
-    static let encryption = OSLog(subsystem: subsystem, category: "encryption")
-    static let keychain = OSLog(subsystem: subsystem, category: "keychain")
-    static let session = OSLog(subsystem: subsystem, category: "session")
-    static let security = OSLog(subsystem: subsystem, category: "security")
-    static let handshake = OSLog(subsystem: subsystem, category: "handshake")
-    
     // MARK: - Timestamp Formatter
     
     private static let timestampFormatter: DateFormatter = {
@@ -132,15 +121,15 @@ final class SecureLogger {
         let message = "\(location) \(event.message)"
         
         #if DEBUG
-        os_log("%{public}@", log: security, type: level.osLogType, message)
+        os_log("%{public}@", log: .security, type: level.osLogType, message)
         #else
         // In release, use private logging to prevent sensitive data exposure
-        os_log("%{private}@", log: security, type: level.osLogType, message)
+        os_log("%{private}@", log: .security, type: level.osLogType, message)
         #endif
     }
     
     /// Log general messages with automatic sensitive data filtering
-    static func log(_ message: @autoclosure () -> String, category: OSLog = noise, level: LogLevel = .debug,
+    static func log(_ message: @autoclosure () -> String, category: OSLog = .noise, level: LogLevel = .debug,
                     file: String = #file, line: Int = #line, function: String = #function) {
         guard shouldLog(level) else { return }
         let location = formatLocation(file: file, line: line, function: function)
@@ -157,7 +146,7 @@ final class SecureLogger {
     }
     
     /// Log errors with context
-    static func logError(_ error: Error, context: @autoclosure () -> String, category: OSLog = noise,
+    static func logError(_ error: Error, context: @autoclosure () -> String, category: OSLog = .noise,
                         file: String = #file, line: Int = #line, function: String = #function) {
         let location = formatLocation(file: file, line: line, function: function)
         let sanitized = sanitize(context())
@@ -240,10 +229,10 @@ extension SecureLogger {
     static func logHandshake(_ phase: String, peerID: String, success: Bool = true,
                             file: String = #file, line: Int = #line, function: String = #function) {
         if success {
-            log("Handshake \(phase) with peer: \(peerID)", category: session, level: .info,
+            log("Handshake \(phase) with peer: \(peerID)", category: .session, level: .info,
                 file: file, line: line, function: function)
         } else {
-            log("Handshake \(phase) failed with peer: \(peerID)", category: session, level: .warning,
+            log("Handshake \(phase) failed with peer: \(peerID)", category: .session, level: .warning,
                 file: file, line: line, function: function)
         }
     }
@@ -253,7 +242,7 @@ extension SecureLogger {
                              file: String = #file, line: Int = #line, function: String = #function) {
         let level: LogLevel = success ? .debug : .error
         log("Encryption operation '\(operation)' \(success ? "succeeded" : "failed")", 
-            category: encryption, level: level, file: file, line: line, function: function)
+            category: .encryption, level: level, file: file, line: line, function: function)
     }
     
     /// Log key management operations
@@ -261,7 +250,7 @@ extension SecureLogger {
                                file: String = #file, line: Int = #line, function: String = #function) {
         let level: LogLevel = success ? .debug : .error
         log("Key operation '\(operation)' for \(keyType) \(success ? "succeeded" : "failed")", 
-            category: keychain, level: level, file: file, line: line, function: function)
+            category: .keychain, level: level, file: file, line: line, function: function)
     }
 }
 
