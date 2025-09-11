@@ -10,7 +10,7 @@ import Foundation
 import CryptoKit
 @testable import bitchat
 
-class TestHelpers {
+final class TestHelpers {
     
     // MARK: - Key Generation
     

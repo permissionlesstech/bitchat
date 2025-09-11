@@ -13,7 +13,7 @@ import CryptoKit
 
 /// Single source of truth for peer state, combining mesh connectivity and favorites
 @MainActor
-class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
+final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
     
     // MARK: - Published Properties
     

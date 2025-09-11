@@ -10,7 +10,7 @@ import Foundation
 import SwiftUI
 
 /// Manages all private chat functionality
-class PrivateChatManager: ObservableObject {
+final class PrivateChatManager: ObservableObject {
     @Published var privateChats: [String: [BitchatMessage]] = [:]
     @Published var selectedPeer: String? = nil
     @Published var unreadMessages: Set<String> = []

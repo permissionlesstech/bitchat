@@ -26,7 +26,7 @@ import CoreBluetooth
 /// - `autoFloodEnabled` is disabled by default; Integration tests enable it in `setUp()` to
 ///   simulate broadcast propagation across the mesh. E2E tests keep it off and perform explicit
 ///   relays when needed.
-class MockBLEService: NSObject {
+final class MockBLEService: NSObject {
     // Enable automatic flooding for public messages in integration tests only
     static var autoFloodEnabled: Bool = false
     

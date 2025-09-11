@@ -4,7 +4,7 @@ import Combine
 
 /// Manages WebSocket connections to Nostr relays
 @MainActor
-class NostrRelayManager: ObservableObject {
+final class NostrRelayManager: ObservableObject {
     static let shared = NostrRelayManager()
     // Track gift-wraps (kind 1059) we initiated so we can log OK acks at info
     private(set) static var pendingGiftWrapIDs = Set<String>()

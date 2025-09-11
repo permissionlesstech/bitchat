@@ -10,7 +10,7 @@ import Foundation
 import Security
 import os.log
 
-class KeychainManager {
+final class KeychainManager {
     static let shared = KeychainManager()
     
     // Use consistent service name for all keychain items
