@@ -253,6 +253,8 @@ final class NostrRelayManager: ObservableObject {
             }
             SecureLogger.log("📋 Queued subscription id=\(id) for \(urls.count) relay(s)",
                              category: SecureLogger.session, level: .debug)
+            // Ensure we actually have sockets opening to these relays so queued REQs can flush
+            ensureConnections(to: urls)
             // If some targets are already connected, flush immediately for them
             for url in urls {
                 if let r = relays.first(where: { $0.url == url }), r.isConnected {
@@ -625,11 +627,10 @@ private enum ParsedInbound {
         guard let data = message.data,
               let array = try? JSONSerialization.jsonObject(with: data) as? [Any],
               array.count >= 2,
-              let type = array[0] as? String
-        else {
+              let type = array[0] as? String else {
             return nil
         }
-        
+
         switch type {
         case "EVENT":
             if array.count >= 3,
@@ -637,27 +638,33 @@ private enum ParsedInbound {
                let eventDict = array[2] as? [String: Any],
                let event = try? NostrEvent(from: eventDict) {
                 self = .event(subId: subId, event: event)
+                return
             }
+            return nil
         case "EOSE":
             if let subId = array[1] as? String {
                 self = .eose(subscriptionId: subId)
+                return
             }
+            return nil
         case "OK":
             if array.count >= 3,
                let eventId = array[1] as? String,
                let success = array[2] as? Bool {
                 let reason = array.count >= 4 ? (array[3] as? String ?? "no reason given") : "no reason given"
                 self = .ok(eventId: eventId, success: success, reason: reason)
+                return
             }
+            return nil
         case "NOTICE":
             if array.count >= 2, let msg = array[1] as? String {
                 self = .notice(msg)
+                return
             }
+            return nil
         default:
-            break
+            return nil
         }
-        
-        return nil
     }
 }
 
