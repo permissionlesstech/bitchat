@@ -205,22 +205,6 @@ final class SecureIdentityStateManager {
         }
     }
     
-    // MARK: - Identity Resolution
-    
-    func resolveIdentity(peerID: String, claimedNickname: String) -> IdentityHint {
-        queue.sync {
-            // Check if we have candidates based on nickname
-            if let fingerprints = cache.nicknameIndex[claimedNickname] {
-                if fingerprints.count == 1 {
-                    return .likelyKnown(fingerprint: fingerprints.first!)
-                } else {
-                    return .ambiguous(candidates: fingerprints)
-                }
-            }
-            return .unknown
-        }
-    }
-    
     // MARK: - Social Identity Management
     
     func getSocialIdentity(for fingerprint: String) -> SocialIdentity? {
