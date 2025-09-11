@@ -78,8 +78,7 @@ struct NostrProtocol {
             )
             // Successfully unwrapped gift wrap
         } catch {
-            SecureLogger.log("❌ Failed to unwrap gift wrap: \(error)", 
-                            category: .session, level: .error)
+            SecureLogger.error("❌ Failed to unwrap gift wrap: \(error)", category: .session)
             throw error
         }
         
@@ -92,8 +91,7 @@ struct NostrProtocol {
             )
             // Successfully opened seal
         } catch {
-            SecureLogger.log("❌ Failed to open seal: \(error)", 
-                            category: .session, level: .error)
+            SecureLogger.error("❌ Failed to open seal: \(error)", category: .session)
             throw error
         }
         

@@ -198,7 +198,7 @@ final class KeychainManager {
     
     // Delete ALL keychain data for panic mode
     func deleteAllKeychainData() -> Bool {
-        SecureLogger.log("Panic mode - deleting all keychain data", category: .security, level: .warning)
+        SecureLogger.warning("Panic mode - deleting all keychain data", category: .security)
         
         var totalDeleted = 0
         
@@ -261,7 +261,7 @@ final class KeychainManager {
                     let deleteStatus = SecItemDelete(deleteQuery as CFDictionary)
                     if deleteStatus == errSecSuccess {
                         totalDeleted += 1
-                        SecureLogger.log("Deleted keychain item: \(account) from \(service)", category: .keychain, level: .info)
+                        SecureLogger.info("Deleted keychain item: \(account) from \(service)", category: .keychain)
                     }
                 }
             }
@@ -303,7 +303,7 @@ final class KeychainManager {
             totalDeleted += 1
         }
         
-        SecureLogger.log("Panic mode cleanup completed. Total items deleted: \(totalDeleted)", category: .keychain, level: .warning)
+        SecureLogger.warning("Panic mode cleanup completed. Total items deleted: \(totalDeleted)", category: .keychain)
         
         return totalDeleted > 0
     }

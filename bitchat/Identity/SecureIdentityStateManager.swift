@@ -191,7 +191,7 @@ final class SecureIdentityStateManager {
             let sealedBox = try AES.GCM.seal(data, using: encryptionKey)
             let saved = keychain.saveIdentityKey(sealedBox.combined!, forKey: cacheKey)
             if saved {
-                SecureLogger.log("Identity cache saved to keychain", category: .security, level: .debug)
+                SecureLogger.debug("Identity cache saved to keychain", category: .security)
             }
         } catch {
             SecureLogger.logError(error, context: "Failed to save identity cache", category: .security)
@@ -395,7 +395,7 @@ final class SecureIdentityStateManager {
     }
     
     func setBlocked(_ fingerprint: String, isBlocked: Bool) {
-        SecureLogger.log("User \(isBlocked ? "blocked" : "unblocked"): \(fingerprint)", category: .security, level: .info)
+        SecureLogger.info("User \(isBlocked ? "blocked" : "unblocked"): \(fingerprint)", category: .security)
         
         queue.async(flags: .barrier) {
             if var identity = self.cache.socialIdentities[fingerprint] {
@@ -519,7 +519,7 @@ final class SecureIdentityStateManager {
     // MARK: - Cleanup
     
     func clearAllIdentityData() {
-        SecureLogger.log("Clearing all identity data", category: .security, level: .warning)
+        SecureLogger.warning("Clearing all identity data", category: .security)
         
         queue.async(flags: .barrier) {
             self.cache = IdentityCache()
@@ -543,7 +543,7 @@ final class SecureIdentityStateManager {
     // MARK: - Verification
     
     func setVerified(fingerprint: String, verified: Bool) {
-        SecureLogger.log("Fingerprint \(verified ? "verified" : "unverified"): \(fingerprint)", category: .security, level: .info)
+        SecureLogger.info("Fingerprint \(verified ? "verified" : "unverified"): \(fingerprint)", category: .security)
         
         queue.async(flags: .barrier) {
             if verified {
