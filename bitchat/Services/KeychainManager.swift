@@ -22,14 +22,9 @@ protocol KeychainManagerProtocol {
 }
 
 final class KeychainManager: KeychainManagerProtocol {
-    static let shared = KeychainManager()
-    
     // Use consistent service name for all keychain items
     private let service = "chat.bitchat"
     private let appGroup = "group.chat.bitchat"
-    
-    private init() {}
-    
     
     private func isSandboxed() -> Bool {
         #if os(macOS)

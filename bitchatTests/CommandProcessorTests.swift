@@ -2,10 +2,12 @@ import XCTest
 @testable import bitchat
 
 final class CommandProcessorTests: XCTestCase {
+    
+    var identityManager: MockIdentityManager!
 
     @MainActor
     func test_slap_notFoundGrammar() {
-        let processor = CommandProcessor(chatViewModel: nil, meshService: nil)
+        let processor = CommandProcessor(chatViewModel: nil, meshService: nil, identityManager: identityManager)
         let result = processor.process("/slap @system")
         switch result {
         case .error(let message):
@@ -17,7 +19,7 @@ final class CommandProcessorTests: XCTestCase {
 
     @MainActor
     func test_hug_notFoundGrammar() {
-        let processor = CommandProcessor(chatViewModel: nil, meshService: nil)
+        let processor = CommandProcessor(chatViewModel: nil, meshService: nil, identityManager: identityManager)
         let result = processor.process("/hug @system")
         switch result {
         case .error(let message):
@@ -29,7 +31,7 @@ final class CommandProcessorTests: XCTestCase {
 
     @MainActor
     func test_slap_usageMessage() {
-        let processor = CommandProcessor(chatViewModel: nil, meshService: nil)
+        let processor = CommandProcessor(chatViewModel: nil, meshService: nil, identityManager: identityManager)
         let result = processor.process("/slap")
         switch result {
         case .error(let message):

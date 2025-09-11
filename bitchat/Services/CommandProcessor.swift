@@ -20,10 +20,12 @@ enum CommandResult {
 final class CommandProcessor {
     weak var chatViewModel: ChatViewModel?
     weak var meshService: Transport?
+    private let identityManager: SecureIdentityStateManagerProtocol
     
-    init(chatViewModel: ChatViewModel? = nil, meshService: Transport? = nil) {
+    init(chatViewModel: ChatViewModel? = nil, meshService: Transport? = nil, identityManager: SecureIdentityStateManagerProtocol) {
         self.chatViewModel = chatViewModel
         self.meshService = meshService
+        self.identityManager = identityManager
     }
     
     /// Process a command string
@@ -189,7 +191,7 @@ final class CommandProcessor {
             }
 
             // Geohash blocked names (prefer visible display names; fallback to #suffix)
-            let geoBlocked = Array(SecureIdentityStateManager.shared.getBlockedNostrPubkeys())
+            let geoBlocked = Array(identityManager.getBlockedNostrPubkeys())
             var geoNames: [String] = []
             if let vm = chatViewModel {
                 let visible = vm.visibleGeohashPeople()
@@ -213,14 +215,14 @@ final class CommandProcessor {
         
         if let peerID = chatViewModel?.getPeerIDForNickname(nickname),
            let fingerprint = meshService?.getFingerprint(for: peerID) {
-            if SecureIdentityStateManager.shared.isBlocked(fingerprint: fingerprint) {
+            if identityManager.isBlocked(fingerprint: fingerprint) {
                 return .success(message: "\(nickname) is already blocked")
             }
             // Block the user (mesh/noise identity)
-            if var identity = SecureIdentityStateManager.shared.getSocialIdentity(for: fingerprint) {
+            if var identity = identityManager.getSocialIdentity(for: fingerprint) {
                 identity.isBlocked = true
                 identity.isFavorite = false
-                SecureIdentityStateManager.shared.updateSocialIdentity(identity)
+                identityManager.updateSocialIdentity(identity)
             } else {
                 let blockedIdentity = SocialIdentity(
                     fingerprint: fingerprint,
@@ -231,16 +233,16 @@ final class CommandProcessor {
                     isBlocked: true,
                     notes: nil
                 )
-                SecureIdentityStateManager.shared.updateSocialIdentity(blockedIdentity)
+                identityManager.updateSocialIdentity(blockedIdentity)
             }
             return .success(message: "blocked \(nickname). you will no longer receive messages from them")
         }
         // Mesh lookup failed; try geohash (Nostr) participant by display name
         if let pub = chatViewModel?.nostrPubkeyForDisplayName(nickname) {
-            if SecureIdentityStateManager.shared.isNostrBlocked(pubkeyHexLowercased: pub) {
+            if identityManager.isNostrBlocked(pubkeyHexLowercased: pub) {
                 return .success(message: "\(nickname) is already blocked")
             }
-            SecureIdentityStateManager.shared.setNostrBlocked(pub, isBlocked: true)
+            identityManager.setNostrBlocked(pub, isBlocked: true)
             return .success(message: "blocked \(nickname) in geohash chats")
         }
         
@@ -257,18 +259,18 @@ final class CommandProcessor {
         
         if let peerID = chatViewModel?.getPeerIDForNickname(nickname),
            let fingerprint = meshService?.getFingerprint(for: peerID) {
-            if !SecureIdentityStateManager.shared.isBlocked(fingerprint: fingerprint) {
+            if !identityManager.isBlocked(fingerprint: fingerprint) {
                 return .success(message: "\(nickname) is not blocked")
             }
-            SecureIdentityStateManager.shared.setBlocked(fingerprint, isBlocked: false)
+            identityManager.setBlocked(fingerprint, isBlocked: false)
             return .success(message: "unblocked \(nickname)")
         }
         // Try geohash unblock
         if let pub = chatViewModel?.nostrPubkeyForDisplayName(nickname) {
-            if !SecureIdentityStateManager.shared.isNostrBlocked(pubkeyHexLowercased: pub) {
+            if !identityManager.isNostrBlocked(pubkeyHexLowercased: pub) {
                 return .success(message: "\(nickname) is not blocked")
             }
-            SecureIdentityStateManager.shared.setNostrBlocked(pub, isBlocked: false)
+            identityManager.setNostrBlocked(pub, isBlocked: false)
             return .success(message: "unblocked \(nickname) in geohash chats")
         }
         return .error(message: "cannot unblock \(nickname): not found")

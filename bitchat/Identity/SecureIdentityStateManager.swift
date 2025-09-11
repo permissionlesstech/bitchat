@@ -137,8 +137,6 @@ protocol SecureIdentityStateManagerProtocol {
 /// Provides thread-safe access to identity mappings with encryption at rest.
 /// All identity data is stored encrypted in the device Keychain for security.
 final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
-    static let shared = SecureIdentityStateManager()
-    
     private let keychain: KeychainManagerProtocol
     private let cacheKey = "bitchat.identityCache.v2"
     private let encryptionKeyName = "identityCacheEncryptionKey"
@@ -159,7 +157,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     // Encryption key
     private let encryptionKey: SymmetricKey
     
-    private init(keychain: KeychainManagerProtocol = KeychainManager.shared) {
+    init(_ keychain: KeychainManagerProtocol) {
         self.keychain = keychain
         
         // Generate or retrieve encryption key from keychain
