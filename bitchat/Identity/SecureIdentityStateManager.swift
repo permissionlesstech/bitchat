@@ -468,12 +468,6 @@ final class SecureIdentityStateManager {
         }
     }
     
-    func getHandshakeState(peerID: String) -> HandshakeState? {
-        queue.sync {
-            return ephemeralSessions[peerID]?.handshakeState
-        }
-    }
-    
     // MARK: - Cleanup
     
     func clearAllIdentityData() {
