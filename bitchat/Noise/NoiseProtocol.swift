@@ -678,7 +678,7 @@ final class NoiseHandshakeState {
                     let decrypted = try symmetricState.decryptAndHash(staticData)
                     remoteStaticPublic = try NoiseHandshakeState.validatePublicKey(decrypted)
                 } catch {
-                    SecureLogger.logSecurityEvent(.authenticationFailed(peerID: "Unknown - handshake"), level: .error)
+                    SecureLogger.error(.authenticationFailed(peerID: "Unknown - handshake"))
                     throw NoiseError.authenticationFailure
                 }
                 

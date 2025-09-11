@@ -133,6 +133,24 @@ final class SecureLogger {
         log(message(), category: category, level: .error, file: file, line: line, function: function)
     }
     
+    // MARK: Security Event Logging
+    
+    static func debug(_ event: SecurityEvent, file: String = #file, line: Int = #line, function: String = #function) {
+        logSecurityEvent(event, level: .debug, file: file, line: line, function: function)
+    }
+    
+    static func info(_ event: SecurityEvent, file: String = #file, line: Int = #line, function: String = #function) {
+        logSecurityEvent(event, level: .info, file: file, line: line, function: function)
+    }
+    
+    static func warning(_ event: SecurityEvent, file: String = #file, line: Int = #line, function: String = #function) {
+        logSecurityEvent(event, level: .warning, file: file, line: line, function: function)
+    }
+    
+    static func error(_ event: SecurityEvent, file: String = #file, line: Int = #line, function: String = #function) {
+        logSecurityEvent(event, level: .error, file: file, line: line, function: function)
+    }
+    
     /// Log errors with context
     static func error(_ error: Error, context: @autoclosure () -> String, category: OSLog = .noise,
                       file: String = #file, line: Int = #line, function: String = #function) {
@@ -144,21 +162,6 @@ final class SecureLogger {
         os_log("%{public}@ Error in %{public}@: %{public}@", log: category, type: .error, location, sanitized, errorDesc)
         #else
         os_log("%{private}@ Error in %{private}@: %{private}@", log: category, type: .error, location, sanitized, errorDesc)
-        #endif
-    }
-    
-    /// Log a security event
-    static func logSecurityEvent(_ event: SecurityEvent, level: LogLevel = .info, 
-                                 file: String = #file, line: Int = #line, function: String = #function) {
-        guard shouldLog(level) else { return }
-        let location = formatLocation(file: file, line: line, function: function)
-        let message = "\(location) \(event.message)"
-        
-        #if DEBUG
-        os_log("%{public}@", log: .security, type: level.osLogType, message)
-        #else
-        // In release, use private logging to prevent sensitive data exposure
-        os_log("%{private}@", log: .security, type: level.osLogType, message)
         #endif
     }
     
@@ -178,6 +181,21 @@ final class SecureLogger {
         if level != .debug {
             os_log("%{private}@", log: category, type: level.osLogType, sanitized)
         }
+        #endif
+    }
+    
+    /// Log a security event
+    private static func logSecurityEvent(_ event: SecurityEvent, level: LogLevel = .info,
+                                         file: String, line: Int, function: String) {
+        guard shouldLog(level) else { return }
+        let location = formatLocation(file: file, line: line, function: function)
+        let message = "\(location) \(event.message)"
+        
+        #if DEBUG
+        os_log("%{public}@", log: .security, type: level.osLogType, message)
+        #else
+        // In release, use private logging to prevent sensitive data exposure
+        os_log("%{private}@", log: .security, type: level.osLogType, message)
         #endif
     }
     

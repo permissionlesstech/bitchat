@@ -131,7 +131,7 @@ class NoiseSession {
                 handshakeState = nil // Clear handshake state
                 
                 SecureLogger.debug("NoiseSession[\(peerID)]: Handshake complete (no response needed), transitioning to established", category: .noise)
-                SecureLogger.logSecurityEvent(.handshakeCompleted(peerID: peerID))
+                SecureLogger.info(.handshakeCompleted(peerID: peerID))
                 
                 return nil
             } else {
@@ -157,7 +157,7 @@ class NoiseSession {
                     handshakeState = nil // Clear handshake state
                     
                     SecureLogger.debug("NoiseSession[\(peerID)]: Handshake complete after writing response, transitioning to established", category: .noise)
-                    SecureLogger.logSecurityEvent(.handshakeCompleted(peerID: peerID))
+                    SecureLogger.info(.handshakeCompleted(peerID: peerID))
                 }
                 
                 return response
@@ -242,7 +242,7 @@ class NoiseSession {
             handshakeHash = nil
             
             if wasEstablished {
-                SecureLogger.logSecurityEvent(.sessionExpired(peerID: peerID))
+                SecureLogger.info(.sessionExpired(peerID: peerID))
             }
         }
     }
@@ -287,7 +287,7 @@ final class NoiseSessionManager {
         managerQueue.sync(flags: .barrier) {
             if let session = sessions[peerID] {
                 if session.isEstablished() {
-                    SecureLogger.logSecurityEvent(.sessionExpired(peerID: peerID))
+                    SecureLogger.info(.sessionExpired(peerID: peerID))
                 }
                 // Clear sensitive data before removing
                 session.reset()
@@ -331,7 +331,7 @@ final class NoiseSessionManager {
             } catch {
                 // Clean up failed session
                 _ = sessions.removeValue(forKey: peerID)
-                SecureLogger.logSecurityEvent(.handshakeFailed(peerID: peerID, error: error.localizedDescription), level: .error)
+                SecureLogger.error(.handshakeFailed(peerID: peerID, error: error.localizedDescription))
                 throw error
             }
         }
@@ -403,7 +403,7 @@ final class NoiseSessionManager {
                     self?.onSessionFailed?(peerID, error)
                 }
                 
-                SecureLogger.logSecurityEvent(.handshakeFailed(peerID: peerID, error: error.localizedDescription), level: .error)
+                SecureLogger.error(.handshakeFailed(peerID: peerID, error: error.localizedDescription))
                 throw error
             }
         }
