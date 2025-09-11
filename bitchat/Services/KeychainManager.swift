@@ -8,7 +8,6 @@
 
 import Foundation
 import Security
-import os.log
 
 final class KeychainManager {
     static let shared = KeychainManager()
