@@ -113,9 +113,9 @@ final class KeychainManager {
 
         if status == errSecSuccess { return true }
         if status == -34018 && !triedWithoutGroup {
-            SecureLogger.logError(NSError(domain: "Keychain", code: -34018), context: "Missing keychain entitlement", category: .keychain)
+            SecureLogger.error(NSError(domain: "Keychain", code: -34018), context: "Missing keychain entitlement", category: .keychain)
         } else if status != errSecDuplicateItem {
-            SecureLogger.logError(NSError(domain: "Keychain", code: Int(status)), context: "Error saving to keychain", category: .keychain)
+            SecureLogger.error(NSError(domain: "Keychain", code: Int(status)), context: "Error saving to keychain", category: .keychain)
         }
         return false
     }
@@ -151,7 +151,7 @@ final class KeychainManager {
 
         if status == errSecSuccess { return result as? Data }
         if status == -34018 {
-            SecureLogger.logError(NSError(domain: "Keychain", code: -34018), context: "Missing keychain entitlement", category: .keychain)
+            SecureLogger.error(NSError(domain: "Keychain", code: -34018), context: "Missing keychain entitlement", category: .keychain)
         }
         return nil
     }
