@@ -41,6 +41,14 @@
 		0481A35D2E6DA18600FC845E /* libz.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 0481A35C2E6DA18600FC845E /* libz.tbd */; };
 		0481A3902E734CAE00FC845E /* CommandProcessorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A38F2E734CAE00FC845E /* CommandProcessorTests.swift */; };
 		0481A3912E734CAE00FC845E /* CommandProcessorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A38F2E734CAE00FC845E /* CommandProcessorTests.swift */; };
+		0481A3932E73730100FC845E /* RequestSyncPacket.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3922E73730100FC845E /* RequestSyncPacket.swift */; };
+		0481A3942E73730100FC845E /* RequestSyncPacket.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3922E73730100FC845E /* RequestSyncPacket.swift */; };
+		0481A3992E73730F00FC845E /* GossipSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3952E73730F00FC845E /* GossipSyncManager.swift */; };
+		0481A39A2E73730F00FC845E /* PacketIdUtil.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3962E73730F00FC845E /* PacketIdUtil.swift */; };
+		0481A39B2E73730F00FC845E /* SeenPacketsBloomFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3972E73730F00FC845E /* SeenPacketsBloomFilter.swift */; };
+		0481A39C2E73730F00FC845E /* GossipSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3952E73730F00FC845E /* GossipSyncManager.swift */; };
+		0481A39D2E73730F00FC845E /* PacketIdUtil.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3962E73730F00FC845E /* PacketIdUtil.swift */; };
+		0481A39E2E73730F00FC845E /* SeenPacketsBloomFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3972E73730F00FC845E /* SeenPacketsBloomFilter.swift */; };
 		048A4BE72E5CCCC300162C4A /* TransportConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 048A4BE62E5CCCC300162C4A /* TransportConfig.swift */; };
 		048A4BE82E5CCCC300162C4A /* TransportConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 048A4BE62E5CCCC300162C4A /* TransportConfig.swift */; };
 		048A4BE92E5CCCC300162C4B /* TransportConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 048A4BE62E5CCCC300162C4A /* TransportConfig.swift */; };
@@ -233,6 +241,10 @@
 		0481A35A2E6D9BEF00FC845E /* libz.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libz.tbd; path = usr/lib/libz.tbd; sourceTree = SDKROOT; };
 		0481A35C2E6DA18600FC845E /* libz.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libz.tbd; path = usr/lib/libz.tbd; sourceTree = SDKROOT; };
 		0481A38F2E734CAE00FC845E /* CommandProcessorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandProcessorTests.swift; sourceTree = "<group>"; };
+		0481A3922E73730100FC845E /* RequestSyncPacket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RequestSyncPacket.swift; sourceTree = "<group>"; };
+		0481A3952E73730F00FC845E /* GossipSyncManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GossipSyncManager.swift; sourceTree = "<group>"; };
+		0481A3962E73730F00FC845E /* PacketIdUtil.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PacketIdUtil.swift; sourceTree = "<group>"; };
+		0481A3972E73730F00FC845E /* SeenPacketsBloomFilter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeenPacketsBloomFilter.swift; sourceTree = "<group>"; };
 		048A4BE62E5CCCC300162C4A /* TransportConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransportConfig.swift; sourceTree = "<group>"; };
 		048A4C272E5FCD6600162C4A /* GeohashBookmarksStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeohashBookmarksStore.swift; sourceTree = "<group>"; };
 		048A4C2A2E5FCE0300162C4A /* GeohashBookmarksStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeohashBookmarksStoreTests.swift; sourceTree = "<group>"; };
@@ -372,9 +384,20 @@
 			path = Frameworks;
 			sourceTree = "<group>";
 		};
+		0481A3982E73730F00FC845E /* Sync */ = {
+			isa = PBXGroup;
+			children = (
+				0481A3952E73730F00FC845E /* GossipSyncManager.swift */,
+				0481A3962E73730F00FC845E /* PacketIdUtil.swift */,
+				0481A3972E73730F00FC845E /* SeenPacketsBloomFilter.swift */,
+			);
+			path = Sync;
+			sourceTree = "<group>";
+		};
 		0575DCBD15C7C719ADDCB67E /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				0481A3922E73730100FC845E /* RequestSyncPacket.swift */,
 				11186E29A064E8D210880E1B /* BitchatPeer.swift */,
 			);
 			path = Models;
@@ -414,6 +437,7 @@
 				0575DCBD15C7C719ADDCB67E /* Models */,
 				637EDFDD042BDB5F2569A501 /* Noise */,
 				E78C7F4B6769C0A72F5DE544 /* Nostr */,
+				0481A3982E73730F00FC845E /* Sync */,
 				ADD53BCDA233C02E53458926 /* Protocols */,
 				D98A3186D7E4C72E35BDF7FE /* Services */,
 				9A78348821A7D3374607D4E3 /* Utils */,
@@ -829,6 +853,9 @@
 				923027D6F2F417AFA2488127 /* BitchatProtocol.swift in Sources */,
 				D450CF41F207BDE1A1AAA56E /* ChatViewModel.swift in Sources */,
 				B0CA7796B2B2AC2B33F84548 /* CompressionUtil.swift in Sources */,
+				0481A3992E73730F00FC845E /* GossipSyncManager.swift in Sources */,
+				0481A39A2E73730F00FC845E /* PacketIdUtil.swift in Sources */,
+				0481A39B2E73730F00FC845E /* SeenPacketsBloomFilter.swift in Sources */,
 				92D34E7A07C990C8A815B0CE /* ContentView.swift in Sources */,
 				5C93B4FDD0C448C3EDDBF8AE /* FavoritesPersistenceService.swift in Sources */,
 				047502B42E55FED60083520F /* MeshPeerList.swift in Sources */,
@@ -854,6 +881,7 @@
 				6A85FC357ACD85DBD9020845 /* NostrRelayManager.swift in Sources */,
 				749D8CF8A362B6CD0786782D /* NotificationService.swift in Sources */,
 				049BD3AF2E51ED60001A566B /* Transport.swift in Sources */,
+				0481A3942E73730100FC845E /* RequestSyncPacket.swift in Sources */,
 				E2DCF7817344F1CCDB8B7B2F /* SecureIdentityStateManager.swift in Sources */,
 				049BD3A02E51DBF4001A566B /* Packets.swift in Sources */,
 				047502892E5416250083520F /* Geohash.swift in Sources */,
@@ -894,6 +922,9 @@
 				6DE056E1EE9850E9FBF50157 /* BitchatProtocol.swift in Sources */,
 				7576A357B278E5733E9D9F33 /* ChatViewModel.swift in Sources */,
 				7DCA0DBCB8884E3B31C7BCE3 /* CompressionUtil.swift in Sources */,
+				0481A39C2E73730F00FC845E /* GossipSyncManager.swift in Sources */,
+				0481A39D2E73730F00FC845E /* PacketIdUtil.swift in Sources */,
+				0481A39E2E73730F00FC845E /* SeenPacketsBloomFilter.swift in Sources */,
 				1D9674FA5F998503831DC281 /* ContentView.swift in Sources */,
 				ACE2ED172C37F01561E50B71 /* FavoritesPersistenceService.swift in Sources */,
 				047502B62E55FED60083520F /* MeshPeerList.swift in Sources */,
@@ -919,6 +950,7 @@
 				BCD0EBACD82AF5E55C2CB2B9 /* NostrRelayManager.swift in Sources */,
 				61C81ED5F679D5E973EE0C07 /* NotificationService.swift in Sources */,
 				049BD3AE2E51ED60001A566B /* Transport.swift in Sources */,
+				0481A3932E73730100FC845E /* RequestSyncPacket.swift in Sources */,
 				68C4BE564735F6E7915274A2 /* SecureIdentityStateManager.swift in Sources */,
 				049BD3A22E51DBF4001A566B /* Packets.swift in Sources */,
 				047502872E5416250083520F /* Geohash.swift in Sources */,

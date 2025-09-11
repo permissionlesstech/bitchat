@@ -1107,10 +1107,13 @@ final class BLEService: NSObject {
         }
 
         // For broadcast (no directed peer) and non-fragment, choose a subset deterministically
-        // Special-case announces: do NOT subset to maximize reach for presence
+        // Special-case control/presence messages: do NOT subset to maximize immediate coverage
         var selectedPeripheralIDs = Set(allowedPeripheralIDs)
         var selectedCentralIDs = Set(allowedCentralIDs)
-        if directedOnlyPeer == nil && packet.type != MessageType.fragment.rawValue && packet.type != MessageType.announce.rawValue {
+        if directedOnlyPeer == nil
+            && packet.type != MessageType.fragment.rawValue
+            && packet.type != MessageType.announce.rawValue
+            && packet.type != MessageType.requestSync.rawValue {
             let kp = subsetSizeForFanout(allowedPeripheralIDs.count)
             let kc = subsetSizeForFanout(allowedCentralIDs.count)
             selectedPeripheralIDs = selectDeterministicSubset(ids: allowedPeripheralIDs, k: kp, seed: messageID)
