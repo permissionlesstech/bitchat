@@ -382,26 +382,12 @@ final class NostrRelayManager: ObservableObject {
             
             switch result {
             case .success(let message):
-                switch message {
-                case .string(let text):
-                    // Parse off-main to reduce UI jank, then hop back for state updates
-                    Task.detached(priority: .utility) {
-                        guard let parsed = parseInboundMessage(text) else { return }
-                        await MainActor.run {
-                            NostrRelayManager.shared.handleParsedMessage(parsed, from: relayUrl)
-                        }
+                // Parse off-main to reduce UI jank, then hop back for state updates
+                Task.detached(priority: .utility) {
+                    guard let parsed = ParsedInbound(message) else { return }
+                    await MainActor.run {
+                        NostrRelayManager.shared.handleParsedMessage(parsed, from: relayUrl)
                     }
-                case .data(let data):
-                    if let text = String(data: data, encoding: .utf8) {
-                        Task.detached(priority: .utility) {
-                            guard let parsed = parseInboundMessage(text) else { return }
-                            await MainActor.run {
-                                NostrRelayManager.shared.handleParsedMessage(parsed, from: relayUrl)
-                            }
-                        }
-                    }
-                @unknown default:
-                    break
                 }
                 
                 // Continue receiving
@@ -634,42 +620,55 @@ private enum ParsedInbound {
     case ok(eventId: String, success: Bool, reason: String)
     case eose(subscriptionId: String)
     case notice(String)
+    
+    init?(_ message: URLSessionWebSocketTask.Message) {
+        guard let data = message.data,
+              let array = try? JSONSerialization.jsonObject(with: data) as? [Any],
+              array.count >= 2,
+              let type = array[0] as? String
+        else {
+            return nil
+        }
+        
+        switch type {
+        case "EVENT":
+            if array.count >= 3,
+               let subId = array[1] as? String,
+               let eventDict = array[2] as? [String: Any],
+               let event = try? NostrEvent(from: eventDict) {
+                self = .event(subId: subId, event: event)
+            }
+        case "EOSE":
+            if let subId = array[1] as? String {
+                self = .eose(subscriptionId: subId)
+            }
+        case "OK":
+            if array.count >= 3,
+               let eventId = array[1] as? String,
+               let success = array[2] as? Bool {
+                let reason = array.count >= 4 ? (array[3] as? String ?? "no reason given") : "no reason given"
+                self = .ok(eventId: eventId, success: success, reason: reason)
+            }
+        case "NOTICE":
+            if array.count >= 2, let msg = array[1] as? String {
+                self = .notice(msg)
+            }
+        default:
+            break
+        }
+        
+        return nil
+    }
 }
 
-// Off-main JSON parse to avoid UI jank; pure function, not actor-isolated
-private func parseInboundMessage(_ message: String) -> ParsedInbound? {
-    guard let data = message.data(using: .utf8) else { return nil }
-    do {
-        if let array = try JSONSerialization.jsonObject(with: data) as? [Any],
-           array.count >= 2,
-           let type = array[0] as? String {
-            switch type {
-            case "EVENT":
-                if array.count >= 3,
-                   let subId = array[1] as? String,
-                   let eventDict = array[2] as? [String: Any] {
-                    let event = try NostrEvent(from: eventDict)
-                    return .event(subId: subId, event: event)
-                }
-            case "EOSE":
-                if let subId = array[1] as? String { return .eose(subscriptionId: subId) }
-            case "OK":
-                if array.count >= 3,
-                   let eventId = array[1] as? String,
-                   let success = array[2] as? Bool {
-                    let reason = array.count >= 4 ? (array[3] as? String ?? "no reason given") : "no reason given"
-                    return .ok(eventId: eventId, success: success, reason: reason)
-                }
-            case "NOTICE":
-                if array.count >= 2, let msg = array[1] as? String { return .notice(msg) }
-            default:
-                return nil
-            }
+private extension URLSessionWebSocketTask.Message {
+    var data: Data? {
+        switch self {
+        case .string(let text): text.data(using: .utf8)
+        case .data(let data):   data
+        @unknown default:       nil
         }
-    } catch {
-        // Ignore
     }
-    return nil
 }
 
 // MARK: - Nostr Protocol Types
