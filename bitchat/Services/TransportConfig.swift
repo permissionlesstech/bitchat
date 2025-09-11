@@ -37,6 +37,8 @@ enum TransportConfig {
 
     // UI thresholds
     static let uiLateInsertThreshold: TimeInterval = 15.0
+    // Geohash public chats are more sensitive to ordering; use a tighter threshold
+    static let uiLateInsertThresholdGeo: TimeInterval = 0.0
     static let uiProcessedNostrEventsCap: Int = 2000
     static let uiChannelInactivityThresholdSeconds: TimeInterval = 9 * 60
     
