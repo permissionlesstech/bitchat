@@ -263,26 +263,6 @@ final class SecureLogger {
 
 extension SecureLogger {
     
-    /// Log handshake events
-    static func logHandshake(_ phase: String, peerID: String, success: Bool = true,
-                            file: String = #file, line: Int = #line, function: String = #function) {
-        if success {
-            log("Handshake \(phase) with peer: \(peerID)", category: .session, level: .info,
-                file: file, line: line, function: function)
-        } else {
-            log("Handshake \(phase) failed with peer: \(peerID)", category: .session, level: .warning,
-                file: file, line: line, function: function)
-        }
-    }
-    
-    /// Log encryption operations
-    static func logEncryption(_ operation: String, success: Bool = true,
-                             file: String = #file, line: Int = #line, function: String = #function) {
-        let level: LogLevel = success ? .debug : .error
-        log("Encryption operation '\(operation)' \(success ? "succeeded" : "failed")", 
-            category: .encryption, level: level, file: file, line: line, function: function)
-    }
-    
     /// Log key management operations
     static func logKeyOperation(_ operation: String, keyType: String, success: Bool = true,
                                file: String = #file, line: Int = #line, function: String = #function) {
