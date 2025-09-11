@@ -339,7 +339,7 @@ final class BLEService: NSObject {
         // Set up Noise session establishment callback
         // This ensures we send pending messages only when session is truly established
         noiseService.onPeerAuthenticated = { [weak self] peerID, fingerprint in
-            SecureLogger.debug("🔐 Noise session authenticated with \(peerID), fingerprint: \(fingerprint.prefix(16))...", category: .noise)
+            SecureLogger.debug("🔐 Noise session authenticated with \(peerID), fingerprint: \(fingerprint.prefix(16))...")
             // Send any messages that were queued during handshake
             self?.messageQueue.async { [weak self] in
                 self?.sendPendingMessagesAfterHandshake(for: peerID)
@@ -623,7 +623,7 @@ final class BLEService: NSObject {
                     messageQueue.async { [weak self] in self?.broadcastPacket(packet) }
                 }
             } catch {
-                SecureLogger.error("Failed to send read receipt: \(error)", category: .noise)
+                SecureLogger.error("Failed to send read receipt: \(error)")
             }
         } else {
             // Queue for after handshake and initiate if needed
@@ -674,7 +674,7 @@ final class BLEService: NSObject {
                 messageQueue.async { [weak self] in self?.broadcastPacket(packet) }
             }
         } catch {
-            SecureLogger.error("Failed to send verification payload: \(error)", category: .noise)
+            SecureLogger.error("Failed to send verification payload: \(error)")
         }
     }
     
@@ -790,7 +790,7 @@ final class BLEService: NSObject {
                 // Create TLV-encoded private message
                 let privateMessage = PrivateMessagePacket(messageID: messageID, content: content)
                 guard let tlvData = privateMessage.encode() else {
-                    SecureLogger.error("Failed to encode private message with TLV", category: .noise)
+                    SecureLogger.error("Failed to encode private message with TLV")
                     return
                 }
                 
@@ -839,7 +839,7 @@ final class BLEService: NSObject {
                     self?.delegate?.didUpdateMessageDeliveryStatus(messageID, status: .sent)
                 }
             } catch {
-                SecureLogger.error("Failed to encrypt message: \(error)", category: .noise)
+                SecureLogger.error("Failed to encrypt message: \(error)")
             }
         } else {
             // Queue message for sending after handshake completes
@@ -888,7 +888,7 @@ final class BLEService: NSObject {
                 }
             }
         } catch {
-            SecureLogger.error("Failed to initiate handshake: \(error)", category: .noise)
+            SecureLogger.error("Failed to initiate handshake: \(error)")
         }
     }
     
@@ -910,7 +910,7 @@ final class BLEService: NSObject {
                 // Use the same TLV format as normal sends to keep receiver decoding consistent
                 let privateMessage = PrivateMessagePacket(messageID: messageID, content: content)
                 guard let tlvData = privateMessage.encode() else {
-                    SecureLogger.error("Failed to encode pending private message TLV", category: .noise)
+                    SecureLogger.error("Failed to encode pending private message TLV")
                     continue
                 }
 
@@ -939,7 +939,7 @@ final class BLEService: NSObject {
 
                 SecureLogger.debug("✅ Sent pending message \(messageID) to \(peerID) after handshake", category: .session)
             } catch {
-                SecureLogger.error("Failed to send pending message after handshake: \(error)", category: .noise)
+                SecureLogger.error("Failed to send pending message after handshake: \(error)")
 
                 // Notify delegate of failure
                 notifyUI { [weak self] in
@@ -1697,7 +1697,7 @@ final class BLEService: NSObject {
                 // Session establishment will trigger onPeerAuthenticated callback
                 // which will send any pending messages at the right time
             } catch {
-                SecureLogger.error("Failed to process handshake: \(error)", category: .noise)
+                SecureLogger.error("Failed to process handshake: \(error)")
                 // Try initiating a new handshake
                 if !noiseService.hasSession(with: peerID) {
                     initiateNoiseHandshake(with: peerID)
@@ -1707,7 +1707,7 @@ final class BLEService: NSObject {
     }
     
     private func handleNoiseEncrypted(_ packet: BitchatPacket, from peerID: String) {
-        SecureLogger.debug("🔐 handleNoiseEncrypted called for packet from \(peerID)", category: .noise)
+        SecureLogger.debug("🔐 handleNoiseEncrypted called for packet from \(peerID)")
         
         guard let recipientID = packet.recipientID else {
             SecureLogger.warning("⚠️ Encrypted message has no recipient ID", category: .session)
@@ -1758,17 +1758,17 @@ final class BLEService: NSObject {
                     self?.delegate?.didReceiveNoisePayload(from: peerID, type: .verifyResponse, payload: Data(payloadData), timestamp: ts)
                 }
             default:
-                SecureLogger.warning("⚠️ Unknown noise payload type: \(payloadType)", category: .noise)
+                SecureLogger.warning("⚠️ Unknown noise payload type: \(payloadType)")
             }
         } catch NoiseEncryptionError.sessionNotEstablished {
             // We received an encrypted message before establishing a session with this peer.
             // Trigger a handshake so future messages can be decrypted.
-            SecureLogger.debug("🔑 Encrypted message from \(peerID) without session; initiating handshake", category: .noise)
+            SecureLogger.debug("🔑 Encrypted message from \(peerID) without session; initiating handshake")
             if !noiseService.hasSession(with: peerID) {
                 initiateNoiseHandshake(with: peerID)
             }
         } catch {
-            SecureLogger.error("❌ Failed to decrypt message from \(peerID): \(error)", category: .noise)
+            SecureLogger.error("❌ Failed to decrypt message from \(peerID): \(error)")
         }
     }
     
@@ -1879,7 +1879,7 @@ final class BLEService: NSObject {
                 )
                 broadcastPacket(packet)
             } catch {
-                SecureLogger.error("Failed to send delivery ACK: \(error)", category: .noise)
+                SecureLogger.error("Failed to send delivery ACK: \(error)")
             }
         } else {
             // Queue for after handshake and initiate if needed
@@ -1914,7 +1914,7 @@ final class BLEService: NSObject {
                 )
                 broadcastPacket(packet)
             } catch {
-                SecureLogger.error("❌ Failed to send pending noise payload to \(peerID): \(error)", category: .noise)
+                SecureLogger.error("❌ Failed to send pending noise payload to \(peerID): \(error)")
             }
         }
     }
