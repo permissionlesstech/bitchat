@@ -96,7 +96,7 @@ import CryptoKit
 /// Singleton manager for secure identity state persistence and retrieval.
 /// Provides thread-safe access to identity mappings with encryption at rest.
 /// All identity data is stored encrypted in the device Keychain for security.
-class SecureIdentityStateManager {
+final class SecureIdentityStateManager {
     static let shared = SecureIdentityStateManager()
     
     private let keychain = KeychainManager.shared

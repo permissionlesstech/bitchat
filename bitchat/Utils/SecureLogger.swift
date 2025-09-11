@@ -11,7 +11,7 @@ import os.log
 
 /// Centralized security-aware logging framework
 /// Provides safe logging that filters sensitive data and security events
-class SecureLogger {
+final class SecureLogger {
     
     // MARK: - Log Categories
     

@@ -163,7 +163,7 @@ struct BitchatApp: App {
 }
 
 #if os(iOS)
-class AppDelegate: NSObject, UIApplicationDelegate {
+final class AppDelegate: NSObject, UIApplicationDelegate {
     weak var chatViewModel: ChatViewModel?
     
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
@@ -175,7 +175,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 #if os(macOS)
 import AppKit
 
-class MacAppDelegate: NSObject, NSApplicationDelegate {
+final class MacAppDelegate: NSObject, NSApplicationDelegate {
     weak var chatViewModel: ChatViewModel?
     
     func applicationWillTerminate(_ notification: Notification) {
@@ -188,7 +188,7 @@ class MacAppDelegate: NSObject, NSApplicationDelegate {
 }
 #endif
 
-class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
+final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
     static let shared = NotificationDelegate()
     weak var chatViewModel: ChatViewModel?
     

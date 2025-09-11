@@ -9,7 +9,7 @@
 import Foundation
 
 /// Coordinates Noise handshakes to prevent race conditions and ensure reliable encryption establishment
-class NoiseHandshakeCoordinator {
+final class NoiseHandshakeCoordinator {
     
     // MARK: - Handshake State
     

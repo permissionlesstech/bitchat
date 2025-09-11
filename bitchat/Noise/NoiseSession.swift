@@ -250,7 +250,7 @@ class NoiseSession {
 
 // MARK: - Session Manager
 
-class NoiseSessionManager {
+final class NoiseSessionManager {
     private var sessions: [String: NoiseSession] = [:]
     private let localStaticKey: Curve25519.KeyAgreement.PrivateKey
     private let managerQueue = DispatchQueue(label: "chat.bitchat.noise.manager", attributes: .concurrent)
