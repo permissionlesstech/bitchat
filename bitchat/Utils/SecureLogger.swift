@@ -164,12 +164,39 @@ final class SecureLogger {
         os_log("%{private}@ Error in %{private}@: %{private}@", log: category, type: .error, location, sanitized, errorDesc)
         #endif
     }
+}
+
+// MARK: - Convenience Extensions
+
+extension SecureLogger {
     
-    // MARK: - Private Helpers
+    enum KeyOperation: String, CustomStringConvertible {
+        case load
+        case create
+        case generate
+        case delete
+        case save
+        
+        var description: String { rawValue }
+    }
     
+    /// Log key management operations
+    static func logKeyOperation(_ operation: KeyOperation, keyType: String, success: Bool = true,
+                                file: String = #file, line: Int = #line, function: String = #function) {
+        if success {
+            debug("Key operation '\(operation)' for \(keyType) succeeded", category: .keychain, file: file, line: line, function: function)
+        } else {
+            error("Key operation '\(operation)' for \(keyType) failed", category: .keychain, file: file, line: line, function: function)
+        }
+    }
+}
+
+// MARK: - Private Helpers
+
+private extension SecureLogger {
     /// Log general messages with automatic sensitive data filtering
-    private static func log(_ message: @autoclosure () -> String, category: OSLog, level: LogLevel,
-                                file: String, line: Int, function: String) {
+    static func log(_ message: @autoclosure () -> String, category: OSLog, level: LogLevel,
+                    file: String, line: Int, function: String) {
         guard shouldLog(level) else { return }
         let location = formatLocation(file: file, line: line, function: function)
         let sanitized = sanitize("\(location) \(message())")
@@ -185,8 +212,8 @@ final class SecureLogger {
     }
     
     /// Log a security event
-    private static func logSecurityEvent(_ event: SecurityEvent, level: LogLevel = .info,
-                                         file: String, line: Int, function: String) {
+    static func logSecurityEvent(_ event: SecurityEvent, level: LogLevel = .info,
+                                 file: String, line: Int, function: String) {
         guard shouldLog(level) else { return }
         let location = formatLocation(file: file, line: line, function: function)
         let message = "\(location) \(event.message)"
@@ -200,14 +227,14 @@ final class SecureLogger {
     }
     
     /// Format location information for logging
-    private static func formatLocation(file: String, line: Int, function: String) -> String {
+    static func formatLocation(file: String, line: Int, function: String) -> String {
         let fileName = (file as NSString).lastPathComponent
         let timestamp = timestampFormatter.string(from: Date())
         return "[\(timestamp)] [\(fileName):\(line) \(function)]"
     }
     
     /// Sanitize strings to remove potentially sensitive data
-    private static func sanitize(_ input: String) -> String {
+    static func sanitize(_ input: String) -> String {
         let key = input as NSString
         
         // Check cache first
@@ -253,34 +280,9 @@ final class SecureLogger {
     }
     
     /// Sanitize individual values
-    private static func sanitize<T>(_ value: T) -> String {
+    static func sanitize<T>(_ value: T) -> String {
         let stringValue = String(describing: value)
         return sanitize(stringValue)
-    }
-}
-
-// MARK: - Convenience Extensions
-
-extension SecureLogger {
-    
-    enum KeyOperation: String, CustomStringConvertible {
-        case load
-        case create
-        case generate
-        case delete
-        case save
-        
-        var description: String { rawValue }
-    }
-    
-    /// Log key management operations
-    static func logKeyOperation(_ operation: KeyOperation, keyType: String, success: Bool = true,
-                                file: String = #file, line: Int = #line, function: String = #function) {
-        if success {
-            debug("Key operation '\(operation)' for \(keyType) succeeded", category: .keychain, file: file, line: line, function: function)
-        } else {
-            error("Key operation '\(operation)' for \(keyType) failed", category: .keychain, file: file, line: line, function: function)
-        }
     }
 }
 
