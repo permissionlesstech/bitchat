@@ -8,7 +8,6 @@
 
 import Foundation
 import CryptoKit
-import os.log
 
 // MARK: - Noise Session State
 
@@ -92,7 +91,7 @@ class NoiseSession {
     
     func processHandshakeMessage(_ message: Data) throws -> Data? {
         return try sessionQueue.sync(flags: .barrier) {
-            SecureLogger.log("NoiseSession[\(peerID)]: Processing handshake message, current state: \(state), role: \(role)", category: SecureLogger.noise, level: .debug)
+            SecureLogger.debug("NoiseSession[\(peerID)]: Processing handshake message, current state: \(state), role: \(role)")
             
             // Initialize handshake state if needed (for responders)
             if state == .uninitialized && role == .responder {
@@ -103,7 +102,7 @@ class NoiseSession {
                     remoteStaticKey: nil
                 )
                 state = .handshaking
-                SecureLogger.log("NoiseSession[\(peerID)]: Initialized handshake state for responder", category: SecureLogger.noise, level: .debug)
+                SecureLogger.debug("NoiseSession[\(peerID)]: Initialized handshake state for responder")
             }
             
             guard case .handshaking = state, let handshake = handshakeState else {
@@ -112,7 +111,7 @@ class NoiseSession {
             
             // Process incoming message
             _ = try handshake.readMessage(message)
-            SecureLogger.log("NoiseSession[\(peerID)]: Read handshake message, checking if complete", category: SecureLogger.noise, level: .debug)
+            SecureLogger.debug("NoiseSession[\(peerID)]: Read handshake message, checking if complete")
             
             // Check if handshake is complete
             if handshake.isHandshakeComplete() {
@@ -130,15 +129,15 @@ class NoiseSession {
                 state = .established
                 handshakeState = nil // Clear handshake state
                 
-                SecureLogger.log("NoiseSession[\(peerID)]: Handshake complete (no response needed), transitioning to established", category: SecureLogger.noise, level: .debug)
-                SecureLogger.logSecurityEvent(.handshakeCompleted(peerID: peerID))
+                SecureLogger.debug("NoiseSession[\(peerID)]: Handshake complete (no response needed), transitioning to established")
+                SecureLogger.info(.handshakeCompleted(peerID: peerID))
                 
                 return nil
             } else {
                 // Generate response
                 let response = try handshake.writeMessage()
                 sentHandshakeMessages.append(response)
-                SecureLogger.log("NoiseSession[\(peerID)]: Generated handshake response of size \(response.count)", category: SecureLogger.noise, level: .debug)
+                SecureLogger.debug("NoiseSession[\(peerID)]: Generated handshake response of size \(response.count)")
                 
                 // Check if handshake is complete after writing
                 if handshake.isHandshakeComplete() {
@@ -156,8 +155,8 @@ class NoiseSession {
                     state = .established
                     handshakeState = nil // Clear handshake state
                     
-                    SecureLogger.log("NoiseSession[\(peerID)]: Handshake complete after writing response, transitioning to established", category: SecureLogger.noise, level: .debug)
-                    SecureLogger.logSecurityEvent(.handshakeCompleted(peerID: peerID))
+                    SecureLogger.debug("NoiseSession[\(peerID)]: Handshake complete after writing response, transitioning to established")
+                    SecureLogger.info(.handshakeCompleted(peerID: peerID))
                 }
                 
                 return response
@@ -242,7 +241,7 @@ class NoiseSession {
             handshakeHash = nil
             
             if wasEstablished {
-                SecureLogger.logSecurityEvent(.sessionExpired(peerID: peerID))
+                SecureLogger.info(.sessionExpired(peerID: peerID))
             }
         }
     }
@@ -287,7 +286,7 @@ final class NoiseSessionManager {
         managerQueue.sync(flags: .barrier) {
             if let session = sessions[peerID] {
                 if session.isEstablished() {
-                    SecureLogger.logSecurityEvent(.sessionExpired(peerID: peerID))
+                    SecureLogger.info(.sessionExpired(peerID: peerID))
                 }
                 // Clear sensitive data before removing
                 session.reset()
@@ -331,7 +330,7 @@ final class NoiseSessionManager {
             } catch {
                 // Clean up failed session
                 _ = sessions.removeValue(forKey: peerID)
-                SecureLogger.logSecurityEvent(.handshakeFailed(peerID: peerID, error: error.localizedDescription), level: .error)
+                SecureLogger.error(.handshakeFailed(peerID: peerID, error: error.localizedDescription))
                 throw error
             }
         }
@@ -348,8 +347,7 @@ final class NoiseSessionManager {
                 // for a good reason (e.g., decryption failure, restart, etc.)
                 // We should accept the new handshake to re-establish encryption
                 if existing.isEstablished() {
-                    SecureLogger.log("Accepting handshake from \(peerID) despite existing session - peer likely cleared their session", 
-                                   category: SecureLogger.session, level: .info)
+                    SecureLogger.info("Accepting handshake from \(peerID) despite existing session - peer likely cleared their session", category: .session)
                     _ = sessions.removeValue(forKey: peerID)
                     shouldCreateNew = true
                 } else {
@@ -404,7 +402,7 @@ final class NoiseSessionManager {
                     self?.onSessionFailed?(peerID, error)
                 }
                 
-                SecureLogger.logSecurityEvent(.handshakeFailed(peerID: peerID, error: error.localizedDescription), level: .error)
+                SecureLogger.error(.handshakeFailed(peerID: peerID, error: error.localizedDescription))
                 throw error
             }
         }

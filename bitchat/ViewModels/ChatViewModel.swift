@@ -462,8 +462,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             if let data = try? JSONEncoder().encode(Array(sentReadReceipts)) {
                 UserDefaults.standard.set(data, forKey: "sentReadReceipts")
             } else {
-                SecureLogger.log("❌ Failed to encode read receipts for persistence",
-                                category: SecureLogger.session, level: .error)
+                SecureLogger.error("❌ Failed to encode read receipts for persistence", category: .session)
             }
         }
     }
@@ -562,11 +561,11 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             // Wait for Tor readiness before Nostr init
             let ready = await TorManager.shared.awaitReady(timeout: 60)
             guard ready else {
-                SecureLogger.log("Nostr init skipped: Tor not ready", category: SecureLogger.session, level: .error)
+                SecureLogger.error("Nostr init skipped: Tor not ready", category: .session)
                 return
             }
             nostrRelayManager = NostrRelayManager.shared
-            SecureLogger.log("Initializing Nostr relay connections", category: SecureLogger.session, level: .debug)
+            SecureLogger.debug("Initializing Nostr relay connections", category: .session)
             // Connect is managed centrally on scene activation; avoid duplicate connects here
 
             // Attempt to flush any queued outbox after Nostr comes online
@@ -596,8 +595,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                         if uniquePeers[peer.id] == nil {
                             uniquePeers[peer.id] = peer
                         } else {
-                            SecureLogger.log("⚠️ Duplicate peer ID detected: \(peer.id) (\(peer.displayName))", 
-                                           category: SecureLogger.session, level: .warning)
+                            SecureLogger.warning("⚠️ Duplicate peer ID detected: \(peer.id) (\(peer.displayName))", category: .session)
                         }
                     }
                     self.peerIndex = uniquePeers
@@ -1035,11 +1033,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                         if let idx = self.privateChats[convKey]?.firstIndex(where: { $0.id == messageID }) {
                             self.privateChats[convKey]?[idx].deliveryStatus = .delivered(to: self.displayNameForNostrPubkey(senderPubkey), at: Date())
                             self.objectWillChange.send()
-                            SecureLogger.log("GeoDM: recv DELIVERED for mid=\(messageID.prefix(8))… from=\(senderPubkey.prefix(8))…",
-                                            category: SecureLogger.session, level: .info)
+                            SecureLogger.info("GeoDM: recv DELIVERED for mid=\(messageID.prefix(8))… from=\(senderPubkey.prefix(8))…", category: .session)
                         } else {
-                            SecureLogger.log("GeoDM: delivered ack for unknown mid=\(messageID.prefix(8))… conv=\(convKey)",
-                                            category: SecureLogger.session, level: .warning)
+                            SecureLogger.warning("GeoDM: delivered ack for unknown mid=\(messageID.prefix(8))… conv=\(convKey)", category: .session)
                         }
                     }
                 case .readReceipt:
@@ -1047,11 +1043,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                         if let idx = self.privateChats[convKey]?.firstIndex(where: { $0.id == messageID }) {
                             self.privateChats[convKey]?[idx].deliveryStatus = .read(by: self.displayNameForNostrPubkey(senderPubkey), at: Date())
                             self.objectWillChange.send()
-                            SecureLogger.log("GeoDM: recv READ for mid=\(messageID.prefix(8))… from=\(senderPubkey.prefix(8))…",
-                                            category: SecureLogger.session, level: .info)
+                            SecureLogger.info("GeoDM: recv READ for mid=\(messageID.prefix(8))… from=\(senderPubkey.prefix(8))…", category: .session)
                         } else {
-                            SecureLogger.log("GeoDM: read ack for unknown mid=\(messageID.prefix(8))… conv=\(convKey)",
-                                            category: SecureLogger.session, level: .warning)
+                            SecureLogger.warning("GeoDM: read ack for unknown mid=\(messageID.prefix(8))… conv=\(convKey)", category: .session)
                         }
                     }
                 case .verifyChallenge, .verifyResponse:
@@ -1464,14 +1458,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                             count: TransportConfig.nostrGeoRelayCount
                         )
                         if targetRelays.isEmpty {
-                            SecureLogger.log("Geo: no geohash relays available for \(ch.geohash); not sending", category: SecureLogger.session, level: .warning)
+                            SecureLogger.warning("Geo: no geohash relays available for \(ch.geohash); not sending", category: .session)
                         } else {
                             NostrRelayManager.shared.sendEvent(event, to: targetRelays)
                         }
                         // Track ourselves as active participant
                         self.recordGeoParticipant(pubkeyHex: identity.publicKeyHex)
-                        SecureLogger.log("GeoTeleport: sent geo message pub=\(identity.publicKeyHex.prefix(8))… teleported=\(LocationChannelManager.shared.teleported)",
-                                        category: SecureLogger.session, level: .debug)
+                        SecureLogger.debug("GeoTeleport: sent geo message pub=\(identity.publicKeyHex.prefix(8))… teleported=\(LocationChannelManager.shared.teleported)", category: .session)
                         // If we tagged this as teleported, also mark our pubkey in teleportedGeo for UI
                         // Only when not in our regional set (and regional list is known)
                         let hasRegional = !LocationChannelManager.shared.availableChannels.isEmpty
@@ -1479,11 +1472,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                         if LocationChannelManager.shared.teleported && hasRegional && !inRegional {
                             let key = identity.publicKeyHex.lowercased()
                             self.teleportedGeo = self.teleportedGeo.union([key])
-                            SecureLogger.log("GeoTeleport: mark self teleported key=\(key.prefix(8))… total=\(self.teleportedGeo.count)",
-                                            category: SecureLogger.session, level: .info)
+                            SecureLogger.info("GeoTeleport: mark self teleported key=\(key.prefix(8))… total=\(self.teleportedGeo.count)", category: .session)
                         }
                     } catch {
-                        SecureLogger.log("❌ Failed to send geohash message: \(error)", category: SecureLogger.session, level: .error)
+                        SecureLogger.error("❌ Failed to send geohash message: \(error)", category: .session)
                         self.addSystemMessage("failed to send to location channel")
                     }
                 }
@@ -1510,7 +1502,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             // Debug: log if any empty messages are present
             let emptyMesh = messages.filter { $0.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count
             if emptyMesh > 0 {
-                SecureLogger.log("RenderGuard: mesh timeline contains \(emptyMesh) empty messages", category: SecureLogger.session, level: .debug)
+                SecureLogger.debug("RenderGuard: mesh timeline contains \(emptyMesh) empty messages", category: .session)
             }
             stopGeoParticipantsTimer()
             geohashPeople = []
@@ -1537,7 +1529,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             // Debug: log if any empty messages are present post-sanitize
             let emptyGeo = messages.filter { $0.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count
             if emptyGeo > 0 {
-                SecureLogger.log("RenderGuard: geohash \(ch.geohash) timeline has \(emptyGeo) empty messages after sanitize", category: SecureLogger.session, level: .debug)
+                SecureLogger.debug("RenderGuard: geohash \(ch.geohash) timeline has \(emptyGeo) empty messages after sanitize", category: .session)
             }
         }
         // If switching to a location channel, flush any pending geohash-only system messages
@@ -1569,8 +1561,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             let key = id.publicKeyHex.lowercased()
             if LocationChannelManager.shared.teleported && hasRegional && !inRegional {
                 teleportedGeo = teleportedGeo.union([key])
-                SecureLogger.log("GeoTeleport: channel switch mark self teleported key=\(key.prefix(8))… total=\(teleportedGeo.count)",
-                                category: SecureLogger.session, level: .info)
+                SecureLogger.info("GeoTeleport: channel switch mark self teleported key=\(key.prefix(8))… total=\(teleportedGeo.count)", category: .session)
             } else {
                 teleportedGeo.remove(key)
             }
@@ -1593,8 +1584,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             self.recordProcessedEvent(event.id)
             // Log incoming tags for diagnostics
             let tagSummary = event.tags.map { "[" + $0.joined(separator: ",") + "]" }.joined(separator: ",")
-            SecureLogger.log("GeoTeleport: recv pub=\(event.pubkey.prefix(8))… tags=\(tagSummary)",
-                            category: SecureLogger.session, level: .debug)
+            SecureLogger.debug("GeoTeleport: recv pub=\(event.pubkey.prefix(8))… tags=\(tagSummary)", category: .session)
             // Track teleport tag for participants – only our format ["t", "teleport"]
             let hasTeleportTag: Bool = event.tags.contains(where: { tag in
                 tag.count >= 2 && tag[0].lowercased() == "t" && tag[1].lowercased() == "teleport"
@@ -1611,8 +1601,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                 if !isSelf {
                     Task { @MainActor in
                         self.teleportedGeo = self.teleportedGeo.union([key])
-                        SecureLogger.log("GeoTeleport: mark peer teleported key=\(key.prefix(8))… total=\(self.teleportedGeo.count)",
-                                        category: SecureLogger.session, level: .info)
+                        SecureLogger.info("GeoTeleport: mark peer teleported key=\(key.prefix(8))… total=\(self.teleportedGeo.count)", category: .session)
                     }
                 }
             }
@@ -1676,8 +1665,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             // pared back logging: subscribe debug only
             // Log GeoDM subscribe only when Tor is ready to avoid early noise
             if TorManager.shared.isReady {
-                SecureLogger.log("GeoDM: subscribing DMs pub=\(id.publicKeyHex.prefix(8))… sub=\(dmSub)",
-                                category: SecureLogger.session, level: .debug)
+                SecureLogger.debug("GeoDM: subscribing DMs pub=\(id.publicKeyHex.prefix(8))… sub=\(dmSub)", category: .session)
             }
             let dmFilter = NostrFilter.giftWrapsFor(pubkey: id.publicKeyHex, since: Date().addingTimeInterval(-TransportConfig.nostrDMSubscribeLookbackSeconds))
             NostrRelayManager.shared.subscribe(filter: dmFilter, id: dmSub) { [weak self] giftWrap in
@@ -1687,12 +1675,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                 self.recordProcessedEvent(giftWrap.id)
                 // Decrypt with per-geohash identity
                 guard let (content, senderPubkey, rumorTs) = try? NostrProtocol.decryptPrivateMessage(giftWrap: giftWrap, recipientIdentity: id) else {
-                    SecureLogger.log("GeoDM: failed decrypt giftWrap id=\(giftWrap.id.prefix(8))…",
-                                    category: SecureLogger.session, level: .warning)
+                    SecureLogger.warning("GeoDM: failed decrypt giftWrap id=\(giftWrap.id.prefix(8))…", category: .session)
                     return
                 }
-                SecureLogger.log("GeoDM: decrypted gift-wrap id=\(giftWrap.id.prefix(16))... from=\(senderPubkey.prefix(8))...",
-                                category: SecureLogger.session, level: .debug)
+                SecureLogger.debug("GeoDM: decrypted gift-wrap id=\(giftWrap.id.prefix(16))... from=\(senderPubkey.prefix(8))...", category: .session)
                 guard content.hasPrefix("bitchat1:") else { return }
                 guard let packetData = Self.base64URLDecode(String(content.dropFirst("bitchat1:".count))),
                       let packet = BitchatPacket.from(packetData) else { return }
@@ -1705,8 +1691,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                 case .privateMessage:
                     guard let pm = PrivateMessagePacket.decode(from: noisePayload.data) else { return }
                     let messageId = pm.messageID
-                    SecureLogger.log("GeoDM: recv PM <- sender=\(senderPubkey.prefix(8))… mid=\(messageId.prefix(8))…",
-                                    category: SecureLogger.session, level: .info)
+                    SecureLogger.info("GeoDM: recv PM <- sender=\(senderPubkey.prefix(8))… mid=\(messageId.prefix(8))…", category: .session)
                     // Send delivery ACK immediately (even if duplicate), once per messageID
                     if !self.sentGeoDeliveryAcks.contains(messageId) {
                         let nostrTransport = NostrTransport()
@@ -1769,11 +1754,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                             if let idx = self.privateChats[convKey]?.firstIndex(where: { $0.id == messageID }) {
                                 self.privateChats[convKey]?[idx].deliveryStatus = .delivered(to: self.displayNameForNostrPubkey(senderPubkey), at: Date())
                                 self.objectWillChange.send()
-                                SecureLogger.log("GeoDM: recv DELIVERED for mid=\(messageID.prefix(8))… from=\(senderPubkey.prefix(8))…",
-                                                category: SecureLogger.session, level: .info)
+                                SecureLogger.info("GeoDM: recv DELIVERED for mid=\(messageID.prefix(8))… from=\(senderPubkey.prefix(8))…", category: .session)
                             } else {
-                                SecureLogger.log("GeoDM: delivered ack for unknown mid=\(messageID.prefix(8))… conv=\(convKey)",
-                                                category: SecureLogger.session, level: .warning)
+                                SecureLogger.warning("GeoDM: delivered ack for unknown mid=\(messageID.prefix(8))… conv=\(convKey)", category: .session)
                             }
                         }
                     case .readReceipt:
@@ -1781,11 +1764,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                             if let idx = self.privateChats[convKey]?.firstIndex(where: { $0.id == messageID }) {
                                 self.privateChats[convKey]?[idx].deliveryStatus = .read(by: self.displayNameForNostrPubkey(senderPubkey), at: Date())
                                 self.objectWillChange.send()
-                                SecureLogger.log("GeoDM: recv READ for mid=\(messageID.prefix(8))… from=\(senderPubkey.prefix(8))…",
-                                                category: SecureLogger.session, level: .info)
+                                SecureLogger.info("GeoDM: recv READ for mid=\(messageID.prefix(8))… from=\(senderPubkey.prefix(8))…", category: .session)
                             } else {
-                                SecureLogger.log("GeoDM: read ack for unknown mid=\(messageID.prefix(8))… conv=\(convKey)",
-                                                category: SecureLogger.session, level: .warning)
+                                SecureLogger.warning("GeoDM: read ack for unknown mid=\(messageID.prefix(8))… conv=\(convKey)", category: .session)
                             }
                         }
                     default:
@@ -2152,8 +2133,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                     }
                     return
                 }
-                SecureLogger.log("GeoDM: local send mid=\(messageID.prefix(8))… to=\(recipientHex.prefix(8))… conv=\(peerID)",
-                                category: SecureLogger.session, level: .debug)
+                SecureLogger.debug("GeoDM: local send mid=\(messageID.prefix(8))… to=\(recipientHex.prefix(8))… conv=\(peerID)", category: .session)
                 let nostrTransport = NostrTransport()
                 nostrTransport.senderPeerID = meshService.myPeerID
                 nostrTransport.sendPrivateMessageGeohash(content: content, toRecipientHex: recipientHex, from: id, messageID: messageID)
@@ -2473,16 +2453,14 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             // If any temp peer ID had unread messages, mark the consolidated peer as unread
             if hadUnreadTemp {
                 unreadPrivateMessages.insert(peerID)
-                SecureLogger.log("📬 Transferred unread status from temp peer IDs to \(peerID)", 
-                                category: SecureLogger.session, level: .debug)
+                SecureLogger.debug("📬 Transferred unread status from temp peer IDs to \(peerID)", category: .session)
             }
             
             if consolidatedCount > 0 {
                 // Sort by timestamp
                 privateChats[peerID]?.sort { $0.timestamp < $1.timestamp }
                 
-                SecureLogger.log("📥 Consolidated \(consolidatedCount) Nostr messages from temporary peer IDs to \(peerNickname)", 
-                                category: SecureLogger.session, level: .info)
+                SecureLogger.info("📥 Consolidated \(consolidatedCount) Nostr messages from temporary peer IDs to \(peerNickname)", category: .session)
             }
         }
         
@@ -2496,8 +2474,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                 break
             }
         } else {
-            SecureLogger.log("GeoDM: skipping mesh handshake for virtual peerID=\(peerID)",
-                            category: SecureLogger.session, level: .debug)
+            SecureLogger.debug("GeoDM: skipping mesh handshake for virtual peerID=\(peerID)", category: .session)
         }
         
         // Delegate to private chat manager but add already-acked messages first
@@ -2577,8 +2554,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     @objc private func handleNostrReadReceipt(_ notification: Notification) {
         guard let receipt = notification.userInfo?["receipt"] as? ReadReceipt else { return }
         
-        SecureLogger.log("📖 Handling read receipt for message \(receipt.originalMessageID) from Nostr", 
-                        category: SecureLogger.session, level: .info)
+        SecureLogger.info("📖 Handling read receipt for message \(receipt.originalMessageID) from Nostr", category: .session)
         
         // Process the read receipt through the same flow as Bluetooth read receipts
         didReceiveReadReceipt(receipt)
@@ -2603,8 +2579,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                 
                 // If we have a private chat open with the old peer ID, update it to the new one
                 if selectedPrivateChatPeer == oldPeerID {
-                    SecureLogger.log("📱 Updating private chat peer ID due to key change: \(oldPeerID) -> \(newPeerID)", 
-                                    category: SecureLogger.session, level: .info)
+                    SecureLogger.info("📱 Updating private chat peer ID due to key change: \(oldPeerID) -> \(newPeerID)", category: .session)
                     
                     // Transfer private chat messages to new peer ID
                     if let messages = privateChats[oldPeerID] {
@@ -2635,8 +2610,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                 } else {
                     // Even if the chat isn't open, migrate any existing private chat data
                     if let messages = privateChats[oldPeerID] {
-                        SecureLogger.log("📱 Migrating private chat messages from \(oldPeerID) to \(newPeerID)", 
-                                        category: SecureLogger.session, level: .debug)
+                        SecureLogger.debug("📱 Migrating private chat messages from \(oldPeerID) to \(newPeerID)", category: .session)
                         var chats = privateChats
                         chats[newPeerID] = messages
                         chats.removeValue(forKey: oldPeerID)
@@ -2742,7 +2716,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                     messageRouter.sendPrivate(screenshotMessage, to: peerID, recipientNickname: peerNickname, messageID: UUID().uuidString)
                 default:
                     // Don't send screenshot notification if no session exists
-                    SecureLogger.log("Skipping screenshot notification to \(peerID) - no established session", category: SecureLogger.security, level: .debug)
+                    SecureLogger.debug("Skipping screenshot notification to \(peerID) - no established session", category: .security)
                 }
             }
             
@@ -2783,14 +2757,14 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                         )
                         let targetRelays = GeoRelayDirectory.shared.closestRelays(toGeohash: ch.geohash, count: 5)
                         if targetRelays.isEmpty {
-                            SecureLogger.log("Geo: no geohash relays available for \(ch.geohash); not sending", category: SecureLogger.session, level: .warning)
+                            SecureLogger.warning("Geo: no geohash relays available for \(ch.geohash); not sending", category: .session)
                         } else {
                             NostrRelayManager.shared.sendEvent(event, to: targetRelays)
                         }
                         // Track ourselves as active participant
                         self.recordGeoParticipant(pubkeyHex: identity.publicKeyHex)
                     } catch {
-                        SecureLogger.log("❌ Failed to send geohash screenshot message: \(error)", category: SecureLogger.session, level: .error)
+                        SecureLogger.error("❌ Failed to send geohash screenshot message: \(error)", category: .session)
                         self.addSystemMessage("failed to send to location channel")
                     }
                 }
@@ -2848,8 +2822,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                 // Search for the current peer ID with the same nickname
                 for (currentPeerID, currentNickname) in meshService.getPeerNicknames() {
                     if currentNickname == peerNickname {
-                        SecureLogger.log("📖 Resolved updated peer ID for read receipt: \(peerID) -> \(currentPeerID)", 
-                                        category: SecureLogger.session, level: .info)
+                        SecureLogger.info("📖 Resolved updated peer ID for read receipt: \(peerID) -> \(currentPeerID)", category: .session)
                         actualPeerID = currentPeerID
                         break
                     }
@@ -2877,8 +2850,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             let messages = privateChats[peerID] ?? []
             for message in messages where message.senderPeerID == peerID && !message.isRelay {
                 if !sentReadReceipts.contains(message.id) {
-                    SecureLogger.log("GeoDM: sending READ for mid=\(message.id.prefix(8))… to=\(recipientHex.prefix(8))…",
-                                    category: SecureLogger.session, level: .debug)
+                    SecureLogger.debug("GeoDM: sending READ for mid=\(message.id.prefix(8))… to=\(recipientHex.prefix(8))…", category: .session)
                     let nostrTransport = NostrTransport()
                     nostrTransport.senderPeerID = meshService.myPeerID
                     nostrTransport.sendReadReceiptGeohash(message.id, toRecipientHex: recipientHex, from: id)
@@ -4322,14 +4294,14 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         verifiedFingerprints = SecureIdentityStateManager.shared.getVerifiedFingerprints()
         // Log snapshot for debugging persistence
         let sample = Array(verifiedFingerprints.prefix(TransportConfig.uiFingerprintSampleCount)).map { $0.prefix(8) }.joined(separator: ", ")
-        SecureLogger.log("🔐 Verified loaded: \(verifiedFingerprints.count) [\(sample)]", category: SecureLogger.security, level: .info)
+        SecureLogger.info("🔐 Verified loaded: \(verifiedFingerprints.count) [\(sample)]", category: .security)
         // Also log any offline favorites and whether we consider them verified
         let offlineFavorites = unifiedPeerService.favorites.filter { !$0.isConnected }
         for fav in offlineFavorites {
             let fp = unifiedPeerService.getFingerprint(for: fav.id)
             let isVer = fp.flatMap { verifiedFingerprints.contains($0) } ?? false
             let fpShort = fp?.prefix(8) ?? "nil"
-            SecureLogger.log("⭐️ Favorite offline: \(fav.nickname) fp=\(fpShort) verified=\(isVer)", category: SecureLogger.security, level: .info)
+            SecureLogger.info("⭐️ Favorite offline: \(fav.nickname) fp=\(fpShort) verified=\(isVer)", category: .security)
         }
         // Invalidate cached encryption statuses so offline favorites can show verified badges immediately
         invalidateEncryptionCache()
@@ -4345,7 +4317,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             DispatchQueue.main.async {
                 guard let self = self else { return }
 
-                SecureLogger.log("🔐 Authenticated: \(peerID)", category: SecureLogger.security, level: .debug)
+                SecureLogger.debug("🔐 Authenticated: \(peerID)", category: .security)
 
                 // Update encryption status
                 if self.verifiedFingerprints.contains(fingerprint) {
@@ -4364,8 +4336,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                    let keyData = self.meshService.getNoiseService().getPeerPublicKeyData(peerID) {
                     let stable = keyData.hexEncodedString()
                     self.shortIDToNoiseKey[peerID] = stable
-                    SecureLogger.log("🗺️ Mapped short peerID to Noise key for header continuity: \(peerID) -> \(stable.prefix(8))…",
-                                    category: SecureLogger.session, level: .debug)
+                    SecureLogger.debug("🗺️ Mapped short peerID to Noise key for header continuity: \(peerID) -> \(stable.prefix(8))…", category: .session)
                 }
 
                 // If a QR verification is pending but not sent yet, send it now that session is authenticated
@@ -4373,7 +4344,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                     self.meshService.sendVerifyChallenge(to: peerID, noiseKeyHex: pending.noiseKeyHex, nonceA: pending.nonceA)
                     pending.sent = true
                     self.pendingQRVerifications[peerID] = pending
-                    SecureLogger.log("📤 Sent deferred verify challenge to \(peerID) after handshake", category: SecureLogger.security, level: .debug)
+                    SecureLogger.debug("📤 Sent deferred verify challenge to \(peerID) after handshake", category: .security)
                 }
 
                 // Schedule UI update
@@ -4519,7 +4490,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                     pendingQRVerifications.removeValue(forKey: peerID)
                     if let fp = getFingerprint(for: peerID) {
                         let short = fp.prefix(8)
-                        SecureLogger.log("🔐 Marking verified fingerprint: \(short)", category: SecureLogger.security, level: .info)
+                        SecureLogger.info("🔐 Marking verified fingerprint: \(short)", category: .security)
                         SecureIdentityStateManager.shared.setVerified(fingerprint: fp, verified: true)
                         SecureIdentityStateManager.shared.forceSave()
                         verifiedFingerprints.insert(fp)
@@ -4605,7 +4576,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     // MARK: - Peer Connection Events
     
     func didConnectToPeer(_ peerID: String) {
-        SecureLogger.log("🤝 Peer connected: \(peerID)", category: SecureLogger.session, level: .debug)
+        SecureLogger.debug("🤝 Peer connected: \(peerID)", category: .session)
         
         // Handle all main actor work async
         Task { @MainActor in
@@ -4622,8 +4593,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                 // Resend favorite notification with our Nostr key after a short delay
                 try? await Task.sleep(nanoseconds: TransportConfig.uiAsyncMediumSleepNs) // 0.5 seconds
                 meshService.sendFavoriteNotification(to: peerID, isFavorite: true)
-                SecureLogger.log("📤 Resent favorite notification to reconnected peer \(peerID)", 
-                                category: SecureLogger.session, level: .debug)
+                SecureLogger.debug("📤 Resent favorite notification to reconnected peer \(peerID)", category: .session)
             }
             
             // Force UI refresh
@@ -4643,7 +4613,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     }
     
     func didDisconnectFromPeer(_ peerID: String) {
-        SecureLogger.log("👋 Peer disconnected: \(peerID)", category: SecureLogger.session, level: .debug)
+        SecureLogger.debug("👋 Peer disconnected: \(peerID)", category: .session)
         
         // Remove ephemeral session from identity manager
         SecureIdentityStateManager.shared.removeEphemeralSession(peerID: peerID)
@@ -4738,8 +4708,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                     self.lastNetworkNotificationTime = Date()
                     self.recentlySeenPeers = currentPeerSet
                     NotificationService.shared.sendNetworkAvailableNotification(peerCount: meshPeers.count)
-                    SecureLogger.log("👥 Sent bitchatters nearby notification for \(meshPeers.count) mesh peers", 
-                                   category: SecureLogger.session, level: .info)
+                    SecureLogger.info("👥 Sent bitchatters nearby notification for \(meshPeers.count) mesh peers", category: .session)
                 }
             } else {
                 // No peers — immediately reset to allow next rising-edge to notify
@@ -4749,7 +4718,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                     self.networkResetTimer?.invalidate()
                     self.networkResetTimer = nil
                 }
-                SecureLogger.log("⏳ Mesh empty — reset network notification state", category: SecureLogger.session, level: .debug)
+                SecureLogger.debug("⏳ Mesh empty — reset network notification state", category: .session)
             }
             
             // Register ephemeral sessions for all connected peers
@@ -4811,8 +4780,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             }
             
             if !idsToRemove.isEmpty {
-                SecureLogger.log("🧹 Cleaned up \(idsToRemove.count) stale unread peer IDs", 
-                                category: SecureLogger.session, level: .debug)
+                SecureLogger.debug("🧹 Cleaned up \(idsToRemove.count) stale unread peer IDs", category: .session)
             }
         }
         
@@ -4842,8 +4810,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         
         let removedCount = oldCount - sentReadReceipts.count
         if removedCount > 0 {
-            SecureLogger.log("🧹 Cleaned up \(removedCount) old read receipts", 
-                            category: SecureLogger.session, level: .debug)
+            SecureLogger.debug("🧹 Cleaned up \(removedCount) old read receipts", category: .session)
         }
     }
     
@@ -4891,7 +4858,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                     nostrPublicKey = data.hexEncodedString()
                 }
             } catch {
-                SecureLogger.log("Failed to decode Nostr npub: \(error)", category: SecureLogger.session, level: .error)
+                SecureLogger.error("Failed to decode Nostr npub: \(error)", category: .session)
             }
         }
         
@@ -5032,7 +4999,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                         NostrRelayManager.shared.sendEvent(event, to: targetRelays)
                     }
                 } catch {
-                    SecureLogger.log("❌ Failed to send geohash raw message: \(error)", category: SecureLogger.session, level: .error)
+                    SecureLogger.error("❌ Failed to send geohash raw message: \(error)", category: .session)
                 }
             }
             return
@@ -5048,12 +5015,11 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     @MainActor
     private func setupNostrMessageHandling() {
         guard let currentIdentity = try? NostrIdentityBridge.getCurrentNostrIdentity() else { 
-            SecureLogger.log("⚠️ No Nostr identity available for message handling", category: SecureLogger.session, level: .warning)
+            SecureLogger.warning("⚠️ No Nostr identity available for message handling", category: .session)
             return 
         }
         
-        SecureLogger.log("🔑 Setting up Nostr subscription for pubkey: \(currentIdentity.publicKeyHex.prefix(16))...", 
-                        category: SecureLogger.session, level: .debug)
+        SecureLogger.debug("🔑 Setting up Nostr subscription for pubkey: \(currentIdentity.publicKeyHex.prefix(16))...", category: .session)
         
         // Subscribe to Nostr messages
         let filter = NostrFilter.giftWrapsFor(
@@ -5093,19 +5059,19 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             
             // Expect embedded BitChat packet content
             guard content.hasPrefix("bitchat1:") else {
-                SecureLogger.log("Ignoring non-embedded Nostr DM content", category: SecureLogger.session, level: .debug)
+                SecureLogger.debug("Ignoring non-embedded Nostr DM content", category: .session)
                 return
             }
 
             guard let packetData = Self.base64URLDecode(String(content.dropFirst("bitchat1:".count))),
                   let packet = BitchatPacket.from(packetData) else {
-                SecureLogger.log("Failed to decode embedded BitChat packet from Nostr DM", category: SecureLogger.session, level: .error)
+                SecureLogger.error("Failed to decode embedded BitChat packet from Nostr DM", category: .session)
                 return
             }
 
             // Only process typed noiseEncrypted envelope for private messages/receipts
             guard packet.type == MessageType.noiseEncrypted.rawValue else {
-                SecureLogger.log("Unsupported embedded packet type: \(packet.type)", category: SecureLogger.session, level: .warning)
+                SecureLogger.warning("Unsupported embedded packet type: \(packet.type)", category: .session)
                 return
             }
 
@@ -5119,7 +5085,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
 
             // Parse plaintext typed payload
             guard let noisePayload = NoisePayload.decode(packet.payload) else {
-                SecureLogger.log("Failed to parse embedded NoisePayload", category: SecureLogger.session, level: .error)
+                SecureLogger.error("Failed to parse embedded NoisePayload", category: .session)
                 return
             }
 
@@ -5215,14 +5181,14 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                 // Send delivery ack via Nostr embedded
                 if !wasReadBefore {
                     if let key = actualSenderNoiseKey {
-                        SecureLogger.log("Sending DELIVERED ack for \(messageId.prefix(8))… via router", category: SecureLogger.session, level: .debug)
+                        SecureLogger.debug("Sending DELIVERED ack for \(messageId.prefix(8))… via router", category: .session)
                         messageRouter.sendDeliveryAck(messageId, to: key.hexEncodedString())
                     } else if let id = try? NostrIdentityBridge.getCurrentNostrIdentity() {
                         // Fallback: no Noise mapping yet — send directly to sender's Nostr pubkey
                         let nt = NostrTransport()
                         nt.senderPeerID = meshService.myPeerID
                         nt.sendDeliveryAckGeohash(for: messageId, toRecipientHex: senderPubkey, from: id)
-                        SecureLogger.log("Sent DELIVERED ack directly to Nostr pub=\(senderPubkey.prefix(8))… for mid=\(messageId.prefix(8))…", category: SecureLogger.session, level: .debug)
+                        SecureLogger.debug("Sent DELIVERED ack directly to Nostr pub=\(senderPubkey.prefix(8))… for mid=\(messageId.prefix(8))…", category: .session)
                     }
                 }
 
@@ -5237,7 +5203,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                     if !sentReadReceipts.contains(messageId) {
                         if let key = actualSenderNoiseKey {
                             let receipt = ReadReceipt(originalMessageID: messageId, readerID: meshService.myPeerID, readerNickname: nickname)
-                            SecureLogger.log("Viewing chat; sending READ ack for \(messageId.prefix(8))… via router", category: SecureLogger.session, level: .debug)
+                            SecureLogger.debug("Viewing chat; sending READ ack for \(messageId.prefix(8))… via router", category: .session)
                             messageRouter.sendReadReceipt(receipt, to: key.hexEncodedString())
                             sentReadReceipts.insert(messageId)
                         } else if let id = try? NostrIdentityBridge.getCurrentNostrIdentity() {
@@ -5245,7 +5211,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                             nt.senderPeerID = meshService.myPeerID
                             nt.sendReadReceiptGeohash(messageId, toRecipientHex: senderPubkey, from: id)
                             sentReadReceipts.insert(messageId)
-                            SecureLogger.log("Viewing chat; sent READ ack directly to Nostr pub=\(senderPubkey.prefix(8))… for mid=\(messageId.prefix(8))…", category: SecureLogger.session, level: .debug)
+                            SecureLogger.debug("Viewing chat; sent READ ack directly to Nostr pub=\(senderPubkey.prefix(8))… for mid=\(messageId.prefix(8))…", category: .session)
                         }
                     }
                 } else {
@@ -5290,7 +5256,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             }
             
         } catch {
-            SecureLogger.log("Failed to decrypt Nostr message: \(error)", category: SecureLogger.session, level: .error)
+            SecureLogger.error("Failed to decrypt Nostr message: \(error)", category: .session)
         }
     }
     
@@ -5311,7 +5277,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         // Parse ACK format: "ACK:TYPE:MESSAGE_ID"
         let parts = content.split(separator: ":", maxSplits: 2)
         guard parts.count >= 3 else {
-            SecureLogger.log("⚠️ Invalid ACK format: \(content)", category: SecureLogger.session, level: .warning)
+            SecureLogger.warning("⚠️ Invalid ACK format: \(content)", category: .session)
             return
         }
         
@@ -5326,8 +5292,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         }
         processedNostrAcks.insert(ackKey)
         
-        SecureLogger.log("📨 Received \(ackType) ACK for message \(messageId.prefix(16))... from \(senderPubkey.prefix(16))...", 
-                        category: SecureLogger.session, level: .debug)
+        SecureLogger.debug("📨 Received \(ackType) ACK for message \(messageId.prefix(16))... from \(senderPubkey.prefix(16))...", category: .session)
         
         // Verify the sender has a valid Noise key
         guard findNoiseKey(for: senderPubkey) != nil else {
@@ -5346,12 +5311,11 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                 case "READ":
                     privateChats[chatPeerID]?[index].deliveryStatus = .read(by: "recipient", at: Date())
                 default:
-                    SecureLogger.log("⚠️ Unknown ACK type: \(ackType)", category: SecureLogger.session, level: .warning)
+                    SecureLogger.warning("⚠️ Unknown ACK type: \(ackType)", category: .session)
                 }
                 
                 messageFound = true
-                SecureLogger.log("✅ Updated message \(messageId.prefix(16))... status to \(ackType) in chat \(chatPeerID.prefix(16))...", 
-                                category: SecureLogger.session, level: .info)
+                SecureLogger.info("✅ Updated message \(messageId.prefix(16))... status to \(ackType) in chat \(chatPeerID.prefix(16))...", category: .session)
                 // Don't break - continue to update in all chats where this message exists
             }
         }
@@ -5359,8 +5323,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         if messageFound {
             objectWillChange.send()
         } else {
-            SecureLogger.log("⚠️ Could not find message \(messageId) to update status from ACK", 
-                            category: SecureLogger.session, level: .warning)
+            SecureLogger.warning("⚠️ Could not find message \(messageId) to update status from ACK", category: .session)
         }
     }
 
@@ -5386,8 +5349,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         var nostrPubkey: String? = nil
         if parts.count > 1 {
             nostrPubkey = String(parts[1])
-            SecureLogger.log("📝 Received Nostr npub in favorite notification: \(nostrPubkey ?? "none")",
-                            category: SecureLogger.session, level: .info)
+            SecureLogger.info("📝 Received Nostr npub in favorite notification: \(nostrPubkey ?? "none")", category: .session)
         }
         
         // Get the noise public key for this peer
@@ -5405,8 +5367,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         }
         
         guard let finalNoiseKey = noiseKey else {
-            SecureLogger.log("⚠️ Cannot get Noise key for peer \(peerID)", 
-                            category: SecureLogger.session, level: .warning)
+            SecureLogger.warning("⚠️ Cannot get Noise key for peer \(peerID)", category: .session)
             return
         }
         
@@ -5420,8 +5381,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         
         // If they favorited us and provided their Nostr key, ensure it's stored
         if isFavorite && nostrPubkey != nil {
-            SecureLogger.log("💾 Storing Nostr key association for \(senderNickname): \(nostrPubkey!.prefix(16))...",
-                            category: SecureLogger.session, level: .info)
+            SecureLogger.info("💾 Storing Nostr key association for \(senderNickname): \(nostrPubkey!.prefix(16))...", category: .session)
         }
         
         // Show system message
@@ -5532,8 +5492,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             // Not notifying for old message
         }
         
-        SecureLogger.log("📬 Stored Nostr message from unknown sender \(finalSenderNickname) in temporary peer \(tempPeerID)", 
-                        category: SecureLogger.session, level: .info)
+        SecureLogger.info("📬 Stored Nostr message from unknown sender \(finalSenderNickname) in temporary peer \(tempPeerID)", category: .session)
     }
     
     @MainActor
@@ -5545,16 +5504,14 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         } else {
             // Try to convert hex to npub
             guard let pubkeyData = Data(hexString: nostrPubkey) else { 
-                SecureLogger.log("⚠️ Invalid hex public key format: \(nostrPubkey.prefix(16))...", 
-                                category: SecureLogger.session, level: .warning)
+                SecureLogger.warning("⚠️ Invalid hex public key format: \(nostrPubkey.prefix(16))...", category: .session)
                 return nil 
             }
             
             do {
                 npubToMatch = try Bech32.encode(hrp: "npub", data: pubkeyData)
             } catch {
-                SecureLogger.log("⚠️ Failed to convert hex to npub: \(error)", 
-                                category: SecureLogger.session, level: .warning)
+                SecureLogger.warning("⚠️ Failed to convert hex to npub: \(error)", category: .session)
                 return nil
             }
         }
@@ -5564,22 +5521,19 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             if let storedNostrKey = relationship.peerNostrPublicKey {
                 // Compare npub format
                 if storedNostrKey == npubToMatch {
-                    // SecureLogger.log("✅ Found Noise key for Nostr sender (npub match)", 
-                    //                 category: SecureLogger.session, level: .debug)
+                    // SecureLogger.debug("✅ Found Noise key for Nostr sender (npub match)", category: .session)
                     return noiseKey
                 }
                 
                 // Also try hex comparison if stored value is hex
                 if !storedNostrKey.hasPrefix("npub") && storedNostrKey == nostrPubkey {
-                    SecureLogger.log("✅ Found Noise key for Nostr sender (hex match)", 
-                                    category: SecureLogger.session, level: .debug)
+                    SecureLogger.debug("✅ Found Noise key for Nostr sender (hex match)", category: .session)
                     return noiseKey
                 }
             }
         }
         
-        SecureLogger.log("⚠️ No matching Noise key found for Nostr pubkey: \(nostrPubkey.prefix(16))... (tried npub: \(npubToMatch.prefix(16))...)", 
-                        category: SecureLogger.session, level: .debug)
+        SecureLogger.debug("⚠️ No matching Noise key found for Nostr pubkey: \(nostrPubkey.prefix(16))... (tried npub: \(npubToMatch.prefix(16))...)", category: .session)
         return nil
     }
     
@@ -5607,13 +5561,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         // Try mesh first for connected peers
         if meshService.isPeerConnected(peerID) {
             messageRouter.sendFavoriteNotification(to: peerID, isFavorite: isFavorite)
-            SecureLogger.log("📤 Sent favorite notification via BLE to \(peerID)", category: SecureLogger.session, level: .debug)
+            SecureLogger.debug("📤 Sent favorite notification via BLE to \(peerID)", category: .session)
         } else if let key = noiseKey {
             // Send via Nostr for offline peers (using router)
             let recipientPeerID = key.hexEncodedString()
             messageRouter.sendFavoriteNotification(to: recipientPeerID, isFavorite: isFavorite)
         } else {
-            SecureLogger.log("⚠️ Cannot send favorite notification - peer not connected and no Nostr pubkey", category: SecureLogger.session, level: .warning)
+            SecureLogger.warning("⚠️ Cannot send favorite notification - peer not connected and no Nostr pubkey", category: .session)
         }
     }
     
@@ -5703,12 +5657,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                             oldPeerIDsToRemove.append(oldPeerID)
                         } else {
                             // Keep old messages in original location but don't show in UI
-                            SecureLogger.log("📦 Partially migrating \(recentMessages.count) of \(messages.count) messages from \(oldPeerID)", 
-                                            category: SecureLogger.session, level: .info)
+                            SecureLogger.info("📦 Partially migrating \(recentMessages.count) of \(messages.count) messages from \(oldPeerID)", category: .session)
                         }
                         
-                        SecureLogger.log("📦 Migrating \(recentMessages.count) recent messages from old peer ID \(oldPeerID) to \(peerID) (fingerprint match)", 
-                                        category: SecureLogger.session, level: .info)
+                        SecureLogger.info("📦 Migrating \(recentMessages.count) recent messages from old peer ID \(oldPeerID) to \(peerID) (fingerprint match)", category: .session)
                     } else if currentFingerprint == nil || oldFingerprint == nil {
                         // Check if this chat contains messages with this sender by nickname
                         let isRelevantChat = recentMessages.contains { msg in
@@ -5724,8 +5676,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                                 oldPeerIDsToRemove.append(oldPeerID)
                             }
                             
-                            SecureLogger.log("📦 Migrating \(recentMessages.count) recent messages from old peer ID \(oldPeerID) to \(peerID) (nickname match)", 
-                                            category: SecureLogger.session, level: .warning)
+                            SecureLogger.warning("📦 Migrating \(recentMessages.count) recent messages from old peer ID \(oldPeerID) to \(peerID) (nickname match)", category: .session)
                         }
                     }
                 }
@@ -5764,8 +5715,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                 // Update selectedPrivateChatPeer if it was pointing to an old ID
                 if needsSelectedUpdate {
                     selectedPrivateChatPeer = peerID
-                    SecureLogger.log("📱 Updated selectedPrivateChatPeer from old ID to \(peerID) during migration", 
-                                    category: SecureLogger.session, level: .info)
+                    SecureLogger.info("📱 Updated selectedPrivateChatPeer from old ID to \(peerID) during migration", category: .session)
                 }
             }
         }
@@ -5774,11 +5724,11 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     /// Handle incoming private message
     @MainActor
     private func handlePrivateMessage(_ message: BitchatMessage) {
-        SecureLogger.log("📥 handlePrivateMessage called for message from \(message.sender)", category: SecureLogger.session, level: .debug)
+        SecureLogger.debug("📥 handlePrivateMessage called for message from \(message.sender)", category: .session)
         let senderPeerID = message.senderPeerID ?? getPeerIDForNickname(message.sender)
         
         guard let peerID = senderPeerID else { 
-            SecureLogger.log("⚠️ Could not get peer ID for sender \(message.sender)", category: SecureLogger.session, level: .warning)
+            SecureLogger.warning("⚠️ Could not get peer ID for sender \(message.sender)", category: .session)
             return 
         }
         
@@ -5818,8 +5768,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                     // Clean up the stable key storage to avoid duplication
                     privateChats.removeValue(forKey: stableKeyHex)
                     
-                    SecureLogger.log("📥 Consolidated \(nostrMessages.count) Nostr messages from stable key to ephemeral peer \(peerID)", 
-                                    category: SecureLogger.session, level: .info)
+                    SecureLogger.info("📥 Consolidated \(nostrMessages.count) Nostr messages from stable key to ephemeral peer \(peerID)", category: .session)
                 }
             }
         }
@@ -6086,8 +6035,7 @@ private func checkForMentions(_ message: BitchatMessage) {
     let isMentioned = (message.mentions?.contains { myTokens.contains($0) } ?? false)
 
     if isMentioned && message.sender != nickname {
-        SecureLogger.log("🔔 Mention from \(message.sender)",
-                       category: SecureLogger.session, level: .info)
+        SecureLogger.info("🔔 Mention from \(message.sender)", category: .session)
         NotificationService.shared.sendMentionNotification(from: message.sender, message: message.content)
     }
 }

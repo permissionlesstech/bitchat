@@ -39,40 +39,34 @@ final class MessageRouter {
     func sendPrivate(_ content: String, to peerID: String, recipientNickname: String, messageID: String) {
         let reachableMesh = mesh.isPeerReachable(peerID)
         if reachableMesh {
-            SecureLogger.log("Routing PM via mesh (reachable) to \(peerID.prefix(8))… id=\(messageID.prefix(8))…",
-                            category: SecureLogger.session, level: .debug)
+            SecureLogger.debug("Routing PM via mesh (reachable) to \(peerID.prefix(8))… id=\(messageID.prefix(8))…", category: .session)
             // BLEService will initiate a handshake if needed and queue the message
             mesh.sendPrivateMessage(content, to: peerID, recipientNickname: recipientNickname, messageID: messageID)
         } else if canSendViaNostr(peerID: peerID) {
-            SecureLogger.log("Routing PM via Nostr to \(peerID.prefix(8))… id=\(messageID.prefix(8))…",
-                            category: SecureLogger.session, level: .debug)
+            SecureLogger.debug("Routing PM via Nostr to \(peerID.prefix(8))… id=\(messageID.prefix(8))…", category: .session)
             nostr.sendPrivateMessage(content, to: peerID, recipientNickname: recipientNickname, messageID: messageID)
         } else {
             // Queue for later (when mesh connects or Nostr mapping appears)
             if outbox[peerID] == nil { outbox[peerID] = [] }
             outbox[peerID]?.append((content, recipientNickname, messageID))
-            SecureLogger.log("Queued PM for \(peerID.prefix(8))… (no mesh, no Nostr mapping) id=\(messageID.prefix(8))…",
-                            category: SecureLogger.session, level: .debug)
+            SecureLogger.debug("Queued PM for \(peerID.prefix(8))… (no mesh, no Nostr mapping) id=\(messageID.prefix(8))…", category: .session)
         }
     }
 
     func sendReadReceipt(_ receipt: ReadReceipt, to peerID: String) {
         // Prefer mesh for reachable peers; BLE will queue if handshake is needed
         if mesh.isPeerReachable(peerID) {
-            SecureLogger.log("Routing READ ack via mesh (reachable) to \(peerID.prefix(8))… id=\(receipt.originalMessageID.prefix(8))…",
-                            category: SecureLogger.session, level: .debug)
+            SecureLogger.debug("Routing READ ack via mesh (reachable) to \(peerID.prefix(8))… id=\(receipt.originalMessageID.prefix(8))…", category: .session)
             mesh.sendReadReceipt(receipt, to: peerID)
         } else {
-            SecureLogger.log("Routing READ ack via Nostr to \(peerID.prefix(8))… id=\(receipt.originalMessageID.prefix(8))…",
-                            category: SecureLogger.session, level: .debug)
+            SecureLogger.debug("Routing READ ack via Nostr to \(peerID.prefix(8))… id=\(receipt.originalMessageID.prefix(8))…", category: .session)
             nostr.sendReadReceipt(receipt, to: peerID)
         }
     }
 
     func sendDeliveryAck(_ messageID: String, to peerID: String) {
         if mesh.isPeerReachable(peerID) {
-            SecureLogger.log("Routing DELIVERED ack via mesh (reachable) to \(peerID.prefix(8))… id=\(messageID.prefix(8))…",
-                            category: SecureLogger.session, level: .debug)
+            SecureLogger.debug("Routing DELIVERED ack via mesh (reachable) to \(peerID.prefix(8))… id=\(messageID.prefix(8))…", category: .session)
             mesh.sendDeliveryAck(for: messageID, to: peerID)
         } else {
             nostr.sendDeliveryAck(for: messageID, to: peerID)
@@ -108,18 +102,15 @@ final class MessageRouter {
 
     func flushOutbox(for peerID: String) {
         guard let queued = outbox[peerID], !queued.isEmpty else { return }
-        SecureLogger.log("Flushing outbox for \(peerID.prefix(8))… count=\(queued.count)",
-                        category: SecureLogger.session, level: .debug)
+        SecureLogger.debug("Flushing outbox for \(peerID.prefix(8))… count=\(queued.count)", category: .session)
         var remaining: [(content: String, nickname: String, messageID: String)] = []
         // Prefer mesh if connected; else try Nostr if mapping exists
         for (content, nickname, messageID) in queued {
             if mesh.isPeerReachable(peerID) {
-                SecureLogger.log("Outbox -> mesh for \(peerID.prefix(8))… id=\(messageID.prefix(8))…",
-                                category: SecureLogger.session, level: .debug)
+                SecureLogger.debug("Outbox -> mesh for \(peerID.prefix(8))… id=\(messageID.prefix(8))…", category: .session)
                 mesh.sendPrivateMessage(content, to: peerID, recipientNickname: nickname, messageID: messageID)
             } else if canSendViaNostr(peerID: peerID) {
-                SecureLogger.log("Outbox -> Nostr for \(peerID.prefix(8))… id=\(messageID.prefix(8))…",
-                                category: SecureLogger.session, level: .debug)
+                SecureLogger.debug("Outbox -> Nostr for \(peerID.prefix(8))… id=\(messageID.prefix(8))…", category: .session)
                 nostr.sendPrivateMessage(content, to: peerID, recipientNickname: nickname, messageID: messageID)
             } else {
                 // Keep unsent items queued
