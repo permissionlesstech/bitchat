@@ -288,26 +288,12 @@ class NostrRelayManager: ObservableObject {
             
             switch result {
             case .success(let message):
-                switch message {
-                case .string(let text):
-                    // Parse off-main to reduce UI jank, then hop back for state updates
-                    Task.detached(priority: .utility) {
-                        guard let parsed = parseInboundMessage(text) else { return }
-                        await MainActor.run {
-                            NostrRelayManager.shared.handleParsedMessage(parsed, from: relayUrl)
-                        }
+                // Parse off-main to reduce UI jank, then hop back for state updates
+                Task.detached(priority: .utility) {
+                    guard let parsed = parseInbound(message) else { return }
+                    await MainActor.run {
+                        NostrRelayManager.shared.handleParsedMessage(parsed, from: relayUrl)
                     }
-                case .data(let data):
-                    if let text = String(data: data, encoding: .utf8) {
-                        Task.detached(priority: .utility) {
-                            guard let parsed = parseInboundMessage(text) else { return }
-                            await MainActor.run {
-                                NostrRelayManager.shared.handleParsedMessage(parsed, from: relayUrl)
-                            }
-                        }
-                    }
-                @unknown default:
-                    break
                 }
                 
                 // Continue receiving
@@ -524,8 +510,8 @@ private enum ParsedInbound {
 }
 
 // Off-main JSON parse to avoid UI jank; pure function, not actor-isolated
-private func parseInboundMessage(_ message: String) -> ParsedInbound? {
-    guard let data = message.data(using: .utf8) else { return nil }
+private func parseInbound(_ message: URLSessionWebSocketTask.Message) -> ParsedInbound? {
+    guard let data = message.data else { return nil }
     do {
         if let array = try JSONSerialization.jsonObject(with: data) as? [Any],
            array.count >= 2,
@@ -557,6 +543,16 @@ private func parseInboundMessage(_ message: String) -> ParsedInbound? {
         // Ignore
     }
     return nil
+}
+
+private extension URLSessionWebSocketTask.Message {
+    var data: Data? {
+        switch self {
+        case .string(let text): text.data(using: .utf8)
+        case .data(let data):   data
+        @unknown default:       nil
+        }
+    }
 }
 
 // MARK: - Nostr Protocol Types
