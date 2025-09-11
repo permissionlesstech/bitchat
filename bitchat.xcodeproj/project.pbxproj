@@ -162,6 +162,8 @@
 		E2DCF7817344F1CCDB8B7B2F /* SecureIdentityStateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDC18D910D6FF2E8B1B6C885 /* SecureIdentityStateManager.swift */; };
 		E65BBB6544FE0159F3C6C3A8 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 95F16C3A4A5621C74461D8D3 /* LaunchScreen.storyboard */; };
 		EC5241969D2550B97629EBD0 /* SecureLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE7EFB209C86BBD956B749EC /* SecureLogger.swift */; };
+		F0A1B2C3D4E5F60718293A4B /* OSLog+Categories.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0A1B2C3D4E5F60718293A4A /* OSLog+Categories.swift */; };
+		F0A1B2C3D4E5F60718293A4C /* OSLog+Categories.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0A1B2C3D4E5F60718293A4A /* OSLog+Categories.swift */; };
 		ED83C7AC1E6BEF15389C0132 /* PrivateChatE2ETests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A262EDDC04B7D7B5E31F321 /* PrivateChatE2ETests.swift */; };
 		EE8C3ECADAB3083A2687D50B /* NostrProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C272F137CE00FC5A96E0CC06 /* NostrProtocolTests.swift */; };
 		EF49C600C1E464710DD6CA29 /* InputValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90CB7A5CD1D1A521CD31F380 /* InputValidator.swift */; };
@@ -297,6 +299,7 @@
 		E95DBE6A48626C5AE287245E /* NoiseProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoiseProtocolTests.swift; sourceTree = "<group>"; };
 		EA706D8E5097785414646A8E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		EE7EFB209C86BBD956B749EC /* SecureLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureLogger.swift; sourceTree = "<group>"; };
+		F0A1B2C3D4E5F60718293A4A /* OSLog+Categories.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "OSLog+Categories.swift"; sourceTree = "<group>"; };
 		EF625BB3AD919322C01A46B2 /* BitchatApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitchatApp.swift; sourceTree = "<group>"; };
 		FC75901A0F0073B5BB8356E7 /* TestConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestConstants.swift; sourceTree = "<group>"; };
 		FDC18D910D6FF2E8B1B6C885 /* SecureIdentityStateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureIdentityStateManager.swift; sourceTree = "<group>"; };
@@ -471,6 +474,7 @@
 				32F149C43D1915831B60FE09 /* CompressionUtil.swift */,
 				90CB7A5CD1D1A521CD31F380 /* InputValidator.swift */,
 				EE7EFB209C86BBD956B749EC /* SecureLogger.swift */,
+				F0A1B2C3D4E5F60718293A4A /* OSLog+Categories.swift */,
 			);
 			path = Utils;
 			sourceTree = "<group>";
@@ -802,6 +806,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F0A1B2C3D4E5F60718293A4C /* OSLog+Categories.swift in Sources */,
 				0C0EFA122E6EAAAA00ABCDF0 /* CTorHost.c in Sources */,
 				0C0EFA172E6EAABB00ABCDF5 /* TorNotifications.swift in Sources */,
 				048A4BE72E5CCCC300162C4A /* TransportConfig.swift in Sources */,
@@ -866,6 +871,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F0A1B2C3D4E5F60718293A4B /* OSLog+Categories.swift in Sources */,
 				0C0EFA112E6EAAAA00ABCDEF /* CTorHost.c in Sources */,
 				0C0EFA162E6EAABB00ABCDF4 /* TorNotifications.swift in Sources */,
 				048A4BE82E5CCCC300162C4A /* TransportConfig.swift in Sources */,
