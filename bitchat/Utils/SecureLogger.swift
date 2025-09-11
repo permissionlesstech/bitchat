@@ -263,12 +263,24 @@ final class SecureLogger {
 
 extension SecureLogger {
     
+    enum KeyOperation: String, CustomStringConvertible {
+        case load
+        case create
+        case generate
+        case delete
+        case save
+        
+        var description: String { rawValue }
+    }
+    
     /// Log key management operations
-    static func logKeyOperation(_ operation: String, keyType: String, success: Bool = true,
-                               file: String = #file, line: Int = #line, function: String = #function) {
-        let level: LogLevel = success ? .debug : .error
-        log("Key operation '\(operation)' for \(keyType) \(success ? "succeeded" : "failed")", 
-            category: .keychain, level: level, file: file, line: line, function: function)
+    static func logKeyOperation(_ operation: KeyOperation, keyType: String, success: Bool = true,
+                                file: String = #file, line: Int = #line, function: String = #function) {
+        if success {
+            debug("Key operation '\(operation)' for \(keyType) succeeded", category: .keychain, file: file, line: line, function: function)
+        } else {
+            error("Key operation '\(operation)' for \(keyType) failed", category: .keychain, file: file, line: line, function: function)
+        }
     }
 }
 

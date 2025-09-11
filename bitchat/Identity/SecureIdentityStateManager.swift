@@ -129,7 +129,7 @@ final class SecureIdentityStateManager {
         // Try to load from keychain
         if let keyData = keychain.getIdentityKey(forKey: encryptionKeyName) {
             loadedKey = SymmetricKey(data: keyData)
-            SecureLogger.logKeyOperation("load", keyType: "identity cache encryption key", success: true)
+            SecureLogger.logKeyOperation(.load, keyType: "identity cache encryption key", success: true)
         }
         // Generate new key if needed
         else {
@@ -137,7 +137,7 @@ final class SecureIdentityStateManager {
             let keyData = loadedKey.withUnsafeBytes { Data($0) }
             // Save to keychain
             let saved = keychain.saveIdentityKey(keyData, forKey: encryptionKeyName)
-            SecureLogger.logKeyOperation("generate", keyType: "identity cache encryption key", success: saved)
+            SecureLogger.logKeyOperation(.generate, keyType: "identity cache encryption key", success: saved)
         }
         
         self.encryptionKey = loadedKey
@@ -529,7 +529,7 @@ final class SecureIdentityStateManager {
             
             // Delete from keychain
             let deleted = self.keychain.deleteIdentityKey(forKey: self.cacheKey)
-            SecureLogger.logKeyOperation("delete", keyType: "identity cache", success: deleted)
+            SecureLogger.logKeyOperation(.delete, keyType: "identity cache", success: deleted)
         }
     }
     

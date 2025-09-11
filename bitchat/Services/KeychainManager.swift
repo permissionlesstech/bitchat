@@ -53,7 +53,7 @@ final class KeychainManager {
     func saveIdentityKey(_ keyData: Data, forKey key: String) -> Bool {
         let fullKey = "identity_\(key)"
         let result = saveData(keyData, forKey: fullKey)
-        SecureLogger.logKeyOperation("save", keyType: key, success: result)
+        SecureLogger.logKeyOperation(.save, keyType: key, success: result)
         return result
     }
     
@@ -64,7 +64,7 @@ final class KeychainManager {
     
     func deleteIdentityKey(forKey key: String) -> Bool {
         let result = delete(forKey: "identity_\(key)")
-        SecureLogger.logKeyOperation("delete", keyType: key, success: result)
+        SecureLogger.logKeyOperation(.delete, keyType: key, success: result)
         return result
     }
     
