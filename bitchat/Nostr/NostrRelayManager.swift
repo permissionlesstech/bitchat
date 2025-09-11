@@ -511,37 +511,41 @@ private enum ParsedInbound {
 
 // Off-main JSON parse to avoid UI jank; pure function, not actor-isolated
 private func parseInbound(_ message: URLSessionWebSocketTask.Message) -> ParsedInbound? {
-    guard let data = message.data else { return nil }
-    do {
-        if let array = try JSONSerialization.jsonObject(with: data) as? [Any],
-           array.count >= 2,
-           let type = array[0] as? String {
-            switch type {
-            case "EVENT":
-                if array.count >= 3,
-                   let subId = array[1] as? String,
-                   let eventDict = array[2] as? [String: Any] {
-                    let event = try NostrEvent(from: eventDict)
-                    return .event(subId: subId, event: event)
-                }
-            case "EOSE":
-                if let subId = array[1] as? String { return .eose(subscriptionId: subId) }
-            case "OK":
-                if array.count >= 3,
-                   let eventId = array[1] as? String,
-                   let success = array[2] as? Bool {
-                    let reason = array.count >= 4 ? (array[3] as? String ?? "no reason given") : "no reason given"
-                    return .ok(eventId: eventId, success: success, reason: reason)
-                }
-            case "NOTICE":
-                if array.count >= 2, let msg = array[1] as? String { return .notice(msg) }
-            default:
-                return nil
-            }
-        }
-    } catch {
-        // Ignore
+    guard let data = message.data,
+          let array = try? JSONSerialization.jsonObject(with: data) as? [Any],
+          array.count >= 2,
+          let type = array[0] as? String
+    else {
+        return nil
     }
+    
+    switch type {
+    case "EVENT":
+        if array.count >= 3,
+           let subId = array[1] as? String,
+           let eventDict = array[2] as? [String: Any],
+           let event = try? NostrEvent(from: eventDict) {
+            return .event(subId: subId, event: event)
+        }
+    case "EOSE":
+        if let subId = array[1] as? String {
+            return .eose(subscriptionId: subId)
+        }
+    case "OK":
+        if array.count >= 3,
+           let eventId = array[1] as? String,
+           let success = array[2] as? Bool {
+            let reason = array.count >= 4 ? (array[3] as? String ?? "no reason given") : "no reason given"
+            return .ok(eventId: eventId, success: success, reason: reason)
+        }
+    case "NOTICE":
+        if array.count >= 2, let msg = array[1] as? String {
+            return .notice(msg)
+        }
+    default:
+        break
+    }
+    
     return nil
 }
 
