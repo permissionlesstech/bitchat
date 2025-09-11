@@ -92,7 +92,7 @@ class NoiseSession {
     
     func processHandshakeMessage(_ message: Data) throws -> Data? {
         return try sessionQueue.sync(flags: .barrier) {
-            SecureLogger.log("NoiseSession[\(peerID)]: Processing handshake message, current state: \(state), role: \(role)", category: .noise, level: .debug)
+            SecureLogger.debug("NoiseSession[\(peerID)]: Processing handshake message, current state: \(state), role: \(role)", category: .noise)
             
             // Initialize handshake state if needed (for responders)
             if state == .uninitialized && role == .responder {
@@ -103,7 +103,7 @@ class NoiseSession {
                     remoteStaticKey: nil
                 )
                 state = .handshaking
-                SecureLogger.log("NoiseSession[\(peerID)]: Initialized handshake state for responder", category: .noise, level: .debug)
+                SecureLogger.debug("NoiseSession[\(peerID)]: Initialized handshake state for responder", category: .noise)
             }
             
             guard case .handshaking = state, let handshake = handshakeState else {
@@ -112,7 +112,7 @@ class NoiseSession {
             
             // Process incoming message
             _ = try handshake.readMessage(message)
-            SecureLogger.log("NoiseSession[\(peerID)]: Read handshake message, checking if complete", category: .noise, level: .debug)
+            SecureLogger.debug("NoiseSession[\(peerID)]: Read handshake message, checking if complete", category: .noise)
             
             // Check if handshake is complete
             if handshake.isHandshakeComplete() {
@@ -130,7 +130,7 @@ class NoiseSession {
                 state = .established
                 handshakeState = nil // Clear handshake state
                 
-                SecureLogger.log("NoiseSession[\(peerID)]: Handshake complete (no response needed), transitioning to established", category: .noise, level: .debug)
+                SecureLogger.debug("NoiseSession[\(peerID)]: Handshake complete (no response needed), transitioning to established", category: .noise)
                 SecureLogger.logSecurityEvent(.handshakeCompleted(peerID: peerID))
                 
                 return nil
@@ -138,7 +138,7 @@ class NoiseSession {
                 // Generate response
                 let response = try handshake.writeMessage()
                 sentHandshakeMessages.append(response)
-                SecureLogger.log("NoiseSession[\(peerID)]: Generated handshake response of size \(response.count)", category: .noise, level: .debug)
+                SecureLogger.debug("NoiseSession[\(peerID)]: Generated handshake response of size \(response.count)", category: .noise)
                 
                 // Check if handshake is complete after writing
                 if handshake.isHandshakeComplete() {
@@ -156,7 +156,7 @@ class NoiseSession {
                     state = .established
                     handshakeState = nil // Clear handshake state
                     
-                    SecureLogger.log("NoiseSession[\(peerID)]: Handshake complete after writing response, transitioning to established", category: .noise, level: .debug)
+                    SecureLogger.debug("NoiseSession[\(peerID)]: Handshake complete after writing response, transitioning to established", category: .noise)
                     SecureLogger.logSecurityEvent(.handshakeCompleted(peerID: peerID))
                 }
                 
@@ -348,8 +348,7 @@ final class NoiseSessionManager {
                 // for a good reason (e.g., decryption failure, restart, etc.)
                 // We should accept the new handshake to re-establish encryption
                 if existing.isEstablished() {
-                    SecureLogger.log("Accepting handshake from \(peerID) despite existing session - peer likely cleared their session", 
-                                   category: .session, level: .info)
+                    SecureLogger.info("Accepting handshake from \(peerID) despite existing session - peer likely cleared their session", category: .session)
                     _ = sessions.removeValue(forKey: peerID)
                     shouldCreateNew = true
                 } else {

@@ -113,6 +113,26 @@ final class SecureLogger {
     
     // MARK: - Public Logging Methods
     
+    static func debug(_ message: @autoclosure () -> String, category: OSLog = .noise,
+                      file: String = #file, line: Int = #line, function: String = #function) {
+        log(message(), category: category, level: .debug, file: file, line: line, function: function)
+    }
+    
+    static func info(_ message: @autoclosure () -> String, category: OSLog = .noise,
+                     file: String = #file, line: Int = #line, function: String = #function) {
+        log(message(), category: category, level: .info, file: file, line: line, function: function)
+    }
+    
+    static func warning(_ message: @autoclosure () -> String, category: OSLog = .noise,
+                        file: String = #file, line: Int = #line, function: String = #function) {
+        log(message(), category: category, level: .warning, file: file, line: line, function: function)
+    }
+    
+    static func error(_ message: @autoclosure () -> String, category: OSLog = .noise,
+                      file: String = #file, line: Int = #line, function: String = #function) {
+        log(message(), category: category, level: .error, file: file, line: line, function: function)
+    }
+    
     /// Log a security event
     static func logSecurityEvent(_ event: SecurityEvent, level: LogLevel = .info, 
                                  file: String = #file, line: Int = #line, function: String = #function) {
@@ -125,23 +145,6 @@ final class SecureLogger {
         #else
         // In release, use private logging to prevent sensitive data exposure
         os_log("%{private}@", log: .security, type: level.osLogType, message)
-        #endif
-    }
-    
-    /// Log general messages with automatic sensitive data filtering
-    static func log(_ message: @autoclosure () -> String, category: OSLog = .noise, level: LogLevel = .debug,
-                    file: String = #file, line: Int = #line, function: String = #function) {
-        guard shouldLog(level) else { return }
-        let location = formatLocation(file: file, line: line, function: function)
-        let sanitized = sanitize("\(location) \(message())")
-        
-        #if DEBUG
-        os_log("%{public}@", log: category, type: level.osLogType, sanitized)
-        #else
-        // In release builds, only log non-debug messages
-        if level != .debug {
-            os_log("%{private}@", log: category, type: level.osLogType, sanitized)
-        }
         #endif
     }
     
@@ -160,6 +163,23 @@ final class SecureLogger {
     }
     
     // MARK: - Private Helpers
+    
+    /// Log general messages with automatic sensitive data filtering
+    private static func log(_ message: @autoclosure () -> String, category: OSLog, level: LogLevel,
+                                file: String, line: Int, function: String) {
+        guard shouldLog(level) else { return }
+        let location = formatLocation(file: file, line: line, function: function)
+        let sanitized = sanitize("\(location) \(message())")
+        
+        #if DEBUG
+        os_log("%{public}@", log: category, type: level.osLogType, sanitized)
+        #else
+        // In release builds, only log non-debug messages
+        if level != .debug {
+            os_log("%{private}@", log: category, type: level.osLogType, sanitized)
+        }
+        #endif
+    }
     
     /// Format location information for logging
     private static func formatLocation(file: String, line: Int, function: String) -> String {
@@ -262,6 +282,6 @@ func secureLog(_ items: Any..., separator: String = " ", terminator: String = "\
                file: String = #file, line: Int = #line, function: String = #function) {
     #if DEBUG
     let message = items.map { String(describing: $0) }.joined(separator: separator)
-    SecureLogger.log(message, level: .debug, file: file, line: line, function: function)
+    SecureLogger.debug(message, file: file, line: line, function: function)
     #endif
 }

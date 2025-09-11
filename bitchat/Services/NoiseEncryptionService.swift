@@ -270,7 +270,7 @@ final class NoiseEncryptionService {
         let deletedStatic = KeychainManager.shared.deleteIdentityKey(forKey: "noiseStaticKey")
         let deletedSigning = KeychainManager.shared.deleteIdentityKey(forKey: "ed25519SigningKey")
         SecureLogger.logKeyOperation("delete", keyType: "identity keys", success: deletedStatic && deletedSigning)
-        SecureLogger.log("Panic mode activated - identity cleared", category: .security, level: .warning)
+        SecureLogger.warning("Panic mode activated - identity cleared", category: .security)
         // Stop rekey timer
         stopRekeyTimer()
     }
@@ -573,7 +573,7 @@ final class NoiseEncryptionService {
             // Attempt to rekey the session
             do {
                 try sessionManager.initiateRekey(for: peerID)
-                SecureLogger.log("Key rotation initiated for peer: \(peerID)", category: .security, level: .debug)
+                SecureLogger.debug("Key rotation initiated for peer: \(peerID)", category: .security)
                 
                 // Signal that handshake is needed
                 onHandshakeRequired?(peerID)
