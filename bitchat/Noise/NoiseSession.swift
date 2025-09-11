@@ -8,7 +8,6 @@
 
 import Foundation
 import CryptoKit
-import os.log
 
 // MARK: - Noise Session State
 

@@ -79,7 +79,6 @@
 
 import Foundation
 import CryptoKit
-import os.log
 
 // Core Noise Protocol implementation
 // Based on the Noise Protocol Framework specification

@@ -85,7 +85,6 @@
 
 import Foundation
 import CryptoKit
-import os.log
 
 // MARK: - Encryption Status
 
