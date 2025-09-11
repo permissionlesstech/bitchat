@@ -92,7 +92,7 @@ class NoiseSession {
     
     func processHandshakeMessage(_ message: Data) throws -> Data? {
         return try sessionQueue.sync(flags: .barrier) {
-            SecureLogger.debug("NoiseSession[\(peerID)]: Processing handshake message, current state: \(state), role: \(role)", category: .noise)
+            SecureLogger.debug("NoiseSession[\(peerID)]: Processing handshake message, current state: \(state), role: \(role)")
             
             // Initialize handshake state if needed (for responders)
             if state == .uninitialized && role == .responder {
@@ -103,7 +103,7 @@ class NoiseSession {
                     remoteStaticKey: nil
                 )
                 state = .handshaking
-                SecureLogger.debug("NoiseSession[\(peerID)]: Initialized handshake state for responder", category: .noise)
+                SecureLogger.debug("NoiseSession[\(peerID)]: Initialized handshake state for responder")
             }
             
             guard case .handshaking = state, let handshake = handshakeState else {
@@ -112,7 +112,7 @@ class NoiseSession {
             
             // Process incoming message
             _ = try handshake.readMessage(message)
-            SecureLogger.debug("NoiseSession[\(peerID)]: Read handshake message, checking if complete", category: .noise)
+            SecureLogger.debug("NoiseSession[\(peerID)]: Read handshake message, checking if complete")
             
             // Check if handshake is complete
             if handshake.isHandshakeComplete() {
@@ -130,7 +130,7 @@ class NoiseSession {
                 state = .established
                 handshakeState = nil // Clear handshake state
                 
-                SecureLogger.debug("NoiseSession[\(peerID)]: Handshake complete (no response needed), transitioning to established", category: .noise)
+                SecureLogger.debug("NoiseSession[\(peerID)]: Handshake complete (no response needed), transitioning to established")
                 SecureLogger.info(.handshakeCompleted(peerID: peerID))
                 
                 return nil
@@ -138,7 +138,7 @@ class NoiseSession {
                 // Generate response
                 let response = try handshake.writeMessage()
                 sentHandshakeMessages.append(response)
-                SecureLogger.debug("NoiseSession[\(peerID)]: Generated handshake response of size \(response.count)", category: .noise)
+                SecureLogger.debug("NoiseSession[\(peerID)]: Generated handshake response of size \(response.count)")
                 
                 // Check if handshake is complete after writing
                 if handshake.isHandshakeComplete() {
@@ -156,7 +156,7 @@ class NoiseSession {
                     state = .established
                     handshakeState = nil // Clear handshake state
                     
-                    SecureLogger.debug("NoiseSession[\(peerID)]: Handshake complete after writing response, transitioning to established", category: .noise)
+                    SecureLogger.debug("NoiseSession[\(peerID)]: Handshake complete after writing response, transitioning to established")
                     SecureLogger.info(.handshakeCompleted(peerID: peerID))
                 }
                 

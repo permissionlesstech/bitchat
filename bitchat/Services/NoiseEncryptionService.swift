@@ -281,7 +281,7 @@ final class NoiseEncryptionService {
             let signature = try signingKey.signature(for: data)
             return signature
         } catch {
-            SecureLogger.error(error, context: "Failed to sign data", category: .noise)
+            SecureLogger.error(error, context: "Failed to sign data")
             return nil
         }
     }
@@ -292,7 +292,7 @@ final class NoiseEncryptionService {
             let signingPublicKey = try Curve25519.Signing.PublicKey(rawRepresentation: publicKey)
             return signingPublicKey.isValidSignature(signature, for: data)
         } catch {
-            SecureLogger.error(error, context: "Failed to verify signature", category: .noise)
+            SecureLogger.error(error, context: "Failed to verify signature")
             return false
         }
     }
