@@ -50,9 +50,9 @@ final class CommandProcessor {
         case "/clear":
             return handleClear()
         case "/hug":
-            return handleEmote(args, action: "hugs", emoji: "🫂")
+            return handleEmote(args, command: "hug", action: "hugs", emoji: "🫂")
         case "/slap":
-            return handleEmote(args, action: "slaps", emoji: "🐟", suffix: " around a bit with a large trout")
+            return handleEmote(args, command: "slap", action: "slaps", emoji: "🐟", suffix: " around a bit with a large trout")
         case "/block":
             return handleBlock(args)
         case "/unblock":
@@ -129,17 +129,17 @@ final class CommandProcessor {
         return .handled
     }
     
-    private func handleEmote(_ args: String, action: String, emoji: String, suffix: String = "") -> CommandResult {
+    private func handleEmote(_ args: String, command: String, action: String, emoji: String, suffix: String = "") -> CommandResult {
         let targetName = args.trimmingCharacters(in: .whitespaces)
         guard !targetName.isEmpty else {
-            return .error(message: "usage: /\(action) <nickname>")
+            return .error(message: "usage: /\(command) <nickname>")
         }
         
         let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
         
         guard let targetPeerID = chatViewModel?.getPeerIDForNickname(nickname),
               let myNickname = chatViewModel?.nickname else {
-            return .error(message: "cannot \(action) \(nickname): not found")
+            return .error(message: "cannot \(command) \(nickname): not found")
         }
         
         let emoteContent = "* \(emoji) \(myNickname) \(action) \(nickname)\(suffix) *"

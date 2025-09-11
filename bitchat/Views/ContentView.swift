@@ -444,7 +444,19 @@ struct ContentView: View {
                 let id = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
                 let peerID = id.removingPercentEncoding ?? id
                 selectedMessageSenderID = peerID
-                selectedMessageSender = viewModel.messages.last(where: { $0.senderPeerID == peerID })?.sender
+                // Derive a stable display name from the peerID instead of peeking at the last message,
+                // which may be a transformed system action (sender == "system").
+                if peerID.hasPrefix("nostr") {
+                    // For geohash senders, resolve display name via mapping (works for "nostr:" and "nostr_" keys)
+                    selectedMessageSender = viewModel.geohashDisplayName(for: peerID)
+                } else {
+                    // Mesh sender: use current mesh nickname if available; otherwise fall back to last non-system message
+                    if let name = viewModel.meshService.peerNickname(peerID: peerID) {
+                        selectedMessageSender = name
+                    } else {
+                        selectedMessageSender = viewModel.messages.last(where: { $0.senderPeerID == peerID && $0.sender != "system" })?.sender
+                    }
+                }
                 showMessageActions = true
             }
             .onOpenURL { url in
