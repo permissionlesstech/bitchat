@@ -303,10 +303,21 @@ struct ContentView: View {
                                     HStack(alignment: .top, spacing: 0) {
                                         let isLong = (message.content.count > TransportConfig.uiLongMessageLengthThreshold || message.content.hasVeryLongToken(threshold: TransportConfig.uiVeryLongTokenThreshold)) && cashuTokens.isEmpty
                                         let isExpanded = expandedMessageIDs.contains(message.id)
-                                        Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme))
-                                            .fixedSize(horizontal: false, vertical: true)
+                                        let formatted = viewModel.formatMessageAsText(message, colorScheme: colorScheme)
+                                        let prefixAttr = viewModel.formatSenderPrefix(message, colorScheme: colorScheme)
+                                        let baseColor = viewModel.baseColorForMessage(message, colorScheme: colorScheme)
+                                        let isSelfMsg = viewModel.isSelfMessage(message)
+                                        if (message.isMiningPow ?? false) {
+                                            // Single Text combines prefix + animated body, so wrapping matches final layout
+                                            CombinedMiningText(prefix: prefixAttr, original: message.content, color: baseColor, isSelf: isSelfMsg)
                                             .lineLimit(isLong && !isExpanded ? TransportConfig.uiLongMessageLineLimit : nil)
                                             .frame(maxWidth: .infinity, alignment: .leading)
+                                        } else {
+                                            Text(formatted)
+                                                .fixedSize(horizontal: false, vertical: true)
+                                                .lineLimit(isLong && !isExpanded ? TransportConfig.uiLongMessageLineLimit : nil)
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                        }
                                         
                                         // Delivery status indicator for private messages
                                         if message.isPrivate && message.sender == viewModel.nickname,
@@ -1385,6 +1396,53 @@ struct ContentView: View {
                 .background(backgroundColor.opacity(0.95))
     }
     
+}
+
+// MARK: - Mining UI helpers (local to ensure inclusion in target)
+fileprivate struct CombinedMiningText: View {
+    let prefix: AttributedString
+    let original: String
+    let color: Color
+    let isSelf: Bool
+    let fontSize: CGFloat = 14
+    let interval: TimeInterval = 0.06
+    @State private var display: String = ""
+    @State private var timer: Timer? = nil
+
+    private let charset: [Character] = Array("abcdefghijklmnopqrstuvwxyz0123456789@#$%&*+-")
+
+    var body: some View {
+        Text(combinedAttributed)
+            .fixedSize(horizontal: false, vertical: true)
+            .onAppear {
+                display = scramble(original)
+                timer?.invalidate()
+                timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { _ in
+                    display = scramble(original)
+                }
+            }
+            .onDisappear { timer?.invalidate(); timer = nil }
+    }
+
+    private var combinedAttributed: AttributedString {
+        var res = AttributedString()
+        res.append(prefix)
+        var style = AttributeContainer()
+        style.foregroundColor = color
+        style.font = .system(size: fontSize, weight: isSelf ? .bold : .regular, design: .monospaced)
+        res.append(AttributedString(display).mergingAttributes(style))
+        return res
+    }
+
+    private func scramble(_ s: String) -> String {
+        var out = String()
+        out.reserveCapacity(s.count)
+        for ch in s {
+            if ch.isWhitespace || ch.isNewline { out.append(ch); continue }
+            out.append(charset.randomElement() ?? ch)
+        }
+        return out
+    }
 }
 
 // MARK: - Helper Views
