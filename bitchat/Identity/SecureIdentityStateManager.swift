@@ -129,7 +129,7 @@ final class SecureIdentityStateManager {
         // Try to load from keychain
         if let keyData = keychain.getIdentityKey(forKey: encryptionKeyName) {
             loadedKey = SymmetricKey(data: keyData)
-            SecureLogger.logKeyOperation("load", keyType: "identity cache encryption key", success: true)
+            SecureLogger.logKeyOperation(.load, keyType: "identity cache encryption key", success: true)
         }
         // Generate new key if needed
         else {
@@ -137,7 +137,7 @@ final class SecureIdentityStateManager {
             let keyData = loadedKey.withUnsafeBytes { Data($0) }
             // Save to keychain
             let saved = keychain.saveIdentityKey(keyData, forKey: encryptionKeyName)
-            SecureLogger.logKeyOperation("generate", keyType: "identity cache encryption key", success: saved)
+            SecureLogger.logKeyOperation(.generate, keyType: "identity cache encryption key", success: saved)
         }
         
         self.encryptionKey = loadedKey
@@ -160,7 +160,7 @@ final class SecureIdentityStateManager {
             cache = try JSONDecoder().decode(IdentityCache.self, from: decryptedData)
         } catch {
             // Log error but continue with empty cache
-            SecureLogger.logError(error, context: "Failed to load identity cache", category: SecureLogger.security)
+            SecureLogger.error(error, context: "Failed to load identity cache", category: .security)
         }
     }
     
@@ -191,10 +191,10 @@ final class SecureIdentityStateManager {
             let sealedBox = try AES.GCM.seal(data, using: encryptionKey)
             let saved = keychain.saveIdentityKey(sealedBox.combined!, forKey: cacheKey)
             if saved {
-                SecureLogger.log("Identity cache saved to keychain", category: SecureLogger.security, level: .debug)
+                SecureLogger.debug("Identity cache saved to keychain", category: .security)
             }
         } catch {
-            SecureLogger.logError(error, context: "Failed to save identity cache", category: SecureLogger.security)
+            SecureLogger.error(error, context: "Failed to save identity cache", category: .security)
         }
     }
     
@@ -395,7 +395,7 @@ final class SecureIdentityStateManager {
     }
     
     func setBlocked(_ fingerprint: String, isBlocked: Bool) {
-        SecureLogger.log("User \(isBlocked ? "blocked" : "unblocked"): \(fingerprint)", category: SecureLogger.security, level: .info)
+        SecureLogger.info("User \(isBlocked ? "blocked" : "unblocked"): \(fingerprint)", category: .security)
         
         queue.async(flags: .barrier) {
             if var identity = self.cache.socialIdentities[fingerprint] {
@@ -519,7 +519,7 @@ final class SecureIdentityStateManager {
     // MARK: - Cleanup
     
     func clearAllIdentityData() {
-        SecureLogger.log("Clearing all identity data", category: SecureLogger.security, level: .warning)
+        SecureLogger.warning("Clearing all identity data", category: .security)
         
         queue.async(flags: .barrier) {
             self.cache = IdentityCache()
@@ -529,7 +529,7 @@ final class SecureIdentityStateManager {
             
             // Delete from keychain
             let deleted = self.keychain.deleteIdentityKey(forKey: self.cacheKey)
-            SecureLogger.logKeyOperation("delete", keyType: "identity cache", success: deleted)
+            SecureLogger.logKeyOperation(.delete, keyType: "identity cache", success: deleted)
         }
     }
     
@@ -543,7 +543,7 @@ final class SecureIdentityStateManager {
     // MARK: - Verification
     
     func setVerified(fingerprint: String, verified: Bool) {
-        SecureLogger.log("Fingerprint \(verified ? "verified" : "unverified"): \(fingerprint)", category: SecureLogger.security, level: .info)
+        SecureLogger.info("Fingerprint \(verified ? "verified" : "unverified"): \(fingerprint)", category: .security)
         
         queue.async(flags: .barrier) {
             if verified {

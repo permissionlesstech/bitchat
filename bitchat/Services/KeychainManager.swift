@@ -8,7 +8,6 @@
 
 import Foundation
 import Security
-import os.log
 
 final class KeychainManager {
     static let shared = KeychainManager()
@@ -53,7 +52,7 @@ final class KeychainManager {
     func saveIdentityKey(_ keyData: Data, forKey key: String) -> Bool {
         let fullKey = "identity_\(key)"
         let result = saveData(keyData, forKey: fullKey)
-        SecureLogger.logKeyOperation("save", keyType: key, success: result)
+        SecureLogger.logKeyOperation(.save, keyType: key, success: result)
         return result
     }
     
@@ -64,7 +63,7 @@ final class KeychainManager {
     
     func deleteIdentityKey(forKey key: String) -> Bool {
         let result = delete(forKey: "identity_\(key)")
-        SecureLogger.logKeyOperation("delete", keyType: key, success: result)
+        SecureLogger.logKeyOperation(.delete, keyType: key, success: result)
         return result
     }
     
@@ -113,9 +112,9 @@ final class KeychainManager {
 
         if status == errSecSuccess { return true }
         if status == -34018 && !triedWithoutGroup {
-            SecureLogger.logError(NSError(domain: "Keychain", code: -34018), context: "Missing keychain entitlement", category: SecureLogger.keychain)
+            SecureLogger.error(NSError(domain: "Keychain", code: -34018), context: "Missing keychain entitlement", category: .keychain)
         } else if status != errSecDuplicateItem {
-            SecureLogger.logError(NSError(domain: "Keychain", code: Int(status)), context: "Error saving to keychain", category: SecureLogger.keychain)
+            SecureLogger.error(NSError(domain: "Keychain", code: Int(status)), context: "Error saving to keychain", category: .keychain)
         }
         return false
     }
@@ -151,7 +150,7 @@ final class KeychainManager {
 
         if status == errSecSuccess { return result as? Data }
         if status == -34018 {
-            SecureLogger.logError(NSError(domain: "Keychain", code: -34018), context: "Missing keychain entitlement", category: SecureLogger.keychain)
+            SecureLogger.error(NSError(domain: "Keychain", code: -34018), context: "Missing keychain entitlement", category: .keychain)
         }
         return nil
     }
@@ -198,7 +197,7 @@ final class KeychainManager {
     
     // Delete ALL keychain data for panic mode
     func deleteAllKeychainData() -> Bool {
-        SecureLogger.log("Panic mode - deleting all keychain data", category: SecureLogger.security, level: .warning)
+        SecureLogger.warning("Panic mode - deleting all keychain data", category: .security)
         
         var totalDeleted = 0
         
@@ -261,7 +260,7 @@ final class KeychainManager {
                     let deleteStatus = SecItemDelete(deleteQuery as CFDictionary)
                     if deleteStatus == errSecSuccess {
                         totalDeleted += 1
-                        SecureLogger.log("Deleted keychain item: \(account) from \(service)", category: SecureLogger.keychain, level: .info)
+                        SecureLogger.info("Deleted keychain item: \(account) from \(service)", category: .keychain)
                     }
                 }
             }
@@ -303,7 +302,7 @@ final class KeychainManager {
             totalDeleted += 1
         }
         
-        SecureLogger.log("Panic mode cleanup completed. Total items deleted: \(totalDeleted)", category: SecureLogger.keychain, level: .warning)
+        SecureLogger.warning("Panic mode cleanup completed. Total items deleted: \(totalDeleted)", category: .keychain)
         
         return totalDeleted > 0
     }

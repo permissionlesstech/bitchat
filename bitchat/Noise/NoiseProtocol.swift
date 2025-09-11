@@ -79,7 +79,6 @@
 
 import Foundation
 import CryptoKit
-import os.log
 
 // Core Noise Protocol implementation
 // Based on the Noise Protocol Framework specification
@@ -285,7 +284,7 @@ final class NoiseCipherState {
         
         // Log high nonce values that might indicate issues
         if currentNonce > Self.HIGH_NONCE_WARNING_THRESHOLD {
-            SecureLogger.log("High nonce value detected: \(currentNonce) - consider rekeying", category: SecureLogger.encryption, level: .warning)
+            SecureLogger.warning("High nonce value detected: \(currentNonce) - consider rekeying", category: .encryption)
         }
                 
         return combinedPayload
@@ -307,13 +306,13 @@ final class NoiseCipherState {
         if useExtractedNonce {
             // Extract nonce and ciphertext from combined payload
             guard let (extractedNonce, actualCiphertext) = try extractNonceFromCiphertextPayload(ciphertext) else {
-                SecureLogger.log("Decrypt failed: Could not extract nonce from payload")
+                SecureLogger.debug("Decrypt failed: Could not extract nonce from payload")
                 throw NoiseError.invalidCiphertext
             }
             
             // Validate nonce with sliding window replay protection
             guard isValidNonce(extractedNonce) else {
-                SecureLogger.log("Replay attack detected: nonce \(extractedNonce) rejected")
+                SecureLogger.debug("Replay attack detected: nonce \(extractedNonce) rejected")
                 throw NoiseError.replayDetected
             }
 
@@ -342,7 +341,7 @@ final class NoiseCipherState {
         
         // Log high nonce values that might indicate issues
         if decryptionNonce > Self.HIGH_NONCE_WARNING_THRESHOLD {
-            SecureLogger.log("High nonce value detected: \(decryptionNonce) - consider rekeying", category: SecureLogger.encryption, level: .warning)
+            SecureLogger.warning("High nonce value detected: \(decryptionNonce) - consider rekeying", category: .encryption)
         }
         
         do {
@@ -355,9 +354,9 @@ final class NoiseCipherState {
             nonce += 1
             return plaintext
         } catch {
-            SecureLogger.log("Decrypt failed: \(error) for nonce \(decryptionNonce)")
+            SecureLogger.debug("Decrypt failed: \(error) for nonce \(decryptionNonce)")
             // Log authentication failures with nonce info
-            SecureLogger.log("Decryption failed at nonce \(decryptionNonce)", category: SecureLogger.encryption, level: .error)
+            SecureLogger.error("Decryption failed at nonce \(decryptionNonce)", category: .encryption)
             throw error
         }
     }
@@ -661,7 +660,7 @@ final class NoiseHandshakeState {
                 do {
                     remoteEphemeralPublic = try NoiseHandshakeState.validatePublicKey(ephemeralData)
                 } catch {
-                    SecureLogger.log("Invalid ephemeral public key received", category: SecureLogger.security, level: .warning)
+                    SecureLogger.warning("Invalid ephemeral public key received", category: .security)
                     throw NoiseError.invalidMessage
                 }
                 symmetricState.mixHash(ephemeralData)
@@ -678,7 +677,7 @@ final class NoiseHandshakeState {
                     let decrypted = try symmetricState.decryptAndHash(staticData)
                     remoteStaticPublic = try NoiseHandshakeState.validatePublicKey(decrypted)
                 } catch {
-                    SecureLogger.logSecurityEvent(.authenticationFailed(peerID: "Unknown - handshake"), level: .error)
+                    SecureLogger.error(.authenticationFailed(peerID: "Unknown - handshake"))
                     throw NoiseError.authenticationFailure
                 }
                 
@@ -877,7 +876,7 @@ extension NoiseHandshakeState {
         
         // Check against known bad points
         if lowOrderPoints.contains(keyData) {
-            SecureLogger.log("Low-order point detected", category: SecureLogger.security, level: .warning)
+            SecureLogger.warning("Low-order point detected", category: .security)
             throw NoiseError.invalidPublicKey
         }
         
@@ -887,7 +886,7 @@ extension NoiseHandshakeState {
             return publicKey
         } catch {
             // If CryptoKit rejects it, it's invalid
-            SecureLogger.log("CryptoKit validation failed", category: SecureLogger.security, level: .warning)
+            SecureLogger.warning("CryptoKit validation failed", category: .security)
             throw NoiseError.invalidPublicKey
         }
     }

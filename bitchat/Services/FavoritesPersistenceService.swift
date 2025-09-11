@@ -47,8 +47,7 @@ final class FavoritesPersistenceService: ObservableObject {
         peerNostrPublicKey: String? = nil,
         peerNickname: String
     ) {
-        SecureLogger.log("⭐️ Adding favorite: \(peerNickname) (\(peerNoisePublicKey.hexEncodedString()))", 
-                        category: SecureLogger.session, level: .info)
+        SecureLogger.info("⭐️ Adding favorite: \(peerNickname) (\(peerNoisePublicKey.hexEncodedString()))", category: .session)
         
         let existing = favorites[peerNoisePublicKey]
         
@@ -64,8 +63,7 @@ final class FavoritesPersistenceService: ObservableObject {
         
         // Log if this creates a mutual favorite
         if relationship.isMutual {
-            SecureLogger.log("💕 Mutual favorite relationship established with \(peerNickname)!", 
-                            category: SecureLogger.session, level: .info)
+            SecureLogger.info("💕 Mutual favorite relationship established with \(peerNickname)!", category: .session)
         }
         
         favorites[peerNoisePublicKey] = relationship
@@ -83,8 +81,7 @@ final class FavoritesPersistenceService: ObservableObject {
     func removeFavorite(peerNoisePublicKey: Data) {
         guard let existing = favorites[peerNoisePublicKey] else { return }
         
-        SecureLogger.log("⭐️ Removing favorite: \(existing.peerNickname) (\(peerNoisePublicKey.hexEncodedString()))", 
-                        category: SecureLogger.session, level: .info)
+        SecureLogger.info("⭐️ Removing favorite: \(existing.peerNickname) (\(peerNoisePublicKey.hexEncodedString()))", category: .session)
         
         // If they still favorite us, keep the record but mark us as not favoriting
         if existing.theyFavoritedUs {
@@ -125,8 +122,7 @@ final class FavoritesPersistenceService: ObservableObject {
         let existing = favorites[peerNoisePublicKey]
         let displayName = peerNickname ?? existing?.peerNickname ?? "Unknown"
         
-        SecureLogger.log("📨 Received favorite notification: \(displayName) \(favorited ? "favorited" : "unfavorited") us", 
-                        category: SecureLogger.session, level: .info)
+        SecureLogger.info("📨 Received favorite notification: \(displayName) \(favorited ? "favorited" : "unfavorited") us", category: .session)
         
         let relationship = FavoriteRelationship(
             peerNoisePublicKey: peerNoisePublicKey,
@@ -147,8 +143,7 @@ final class FavoritesPersistenceService: ObservableObject {
             
             // Check if this creates a mutual favorite
             if relationship.isMutual {
-                SecureLogger.log("💕 Mutual favorite relationship established with \(displayName)!", 
-                                category: SecureLogger.session, level: .info)
+                SecureLogger.info("💕 Mutual favorite relationship established with \(displayName)!", category: .session)
             }
         }
         
@@ -240,15 +235,13 @@ final class FavoritesPersistenceService: ObservableObject {
     /// Update noise public key when peer reconnects with new ID
     func updateNoisePublicKey(from oldKey: Data, to newKey: Data, peerNickname: String) {
         guard let existing = favorites[oldKey] else { 
-            SecureLogger.log("⚠️ Cannot update noise key - no favorite found for \(oldKey.hexEncodedString())", 
-                            category: SecureLogger.session, level: .warning)
+            SecureLogger.warning("⚠️ Cannot update noise key - no favorite found for \(oldKey.hexEncodedString())", category: .session)
             return 
         }
         
         // Check if we already have a favorite with the new key
         if favorites[newKey] != nil {
-            SecureLogger.log("⚠️ Favorite already exists with new key \(newKey.hexEncodedString()), removing old entry", 
-                            category: SecureLogger.session, level: .warning)
+            SecureLogger.warning("⚠️ Favorite already exists with new key \(newKey.hexEncodedString()), removing old entry", category: .session)
             favorites.removeValue(forKey: oldKey)
             saveFavorites()
             return
@@ -302,7 +295,7 @@ final class FavoritesPersistenceService: ObservableObject {
     
     /// Clear all favorites - used for panic mode
     func clearAllFavorites() {
-        SecureLogger.log("🧹 Clearing all favorites (panic mode)", category: SecureLogger.session, level: .warning)
+        SecureLogger.warning("🧹 Clearing all favorites (panic mode)", category: .session)
         
         favorites.removeAll()
         saveFavorites()
@@ -336,7 +329,7 @@ final class FavoritesPersistenceService: ObservableObject {
             
             // Successfully saved favorites
         } catch {
-            SecureLogger.log("Failed to save favorites: \(error)", category: SecureLogger.session, level: .error)
+            SecureLogger.error("Failed to save favorites: \(error)", category: .session)
         }
     }
     
@@ -354,14 +347,12 @@ final class FavoritesPersistenceService: ObservableObject {
             let decoder = JSONDecoder()
             let relationships = try decoder.decode([FavoriteRelationship].self, from: data)
             
-            SecureLogger.log("✅ Loaded \(relationships.count) favorite relationships", 
-                            category: SecureLogger.session, level: .info)
+            SecureLogger.info("✅ Loaded \(relationships.count) favorite relationships", category: .session)
             
             // Log Nostr public key info
             for relationship in relationships {
                 if relationship.peerNostrPublicKey == nil {
-                    SecureLogger.log("⚠️ No Nostr public key stored for '\(relationship.peerNickname)'", 
-                                    category: SecureLogger.session, level: .warning)
+                    SecureLogger.warning("⚠️ No Nostr public key stored for '\(relationship.peerNickname)'", category: .session)
                 }
             }
             
@@ -372,8 +363,7 @@ final class FavoritesPersistenceService: ObservableObject {
             for relationship in relationships {
                 // Check for duplicates by public key (the actual unique identifier)
                 if let existing = seenPublicKeys[relationship.peerNoisePublicKey] {
-                    SecureLogger.log("⚠️ Duplicate favorite found for public key \(relationship.peerNoisePublicKey.hexEncodedString()) - nicknames: '\(existing.peerNickname)' vs '\(relationship.peerNickname)'", 
-                                    category: SecureLogger.session, level: .warning)
+                    SecureLogger.warning("⚠️ Duplicate favorite found for public key \(relationship.peerNoisePublicKey.hexEncodedString()) - nicknames: '\(existing.peerNickname)' vs '\(relationship.peerNickname)'", category: .session)
                     
                     // Keep the most recent or most complete relationship
                     if relationship.lastUpdated > existing.lastUpdated ||
@@ -414,7 +404,7 @@ final class FavoritesPersistenceService: ObservableObject {
             // Log loaded relationships
             // Loaded relationships successfully
         } catch {
-            SecureLogger.log("Failed to load favorites: \(error)", category: SecureLogger.session, level: .error)
+            SecureLogger.error("Failed to load favorites: \(error)", category: .session)
         }
     }
 }

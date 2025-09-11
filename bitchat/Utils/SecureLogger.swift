@@ -13,17 +13,6 @@ import os.log
 /// Provides safe logging that filters sensitive data and security events
 final class SecureLogger {
     
-    // MARK: - Log Categories
-    
-    private static let subsystem = "chat.bitchat"
-    
-    static let noise = OSLog(subsystem: subsystem, category: "noise")
-    static let encryption = OSLog(subsystem: subsystem, category: "encryption")
-    static let keychain = OSLog(subsystem: subsystem, category: "keychain")
-    static let session = OSLog(subsystem: subsystem, category: "session")
-    static let security = OSLog(subsystem: subsystem, category: "security")
-    static let handshake = OSLog(subsystem: subsystem, category: "handshake")
-    
     // MARK: - Timestamp Formatter
     
     private static let timestampFormatter: DateFormatter = {
@@ -124,24 +113,90 @@ final class SecureLogger {
     
     // MARK: - Public Logging Methods
     
-    /// Log a security event
-    static func logSecurityEvent(_ event: SecurityEvent, level: LogLevel = .info, 
-                                 file: String = #file, line: Int = #line, function: String = #function) {
-        guard shouldLog(level) else { return }
-        let location = formatLocation(file: file, line: line, function: function)
-        let message = "\(location) \(event.message)"
-        
-        #if DEBUG
-        os_log("%{public}@", log: security, type: level.osLogType, message)
-        #else
-        // In release, use private logging to prevent sensitive data exposure
-        os_log("%{private}@", log: security, type: level.osLogType, message)
-        #endif
+    static func debug(_ message: @autoclosure () -> String, category: OSLog = .noise,
+                      file: String = #file, line: Int = #line, function: String = #function) {
+        log(message(), category: category, level: .debug, file: file, line: line, function: function)
     }
     
+    static func info(_ message: @autoclosure () -> String, category: OSLog = .noise,
+                     file: String = #file, line: Int = #line, function: String = #function) {
+        log(message(), category: category, level: .info, file: file, line: line, function: function)
+    }
+    
+    static func warning(_ message: @autoclosure () -> String, category: OSLog = .noise,
+                        file: String = #file, line: Int = #line, function: String = #function) {
+        log(message(), category: category, level: .warning, file: file, line: line, function: function)
+    }
+    
+    static func error(_ message: @autoclosure () -> String, category: OSLog = .noise,
+                      file: String = #file, line: Int = #line, function: String = #function) {
+        log(message(), category: category, level: .error, file: file, line: line, function: function)
+    }
+    
+    // MARK: Security Event Logging
+    
+    static func debug(_ event: SecurityEvent, file: String = #file, line: Int = #line, function: String = #function) {
+        logSecurityEvent(event, level: .debug, file: file, line: line, function: function)
+    }
+    
+    static func info(_ event: SecurityEvent, file: String = #file, line: Int = #line, function: String = #function) {
+        logSecurityEvent(event, level: .info, file: file, line: line, function: function)
+    }
+    
+    static func warning(_ event: SecurityEvent, file: String = #file, line: Int = #line, function: String = #function) {
+        logSecurityEvent(event, level: .warning, file: file, line: line, function: function)
+    }
+    
+    static func error(_ event: SecurityEvent, file: String = #file, line: Int = #line, function: String = #function) {
+        logSecurityEvent(event, level: .error, file: file, line: line, function: function)
+    }
+    
+    /// Log errors with context
+    static func error(_ error: Error, context: @autoclosure () -> String, category: OSLog = .noise,
+                      file: String = #file, line: Int = #line, function: String = #function) {
+        let location = formatLocation(file: file, line: line, function: function)
+        let sanitized = sanitize(context())
+        let errorDesc = sanitize(error.localizedDescription)
+        
+        #if DEBUG
+        os_log("%{public}@ Error in %{public}@: %{public}@", log: category, type: .error, location, sanitized, errorDesc)
+        #else
+        os_log("%{private}@ Error in %{private}@: %{private}@", log: category, type: .error, location, sanitized, errorDesc)
+        #endif
+    }
+}
+
+// MARK: - Convenience Extensions
+
+extension SecureLogger {
+    
+    enum KeyOperation: String, CustomStringConvertible {
+        case load
+        case create
+        case generate
+        case delete
+        case save
+        
+        var description: String { rawValue }
+    }
+    
+    /// Log key management operations
+    static func logKeyOperation(_ operation: KeyOperation, keyType: String, success: Bool = true,
+                                file: String = #file, line: Int = #line, function: String = #function) {
+        if success {
+            debug("Key operation '\(operation)' for \(keyType) succeeded", category: .keychain, file: file, line: line, function: function)
+        } else {
+            error("Key operation '\(operation)' for \(keyType) failed", category: .keychain, file: file, line: line, function: function)
+        }
+    }
+}
+
+// MARK: - Private Helpers
+
+private extension SecureLogger {
     /// Log general messages with automatic sensitive data filtering
-    static func log(_ message: @autoclosure () -> String, category: OSLog = noise, level: LogLevel = .debug,
-                    file: String = #file, line: Int = #line, function: String = #function) {
+    static func log(_ message: @autoclosure () -> String, category: OSLog, level: LogLevel,
+                    file: String, line: Int, function: String) {
         guard shouldLog(level) else { return }
         let location = formatLocation(file: file, line: line, function: function)
         let sanitized = sanitize("\(location) \(message())")
@@ -156,31 +211,30 @@ final class SecureLogger {
         #endif
     }
     
-    /// Log errors with context
-    static func logError(_ error: Error, context: @autoclosure () -> String, category: OSLog = noise,
-                        file: String = #file, line: Int = #line, function: String = #function) {
+    /// Log a security event
+    static func logSecurityEvent(_ event: SecurityEvent, level: LogLevel = .info,
+                                 file: String, line: Int, function: String) {
+        guard shouldLog(level) else { return }
         let location = formatLocation(file: file, line: line, function: function)
-        let sanitized = sanitize(context())
-        let errorDesc = sanitize(error.localizedDescription)
+        let message = "\(location) \(event.message)"
         
         #if DEBUG
-        os_log("%{public}@ Error in %{public}@: %{public}@", log: category, type: .error, location, sanitized, errorDesc)
+        os_log("%{public}@", log: .security, type: level.osLogType, message)
         #else
-        os_log("%{private}@ Error in %{private}@: %{private}@", log: category, type: .error, location, sanitized, errorDesc)
+        // In release, use private logging to prevent sensitive data exposure
+        os_log("%{private}@", log: .security, type: level.osLogType, message)
         #endif
     }
     
-    // MARK: - Private Helpers
-    
     /// Format location information for logging
-    private static func formatLocation(file: String, line: Int, function: String) -> String {
+    static func formatLocation(file: String, line: Int, function: String) -> String {
         let fileName = (file as NSString).lastPathComponent
         let timestamp = timestampFormatter.string(from: Date())
         return "[\(timestamp)] [\(fileName):\(line) \(function)]"
     }
     
     /// Sanitize strings to remove potentially sensitive data
-    private static func sanitize(_ input: String) -> String {
+    static func sanitize(_ input: String) -> String {
         let key = input as NSString
         
         // Check cache first
@@ -226,42 +280,9 @@ final class SecureLogger {
     }
     
     /// Sanitize individual values
-    private static func sanitize<T>(_ value: T) -> String {
+    static func sanitize<T>(_ value: T) -> String {
         let stringValue = String(describing: value)
         return sanitize(stringValue)
-    }
-}
-
-// MARK: - Convenience Extensions
-
-extension SecureLogger {
-    
-    /// Log handshake events
-    static func logHandshake(_ phase: String, peerID: String, success: Bool = true,
-                            file: String = #file, line: Int = #line, function: String = #function) {
-        if success {
-            log("Handshake \(phase) with peer: \(peerID)", category: session, level: .info,
-                file: file, line: line, function: function)
-        } else {
-            log("Handshake \(phase) failed with peer: \(peerID)", category: session, level: .warning,
-                file: file, line: line, function: function)
-        }
-    }
-    
-    /// Log encryption operations
-    static func logEncryption(_ operation: String, success: Bool = true,
-                             file: String = #file, line: Int = #line, function: String = #function) {
-        let level: LogLevel = success ? .debug : .error
-        log("Encryption operation '\(operation)' \(success ? "succeeded" : "failed")", 
-            category: encryption, level: level, file: file, line: line, function: function)
-    }
-    
-    /// Log key management operations
-    static func logKeyOperation(_ operation: String, keyType: String, success: Bool = true,
-                               file: String = #file, line: Int = #line, function: String = #function) {
-        let level: LogLevel = success ? .debug : .error
-        log("Key operation '\(operation)' for \(keyType) \(success ? "succeeded" : "failed")", 
-            category: keychain, level: level, file: file, line: line, function: function)
     }
 }
 
@@ -273,6 +294,6 @@ func secureLog(_ items: Any..., separator: String = " ", terminator: String = "\
                file: String = #file, line: Int = #line, function: String = #function) {
     #if DEBUG
     let message = items.map { String(describing: $0) }.joined(separator: separator)
-    SecureLogger.log(message, level: .debug, file: file, line: line, function: function)
+    SecureLogger.debug(message, file: file, line: line, function: function)
     #endif
 }

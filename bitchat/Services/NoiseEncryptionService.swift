@@ -85,7 +85,6 @@
 
 import Foundation
 import CryptoKit
-import os.log
 
 // MARK: - Encryption Status
 
@@ -190,7 +189,7 @@ final class NoiseEncryptionService {
         if let identityData = KeychainManager.shared.getIdentityKey(forKey: "noiseStaticKey"),
            let key = try? Curve25519.KeyAgreement.PrivateKey(rawRepresentation: identityData) {
             loadedKey = key
-            SecureLogger.logKeyOperation("load", keyType: "noiseStaticKey", success: true)
+            SecureLogger.logKeyOperation(.load, keyType: "noiseStaticKey", success: true)
         }
         // If no identity exists, create new one
         else {
@@ -199,7 +198,7 @@ final class NoiseEncryptionService {
             
             // Save to keychain
             let saved = KeychainManager.shared.saveIdentityKey(keyData, forKey: "noiseStaticKey")
-            SecureLogger.logKeyOperation("create", keyType: "noiseStaticKey", success: saved)
+            SecureLogger.logKeyOperation(.create, keyType: "noiseStaticKey", success: saved)
         }
         
         // Now assign the final value
@@ -213,7 +212,7 @@ final class NoiseEncryptionService {
         if let signingData = KeychainManager.shared.getIdentityKey(forKey: "ed25519SigningKey"),
            let key = try? Curve25519.Signing.PrivateKey(rawRepresentation: signingData) {
             loadedSigningKey = key
-            SecureLogger.logKeyOperation("load", keyType: "ed25519SigningKey", success: true)
+            SecureLogger.logKeyOperation(.load, keyType: "ed25519SigningKey", success: true)
         }
         // If no signing key exists, create new one
         else {
@@ -222,7 +221,7 @@ final class NoiseEncryptionService {
             
             // Save to keychain
             let saved = KeychainManager.shared.saveIdentityKey(keyData, forKey: "ed25519SigningKey")
-            SecureLogger.logKeyOperation("create", keyType: "ed25519SigningKey", success: saved)
+            SecureLogger.logKeyOperation(.create, keyType: "ed25519SigningKey", success: saved)
         }
         
         // Now assign the signing keys
@@ -269,8 +268,8 @@ final class NoiseEncryptionService {
         // Clear from keychain
         let deletedStatic = KeychainManager.shared.deleteIdentityKey(forKey: "noiseStaticKey")
         let deletedSigning = KeychainManager.shared.deleteIdentityKey(forKey: "ed25519SigningKey")
-        SecureLogger.logKeyOperation("delete", keyType: "identity keys", success: deletedStatic && deletedSigning)
-        SecureLogger.log("Panic mode activated - identity cleared", category: SecureLogger.security, level: .warning)
+        SecureLogger.logKeyOperation(.delete, keyType: "identity keys", success: deletedStatic && deletedSigning)
+        SecureLogger.warning("Panic mode activated - identity cleared", category: .security)
         // Stop rekey timer
         stopRekeyTimer()
     }
@@ -281,7 +280,7 @@ final class NoiseEncryptionService {
             let signature = try signingKey.signature(for: data)
             return signature
         } catch {
-            SecureLogger.logError(error, context: "Failed to sign data", category: SecureLogger.noise)
+            SecureLogger.error(error, context: "Failed to sign data")
             return nil
         }
     }
@@ -292,7 +291,7 @@ final class NoiseEncryptionService {
             let signingPublicKey = try Curve25519.Signing.PublicKey(rawRepresentation: publicKey)
             return signingPublicKey.isValidSignature(signature, for: data)
         } catch {
-            SecureLogger.logError(error, context: "Failed to verify signature", category: SecureLogger.noise)
+            SecureLogger.error(error, context: "Failed to verify signature")
             return false
         }
     }
@@ -392,17 +391,17 @@ final class NoiseEncryptionService {
         
         // Validate peer ID
         guard NoiseSecurityValidator.validatePeerID(peerID) else {
-            SecureLogger.logSecurityEvent(.authenticationFailed(peerID: peerID), level: .warning)
+            SecureLogger.warning(.authenticationFailed(peerID: peerID))
             throw NoiseSecurityError.invalidPeerID
         }
         
         // Check rate limit
         guard rateLimiter.allowHandshake(from: peerID) else {
-            SecureLogger.logSecurityEvent(.authenticationFailed(peerID: "Rate limited: \(peerID)"), level: .warning)
+            SecureLogger.warning(.authenticationFailed(peerID: "Rate limited: \(peerID)"))
             throw NoiseSecurityError.rateLimitExceeded
         }
         
-        SecureLogger.logSecurityEvent(.handshakeStarted(peerID: peerID))
+        SecureLogger.info(.handshakeStarted(peerID: peerID))
         
         // Return raw handshake data without wrapper
         // The Noise protocol handles its own message format
@@ -415,19 +414,19 @@ final class NoiseEncryptionService {
         
         // Validate peer ID
         guard NoiseSecurityValidator.validatePeerID(peerID) else {
-            SecureLogger.logSecurityEvent(.authenticationFailed(peerID: peerID), level: .warning)
+            SecureLogger.warning(.authenticationFailed(peerID: peerID))
             throw NoiseSecurityError.invalidPeerID
         }
         
         // Validate message size
         guard NoiseSecurityValidator.validateHandshakeMessageSize(message) else {
-            SecureLogger.logSecurityEvent(.handshakeFailed(peerID: peerID, error: "Message too large"), level: .warning)
+            SecureLogger.warning(.handshakeFailed(peerID: peerID, error: "Message too large"))
             throw NoiseSecurityError.messageTooLarge
         }
         
         // Check rate limit
         guard rateLimiter.allowHandshake(from: peerID) else {
-            SecureLogger.logSecurityEvent(.authenticationFailed(peerID: "Rate limited: \(peerID)"), level: .warning)
+            SecureLogger.warning(.authenticationFailed(peerID: "Rate limited: \(peerID)"))
             throw NoiseSecurityError.rateLimitExceeded
         }
         
@@ -521,7 +520,7 @@ final class NoiseEncryptionService {
             peerFingerprints.removeValue(forKey: peerID)
         }
         
-        SecureLogger.logSecurityEvent(.sessionExpired(peerID: peerID))
+        SecureLogger.info(.sessionExpired(peerID: peerID))
     }
     
     // MARK: - Private Helpers
@@ -537,7 +536,7 @@ final class NoiseEncryptionService {
         }
         
         // Log security event
-        SecureLogger.logSecurityEvent(.handshakeCompleted(peerID: peerID))
+        SecureLogger.info(.handshakeCompleted(peerID: peerID))
         
         // Notify all handlers about authentication
         serviceQueue.async { [weak self] in
@@ -573,12 +572,12 @@ final class NoiseEncryptionService {
             // Attempt to rekey the session
             do {
                 try sessionManager.initiateRekey(for: peerID)
-                SecureLogger.log("Key rotation initiated for peer: \(peerID)", category: SecureLogger.security, level: .debug)
+                SecureLogger.debug("Key rotation initiated for peer: \(peerID)", category: .security)
                 
                 // Signal that handshake is needed
                 onHandshakeRequired?(peerID)
             } catch {
-                SecureLogger.logError(error, context: "Failed to initiate rekey for peer: \(peerID)", category: SecureLogger.session)
+                SecureLogger.error(error, context: "Failed to initiate rekey for peer: \(peerID)", category: .session)
             }
         }
     }

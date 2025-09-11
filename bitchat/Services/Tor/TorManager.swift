@@ -189,7 +189,7 @@ final class TorManager: ObservableObject {
         var started = false
         // If already running (per C glue), treat as started
         if tor_host_is_running() != 0 {
-            SecureLogger.log("TorManager: embed reports already running", category: SecureLogger.session, level: .info)
+            SecureLogger.info("TorManager: embed reports already running", category: .session)
             return true
         }
         dir.withCString { dptr in
@@ -198,9 +198,9 @@ final class TorManager: ObservableObject {
                     let rc = tor_host_start(dptr, sptr, cptr, 1)
                     started = (rc == 0)
                     if rc != 0 {
-                        SecureLogger.log("TorManager: tor_host_start failed rc=\(rc)", category: SecureLogger.session, level: .error)
+                        SecureLogger.error("TorManager: tor_host_start failed rc=\(rc)", category: .session)
                     } else {
-                        SecureLogger.log("TorManager: tor_host_start OK (\(socks), control \(control))", category: SecureLogger.session, level: .info)
+                        SecureLogger.info("TorManager: tor_host_start OK (\(socks), control \(control))", category: .session)
                     }
                 }
             }
@@ -215,10 +215,10 @@ final class TorManager: ObservableObject {
             await MainActor.run {
                 self.socksReady = ready
                 if ready {
-                    SecureLogger.log("TorManager: SOCKS ready at \(self.socksHost):\(self.socksPort) [embed]", category: SecureLogger.session, level: .info)
+                    SecureLogger.info("TorManager: SOCKS ready at \(self.socksHost):\(self.socksPort) [embed]", category: .session)
                 } else {
                     self.lastError = NSError(domain: "TorManager", code: -14, userInfo: [NSLocalizedDescriptionKey: "Tor SOCKS not reachable after embed start"])
-                    SecureLogger.log("TorManager: SOCKS not reachable (timeout) [embed]", category: SecureLogger.session, level: .error)
+                    SecureLogger.error("TorManager: SOCKS not reachable (timeout) [embed]", category: .session)
                 }
             }
         }
@@ -282,13 +282,13 @@ final class TorManager: ObservableObject {
     /// Returns true if the attempt started and port probing was scheduled.
     private func startTorViaDlopen() -> Bool {
         guard let fwURL = frameworkBinaryURL() else {
-            SecureLogger.log("TorManager: no embedded tor framework found", category: SecureLogger.session, level: .warning)
+            SecureLogger.warning("TorManager: no embedded tor framework found", category: .session)
             return false
         }
 
         // Load the library
         let mode = RTLD_NOW | RTLD_LOCAL
-        SecureLogger.log("TorManager: dlopen(\(fwURL.lastPathComponent))…", category: SecureLogger.session, level: .info)
+        SecureLogger.info("TorManager: dlopen(\(fwURL.lastPathComponent))…", category: .session)
         guard let handle = dlopen(fwURL.path, mode) else {
             let err = String(cString: dlerror())
             self.lastError = NSError(domain: "TorManager", code: -10, userInfo: [NSLocalizedDescriptionKey: "dlopen failed: \(err)"])
@@ -314,7 +314,7 @@ final class TorManager: ObservableObject {
             argv.append(contentsOf: ["-f", torrc])
         }
         // Run Tor on a background thread to avoid blocking the main actor
-        SecureLogger.log("TorManager: launching tor_main with torrc", category: SecureLogger.session, level: .info)
+        SecureLogger.info("TorManager: launching tor_main with torrc", category: .session)
         let argc = Int32(argv.count)
         DispatchQueue.global(qos: .utility).async {
             // Build stable C argv in this thread
@@ -339,9 +339,9 @@ final class TorManager: ObservableObject {
                 self.socksReady = ready
                 if !ready {
                     self.lastError = NSError(domain: "TorManager", code: -12, userInfo: [NSLocalizedDescriptionKey: "Tor SOCKS not reachable after dlopen start"])
-                    SecureLogger.log("TorManager: SOCKS not reachable (timeout)", category: SecureLogger.session, level: .error)
+                    SecureLogger.error("TorManager: SOCKS not reachable (timeout)", category: .session)
                 } else {
-                    SecureLogger.log("TorManager: SOCKS ready at \(self.socksHost):\(self.socksPort)", category: SecureLogger.session, level: .info)
+                    SecureLogger.info("TorManager: SOCKS ready at \(self.socksHost):\(self.socksPort)", category: .session)
                 }
                 // isStarting will be cleared when bootstrap reaches 100%
             }
@@ -385,7 +385,7 @@ final class TorManager: ObservableObject {
         var argv: [String] = ["tor"]
         if let torrc = torrcURL()?.path { argv.append(contentsOf: ["-f", torrc]) }
 
-        SecureLogger.log("TorManager: starting tor_main (static)", category: SecureLogger.session, level: .info)
+        SecureLogger.info("TorManager: starting tor_main (static)", category: .session)
         let argc = Int32(argv.count)
         DispatchQueue.global(qos: .utility).async {
             // Build stable C argv in this thread
@@ -409,10 +409,10 @@ final class TorManager: ObservableObject {
             await MainActor.run {
                 self.socksReady = ready
                 if ready {
-                    SecureLogger.log("TorManager: SOCKS ready at \(self.socksHost):\(self.socksPort)", category: SecureLogger.session, level: .info)
+                    SecureLogger.info("TorManager: SOCKS ready at \(self.socksHost):\(self.socksPort)", category: .session)
                 } else {
                     self.lastError = NSError(domain: "TorManager", code: -13, userInfo: [NSLocalizedDescriptionKey: "Tor SOCKS not reachable after static start"])
-                    SecureLogger.log("TorManager: SOCKS not reachable (timeout)", category: SecureLogger.session, level: .error)
+                    SecureLogger.error("TorManager: SOCKS not reachable (timeout)", category: .session)
                 }
                 // isStarting will be cleared when bootstrap reaches 100%
             }

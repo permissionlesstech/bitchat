@@ -153,7 +153,7 @@ final class NoiseRateLimiter {
             // Check global rate limit first
             globalHandshakeTimestamps = globalHandshakeTimestamps.filter { $0 > oneMinuteAgo }
             if globalHandshakeTimestamps.count >= NoiseSecurityConstants.maxGlobalHandshakesPerMinute {
-                SecureLogger.log("Global handshake rate limit exceeded: \(globalHandshakeTimestamps.count)/\(NoiseSecurityConstants.maxGlobalHandshakesPerMinute) per minute", category: SecureLogger.security, level: .warning)
+                SecureLogger.warning("Global handshake rate limit exceeded: \(globalHandshakeTimestamps.count)/\(NoiseSecurityConstants.maxGlobalHandshakesPerMinute) per minute", category: .security)
                 return false
             }
             
@@ -162,7 +162,7 @@ final class NoiseRateLimiter {
             timestamps = timestamps.filter { $0 > oneMinuteAgo }
             
             if timestamps.count >= NoiseSecurityConstants.maxHandshakesPerMinute {
-                SecureLogger.log("Per-peer handshake rate limit exceeded for \(peerID): \(timestamps.count)/\(NoiseSecurityConstants.maxHandshakesPerMinute) per minute", category: SecureLogger.security, level: .warning)
+                SecureLogger.warning("Per-peer handshake rate limit exceeded for \(peerID): \(timestamps.count)/\(NoiseSecurityConstants.maxHandshakesPerMinute) per minute", category: .security)
                 return false
             }
             
@@ -182,7 +182,7 @@ final class NoiseRateLimiter {
             // Check global rate limit first
             globalMessageTimestamps = globalMessageTimestamps.filter { $0 > oneSecondAgo }
             if globalMessageTimestamps.count >= NoiseSecurityConstants.maxGlobalMessagesPerSecond {
-                SecureLogger.log("Global message rate limit exceeded: \(globalMessageTimestamps.count)/\(NoiseSecurityConstants.maxGlobalMessagesPerSecond) per second", category: SecureLogger.security, level: .warning)
+                SecureLogger.warning("Global message rate limit exceeded: \(globalMessageTimestamps.count)/\(NoiseSecurityConstants.maxGlobalMessagesPerSecond) per second", category: .security)
                 return false
             }
             
@@ -191,7 +191,7 @@ final class NoiseRateLimiter {
             timestamps = timestamps.filter { $0 > oneSecondAgo }
             
             if timestamps.count >= NoiseSecurityConstants.maxMessagesPerSecond {
-                SecureLogger.log("Per-peer message rate limit exceeded for \(peerID): \(timestamps.count)/\(NoiseSecurityConstants.maxMessagesPerSecond) per second", category: SecureLogger.security, level: .warning)
+                SecureLogger.warning("Per-peer message rate limit exceeded for \(peerID): \(timestamps.count)/\(NoiseSecurityConstants.maxMessagesPerSecond) per second", category: .security)
                 return false
             }
             
