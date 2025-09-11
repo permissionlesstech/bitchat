@@ -160,7 +160,7 @@ final class SecureIdentityStateManager {
             cache = try JSONDecoder().decode(IdentityCache.self, from: decryptedData)
         } catch {
             // Log error but continue with empty cache
-            SecureLogger.logError(error, context: "Failed to load identity cache", category: .security)
+            SecureLogger.error(error, context: "Failed to load identity cache", category: .security)
         }
     }
     
@@ -194,7 +194,7 @@ final class SecureIdentityStateManager {
                 SecureLogger.debug("Identity cache saved to keychain", category: .security)
             }
         } catch {
-            SecureLogger.logError(error, context: "Failed to save identity cache", category: .security)
+            SecureLogger.error(error, context: "Failed to save identity cache", category: .security)
         }
     }
     

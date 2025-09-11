@@ -133,6 +133,20 @@ final class SecureLogger {
         log(message(), category: category, level: .error, file: file, line: line, function: function)
     }
     
+    /// Log errors with context
+    static func error(_ error: Error, context: @autoclosure () -> String, category: OSLog = .noise,
+                      file: String = #file, line: Int = #line, function: String = #function) {
+        let location = formatLocation(file: file, line: line, function: function)
+        let sanitized = sanitize(context())
+        let errorDesc = sanitize(error.localizedDescription)
+        
+        #if DEBUG
+        os_log("%{public}@ Error in %{public}@: %{public}@", log: category, type: .error, location, sanitized, errorDesc)
+        #else
+        os_log("%{private}@ Error in %{private}@: %{private}@", log: category, type: .error, location, sanitized, errorDesc)
+        #endif
+    }
+    
     /// Log a security event
     static func logSecurityEvent(_ event: SecurityEvent, level: LogLevel = .info, 
                                  file: String = #file, line: Int = #line, function: String = #function) {
@@ -145,20 +159,6 @@ final class SecureLogger {
         #else
         // In release, use private logging to prevent sensitive data exposure
         os_log("%{private}@", log: .security, type: level.osLogType, message)
-        #endif
-    }
-    
-    /// Log errors with context
-    static func logError(_ error: Error, context: @autoclosure () -> String, category: OSLog = .noise,
-                        file: String = #file, line: Int = #line, function: String = #function) {
-        let location = formatLocation(file: file, line: line, function: function)
-        let sanitized = sanitize(context())
-        let errorDesc = sanitize(error.localizedDescription)
-        
-        #if DEBUG
-        os_log("%{public}@ Error in %{public}@: %{public}@", log: category, type: .error, location, sanitized, errorDesc)
-        #else
-        os_log("%{private}@ Error in %{private}@: %{private}@", log: category, type: .error, location, sanitized, errorDesc)
         #endif
     }
     
