@@ -145,9 +145,13 @@ final class SecureIdentityStateManager {
         loadIdentityCache()
     }
     
+    deinit {
+        forceSave()
+    }
+    
     // MARK: - Secure Loading/Saving
     
-    func loadIdentityCache() {
+    private func loadIdentityCache() {
         guard let encryptedData = keychain.getIdentityKey(forKey: cacheKey) else {
             // No existing cache, start fresh
             return
@@ -163,12 +167,7 @@ final class SecureIdentityStateManager {
         }
     }
     
-    deinit {
-        // Force save any pending changes
-        forceSave()
-    }
-    
-    func saveIdentityCache() {
+    private func saveIdentityCache() {
         // Mark that we need to save
         pendingSave = true
         
@@ -200,9 +199,7 @@ final class SecureIdentityStateManager {
     // Force immediate save (for app termination)
     func forceSave() {
         saveTimer?.invalidate()
-        if pendingSave {
-            performSave()
-        }
+        performSave()
     }
     
     // MARK: - Social Identity Management
