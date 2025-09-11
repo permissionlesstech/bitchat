@@ -14,6 +14,7 @@ final class IntegrationTests: XCTestCase {
     
     var nodes: [String: MockBluetoothMeshService] = [:]
     var noiseManagers: [String: NoiseSessionManager] = [:]
+    private var mockKeychain: MockKeychain!
     
     override func setUp() {
         super.setUp()
@@ -21,6 +22,7 @@ final class IntegrationTests: XCTestCase {
         // broadcast propagation across a larger mesh. Integration-only.
         MockBLEService.resetTestBus()
         MockBLEService.autoFloodEnabled = true
+        mockKeychain = MockKeychain()
         
         // Create a network of nodes
         createNode("Alice", peerID: TestConstants.testPeerID1)
@@ -34,6 +36,7 @@ final class IntegrationTests: XCTestCase {
         MockBLEService.autoFloodEnabled = false
         nodes.removeAll()
         noiseManagers.removeAll()
+        mockKeychain = nil
         super.tearDown()
     }
     
@@ -307,7 +310,7 @@ final class IntegrationTests: XCTestCase {
         
         // Simulate Bob restart by recreating his Noise manager
         let bobKey = Curve25519.KeyAgreement.PrivateKey()
-        noiseManagers["Bob"] = NoiseSessionManager(localStaticKey: bobKey)
+        noiseManagers["Bob"] = NoiseSessionManager(localStaticKey: bobKey, keychain: mockKeychain)
         
         // Re-establish Noise handshake explicitly via managers
         do {
@@ -593,7 +596,7 @@ final class IntegrationTests: XCTestCase {
         
         // Create Noise manager
         let key = Curve25519.KeyAgreement.PrivateKey()
-        noiseManagers[name] = NoiseSessionManager(localStaticKey: key)
+        noiseManagers[name] = NoiseSessionManager(localStaticKey: key, keychain: mockKeychain)
     }
     
     private func connect(_ node1: String, _ node2: String) {

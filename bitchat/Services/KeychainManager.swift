@@ -9,7 +9,19 @@
 import Foundation
 import Security
 
-final class KeychainManager {
+protocol KeychainManagerProtocol {
+    func saveIdentityKey(_ keyData: Data, forKey key: String) -> Bool
+    func getIdentityKey(forKey key: String) -> Data?
+    func deleteIdentityKey(forKey key: String) -> Bool
+    func deleteAllKeychainData() -> Bool
+    
+    func secureClear(_ data: inout Data)
+    func secureClear(_ string: inout String)
+    
+    func verifyIdentityKeyExists() -> Bool
+}
+
+final class KeychainManager: KeychainManagerProtocol {
     static let shared = KeychainManager()
     
     // Use consistent service name for all keychain items

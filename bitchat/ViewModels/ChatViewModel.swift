@@ -344,13 +344,14 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     
     // MARK: - Services and Storage
     
-    var meshService: Transport = BLEService()
+    let meshService: Transport
     private var nostrRelayManager: NostrRelayManager?
     // PeerManager replaced by UnifiedPeerService
     private var processedNostrEvents = Set<String>()  // Simple deduplication
     private var processedNostrEventOrder: [String] = []
     private let maxProcessedNostrEvents = TransportConfig.uiProcessedNostrEventsCap
     private let userDefaults = UserDefaults.standard
+    private let keychain: KeychainManagerProtocol
     private let nicknameKey = "bitchat.nickname"
     // Location channel state (macOS supports manual geohash selection)
     @Published private var activeChannel: ChannelID = .mesh
@@ -484,7 +485,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     // MARK: - Initialization
     
     @MainActor
-    init() {
+    init(keychain: KeychainManagerProtocol = KeychainManager.shared) {
+        self.keychain = keychain
+        self.meshService = BLEService(keychain: keychain)
+        
         // Load persisted read receipts
         if let data = UserDefaults.standard.data(forKey: "sentReadReceipts"),
            let receipts = try? JSONDecoder().decode([String].self, from: data) {
@@ -498,7 +502,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         self.commandProcessor = CommandProcessor()
         self.privateChatManager = PrivateChatManager(meshService: meshService)
         self.unifiedPeerService = UnifiedPeerService(meshService: meshService)
-        let nostrTransport = NostrTransport()
+        let nostrTransport = NostrTransport(keychain: keychain)
         self.messageRouter = MessageRouter(mesh: meshService, nostr: nostrTransport)
         // Route receipts from PrivateChatManager through MessageRouter
         self.privateChatManager.messageRouter = self.messageRouter
@@ -976,7 +980,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                     let messageId = pm.messageID
                     // Send delivery ACK immediately (once per message ID)
                     if !self.sentGeoDeliveryAcks.contains(messageId) {
-                        let nt = NostrTransport()
+                        let nt = NostrTransport(keychain: keychain)
                         nt.senderPeerID = self.meshService.myPeerID
                         nt.sendDeliveryAckGeohash(for: messageId, toRecipientHex: senderPubkey, from: id)
                         self.sentGeoDeliveryAcks.insert(messageId)
@@ -1014,7 +1018,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                     if isViewing {
                         // pared back: omit pre-send READ log
                         if !wasReadBefore {
-                            let nt = NostrTransport()
+                            let nt = NostrTransport(keychain: keychain)
                             nt.senderPeerID = self.meshService.myPeerID
                             nt.sendReadReceiptGeohash(messageId, toRecipientHex: senderPubkey, from: id)
                             self.sentReadReceipts.insert(messageId)
@@ -1698,7 +1702,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                     SecureLogger.info("GeoDM: recv PM <- sender=\(senderPubkey.prefix(8))… mid=\(messageId.prefix(8))…", category: .session)
                     // Send delivery ACK immediately (even if duplicate), once per messageID
                     if !self.sentGeoDeliveryAcks.contains(messageId) {
-                        let nostrTransport = NostrTransport()
+                        let nostrTransport = NostrTransport(keychain: keychain)
                         nostrTransport.senderPeerID = self.meshService.myPeerID
                     // pared back: omit pre-send log
                         nostrTransport.sendDeliveryAckGeohash(for: messageId, toRecipientHex: senderPubkey, from: id)
@@ -1733,7 +1737,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                     if isViewing {
                         // pared back: omit pre-send READ log
                         if !wasReadBefore {
-                            let nostrTransport = NostrTransport()
+                            let nostrTransport = NostrTransport(keychain: keychain)
                             nostrTransport.senderPeerID = self.meshService.myPeerID
                             nostrTransport.sendReadReceiptGeohash(messageId, toRecipientHex: senderPubkey, from: id)
                             self.sentReadReceipts.insert(messageId)
@@ -2140,7 +2144,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                     return
                 }
                 SecureLogger.debug("GeoDM: local send mid=\(messageID.prefix(8))… to=\(recipientHex.prefix(8))… conv=\(peerID)", category: .session)
-                let nostrTransport = NostrTransport()
+                let nostrTransport = NostrTransport(keychain: keychain)
                 nostrTransport.senderPeerID = meshService.myPeerID
                 nostrTransport.sendPrivateMessageGeohash(content: content, toRecipientHex: recipientHex, from: id, messageID: messageID)
                 if let msgIdx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
@@ -2801,12 +2805,12 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         SecureIdentityStateManager.shared.forceSave()
         
         // Verify identity key is still there
-        _ = KeychainManager.shared.verifyIdentityKeyExists()
+        _ = keychain.verifyIdentityKeyExists()
         
         // No need to force synchronize here
         
         // Verify identity key after save
-        _ = KeychainManager.shared.verifyIdentityKeyExists()
+        _ = keychain.verifyIdentityKeyExists()
     }
     
     @objc private func appWillTerminate() {
@@ -2857,7 +2861,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             for message in messages where message.senderPeerID == peerID && !message.isRelay {
                 if !sentReadReceipts.contains(message.id) {
                     SecureLogger.debug("GeoDM: sending READ for mid=\(message.id.prefix(8))… to=\(recipientHex.prefix(8))…", category: .session)
-                    let nostrTransport = NostrTransport()
+                    let nostrTransport = NostrTransport(keychain: keychain)
                     nostrTransport.senderPeerID = meshService.myPeerID
                     nostrTransport.sendReadReceiptGeohash(message.id, toRecipientHex: recipientHex, from: id)
                     sentReadReceipts.insert(message.id)
@@ -3003,7 +3007,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         privateChatManager.unreadMessages.removeAll()
         
         // Delete all keychain data (including Noise and Nostr keys)
-        _ = KeychainManager.shared.deleteAllKeychainData()
+        _ = keychain.deleteAllKeychainData()
         
         // Clear UserDefaults identity data
         userDefaults.removeObject(forKey: "bitchat.noiseIdentityKey")
@@ -5199,7 +5203,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                         messageRouter.sendDeliveryAck(messageId, to: key.hexEncodedString())
                     } else if let id = try? NostrIdentityBridge.getCurrentNostrIdentity() {
                         // Fallback: no Noise mapping yet — send directly to sender's Nostr pubkey
-                        let nt = NostrTransport()
+                        let nt = NostrTransport(keychain: keychain)
                         nt.senderPeerID = meshService.myPeerID
                         nt.sendDeliveryAckGeohash(for: messageId, toRecipientHex: senderPubkey, from: id)
                         SecureLogger.debug("Sent DELIVERED ack directly to Nostr pub=\(senderPubkey.prefix(8))… for mid=\(messageId.prefix(8))…", category: .session)
@@ -5221,7 +5225,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                             messageRouter.sendReadReceipt(receipt, to: key.hexEncodedString())
                             sentReadReceipts.insert(messageId)
                         } else if let id = try? NostrIdentityBridge.getCurrentNostrIdentity() {
-                            let nt = NostrTransport()
+                            let nt = NostrTransport(keychain: keychain)
                             nt.senderPeerID = meshService.myPeerID
                             nt.sendReadReceiptGeohash(messageId, toRecipientHex: senderPubkey, from: id)
                             sentReadReceipts.insert(messageId)

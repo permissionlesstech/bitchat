@@ -21,10 +21,15 @@ final class NostrTransport: Transport {
     private var readQueue: [QueuedRead] = []
     private var isSendingReadAcks = false
     private let readAckInterval: TimeInterval = TransportConfig.nostrReadAckInterval
+    private let keychain: KeychainManagerProtocol
 
     var myPeerID: String { senderPeerID }
     var myNickname: String { "" }
     func setNickname(_ nickname: String) { /* not used for Nostr */ }
+    
+    init(keychain: KeychainManagerProtocol) {
+        self.keychain = keychain
+    }
 
     func startServices() { /* no-op */ }
     func stopServices() { /* no-op */ }
@@ -38,11 +43,17 @@ final class NostrTransport: Transport {
     func getFingerprint(for peerID: String) -> String? { nil }
     func getNoiseSessionState(for peerID: String) -> LazyHandshakeState { .none }
     func triggerHandshake(with peerID: String) { /* no-op */ }
+    
     // Nostr does not use Noise sessions here; return a cached placeholder to avoid reallocation
-    private static var cachedNoiseService: NoiseEncryptionService = {
-        NoiseEncryptionService()
-    }()
-    func getNoiseService() -> NoiseEncryptionService { Self.cachedNoiseService }
+    private static var cachedNoiseService: NoiseEncryptionService?
+    func getNoiseService() -> NoiseEncryptionService {
+        if let noiseService = Self.cachedNoiseService {
+            return noiseService
+        }
+        let noiseService = NoiseEncryptionService(keychain: keychain)
+        Self.cachedNoiseService = noiseService
+        return noiseService
+    }
 
     // Public broadcast not supported over Nostr here
     func sendMessage(_ content: String, mentions: [String]) { /* no-op */ }

@@ -88,7 +88,7 @@ final class BLEService: NSObject {
     
     var myPeerID: String = ""
     var myNickname: String = "anon"
-    private let noiseService = NoiseEncryptionService()
+    private let noiseService: NoiseEncryptionService
     private var myPeerIDData: Data = Data()
 
     // MARK: - Advertising Privacy
@@ -325,7 +325,8 @@ final class BLEService: NSObject {
         }
     }
     
-    override init() {
+    init(keychain: KeychainManagerProtocol) {
+        noiseService = NoiseEncryptionService(keychain: keychain)
         super.init()
         
         // Derive stable peer ID from Noise static public key fingerprint (first 8 bytes → 16 hex chars)

@@ -75,7 +75,7 @@ final class FragmentationTests: XCTestCase {
     }
 
     func test_reassembly_from_fragments_delivers_public_message() {
-        let ble = BLEService()
+        let ble = BLEService(keychain: MockKeychain())
         let capture = CaptureDelegate()
         ble.delegate = capture
 
@@ -106,7 +106,7 @@ final class FragmentationTests: XCTestCase {
     }
 
     func test_duplicate_fragment_does_not_break_reassembly() {
-        let ble = BLEService()
+        let ble = BLEService(keychain: MockKeychain())
         let capture = CaptureDelegate()
         ble.delegate = capture
 
@@ -132,7 +132,7 @@ final class FragmentationTests: XCTestCase {
     }
 
     func test_invalid_fragment_header_is_ignored() {
-        let ble = BLEService()
+        let ble = BLEService(keychain: MockKeychain())
         let capture = CaptureDelegate()
         ble.delegate = capture
 

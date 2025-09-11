@@ -99,7 +99,7 @@ import CryptoKit
 final class SecureIdentityStateManager {
     static let shared = SecureIdentityStateManager()
     
-    private let keychain = KeychainManager.shared
+    private let keychain: KeychainManagerProtocol
     private let cacheKey = "bitchat.identityCache.v2"
     private let encryptionKeyName = "identityCacheEncryptionKey"
     
@@ -122,7 +122,9 @@ final class SecureIdentityStateManager {
     // Encryption key
     private let encryptionKey: SymmetricKey
     
-    private init() {
+    private init(keychain: KeychainManagerProtocol = KeychainManager.shared) {
+        self.keychain = keychain
+        
         // Generate or retrieve encryption key from keychain
         let loadedKey: SymmetricKey
         
