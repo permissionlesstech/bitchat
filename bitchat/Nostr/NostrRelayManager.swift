@@ -39,8 +39,11 @@ class NostrRelayManager: ObservableObject {
     @Published private(set) var isConnected = false
     
     private var connections: [String: URLSessionWebSocketTask] = [:]
-    private var subscriptions: [String: Set<String>] = [:] // relay URL -> subscription IDs
+    private var subscriptions: [String: Set<String>] = [:] // relay URL -> active subscription IDs
+    private var pendingSubscriptions: [String: [String: String]] = [:] // relay URL -> (subscription id -> encoded REQ JSON)
     private var messageHandlers: [String: (NostrEvent) -> Void] = [:]
+    // Coalesce duplicate subscribe requests for the same id within a short window
+    private var subscribeCoalesce: [String: Date] = [:]
     private var cancellables = Set<AnyCancellable>()
     
     // Message queue for reliability
@@ -62,6 +65,8 @@ class NostrRelayManager: ObservableObject {
     
     // Reconnection timer
     private var reconnectionTimer: Timer?
+    // Bump generation to invalidate scheduled reconnects when we reset/disconnect
+    private var connectionGeneration: Int = 0
     
     init() {
         // Initialize with default relays
@@ -72,23 +77,46 @@ class NostrRelayManager: ObservableObject {
     
     /// Connect to all configured relays
     func connect() {
-        SecureLogger.log("🌐 Connecting to \(relays.count) Nostr relays", category: SecureLogger.session, level: .debug)
-        for relay in relays {
-            connectToRelay(relay.url)
+        // Ensure Tor is started early and wait for readiness off-main; then hop back to connect.
+        Task.detached {
+            let ready = await TorManager.shared.awaitReady()
+            await MainActor.run {
+                if !ready {
+                    SecureLogger.log("❌ Tor not ready; aborting relay connections (fail-closed)", category: SecureLogger.session, level: .error)
+                    return
+                }
+                SecureLogger.log("🌐 Connecting to \(self.relays.count) Nostr relays (via Tor)", category: SecureLogger.session, level: .debug)
+                for relay in self.relays {
+                    self.connectToRelay(relay.url)
+                }
+            }
         }
     }
     
     /// Disconnect from all relays
     func disconnect() {
+        connectionGeneration &+= 1
         for (_, task) in connections {
             task.cancel(with: .goingAway, reason: nil)
         }
         connections.removeAll()
+        // Clear known subscriptions and any queued subs since connections are gone
+        subscriptions.removeAll()
+        pendingSubscriptions.removeAll()
         updateConnectionStatus()
     }
     
     /// Ensure connections exist to the given relay URLs (idempotent).
     func ensureConnections(to relayUrls: [String]) {
+        if TorManager.shared.torEnforced && !TorManager.shared.isReady {
+            // Defer until Tor is fully ready; avoid queuing connection attempts early
+            Task.detached { [weak self] in
+                guard let self = self else { return }
+                let ready = await TorManager.shared.awaitReady()
+                await MainActor.run { if ready { self.ensureConnections(to: relayUrls) } }
+            }
+            return
+        }
         let existing = Set(relays.map { $0.url })
         for url in Set(relayUrls) {
             if !existing.contains(url) {
@@ -102,6 +130,15 @@ class NostrRelayManager: ObservableObject {
 
     /// Send an event to specified relays (or all if none specified)
     func sendEvent(_ event: NostrEvent, to relayUrls: [String]? = nil) {
+        if TorManager.shared.torEnforced && !TorManager.shared.isReady {
+            // Defer sends until Tor is ready to avoid premature queueing
+            Task.detached { [weak self] in
+                guard let self = self else { return }
+                let ready = await TorManager.shared.awaitReady()
+                await MainActor.run { if ready { self.sendEvent(event, to: relayUrls) } }
+            }
+            return
+        }
         let targetRelays = relayUrls ?? Self.defaultRelays
         ensureConnections(to: targetRelays)
 
@@ -166,10 +203,28 @@ class NostrRelayManager: ObservableObject {
         relayUrls: [String]? = nil,
         handler: @escaping (NostrEvent) -> Void
     ) {
+        // Coalesce rapid duplicate subscribe requests only if a handler already exists
+        let now = Date()
+        if messageHandlers[id] != nil {
+            if let last = subscribeCoalesce[id], now.timeIntervalSince(last) < 1.0 {
+                return
+            }
+        }
+        subscribeCoalesce[id] = now
+        if TorManager.shared.torEnforced && !TorManager.shared.isReady {
+            // Defer subscription setup until Tor is ready; avoid queuing subs early
+            Task.detached { [weak self] in
+                guard let self = self else { return }
+                let ready = await TorManager.shared.awaitReady()
+                await MainActor.run {
+                    if ready {
+                        self.subscribe(filter: filter, id: id, relayUrls: relayUrls, handler: handler)
+                    }
+                }
+            }
+            return
+        }
         messageHandlers[id] = handler
-        
-        SecureLogger.log("📡 Subscribing to Nostr filter id=\(id) kinds=\(filter.kinds ?? []) since=\(filter.since ?? 0)", 
-                        category: SecureLogger.session, level: .debug)
         
         let req = NostrRequest.subscribe(id: id, filters: [filter])
         
@@ -183,34 +238,26 @@ class NostrRelayManager: ObservableObject {
             // SecureLogger.log("📋 Subscription filter JSON: \(messageString.prefix(200))...", 
             //                 category: SecureLogger.session, level: .debug)
             
-            // Target specific relays if provided; else all connections
-            let urls = relayUrls ?? Self.defaultRelays
-            ensureConnections(to: urls)
-            let targets: [(String, URLSessionWebSocketTask)] = urls.compactMap { url in
-                connections[url].map { (url, $0) }
+            // Target specific relays if provided; else default. Filter permanently failed relays.
+            let baseUrls = relayUrls ?? Self.defaultRelays
+            let urls = baseUrls.filter { !isPermanentlyFailed($0) }
+            // Always queue subscriptions; sending happens when a relay reports connected
+            let existingSet = Set(relays.map { $0.url })
+            for url in urls where !existingSet.contains(url) {
+                relays.append(Relay(url: url))
             }
-
-            for (relayUrl, connection) in targets {
-                connection.send(.string(messageString)) { error in
-                    if let error = error {
-                        SecureLogger.log("❌ Failed to send subscription to \(relayUrl): \(error)", 
-                                        category: SecureLogger.session, level: .error)
-                    } else {
-                        // SecureLogger.log("✅ Subscription '\(id)' sent to relay: \(relayUrl)", 
-                        //                 category: SecureLogger.session, level: .debug)
-                        // Subscription sent successfully
-                        Task { @MainActor in
-                            var subs = self.subscriptions[relayUrl] ?? Set<String>()
-                            subs.insert(id)
-                            self.subscriptions[relayUrl] = subs
-                        }
-                    }
+            for url in urls {
+                var map = self.pendingSubscriptions[url] ?? [:]
+                map[id] = messageString
+                self.pendingSubscriptions[url] = map
+            }
+            SecureLogger.log("📋 Queued subscription id=\(id) for \(urls.count) relay(s)",
+                             category: SecureLogger.session, level: .debug)
+            // If some targets are already connected, flush immediately for them
+            for url in urls {
+                if let r = relays.first(where: { $0.url == url }), r.isConnected {
+                    flushPendingSubscriptions(for: url)
                 }
-            }
-            
-            if connections.isEmpty {
-                SecureLogger.log("⚠️ No relay connections available for subscription", 
-                                category: SecureLogger.session, level: .warning)
             }
         } catch {
             SecureLogger.log("❌ Failed to encode subscription request: \(error)", 
@@ -221,6 +268,8 @@ class NostrRelayManager: ObservableObject {
     /// Unsubscribe from a subscription
     func unsubscribe(id: String) {
         messageHandlers.removeValue(forKey: id)
+        // Allow immediate re-subscription by clearing coalescer timestamp
+        subscribeCoalesce.removeValue(forKey: id)
         
         let req = NostrRequest.close(id: id)
         let message = try? encoder.encode(req)
@@ -247,15 +296,36 @@ class NostrRelayManager: ObservableObject {
             SecureLogger.log("Invalid relay URL: \(urlString)", category: SecureLogger.session, level: .warning)
             return 
         }
+
+        // Avoid initiating connections while app is backgrounded; we'll reconnect on foreground
+        if TorManager.shared.torEnforced && !TorManager.shared.isForeground() {
+            return
+        }
         
         // Skip if we already have a connection object
         if connections[urlString] != nil {
             return
         }
+        if isPermanentlyFailed(urlString) {
+            return
+        }
         
-        // Attempting to connect to Nostr relay
+        // Attempting to connect to Nostr relay via the proxied session
         
-        let session = URLSession(configuration: .default)
+        // If Tor is enforced but not ready, delay connection until it is.
+        if TorManager.shared.torEnforced && !TorManager.shared.isReady {
+            Task.detached { [weak self] in
+                guard let self = self else { return }
+                let ready = await TorManager.shared.awaitReady()
+                await MainActor.run {
+                    if ready { self.connectToRelay(urlString) }
+                    else { SecureLogger.log("❌ Tor not ready; skipping connection to \(urlString)", category: SecureLogger.session, level: .error) }
+                }
+            }
+            return
+        }
+        
+        let session = TorURLSession.shared.session
         let task = session.webSocketTask(with: url)
         
         connections[urlString] = task
@@ -271,6 +341,8 @@ class NostrRelayManager: ObservableObject {
                     SecureLogger.log("✅ Connected to Nostr relay: \(urlString)", 
                                    category: SecureLogger.session, level: .debug)
                     self?.updateRelayStatus(urlString, isConnected: true)
+                    // Flush any pending subscriptions for this relay
+                    self?.flushPendingSubscriptions(for: urlString)
                 } else {
                     SecureLogger.log("❌ Failed to connect to Nostr relay \(urlString): \(error?.localizedDescription ?? "Unknown error")", 
                                    category: SecureLogger.session, level: .error)
@@ -280,6 +352,28 @@ class NostrRelayManager: ObservableObject {
                 }
             }
         }
+    }
+
+    /// Send any queued subscriptions for a relay that just connected.
+    private func flushPendingSubscriptions(for relayUrl: String) {
+        guard let map = pendingSubscriptions[relayUrl], !map.isEmpty else { return }
+        guard let connection = connections[relayUrl] else { return }
+        for (id, messageString) in map {
+            if self.subscriptions[relayUrl]?.contains(id) == true { continue }
+            connection.send(.string(messageString)) { error in
+                if let error = error {
+                    SecureLogger.log("❌ Failed to send pending subscription to \(relayUrl): \(error)",
+                                    category: SecureLogger.session, level: .error)
+                } else {
+                    Task { @MainActor in
+                        var subs = self.subscriptions[relayUrl] ?? Set<String>()
+                        subs.insert(id)
+                        self.subscriptions[relayUrl] = subs
+                    }
+                }
+            }
+        }
+        pendingSubscriptions[relayUrl] = nil
     }
     
     private func receiveMessage(from task: URLSessionWebSocketTask, relayUrl: String) {
@@ -420,18 +514,21 @@ class NostrRelayManager: ObservableObject {
         subscriptions.removeValue(forKey: relayUrl)
         updateRelayStatus(relayUrl, isConnected: false, error: error)
         
-        // Check if this is a DNS error
+        // Check if this is a DNS or handshake error; treat as permanent
         let errorDescription = error.localizedDescription.lowercased()
+        let ns = error as NSError
         if errorDescription.contains("hostname could not be found") || 
-           errorDescription.contains("dns") {
-            // Only log once for DNS failures
+           errorDescription.contains("dns") ||
+           (ns.domain == NSURLErrorDomain && ns.code == NSURLErrorBadServerResponse) {
             if relays.first(where: { $0.url == relayUrl })?.lastError == nil {
-                SecureLogger.log("Nostr relay DNS failure for \(relayUrl) - not retrying", category: SecureLogger.session, level: .warning)
+                SecureLogger.log("Nostr relay permanent failure for \(relayUrl) - not retrying (code=\(ns.code))", category: SecureLogger.session, level: .warning)
             }
-            // Mark relay as permanently failed
             if let index = relays.firstIndex(where: { $0.url == relayUrl }) {
                 relays[index].lastError = error
+                relays[index].reconnectAttempts = maxReconnectAttempts
+                relays[index].nextReconnectTime = nil
             }
+            pendingSubscriptions[relayUrl] = nil
             return
         }
         
@@ -458,9 +555,11 @@ class NostrRelayManager: ObservableObject {
         
         
         // Schedule reconnection with exponential backoff
+        let gen = connectionGeneration
         DispatchQueue.main.asyncAfter(deadline: .now() + backoffInterval) { [weak self] in
             guard let self = self else { return }
-            
+            // Ignore stale scheduled reconnects from a previous generation
+            guard gen == self.connectionGeneration else { return }
             // Check if we should still reconnect (relay might have been removed)
             if self.relays.contains(where: { $0.url == relayUrl }) {
                 self.connectToRelay(relayUrl)
@@ -501,6 +600,8 @@ class NostrRelayManager: ObservableObject {
     /// Reset all relay connections
     func resetAllConnections() {
         disconnect()
+        // New generation begins now
+        connectionGeneration &+= 1
         
         // Reset all relay states
         for index in relays.indices {
@@ -511,6 +612,18 @@ class NostrRelayManager: ObservableObject {
         
         // Reconnect
         connect()
+    }
+
+    // MARK: - Failure classification
+    private func isPermanentlyFailed(_ url: String) -> Bool {
+        guard let r = relays.first(where: { $0.url == url }) else { return false }
+        if r.reconnectAttempts >= maxReconnectAttempts { return true }
+        if let ns = r.lastError as NSError?, ns.domain == NSURLErrorDomain {
+            if ns.code == NSURLErrorBadServerResponse || ns.code == NSURLErrorCannotFindHost {
+                return true
+            }
+        }
+        return false
     }
 }
 
