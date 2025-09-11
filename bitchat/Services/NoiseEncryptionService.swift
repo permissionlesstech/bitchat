@@ -190,7 +190,7 @@ final class NoiseEncryptionService {
         if let identityData = KeychainManager.shared.getIdentityKey(forKey: "noiseStaticKey"),
            let key = try? Curve25519.KeyAgreement.PrivateKey(rawRepresentation: identityData) {
             loadedKey = key
-            SecureLogger.logKeyOperation("load", keyType: "noiseStaticKey", success: true)
+            SecureLogger.logKeyOperation(.load, keyType: "noiseStaticKey", success: true)
         }
         // If no identity exists, create new one
         else {
@@ -199,7 +199,7 @@ final class NoiseEncryptionService {
             
             // Save to keychain
             let saved = KeychainManager.shared.saveIdentityKey(keyData, forKey: "noiseStaticKey")
-            SecureLogger.logKeyOperation("create", keyType: "noiseStaticKey", success: saved)
+            SecureLogger.logKeyOperation(.create, keyType: "noiseStaticKey", success: saved)
         }
         
         // Now assign the final value
@@ -213,7 +213,7 @@ final class NoiseEncryptionService {
         if let signingData = KeychainManager.shared.getIdentityKey(forKey: "ed25519SigningKey"),
            let key = try? Curve25519.Signing.PrivateKey(rawRepresentation: signingData) {
             loadedSigningKey = key
-            SecureLogger.logKeyOperation("load", keyType: "ed25519SigningKey", success: true)
+            SecureLogger.logKeyOperation(.load, keyType: "ed25519SigningKey", success: true)
         }
         // If no signing key exists, create new one
         else {
@@ -222,7 +222,7 @@ final class NoiseEncryptionService {
             
             // Save to keychain
             let saved = KeychainManager.shared.saveIdentityKey(keyData, forKey: "ed25519SigningKey")
-            SecureLogger.logKeyOperation("create", keyType: "ed25519SigningKey", success: saved)
+            SecureLogger.logKeyOperation(.create, keyType: "ed25519SigningKey", success: saved)
         }
         
         // Now assign the signing keys
@@ -269,7 +269,7 @@ final class NoiseEncryptionService {
         // Clear from keychain
         let deletedStatic = KeychainManager.shared.deleteIdentityKey(forKey: "noiseStaticKey")
         let deletedSigning = KeychainManager.shared.deleteIdentityKey(forKey: "ed25519SigningKey")
-        SecureLogger.logKeyOperation("delete", keyType: "identity keys", success: deletedStatic && deletedSigning)
+        SecureLogger.logKeyOperation(.delete, keyType: "identity keys", success: deletedStatic && deletedSigning)
         SecureLogger.warning("Panic mode activated - identity cleared", category: .security)
         // Stop rekey timer
         stopRekeyTimer()
