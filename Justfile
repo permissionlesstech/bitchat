@@ -48,6 +48,11 @@ patch-for-macos: backup
 generate: patch-for-macos
     @echo "Generating Xcode project..."
     @xcodegen generate
+    @echo "Patching Xcode project format for Xcode 15.x..."
+    @if [ -f bitchat.xcodeproj/project.pbxproj ]; then \
+        sed -i '' -E 's/objectVersion = [0-9]+;/objectVersion = 60;/' bitchat.xcodeproj/project.pbxproj; \
+        sed -i '' -E 's/compatibilityVersion = \"Xcode [^\"]+\";/compatibilityVersion = \"Xcode 15.0\";/' bitchat.xcodeproj/project.pbxproj; \
+    fi
 
 # Build the macOS app
 build: check generate
@@ -77,6 +82,11 @@ dev-run: check
     @echo "Quick development build..."
     @if [ ! -f project.yml.backup ]; then just patch-for-macos; fi
     @xcodegen generate
+    @echo "Patching Xcode project format for Xcode 15.x..."
+    @if [ -f bitchat.xcodeproj/project.pbxproj ]; then \
+        sed -i '' -E 's/objectVersion = [0-9]+;/objectVersion = 60;/' bitchat.xcodeproj/project.pbxproj; \
+        sed -i '' -E 's/compatibilityVersion = \"Xcode [^\"]+\";/compatibilityVersion = \"Xcode 15.0\";/' bitchat.xcodeproj/project.pbxproj; \
+    fi
     @xcodebuild -project bitchat.xcodeproj -scheme "bitchat (macOS)" -configuration Debug CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGN_ENTITLEMENTS="" build
     @find ~/Library/Developer/Xcode/DerivedData -name "bitchat.app" -path "*/Debug/*" -not -path "*/Index.noindex/*" | head -1 | xargs -I {} open "{}"
 

@@ -640,7 +640,7 @@ struct NostrFilter: Encodable {
     // For location channels: geohash-scoped ephemeral events (kind 20000)
     static func geohashEphemeral(_ geohash: String, since: Date? = nil, limit: Int = 200) -> NostrFilter {
         var filter = NostrFilter()
-        filter.kinds = [20000]
+        filter.kinds = [20000, 20001]
         filter.since = since?.timeIntervalSince1970.toInt()
         filter.tagFilters = ["g": [geohash]]
         filter.limit = limit

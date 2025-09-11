@@ -159,6 +159,9 @@ enum NoisePayloadType: UInt8 {
     case verifyChallenge = 0x10     // Verification challenge
     case verifyResponse  = 0x11     // Verification response
     
+    // Minimal file sharing (inline, <=64KB total encrypted payload)
+    case fileInline = 0x20          // File metadata + bytes (see BLEService for handling)
+    
     var description: String {
         switch self {
         case .privateMessage: return "privateMessage"
@@ -166,6 +169,7 @@ enum NoisePayloadType: UInt8 {
         case .delivered: return "delivered"
         case .verifyChallenge: return "verifyChallenge"
         case .verifyResponse: return "verifyResponse"
+        case .fileInline: return "fileInline"
         }
     }
 }

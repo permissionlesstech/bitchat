@@ -1,0 +1,223 @@
+name: bitchat
+options:
+  bundleIdPrefix: chat.bitchat
+  deploymentTarget:
+    iOS: 16.0
+    macOS: 13.0
+  createIntermediateGroups: true
+  
+settings:
+  MARKETING_VERSION: 1.0.0
+  CURRENT_PROJECT_VERSION: 1
+
+packages:
+  P256K:
+    url: https://github.com/21-DOT-DEV/swift-secp256k1
+    majorVersion: 0.21.1
+  
+targets:
+  bitchat_iOS:
+    type: application
+    platform: iOS
+    sources: 
+      - bitchat
+    resources:
+      - bitchat/Assets.xcassets
+      - bitchat/LaunchScreen.storyboard
+    info:
+      path: bitchat/Info.plist
+      properties:
+        CFBundleDisplayName: bitchat
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSBluetoothAlwaysUsageDescription: bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users.
+        NSBluetoothPeripheralUsageDescription: bitchat uses Bluetooth to discover and connect with other bitchat users nearby.
+        UIBackgroundModes:
+          - bluetooth-central
+          - bluetooth-peripheral
+        UILaunchStoryboardName: LaunchScreen
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UIRequiresFullScreen: false
+        CFBundleURLTypes:
+          - CFBundleURLSchemes:
+              - bitchat
+        # xcodegen quirk: include some macOS properties in iOS target
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: chat.bitchat
+      PRODUCT_NAME: bitchat
+      INFOPLIST_FILE: bitchat/Info.plist
+      ENABLE_PREVIEWS: YES
+      SWIFT_VERSION: 5.0
+      IPHONEOS_DEPLOYMENT_TARGET: 16.0
+      SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: YES
+      CODE_SIGN_STYLE: Automatic
+      CODE_SIGNING_REQUIRED: YES
+      CODE_SIGNING_ALLOWED: YES
+      DEVELOPMENT_TEAM: L3N5LHJD5Y
+      ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+      ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
+      CODE_SIGN_ENTITLEMENTS: bitchat/bitchat.entitlements
+    dependencies:
+      - target: bitchatShareExtension
+        embed: true
+      - package: P256K
+        
+  bitchat_macOS:
+    type: application
+    platform: macOS
+    sources: 
+      - bitchat
+    resources:
+      - bitchat/Assets.xcassets
+    info:
+      path: bitchat/Info.plist
+      properties:
+        CFBundleDisplayName: bitchat
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        NSBluetoothAlwaysUsageDescription: bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users.
+        NSBluetoothPeripheralUsageDescription: bitchat uses Bluetooth to discover and connect with other bitchat users nearby.
+        CFBundleURLTypes:
+          - CFBundleURLSchemes:
+              - bitchat
+        # xcodegen quirk: include some iOS properties in macOS target
+        UIBackgroundModes:
+          - bluetooth-central
+          - bluetooth-peripheral
+        UILaunchStoryboardName: LaunchScreen
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UIRequiresFullScreen: true
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: chat.bitchat
+      PRODUCT_NAME: bitchat
+      INFOPLIST_FILE: bitchat/Info.plist
+      ENABLE_PREVIEWS: YES
+      SWIFT_VERSION: 5.0
+      MACOSX_DEPLOYMENT_TARGET: 13.0
+      CODE_SIGN_STYLE: Automatic
+      CODE_SIGNING_REQUIRED: YES
+      CODE_SIGNING_ALLOWED: YES
+      DEVELOPMENT_TEAM: L3N5LHJD5Y
+      ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+      ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
+      CODE_SIGN_ENTITLEMENTS: bitchat/bitchat-macOS.entitlements
+    dependencies:
+      - package: P256K
+
+  bitchatShareExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - bitchatShareExtension
+    info:
+      path: bitchatShareExtension/Info.plist
+      properties:
+        CFBundleDisplayName: bitchat
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsText: true
+              NSExtensionActivationSupportsWebURLWithMaxCount: 1
+              NSExtensionActivationSupportsImageWithMaxCount: 1
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: chat.bitchat.ShareExtension
+      INFOPLIST_FILE: bitchatShareExtension/Info.plist
+      SWIFT_VERSION: 5.0
+      IPHONEOS_DEPLOYMENT_TARGET: 16.0
+      CODE_SIGN_STYLE: Automatic
+      CODE_SIGNING_REQUIRED: YES
+      CODE_SIGNING_ALLOWED: YES
+      DEVELOPMENT_TEAM: L3N5LHJD5Y
+      CODE_SIGN_ENTITLEMENTS: bitchatShareExtension/bitchatShareExtension.entitlements
+      CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION: YES
+
+  bitchatTests_iOS:
+    type: bundle.unit-test
+    platform: iOS
+    sources: 
+      - bitchatTests
+    dependencies:
+      - target: bitchat_iOS
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: chat.bitchat.tests
+      INFOPLIST_FILE: bitchatTests/Info.plist
+      SWIFT_VERSION: 5.0
+      IPHONEOS_DEPLOYMENT_TARGET: 16.0
+      TEST_HOST: $(BUILT_PRODUCTS_DIR)/bitchat.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/bitchat
+      BUNDLE_LOADER: $(TEST_HOST)
+      CODE_SIGN_STYLE: Automatic
+      CODE_SIGNING_REQUIRED: YES
+      CODE_SIGNING_ALLOWED: YES
+      DEVELOPMENT_TEAM: L3N5LHJD5Y
+      
+  bitchatTests_macOS:
+    type: bundle.unit-test
+    platform: macOS
+    sources: 
+      - bitchatTests
+    dependencies:
+      - target: bitchat_macOS
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: chat.bitchat.tests
+      INFOPLIST_FILE: bitchatTests/Info.plist
+      SWIFT_VERSION: 5.0
+      MACOSX_DEPLOYMENT_TARGET: 13.0
+      TEST_HOST: $(BUILT_PRODUCTS_DIR)/bitchat.app/Contents/MacOS/bitchat
+      BUNDLE_LOADER: $(TEST_HOST)
+      CODE_SIGN_STYLE: Automatic
+      CODE_SIGNING_REQUIRED: YES
+      CODE_SIGNING_ALLOWED: YES
+      DEVELOPMENT_TEAM: L3N5LHJD5Y
+
+schemes:
+  bitchat (iOS):
+    build:
+      targets:
+        bitchat_iOS: all
+        bitchatShareExtension: all
+    run:
+      config: Debug
+      executable: bitchat_iOS
+    test:
+      config: Debug
+      targets:
+        - bitchatTests_iOS
+    profile:
+      config: Release
+      executable: bitchat_iOS
+    analyze:
+      config: Debug
+    archive:
+      config: Release
+      
+  bitchat (macOS):
+    build:
+      targets:
+        bitchat_macOS: all
+    run:
+      config: Debug
+      executable: bitchat_macOS
+    test:
+      config: Debug
+      targets:
+        - bitchatTests_macOS
+    profile:
+      config: Release
+      executable: bitchat_macOS
+    analyze:
+      config: Debug
+    archive:
+      config: Release
