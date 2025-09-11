@@ -108,9 +108,6 @@ final class SecureIdentityStateManager {
     private var cryptographicIdentities: [String: CryptographicIdentity] = [:]
     private var cache: IdentityCache = IdentityCache()
     
-    // Pending actions before handshake
-    private var pendingActions: [String: PendingActions] = [:]
-    
     // Thread safety
     private let queue = DispatchQueue(label: "bitchat.identity.state", attributes: .concurrent)
     
@@ -477,47 +474,6 @@ final class SecureIdentityStateManager {
         }
     }
     
-    // MARK: - Pending Actions
-    
-    func setPendingAction(peerID: String, action: PendingActions) {
-        queue.async(flags: .barrier) {
-            self.pendingActions[peerID] = action
-        }
-    }
-    
-    func applyPendingActions(peerID: String, fingerprint: String) {
-        queue.async(flags: .barrier) {
-            guard let actions = self.pendingActions[peerID] else { return }
-            
-            // Get or create social identity
-            var identity = self.cache.socialIdentities[fingerprint] ?? SocialIdentity(
-                fingerprint: fingerprint,
-                localPetname: nil,
-                claimedNickname: "Unknown",
-                trustLevel: .unknown,
-                isFavorite: false,
-                isBlocked: false,
-                notes: nil
-            )
-            
-            // Apply pending actions
-            if let toggleFavorite = actions.toggleFavorite {
-                identity.isFavorite = toggleFavorite
-            }
-            if let trustLevel = actions.setTrustLevel {
-                identity.trustLevel = trustLevel
-            }
-            if let petname = actions.setPetname {
-                identity.localPetname = petname
-            }
-            
-            // Save updated identity
-            self.cache.socialIdentities[fingerprint] = identity
-            self.pendingActions.removeValue(forKey: peerID)
-            self.saveIdentityCache()
-        }
-    }
-    
     // MARK: - Cleanup
     
     func clearAllIdentityData() {
@@ -527,7 +483,6 @@ final class SecureIdentityStateManager {
             self.cache = IdentityCache()
             self.ephemeralSessions.removeAll()
             self.cryptographicIdentities.removeAll()
-            self.pendingActions.removeAll()
             
             // Delete from keychain
             let deleted = self.keychain.deleteIdentityKey(forKey: self.cacheKey)
@@ -538,7 +493,6 @@ final class SecureIdentityStateManager {
     func removeEphemeralSession(peerID: String) {
         queue.async(flags: .barrier) {
             self.ephemeralSessions.removeValue(forKey: peerID)
-            self.pendingActions.removeValue(forKey: peerID)
         }
     }
     
