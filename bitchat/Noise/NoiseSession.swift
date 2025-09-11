@@ -230,13 +230,13 @@ class NoiseSession {
             // Clear sent handshake messages
             for i in 0..<sentHandshakeMessages.count {
                 var message = sentHandshakeMessages[i]
-                KeychainManager.secureClear(&message)
+                KeychainManager.shared.secureClear(&message)
             }
             sentHandshakeMessages.removeAll()
             
             // Clear handshake hash
             if var hash = handshakeHash {
-                KeychainManager.secureClear(&hash)
+                KeychainManager.shared.secureClear(&hash)
             }
             handshakeHash = nil
             

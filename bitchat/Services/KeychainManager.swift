@@ -310,7 +310,7 @@ final class KeychainManager {
     // MARK: - Security Utilities
     
     /// Securely clear sensitive data from memory
-    static func secureClear(_ data: inout Data) {
+    func secureClear(_ data: inout Data) {
         _ = data.withUnsafeMutableBytes { bytes in
             // Use volatile memset to prevent compiler optimization
             memset_s(bytes.baseAddress, bytes.count, 0, bytes.count)
@@ -319,7 +319,7 @@ final class KeychainManager {
     }
     
     /// Securely clear sensitive string from memory
-    static func secureClear(_ string: inout String) {
+    func secureClear(_ string: inout String) {
         // Convert to mutable data and clear
         if var data = string.data(using: .utf8) {
             secureClear(&data)
