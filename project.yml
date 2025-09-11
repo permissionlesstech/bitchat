@@ -32,6 +32,8 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSBluetoothAlwaysUsageDescription: bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users.
         NSBluetoothPeripheralUsageDescription: bitchat uses Bluetooth to discover and connect with other bitchat users nearby.
+        NSCameraUsageDescription: bitchat uses the camera to scan QR codes to verify peers.
+        NSLocationWhenInUseUsageDescription: bitchat uses your approximate location to compute local geohash channels for optional public chats. Exact GPS is never shared.
         UIBackgroundModes:
           - bluetooth-central
           - bluetooth-peripheral
@@ -89,6 +91,8 @@ targets:
         LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
         NSBluetoothAlwaysUsageDescription: bitchat uses Bluetooth to create a secure mesh network for chatting with nearby users.
         NSBluetoothPeripheralUsageDescription: bitchat uses Bluetooth to discover and connect with other bitchat users nearby.
+        NSCameraUsageDescription: bitchat uses the camera to scan QR codes to verify peers.
+        NSLocationWhenInUseUsageDescription: bitchat uses your approximate location to compute local geohash channels for optional public chats. Exact GPS is never shared.
         CFBundleURLTypes:
           - CFBundleURLSchemes:
               - bitchat
