@@ -285,7 +285,7 @@ final class NoiseCipherState {
         
         // Log high nonce values that might indicate issues
         if currentNonce > Self.HIGH_NONCE_WARNING_THRESHOLD {
-            SecureLogger.log("High nonce value detected: \(currentNonce) - consider rekeying", category: SecureLogger.encryption, level: .warning)
+            SecureLogger.log("High nonce value detected: \(currentNonce) - consider rekeying", category: .encryption, level: .warning)
         }
                 
         return combinedPayload
@@ -342,7 +342,7 @@ final class NoiseCipherState {
         
         // Log high nonce values that might indicate issues
         if decryptionNonce > Self.HIGH_NONCE_WARNING_THRESHOLD {
-            SecureLogger.log("High nonce value detected: \(decryptionNonce) - consider rekeying", category: SecureLogger.encryption, level: .warning)
+            SecureLogger.log("High nonce value detected: \(decryptionNonce) - consider rekeying", category: .encryption, level: .warning)
         }
         
         do {
@@ -357,7 +357,7 @@ final class NoiseCipherState {
         } catch {
             SecureLogger.log("Decrypt failed: \(error) for nonce \(decryptionNonce)")
             // Log authentication failures with nonce info
-            SecureLogger.log("Decryption failed at nonce \(decryptionNonce)", category: SecureLogger.encryption, level: .error)
+            SecureLogger.log("Decryption failed at nonce \(decryptionNonce)", category: .encryption, level: .error)
             throw error
         }
     }
@@ -661,7 +661,7 @@ final class NoiseHandshakeState {
                 do {
                     remoteEphemeralPublic = try NoiseHandshakeState.validatePublicKey(ephemeralData)
                 } catch {
-                    SecureLogger.log("Invalid ephemeral public key received", category: SecureLogger.security, level: .warning)
+                    SecureLogger.log("Invalid ephemeral public key received", category: .security, level: .warning)
                     throw NoiseError.invalidMessage
                 }
                 symmetricState.mixHash(ephemeralData)
@@ -877,7 +877,7 @@ extension NoiseHandshakeState {
         
         // Check against known bad points
         if lowOrderPoints.contains(keyData) {
-            SecureLogger.log("Low-order point detected", category: SecureLogger.security, level: .warning)
+            SecureLogger.log("Low-order point detected", category: .security, level: .warning)
             throw NoiseError.invalidPublicKey
         }
         
@@ -887,7 +887,7 @@ extension NoiseHandshakeState {
             return publicKey
         } catch {
             // If CryptoKit rejects it, it's invalid
-            SecureLogger.log("CryptoKit validation failed", category: SecureLogger.security, level: .warning)
+            SecureLogger.log("CryptoKit validation failed", category: .security, level: .warning)
             throw NoiseError.invalidPublicKey
         }
     }

@@ -205,7 +205,7 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
                let noiseKey = peerInfo.noisePublicKey {
                 SecureLogger.log(
                     "🔄 Found favorite for '\(peerInfo.nickname)' by nickname, updating noise key",
-                    category: SecureLogger.session,
+                    category: .session,
                     level: .debug
                 )
                 
@@ -283,7 +283,7 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
     func toggleFavorite(_ peerID: String) {
         guard let peer = getPeer(by: peerID) else { 
             SecureLogger.log("⚠️ Cannot toggle favorite - peer not found: \(peerID)", 
-                           category: SecureLogger.session, level: .warning)
+                           category: .session, level: .warning)
             return 
         }
         
@@ -294,14 +294,14 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         
         // Debug logging to understand the issue
         SecureLogger.log("🔍 Toggle favorite - peer.nickname: '\(peer.nickname)', peer.displayName: '\(peer.displayName)', peerID: \(peerID)", 
-                       category: SecureLogger.session, level: .debug)
+                       category: .session, level: .debug)
         
         if actualNickname.isEmpty {
             // Try to get from mesh service's current peer list
             if let meshPeerNickname = meshService.peerNickname(peerID: peerID) {
                 actualNickname = meshPeerNickname
                 SecureLogger.log("🔍 Got nickname from mesh service: '\(actualNickname)'", 
-                               category: SecureLogger.session, level: .debug)
+                               category: .session, level: .debug)
             }
         }
         
@@ -329,7 +329,7 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         
         // Log the final nickname being saved
         SecureLogger.log("⭐️ Toggled favorite for '\(finalNickname)' (peerID: \(peerID), was: \(wasFavorite), now: \(!wasFavorite))",
-                       category: SecureLogger.session, level: .debug)
+                       category: .session, level: .debug)
         
         // Send favorite notification to the peer via router (mesh or Nostr)
         if let router = messageRouter {

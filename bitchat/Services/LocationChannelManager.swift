@@ -198,7 +198,7 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         // Surface as denied/restricted if relevant; otherwise keep previous state
         SecureLogger.log("LocationChannelManager: location error: \(error.localizedDescription)",
-                         category: SecureLogger.session, level: .error)
+                         category: .session, level: .error)
     }
 
     // MARK: - Helpers

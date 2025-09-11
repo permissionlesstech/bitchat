@@ -270,7 +270,7 @@ final class NoiseEncryptionService {
         let deletedStatic = KeychainManager.shared.deleteIdentityKey(forKey: "noiseStaticKey")
         let deletedSigning = KeychainManager.shared.deleteIdentityKey(forKey: "ed25519SigningKey")
         SecureLogger.logKeyOperation("delete", keyType: "identity keys", success: deletedStatic && deletedSigning)
-        SecureLogger.log("Panic mode activated - identity cleared", category: SecureLogger.security, level: .warning)
+        SecureLogger.log("Panic mode activated - identity cleared", category: .security, level: .warning)
         // Stop rekey timer
         stopRekeyTimer()
     }
@@ -281,7 +281,7 @@ final class NoiseEncryptionService {
             let signature = try signingKey.signature(for: data)
             return signature
         } catch {
-            SecureLogger.logError(error, context: "Failed to sign data", category: SecureLogger.noise)
+            SecureLogger.logError(error, context: "Failed to sign data", category: .noise)
             return nil
         }
     }
@@ -292,7 +292,7 @@ final class NoiseEncryptionService {
             let signingPublicKey = try Curve25519.Signing.PublicKey(rawRepresentation: publicKey)
             return signingPublicKey.isValidSignature(signature, for: data)
         } catch {
-            SecureLogger.logError(error, context: "Failed to verify signature", category: SecureLogger.noise)
+            SecureLogger.logError(error, context: "Failed to verify signature", category: .noise)
             return false
         }
     }
@@ -573,12 +573,12 @@ final class NoiseEncryptionService {
             // Attempt to rekey the session
             do {
                 try sessionManager.initiateRekey(for: peerID)
-                SecureLogger.log("Key rotation initiated for peer: \(peerID)", category: SecureLogger.security, level: .debug)
+                SecureLogger.log("Key rotation initiated for peer: \(peerID)", category: .security, level: .debug)
                 
                 // Signal that handshake is needed
                 onHandshakeRequired?(peerID)
             } catch {
-                SecureLogger.logError(error, context: "Failed to initiate rekey for peer: \(peerID)", category: SecureLogger.session)
+                SecureLogger.logError(error, context: "Failed to initiate rekey for peer: \(peerID)", category: .session)
             }
         }
     }
