@@ -314,12 +314,6 @@ final class SecureIdentityStateManager {
         }
     }
     
-    func getAllSocialIdentities() -> [SocialIdentity] {
-        queue.sync {
-            return Array(cache.socialIdentities.values)
-        }
-    }
-    
     func updateSocialIdentity(_ identity: SocialIdentity) {
         queue.async(flags: .barrier) {
             self.cache.socialIdentities[identity.fingerprint] = identity
