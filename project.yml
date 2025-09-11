@@ -126,6 +126,7 @@ targets:
     platform: iOS
     sources:
       - bitchatShareExtension
+      - bitchat/Services/TransportConfig.swift
     info:
       path: bitchatShareExtension/Info.plist
       properties:
