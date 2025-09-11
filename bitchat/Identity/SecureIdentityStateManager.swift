@@ -300,11 +300,6 @@ final class SecureIdentityStateManager {
         }
     }
 
-    /// Retrieve cryptographic identity by fingerprint
-    func getCryptographicIdentity(for fingerprint: String) -> CryptographicIdentity? {
-        queue.sync { cryptographicIdentities[fingerprint] }
-    }
-
     /// Find cryptographic identities whose fingerprint prefix matches a peerID (16-hex) short ID
     func getCryptoIdentitiesByPeerIDPrefix(_ peerID: String) -> [CryptographicIdentity] {
         queue.sync {
