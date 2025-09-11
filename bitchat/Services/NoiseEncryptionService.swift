@@ -392,17 +392,17 @@ final class NoiseEncryptionService {
         
         // Validate peer ID
         guard NoiseSecurityValidator.validatePeerID(peerID) else {
-            SecureLogger.logSecurityEvent(.authenticationFailed(peerID: peerID), level: .warning)
+            SecureLogger.warning(.authenticationFailed(peerID: peerID))
             throw NoiseSecurityError.invalidPeerID
         }
         
         // Check rate limit
         guard rateLimiter.allowHandshake(from: peerID) else {
-            SecureLogger.logSecurityEvent(.authenticationFailed(peerID: "Rate limited: \(peerID)"), level: .warning)
+            SecureLogger.warning(.authenticationFailed(peerID: "Rate limited: \(peerID)"))
             throw NoiseSecurityError.rateLimitExceeded
         }
         
-        SecureLogger.logSecurityEvent(.handshakeStarted(peerID: peerID))
+        SecureLogger.info(.handshakeStarted(peerID: peerID))
         
         // Return raw handshake data without wrapper
         // The Noise protocol handles its own message format
@@ -415,19 +415,19 @@ final class NoiseEncryptionService {
         
         // Validate peer ID
         guard NoiseSecurityValidator.validatePeerID(peerID) else {
-            SecureLogger.logSecurityEvent(.authenticationFailed(peerID: peerID), level: .warning)
+            SecureLogger.warning(.authenticationFailed(peerID: peerID))
             throw NoiseSecurityError.invalidPeerID
         }
         
         // Validate message size
         guard NoiseSecurityValidator.validateHandshakeMessageSize(message) else {
-            SecureLogger.logSecurityEvent(.handshakeFailed(peerID: peerID, error: "Message too large"), level: .warning)
+            SecureLogger.warning(.handshakeFailed(peerID: peerID, error: "Message too large"))
             throw NoiseSecurityError.messageTooLarge
         }
         
         // Check rate limit
         guard rateLimiter.allowHandshake(from: peerID) else {
-            SecureLogger.logSecurityEvent(.authenticationFailed(peerID: "Rate limited: \(peerID)"), level: .warning)
+            SecureLogger.warning(.authenticationFailed(peerID: "Rate limited: \(peerID)"))
             throw NoiseSecurityError.rateLimitExceeded
         }
         
@@ -521,7 +521,7 @@ final class NoiseEncryptionService {
             peerFingerprints.removeValue(forKey: peerID)
         }
         
-        SecureLogger.logSecurityEvent(.sessionExpired(peerID: peerID))
+        SecureLogger.info(.sessionExpired(peerID: peerID))
     }
     
     // MARK: - Private Helpers
@@ -537,7 +537,7 @@ final class NoiseEncryptionService {
         }
         
         // Log security event
-        SecureLogger.logSecurityEvent(.handshakeCompleted(peerID: peerID))
+        SecureLogger.info(.handshakeCompleted(peerID: peerID))
         
         // Notify all handlers about authentication
         serviceQueue.async { [weak self] in
