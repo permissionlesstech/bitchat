@@ -50,23 +50,31 @@ final class GeoRelayDirectory {
 
     private func fetchRemote() {
         let req = URLRequest(url: remoteURL, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
-        let task = URLSession.shared.dataTask(with: req) { [weak self] data, _, error in
-            guard let self = self else { return }
-            if let data = data, error == nil, let text = String(data: data, encoding: .utf8) {
-                let parsed = GeoRelayDirectory.parseCSV(text)
-                if !parsed.isEmpty {
-                    Task { @MainActor in
-                        self.entries = parsed
-                        self.persistCache(text)
-                        UserDefaults.standard.set(Date(), forKey: self.lastFetchKey)
-                        SecureLogger.log("GeoRelayDirectory: refreshed \(parsed.count) relays from remote", category: SecureLogger.session, level: .info)
-                    }
-                    return
-                }
+        // Ensure Tor readiness before fetching (fail-closed by default)
+        Task.detached {
+            let ready = await TorManager.shared.awaitReady()
+            if !ready {
+                SecureLogger.log("GeoRelayDirectory: Tor not ready; skipping remote fetch (fail-closed)", category: SecureLogger.session, level: .warning)
+                return
             }
-            SecureLogger.log("GeoRelayDirectory: remote fetch failed; keeping local entries", category: SecureLogger.session, level: .warning)
+            let task = TorURLSession.shared.session.dataTask(with: req) { [weak self] data, _, error in
+                guard let self = self else { return }
+                if let data = data, error == nil, let text = String(data: data, encoding: .utf8) {
+                    let parsed = GeoRelayDirectory.parseCSV(text)
+                    if !parsed.isEmpty {
+                        Task { @MainActor in
+                            self.entries = parsed
+                            self.persistCache(text)
+                            UserDefaults.standard.set(Date(), forKey: self.lastFetchKey)
+                            SecureLogger.log("GeoRelayDirectory: refreshed \(parsed.count) relays from remote", category: SecureLogger.session, level: .info)
+                        }
+                        return
+                    }
+                }
+                SecureLogger.log("GeoRelayDirectory: remote fetch failed; keeping local entries", category: SecureLogger.session, level: .warning)
+            }
+            task.resume()
         }
-        task.resume()
     }
 
     private func persistCache(_ text: String) {

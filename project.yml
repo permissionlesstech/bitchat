@@ -68,6 +68,10 @@ targets:
       - target: bitchatShareExtension
         embed: true
       - package: P256K
+      - framework: Frameworks/tor-nolzma.xcframework
+        embed: true
+        codeSign: true
+      - sdk: libz.tbd
         
   bitchat_macOS:
     type: application
@@ -100,7 +104,7 @@ targets:
       PRODUCT_BUNDLE_IDENTIFIER: chat.bitchat
       PRODUCT_NAME: bitchat
       INFOPLIST_FILE: bitchat/Info.plist
-      ENABLE_PREVIEWS: YES
+      ENABLE_PREVIEWS: NO
       SWIFT_VERSION: 5.0
       MACOSX_DEPLOYMENT_TARGET: 13.0
       CODE_SIGN_STYLE: Automatic
@@ -112,6 +116,10 @@ targets:
       CODE_SIGN_ENTITLEMENTS: bitchat/bitchat-macOS.entitlements
     dependencies:
       - package: P256K
+      - framework: Frameworks/tor-nolzma.xcframework
+        embed: true
+        codeSign: true
+      - sdk: libz.tbd
 
   bitchatShareExtension:
     type: app-extension

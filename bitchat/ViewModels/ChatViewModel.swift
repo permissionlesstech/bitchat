@@ -358,6 +358,17 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     private var geoDmSubscriptionID: String? = nil
     private var currentGeohash: String? = nil
     private var geoNicknames: [String: String] = [:] // pubkeyHex(lowercased) -> nickname
+    // Show Tor status once per app launch
+    private var torStatusAnnounced = false
+    private var torProgressCancellable: AnyCancellable?
+    private var lastTorProgressAnnounced = -1
+    // Queue geohash-only system messages if user isn't on a location channel yet
+    private var pendingGeohashSystemMessages: [String] = []
+    // Track whether a Tor restart is pending so we only announce
+    // "tor restarted" after an actual restart, not the first launch.
+    private var torRestartPending: Bool = false
+    // Ensure we set up DM subscription only once per app session
+    private var nostrHandlersSetup: Bool = false
     
     // MARK: - Caches
     
@@ -526,18 +537,37 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         // Start mesh service immediately
         meshService.startServices()
         
-        // Initialize Nostr services
+        // Announce Tor status (geohash-only; do not show in mesh chat)
+        if TorManager.shared.torEnforced && !torStatusAnnounced {
+            torStatusAnnounced = true
+            addGeohashOnlySystemMessage("starting tor...")
+            // Suppress incremental Tor progress messages; only show initial start and readiness.
+            torProgressCancellable = nil
+            Task.detached {
+                let ready = await TorManager.shared.awaitReady()
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    if ready { self.addGeohashOnlySystemMessage("tor started. routing all chats via tor for privacy.") }
+                    else { self.addGeohashOnlySystemMessage("still waiting for tor to start...") }
+                }
+            }
+        } else if !TorManager.shared.torEnforced && !torStatusAnnounced {
+            torStatusAnnounced = true
+            addGeohashOnlySystemMessage("development build: tor bypass enabled.")
+        }
+
+        // Initialize Nostr services only after Tor is fully ready, to avoid
+        // interleaving setup logs during Tor startup.
         Task { @MainActor in
+            // Wait for Tor readiness before Nostr init
+            let ready = await TorManager.shared.awaitReady(timeout: 60)
+            guard ready else {
+                SecureLogger.log("Nostr init skipped: Tor not ready", category: SecureLogger.session, level: .error)
+                return
+            }
             nostrRelayManager = NostrRelayManager.shared
             SecureLogger.log("Initializing Nostr relay connections", category: SecureLogger.session, level: .debug)
-            nostrRelayManager?.connect()
-            
-            // Small delay to ensure read receipts are fully loaded
-            // This prevents race conditions where messages arrive before initialization completes
-            try? await Task.sleep(nanoseconds: TransportConfig.uiStartupShortSleepNs) // 0.2 seconds
-            
-            // Set up Nostr message handling directly
-            setupNostrMessageHandling()
+            // Connect is managed centrally on scene activation; avoid duplicate connects here
 
             // Attempt to flush any queued outbox after Nostr comes online
             messageRouter.flushAllOutbox()
@@ -584,25 +614,34 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             
             self.cancellables.insert(cancellable)
 
-            // Resubscribe geohash on relay reconnect
-            if let relayMgr = self.nostrRelayManager {
-                relayMgr.$isConnected
-                    .receive(on: DispatchQueue.main)
-                    .sink { [weak self] connected in
-                        guard let self = self else { return }
-                        if connected {
-                            Task { @MainActor in
-                                self.resubscribeCurrentGeohash()
-                                // Re-init sampling for regional + bookmarked geohashes after reconnect
-                                let regional = LocationChannelManager.shared.availableChannels.map { $0.geohash }
-                                let bookmarks = GeohashBookmarksStore.shared.bookmarks
-                                let union = Array(Set(regional).union(bookmarks))
+        // Resubscribe geohash on relay reconnect
+        if let relayMgr = self.nostrRelayManager {
+            relayMgr.$isConnected
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] connected in
+                    guard let self = self else { return }
+                    if connected {
+                        Task { @MainActor in
+                            // Set up DM handler once on first connect
+                            if !self.nostrHandlersSetup {
+                                self.setupNostrMessageHandling()
+                                self.nostrHandlersSetup = true
+                            }
+                            self.resubscribeCurrentGeohash()
+                            // Re-init sampling for regional + bookmarked geohashes after reconnect
+                            let regional = LocationChannelManager.shared.availableChannels.map { $0.geohash }
+                            let bookmarks = GeohashBookmarksStore.shared.bookmarks
+                            let union = Array(Set(regional).union(bookmarks))
+                            if TorManager.shared.isForeground() {
                                 self.beginGeohashSampling(for: union)
+                            } else {
+                                self.endGeohashSampling()
                             }
                         }
                     }
-                    .store(in: &self.cancellables)
-            }
+                }
+                .store(in: &self.cancellables)
+        }
         }
 
         // Set up Noise encryption callbacks
@@ -623,7 +662,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             self.switchLocationChannel(to: LocationChannelManager.shared.selectedChannel)
         }
 
-        // Background: keep sampling nearby geohashes + bookmarks for notifications even when sheet is closed
+        // Foreground-only: sample nearby geohashes + bookmarks (disabled in background)
         LocationChannelManager.shared.$availableChannels
             .receive(on: DispatchQueue.main)
             .sink { [weak self] channels in
@@ -632,7 +671,11 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 let bookmarks = GeohashBookmarksStore.shared.bookmarks
                 let union = Array(Set(regional).union(bookmarks))
                 Task { @MainActor in
-                    self.beginGeohashSampling(for: union)
+                    if TorManager.shared.isForeground() {
+                        self.beginGeohashSampling(for: union)
+                    } else {
+                        self.endGeohashSampling()
+                    }
                 }
             }
             .store(in: &cancellables)
@@ -645,17 +688,21 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 let regional = LocationChannelManager.shared.availableChannels.map { $0.geohash }
                 let union = Array(Set(regional).union(bookmarks))
                 Task { @MainActor in
-                    self.beginGeohashSampling(for: union)
+                    if TorManager.shared.isForeground() {
+                        self.beginGeohashSampling(for: union)
+                    } else {
+                        self.endGeohashSampling()
+                    }
                 }
             }
             .store(in: &cancellables)
 
-        // Kick off initial sampling if we have regional channels or bookmarks
+        // Kick off initial sampling if we have regional channels or bookmarks (foreground only)
         do {
             let regional = LocationChannelManager.shared.availableChannels.map { $0.geohash }
             let bookmarks = GeohashBookmarksStore.shared.bookmarks
             let union = Array(Set(regional).union(bookmarks))
-            if !union.isEmpty {
+            if !union.isEmpty && TorManager.shared.isForeground() {
                 Task { @MainActor in self.beginGeohashSampling(for: union) }
             }
         }
@@ -731,6 +778,19 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             name: NSApplication.willTerminateNotification,
             object: nil
         )
+        // Tor lifecycle notifications: inform user when Tor restarts and when ready (macOS)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleTorWillRestart),
+            name: .TorWillRestart,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleTorDidBecomeReady),
+            name: .TorDidBecomeReady,
+            object: nil
+        )
         #else
         NotificationCenter.default.addObserver(
             self,
@@ -762,6 +822,19 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             name: UIApplication.willTerminateNotification,
             object: nil
         )
+        // Tor lifecycle notifications: inform user when Tor restarts and when ready
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleTorWillRestart),
+            name: .TorWillRestart,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleTorDidBecomeReady),
+            name: .TorDidBecomeReady,
+            object: nil
+        )
         #endif
     }
     
@@ -769,6 +842,26 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     
     deinit {
         // No need to force UserDefaults synchronization
+    }
+
+    // MARK: - Tor notifications
+    @objc private func handleTorWillRestart() {
+        Task { @MainActor in
+            self.torRestartPending = true
+            // Post only in geohash channels (queue if not active)
+            self.addGeohashOnlySystemMessage("tor restarting to recover connectivity…")
+        }
+    }
+
+    @objc private func handleTorDidBecomeReady() {
+        Task { @MainActor in
+            // Only announce "restarted" if we actually restarted this session
+            if self.torRestartPending {
+                // Post only in geohash channels (queue if not active)
+                self.addGeohashOnlySystemMessage("tor restarted. network routing restored.")
+                self.torRestartPending = false
+            }
+        }
     }
     
     // Resubscribe to the active geohash channel without clearing timeline
@@ -1447,6 +1540,11 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 SecureLogger.log("RenderGuard: geohash \(ch.geohash) timeline has \(emptyGeo) empty messages after sanitize", category: SecureLogger.session, level: .debug)
             }
         }
+        // If switching to a location channel, flush any pending geohash-only system messages
+        if case .location = channel, !pendingGeohashSystemMessages.isEmpty {
+            for m in pendingGeohashSystemMessages { addPublicSystemMessage(m) }
+            pendingGeohashSystemMessages.removeAll(keepingCapacity: false)
+        }
         // Unsubscribe previous
         if let sub = geoSubscriptionID {
             NostrRelayManager.shared.unsubscribe(id: sub)
@@ -1576,8 +1674,11 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
             let dmSub = "geo-dm-\(ch.geohash)"
             geoDmSubscriptionID = dmSub
             // pared back logging: subscribe debug only
-            SecureLogger.log("GeoDM: subscribing DMs pub=\(id.publicKeyHex.prefix(8))… sub=\(dmSub)",
-                            category: SecureLogger.session, level: .debug)
+            // Log GeoDM subscribe only when Tor is ready to avoid early noise
+            if TorManager.shared.isReady {
+                SecureLogger.log("GeoDM: subscribing DMs pub=\(id.publicKeyHex.prefix(8))… sub=\(dmSub)",
+                                category: SecureLogger.session, level: .debug)
+            }
             let dmFilter = NostrFilter.giftWrapsFor(pubkey: id.publicKeyHex, since: Date().addingTimeInterval(-TransportConfig.nostrDMSubscribeLookbackSeconds))
             NostrRelayManager.shared.subscribe(filter: dmFilter, id: dmSub) { [weak self] giftWrap in
                 guard let self = self else { return }
@@ -1842,6 +1943,11 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
     /// Begin sampling multiple geohashes (used by channel sheet) without changing active channel.
     @MainActor
     func beginGeohashSampling(for geohashes: [String]) {
+        // Disable sampling when app is backgrounded (Tor is stopped there)
+        if !TorManager.shared.isForeground() {
+            endGeohashSampling()
+            return
+        }
         // Determine which to add and which to remove
         let desired = Set(geohashes)
         let current = Set(geoSamplingSubs.values)
@@ -1887,15 +1993,13 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 // Avoid notifications for old sampled events when launching or (re)subscribing
                 let eventTime = Date(timeIntervalSince1970: TimeInterval(event.created_at))
                 if Date().timeIntervalSince(eventTime) > 30 { return }
-                // Foreground policy: allow if it's a different geohash than the one currently open
+                // Foreground-only notifications: app must be active, and not already viewing this geohash
                 #if os(iOS)
-                if UIApplication.shared.applicationState == .active {
-                    if case .location(let ch) = self.activeChannel, ch.geohash == gh { return }
-                }
+                guard UIApplication.shared.applicationState == .active else { return }
+                if case .location(let ch) = self.activeChannel, ch.geohash == gh { return }
                 #elseif os(macOS)
-                if NSApplication.shared.isActive {
-                    if case .location(let ch) = self.activeChannel, ch.geohash == gh { return }
-                }
+                guard NSApplication.shared.isActive else { return }
+                if case .location(let ch) = self.activeChannel, ch.geohash == gh { return }
                 #endif
                 // Cooldown per geohash
                 let now = Date()
@@ -2607,8 +2711,7 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 self.markPrivateMessagesAsRead(from: peerID)
             }
         }
-        // Also resubscribe the current geohash channel if active
-        resubscribeCurrentGeohash()
+        // Subscriptions will be resent after connections come back up
     }
     
     @MainActor
@@ -4873,11 +4976,39 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
         messages.append(systemMessage)
     }
 
-    /// Public helper to add a system message to the public chat timeline
+    /// Public helper to add a system message to the public chat timeline.
+    /// Also persists the message into the active channel's backing store so it survives timeline rebinds.
     @MainActor
     func addPublicSystemMessage(_ content: String) {
-        addSystemMessage(content)
+        let systemMessage = BitchatMessage(
+            sender: "system",
+            content: content,
+            timestamp: Date(),
+            isRelay: false
+        )
+        // Append to current visible messages
+        messages.append(systemMessage)
+        // Persist into the backing store for the active channel to survive rebinds
+        switch activeChannel {
+        case .mesh:
+            meshTimeline.append(systemMessage)
+        case .location(let ch):
+            var arr = geoTimelines[ch.geohash] ?? []
+            arr.append(systemMessage)
+            geoTimelines[ch.geohash] = arr
+        }
         objectWillChange.send()
+    }
+
+    /// Add a system message only if viewing a geohash location channel (never post to mesh).
+    @MainActor
+    func addGeohashOnlySystemMessage(_ content: String) {
+        if case .location = activeChannel {
+            addPublicSystemMessage(content)
+        } else {
+            // Not on a location channel yet: queue to show when user switches
+            pendingGeohashSystemMessages.append(content)
+        }
     }
     // Send a public message without adding a local user echo.
     // Used for emotes where we want a local system-style confirmation instead.
