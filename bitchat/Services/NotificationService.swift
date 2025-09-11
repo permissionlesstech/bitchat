@@ -14,7 +14,7 @@ import UIKit
 import AppKit
 #endif
 
-class NotificationService {
+final class NotificationService {
     static let shared = NotificationService()
     
     private init() {}

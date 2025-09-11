@@ -270,7 +270,7 @@ final class BLEServiceTests: XCTestCase {
 
 // MARK: - Mock Delegate Helper
 
-private class MockBitchatDelegate: BitchatDelegate {
+private final class MockBitchatDelegate: BitchatDelegate {
     private let messageHandler: (BitchatMessage) -> Void
     
     init(_ handler: @escaping (BitchatMessage) -> Void) {

@@ -90,7 +90,7 @@ import UIKit
 /// Manages the application state and business logic for BitChat.
 /// Acts as the primary coordinator between UI components and backend services,
 /// implementing the BitchatDelegate protocol to handle network events.
-class ChatViewModel: ObservableObject, BitchatDelegate {
+final class ChatViewModel: ObservableObject, BitchatDelegate {
     // Precompiled regexes and detectors reused across formatting
     private enum Regexes {
         static let hashtag: NSRegularExpression = {

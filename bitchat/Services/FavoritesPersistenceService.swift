@@ -3,7 +3,7 @@ import Combine
 
 /// Manages persistent favorite relationships between peers
 @MainActor
-class FavoritesPersistenceService: ObservableObject {
+final class FavoritesPersistenceService: ObservableObject {
     
     struct FavoriteRelationship: Codable {
         let peerNoisePublicKey: Data

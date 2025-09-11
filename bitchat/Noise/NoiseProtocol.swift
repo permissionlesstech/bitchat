@@ -127,7 +127,7 @@ struct NoiseProtocolName {
 /// Handles ChaCha20-Poly1305 AEAD encryption with automatic nonce management
 /// and replay protection using a sliding window algorithm.
 /// - Warning: Nonce reuse would be catastrophic for security
-class NoiseCipherState {
+final class NoiseCipherState {
     // Constants for replay protection
     private static let NONCE_SIZE_BYTES = 4
     private static let REPLAY_WINDOW_SIZE = 1024
@@ -384,7 +384,7 @@ class NoiseCipherState {
 /// Responsible for key derivation, protocol name hashing, and maintaining
 /// the chaining key that provides key separation between handshake messages.
 /// - Note: This class implements the SymmetricState object from the Noise spec
-class NoiseSymmetricState {
+final class NoiseSymmetricState {
     private var cipherState: NoiseCipherState
     private var chainingKey: Data
     private var hash: Data
@@ -488,7 +488,7 @@ class NoiseSymmetricState {
 /// This is the main interface for establishing encrypted sessions between peers.
 /// Manages the handshake state machine, message patterns, and key derivation.
 /// - Important: Each handshake instance should only be used once
-class NoiseHandshakeState {
+final class NoiseHandshakeState {
     private let role: NoiseRole
     private let pattern: NoisePattern
     private var symmetricState: NoiseSymmetricState

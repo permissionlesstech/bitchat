@@ -397,7 +397,7 @@ enum DeliveryStatus: Codable, Equatable {
 /// Handles both broadcast messages and private encrypted messages,
 /// with support for mentions, replies, and delivery tracking.
 /// - Note: This is the primary data model for chat messages
-class BitchatMessage: Codable {
+final class BitchatMessage: Codable {
     let id: String
     let sender: String
     let content: String

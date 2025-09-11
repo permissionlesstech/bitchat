@@ -17,7 +17,7 @@ enum CommandResult {
 
 /// Processes chat commands in a focused, efficient way
 @MainActor
-class CommandProcessor {
+final class CommandProcessor {
     weak var chatViewModel: ChatViewModel?
     weak var meshService: Transport?
     
