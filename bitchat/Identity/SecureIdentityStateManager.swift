@@ -93,10 +93,50 @@
 import Foundation
 import CryptoKit
 
+protocol SecureIdentityStateManagerProtocol {
+    // MARK: Secure Loading/Saving
+    func forceSave()
+    
+    // MARK: Social Identity Management
+    func getSocialIdentity(for fingerprint: String) -> SocialIdentity?
+    
+    // MARK: Cryptographic Identities
+    func upsertCryptographicIdentity(fingerprint: String, noisePublicKey: Data, signingPublicKey: Data?, claimedNickname: String?)
+    func getCryptoIdentitiesByPeerIDPrefix(_ peerID: String) -> [CryptographicIdentity]
+    func updateSocialIdentity(_ identity: SocialIdentity)
+    
+    // MARK: Favorites Management
+    func getFavorites() -> Set<String>
+    func setFavorite(_ fingerprint: String, isFavorite: Bool)
+    func isFavorite(fingerprint: String) -> Bool
+    
+    // MARK: Blocked Users Management
+    func isBlocked(fingerprint: String) -> Bool
+    func setBlocked(_ fingerprint: String, isBlocked: Bool)
+    
+    // MARK: Geohash (Nostr) Blocking
+    func isNostrBlocked(pubkeyHexLowercased: String) -> Bool
+    func setNostrBlocked(_ pubkeyHexLowercased: String, isBlocked: Bool)
+    func getBlockedNostrPubkeys() -> Set<String>
+    
+    // MARK: Ephemeral Session Management
+    func registerEphemeralSession(peerID: String, handshakeState: HandshakeState)
+    func updateHandshakeState(peerID: String, state: HandshakeState)
+    
+    // MARK: Cleanup
+    func clearAllIdentityData()
+    func removeEphemeralSession(peerID: String)
+    
+    // MARK: Verification
+    func setVerified(fingerprint: String, verified: Bool)
+    func isVerified(fingerprint: String) -> Bool
+    func getVerifiedFingerprints() -> Set<String>
+}
+
 /// Singleton manager for secure identity state persistence and retrieval.
 /// Provides thread-safe access to identity mappings with encryption at rest.
 /// All identity data is stored encrypted in the device Keychain for security.
-final class SecureIdentityStateManager {
+final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     static let shared = SecureIdentityStateManager()
     
     private let keychain: KeychainManagerProtocol
