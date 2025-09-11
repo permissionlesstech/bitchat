@@ -904,76 +904,19 @@ struct ContentView: View {
                         fileImportError = "File too large. Max \(NoiseSecurityConstants.maxMessageSize / (1024 * 1024))MB for inline transfer."
                         return
                     }
-                    
+                    guard let peerID = viewModel.selectedPrivateChatPeer else {
+                        fileImportError = "Select a private chat first."
+                        return
+                    }
                     let filename = url.lastPathComponent
                     let mime = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? "application/octet-stream"
-                    
-                    // Determine transfer destination
-                    if let peerID = viewModel.selectedPrivateChatPeer {
-                        // Private chat via mesh
-                        viewModel.meshService.getNoiseService() // touch to ensure Noise available
-                        if let ble = viewModel.meshService as? BLEService {
-                            ble.sendInlineFile(to: peerID, filename: filename, mimeType: mime, data: data)
-                        } else {
-                            fileImportError = "Inline file send not supported on current transport."
-                        }
-                    } else if case .location(let geohashChannel) = viewModel.activeChannel {
-                        // Location channel via Nostr
-                        Task {
-                            do {
-                                // Create file transfer event content (base64-encoded file data)
-                                let encodedData = data.base64EncodedString()
-                                let fileContent = [
-                                    "type": "file",
-                                    "filename": filename,
-                                    "mimeType": mime,
-                                    "size": data.count,
-                                    "data": encodedData
-                                ]
-                                
-                                guard let contentData = try? JSONSerialization.data(withJSONObject: fileContent),
-                                      let contentString = String(data: contentData, encoding: .utf8) else {
-                                    await MainActor.run {
-                                        fileImportError = "Failed to encode file content"
-                                    }
-                                    return
-                                }
-                                
-                                // Get identity for this geohash
-                                let identity = try NostrIdentityBridge.deriveIdentity(forGeohash: geohashChannel.geohash)
-                                
-                                // Create geohash file transfer event (kind 20001)
-                                let event = try NostrProtocol.createEphemeralGeohashFileEvent(
-                                    fileContent: contentString,
-                                    geohash: geohashChannel.geohash,
-                                    senderIdentity: identity,
-                                    filename: filename
-                                )
-                                
-                                // Get target relays for this geohash
-                                let targetRelays = await GeoRelayDirectory.shared.closestRelays(
-                                    toGeohash: geohashChannel.geohash,
-                                    count: 3
-                                )
-                                
-                                if targetRelays.isEmpty {
-                                    await MainActor.run {
-                                        fileImportError = "No relays available for location \(geohashChannel.geohash)"
-                                    }
-                                    return
-                                }
-                                
-                                // Send to relays
-                                await NostrRelayManager.shared.sendEvent(event, to: targetRelays)
-                                
-                            } catch {
-                                await MainActor.run {
-                                    fileImportError = "Failed to send file: \(error.localizedDescription)"
-                                }
-                            }
-                        }
+                    // Send via mesh service (BLE)
+                    viewModel.meshService.getNoiseService() // touch to ensure Noise available
+                    if let ble = viewModel.meshService as? BLEService {
+                        ble.sendInlineFile(to: peerID, filename: filename, mimeType: mime, data: data)
                     } else {
-                        fileImportError = "Select a private chat or location channel first."
+                        // Fallback: attempt through Transport if later exposed
+                        fileImportError = "Inline file send not supported on current transport."
                     }
                 } catch {
                     fileImportError = "Failed to read file: \(error.localizedDescription)"
@@ -981,7 +924,6 @@ struct ContentView: View {
             case .failure(let err):
                 fileImportError = err.localizedDescription
             }
-        }
         }
         .alert(item: Binding(get: {
             fileImportError.map { LocalizedErrorWrapper(message: $0) }

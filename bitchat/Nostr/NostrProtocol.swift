@@ -17,6 +17,7 @@ struct NostrProtocol {
         case seal = 13 // NIP-17 sealed event
         case giftWrap = 1059 // NIP-59 gift wrap
         case ephemeralEvent = 20000
+        case ephemeralFileEvent = 20001
     }
     
     /// Create a NIP-17 private message
@@ -121,6 +122,25 @@ struct NostrProtocol {
             kind: .ephemeralEvent,
             tags: tags,
             content: content
+        )
+        let schnorrKey = try senderIdentity.schnorrSigningKey()
+        return try event.sign(with: schnorrKey)
+    }
+    
+    /// Create a geohash-scoped ephemeral file transfer event (kind 20001)
+    static func createEphemeralGeohashFileEvent(
+        fileContent: String,
+        geohash: String,
+        senderIdentity: NostrIdentity,
+        filename: String
+    ) throws -> NostrEvent {
+        var tags = [["g", geohash], ["f", filename], ["t", "file"]]
+        let event = NostrEvent(
+            pubkey: senderIdentity.publicKeyHex,
+            createdAt: Date(),
+            kind: .ephemeralFileEvent,
+            tags: tags,
+            content: fileContent
         )
         let schnorrKey = try senderIdentity.schnorrSigningKey()
         return try event.sign(with: schnorrKey)
