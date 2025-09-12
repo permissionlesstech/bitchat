@@ -420,6 +420,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     private var geoSamplingSubs: [String: String] = [:] // subID -> geohash
     private var lastGeoNotificationAt: [String: Date] = [:] // geohash -> last notify time
     
+    
     // MARK: - Message Delivery Tracking
     
     // Delivery tracking
@@ -4599,16 +4600,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             // Register ephemeral session with identity manager
             SecureIdentityStateManager.shared.registerEphemeralSession(peerID: peerID)
             
-            // Check if we favorite this peer and resend notification on reconnect
-            // This ensures Nostr key mapping is maintained across reconnections
-            if let peer = unifiedPeerService.getPeer(by: peerID),
-               let favoriteStatus = FavoritesPersistenceService.shared.getFavoriteStatus(for: peer.noisePublicKey),
-               favoriteStatus.isFavorite {
-                // Resend favorite notification with our Nostr key after a short delay
-                try? await Task.sleep(nanoseconds: TransportConfig.uiAsyncMediumSleepNs) // 0.5 seconds
-                meshService.sendFavoriteNotification(to: peerID, isFavorite: true)
-                SecureLogger.debug("📤 Resent favorite notification to reconnected peer \(peerID)", category: .session)
-            }
+            // Intentionally do not resend favorites on reconnect.
+            // We only send our npub when a favorite is toggled on, or if our npub changes.
             
             // Force UI refresh
             objectWillChange.send()
@@ -4955,6 +4948,26 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             isRelay: false
         )
         messages.append(systemMessage)
+    }
+
+    /// Add a system message to the mesh timeline only (never geohash).
+    /// If mesh is currently active, also append to the visible `messages`.
+    @MainActor
+    private func addMeshOnlySystemMessage(_ content: String) {
+        let systemMessage = BitchatMessage(
+            sender: "system",
+            content: content,
+            timestamp: Date(),
+            isRelay: false
+        )
+        // Persist to mesh timeline
+        meshTimeline.append(systemMessage)
+        trimMeshTimelineIfNeeded()
+        // Only show inline if mesh is the active channel
+        if case .mesh = activeChannel {
+            messages.append(systemMessage)
+        }
+        objectWillChange.send()
     }
 
     /// Public helper to add a system message to the public chat timeline.
@@ -5384,23 +5397,27 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             SecureLogger.warning("⚠️ Cannot get Noise key for peer \(peerID)", category: .session)
             return
         }
-        
-        // Update the favorite relationship
+        // Determine prior state to avoid duplicate system messages on repeated notifications
+        let prior = FavoritesPersistenceService.shared.getFavoriteStatus(for: finalNoiseKey)?.theyFavoritedUs ?? false
+
+        // Update the favorite relationship (idempotent storage)
         FavoritesPersistenceService.shared.updatePeerFavoritedUs(
             peerNoisePublicKey: finalNoiseKey,
             favorited: isFavorite,
             peerNickname: senderNickname,
             peerNostrPublicKey: nostrPubkey
         )
-        
-        // If they favorited us and provided their Nostr key, ensure it's stored
+
+        // If they favorited us and provided their Nostr key, ensure it's stored (log only)
         if isFavorite && nostrPubkey != nil {
             SecureLogger.info("💾 Storing Nostr key association for \(senderNickname): \(nostrPubkey!.prefix(16))...", category: .session)
         }
-        
-        // Show system message
-        let action = isFavorite ? "favorited" : "unfavorited"
-        addSystemMessage("\(senderNickname) \(action) you")
+
+        // Only show a system message when the state changes, and only in mesh
+        if prior != isFavorite {
+            let action = isFavorite ? "favorited" : "unfavorited"
+            addMeshOnlySystemMessage("\(senderNickname) \(action) you")
+        }
     }
     
     @MainActor
