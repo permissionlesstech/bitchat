@@ -1046,7 +1046,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                         if let idx = self.privateChats[convKey]?.firstIndex(where: { $0.id == messageID }) {
                             self.privateChats[convKey]?[idx].deliveryStatus = .delivered(to: self.displayNameForNostrPubkey(senderPubkey), at: Date())
                             self.objectWillChange.send()
-                            SecureLogger.info("GeoDM: recv DELIVERED for mid=\(messageID.prefix(8))… from=\(senderPubkey.prefix(8))…", category: .session)
+                            SecureLogger.info("GeoDM: recv DELIVERED for mid=\(messageID.prefix(8))… from=\(senderpubkey.prefix(min(8, pubkey.count)))…", category: .session)
                         } else {
                             SecureLogger.warning("GeoDM: delivered ack for unknown mid=\(messageID.prefix(8))… conv=\(convKey)", category: .session)
                         }
@@ -1056,7 +1056,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                         if let idx = self.privateChats[convKey]?.firstIndex(where: { $0.id == messageID }) {
                             self.privateChats[convKey]?[idx].deliveryStatus = .read(by: self.displayNameForNostrPubkey(senderPubkey), at: Date())
                             self.objectWillChange.send()
-                            SecureLogger.info("GeoDM: recv READ for mid=\(messageID.prefix(8))… from=\(senderPubkey.prefix(8))…", category: .session)
+                            SecureLogger.info("GeoDM: recv READ for mid=\(messageID.prefix(8))… from=\(senderpubkey.prefix(min(8, pubkey.count)))…", category: .session)
                         } else {
                             SecureLogger.warning("GeoDM: read ack for unknown mid=\(messageID.prefix(8))… conv=\(convKey)", category: .session)
                         }
@@ -1597,7 +1597,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             self.recordProcessedEvent(event.id)
             // Log incoming tags for diagnostics
             let tagSummary = event.tags.map { "[" + $0.joined(separator: ",") + "]" }.joined(separator: ",")
-            SecureLogger.debug("GeoTeleport: recv pub=\(event.pubkey.prefix(8))… tags=\(tagSummary)", category: .session)
+            SecureLogger.debug("GeoTeleport: recv pub=\(event.pubkey.prefix(min(8, pubkey.count)))… tags=\(tagSummary)", category: .session)
             // Track teleport tag for participants – only our format ["t", "teleport"]
             let hasTeleportTag: Bool = event.tags.contains(where: { tag in
                 tag.count >= 2 && tag[0].lowercased() == "t" && tag[1].lowercased() == "teleport"
@@ -1693,7 +1693,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                     SecureLogger.warning("GeoDM: failed decrypt giftWrap id=\(giftWrap.id.prefix(8))…", category: .session)
                     return
                 }
-                SecureLogger.debug("GeoDM: decrypted gift-wrap id=\(giftWrap.id.prefix(16))... from=\(senderPubkey.prefix(8))...", category: .session)
+                SecureLogger.debug("GeoDM: decrypted gift-wrap id=\(giftWrap.id.prefix(16))... from=\(senderpubkey.prefix(min(8, pubkey.count)))...", category: .session)
                 guard content.hasPrefix("bitchat1:") else { return }
                 guard let packetData = Self.base64URLDecode(String(content.dropFirst("bitchat1:".count))),
                       let packet = BitchatPacket.from(packetData) else { return }
@@ -1706,7 +1706,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                 case .privateMessage:
                     guard let pm = PrivateMessagePacket.decode(from: noisePayload.data) else { return }
                     let messageId = pm.messageID
-                    SecureLogger.info("GeoDM: recv PM <- sender=\(senderPubkey.prefix(8))… mid=\(messageId.prefix(8))…", category: .session)
+                    SecureLogger.info("GeoDM: recv PM <- sender=\(senderpubkey.prefix(min(8, pubkey.count)))… mid=\(messageId.prefix(8))…", category: .session)
                     // Send delivery ACK immediately (even if duplicate), once per messageID
                     if !self.sentGeoDeliveryAcks.contains(messageId) {
                         let nostrTransport = NostrTransport(keychain: keychain)
@@ -1769,7 +1769,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                             if let idx = self.privateChats[convKey]?.firstIndex(where: { $0.id == messageID }) {
                                 self.privateChats[convKey]?[idx].deliveryStatus = .delivered(to: self.displayNameForNostrPubkey(senderPubkey), at: Date())
                                 self.objectWillChange.send()
-                                SecureLogger.info("GeoDM: recv DELIVERED for mid=\(messageID.prefix(8))… from=\(senderPubkey.prefix(8))…", category: .session)
+                                SecureLogger.info("GeoDM: recv DELIVERED for mid=\(messageID.prefix(8))… from=\(senderpubkey.prefix(min(8, pubkey.count)))…", category: .session)
                             } else {
                                 SecureLogger.warning("GeoDM: delivered ack for unknown mid=\(messageID.prefix(8))… conv=\(convKey)", category: .session)
                             }
@@ -1779,7 +1779,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                             if let idx = self.privateChats[convKey]?.firstIndex(where: { $0.id == messageID }) {
                                 self.privateChats[convKey]?[idx].deliveryStatus = .read(by: self.displayNameForNostrPubkey(senderPubkey), at: Date())
                                 self.objectWillChange.send()
-                                SecureLogger.info("GeoDM: recv READ for mid=\(messageID.prefix(8))… from=\(senderPubkey.prefix(8))…", category: .session)
+                                SecureLogger.info("GeoDM: recv READ for mid=\(messageID.prefix(8))… from=\(senderpubkey.prefix(min(8, pubkey.count)))…", category: .session)
                             } else {
                                 SecureLogger.warning("GeoDM: read ack for unknown mid=\(messageID.prefix(8))… conv=\(convKey)", category: .session)
                             }
@@ -4648,7 +4648,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             // Migrate messages view context to stable key so header shows favorite + Nostr globe
             if let messages = privateChats[peerID] {
                 if privateChats[stableKeyHex] == nil { privateChats[stableKeyHex] = [] }
-                let existing = Set(privateChats[stableKeyHex]!.map { $0.id })
+                let existing = Set((privateChats[stableKeyHex] ?? []).map { $0.id })
                 for msg in messages where !existing.contains(msg.id) {
                     let updated = BitchatMessage(
                         id: msg.id,
@@ -5225,7 +5225,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                         let nt = NostrTransport(keychain: keychain)
                         nt.senderPeerID = meshService.myPeerID
                         nt.sendDeliveryAckGeohash(for: messageId, toRecipientHex: senderPubkey, from: id)
-                        SecureLogger.debug("Sent DELIVERED ack directly to Nostr pub=\(senderPubkey.prefix(8))… for mid=\(messageId.prefix(8))…", category: .session)
+                        SecureLogger.debug("Sent DELIVERED ack directly to Nostr pub=\(senderpubkey.prefix(min(8, pubkey.count)))… for mid=\(messageId.prefix(8))…", category: .session)
                     }
                 }
 
@@ -5248,7 +5248,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                             nt.senderPeerID = meshService.myPeerID
                             nt.sendReadReceiptGeohash(messageId, toRecipientHex: senderPubkey, from: id)
                             sentReadReceipts.insert(messageId)
-                            SecureLogger.debug("Viewing chat; sent READ ack directly to Nostr pub=\(senderPubkey.prefix(8))… for mid=\(messageId.prefix(8))…", category: .session)
+                            SecureLogger.debug("Viewing chat; sent READ ack directly to Nostr pub=\(senderpubkey.prefix(min(8, pubkey.count)))… for mid=\(messageId.prefix(8))…", category: .session)
                         }
                     }
                 } else {
