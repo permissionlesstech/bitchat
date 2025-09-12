@@ -88,7 +88,8 @@ final class BLEService: NSObject {
     
     var myPeerID: String = ""
     var myNickname: String = "anon"
-    private let noiseService = NoiseEncryptionService()
+    private let noiseService: NoiseEncryptionService
+    private let identityManager: SecureIdentityStateManagerProtocol
     private var myPeerIDData: Data = Data()
 
     // MARK: - Advertising Privacy
@@ -325,7 +326,9 @@ final class BLEService: NSObject {
         }
     }
     
-    override init() {
+    init(keychain: KeychainManagerProtocol, identityManager: SecureIdentityStateManagerProtocol) {
+        noiseService = NoiseEncryptionService(keychain: keychain)
+        self.identityManager = identityManager
         super.init()
         
         // Derive stable peer ID from Noise static public key fingerprint (first 8 bytes → 16 hex chars)
@@ -1548,7 +1551,7 @@ final class BLEService: NSObject {
             // Derive fingerprint from Noise public key
             let hash = SHA256.hash(data: announcement.noisePublicKey)
             let fingerprint = hash.map { String(format: "%02x", $0) }.joined()
-            SecureIdentityStateManager.shared.upsertCryptographicIdentity(
+            identityManager.upsertCryptographicIdentity(
                 fingerprint: fingerprint,
                 noisePublicKey: announcement.noisePublicKey,
                 signingPublicKey: announcement.signingPublicKey,
@@ -1630,13 +1633,13 @@ final class BLEService: NSObject {
             // Fallback: verify signature using persisted signing key for this peerID's fingerprint prefix
             if let signature = packet.signature, let packetData = packet.toBinaryDataForSigning() {
                 // Find candidate identities by peerID prefix (16 hex)
-                let candidates = SecureIdentityStateManager.shared.getCryptoIdentitiesByPeerIDPrefix(peerID)
+                let candidates = identityManager.getCryptoIdentitiesByPeerIDPrefix(peerID)
                 for candidate in candidates {
                     if let signingKey = candidate.signingPublicKey,
                        noiseService.verifySignature(signature, for: packetData, publicKey: signingKey) {
                         accepted = true
                         // Prefer persisted social petname or claimed nickname
-                        if let social = SecureIdentityStateManager.shared.getSocialIdentity(for: candidate.fingerprint) {
+                        if let social = identityManager.getSocialIdentity(for: candidate.fingerprint) {
                             senderNickname = social.localPetname ?? social.claimedNickname
                         } else {
                             senderNickname = "anon" + String(peerID.prefix(4))

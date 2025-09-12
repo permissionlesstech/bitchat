@@ -10,6 +10,21 @@ import XCTest
 @testable import bitchat
 
 final class FragmentationTests: XCTestCase {
+    
+    private var mockKeychain: MockKeychain!
+    private var mockIdentityManager: MockIdentityManager!
+    
+    override func setUp() {
+        super.setUp()
+        mockKeychain = MockKeychain()
+        mockIdentityManager = MockIdentityManager(mockKeychain)
+    }
+    
+    override func tearDown() {
+        mockKeychain = nil
+        mockIdentityManager = nil
+        super.tearDown()
+    }
 
     private final class CaptureDelegate: BitchatDelegate {
         var publicMessages: [(peerID: String, nickname: String, content: String)] = []
@@ -75,7 +90,7 @@ final class FragmentationTests: XCTestCase {
     }
 
     func test_reassembly_from_fragments_delivers_public_message() {
-        let ble = BLEService()
+        let ble = BLEService(keychain: mockKeychain, identityManager: mockIdentityManager)
         let capture = CaptureDelegate()
         ble.delegate = capture
 
@@ -106,7 +121,7 @@ final class FragmentationTests: XCTestCase {
     }
 
     func test_duplicate_fragment_does_not_break_reassembly() {
-        let ble = BLEService()
+        let ble = BLEService(keychain: mockKeychain, identityManager: mockIdentityManager)
         let capture = CaptureDelegate()
         ble.delegate = capture
 
@@ -132,7 +147,7 @@ final class FragmentationTests: XCTestCase {
     }
 
     func test_invalid_fragment_header_is_ignored() {
-        let ble = BLEService()
+        let ble = BLEService(keychain: mockKeychain, identityManager: mockIdentityManager)
         let capture = CaptureDelegate()
         ble.delegate = capture
 

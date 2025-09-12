@@ -53,7 +53,7 @@ struct FingerprintView: View {
                     if peerID.count == 64, let data = Data(hexString: peerID) {
                         if let fav = FavoritesPersistenceService.shared.getFavoriteStatus(for: data), !fav.peerNickname.isEmpty { return fav.peerNickname }
                         let fp = data.sha256Fingerprint()
-                        if let social = SecureIdentityStateManager.shared.getSocialIdentity(for: fp) {
+                        if let social = viewModel.identityManager.getSocialIdentity(for: fp) {
                             if let pet = social.localPetname, !pet.isEmpty { return pet }
                             if !social.claimedNickname.isEmpty { return social.claimedNickname }
                         }

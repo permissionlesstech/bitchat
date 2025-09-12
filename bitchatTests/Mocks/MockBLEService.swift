@@ -36,6 +36,8 @@ final class MockBLEService: NSObject {
     var myPeerID: String = "MOCK1234"
     var myNickname: String = "MockUser"
     
+    private let mockKeychain = MockKeychain()
+    
     // Test-specific properties
     var sentMessages: [(message: BitchatMessage, packet: BitchatPacket)] = []
     var sentPackets: [BitchatPacket] = []
@@ -272,7 +274,7 @@ final class MockBLEService: NSObject {
     }
     
     func getNoiseService() -> NoiseEncryptionService {
-        return NoiseEncryptionService()
+        return NoiseEncryptionService(keychain: mockKeychain)
     }
     
     func getFingerprint(for peerID: String) -> String? {

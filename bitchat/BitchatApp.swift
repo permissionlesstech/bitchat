@@ -11,7 +11,7 @@ import UserNotifications
 
 @main
 struct BitchatApp: App {
-    @StateObject private var chatViewModel = ChatViewModel()
+    @StateObject private var chatViewModel: ChatViewModel
     #if os(iOS)
     @Environment(\.scenePhase) var scenePhase
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
@@ -23,6 +23,14 @@ struct BitchatApp: App {
     #endif
     
     init() {
+        let keychain = KeychainManager()
+        _chatViewModel = StateObject(
+            wrappedValue: ChatViewModel(
+                keychain: keychain,
+                identityManager: SecureIdentityStateManager(keychain)
+            )
+        )
+        
         UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
         // Warm up georelay directory and refresh if stale (once/day)
         GeoRelayDirectory.shared.prefetchIfNeeded()

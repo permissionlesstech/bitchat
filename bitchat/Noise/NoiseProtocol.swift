@@ -490,6 +490,7 @@ final class NoiseSymmetricState {
 final class NoiseHandshakeState {
     private let role: NoiseRole
     private let pattern: NoisePattern
+    private let keychain: KeychainManagerProtocol
     private var symmetricState: NoiseSymmetricState
     
     // Keys
@@ -505,9 +506,16 @@ final class NoiseHandshakeState {
     private var messagePatterns: [[NoiseMessagePattern]] = []
     private var currentPattern = 0
     
-    init(role: NoiseRole, pattern: NoisePattern, localStaticKey: Curve25519.KeyAgreement.PrivateKey? = nil, remoteStaticKey: Curve25519.KeyAgreement.PublicKey? = nil) {
+    init(
+        role: NoiseRole,
+        pattern: NoisePattern,
+        keychain: KeychainManagerProtocol,
+        localStaticKey: Curve25519.KeyAgreement.PrivateKey? = nil,
+        remoteStaticKey: Curve25519.KeyAgreement.PublicKey? = nil
+    ) {
         self.role = role
         self.pattern = pattern
+        self.keychain = keychain
         
         // Initialize static keys
         if let localKey = localStaticKey {
@@ -578,7 +586,7 @@ final class NoiseHandshakeState {
                 var sharedData = shared.withUnsafeBytes { Data($0) }
                 symmetricState.mixKey(sharedData)
                 // Clear sensitive shared secret
-                KeychainManager.secureClear(&sharedData)
+                keychain.secureClear(&sharedData)
                 
             case .es:
                 // DH(ephemeral, static) - direction depends on role
@@ -626,7 +634,7 @@ final class NoiseHandshakeState {
                 var sharedData = shared.withUnsafeBytes { Data($0) }
                 symmetricState.mixKey(sharedData)
                 // Clear sensitive shared secret
-                KeychainManager.secureClear(&sharedData)
+                keychain.secureClear(&sharedData)
             }
         }
         
@@ -714,7 +722,7 @@ final class NoiseHandshakeState {
                 var sharedData = shared.withUnsafeBytes { Data($0) }
                 symmetricState.mixKey(sharedData)
                 // Clear sensitive shared secret
-                KeychainManager.secureClear(&sharedData)
+                keychain.secureClear(&sharedData)
             } else {
                 guard let localStatic = localStaticPrivate,
                       let remoteEphemeral = remoteEphemeralPublic else {
@@ -724,7 +732,7 @@ final class NoiseHandshakeState {
                 var sharedData = shared.withUnsafeBytes { Data($0) }
                 symmetricState.mixKey(sharedData)
                 // Clear sensitive shared secret
-                KeychainManager.secureClear(&sharedData)
+                keychain.secureClear(&sharedData)
             }
             
         case .se:
@@ -737,7 +745,7 @@ final class NoiseHandshakeState {
                 var sharedData = shared.withUnsafeBytes { Data($0) }
                 symmetricState.mixKey(sharedData)
                 // Clear sensitive shared secret
-                KeychainManager.secureClear(&sharedData)
+                keychain.secureClear(&sharedData)
             } else {
                 guard let localEphemeral = localEphemeralPrivate,
                       let remoteStatic = remoteStaticPublic else {
@@ -747,7 +755,7 @@ final class NoiseHandshakeState {
                 var sharedData = shared.withUnsafeBytes { Data($0) }
                 symmetricState.mixKey(sharedData)
                 // Clear sensitive shared secret
-                KeychainManager.secureClear(&sharedData)
+                keychain.secureClear(&sharedData)
             }
             
         case .ss:

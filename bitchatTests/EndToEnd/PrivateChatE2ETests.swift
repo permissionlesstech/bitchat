@@ -16,6 +16,8 @@ final class PrivateChatE2ETests: XCTestCase {
     var bob: MockBluetoothMeshService!
     var charlie: MockBluetoothMeshService!
     
+    private var mockKeychain: MockKeychain!
+    
     override func setUp() {
         super.setUp()
         MockBLEService.resetTestBus()
@@ -24,6 +26,7 @@ final class PrivateChatE2ETests: XCTestCase {
         alice = createMockService(peerID: TestConstants.testPeerID1, nickname: TestConstants.testNickname1)
         bob = createMockService(peerID: TestConstants.testPeerID2, nickname: TestConstants.testNickname2)
         charlie = createMockService(peerID: TestConstants.testPeerID3, nickname: TestConstants.testNickname3)
+        mockKeychain = MockKeychain()
         
         // Delivery tracking is now handled internally by BLEService
     }
@@ -32,6 +35,7 @@ final class PrivateChatE2ETests: XCTestCase {
         alice = nil
         bob = nil
         charlie = nil
+        mockKeychain = nil
         super.tearDown()
     }
     
@@ -116,8 +120,8 @@ final class PrivateChatE2ETests: XCTestCase {
         let aliceKey = Curve25519.KeyAgreement.PrivateKey()
         let bobKey = Curve25519.KeyAgreement.PrivateKey()
         
-        let aliceManager = NoiseSessionManager(localStaticKey: aliceKey)
-        let bobManager = NoiseSessionManager(localStaticKey: bobKey)
+        let aliceManager = NoiseSessionManager(localStaticKey: aliceKey, keychain: mockKeychain)
+        let bobManager = NoiseSessionManager(localStaticKey: bobKey, keychain: mockKeychain)
         
         // Establish encrypted session
         do {

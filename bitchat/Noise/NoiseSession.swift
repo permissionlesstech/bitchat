@@ -36,6 +36,7 @@ enum NoiseSessionState: Equatable {
 class NoiseSession {
     let peerID: String
     let role: NoiseRole
+    private let keychain: KeychainManagerProtocol
     private var state: NoiseSessionState = .uninitialized
     private var handshakeState: NoiseHandshakeState?
     private var sendCipher: NoiseCipherState?
@@ -52,9 +53,16 @@ class NoiseSession {
     // Thread safety
     private let sessionQueue = DispatchQueue(label: "chat.bitchat.noise.session", attributes: .concurrent)
     
-    init(peerID: String, role: NoiseRole, localStaticKey: Curve25519.KeyAgreement.PrivateKey, remoteStaticKey: Curve25519.KeyAgreement.PublicKey? = nil) {
+    init(
+        peerID: String,
+        role: NoiseRole,
+        keychain: KeychainManagerProtocol,
+        localStaticKey: Curve25519.KeyAgreement.PrivateKey,
+        remoteStaticKey: Curve25519.KeyAgreement.PublicKey? = nil
+    ) {
         self.peerID = peerID
         self.role = role
+        self.keychain = keychain
         self.localStaticKey = localStaticKey
         self.remoteStaticPublicKey = remoteStaticKey
     }
@@ -71,6 +79,7 @@ class NoiseSession {
             handshakeState = NoiseHandshakeState(
                 role: role,
                 pattern: .XX,
+                keychain: keychain,
                 localStaticKey: localStaticKey,
                 remoteStaticKey: nil
             )
@@ -98,6 +107,7 @@ class NoiseSession {
                 handshakeState = NoiseHandshakeState(
                     role: role,
                     pattern: .XX,
+                    keychain: keychain,
                     localStaticKey: localStaticKey,
                     remoteStaticKey: nil
                 )
@@ -230,13 +240,13 @@ class NoiseSession {
             // Clear sent handshake messages
             for i in 0..<sentHandshakeMessages.count {
                 var message = sentHandshakeMessages[i]
-                KeychainManager.secureClear(&message)
+                keychain.secureClear(&message)
             }
             sentHandshakeMessages.removeAll()
             
             // Clear handshake hash
             if var hash = handshakeHash {
-                KeychainManager.secureClear(&hash)
+                keychain.secureClear(&hash)
             }
             handshakeHash = nil
             
@@ -252,14 +262,16 @@ class NoiseSession {
 final class NoiseSessionManager {
     private var sessions: [String: NoiseSession] = [:]
     private let localStaticKey: Curve25519.KeyAgreement.PrivateKey
+    private let keychain: KeychainManagerProtocol
     private let managerQueue = DispatchQueue(label: "chat.bitchat.noise.manager", attributes: .concurrent)
     
     // Callbacks
     var onSessionEstablished: ((String, Curve25519.KeyAgreement.PublicKey) -> Void)?
     var onSessionFailed: ((String, Error) -> Void)?
     
-    init(localStaticKey: Curve25519.KeyAgreement.PrivateKey) {
+    init(localStaticKey: Curve25519.KeyAgreement.PrivateKey, keychain: KeychainManagerProtocol) {
         self.localStaticKey = localStaticKey
+        self.keychain = keychain
     }
     
     // MARK: - Session Management
@@ -269,6 +281,7 @@ final class NoiseSessionManager {
             let session = SecureNoiseSession(
                 peerID: peerID,
                 role: role,
+                keychain: keychain,
                 localStaticKey: localStaticKey
             )
             sessions[peerID] = session
@@ -320,6 +333,7 @@ final class NoiseSessionManager {
             let session = SecureNoiseSession(
                 peerID: peerID,
                 role: .initiator,
+                keychain: keychain,
                 localStaticKey: localStaticKey
             )
             sessions[peerID] = session
@@ -370,6 +384,7 @@ final class NoiseSessionManager {
                 let newSession = SecureNoiseSession(
                     peerID: peerID,
                     role: .responder,
+                    keychain: keychain,
                     localStaticKey: localStaticKey
                 )
                 sessions[peerID] = newSession

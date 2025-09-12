@@ -27,14 +27,16 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
     private var peerIndex: [String: BitchatPeer] = [:]
     private var fingerprintCache: [String: String] = [:]  // peerID -> fingerprint
     private let meshService: Transport
+    private let identityManager: SecureIdentityStateManagerProtocol
     weak var messageRouter: MessageRouter?
     private let favoritesService = FavoritesPersistenceService.shared
     private var cancellables = Set<AnyCancellable>()
     
     // MARK: - Initialization
     
-    init(meshService: Transport) {
+    init(meshService: Transport, identityManager: SecureIdentityStateManagerProtocol) {
         self.meshService = meshService
+        self.identityManager = identityManager
         
         // Subscribe to changes from both services
         setupSubscriptions()
@@ -174,7 +176,7 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         // Determine reachability based on lastSeen and identity trust
         let now = Date()
         let fingerprint = peerInfo.noisePublicKey?.sha256Fingerprint()
-        let isVerified = fingerprint.map { SecureIdentityStateManager.shared.isVerified(fingerprint: $0) } ?? false
+        let isVerified = fingerprint.map { identityManager.isVerified(fingerprint: $0) } ?? false
         let isFav = peerInfo.noisePublicKey.flatMap { favorites[$0]?.isFavorite } ?? false
         let retention: TimeInterval = (isVerified || isFav) ? TransportConfig.bleReachabilityRetentionVerifiedSeconds : TransportConfig.bleReachabilityRetentionUnverifiedSeconds
         // A peer is reachable if we recently saw them AND we are attached to the mesh
@@ -247,7 +249,7 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         guard let fingerprint = getFingerprint(for: peerID) else { return false }
         
         // Check SecureIdentityStateManager for block status
-        if let identity = SecureIdentityStateManager.shared.getSocialIdentity(for: fingerprint) {
+        if let identity = identityManager.getSocialIdentity(for: fingerprint) {
             return identity.isBlocked
         }
         
@@ -324,7 +326,7 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         guard let fingerprint = getFingerprint(for: peerID) else { return }
         
         // Get or create social identity
-        var identity = SecureIdentityStateManager.shared.getSocialIdentity(for: fingerprint)
+        var identity = identityManager.getSocialIdentity(for: fingerprint)
             ?? SocialIdentity(
                 fingerprint: fingerprint,
                 localPetname: nil,
@@ -347,7 +349,7 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
             }
         }
         
-        SecureIdentityStateManager.shared.updateSocialIdentity(identity)
+        identityManager.updateSocialIdentity(identity)
     }
     
     /// Get fingerprint for peer ID
