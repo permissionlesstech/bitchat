@@ -16,16 +16,19 @@ final class NoiseProtocolTests: XCTestCase {
     var bobKey: Curve25519.KeyAgreement.PrivateKey!
     var aliceSession: NoiseSession!
     var bobSession: NoiseSession!
+    private var mockKeychain: MockKeychain!
     
     override func setUp() {
         super.setUp()
         aliceKey = Curve25519.KeyAgreement.PrivateKey()
         bobKey = Curve25519.KeyAgreement.PrivateKey()
+        mockKeychain = MockKeychain()
     }
     
     override func tearDown() {
         aliceSession = nil
         bobSession = nil
+        mockKeychain = nil
         super.tearDown()
     }
     
@@ -36,12 +39,14 @@ final class NoiseProtocolTests: XCTestCase {
         aliceSession = NoiseSession(
             peerID: TestConstants.testPeerID2,
             role: .initiator,
+            keychain: mockKeychain,
             localStaticKey: aliceKey
         )
         
         bobSession = NoiseSession(
             peerID: TestConstants.testPeerID1,
             role: .responder,
+            keychain: mockKeychain,
             localStaticKey: bobKey
         )
         
@@ -80,6 +85,7 @@ final class NoiseProtocolTests: XCTestCase {
         aliceSession = NoiseSession(
             peerID: TestConstants.testPeerID2,
             role: .initiator,
+            keychain: mockKeychain,
             localStaticKey: aliceKey
         )
         
@@ -144,6 +150,7 @@ final class NoiseProtocolTests: XCTestCase {
         aliceSession = NoiseSession(
             peerID: TestConstants.testPeerID2,
             role: .initiator,
+            keychain: mockKeychain,
             localStaticKey: aliceKey
         )
         
@@ -157,7 +164,7 @@ final class NoiseProtocolTests: XCTestCase {
     // MARK: - Session Manager Tests
     
     func testSessionManagerBasicOperations() throws {
-        let manager = NoiseSessionManager(localStaticKey: aliceKey)
+        let manager = NoiseSessionManager(localStaticKey: aliceKey, keychain: mockKeychain)
         
         // Create session
         let session = manager.createSession(for: TestConstants.testPeerID2, role: .initiator)
@@ -174,7 +181,7 @@ final class NoiseProtocolTests: XCTestCase {
     }
     
     func testSessionManagerHandshakeInitiation() throws {
-        let manager = NoiseSessionManager(localStaticKey: aliceKey)
+        let manager = NoiseSessionManager(localStaticKey: aliceKey, keychain: mockKeychain)
         
         // Initiate handshake
         let handshakeData = try manager.initiateHandshake(with: TestConstants.testPeerID2)
@@ -187,8 +194,8 @@ final class NoiseProtocolTests: XCTestCase {
     }
     
     func testSessionManagerIncomingHandshake() throws {
-        let aliceManager = NoiseSessionManager(localStaticKey: aliceKey)
-        let bobManager = NoiseSessionManager(localStaticKey: bobKey)
+        let aliceManager = NoiseSessionManager(localStaticKey: aliceKey, keychain: mockKeychain)
+        let bobManager = NoiseSessionManager(localStaticKey: bobKey, keychain: mockKeychain)
         
         // Alice initiates
         let message1 = try aliceManager.initiateHandshake(with: TestConstants.testPeerID2)
@@ -211,8 +218,8 @@ final class NoiseProtocolTests: XCTestCase {
     }
     
     func testSessionManagerEncryptionDecryption() throws {
-        let aliceManager = NoiseSessionManager(localStaticKey: aliceKey)
-        let bobManager = NoiseSessionManager(localStaticKey: bobKey)
+        let aliceManager = NoiseSessionManager(localStaticKey: aliceKey, keychain: mockKeychain)
+        let bobManager = NoiseSessionManager(localStaticKey: bobKey, keychain: mockKeychain)
         
         // Establish sessions
         try establishManagerSessions(aliceManager: aliceManager, bobManager: bobManager)
@@ -256,11 +263,11 @@ final class NoiseProtocolTests: XCTestCase {
     
     func testSessionIsolation() throws {
         // Create two separate session pairs
-        let aliceSession1 = NoiseSession(peerID: "peer1", role: .initiator, localStaticKey: aliceKey)
-        let bobSession1 = NoiseSession(peerID: "alice1", role: .responder, localStaticKey: bobKey)
+        let aliceSession1 = NoiseSession(peerID: "peer1", role: .initiator, keychain: mockKeychain, localStaticKey: aliceKey)
+        let bobSession1 = NoiseSession(peerID: "alice1", role: .responder, keychain: mockKeychain, localStaticKey: bobKey)
         
-        let aliceSession2 = NoiseSession(peerID: "peer2", role: .initiator, localStaticKey: aliceKey)
-        let bobSession2 = NoiseSession(peerID: "alice2", role: .responder, localStaticKey: bobKey)
+        let aliceSession2 = NoiseSession(peerID: "peer2", role: .initiator, keychain: mockKeychain, localStaticKey: aliceKey)
+        let bobSession2 = NoiseSession(peerID: "alice2", role: .responder, keychain: mockKeychain, localStaticKey: bobKey)
         
         // Establish both pairs
         try performHandshake(initiator: aliceSession1, responder: bobSession1)
@@ -282,8 +289,8 @@ final class NoiseProtocolTests: XCTestCase {
     
     func testPeerRestartDetection() throws {
         // Establish initial sessions
-        let aliceManager = NoiseSessionManager(localStaticKey: aliceKey)
-        let bobManager = NoiseSessionManager(localStaticKey: bobKey)
+        let aliceManager = NoiseSessionManager(localStaticKey: aliceKey, keychain: mockKeychain)
+        let bobManager = NoiseSessionManager(localStaticKey: bobKey, keychain: mockKeychain)
         
         try establishManagerSessions(aliceManager: aliceManager, bobManager: bobManager)
         
@@ -295,7 +302,7 @@ final class NoiseProtocolTests: XCTestCase {
         _ = try aliceManager.decrypt(message2, from: TestConstants.testPeerID2)
         
         // Simulate Bob restart by creating new manager with same key
-        let bobManagerRestarted = NoiseSessionManager(localStaticKey: bobKey)
+        let bobManagerRestarted = NoiseSessionManager(localStaticKey: bobKey, keychain: mockKeychain)
         
         // Bob initiates new handshake after restart
         let newHandshake1 = try bobManagerRestarted.initiateHandshake(with: TestConstants.testPeerID1)
@@ -318,8 +325,8 @@ final class NoiseProtocolTests: XCTestCase {
     
     func testNonceDesynchronizationRecovery() throws {
         // Create two sessions
-        aliceSession = NoiseSession(peerID: TestConstants.testPeerID2, role: .initiator, localStaticKey: aliceKey)
-        bobSession = NoiseSession(peerID: TestConstants.testPeerID1, role: .responder, localStaticKey: bobKey)
+        aliceSession = NoiseSession(peerID: TestConstants.testPeerID2, role: .initiator, keychain: mockKeychain, localStaticKey: aliceKey)
+        bobSession = NoiseSession(peerID: TestConstants.testPeerID1, role: .responder, keychain: mockKeychain, localStaticKey: bobKey)
         
         // Establish sessions
         try performHandshake(initiator: aliceSession, responder: bobSession)
@@ -342,8 +349,8 @@ final class NoiseProtocolTests: XCTestCase {
     
     func testConcurrentEncryption() throws {
         // Test thread safety of encryption operations
-        let aliceManager = NoiseSessionManager(localStaticKey: aliceKey)
-        let bobManager = NoiseSessionManager(localStaticKey: bobKey)
+        let aliceManager = NoiseSessionManager(localStaticKey: aliceKey, keychain: mockKeychain)
+        let bobManager = NoiseSessionManager(localStaticKey: bobKey, keychain: mockKeychain)
         
         try establishManagerSessions(aliceManager: aliceManager, bobManager: bobManager)
         
@@ -380,8 +387,8 @@ final class NoiseProtocolTests: XCTestCase {
     
     func testSessionStaleDetection() throws {
         // Test that sessions are properly marked as stale
-        let aliceManager = NoiseSessionManager(localStaticKey: aliceKey)
-        let bobManager = NoiseSessionManager(localStaticKey: bobKey)
+        let aliceManager = NoiseSessionManager(localStaticKey: aliceKey, keychain: mockKeychain)
+        let bobManager = NoiseSessionManager(localStaticKey: bobKey, keychain: mockKeychain)
         
         try establishManagerSessions(aliceManager: aliceManager, bobManager: bobManager)
         
@@ -394,8 +401,8 @@ final class NoiseProtocolTests: XCTestCase {
     
     func testHandshakeAfterDecryptionFailure() throws {
         // Test that handshake is properly initiated after decryption failure
-        let aliceManager = NoiseSessionManager(localStaticKey: aliceKey)
-        let bobManager = NoiseSessionManager(localStaticKey: bobKey)
+        let aliceManager = NoiseSessionManager(localStaticKey: aliceKey, keychain: mockKeychain)
+        let bobManager = NoiseSessionManager(localStaticKey: bobKey, keychain: mockKeychain)
         
         // Establish sessions
         try establishManagerSessions(aliceManager: aliceManager, bobManager: bobManager)
@@ -413,8 +420,8 @@ final class NoiseProtocolTests: XCTestCase {
     
     func testHandshakeAlwaysAcceptedWithExistingSession() throws {
         // Test that handshake is always accepted even with existing valid session
-        let aliceManager = NoiseSessionManager(localStaticKey: aliceKey)
-        let bobManager = NoiseSessionManager(localStaticKey: bobKey)
+        let aliceManager = NoiseSessionManager(localStaticKey: aliceKey, keychain: mockKeychain)
+        let bobManager = NoiseSessionManager(localStaticKey: bobKey, keychain: mockKeychain)
         
         // Establish sessions
         try establishManagerSessions(aliceManager: aliceManager, bobManager: bobManager)
@@ -453,8 +460,8 @@ final class NoiseProtocolTests: XCTestCase {
     
     func testNonceDesynchronizationCausesRehandshake() throws {
         // Test that nonce desynchronization leads to proper re-handshake
-        let aliceManager = NoiseSessionManager(localStaticKey: aliceKey)
-        let bobManager = NoiseSessionManager(localStaticKey: bobKey)
+        let aliceManager = NoiseSessionManager(localStaticKey: aliceKey, keychain: mockKeychain)
+        let bobManager = NoiseSessionManager(localStaticKey: bobKey, keychain: mockKeychain)
         
         // Establish sessions
         try establishManagerSessions(aliceManager: aliceManager, bobManager: bobManager)
@@ -499,8 +506,8 @@ final class NoiseProtocolTests: XCTestCase {
     func testHandshakePerformance() throws {
         measure {
             do {
-                let alice = NoiseSession(peerID: "bob", role: .initiator, localStaticKey: aliceKey)
-                let bob = NoiseSession(peerID: "alice", role: .responder, localStaticKey: bobKey)
+                let alice = NoiseSession(peerID: "bob", role: .initiator, keychain: mockKeychain, localStaticKey: aliceKey)
+                let bob = NoiseSession(peerID: "alice", role: .responder, keychain: mockKeychain, localStaticKey: bobKey)
                 try performHandshake(initiator: alice, responder: bob)
             } catch {
                 XCTFail("Handshake failed: \(error)")
@@ -530,12 +537,14 @@ final class NoiseProtocolTests: XCTestCase {
         aliceSession = NoiseSession(
             peerID: TestConstants.testPeerID2,
             role: .initiator,
+            keychain: mockKeychain,
             localStaticKey: aliceKey
         )
         
         bobSession = NoiseSession(
             peerID: TestConstants.testPeerID1,
             role: .responder,
+            keychain: mockKeychain,
             localStaticKey: bobKey
         )
         

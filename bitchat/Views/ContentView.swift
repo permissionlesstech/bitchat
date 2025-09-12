@@ -1247,15 +1247,15 @@ struct ContentView: View {
                !fav.peerNickname.isEmpty { return fav.peerNickname }
             // Fallback: resolve from persisted social identity via fingerprint mapping
             if headerPeerID.count == 16 {
-                let candidates = SecureIdentityStateManager.shared.getCryptoIdentitiesByPeerIDPrefix(headerPeerID)
+                let candidates = viewModel.identityManager.getCryptoIdentitiesByPeerIDPrefix(headerPeerID)
                 if let id = candidates.first,
-                   let social = SecureIdentityStateManager.shared.getSocialIdentity(for: id.fingerprint) {
+                   let social = viewModel.identityManager.getSocialIdentity(for: id.fingerprint) {
                     if let pet = social.localPetname, !pet.isEmpty { return pet }
                     if !social.claimedNickname.isEmpty { return social.claimedNickname }
                 }
             } else if headerPeerID.count == 64, let keyData = Data(hexString: headerPeerID) {
                 let fp = keyData.sha256Fingerprint()
-                if let social = SecureIdentityStateManager.shared.getSocialIdentity(for: fp) {
+                if let social = viewModel.identityManager.getSocialIdentity(for: fp) {
                     if let pet = social.localPetname, !pet.isEmpty { return pet }
                     if !social.claimedNickname.isEmpty { return social.claimedNickname }
                 }
