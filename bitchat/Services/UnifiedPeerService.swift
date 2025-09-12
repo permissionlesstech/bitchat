@@ -195,27 +195,6 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
            let favoriteStatus = favorites[noiseKey] {
             peer.favoriteStatus = favoriteStatus
             peer.nostrPublicKey = favoriteStatus.peerNostrPublicKey
-        } else {
-            // Check by nickname for reconnected peers
-            let favoriteByNickname = favorites.values.first { 
-                $0.peerNickname == peerInfo.nickname 
-            }
-            
-            if let favorite = favoriteByNickname,
-               let noiseKey = peerInfo.noisePublicKey {
-                SecureLogger.debug("🔄 Found favorite for '\(peerInfo.nickname)' by nickname, updating noise key", category: .session)
-                
-                // Update the favorite's key in persistence
-                favoritesService.updateNoisePublicKey(
-                    from: favorite.peerNoisePublicKey,
-                    to: noiseKey,
-                    peerNickname: peerInfo.nickname
-                )
-                
-                // Get updated favorite
-                peer.favoriteStatus = favoritesService.getFavoriteStatus(for: noiseKey)
-                peer.nostrPublicKey = peer.favoriteStatus?.peerNostrPublicKey ?? favorite.peerNostrPublicKey
-            }
         }
         
         return peer
