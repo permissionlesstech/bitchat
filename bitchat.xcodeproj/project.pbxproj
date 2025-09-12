@@ -173,6 +173,10 @@
 		F455F011B3B648ADA233F998 /* BinaryProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2136C3E22D02D4A8DBE7EAB /* BinaryProtocol.swift */; };
 		FB8819B4C84FAFEF5C36B216 /* KeychainManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 136696FC4436A02D98CE6A77 /* KeychainManager.swift */; };
 		FBC409E105493C491531B59A /* NostrProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E5A9FF4AEA8A923317ED26A /* NostrProtocol.swift */; };
+ 		A1B2C3D4E5F60123456789BA /* MockKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60123456789AA /* MockKeychain.swift */; };
+ 		A1B2C3D4E5F60123456789BB /* MockKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60123456789AA /* MockKeychain.swift */; };
+ 		A1B2C3D4E5F60123456789BC /* MockIdentityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60123456789AB /* MockIdentityManager.swift */; };
+ 		A1B2C3D4E5F60123456789BD /* MockIdentityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60123456789AB /* MockIdentityManager.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -307,6 +311,8 @@
 		FC75901A0F0073B5BB8356E7 /* TestConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestConstants.swift; sourceTree = "<group>"; };
 		FDC18D910D6FF2E8B1B6C885 /* SecureIdentityStateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureIdentityStateManager.swift; sourceTree = "<group>"; };
 		FE7CCF2BD78A3F3DAE6DA145 /* MockBLEService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockBLEService.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60123456789AA /* MockKeychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockKeychain.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60123456789AB /* MockIdentityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockIdentityManager.swift; sourceTree = "<group>"; };
 		FF7AF93D874001FBD94C8306 /* bitchat-macOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "bitchat-macOS.entitlements"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -464,6 +470,8 @@
 			children = (
 				C27328EE574221395B2B8E87 /* MockBluetoothMeshService.swift */,
 				FE7CCF2BD78A3F3DAE6DA145 /* MockBLEService.swift */,
+				A1B2C3D4E5F60123456789AA /* MockKeychain.swift */,
+				A1B2C3D4E5F60123456789AB /* MockIdentityManager.swift */,
 			);
 			path = Mocks;
 			sourceTree = "<group>";
@@ -949,6 +957,8 @@
 				047502932E547ACC0083520F /* LocationChannelsTests.swift in Sources */,
 				048A4C2B2E5FCE0300162C4A /* GeohashBookmarksStoreTests.swift in Sources */,
 				6C803BF930E7E19BE6E99EAA /* MockBLEService.swift in Sources */,
+				A1B2C3D4E5F60123456789BB /* MockKeychain.swift in Sources */,
+				A1B2C3D4E5F60123456789BD /* MockIdentityManager.swift in Sources */,
 				765254F56997F01054699AC0 /* NoiseProtocolTests.swift in Sources */,
 				968181D255CA7A804340B4DA /* NostrProtocolTests.swift in Sources */,
 				ED83C7AC1E6BEF15389C0132 /* PrivateChatE2ETests.swift in Sources */,
@@ -973,6 +983,9 @@
 				047502922E547ACC0083520F /* LocationChannelsTests.swift in Sources */,
 				048A4C2C2E5FCE0300162C4A /* GeohashBookmarksStoreTests.swift in Sources */,
 				3849CA6D99B2D536636DF4A6 /* MockBLEService.swift in Sources */,
+				A1B2C3D4E5F60123456789BA /* MockKeychain.swift in Sources */,
+
+				A1B2C3D4E5F60123456789BC /* MockIdentityManager.swift in Sources */,
 				BC4DC75F4FB823FF40569676 /* NoiseProtocolTests.swift in Sources */,
 				EE8C3ECADAB3083A2687D50B /* NostrProtocolTests.swift in Sources */,
 				0AE840940F21AFC07C226636 /* PrivateChatE2ETests.swift in Sources */,

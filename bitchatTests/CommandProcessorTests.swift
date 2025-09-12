@@ -4,6 +4,17 @@ import XCTest
 final class CommandProcessorTests: XCTestCase {
     
     var identityManager: MockIdentityManager!
+    
+    override func setUp() {
+        super.setUp()
+        // Provide a minimal identity manager for commands that query identity/block lists
+        identityManager = MockIdentityManager(MockKeychain())
+    }
+    
+    override func tearDown() {
+        identityManager = nil
+        super.tearDown()
+    }
 
     @MainActor
     func test_slap_notFoundGrammar() {
@@ -41,4 +52,3 @@ final class CommandProcessorTests: XCTestCase {
         }
     }
 }
-
