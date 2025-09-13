@@ -45,6 +45,10 @@
 		0481A3AD2E74D29400FC845E /* LocationNotesManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3AB2E74D29400FC845E /* LocationNotesManager.swift */; };
 		0481A3AF2E74E06300FC845E /* LocationNotesCounter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3AE2E74E06300FC845E /* LocationNotesCounter.swift */; };
 		0481A3B02E74E06300FC845E /* LocationNotesCounter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3AE2E74E06300FC845E /* LocationNotesCounter.swift */; };
+		0481A3B52E75A31500FC845E /* CTorHost.c in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3B32E75A31500FC845E /* CTorHost.c */; };
+		0481A3B62E75A31500FC845E /* .gitkeep in Resources */ = {isa = PBXBuildFile; fileRef = 0481A3B12E75A31500FC845E /* .gitkeep */; };
+		0481A3B72E75A31500FC845E /* CTorHost.c in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3B32E75A31500FC845E /* CTorHost.c */; };
+		0481A3B82E75A31500FC845E /* .gitkeep in Resources */ = {isa = PBXBuildFile; fileRef = 0481A3B12E75A31500FC845E /* .gitkeep */; };
 		048A4BE72E5CCCC300162C4A /* TransportConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 048A4BE62E5CCCC300162C4A /* TransportConfig.swift */; };
 		048A4BE82E5CCCC300162C4A /* TransportConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 048A4BE62E5CCCC300162C4A /* TransportConfig.swift */; };
 		048A4BE92E5CCCC300162C4B /* TransportConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 048A4BE62E5CCCC300162C4A /* TransportConfig.swift */; };
@@ -78,8 +82,6 @@
 		049BD3B52E51F319001A566B /* MessageRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 049BD3B02E51F319001A566B /* MessageRouter.swift */; };
 		0AE840940F21AFC07C226636 /* PrivateChatE2ETests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A262EDDC04B7D7B5E31F321 /* PrivateChatE2ETests.swift */; };
 		0B6F25559A21F8C69C8357C6 /* BinaryProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B3CC6FA298729906109F61B /* BinaryProtocolTests.swift */; };
-		0C0EFA112E6EAAAA00ABCDEF /* CTorHost.c in Sources */ = {isa = PBXBuildFile; fileRef = 0C0EFA102E6EAAAA00ABCDEF /* CTorHost.c */; };
-		0C0EFA122E6EAAAA00ABCDF0 /* CTorHost.c in Sources */ = {isa = PBXBuildFile; fileRef = 0C0EFA102E6EAAAA00ABCDEF /* CTorHost.c */; };
 		0C0EFA162E6EAABB00ABCDF4 /* TorNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C0EFA132E6EAABB00ABCDF1 /* TorNotifications.swift */; };
 		0C0EFA172E6EAABB00ABCDF5 /* TorNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C0EFA132E6EAABB00ABCDF1 /* TorNotifications.swift */; };
 		10E68BB889356219189E38EC /* BitchatApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF625BB3AD919322C01A46B2 /* BitchatApp.swift */; };
@@ -243,6 +245,8 @@
 		0481A3A82E74D28800FC845E /* LocationNotesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationNotesView.swift; sourceTree = "<group>"; };
 		0481A3AB2E74D29400FC845E /* LocationNotesManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationNotesManager.swift; sourceTree = "<group>"; };
 		0481A3AE2E74E06300FC845E /* LocationNotesCounter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationNotesCounter.swift; sourceTree = "<group>"; };
+		0481A3B12E75A31500FC845E /* .gitkeep */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitkeep; sourceTree = "<group>"; };
+		0481A3B32E75A31500FC845E /* CTorHost.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = CTorHost.c; sourceTree = "<group>"; };
 		048A4BE62E5CCCC300162C4A /* TransportConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransportConfig.swift; sourceTree = "<group>"; };
 		048A4C272E5FCD6600162C4A /* GeohashBookmarksStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeohashBookmarksStore.swift; sourceTree = "<group>"; };
 		048A4C2A2E5FCE0300162C4A /* GeohashBookmarksStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeohashBookmarksStoreTests.swift; sourceTree = "<group>"; };
@@ -260,7 +264,6 @@
 		049BD3B12E51F319001A566B /* NostrTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NostrTransport.swift; sourceTree = "<group>"; };
 		05BA20BC0F123F1507C5C247 /* IdentityModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdentityModels.swift; sourceTree = "<group>"; };
 		0B3CC6FA298729906109F61B /* BinaryProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BinaryProtocolTests.swift; sourceTree = "<group>"; };
-		0C0EFA102E6EAAAA00ABCDEF /* CTorHost.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = CTorHost.c; sourceTree = "<group>"; };
 		0C0EFA132E6EAABB00ABCDF1 /* TorNotifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TorNotifications.swift; sourceTree = "<group>"; };
 		11186E29A064E8D210880E1B /* BitchatPeer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitchatPeer.swift; sourceTree = "<group>"; };
 		1234567890ABCDEFFEDCBA02 /* PeerDisplayNameResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerDisplayNameResolver.swift; sourceTree = "<group>"; };
@@ -365,9 +368,9 @@
 		0481A3452E6D869F00FC845E /* Tor */ = {
 			isa = PBXGroup;
 			children = (
+				0481A3B42E75A31500FC845E /* C */,
 				0481A3432E6D869F00FC845E /* TorManager.swift */,
 				0481A3442E6D869F00FC845E /* TorURLSession.swift */,
-				0C0EFA102E6EAAAA00ABCDEF /* CTorHost.c */,
 				0C0EFA132E6EAABB00ABCDF1 /* TorNotifications.swift */,
 			);
 			path = Tor;
@@ -381,6 +384,23 @@
 				0481A3572E6D929E00FC845E /* tor-nolzma.xcframework */,
 			);
 			path = Frameworks;
+			sourceTree = "<group>";
+		};
+		0481A3B22E75A31500FC845E /* include */ = {
+			isa = PBXGroup;
+			children = (
+				0481A3B12E75A31500FC845E /* .gitkeep */,
+			);
+			path = include;
+			sourceTree = "<group>";
+		};
+		0481A3B42E75A31500FC845E /* C */ = {
+			isa = PBXGroup;
+			children = (
+				0481A3B22E75A31500FC845E /* include */,
+				0481A3B32E75A31500FC845E /* CTorHost.c */,
+			);
+			path = C;
 			sourceTree = "<group>";
 		};
 		0575DCBD15C7C719ADDCB67E /* Models */ = {
@@ -793,6 +813,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0481A3B62E75A31500FC845E /* .gitkeep in Resources */,
 				7DD72D928FF9DD3CA81B46B0 /* Assets.xcassets in Resources */,
 				E0A1B2C3D4E5F6012345678D /* relays/online_relays_gps.csv in Resources */,
 			);
@@ -805,6 +826,7 @@
 				BCCFEDC1EBE59323C3C470BF /* Assets.xcassets in Resources */,
 				E65BBB6544FE0159F3C6C3A8 /* LaunchScreen.storyboard in Resources */,
 				E0A1B2C3D4E5F6012345678E /* relays/online_relays_gps.csv in Resources */,
+				0481A3B82E75A31500FC845E /* .gitkeep in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -825,7 +847,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				F0A1B2C3D4E5F60718293A4C /* OSLog+Categories.swift in Sources */,
-				0C0EFA122E6EAAAA00ABCDF0 /* CTorHost.c in Sources */,
 				0C0EFA172E6EAABB00ABCDF5 /* TorNotifications.swift in Sources */,
 				048A4BE72E5CCCC300162C4A /* TransportConfig.swift in Sources */,
 				1234567890ABCDEFFEDCBA13 /* PeerDisplayNameResolver.swift in Sources */,
@@ -835,6 +856,7 @@
 				AD11E46940D742AEAF547EB2 /* AppInfoView.swift in Sources */,
 				9B51E9B63A3EA59B1A7874BD /* BinaryEncodingUtils.swift in Sources */,
 				049BD3B42E51F319001A566B /* NostrTransport.swift in Sources */,
+				0481A3B52E75A31500FC845E /* CTorHost.c in Sources */,
 				049BD3B52E51F319001A566B /* MessageRouter.swift in Sources */,
 				4B747085D07A1BCE0F5BA612 /* BinaryProtocol.swift in Sources */,
 				047502B92E560F690083520F /* RelayController.swift in Sources */,
@@ -893,7 +915,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				F0A1B2C3D4E5F60718293A4B /* OSLog+Categories.swift in Sources */,
-				0C0EFA112E6EAAAA00ABCDEF /* CTorHost.c in Sources */,
 				0C0EFA162E6EAABB00ABCDF4 /* TorNotifications.swift in Sources */,
 				048A4BE82E5CCCC300162C4A /* TransportConfig.swift in Sources */,
 				1234567890ABCDEFFEDCBA14 /* PeerDisplayNameResolver.swift in Sources */,
@@ -903,6 +924,7 @@
 				ABAF130D88561F4A646F0430 /* AppInfoView.swift in Sources */,
 				AFB6AEFCABBE97441CB3102B /* BinaryEncodingUtils.swift in Sources */,
 				049BD3B22E51F319001A566B /* NostrTransport.swift in Sources */,
+				0481A3B72E75A31500FC845E /* CTorHost.c in Sources */,
 				049BD3B32E51F319001A566B /* MessageRouter.swift in Sources */,
 				F455F011B3B648ADA233F998 /* BinaryProtocol.swift in Sources */,
 				047502BA2E560F690083520F /* RelayController.swift in Sources */,
