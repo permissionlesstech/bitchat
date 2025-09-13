@@ -1,13 +1,13 @@
 import Foundation
 
 // REQUEST_SYNC payload TLV (type, length16, value)
-//  - 0x01: mBytes (uint16)
-//  - 0x02: k (uint8)
-//  - 0x03: bloom filter bits (opaque byte array of length mBytes)
+//  - 0x01: P (uint8) — Golomb-Rice parameter
+//  - 0x02: M (uint32, big-endian) — hash range (N * 2^P)
+//  - 0x03: data (opaque) — GR bitstream bytes (MSB-first)
 struct RequestSyncPacket {
-    let mBytes: Int
-    let k: Int
-    let bits: Data
+    let p: Int
+    let m: UInt32
+    let data: Data
 
     func encode() -> Data {
         var out = Data()
@@ -18,22 +18,21 @@ struct RequestSyncPacket {
             out.append(UInt8(len & 0xFF))
             out.append(v)
         }
-        // mBytes
-        let mbBE = UInt16(mBytes).bigEndian
-        let mbData = withUnsafeBytes(of: mbBE) { Data($0) }
-        putTLV(0x01, mbData)
-        // k
-        putTLV(0x02, Data([UInt8(k & 0xFF)]))
-        // bits
-        putTLV(0x03, bits)
+        // P
+        putTLV(0x01, Data([UInt8(p & 0xFF)]))
+        // M (uint32)
+        var mBE = m.bigEndian
+        putTLV(0x02, withUnsafeBytes(of: &mBE) { Data($0) })
+        // data
+        putTLV(0x03, data)
         return out
     }
 
-    static func decode(from data: Data) -> RequestSyncPacket? {
+    static func decode(from data: Data, maxAcceptBytes: Int = 1024) -> RequestSyncPacket? {
         var off = 0
-        var mBytes: Int? = nil
-        var k: Int? = nil
-        var bits: Data? = nil
+        var p: Int? = nil
+        var m: UInt32? = nil
+        var payload: Data? = nil
 
         while off + 3 <= data.count {
             let t = Int(data[off]); off += 1
@@ -43,20 +42,22 @@ struct RequestSyncPacket {
             let v = data.subdata(in: off..<(off+len)); off += len
             switch t {
             case 0x01:
-                if v.count == 2 {
-                    let mb = (Int(v[0]) << 8) | Int(v[1])
-                    mBytes = mb
-                }
+                if v.count == 1 { p = Int(v[0]) }
             case 0x02:
-                if v.count == 1 { k = Int(v[0]) }
+                if v.count == 4 {
+                    var mm: UInt32 = 0
+                    for b in v { mm = (mm << 8) | UInt32(b) }
+                    m = mm
+                }
             case 0x03:
-                bits = v
+                if v.count > maxAcceptBytes { return nil }
+                payload = v
             default:
                 break // forward compatible; ignore unknown TLVs
             }
         }
 
-        guard let mb = mBytes, let kk = k, let bb = bits, mb == bb.count else { return nil }
-        return RequestSyncPacket(mBytes: mb, k: kk, bits: bb)
+        guard let pp = p, let mm = m, let dd = payload, pp >= 1, mm > 0 else { return nil }
+        return RequestSyncPacket(p: pp, m: mm, data: dd)
     }
 }

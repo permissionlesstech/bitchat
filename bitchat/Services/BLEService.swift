@@ -1819,6 +1819,8 @@ final class BLEService: NSObject {
             // Remove the peer when they leave
             peers.removeValue(forKey: peerID)
         }
+        // Remove any stored announcement for sync purposes
+        gossipSyncManager?.removeAnnouncementForPeer(peerID)
         // Send on main thread
         notifyUI { [weak self] in
             guard let self = self else { return }
@@ -2129,6 +2131,8 @@ final class BLEService: NSObject {
                 if !peer.isConnected {
                     if age > retention {
                         SecureLogger.debug("🗑️ Removing stale peer after reachability window: \(peerID) (\(peer.nickname))", category: .session)
+                        // Also remove any stored announcement from sync candidates
+                        gossipSyncManager?.removeAnnouncementForPeer(peerID)
                         peers.removeValue(forKey: peerID)
                         removedOfflineCount += 1
                     }

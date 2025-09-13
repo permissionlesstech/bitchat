@@ -45,10 +45,10 @@
 		0481A3942E73730100FC845E /* RequestSyncPacket.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3922E73730100FC845E /* RequestSyncPacket.swift */; };
 		0481A3992E73730F00FC845E /* GossipSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3952E73730F00FC845E /* GossipSyncManager.swift */; };
 		0481A39A2E73730F00FC845E /* PacketIdUtil.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3962E73730F00FC845E /* PacketIdUtil.swift */; };
-		0481A39B2E73730F00FC845E /* SeenPacketsBloomFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3972E73730F00FC845E /* SeenPacketsBloomFilter.swift */; };
+		11F0A1B22E80000000ABCDEF /* GCSFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11F0A1B12E80000000ABCDEF /* GCSFilter.swift */; };
 		0481A39C2E73730F00FC845E /* GossipSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3952E73730F00FC845E /* GossipSyncManager.swift */; };
 		0481A39D2E73730F00FC845E /* PacketIdUtil.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3962E73730F00FC845E /* PacketIdUtil.swift */; };
-		0481A39E2E73730F00FC845E /* SeenPacketsBloomFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3972E73730F00FC845E /* SeenPacketsBloomFilter.swift */; };
+		11F0A1B32E80000000ABCDEF /* GCSFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11F0A1B12E80000000ABCDEF /* GCSFilter.swift */; };
 		048A4BE72E5CCCC300162C4A /* TransportConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 048A4BE62E5CCCC300162C4A /* TransportConfig.swift */; };
 		048A4BE82E5CCCC300162C4A /* TransportConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 048A4BE62E5CCCC300162C4A /* TransportConfig.swift */; };
 		048A4BE92E5CCCC300162C4B /* TransportConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 048A4BE62E5CCCC300162C4A /* TransportConfig.swift */; };
@@ -244,7 +244,7 @@
 		0481A3922E73730100FC845E /* RequestSyncPacket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RequestSyncPacket.swift; sourceTree = "<group>"; };
 		0481A3952E73730F00FC845E /* GossipSyncManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GossipSyncManager.swift; sourceTree = "<group>"; };
 		0481A3962E73730F00FC845E /* PacketIdUtil.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PacketIdUtil.swift; sourceTree = "<group>"; };
-		0481A3972E73730F00FC845E /* SeenPacketsBloomFilter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeenPacketsBloomFilter.swift; sourceTree = "<group>"; };
+		11F0A1B12E80000000ABCDEF /* GCSFilter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GCSFilter.swift; sourceTree = "<group>"; };
 		048A4BE62E5CCCC300162C4A /* TransportConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransportConfig.swift; sourceTree = "<group>"; };
 		048A4C272E5FCD6600162C4A /* GeohashBookmarksStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeohashBookmarksStore.swift; sourceTree = "<group>"; };
 		048A4C2A2E5FCE0300162C4A /* GeohashBookmarksStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeohashBookmarksStoreTests.swift; sourceTree = "<group>"; };
@@ -389,7 +389,7 @@
 			children = (
 				0481A3952E73730F00FC845E /* GossipSyncManager.swift */,
 				0481A3962E73730F00FC845E /* PacketIdUtil.swift */,
-				0481A3972E73730F00FC845E /* SeenPacketsBloomFilter.swift */,
+				11F0A1B12E80000000ABCDEF /* GCSFilter.swift */,
 			);
 			path = Sync;
 			sourceTree = "<group>";
@@ -855,7 +855,7 @@
 				B0CA7796B2B2AC2B33F84548 /* CompressionUtil.swift in Sources */,
 				0481A3992E73730F00FC845E /* GossipSyncManager.swift in Sources */,
 				0481A39A2E73730F00FC845E /* PacketIdUtil.swift in Sources */,
-				0481A39B2E73730F00FC845E /* SeenPacketsBloomFilter.swift in Sources */,
+				11F0A1B22E80000000ABCDEF /* GCSFilter.swift in Sources */,
 				92D34E7A07C990C8A815B0CE /* ContentView.swift in Sources */,
 				5C93B4FDD0C448C3EDDBF8AE /* FavoritesPersistenceService.swift in Sources */,
 				047502B42E55FED60083520F /* MeshPeerList.swift in Sources */,
@@ -924,7 +924,7 @@
 				7DCA0DBCB8884E3B31C7BCE3 /* CompressionUtil.swift in Sources */,
 				0481A39C2E73730F00FC845E /* GossipSyncManager.swift in Sources */,
 				0481A39D2E73730F00FC845E /* PacketIdUtil.swift in Sources */,
-				0481A39E2E73730F00FC845E /* SeenPacketsBloomFilter.swift in Sources */,
+				11F0A1B32E80000000ABCDEF /* GCSFilter.swift in Sources */,
 				1D9674FA5F998503831DC281 /* ContentView.swift in Sources */,
 				ACE2ED172C37F01561E50B71 /* FavoritesPersistenceService.swift in Sources */,
 				047502B62E55FED60083520F /* MeshPeerList.swift in Sources */,

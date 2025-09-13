@@ -1,6 +1,7 @@
 import Foundation
+import CryptoKit
 
-// Gossip-based sync manager using rotating Bloom filters
+// Gossip-based sync manager using on-demand GCS filters
 final class GossipSyncManager {
     protocol Delegate: AnyObject {
         func sendPacket(_ packet: BitchatPacket)
@@ -9,22 +10,20 @@ final class GossipSyncManager {
     }
 
     struct Config {
-        var seenCapacity: Int = 100          // recent broadcast messages kept
-        var bloomMaxBytes: Int = 256         // up to 256 bytes
-        var bloomTargetFpr: Double = 0.01    // 1%
+        var seenCapacity: Int = 100          // max packets per sync (cap across types)
+        var gcsMaxBytes: Int = 256           // filter size budget (128..1024)
+        var gcsTargetFpr: Double = 0.01      // 1%
     }
 
     private let myPeerID: String
     private let config: Config
     weak var delegate: Delegate?
 
-    // Bloom filter
-    private let bloom: SeenPacketsBloomFilter
-
     // Storage: broadcast messages (ordered by insert), and latest announce per sender
     private var messages: [String: BitchatPacket] = [:] // idHex -> packet
     private var messageOrder: [String] = []
     private var latestAnnouncementByPeer: [String: (id: String, packet: BitchatPacket)] = [:]
+    private var pruneTimer: DispatchSourceTimer?
 
     // Timer
     private var periodicTimer: DispatchSourceTimer?
@@ -33,7 +32,6 @@ final class GossipSyncManager {
     init(myPeerID: String, config: Config = Config()) {
         self.myPeerID = myPeerID
         self.config = config
-        self.bloom = SeenPacketsBloomFilter(maxBytes: config.bloomMaxBytes, targetFpr: config.bloomTargetFpr)
     }
 
     func start() {
@@ -43,10 +41,17 @@ final class GossipSyncManager {
         timer.setEventHandler { [weak self] in self?.sendRequestSync() }
         timer.resume()
         periodicTimer = timer
+
+        let prune = DispatchSource.makeTimerSource(queue: queue)
+        prune.schedule(deadline: .now() + 15.0, repeating: 15.0, leeway: .seconds(1))
+        prune.setEventHandler { [weak self] in self?.pruneOldAnnouncements(maxAgeSeconds: 60) }
+        prune.resume()
+        pruneTimer = prune
     }
 
     func stop() {
         periodicTimer?.cancel(); periodicTimer = nil
+        pruneTimer?.cancel(); pruneTimer = nil
     }
 
     func scheduleInitialSyncToPeer(_ peerID: String, delaySeconds: TimeInterval = 5.0) {
@@ -61,9 +66,7 @@ final class GossipSyncManager {
         let isAnnounce = (mt == .announce)
         guard isBroadcastMessage || isAnnounce else { return }
 
-        let idBytes = PacketIdUtil.computeId(packet)
-        bloom.add(idBytes)
-        let idHex = idBytes.hexEncodedString()
+        let idHex = PacketIdUtil.computeId(packet).hexEncodedString()
 
         if isBroadcastMessage {
             if messages[idHex] == nil {
@@ -83,8 +86,7 @@ final class GossipSyncManager {
     }
 
     private func sendRequestSync() {
-        let snap = bloom.snapshotActive()
-        let payload = RequestSyncPacket(mBytes: snap.mBytes, k: snap.k, bits: snap.bits).encode()
+        let payload = buildGcsPayload()
         let pkt = BitchatPacket(
             type: MessageType.requestSync.rawValue,
             senderID: Data(hexString: myPeerID) ?? Data(),
@@ -99,8 +101,7 @@ final class GossipSyncManager {
     }
 
     private func sendRequestSync(to peerID: String) {
-        let snap = bloom.snapshotActive()
-        let payload = RequestSyncPacket(mBytes: snap.mBytes, k: snap.k, bits: snap.bits).encode()
+        let payload = buildGcsPayload()
         var recipient = Data()
         var temp = peerID
         while temp.count >= 2 && recipient.count < 8 {
@@ -122,24 +123,16 @@ final class GossipSyncManager {
     }
 
     func handleRequestSync(fromPeerID: String, request: RequestSyncPacket) {
-        // Build membership checker from provided parameters
-        let mBits = request.mBytes * 8
-        let k = request.k
+        // Decode GCS into sorted set and prepare membership checker
+        let sorted = GCSFilter.decodeToSortedSet(p: request.p, m: request.m, data: request.data)
         func mightContain(_ id: Data) -> Bool {
-            // Same hashing as local bloom; compute indices, check MSB-first bits in request.bits
-            var h1: UInt64 = 1469598103934665603
-            var h2: UInt64 = 0x27d4eb2f165667c5
-            for b in id { h1 = (h1 ^ UInt64(b)) &* 1099511628211; h2 = (h2 ^ UInt64(b)) &* 0x100000001B3 }
-            for i in 0..<k {
-                let combined = h1 &+ (UInt64(i) &* h2)
-                let idx = Int((combined & 0x7fff_ffff_ffff_ffff) % UInt64(mBits))
-                let byteIndex = idx / 8
-                let bitIndex = idx % 8
-                let byte = request.bits[byteIndex]
-                let bit = ((Int(byte) >> (7 - bitIndex)) & 1) == 1
-                if !bit { return false }
-            }
-            return true
+            var hasher = SHA256()
+            hasher.update(data: id) // 16-byte PacketId
+            let digest = hasher.finalize()
+            var x: UInt64 = 0
+            for i in 0..<8 { x = (x << 8) | UInt64(digest[i]) }
+            let v = (x & 0x7fff_ffff_ffff_ffff) % UInt64(request.m)
+            return GCSFilter.contains(sortedValues: sorted, candidate: v)
         }
 
         // 1) Announcements: send latest per peer if requester lacks them
@@ -164,5 +157,45 @@ final class GossipSyncManager {
             }
         }
     }
-}
 
+    // Build REQUEST_SYNC payload using current candidates and GCS params
+    private func buildGcsPayload() -> Data {
+        // Collect candidates: latest announce per peer + broadcast messages
+        var candidates: [BitchatPacket] = []
+        candidates.reserveCapacity(latestAnnouncementByPeer.count + messageOrder.count)
+        for (_, pair) in latestAnnouncementByPeer { candidates.append(pair.packet) }
+        for id in messageOrder { if let p = messages[id] { candidates.append(p) } }
+        // Sort by timestamp desc
+        candidates.sort { $0.timestamp > $1.timestamp }
+
+        let p = GCSFilter.deriveP(targetFpr: config.gcsTargetFpr)
+        let nMax = GCSFilter.estimateMaxElements(sizeBytes: config.gcsMaxBytes, p: p)
+        let cap = max(1, config.seenCapacity)
+        let takeN = min(candidates.count, min(nMax, cap))
+        if takeN <= 0 {
+            let req = RequestSyncPacket(p: p, m: 1, data: Data())
+            return req.encode()
+        }
+        let ids: [Data] = candidates.prefix(takeN).map { PacketIdUtil.computeId($0) }
+        let params = GCSFilter.buildFilter(ids: ids, maxBytes: config.gcsMaxBytes, targetFpr: config.gcsTargetFpr)
+        let req = RequestSyncPacket(p: params.p, m: params.m, data: params.data)
+        return req.encode()
+    }
+
+    // Remove announcements older than maxAgeSeconds
+    private func pruneOldAnnouncements(maxAgeSeconds: TimeInterval) {
+        let cutoffMs = UInt64((Date().timeIntervalSince1970 - maxAgeSeconds) * 1000)
+        var toRemove: [String] = []
+        for (peer, pair) in latestAnnouncementByPeer {
+            if pair.packet.timestamp < cutoffMs { toRemove.append(peer) }
+        }
+        if !toRemove.isEmpty {
+            for k in toRemove { latestAnnouncementByPeer.removeValue(forKey: k) }
+        }
+    }
+
+    // Explicit removal hook for LEAVE/stale peer
+    func removeAnnouncementForPeer(_ peerID: String) {
+        _ = latestAnnouncementByPeer.removeValue(forKey: peerID.lowercased())
+    }
+}
