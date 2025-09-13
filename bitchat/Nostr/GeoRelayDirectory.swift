@@ -1,4 +1,6 @@
+import BitLogger
 import Foundation
+import Tor
 
 /// Directory of online Nostr relays with approximate GPS locations, used for geohash routing.
 @MainActor

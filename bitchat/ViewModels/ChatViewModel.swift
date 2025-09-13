@@ -77,12 +77,14 @@
 /// ```
 ///
 
+import BitLogger
 import Foundation
 import SwiftUI
 import CryptoKit
 import Combine
 import CommonCrypto
 import CoreBluetooth
+import Tor
 #if os(iOS)
 import UIKit
 #endif
