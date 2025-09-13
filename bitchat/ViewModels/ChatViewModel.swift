@@ -218,6 +218,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     // MARK: - Published Properties
     
     @Published var messages: [BitchatMessage] = []
+    
+    @Published var translatedMessages: Set<String> = [] // Set of message IDs that have been translated
+    @Published var translatingMessages: Set<String> = [] // Set of message IDs currently being translated
     @Published var currentColorScheme: ColorScheme = .light
     private let maxMessages = TransportConfig.meshTimelineCap // Maximum messages before oldest are removed
     @Published var isConnected = false
@@ -338,6 +341,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     @Published var showAutocomplete: Bool = false
     @Published var autocompleteRange: NSRange? = nil
     @Published var selectedAutocompleteIndex: Int = 0
+    
+    @Published var showLanguageAlert = false
+    @Published var selectedMessageForLanguage: String? = nil
+    @Published var languageInput: String = ""
     
     // Temporary property to fix compilation
     @Published var showPasswordPrompt = false
@@ -3144,6 +3151,139 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         
         // Return new cursor position
         return range.location + nickname.count + (nickname.hasPrefix("@") ? 1 : 2)
+    }
+    
+    @MainActor
+    func showLanguageSelectionForMessage(_ messageID: String) {
+        selectedMessageForLanguage = messageID
+        languageInput = TranslationService.shared.preferredLanguage
+        showLanguageAlert = true
+    }
+    
+    @MainActor
+    func confirmLanguageSelection() {
+        if !languageInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            TranslationService.shared.setPreferredLanguage(languageInput.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+        showLanguageAlert = false
+        
+        if let messageID = selectedMessageForLanguage {
+            selectedMessageForLanguage = nil
+            Task {
+                await translateMessage(messageID)
+            }
+        }
+    }
+    
+    @MainActor
+    func translateMessage(_ messageID: String) async {
+        guard !translatedMessages.contains(messageID) && !translatingMessages.contains(messageID),
+              let message = findMessage(byID: messageID) else {
+            return
+        }
+        
+        translatingMessages.insert(messageID)
+        print("Translating... \(messageID)")
+        
+        let formattedText = formatMessageAsText(message, colorScheme: currentColorScheme)
+        let originalText = String(formattedText.characters[...])
+        
+        let translatedText = await TranslationService.shared.translateText(originalText)
+        
+        let tempMessage = BitchatMessage(
+            id: message.id,
+            sender: message.sender,
+            content: extractContentFromTranslatedText(translatedText, originalMessage: message),
+            timestamp: message.timestamp,
+            isRelay: message.isRelay,
+            originalSender: message.originalSender,
+            isPrivate: message.isPrivate,
+            recipientNickname: message.recipientNickname,
+            senderPeerID: message.senderPeerID,
+            mentions: message.mentions,
+            deliveryStatus: message.deliveryStatus
+        )
+        
+        // Format the temporary message to get properly styled AttributedString
+        let properlyFormattedText = formatMessageAsText(tempMessage, colorScheme: currentColorScheme)
+        
+        message.setCachedFormattedText(properlyFormattedText, isDark: currentColorScheme == .dark, isSelf: isMessageFromSelf(message))
+        translatedMessages.insert(messageID)
+        translatingMessages.remove(messageID)
+    }
+    
+    /// Extract the translated content from the formatted translation service result
+    private func extractContentFromTranslatedText(_ translatedText: String, originalMessage: BitchatMessage) -> String {
+        // The TranslationService returns formatted text like "<@sender> translated_content [timestamp]"
+        // We need to extract just the translated content part
+        if originalMessage.sender == "system" {
+            // For system messages, extract content between "* " and " * ["
+            if translatedText.hasPrefix("* ") && translatedText.contains(" * [") {
+                if let startRange = translatedText.range(of: "* "),
+                   let endRange = translatedText.range(of: " * [") {
+                    return String(translatedText[startRange.upperBound..<endRange.lowerBound])
+                }
+            }
+            return translatedText
+        } else {
+            // For regular messages, extract content between "> " and " [" (or end if no timestamp)
+            if let senderEndRange = translatedText.range(of: "> ") {
+                var content = String(translatedText[senderEndRange.upperBound...])
+                
+                // Remove timestamp if present
+                if let timestampRange = content.range(of: " [", options: .backwards) {
+                    let possibleTimestamp = String(content[timestampRange.lowerBound...])
+                    if possibleTimestamp.hasSuffix("]") {
+                        content = String(content[..<timestampRange.lowerBound])
+                    }
+                }
+                
+                return content.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            return translatedText
+        }
+    }
+    
+    func isMessageTranslating(_ messageID: String) -> Bool {
+        return translatingMessages.contains(messageID)
+    }
+    
+    func isMessageTranslated(_ messageID: String) -> Bool {
+        return translatedMessages.contains(messageID)
+    }
+    
+    /// Helper to find a message by ID across all message collections
+    private func findMessage(byID messageID: String) -> BitchatMessage? {
+        // Check public messages
+        if let message = messages.first(where: { $0.id == messageID }) {
+            return message
+        }
+        
+        // Check private chats
+        for (_, chatMessages) in privateChats {
+            if let message = chatMessages.first(where: { $0.id == messageID }) {
+                return message
+            }
+        }
+        
+        return nil
+    }
+    
+    /// Helper to check if a message is from self
+    private func isMessageFromSelf(_ message: BitchatMessage) -> Bool {
+        if let spid = message.senderPeerID {
+            // In geohash channels, compare against our per-geohash nostr short ID
+            if case .location(let ch) = activeChannel, spid.hasPrefix("nostr:") {
+                if let myGeo = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
+                    return spid == "nostr:\(myGeo.publicKeyHex.prefix(TransportConfig.nostrShortKeyDisplayLength))"
+                }
+            }
+            return spid == meshService.myPeerID
+        }
+        // Fallback by nickname
+        if message.sender == nickname { return true }
+        if message.sender.hasPrefix(nickname + "#") { return true }
+        return false
     }
     
     // MARK: - Message Formatting

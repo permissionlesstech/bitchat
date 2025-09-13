@@ -43,6 +43,9 @@ struct BitchatApp: App {
                     }
                     #if os(iOS)
                     appDelegate.chatViewModel = chatViewModel
+                    Task.detached {
+                        await TranslationService.shared.prepareTranslation()
+                    }
                     #elseif os(macOS)
                     appDelegate.chatViewModel = chatViewModel
                     #endif

@@ -308,6 +308,24 @@ struct ContentView: View {
                                             .lineLimit(isLong && !isExpanded ? TransportConfig.uiLongMessageLineLimit : nil)
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                         
+                                        if message.sender != "system" {
+                                            TranslationButton(
+                                                messageId: message.id,
+                                                isTranslating: viewModel.isMessageTranslating(message.id),
+                                                isTranslated: viewModel.isMessageTranslated(message.id),
+                                                secondaryTextColor: secondaryTextColor,
+                                                onTap: {
+                                                    Task {
+                                                        await viewModel.translateMessage(message.id)
+                                                    }
+                                                },
+                                                onLongPress: {
+                                                    viewModel.showLanguageSelectionForMessage(message.id)
+                                                }
+                                            )
+                                            .padding(.leading, 4)
+                                        }
+                                        
                                         // Delivery status indicator for private messages
                                         if message.isPrivate && message.sender == viewModel.nickname,
                                            let status = message.deliveryStatus {
@@ -1201,6 +1219,18 @@ struct ContentView: View {
                 .onAppear { viewModel.isLocationChannelsSheetPresented = true }
                 .onDisappear { viewModel.isLocationChannelsSheetPresented = false }
         }
+        .alert("Translation Language", isPresented: $viewModel.showLanguageAlert) {
+            TextField("Language (e.g., Spanish, French)", text: $viewModel.languageInput)
+            Button("Translate") {
+                viewModel.confirmLanguageSelection()
+            }
+            Button("Cancel", role: .cancel) {
+                viewModel.showLanguageAlert = false
+                viewModel.selectedMessageForLanguage = nil
+            }
+        } message: {
+            Text("Enter the language you want to translate to:")
+        }
         .alert("heads up", isPresented: $viewModel.showScreenshotPrivacyWarning) {
             Button("ok", role: .cancel) {}
         } message: {
@@ -1505,6 +1535,49 @@ struct DeliveryStatusView: View {
             }
             .foregroundColor(secondaryTextColor.opacity(0.6))
             .help("Delivered to \(reached) of \(total) members")
+        }
+    }
+}
+
+struct TranslationButton: View {
+    let messageId: String
+    let isTranslating: Bool
+    let isTranslated: Bool
+    let secondaryTextColor: Color
+    let onTap: () -> Void
+    let onLongPress: () -> Void
+    
+    @State private var isPressed = false
+    @State private var longPressTriggered = false
+    
+    var body: some View {
+        Group {
+            if isTranslating {
+                ProgressView()
+                    .scaleEffect(0.6)
+                    .frame(width: 16, height: 16)
+            } else {
+                Image(systemName: isTranslated ? "globe.badge.chevron.backward" : "globe")
+                    .font(.system(size: 18))
+                    .foregroundColor(isTranslated ? .blue : secondaryTextColor.opacity(0.6))
+            }
+        }
+        .scaleEffect(isPressed ? 1.1 : 1.0)
+        .animation(.easeInOut(duration: 0.1), value: isPressed)
+        .accessibilityLabel(isTranslated ? "Translated" : "Translate")
+        .onTapGesture {
+            if !isTranslating && !longPressTriggered {
+                onTap()
+            }
+            longPressTriggered = false
+        }
+        .onLongPressGesture(minimumDuration: 1.0) {
+            if !isTranslating {
+                longPressTriggered = true
+                onLongPress()
+            }
+        } onPressingChanged: { pressing in
+            isPressed = pressing
         }
     }
 }
