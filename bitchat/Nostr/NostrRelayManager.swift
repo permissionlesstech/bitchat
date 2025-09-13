@@ -1,3 +1,4 @@
+import BitLogger
 import Foundation
 import Network
 import Combine

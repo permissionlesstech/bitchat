@@ -77,6 +77,7 @@
 /// - Noise Specification: http://www.noiseprotocol.org/noise.html
 ///
 
+import BitLogger
 import Foundation
 import CryptoKit
 
