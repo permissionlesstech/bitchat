@@ -302,6 +302,7 @@
 		A1B2C3D4E5F60123456789AA /* MockKeychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockKeychain.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60123456789AB /* MockIdentityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockIdentityManager.swift; sourceTree = "<group>"; };
 		A2136C3E22D02D4A8DBE7EAB /* BinaryProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BinaryProtocol.swift; sourceTree = "<group>"; };
+		A668F40B2E75874A000C4760 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		AA11BB22CC33DD44EE55FF68 /* MessageTextHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageTextHelpers.swift; sourceTree = "<group>"; };
 		AA77BB10CC22DD33EE44FF55 /* VerificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerificationService.swift; sourceTree = "<group>"; };
 		AA77BB13CC22DD33EE44FF57 /* VerificationViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerificationViews.swift; sourceTree = "<group>"; };
@@ -581,6 +582,7 @@
 		C3D98EB3E1B455E321F519F4 /* bitchatTests */ = {
 			isa = PBXGroup;
 			children = (
+				A668F40B2E75874A000C4760 /* README.md */,
 				D69A18D27F9A565FD6041E12 /* Info.plist */,
 				0481A38F2E734CAE00FC845E /* CommandProcessorTests.swift */,
 				048A4C2A2E5FCE0300162C4A /* GeohashBookmarksStoreTests.swift */,
