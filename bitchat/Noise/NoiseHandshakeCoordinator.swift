@@ -6,6 +6,7 @@
 // For more information, see <https://unlicense.org>
 //
 
+import BitLogger
 import Foundation
 
 /// Coordinates Noise handshakes to prevent race conditions and ensure reliable encryption establishment
