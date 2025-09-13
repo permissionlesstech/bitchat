@@ -94,7 +94,7 @@ class MLXTranslationService {
                     let messages = [["role": "user", "content": prompt]]
                     
                     let result = try await container.perform { context in
-                        let userInput = MLXLMCommon.UserInput(messages: messages)
+                            let userInput = MLXLMCommon.UserInput(messages: messages)
                         let lmInput = try await context.processor.prepare(input: userInput)
                         
                         var tokenCount = 0

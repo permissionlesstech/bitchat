@@ -5,16 +5,14 @@
 	<key>com.apple.security.app-sandbox</key>
 	<true/>
 	<key>com.apple.security.application-groups</key>
-	<array>
-		<string>group.chat.bitchat</string>
-	</array>
+	<array/>
 	<key>com.apple.security.device.bluetooth</key>
-	<true/>
-	<key>com.apple.security.personal-information.location</key>
 	<true/>
 	<key>com.apple.security.network.client</key>
 	<true/>
 	<key>com.apple.security.network.server</key>
+	<true/>
+	<key>com.apple.security.personal-information.location</key>
 	<true/>
 </dict>
 </plist>

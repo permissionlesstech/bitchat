@@ -16,16 +16,17 @@ let package = Package(
     ],
     dependencies:[
         .package(url: "https://github.com/21-DOT-DEV/swift-secp256k1", exact: "0.21.1"),
-        .package(url: "https://github.com/ml-explore/mlx-swift", from: "0.18.0"),
+        .package(url: "https://github.com/ml-explore/mlx-swift-examples/", branch: "main"),
     ],
     targets: [
         .executableTarget(
             name: "bitchat",
             dependencies: [
                 .product(name: "P256K", package: "swift-secp256k1"),
-                .product(name: "MLX", package: "mlx-swift"),
-                .product(name: "MLXNN", package: "mlx-swift"),
-                .product(name: "MLXLMCommon", package: "mlx-swift"),
+                .product(name: "MLX", package: "mlx-swift-examples"),
+                .product(name: "MLXNN", package: "mlx-swift-examples"),
+                .product(name: "MLXLLM", package: "mlx-swift-examples"),
+                .product(name: "MLXLMCommon", package: "mlx-swift-examples"),
             ],
             path: "bitchat",
             exclude: [

@@ -5,9 +5,7 @@
 	<key>com.apple.security.app-sandbox</key>
 	<true/>
 	<key>com.apple.security.application-groups</key>
-	<array>
-		<string>group.chat.bitchat</string>
-	</array>
+	<array/>
 	<key>com.apple.security.device.bluetooth</key>
 	<true/>
 </dict>
