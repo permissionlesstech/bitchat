@@ -13,7 +13,7 @@ struct LocationNotesSheet: View {
 
     var body: some View {
         Group {
-            if let gh = notesGeohash ?? locationManager.availableChannels.first(where: { $0.level == .block })?.geohash {
+            if let gh = notesGeohash ?? locationManager.availableChannels.first(where: { $0.level == .building })?.geohash {
                 // Found block geohash: show notes view
                 LocationNotesView(geohash: gh)
                     .environmentObject(viewModel)
@@ -55,8 +55,8 @@ struct LocationNotesSheet: View {
                     LocationChannelManager.shared.refreshChannels()
                 }
                 .onChange(of: locationManager.availableChannels) { channels in
-                    if notesGeohash == nil, let block = channels.first(where: { $0.level == .block }) {
-                        notesGeohash = block.geohash
+                    if notesGeohash == nil, let building = channels.first(where: { $0.level == .building }) {
+                        notesGeohash = building.geohash
                     }
                 }
             }
