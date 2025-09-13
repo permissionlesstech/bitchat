@@ -129,8 +129,10 @@ final class GossipSyncManager {
             var hasher = SHA256()
             hasher.update(data: id) // 16-byte PacketId
             let digest = hasher.finalize()
+            let db = Data(digest)
             var x: UInt64 = 0
-            for i in 0..<8 { x = (x << 8) | UInt64(digest[i]) }
+            let take = min(8, db.count)
+            for i in 0..<take { x = (x << 8) | UInt64(db[i]) }
             let v = (x & 0x7fff_ffff_ffff_ffff) % UInt64(request.m)
             return GCSFilter.contains(sortedValues: sorted, candidate: v)
         }

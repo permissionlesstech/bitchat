@@ -81,8 +81,10 @@ enum GCSFilter {
         var hasher = SHA256()
         hasher.update(data: id16)
         let d = hasher.finalize()
+        let db = Data(d)
         var x: UInt64 = 0
-        for i in 0..<8 { x = (x << 8) | UInt64(d[i]) }
+        let take = min(8, db.count)
+        for i in 0..<take { x = (x << 8) | UInt64(db[i]) }
         return x & 0x7fff_ffff_ffff_ffff
     }
 
@@ -179,4 +181,3 @@ enum GCSFilter {
         }
     }
 }
-
