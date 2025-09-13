@@ -19,6 +19,7 @@ final class ShareViewController: UIViewController {
         l.textAlignment = .center
         l.numberOfLines = 0
         l.textColor = .label
+        l.accessibilityLabel = String(localized: "accessibility.share_status")
         return l
     }()
 
@@ -40,7 +41,7 @@ final class ShareViewController: UIViewController {
     private func processShare() {
         guard let ctx = self.extensionContext,
               let item = ctx.inputItems.first as? NSExtensionItem else {
-            finishWithMessage("Nothing to share")
+            finishWithMessage(String(localized: "share.nothing_to_share"))
             return
         }
 
@@ -57,7 +58,7 @@ final class ShareViewController: UIViewController {
             if let title = item.attributedTitle?.string, !title.isEmpty {
                 saveAndFinish(text: title)
             } else {
-                finishWithMessage("No shareable content")
+                finishWithMessage(String(localized: "share.no_shareable_content"))
             }
             return
         }
@@ -77,7 +78,7 @@ final class ShareViewController: UIViewController {
                             self.saveAndFinish(text: t)
                         }
                     } else {
-                        self.finishWithMessage("No shareable content")
+                        self.finishWithMessage(String(localized: "share.no_shareable_content"))
                     }
                 }
             }
@@ -132,20 +133,20 @@ final class ShareViewController: UIViewController {
     private func saveAndFinish(url: URL, title: String?) {
         let payload: [String: String] = [
             "url": url.absoluteString,
-            "title": title ?? url.host ?? "Shared Link"
+            "title": title ?? url.host ?? String(localized: "share.shared_link")
         ]
         if let json = try? JSONSerialization.data(withJSONObject: payload),
            let s = String(data: json, encoding: .utf8) {
             saveToSharedDefaults(content: s, type: "url")
-            finishWithMessage("✓ Shared link to bitchat")
+            finishWithMessage(String(localized: "share.link_success"))
         } else {
-            finishWithMessage("Failed to encode link")
+            finishWithMessage(String(localized: "share.failed_to_encode"))
         }
     }
 
     private func saveAndFinish(text: String) {
         saveToSharedDefaults(content: text, type: "text")
-        finishWithMessage("✓ Shared text to bitchat")
+        finishWithMessage(String(localized: "share.text_success"))
     }
 
     private func saveToSharedDefaults(content: String, type: String) {
@@ -159,7 +160,7 @@ final class ShareViewController: UIViewController {
     private func finishWithMessage(_ msg: String) {
         statusLabel.text = msg
         // Complete shortly after showing status
-        DispatchQueue.main.asyncAfter(deadline: .now() + TransportConfig.uiShareExtensionDismissDelaySeconds) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
             self.extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
         }
     }

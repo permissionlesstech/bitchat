@@ -24,6 +24,8 @@ targets:
     resources:
       - bitchat/Assets.xcassets
       - bitchat/LaunchScreen.storyboard
+      - bitchat/Localizable.xcstrings
+      - bitchat/Infoplist.xcstrings
     info:
       path: bitchat/Info.plist
       properties:
@@ -70,9 +72,10 @@ targets:
       - target: bitchatShareExtension
         embed: true
       - package: P256K
-      - framework: Frameworks/tor-nolzma.xcframework
-        embed: true
-        codeSign: true
+      # Tor framework excluded for iOS Simulator compatibility
+      # - framework: Frameworks/tor-nolzma.xcframework
+      #   embed: true
+      #   codeSign: true
       - sdk: libz.tbd
         
   bitchat_macOS:
@@ -82,6 +85,8 @@ targets:
       - bitchat
     resources:
       - bitchat/Assets.xcassets
+      - bitchat/Localizable.xcstrings
+      - bitchat/Infoplist.xcstrings
     info:
       path: bitchat/Info.plist
       properties:
@@ -194,6 +199,7 @@ targets:
       CODE_SIGNING_REQUIRED: YES
       CODE_SIGNING_ALLOWED: YES
       DEVELOPMENT_TEAM: L3N5LHJD5Y
+
 
 schemes:
   bitchat (iOS):

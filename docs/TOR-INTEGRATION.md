@@ -8,6 +8,7 @@ Key pieces
 - TorManager
   - Boots Tor, manages a DataDirectory under Application Support, exposes SOCKS at 127.0.0.1:39050, and provides awaitReady().
   - Fails closed by default until Tor is bootstrapped. For local development only, define BITCHAT_DEV_ALLOW_CLEARNET to bypass Tor.
+  - **iOS Simulator Development**: Automatically uses clearnet mode when building for iOS Simulator (Tor framework not available).
 - TorURLSession
   - Provides a shared URLSession configured with a SOCKS5 proxy when Tor is enforced/ready.
   - NostrRelayManager and GeoRelayDirectory now use this session and await Tor readiness before starting network activity.
@@ -28,6 +29,7 @@ Drop‑in steps
 2) Add the framework to Xcode targets
    - Drop your xcframework into `Frameworks/`. The project is prewired in `project.yml` to link/embed `Frameworks/tor-nolzma.xcframework` (rename yours to match, or update the path).
    - Ensure the binary includes the slices you need (iOS device/simulator and/or macOS). If your xcframework lacks simulator slices, you can still build/run on device or macOS arm64; simulator will fail to link.
+   - **iOS Simulator Compatibility**: BitChat now includes automatic Tor framework exclusion for iOS Simulator builds. The code conditionally compiles out Tor functionality when `TARGET_OS_SIMULATOR && TARGET_OS_IOS` is true, allowing development and testing on iOS Simulator without Tor framework dependencies.
    - On iOS, it will be embedded and signed automatically.
 
 3) Wire Tor bootstrap in TorManager.startTor()

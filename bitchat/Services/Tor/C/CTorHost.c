@@ -6,6 +6,17 @@
 #include <stdio.h>
 #include <string.h>
 
+// Exclude Tor functionality for iOS Simulator builds (no Tor framework available)
+#if TARGET_OS_SIMULATOR && TARGET_OS_IOS
+
+// Stub implementations for iOS Simulator
+int tor_host_is_running(void) { return 0; }
+int tor_host_start(const char *data_dir, const char *socks_addr, const char *control_addr, int shutdown_fast) { return -1; }
+int tor_host_shutdown(void) { return 0; }
+int tor_host_restart(const char *data_dir, const char *socks_addr, const char *control_addr, int shutdown_fast) { return -1; }
+
+#else
+
 // Forward declarations from Tor's public embedding API (tor_api.h)
 typedef struct tor_main_configuration_t tor_main_configuration_t;
 tor_main_configuration_t *tor_main_configuration_new(void);
@@ -171,3 +182,5 @@ int tor_host_restart(const char *data_dir, const char *socks_addr, const char *c
   (void)tor_host_shutdown();
   return tor_host_start(data_dir_copy, socks_arg_copy, control_arg_copy, shutdown_fast);
 }
+
+#endif // !TARGET_OS_SIMULATOR || !TARGET_OS_IOS

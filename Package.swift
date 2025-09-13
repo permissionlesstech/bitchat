@@ -4,6 +4,7 @@ import PackageDescription
 
 let package = Package(
     name: "bitchat",
+    defaultLocalization: "en",
     platforms: [
         .iOS(.v16),
         .macOS(.v13)
@@ -33,6 +34,9 @@ let package = Package(
                 "bitchat-macOS.entitlements",
                 "LaunchScreen.storyboard",
                 "Services/Tor/C/"
+            ],
+            resources: [
+                .process("Localizable.xcstrings")
             ],
             linkerSettings: [
                 .linkedLibrary("z")

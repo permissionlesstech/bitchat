@@ -75,3 +75,9 @@ TestResult.xcresult/
 *.xcresult/
 build.log
 *.log
+*.backup
+*.bk
+.derived_data/*
+# iOS-specific files
+LaunchScreen.storyboard.ios
+LaunchScreen.storyboard

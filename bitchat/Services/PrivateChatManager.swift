@@ -196,7 +196,7 @@ final class PrivateChatManager: ObservableObject {
         guard privateChats[peerID] != nil else { return }
         
         if let index = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
-            privateChats[peerID]?[index].deliveryStatus = .delivered(to: "recipient", at: Date())
+            privateChats[peerID]?[index].deliveryStatus = .delivered(to: String(localized: "delivery.recipient"), at: Date())
         }
     }
     
@@ -205,7 +205,7 @@ final class PrivateChatManager: ObservableObject {
         guard privateChats[peerID] != nil else { return }
         
         if let index = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
-            privateChats[peerID]?[index].deliveryStatus = .read(by: "recipient", at: Date())
+            privateChats[peerID]?[index].deliveryStatus = .read(by: String(localized: "delivery.recipient"), at: Date())
         }
     }
     

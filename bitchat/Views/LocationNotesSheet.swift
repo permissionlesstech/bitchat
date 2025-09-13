@@ -23,9 +23,9 @@ struct LocationNotesSheet: View {
                     VStack(spacing: 0) {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("notes")
+                                Text(String(localized: "location.notes.title"))
                                     .font(.system(size: 16, weight: .bold, design: .monospaced))
-                                Text("acquiring location…")
+                                Text(String(localized: "location.notes.acquiring_location"))
                                     .font(.system(size: 12, design: .monospaced))
                                     .foregroundColor(secondaryTextColor)
                             }
@@ -37,7 +37,7 @@ struct LocationNotesSheet: View {
                                     .frame(width: 32, height: 32)
                             }
                             .buttonStyle(.plain)
-                            .accessibilityLabel("Close")
+                            .accessibilityLabel(String(localized: "accessibility.close"))
                         }
                         .frame(height: 44)
                         .padding(.horizontal, 12)

@@ -3,8 +3,10 @@ import Network
 import Darwin
 
 // Declare C entrypoint for Tor when statically linked from an xcframework.
+#if !(targetEnvironment(simulator) && os(iOS))
 @_silgen_name("tor_main")
 private func tor_main_c(_ argc: Int32, _ argv: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?) -> Int32
+#endif
 
 // Preferred: tiny C glue that uses Tor's embedding API (tor_api.h)
 @_silgen_name("tor_host_start")
@@ -379,6 +381,11 @@ final class TorManager: ObservableObject {
 
     // MARK: - Static-link path (no module import)
     private func startTorViaLinkedSymbol() -> Bool {
+        #if targetEnvironment(simulator) && os(iOS)
+        // iOS Simulator: Tor framework not available, return false to skip
+        SecureLogger.info("TorManager: skipping tor_main (iOS Simulator)", category: .session)
+        return false
+        #else
         // Attempt to start tor_run_main directly (statically linked). If the
         // symbol is not present at link-time, builds will fail — which is
         // expected when the xcframework is absent.
@@ -418,6 +425,7 @@ final class TorManager: ObservableObject {
             }
         }
         return true
+        #endif
     }
     
     // MARK: - ControlPort monitoring (bootstrap progress)

@@ -110,6 +110,7 @@ For detailed protocol documentation, see the [Technical Whitepaper](WHITEPAPER.m
    ```
 
 3. Open the generated project:
+
    ```bash
    open bitchat.xcodeproj
    ```
@@ -136,3 +137,32 @@ For detailed protocol documentation, see the [Technical Whitepaper](WHITEPAPER.m
 
 Want to try this on macos: `just run` will set it up and run from source.
 Run `just clean` afterwards to restore things to original state for mobile app building and development.
+
+## Development Notes
+
+### iOS Simulator Support
+
+BitChat now supports iOS Simulator development with automatic Tor framework exclusion:
+
+- **iOS Simulator builds** automatically exclude Tor framework (not available on simulator)
+- **Development clearnet mode** enabled via `BITCHAT_DEV_ALLOW_CLEARNET` flag
+- **Cross-platform compatibility** maintained between iOS device, iOS Simulator, and macOS
+
+To build for iOS Simulator:
+```bash
+xcodebuild -project bitchat.xcodeproj -scheme "bitchat (iOS)" \
+  -destination "platform=iOS Simulator" \
+  OTHER_SWIFT_FLAGS="-DBITCHAT_DEV_ALLOW_CLEARNET"
+```
+
+### Localization Testing
+
+The app supports 25+ languages with full localization testing:
+
+```bash
+# Set app language (macOS)
+defaults write chat.bitchat AppleLanguages -array ja-JP
+
+# Set iOS Simulator language
+xcrun simctl spawn <device-id> defaults write NSGlobalDomain AppleLanguages -array ja-JP
+```
