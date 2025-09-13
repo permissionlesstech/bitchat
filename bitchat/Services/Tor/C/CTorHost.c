@@ -40,7 +40,11 @@ static void *tor_thread_main(void *arg) {
   int rc = tor_run_main(cfg);            // blocks until tor exits
   tor_main_configuration_free(cfg);
   if (argv_owned) { free(argv_owned); argv_owned = NULL; argv_owned_argc = 0; }
-  if (owning_fd_tor != -1) { close(owning_fd_tor); owning_fd_tor = -1; }
+  // Do not close owning_fd_tor here: Tor may have already closed it and the
+  // fd number could have been re-used by the time we get here. On iOS 18,
+  // attempting to close a re-used guarded fd can trigger EXC_GUARD. Treat the
+  // tor-side end as owned by Tor and simply forget our reference.
+  owning_fd_tor = -1;
   return (void*)(intptr_t)rc;
 }
 
