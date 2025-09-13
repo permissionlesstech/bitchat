@@ -858,7 +858,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         Task { @MainActor in
             self.torRestartPending = true
             // Post only in geohash channels (queue if not active)
-            self.addGeohashOnlySystemMessage("tor restarting to recover connectivity…")
+            self.addGeohashOnlySystemMessage("tor restarting to recover connectivity...")
         }
     }
 

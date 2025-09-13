@@ -123,6 +123,28 @@ struct NostrProtocol {
         let schnorrKey = try senderIdentity.schnorrSigningKey()
         return try event.sign(with: schnorrKey)
     }
+
+    /// Create a persistent location note (kind 1: text note) tagged to a street-level geohash.
+    static func createGeohashTextNote(
+        content: String,
+        geohash: String,
+        senderIdentity: NostrIdentity,
+        nickname: String? = nil
+    ) throws -> NostrEvent {
+        var tags = [["g", geohash]]
+        if let nickname = nickname?.trimmingCharacters(in: .whitespacesAndNewlines), !nickname.isEmpty {
+            tags.append(["n", nickname])
+        }
+        let event = NostrEvent(
+            pubkey: senderIdentity.publicKeyHex,
+            createdAt: Date(),
+            kind: .textNote,
+            tags: tags,
+            content: content
+        )
+        let schnorrKey = try senderIdentity.schnorrSigningKey()
+        return try event.sign(with: schnorrKey)
+    }
     
     // MARK: - Private Methods
     
