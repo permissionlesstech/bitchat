@@ -964,6 +964,11 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 case .verifyChallenge, .verifyResponse:
                     // QR verification payloads over Nostr are not supported; ignore in geohash DMs
                     break
+                case .fileInline:
+                    // Handle inline file transfer
+                    let data = noisePayload.data
+                    NotificationCenter.default.post(name: Notification.Name("BitChatIncomingInlineFile"), object: nil, userInfo: ["tlv": data])
+                    break
                 }
             }
         } catch { }
@@ -5163,6 +5168,11 @@ class ChatViewModel: ObservableObject, BitchatDelegate {
                 }
             case .verifyChallenge, .verifyResponse:
                 // Ignore verification payloads arriving via Nostr path for now
+                break
+            case .fileInline:
+                // Handle inline file transfer
+                let data = noisePayload.data
+                NotificationCenter.default.post(name: Notification.Name("BitChatIncomingInlineFile"), object: nil, userInfo: ["tlv": data])
                 break
             }
             

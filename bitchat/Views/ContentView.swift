@@ -9,9 +9,11 @@
 import SwiftUI
 #if os(iOS)
 import UIKit
+import Photos
+#elseif os(macOS)
+import AppKit
 #endif
 import UniformTypeIdentifiers
-import Photos
 
 // MARK: - Supporting Types
 
@@ -683,216 +685,203 @@ struct ContentView: View {
         })
     }
     
+    // MARK: - Autocomplete View
+    
+    @ViewBuilder
+    private var autocompleteView: some View {
+        if viewModel.showAutocomplete && !viewModel.autocompleteSuggestions.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(viewModel.autocompleteSuggestions.prefix(4)), id: \.self) { suggestion in
+                    Button(action: {
+                        _ = viewModel.completeNickname(suggestion, in: &messageText)
+                    }) {
+                        HStack {
+                            Text(suggestion)
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundColor(textColor)
+                                .fontWeight(.medium)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 3)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .buttonStyle(.plain)
+                    .background(Color.gray.opacity(0.1))
+                }
+            }
+            .background(backgroundColor)
+            .overlay(
+                RoundedRectangle(cornerRadius: 4)
+                    .stroke(secondaryTextColor.opacity(0.3), lineWidth: 1)
+            )
+            .padding(.horizontal, 12)
+        }
+    }
+    
+    // MARK: - Command Suggestions View
+    
+    @ViewBuilder
+    private var commandSuggestionsView: some View {
+        if showCommandSuggestions && !commandSuggestions.isEmpty {
+            commandSuggestionsContent
+        }
+    }
+    
+    @ViewBuilder
+    private var commandSuggestionsContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(commandSuggestions, id: \.self) { command in
+                if let info = allCommandInfo.first(where: { $0.commands.contains(command) }) {
+                    Button(action: {
+                        messageText = command + " "
+                        showCommandSuggestions = false
+                        commandSuggestions = []
+                    }) {
+                        HStack {
+                            Text(info.commands.joined(separator: ", "))
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundColor(textColor)
+                                .fontWeight(.medium)
+                            
+                            if let syntax = info.syntax {
+                                Text(syntax)
+                                    .font(.system(size: 10, design: .monospaced))
+                                    .foregroundColor(secondaryTextColor.opacity(0.8))
+                            }
+                            
+                            Spacer()
+                            
+                            Text(info.description)
+                                .font(.system(size: 10, design: .monospaced))
+                                .foregroundColor(secondaryTextColor)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 3)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .buttonStyle(.plain)
+                    .background(Color.gray.opacity(0.1))
+                }
+            }
+        }
+        .background(backgroundColor)
+        .overlay(
+            RoundedRectangle(cornerRadius: 4)
+                .stroke(secondaryTextColor.opacity(0.3), lineWidth: 1)
+        )
+        .padding(.horizontal, 12)
+    }
+    
+    // MARK: - Command Info Helper
+    
+    private var allCommandInfo: [(commands: [String], syntax: String?, description: String)] {
+        let baseInfo: [(commands: [String], syntax: String?, description: String)] = [
+            (["/block"], "[nickname]", "block or list blocked peers"),
+            (["/clear"], nil, "clear chat messages"),
+            (["/hug"], "<nickname>", "send someone a warm hug"),
+            (["/m", "/msg"], "<nickname> [message]", "send private message"),
+            (["/slap"], "<nickname>", "slap someone with a trout"),
+            (["/unblock"], "<nickname>", "unblock a peer"),
+            (["/w"], nil, "see who's online")
+        ]
+        let isGeoPublic: Bool = {
+            if case .location = locationManager.selectedChannel { return true }
+            return false
+        }()
+        let isGeoDM: Bool = (viewModel.selectedPrivateChatPeer?.hasPrefix("nostr_") == true)
+        let favInfo: [(commands: [String], syntax: String?, description: String)] = [
+            (["/fav"], "<nickname>", "add to favorites"),
+            (["/unfav"], "<nickname>", "remove from favorites")
+        ]
+        return baseInfo + ((isGeoPublic || isGeoDM) ? [] : favInfo)
+    }
+    
+    // MARK: - Message Input Section
+    
+    @ViewBuilder
+    private var messageInputSection: some View {
+        HStack(alignment: .center, spacing: 4) {
+            messageTextField
+            sendButton
+        }
+        .padding(.vertical, 8)
+        .background(backgroundColor.opacity(0.95))
+        .overlay(attachButtonOverlay)
+    }
+    
+    @ViewBuilder
+    private var messageTextField: some View {
+        TextField("type a message...", text: $messageText)
+            .textFieldStyle(.plain)
+            .font(.system(size: 14, design: .monospaced))
+            .foregroundColor(textColor)
+            .focused($isTextFieldFocused)
+            .padding(.leading, 12)
+            .onChange(of: messageText, perform: handleMessageTextChange)
+            .onSubmit {
+                sendMessage()
+            }
+    }
+    
+    @ViewBuilder
+    private var sendButton: some View {
+        Button(action: sendMessage) {
+            Image(systemName: "arrow.up.circle.fill")
+                .font(.system(size: 20))
+                .foregroundColor(messageText.isEmpty ? Color.gray :
+                                        viewModel.selectedPrivateChatPeer != nil
+                                         ? Color.orange : textColor)
+        }
+        .buttonStyle(.plain)
+        .padding(.trailing, 12)
+        .accessibilityLabel("Send message")
+        .accessibilityHint(messageText.isEmpty ? "Enter a message to send" : "Double tap to send")
+    }
+    
+    @ViewBuilder
+    private var attachButtonOverlay: some View {
+        HStack {
+            attachButton
+            Spacer()
+        }
+    }
+    
+    @ViewBuilder
+    private var attachButton: some View {
+        Button(action: { showFileImporter = true }) {
+            Image(systemName: "paperclip.circle.fill")
+                .font(.system(size: 20))
+                .foregroundColor(attachButtonColor)
+        }
+        .buttonStyle(.plain)
+        .padding(.leading, 12)
+        .disabled(!attachButtonEnabled)
+    }
+    
+    private var attachButtonColor: Color {
+        let isLocationActive: Bool = {
+            if case .location(_) = locationManager.selectedChannel { return true }
+            return false
+        }()
+        return (viewModel.selectedPrivateChatPeer != nil || isLocationActive) ? Color.blue : Color.gray
+    }
+    
+    private var attachButtonEnabled: Bool {
+        let isLocationActive: Bool = {
+            if case .location(_) = locationManager.selectedChannel { return true }
+            return false
+        }()
+        return viewModel.selectedPrivateChatPeer != nil || isLocationActive
+    }
+    
     // MARK: - Input View
     
     private var inputView: some View {
         VStack(spacing: 0) {
-            // @mentions autocomplete
-            if viewModel.showAutocomplete && !viewModel.autocompleteSuggestions.isEmpty {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(viewModel.autocompleteSuggestions.prefix(4)), id: \.self) { suggestion in
-                        Button(action: {
-                            _ = viewModel.completeNickname(suggestion, in: &messageText)
-                        }) {
-                            HStack {
-                                Text(suggestion)
-                                    .font(.system(size: 11, design: .monospaced))
-                                    .foregroundColor(textColor)
-                                    .fontWeight(.medium)
-                                Spacer()
-                            }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 3)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        .buttonStyle(.plain)
-                        .background(Color.gray.opacity(0.1))
-                    }
-                }
-                .background(backgroundColor)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 4)
-                        .stroke(secondaryTextColor.opacity(0.3), lineWidth: 1)
-                )
-                .padding(.horizontal, 12)
-            }
-            
-            // Command suggestions
-            if showCommandSuggestions && !commandSuggestions.isEmpty {
-                VStack(alignment: .leading, spacing: 0) {
-                    // Define commands with aliases and syntax
-                    let baseInfo: [(commands: [String], syntax: String?, description: String)] = [
-                        (["/block"], "[nickname]", "block or list blocked peers"),
-                        (["/clear"], nil, "clear chat messages"),
-                        (["/hug"], "<nickname>", "send someone a warm hug"),
-                        (["/m", "/msg"], "<nickname> [message]", "send private message"),
-                        (["/slap"], "<nickname>", "slap someone with a trout"),
-                        (["/unblock"], "<nickname>", "unblock a peer"),
-                        (["/w"], nil, "see who's online")
-                    ]
-                    let isGeoPublic: Bool = { if case .location = locationManager.selectedChannel { return true }; return false }()
-                    let isGeoDM: Bool = (viewModel.selectedPrivateChatPeer?.hasPrefix("nostr_") == true)
-                    let favInfo: [(commands: [String], syntax: String?, description: String)] = [
-                        (["/fav"], "<nickname>", "add to favorites"),
-                        (["/unfav"], "<nickname>", "remove from favorites")
-                    ]
-                    let commandInfo = baseInfo + ((isGeoPublic || isGeoDM) ? [] : favInfo)
-                    
-                    // Build the display
-                    let allCommands = commandInfo
-                    
-                    // Show matching commands
-                    ForEach(commandSuggestions, id: \.self) { command in
-                        // Find the command info for this suggestion
-                        if let info = allCommands.first(where: { $0.commands.contains(command) }) {
-                            Button(action: {
-                                // Replace current text with selected command
-                                messageText = command + " "
-                                showCommandSuggestions = false
-                                commandSuggestions = []
-                            }) {
-                                HStack {
-                                    // Show all aliases together
-                                    Text(info.commands.joined(separator: ", "))
-                                        .font(.system(size: 11, design: .monospaced))
-                                        .foregroundColor(textColor)
-                                        .fontWeight(.medium)
-                                    
-                                    // Show syntax if any
-                                    if let syntax = info.syntax {
-                                        Text(syntax)
-                                            .font(.system(size: 10, design: .monospaced))
-                                            .foregroundColor(secondaryTextColor.opacity(0.8))
-                                    }
-                                    
-                                    Spacer()
-                                    
-                                    // Show description
-                                    Text(info.description)
-                                        .font(.system(size: 10, design: .monospaced))
-                                        .foregroundColor(secondaryTextColor)
-                                }
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 3)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            .buttonStyle(.plain)
-                            .background(Color.gray.opacity(0.1))
-                        }
-                    }
-                }
-                .background(backgroundColor)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 4)
-                        .stroke(secondaryTextColor.opacity(0.3), lineWidth: 1)
-                )
-                .padding(.horizontal, 12)
-            }
-            
-            HStack(alignment: .center, spacing: 4) {
-            TextField("type a message...", text: $messageText)
-                .textFieldStyle(.plain)
-                .font(.system(size: 14, design: .monospaced))
-                .foregroundColor(textColor)
-                .focused($isTextFieldFocused)
-                .padding(.leading, 12)
-                // iOS keyboard autocomplete and capitalization enabled by default
-                .onChange(of: messageText) { newValue in
-                    // Cancel previous debounce timer
-                    autocompleteDebounceTimer?.invalidate()
-                    
-                    // Debounce autocomplete updates to reduce calls during rapid typing
-                    autocompleteDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: false) { _ in
-                        // Get cursor position (approximate - end of text for now)
-                        let cursorPosition = newValue.count
-                        viewModel.updateAutocomplete(for: newValue, cursorPosition: cursorPosition)
-                    }
-                    
-                    // Check for command autocomplete (instant, no debounce needed)
-                    if newValue.hasPrefix("/") && newValue.count >= 1 {
-                        // Build context-aware command list
-                        let isGeoPublic: Bool = {
-                            if case .location = locationManager.selectedChannel { return true }
-                            return false
-                        }()
-                        let isGeoDM: Bool = (viewModel.selectedPrivateChatPeer?.hasPrefix("nostr_") == true)
-                        var commandDescriptions = [
-                            ("/block", "block or list blocked peers"),
-                            ("/clear", "clear chat messages"),
-                            ("/hug", "send someone a warm hug"),
-                            ("/m", "send private message"),
-                            ("/slap", "slap someone with a trout"),
-                            ("/unblock", "unblock a peer"),
-                            ("/w", "see who's online")
-                        ]
-                        // Only show favorites commands when not in geohash context
-                        if !(isGeoPublic || isGeoDM) {
-                            commandDescriptions.append(("/fav", "add to favorites"))
-                            commandDescriptions.append(("/unfav", "remove from favorites"))
-                        }
-                        
-                        let input = newValue.lowercased()
-                        
-                        // Map of aliases to primary commands
-                        let aliases: [String: String] = [
-                            "/join": "/j",
-                            "/msg": "/m"
-                        ]
-                        
-                        // Filter commands, but convert aliases to primary
-                        commandSuggestions = commandDescriptions
-                            .filter { $0.0.starts(with: input) }
-                            .map { $0.0 }
-                        
-                        // Also check if input matches an alias
-                        for (alias, primary) in aliases {
-                            if alias.starts(with: input) && !commandSuggestions.contains(primary) {
-                                if commandDescriptions.contains(where: { $0.0 == primary }) {
-                                    commandSuggestions.append(primary)
-                                }
-                            }
-                        }
-                        
-                        // Remove duplicates and sort
-                        commandSuggestions = Array(Set(commandSuggestions)).sorted()
-                        showCommandSuggestions = !commandSuggestions.isEmpty
-                    } else {
-                        showCommandSuggestions = false
-                        commandSuggestions = []
-                    }
-                }
-                .onSubmit {
-                    sendMessage()
-                }
-            
-            Button(action: sendMessage) {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 20))
-                    .foregroundColor(messageText.isEmpty ? Color.gray :
-                                            viewModel.selectedPrivateChatPeer != nil
-                                             ? Color.orange : textColor)
-            }
-            .buttonStyle(.plain)
-            .padding(.trailing, 12)
-            .accessibilityLabel("Send message")
-            .accessibilityHint(messageText.isEmpty ? "Enter a message to send" : "Double tap to send")
-            }
-            .padding(.vertical, 8)
-            .background(backgroundColor.opacity(0.95))
-            // Attach button and file importer
-            .overlay(
-                HStack {
-                    Button(action: { showFileImporter = true }) {
-                        Image(systemName: "paperclip.circle.fill")
-                            .font(.system(size: 20))
-                            .foregroundColor((viewModel.selectedPrivateChatPeer != nil || case .location(_) = viewModel.activeChannel) ? Color.blue : Color.gray)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.leading, 12)
-                    .disabled(viewModel.selectedPrivateChatPeer == nil && !case .location(_) = viewModel.activeChannel)
-                    Spacer()
-                }
-            )
+            autocompleteView
+            commandSuggestionsView
+            messageInputSection
         }
         .fileImporter(isPresented: $showFileImporter, allowedContentTypes: [UTType.item], allowsMultipleSelection: false) { result in
             switch result {
@@ -917,7 +906,7 @@ struct ContentView: View {
                         } else {
                             fileImportError = "Inline file send not supported on current transport."
                         }
-                    } else if case .location(let geohashChannel) = viewModel.activeChannel {
+                    } else if case .location(let geohashChannel) = locationManager.selectedChannel {
                         // Location channel via Nostr
                         Task {
                             do {
@@ -982,7 +971,6 @@ struct ContentView: View {
                 fileImportError = err.localizedDescription
             }
         }
-        }
         .alert(item: Binding(get: {
             fileImportError.map { LocalizedErrorWrapper(message: $0) }
         }, set: { _ in fileImportError = nil })) { wrapper in
@@ -1014,9 +1002,7 @@ struct ContentView: View {
             incomingFileData = nil
         }) {
             if let data = incomingFileData {
-                let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + (incomingFilename.isEmpty ? "" : "_" + incomingFilename))
-                try? data.write(to: tmp)
-                ShareSheet(activityItems: [tmp])
+                ShareSheetView(data: data, filename: incomingFilename)
             } else {
                 EmptyView()
             }
@@ -1030,6 +1016,75 @@ struct ContentView: View {
         messageText = ""
     }
     
+    private func handleMessageTextChange(_ newValue: String) {
+        // Cancel previous debounce timer
+        autocompleteDebounceTimer?.invalidate()
+        
+        // Debounce autocomplete updates to reduce calls during rapid typing
+        autocompleteDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: false) { _ in
+            // Get cursor position (approximate - end of text for now)
+            let cursorPosition = newValue.count
+            viewModel.updateAutocomplete(for: newValue, cursorPosition: cursorPosition)
+        }
+        
+        // Check for command autocomplete (instant, no debounce needed)
+        if newValue.hasPrefix("/") && newValue.count >= 1 {
+            updateCommandSuggestions(for: newValue)
+        } else {
+            showCommandSuggestions = false
+            commandSuggestions = []
+        }
+    }
+    
+    private func updateCommandSuggestions(for input: String) {
+        // Build context-aware command list
+        let isGeoPublic: Bool = {
+            if case .location = locationManager.selectedChannel { return true }
+            return false
+        }()
+        let isGeoDM: Bool = (viewModel.selectedPrivateChatPeer?.hasPrefix("nostr_") == true)
+        var commandDescriptions = [
+            ("/block", "block or list blocked peers"),
+            ("/clear", "clear chat messages"),
+            ("/hug", "send someone a warm hug"),
+            ("/m", "send private message"),
+            ("/slap", "slap someone with a trout"),
+            ("/unblock", "unblock a peer"),
+            ("/w", "see who's online")
+        ]
+        // Only show favorites commands when not in geohash context
+        if !(isGeoPublic || isGeoDM) {
+            commandDescriptions.append(("/fav", "add to favorites"))
+            commandDescriptions.append(("/unfav", "remove from favorites"))
+        }
+        
+        let lowercaseInput = input.lowercased()
+        
+        // Map of aliases to primary commands
+        let aliases: [String: String] = [
+            "/join": "/j",
+            "/msg": "/m"
+        ]
+        
+        // Filter commands, but convert aliases to primary
+        commandSuggestions = commandDescriptions
+            .filter { $0.0.starts(with: lowercaseInput) }
+            .map { $0.0 }
+        
+        // Also check if input matches an alias
+        for (alias, primary) in aliases {
+            if alias.starts(with: lowercaseInput) && !commandSuggestions.contains(primary) {
+                if commandDescriptions.contains(where: { $0.0 == primary }) {
+                    commandSuggestions.append(primary)
+                }
+            }
+        }
+        
+        // Remove duplicates and sort
+        commandSuggestions = Array(Set(commandSuggestions)).sorted()
+        showCommandSuggestions = !commandSuggestions.isEmpty
+    }
+    
     // Helper for alert binding
     private struct LocalizedErrorWrapper: Identifiable {
         let id = UUID()
@@ -1038,6 +1093,7 @@ struct ContentView: View {
     
     // MARK: - Inline File Helpers
     
+    #if os(iOS)
     struct ShareSheet: UIViewControllerRepresentable {
         let activityItems: [Any]
         func makeUIViewController(context: Context) -> UIActivityViewController {
@@ -1045,6 +1101,89 @@ struct ContentView: View {
         }
         func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
     }
+    #else
+    // macOS version using NSSharingService or AppKit sharing
+    struct ShareSheet: View {
+        let activityItems: [Any]
+        var body: some View {
+            Button("Share") {
+                if let url = activityItems.first as? URL {
+                    let panel = NSSavePanel()
+                    panel.allowedContentTypes = [.data]
+                    panel.nameFieldStringValue = url.lastPathComponent
+                    panel.begin { response in
+                        if response == .OK, let saveURL = panel.url {
+                            try? FileManager.default.copyItem(at: url, to: saveURL)
+                        }
+                    }
+                }
+            }
+            .buttonStyle(.borderedProminent)
+        }
+    }
+    #endif
+    
+    // Helper view for sharing files that handles file writing outside ViewBuilder context
+    private struct ShareSheetView: View {
+        let data: Data
+        let filename: String
+        
+        var body: some View {
+            #if os(iOS)
+            ShareSheetViewImpl(data: data, filename: filename)
+            #else
+            ShareSheetMacOS(data: data, filename: filename)
+            #endif
+        }
+    }
+    
+    #if os(iOS)
+    private struct ShareSheetViewImpl: UIViewControllerRepresentable {
+        let data: Data
+        let filename: String
+        
+        func makeUIViewController(context: Context) -> UIActivityViewController {
+            let tempURL = createTempFile()
+            return UIActivityViewController(activityItems: [tempURL], applicationActivities: nil)
+        }
+        
+        func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+        
+        private func createTempFile() -> URL {
+            let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+                .appendingPathComponent(UUID().uuidString + (filename.isEmpty ? "" : "_" + filename))
+            try? data.write(to: tmp)
+            return tmp
+        }
+    }
+    #else
+    private struct ShareSheetMacOS: View {
+        let data: Data
+        let filename: String
+        
+        var body: some View {
+            Button("Share File") {
+                let tempURL = createTempFile()
+                let panel = NSSavePanel()
+                panel.allowedContentTypes = [.data]
+                panel.nameFieldStringValue = filename.isEmpty ? "file" : filename
+                panel.begin { response in
+                    if response == .OK, let saveURL = panel.url {
+                        try? FileManager.default.copyItem(at: tempURL, to: saveURL)
+                    }
+                }
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        
+        private func createTempFile() -> URL {
+            let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+                .appendingPathComponent(UUID().uuidString + (filename.isEmpty ? "" : "_" + filename))
+            try? data.write(to: tmp)
+            return tmp
+        }
+    }
+    #endif
     
     private func parseInlineTLV(_ data: Data) -> (filename: String, mime: String, bytes: Data)? {
         var offset = 0
@@ -1072,6 +1211,7 @@ struct ContentView: View {
     }
     
     private func saveImageToPhotos(_ imageData: Data) {
+        #if os(iOS)
         let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
         let proceed: () -> Void = {
             PHPhotoLibrary.shared().performChanges({
@@ -1097,6 +1237,13 @@ struct ContentView: View {
         default:
             break
         }
+        #else
+        // macOS version - save to Downloads folder
+        let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
+        let filename = UUID().uuidString + ".jpg"
+        let saveURL = downloadsURL.appendingPathComponent(filename)
+        try? imageData.write(to: saveURL)
+        #endif
     }
     
     // MARK: - Sidebar View
