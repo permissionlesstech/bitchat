@@ -83,6 +83,7 @@ final class BLEService: NSObject {
     private var centralManager: CBCentralManager?
     private var peripheralManager: CBPeripheralManager?
     private var characteristic: CBMutableCharacteristic?
+    private var bluetoothState: CBManagerState = .unknown
     
     // MARK: - Identity
     
@@ -2253,7 +2254,21 @@ final class BLEService: NSObject {
 
 extension BLEService: CBCentralManagerDelegate {
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
-        if central.state == .poweredOn {
+        bluetoothState = central.state
+        
+        if let delegate = delegate {
+            Task { @MainActor in
+                delegate.updateBluetoothState(bluetoothState)
+            }
+        }
+        else {
+            DispatchQueue.main.asyncAfter(deadline: .now() + TransportConfig.uiStartupInitialDelaySeconds) { [weak self] in
+                guard let self else { return }
+                delegate?.updateBluetoothState(bluetoothState)
+            }
+        }
+        
+        if bluetoothState == .poweredOn {
             // Start scanning - use allow duplicates for faster discovery when active
             startScanning()
         }

@@ -60,6 +60,7 @@
 
 import Foundation
 import CryptoKit
+import CoreBluetooth.CBManager
 
 // MARK: - Message Padding
 
@@ -462,6 +463,8 @@ extension BitchatMessage: Equatable {
 // MARK: - Delegate Protocol
 
 protocol BitchatDelegate: AnyObject {
+    @MainActor func updateBluetoothState(_ state: CBManagerState)
+    
     func didReceiveMessage(_ message: BitchatMessage)
     func didConnectToPeer(_ peerID: String)
     func didDisconnectFromPeer(_ peerID: String)

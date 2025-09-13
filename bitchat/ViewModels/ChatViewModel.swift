@@ -395,7 +395,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     // Bluetooth state management
     @Published var showBluetoothAlert = false
     @Published var bluetoothAlertMessage = ""
-    @Published var bluetoothState: CBManagerState = .unknown
 
     // Presentation state for privacy gating
     @Published var isLocationChannelsSheetPresented: Bool = false
@@ -2281,8 +2280,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     /// - Parameter state: The current Bluetooth manager state
     @MainActor
     func updateBluetoothState(_ state: CBManagerState) {
-        bluetoothState = state
-        
         switch state {
         case .poweredOff:
             bluetoothAlertMessage = "Bluetooth is turned off. Please turn on Bluetooth in Settings to use BitChat."
