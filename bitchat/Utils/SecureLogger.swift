@@ -86,6 +86,38 @@ final class SecureLogger {
         return level.order >= minimumLevel.order
     }
     
+    // MARK: - In-memory debug buffer (DEBUG builds only)
+    #if DEBUG
+    private static let logBufferQueue = DispatchQueue(label: "chat.bitchat.securelogger.buffer")
+    private static var logBuffer: [String] = []
+    private static let logBufferCap: Int = 2000
+    
+    /// Append a sanitized line to the in-memory debug buffer
+    private static func record(_ line: String) {
+        logBufferQueue.async {
+            logBuffer.append(line)
+            if logBuffer.count > logBufferCap {
+                logBuffer.removeFirst(logBuffer.count - logBufferCap)
+            }
+        }
+    }
+    
+    /// Get the current logs as an array (oldest first)
+    static func getLogs() -> [String] {
+        return logBufferQueue.sync { logBuffer }
+    }
+    
+    /// Get the current logs as a single string
+    static func getLogText() -> String {
+        return getLogs().joined(separator: "\n")
+    }
+    
+    /// Clear the in-memory debug buffer
+    static func clearLogs() {
+        logBufferQueue.async { logBuffer.removeAll(keepingCapacity: false) }
+    }
+    #endif
+    
     // MARK: - Security Event Types
     
     enum SecurityEvent {
@@ -159,7 +191,9 @@ final class SecureLogger {
         let errorDesc = sanitize(error.localizedDescription)
         
         #if DEBUG
-        os_log("%{public}@ Error in %{public}@: %{public}@", log: category, type: .error, location, sanitized, errorDesc)
+        let line = "\(location) Error: \(sanitized) — \(errorDesc)"
+        os_log("%{public}@", log: category, type: .error, line)
+        record(line)
         #else
         os_log("%{private}@ Error in %{private}@: %{private}@", log: category, type: .error, location, sanitized, errorDesc)
         #endif
@@ -203,6 +237,7 @@ private extension SecureLogger {
         
         #if DEBUG
         os_log("%{public}@", log: category, type: level.osLogType, sanitized)
+        record(sanitized)
         #else
         // In release builds, only log non-debug messages
         if level != .debug {
@@ -220,6 +255,7 @@ private extension SecureLogger {
         
         #if DEBUG
         os_log("%{public}@", log: .security, type: level.osLogType, message)
+        record(message)
         #else
         // In release, use private logging to prevent sensitive data exposure
         os_log("%{private}@", log: .security, type: level.osLogType, message)

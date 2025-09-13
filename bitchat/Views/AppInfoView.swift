@@ -1,4 +1,9 @@
 import SwiftUI
+#if os(iOS)
+import UIKit
+#elseif os(macOS)
+import AppKit
+#endif
 
 struct AppInfoView: View {
     @Environment(\.dismiss) var dismiss
@@ -187,11 +192,77 @@ struct AppInfoView: View {
             .background(Color.red.opacity(0.1))
             .cornerRadius(8)
             
+            #if DEBUG
+            // Debug section (visible only in Debug builds)
+            DebugLogsSection(textColor: textColor, secondaryTextColor: secondaryTextColor)
+            #endif
+            
             .padding(.top)
         }
         .padding()
     }
 }
+
+#if DEBUG
+private struct DebugLogsSection: View {
+    let textColor: Color
+    let secondaryTextColor: Color
+    @State private var logsText: String = SecureLogger.getLogText()
+    private let timer = Timer.publish(every: 1.0, on: .main, in: .common).autoconnect()
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeader("DEBUG")
+            
+            HStack(spacing: 12) {
+                Button {
+                    copyToPasteboard(logsText)
+                } label: {
+                    Text("copy logs")
+                        .font(.system(size: 14, design: .monospaced))
+                        .foregroundColor(textColor)
+                }
+                .buttonStyle(.plain)
+                
+                Button {
+                    SecureLogger.clearLogs()
+                    logsText = ""
+                } label: {
+                    Text("clear logs")
+                        .font(.system(size: 14, design: .monospaced))
+                        .foregroundColor(textColor)
+                }
+                .buttonStyle(.plain)
+            }
+            
+            ScrollView {
+                Text(logsText.isEmpty ? "(no logs)" : logsText)
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundColor(secondaryTextColor)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .textSelection(.enabled)
+                    .padding(8)
+            }
+            .frame(minHeight: 180)
+            .background(secondaryTextColor.opacity(0.08))
+            .cornerRadius(8)
+        }
+        .onReceive(timer) { _ in
+            logsText = SecureLogger.getLogText()
+        }
+    }
+    
+    private func copyToPasteboard(_ text: String) {
+        #if os(iOS)
+        UIPasteboard.general.string = text
+        #elseif os(macOS)
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(text, forType: .string)
+        #endif
+    }
+}
+#endif
 
 struct SectionHeader: View {
     let title: String
