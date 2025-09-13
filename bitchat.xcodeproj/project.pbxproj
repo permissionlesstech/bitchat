@@ -33,22 +33,23 @@
 		0481A3472E6D869F00FC845E /* TorURLSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3442E6D869F00FC845E /* TorURLSession.swift */; };
 		0481A3482E6D869F00FC845E /* TorManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3432E6D869F00FC845E /* TorManager.swift */; };
 		0481A3492E6D869F00FC845E /* TorURLSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3442E6D869F00FC845E /* TorURLSession.swift */; };
-		0481A3582E6D929E00FC845E /* tor-nolzma.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0481A3572E6D929E00FC845E /* tor-nolzma.xcframework */; };
-		0481A3592E6D929E00FC845E /* tor-nolzma.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0481A3572E6D929E00FC845E /* tor-nolzma.xcframework */; };
+
 		0481A35B2E6D9BEF00FC845E /* libz.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 0481A35A2E6D9BEF00FC845E /* libz.tbd */; };
 		0481A35D2E6DA18600FC845E /* libz.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 0481A35C2E6DA18600FC845E /* libz.tbd */; };
 		0481A3902E734CAE00FC845E /* CommandProcessorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A38F2E734CAE00FC845E /* CommandProcessorTests.swift */; };
 		0481A3912E734CAE00FC845E /* CommandProcessorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A38F2E734CAE00FC845E /* CommandProcessorTests.swift */; };
-		0481A3A92E74D28800FC845E /* LocationNotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3A82E74D28800FC845E /* LocationNotesView.swift */; };
-		0481A3AA2E74D28800FC845E /* LocationNotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3A82E74D28800FC845E /* LocationNotesView.swift */; };
-		0481A3AC2E74D29400FC845E /* LocationNotesManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3AB2E74D29400FC845E /* LocationNotesManager.swift */; };
-		0481A3AD2E74D29400FC845E /* LocationNotesManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3AB2E74D29400FC845E /* LocationNotesManager.swift */; };
-		0481A3AF2E74E06300FC845E /* LocationNotesCounter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3AE2E74E06300FC845E /* LocationNotesCounter.swift */; };
-		0481A3B02E74E06300FC845E /* LocationNotesCounter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3AE2E74E06300FC845E /* LocationNotesCounter.swift */; };
-		0481A3B52E75A31500FC845E /* CTorHost.c in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3B32E75A31500FC845E /* CTorHost.c */; };
-		0481A3B62E75A31500FC845E /* .gitkeep in Resources */ = {isa = PBXBuildFile; fileRef = 0481A3B12E75A31500FC845E /* .gitkeep */; };
-		0481A3B72E75A31500FC845E /* CTorHost.c in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3B32E75A31500FC845E /* CTorHost.c */; };
-		0481A3B82E75A31500FC845E /* .gitkeep in Resources */ = {isa = PBXBuildFile; fileRef = 0481A3B12E75A31500FC845E /* .gitkeep */; };
+			0481A3A92E74D28800FC845E /* LocationNotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3A82E74D28800FC845E /* LocationNotesView.swift */; };
+			0481A3AA2E74D28800FC845E /* LocationNotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3A82E74D28800FC845E /* LocationNotesView.swift */; };
+			0481A3AC2E74D29400FC845E /* LocationNotesManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3AB2E74D29400FC845E /* LocationNotesManager.swift */; };
+			0481A3AD2E74D29400FC845E /* LocationNotesManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3AB2E74D29400FC845E /* LocationNotesManager.swift */; };
+			0481A3AF2E74E06300FC845E /* LocationNotesCounter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3AE2E74E06300FC845E /* LocationNotesCounter.swift */; };
+			0481A3B02E74E06300FC845E /* LocationNotesCounter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3AE2E74E06300FC845E /* LocationNotesCounter.swift */; };
+			0481A3B52E75A31500FC845E /* CTorHost.c in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3B32E75A31500FC845E /* CTorHost.c */; };
+			0481A3B62E75A31500FC845E /* .gitkeep in Resources */ = {isa = PBXBuildFile; fileRef = 0481A3B12E75A31500FC845E /* .gitkeep */; };
+			0481A3B72E75A31500FC845E /* CTorHost.c in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3B32E75A31500FC845E /* CTorHost.c */; };
+			0481A3B82E75A31500FC845E /* .gitkeep in Resources */ = {isa = PBXBuildFile; fileRef = 0481A3B12E75A31500FC845E /* .gitkeep */; };
+			0481A3A02E744D6300FC845E /* tor-nolzma.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0481A39F2E744D6300FC845E /* tor-nolzma.xcframework */; };
+			0481A3A12E744D6300FC845E /* tor-nolzma.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0481A39F2E744D6300FC845E /* tor-nolzma.xcframework */; };
 		048A4BE72E5CCCC300162C4A /* TransportConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 048A4BE62E5CCCC300162C4A /* TransportConfig.swift */; };
 		048A4BE82E5CCCC300162C4A /* TransportConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 048A4BE62E5CCCC300162C4A /* TransportConfig.swift */; };
 		048A4BE92E5CCCC300162C4B /* TransportConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 048A4BE62E5CCCC300162C4A /* TransportConfig.swift */; };
@@ -238,15 +239,15 @@
 		047502B82E560F690083520F /* RelayController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayController.swift; sourceTree = "<group>"; };
 		0481A3432E6D869F00FC845E /* TorManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TorManager.swift; sourceTree = "<group>"; };
 		0481A3442E6D869F00FC845E /* TorURLSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TorURLSession.swift; sourceTree = "<group>"; };
-		0481A3572E6D929E00FC845E /* tor-nolzma.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = "tor-nolzma.xcframework"; sourceTree = "<group>"; };
-		0481A35A2E6D9BEF00FC845E /* libz.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libz.tbd; path = usr/lib/libz.tbd; sourceTree = SDKROOT; };
-		0481A35C2E6DA18600FC845E /* libz.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libz.tbd; path = usr/lib/libz.tbd; sourceTree = SDKROOT; };
-		0481A38F2E734CAE00FC845E /* CommandProcessorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandProcessorTests.swift; sourceTree = "<group>"; };
-		0481A3A82E74D28800FC845E /* LocationNotesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationNotesView.swift; sourceTree = "<group>"; };
-		0481A3AB2E74D29400FC845E /* LocationNotesManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationNotesManager.swift; sourceTree = "<group>"; };
-		0481A3AE2E74E06300FC845E /* LocationNotesCounter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationNotesCounter.swift; sourceTree = "<group>"; };
-		0481A3B12E75A31500FC845E /* .gitkeep */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitkeep; sourceTree = "<group>"; };
-		0481A3B32E75A31500FC845E /* CTorHost.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = CTorHost.c; sourceTree = "<group>"; };
+			0481A35A2E6D9BEF00FC845E /* libz.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libz.tbd; path = usr/lib/libz.tbd; sourceTree = SDKROOT; };
+			0481A35C2E6DA18600FC845E /* libz.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libz.tbd; path = usr/lib/libz.tbd; sourceTree = SDKROOT; };
+			0481A38F2E734CAE00FC845E /* CommandProcessorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandProcessorTests.swift; sourceTree = "<group>"; };
+			0481A39F2E744D6300FC845E /* tor-nolzma.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = "tor-nolzma.xcframework"; sourceTree = "<group>"; };
+			0481A3A82E74D28800FC845E /* LocationNotesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationNotesView.swift; sourceTree = "<group>"; };
+			0481A3AB2E74D29400FC845E /* LocationNotesManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationNotesManager.swift; sourceTree = "<group>"; };
+			0481A3AE2E74E06300FC845E /* LocationNotesCounter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationNotesCounter.swift; sourceTree = "<group>"; };
+			0481A3B12E75A31500FC845E /* .gitkeep */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitkeep; sourceTree = "<group>"; };
+			0481A3B32E75A31500FC845E /* CTorHost.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = CTorHost.c; sourceTree = "<group>"; };
 		048A4BE62E5CCCC300162C4A /* TransportConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransportConfig.swift; sourceTree = "<group>"; };
 		048A4C272E5FCD6600162C4A /* GeohashBookmarksStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeohashBookmarksStore.swift; sourceTree = "<group>"; };
 		048A4C2A2E5FCE0300162C4A /* GeohashBookmarksStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeohashBookmarksStoreTests.swift; sourceTree = "<group>"; };
@@ -331,7 +332,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				0481A35B2E6D9BEF00FC845E /* libz.tbd in Frameworks */,
-				0481A3582E6D929E00FC845E /* tor-nolzma.xcframework in Frameworks */,
+				0481A3A02E744D6300FC845E /* tor-nolzma.xcframework in Frameworks */,
 				3EE336D150427F736F32B56C /* P256K in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -341,7 +342,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				0481A35D2E6DA18600FC845E /* libz.tbd in Frameworks */,
-				0481A3592E6D929E00FC845E /* tor-nolzma.xcframework in Frameworks */,
+				0481A3A12E744D6300FC845E /* tor-nolzma.xcframework in Frameworks */,
 				885BBED78092484A5B069461 /* P256K in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -379,9 +380,10 @@
 		0481A3542E6D877600FC845E /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				0481A39F2E744D6300FC845E /* tor-nolzma.xcframework */,
 				0481A35A2E6D9BEF00FC845E /* libz.tbd */,
 				0481A35C2E6DA18600FC845E /* libz.tbd */,
-				0481A3572E6D929E00FC845E /* tor-nolzma.xcframework */,
+
 			);
 			path = Frameworks;
 			sourceTree = "<group>";
@@ -813,7 +815,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				0481A3B62E75A31500FC845E /* .gitkeep in Resources */,
+
 				7DD72D928FF9DD3CA81B46B0 /* Assets.xcassets in Resources */,
 				E0A1B2C3D4E5F6012345678D /* relays/online_relays_gps.csv in Resources */,
 			);
@@ -1134,7 +1136,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.4.0;
+					MARKETING_VERSION = 1.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat.ShareExtension;
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -1165,7 +1167,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.4.0;
+					MARKETING_VERSION = 1.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat;
 				PRODUCT_NAME = bitchat;
 				SDKROOT = iphoneos;
@@ -1220,7 +1222,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.4.0;
+					MARKETING_VERSION = 1.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat;
 				PRODUCT_NAME = bitchat;
 				SDKROOT = iphoneos;
@@ -1252,7 +1254,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				MARKETING_VERSION = 1.4.0;
+					MARKETING_VERSION = 1.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat;
 				PRODUCT_NAME = bitchat;
 				REGISTER_APP_GROUPS = YES;
@@ -1341,7 +1343,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				MARKETING_VERSION = 1.4.0;
+					MARKETING_VERSION = 1.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat;
 				PRODUCT_NAME = bitchat;
 				REGISTER_APP_GROUPS = YES;
@@ -1434,7 +1436,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.4.0;
+					MARKETING_VERSION = 1.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat.ShareExtension;
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
