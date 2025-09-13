@@ -6,8 +6,8 @@ import CFNetwork
 /// Provides a shared URLSession that routes traffic via Tor's SOCKS5 proxy
 /// when Tor is enforced/ready. Allows swapping between proxied and direct
 /// sessions so UI can toggle Tor usage at runtime.
-final class TorURLSession {
-    static let shared = TorURLSession()
+public final class TorURLSession {
+    public static let shared = TorURLSession()
 
     // Default (no proxy) session for direct Nostr access when Tor is disabled.
     private var defaultSession: URLSession = TorURLSession.makeDefaultSession()
@@ -16,17 +16,17 @@ final class TorURLSession {
     private var torSession: URLSession = TorURLSession.makeTorSession()
     private var useTorProxy: Bool = true
 
-    var session: URLSession {
+    public var session: URLSession {
         useTorProxy ? torSession : defaultSession
     }
 
     // Recreate sessions so new clients bind to the fresh SOCKS/control ports after a Tor restart.
-    func rebuild() {
+    public func rebuild() {
         defaultSession = TorURLSession.makeDefaultSession()
         torSession = TorURLSession.makeTorSession()
     }
 
-    func setProxyMode(useTor: Bool) {
+    public func setProxyMode(useTor: Bool) {
         guard useTorProxy != useTor else { return }
         useTorProxy = useTor
         rebuild()

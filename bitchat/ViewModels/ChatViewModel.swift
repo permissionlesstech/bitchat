@@ -83,6 +83,7 @@ import SwiftUI
 import Combine
 import CommonCrypto
 import CoreBluetooth
+import Tor
 #if os(iOS)
 import UIKit
 #endif
