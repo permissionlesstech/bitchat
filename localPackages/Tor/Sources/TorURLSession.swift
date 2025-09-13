@@ -6,8 +6,8 @@ import CFNetwork
 /// Provides a shared URLSession that routes traffic via Tor's SOCKS5 proxy
 /// when Tor is enforced/ready. Falls back to a default session only when
 /// compiled with the `BITCHAT_DEV_ALLOW_CLEARNET` flag.
-final class TorURLSession {
-    static let shared = TorURLSession()
+public final class TorURLSession {
+    public static let shared = TorURLSession()
 
     // Default (no proxy) session for local development when dev bypass is enabled.
     private var defaultSession: URLSession = {
@@ -19,7 +19,7 @@ final class TorURLSession {
     // Proxied (SOCKS5) session that routes through Tor.
     private var torSession: URLSession = TorURLSession.makeTorSession()
 
-    var session: URLSession {
+    public var session: URLSession {
         #if BITCHAT_DEV_ALLOW_CLEARNET
         // Dev bypass: use direct session. Call sites may still await Tor if desired.
         return defaultSession

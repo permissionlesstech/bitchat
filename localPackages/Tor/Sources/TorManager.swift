@@ -23,8 +23,8 @@ private func tor_host_is_running() -> Int32
 ///   route via this proxy. Fails closed by default when Tor is unavailable.
 /// - Drop-in ready: add your Tor framework and complete `startTor()`.
 @MainActor
-final class TorManager: ObservableObject {
-    static let shared = TorManager()
+public final class TorManager: ObservableObject {
+    public static let shared = TorManager()
 
     // SOCKS endpoint where the embedded Tor should listen.
     let socksHost: String = "127.0.0.1"
@@ -36,7 +36,7 @@ final class TorManager: ObservableObject {
 
     // State
     // True only when SOCKS is reachable AND bootstrap has reached 100%.
-    @Published private(set) var isReady: Bool = false
+    @Published private(set) public var isReady: Bool = false
     @Published private(set) var isStarting: Bool = false
     @Published private(set) var lastError: Error?
     @Published private(set) var bootstrapProgress: Int = 0
@@ -49,7 +49,7 @@ final class TorManager: ObservableObject {
     // Whether the app must enforce Tor for all connections (fail-closed).
     // This is the default. For local development, you may compile with
     // `-DBITCHAT_DEV_ALLOW_CLEARNET` to temporarily allow direct network.
-    var torEnforced: Bool {
+    public var torEnforced: Bool {
         #if BITCHAT_DEV_ALLOW_CLEARNET
         return false
         #else
@@ -74,7 +74,7 @@ final class TorManager: ObservableObject {
 
     // MARK: - Public API
 
-    func startIfNeeded() {
+    public func startIfNeeded() {
         // Do not start in background; caller should wait for foreground
         guard isAppForeground else { return }
         guard !didStart else { return }
@@ -92,11 +92,12 @@ final class TorManager: ObservableObject {
     }
 
     /// Foreground state accessor for other @MainActor clients.
-    func isForeground() -> Bool { isAppForeground }
+    public func isForeground() -> Bool { isAppForeground }
 
     /// Await Tor bootstrap to readiness. Returns true if network is permitted (Tor ready or dev bypass).
     /// Nonisolated to avoid blocking the main actor during waits.
-    nonisolated func awaitReady(timeout: TimeInterval = 25.0) async -> Bool {
+    nonisolated
+    public func awaitReady(timeout: TimeInterval = 25.0) async -> Bool {
         // Only start Tor if we're in foreground; otherwise just wait for it
         await MainActor.run {
             if self.isAppForeground { self.startIfNeeded() }
