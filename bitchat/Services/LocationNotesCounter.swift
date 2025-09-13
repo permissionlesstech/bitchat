@@ -1,6 +1,6 @@
 import Foundation
 
-/// Lightweight background counter for location notes (kind 1) at block-level geohash.
+/// Lightweight background counter for location notes (kind 1) at building-level geohash (8 chars).
 @MainActor
 final class LocationNotesCounter: ObservableObject {
     static let shared = LocationNotesCounter()
@@ -16,10 +16,11 @@ final class LocationNotesCounter: ObservableObject {
 
     func subscribe(geohash gh: String) {
         let norm = gh.lowercased()
-        if geohash == norm { return }
-        cancel()
+        if geohash == norm, subscriptionID != nil { return }
+        // Unsubscribe previous without clearing count to avoid flicker
+        if let sub = subscriptionID { NostrRelayManager.shared.unsubscribe(id: sub) }
+        subscriptionID = nil
         geohash = norm
-        count = 0
         noteIDs.removeAll()
         initialLoadComplete = false
 

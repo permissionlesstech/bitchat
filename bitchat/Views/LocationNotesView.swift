@@ -27,6 +27,10 @@ struct LocationNotesView: View {
     private var secondaryTextColor: Color {
         colorScheme == .dark ? Color.green.opacity(0.8) : Color(red: 0, green: 0.5, blue: 0).opacity(0.8)
     }
+    // Slightly darker green for hash suffix emphasis
+    private var darkerTextColor: Color {
+        colorScheme == .dark ? Color.green : Color(red: 0, green: 0.4, blue: 0)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -55,8 +59,11 @@ struct LocationNotesView: View {
                     let c = manager.notes.count
                     Text("\(c) \(c == 1 ? "note" : "notes") ")
                         .font(.system(size: 16, weight: .bold, design: .monospaced))
-                    Text("@ #\(geohash)")
+                    Text("@ ")
                         .font(.system(size: 16, weight: .bold, design: .monospaced))
+                    Text("#\(geohash)")
+                        .font(.system(size: 16, weight: .bold, design: .monospaced))
+                        .foregroundColor(textColor)
                 }
                 if let buildingName = locationManager.locationNames[.building], !buildingName.isEmpty {
                     Text(buildingName)
@@ -90,10 +97,18 @@ struct LocationNotesView: View {
                 ForEach(manager.notes) { note in
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 6) {
-                            Text(note.displayName)
-                                .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                                .foregroundColor(secondaryTextColor)
-                            Text(timestampText(for: note.createdAt))
+                            // Show @name without the #abcd suffix; timestamp in brackets
+                            HStack(spacing: 0) {
+                                Text("@")
+                                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                                    .foregroundColor(textColor)
+                                let parts = splitSuffix(from: note.displayName)
+                                Text(parts.0)
+                                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                                    .foregroundColor(textColor)
+                            }
+                            let ts = timestampText(for: note.createdAt)
+                            Text(ts.isEmpty ? "" : "[\(ts)]")
                                 .font(.system(size: 11, design: .monospaced))
                                 .foregroundColor(secondaryTextColor.opacity(0.8))
                         }
@@ -173,4 +188,17 @@ struct LocationNotesView: View {
         f.setLocalizedDateFormatFromTemplate("MMM d, y")
         return f
     }()
+}
+
+// Helper to split a trailing #abcd suffix
+private func splitSuffix(from name: String) -> (String, String) {
+    guard name.count >= 5 else { return (name, "") }
+    let suffix = String(name.suffix(5))
+    if suffix.first == "#", suffix.dropFirst().allSatisfy({ c in
+        ("0"..."9").contains(String(c)) || ("a"..."f").contains(String(c)) || ("A"..."F").contains(String(c))
+    }) {
+        let base = String(name.dropLast(5))
+        return (base, suffix)
+    }
+    return (name, "")
 }

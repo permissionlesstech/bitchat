@@ -86,10 +86,14 @@ struct AppInfoView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("close") {
-                        dismiss()
+                    Button(action: { dismiss() }) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                            .foregroundColor(textColor)
+                            .frame(width: 32, height: 32)
                     }
-                    .foregroundColor(textColor)
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Close")
                 }
             }
         }

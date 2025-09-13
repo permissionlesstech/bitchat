@@ -62,7 +62,7 @@ final class NotificationService {
     }
     
     func sendPrivateMessageNotification(from sender: String, message: String, peerID: String) {
-        let title = "🔒 private message from \(sender)"
+        let title = "🔒 DM from \(sender)"
         let body = message
         let identifier = "private-\(UUID().uuidString)"
         let userInfo = ["peerID": peerID, "senderName": sender]
