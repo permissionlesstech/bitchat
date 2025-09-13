@@ -39,7 +39,7 @@ let package = Package(
         ),
         .binaryTarget(
             name: "tor-nolzma",
-            path: "../../Frameworks/tor-nolzma.xcframework"
+            path: "Frameworks/tor-nolzma.xcframework"
         ),
     ]
 )
