@@ -107,7 +107,7 @@ struct LocationChannelsSheet: View {
 
             // Nearby options
             if !manager.availableChannels.isEmpty {
-                ForEach(manager.availableChannels) { channel in
+                ForEach(manager.availableChannels.filter { $0.level != .building }) { channel in
                     let coverage = coverageString(forPrecision: channel.geohash.count)
                     let nameBase = locationName(for: channel.level)
                     let namePart = nameBase.map { formattedNamePrefix(for: channel.level) + $0 }
@@ -381,6 +381,7 @@ struct LocationChannelsSheet: View {
         case 5: return .city
         case 6: return .neighborhood
         case 7: return .block
+        case 8: return .building
         default: return .block
         }
     }
