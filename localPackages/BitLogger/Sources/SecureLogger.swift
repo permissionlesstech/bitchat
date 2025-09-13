@@ -1,6 +1,6 @@
 //
 // SecureLogger.swift
-// bitchat
+// BitLogger
 //
 // This is free and unencumbered software released into the public domain.
 // For more information, see <https://unlicense.org>
@@ -11,7 +11,7 @@ import os.log
 
 /// Centralized security-aware logging framework
 /// Provides safe logging that filters sensitive data and security events
-final class SecureLogger {
+public final class SecureLogger {
     
     // MARK: - Timestamp Formatter
     
@@ -85,8 +85,50 @@ final class SecureLogger {
     private static func shouldLog(_ level: LogLevel) -> Bool {
         return level.order >= minimumLevel.order
     }
+}
+
+// MARK: - Public Logging Methods
+
+public extension SecureLogger {
     
-    // MARK: - Security Event Types
+    static func debug(_ message: @autoclosure () -> String, category: OSLog = .noise,
+                      file: String = #file, line: Int = #line, function: String = #function) {
+        log(message(), category: category, level: .debug, file: file, line: line, function: function)
+    }
+    
+    static func info(_ message: @autoclosure () -> String, category: OSLog = .noise,
+                     file: String = #file, line: Int = #line, function: String = #function) {
+        log(message(), category: category, level: .info, file: file, line: line, function: function)
+    }
+    
+    static func warning(_ message: @autoclosure () -> String, category: OSLog = .noise,
+                        file: String = #file, line: Int = #line, function: String = #function) {
+        log(message(), category: category, level: .warning, file: file, line: line, function: function)
+    }
+    
+    static func error(_ message: @autoclosure () -> String, category: OSLog = .noise,
+                      file: String = #file, line: Int = #line, function: String = #function) {
+        log(message(), category: category, level: .error, file: file, line: line, function: function)
+    }
+    
+    /// Log errors with context
+    static func error(_ error: Error, context: @autoclosure () -> String, category: OSLog = .noise,
+                      file: String = #file, line: Int = #line, function: String = #function) {
+        let location = formatLocation(file: file, line: line, function: function)
+        let sanitized = sanitize(context())
+        let errorDesc = sanitize(error.localizedDescription)
+        
+        #if DEBUG
+        os_log("%{public}@ Error in %{public}@: %{public}@", log: category, type: .error, location, sanitized, errorDesc)
+        #else
+        os_log("%{private}@ Error in %{private}@: %{private}@", log: category, type: .error, location, sanitized, errorDesc)
+        #endif
+    }
+}
+
+// MARK: Security Event Logging
+
+public extension SecureLogger {
     
     enum SecurityEvent {
         case handshakeStarted(peerID: String)
@@ -111,30 +153,6 @@ final class SecureLogger {
         }
     }
     
-    // MARK: - Public Logging Methods
-    
-    static func debug(_ message: @autoclosure () -> String, category: OSLog = .noise,
-                      file: String = #file, line: Int = #line, function: String = #function) {
-        log(message(), category: category, level: .debug, file: file, line: line, function: function)
-    }
-    
-    static func info(_ message: @autoclosure () -> String, category: OSLog = .noise,
-                     file: String = #file, line: Int = #line, function: String = #function) {
-        log(message(), category: category, level: .info, file: file, line: line, function: function)
-    }
-    
-    static func warning(_ message: @autoclosure () -> String, category: OSLog = .noise,
-                        file: String = #file, line: Int = #line, function: String = #function) {
-        log(message(), category: category, level: .warning, file: file, line: line, function: function)
-    }
-    
-    static func error(_ message: @autoclosure () -> String, category: OSLog = .noise,
-                      file: String = #file, line: Int = #line, function: String = #function) {
-        log(message(), category: category, level: .error, file: file, line: line, function: function)
-    }
-    
-    // MARK: Security Event Logging
-    
     static func debug(_ event: SecurityEvent, file: String = #file, line: Int = #line, function: String = #function) {
         logSecurityEvent(event, level: .debug, file: file, line: line, function: function)
     }
@@ -150,25 +168,11 @@ final class SecureLogger {
     static func error(_ event: SecurityEvent, file: String = #file, line: Int = #line, function: String = #function) {
         logSecurityEvent(event, level: .error, file: file, line: line, function: function)
     }
-    
-    /// Log errors with context
-    static func error(_ error: Error, context: @autoclosure () -> String, category: OSLog = .noise,
-                      file: String = #file, line: Int = #line, function: String = #function) {
-        let location = formatLocation(file: file, line: line, function: function)
-        let sanitized = sanitize(context())
-        let errorDesc = sanitize(error.localizedDescription)
-        
-        #if DEBUG
-        os_log("%{public}@ Error in %{public}@: %{public}@", log: category, type: .error, location, sanitized, errorDesc)
-        #else
-        os_log("%{private}@ Error in %{private}@: %{private}@", log: category, type: .error, location, sanitized, errorDesc)
-        #endif
-    }
 }
 
 // MARK: - Convenience Extensions
 
-extension SecureLogger {
+public extension SecureLogger {
     
     enum KeyOperation: String, CustomStringConvertible {
         case load
@@ -177,7 +181,7 @@ extension SecureLogger {
         case delete
         case save
         
-        var description: String { rawValue }
+        public var description: String { rawValue }
     }
     
     /// Log key management operations
@@ -290,8 +294,8 @@ private extension SecureLogger {
 
 /// Helper to migrate from print statements to SecureLogger
 /// Usage: Replace print(...) with secureLog(...)
-func secureLog(_ items: Any..., separator: String = " ", terminator: String = "\n",
-               file: String = #file, line: Int = #line, function: String = #function) {
+public func secureLog(_ items: Any..., separator: String = " ", terminator: String = "\n",
+                      file: String = #file, line: Int = #line, function: String = #function) {
     #if DEBUG
     let message = items.map { String(describing: $0) }.joined(separator: separator)
     SecureLogger.debug(message, file: file, line: line, function: function)

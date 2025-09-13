@@ -1,6 +1,6 @@
 //
 // OSLog+Categories.swift
-// bitchat
+// BitLogger
 //
 // This is free and unencumbered software released into the public domain.
 // For more information, see <https://unlicense.org>
@@ -8,7 +8,7 @@
 
 import os.log
 
-extension OSLog {
+public extension OSLog {
     private static let subsystem = "chat.bitchat"
     
     static let noise        = OSLog(subsystem: subsystem, category: "noise")

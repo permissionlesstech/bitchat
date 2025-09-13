@@ -77,6 +77,7 @@
 /// ```
 ///
 
+import BitLogger
 import Foundation
 import SwiftUI
 import CryptoKit
