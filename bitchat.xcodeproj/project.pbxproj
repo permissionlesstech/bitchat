@@ -140,6 +140,8 @@
 		A1B2C3D4E5F60123456789BD /* MockIdentityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60123456789AB /* MockIdentityManager.swift */; };
 		A1B2C3D54E5F60718293A4B6 /* XChaCha20Poly1305Compat.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D44E5F60718293A4B4 /* XChaCha20Poly1305Compat.swift */; };
 		A2977428C1D9EF9944C4BFAF /* BLEServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 980B109CBA72BC996455C62B /* BLEServiceTests.swift */; };
+		A6E3292B2E75B6730032EA8A /* LocationNotesSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6E3292A2E75B6730032EA8A /* LocationNotesSheet.swift */; };
+		A6E3292C2E75B6730032EA8A /* LocationNotesSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6E3292A2E75B6730032EA8A /* LocationNotesSheet.swift */; };
 		A7187D48B07C6857DE01D0ED /* NoiseProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43613045E63D21D429396805 /* NoiseProtocol.swift */; };
 		AA11BB22CC33DD44EE55FF66 /* MessageTextHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11BB22CC33DD44EE55FF68 /* MessageTextHelpers.swift */; };
 		AA11BB22CC33DD44EE55FF67 /* MessageTextHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11BB22CC33DD44EE55FF68 /* MessageTextHelpers.swift */; };
@@ -302,6 +304,7 @@
 		A1B2C3D4E5F60123456789AB /* MockIdentityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockIdentityManager.swift; sourceTree = "<group>"; };
 		A2136C3E22D02D4A8DBE7EAB /* BinaryProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BinaryProtocol.swift; sourceTree = "<group>"; };
 		A668F40B2E75874A000C4760 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		A6E3292A2E75B6730032EA8A /* LocationNotesSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationNotesSheet.swift; sourceTree = "<group>"; };
 		AA11BB22CC33DD44EE55FF68 /* MessageTextHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageTextHelpers.swift; sourceTree = "<group>"; };
 		AA77BB10CC22DD33EE44FF55 /* VerificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerificationService.swift; sourceTree = "<group>"; };
 		AA77BB13CC22DD33EE44FF57 /* VerificationViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerificationViews.swift; sourceTree = "<group>"; };
@@ -541,6 +544,7 @@
 		A55126E93155456CAA8D6656 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				A6E3292A2E75B6730032EA8A /* LocationNotesSheet.swift */,
 				0481A3A82E74D28800FC845E /* LocationNotesView.swift */,
 				AA77BB13CC22DD33EE44FF57 /* VerificationViews.swift */,
 				047502B22E55FED60083520F /* GeohashPeopleList.swift */,
@@ -906,6 +910,7 @@
 				049BD3952E4EC4F0001A566B /* AutocompleteService.swift in Sources */,
 				049BD3962E4EC4F0001A566B /* CommandProcessor.swift in Sources */,
 				D111988977C3BC246AB27FA4 /* SecureLogger.swift in Sources */,
+				A6E3292B2E75B6730032EA8A /* LocationNotesSheet.swift in Sources */,
 				8DE687D2EB5EB120868DBFB5 /* BLEService.swift in Sources */,
 				AA11BB22CC33DD44EE55FF66 /* MessageTextHelpers.swift in Sources */,
 				E0A1B2C3D4E5F6012345678B /* GeoRelayDirectory.swift in Sources */,
@@ -974,6 +979,7 @@
 				049BD3912E4EC4F0001A566B /* AutocompleteService.swift in Sources */,
 				049BD3922E4EC4F0001A566B /* CommandProcessor.swift in Sources */,
 				EC5241969D2550B97629EBD0 /* SecureLogger.swift in Sources */,
+				A6E3292C2E75B6730032EA8A /* LocationNotesSheet.swift in Sources */,
 				C165DD35BB8E9C327A3C2DA4 /* BLEService.swift in Sources */,
 				AA11BB22CC33DD44EE55FF67 /* MessageTextHelpers.swift in Sources */,
 				E0A1B2C3D4E5F6012345678C /* GeoRelayDirectory.swift in Sources */,
