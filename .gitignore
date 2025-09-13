@@ -1,3 +1,7 @@
 *.backup
 *2.*
 *2/
+
+# Xcode workspace and scheme files (auto-generated)
+bitchat.xcodeproj/project.xcworkspace/
+bitchat.xcodeproj/xcshareddata/
