@@ -1684,8 +1684,12 @@ final class BLEService: NSObject {
             }
         }
 
-        // Track broadcast messages (recipientID == nil indicates broadcast)
-        if packet.recipientID == nil && packet.type == MessageType.message.rawValue {
+        // Track broadcast messages for sync (treat nil or 0xFF..0xFF as broadcast)
+        let isBroadcastRecipient: Bool = {
+            guard let r = packet.recipientID else { return true }
+            return r.count == 8 && r.allSatisfy { $0 == 0xFF }
+        }()
+        if isBroadcastRecipient && packet.type == MessageType.message.rawValue {
             gossipSyncManager?.onPublicPacketSeen(packet)
         }
 

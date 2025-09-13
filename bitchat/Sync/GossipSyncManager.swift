@@ -62,7 +62,11 @@ final class GossipSyncManager {
 
     func onPublicPacketSeen(_ packet: BitchatPacket) {
         let mt = MessageType(rawValue: packet.type)
-        let isBroadcastMessage = (mt == .message && packet.recipientID == nil)
+        let isBroadcastRecipient: Bool = {
+            guard let r = packet.recipientID else { return true }
+            return r.count == 8 && r.allSatisfy { $0 == 0xFF }
+        }()
+        let isBroadcastMessage = (mt == .message && isBroadcastRecipient)
         let isAnnounce = (mt == .announce)
         guard isBroadcastMessage || isAnnounce else { return }
 
