@@ -1685,63 +1685,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                 self.nostrKeyMapping[convKey] = senderPubkey
                 switch noisePayload.type {
                 case .privateMessage:
-                    guard let pm = PrivateMessagePacket.decode(from: noisePayload.data) else { return }
-                    let messageId = pm.messageID
-                    SecureLogger.info("GeoDM: recv PM <- sender=\(senderPubkey.prefix(8))… mid=\(messageId.prefix(8))…", category: .session)
-                    // Send delivery ACK immediately (even if duplicate), once per messageID
-                    if !self.sentGeoDeliveryAcks.contains(messageId) {
-                        let nostrTransport = NostrTransport(keychain: keychain)
-                        nostrTransport.senderPeerID = self.meshService.myPeerID
-                    // pared back: omit pre-send log
-                        nostrTransport.sendDeliveryAckGeohash(for: messageId, toRecipientHex: senderPubkey, from: id)
-                        self.sentGeoDeliveryAcks.insert(messageId)
-                    }
-                    // Duplicate check
-                    if self.privateChats[convKey]?.contains(where: { $0.id == messageId }) == true { return }
-                    for (_, arr) in self.privateChats { if arr.contains(where: { $0.id == messageId }) { return } }
-                    let senderName = self.displayNameForNostrPubkey(senderPubkey)
-                    let isViewing = (self.selectedPrivateChatPeer == convKey)
-                    let wasReadBefore = self.sentReadReceipts.contains(messageId)
-                    let isRecentMessage = Date().timeIntervalSince(messageTimestamp) < 30
-                    let shouldMarkUnread = !wasReadBefore && !isViewing && isRecentMessage
-                    let msg = BitchatMessage(
-                        id: messageId,
-                        sender: senderName,
-                        content: pm.content,
-                        timestamp: messageTimestamp,
-                        isRelay: false,
-                        originalSender: nil,
-                        isPrivate: true,
-                        recipientNickname: self.nickname,
-                        senderPeerID: convKey,
-                        mentions: nil,
-                        deliveryStatus: .delivered(to: self.nickname, at: Date())
-                    )
-                    if self.privateChats[convKey] == nil { self.privateChats[convKey] = [] }
-                    self.privateChats[convKey]?.append(msg)
-                    self.trimPrivateChatMessagesIfNeeded(for: convKey)
-                    if shouldMarkUnread { self.unreadPrivateMessages.insert(convKey) }
-                    // Send READ if viewing this conversation
-                    if isViewing {
-                        // pared back: omit pre-send READ log
-                        if !wasReadBefore {
-                            let nostrTransport = NostrTransport(keychain: keychain)
-                            nostrTransport.senderPeerID = self.meshService.myPeerID
-                            nostrTransport.sendReadReceiptGeohash(messageId, toRecipientHex: senderPubkey, from: id)
-                            self.sentReadReceipts.insert(messageId)
-                        }
-                    } else {
-                        // pared back: omit defer READ log
-                    }
-                    // Notify for truly unread and recent messages when not viewing
-                    if !isViewing && shouldMarkUnread {
-                        NotificationService.shared.sendPrivateMessageNotification(
-                            from: senderName,
-                            message: pm.content,
-                            peerID: convKey
-                        )
-                    }
-                    self.objectWillChange.send()
+                    handlePrivateMessage(noisePayload: noisePayload, senderPubkey: senderPubkey, convKey: convKey, id: id, messageTimestamp: messageTimestamp)
                 default:
                     handleDeliveredReadReceipt(noisePayload: noisePayload, senderPubkey: senderPubkey, convKey: convKey)
                 }
@@ -1750,6 +1694,81 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             // ignore
         }
         //
+    }
+    
+    private func handlePrivateMessage(noisePayload: NoisePayload, senderPubkey: String, convKey: String, id: NostrIdentity, messageTimestamp: Date) {
+        guard let pm = PrivateMessagePacket.decode(from: noisePayload.data) else { return }
+        let messageId = pm.messageID
+        
+        SecureLogger.info("GeoDM: recv PM <- sender=\(senderPubkey.prefix(8))… mid=\(messageId.prefix(8))…", category: .session)
+        
+        // Send delivery ACK immediately (even if duplicate), once per messageID
+        if !sentGeoDeliveryAcks.contains(messageId) {
+            let nostrTransport = NostrTransport(keychain: keychain)
+            nostrTransport.senderPeerID = meshService.myPeerID
+            // pared back: omit pre-send log
+            nostrTransport.sendDeliveryAckGeohash(for: messageId, toRecipientHex: senderPubkey, from: id)
+            sentGeoDeliveryAcks.insert(messageId)
+        }
+        
+        // Duplicate check
+        if privateChats[convKey]?.contains(where: { $0.id == messageId }) == true { return }
+        for (_, arr) in privateChats {
+            if arr.contains(where: { $0.id == messageId }) {
+                return
+            }
+        }
+        
+        let senderName = displayNameForNostrPubkey(senderPubkey)
+        let msg = BitchatMessage(
+            id: messageId,
+            sender: senderName,
+            content: pm.content,
+            timestamp: messageTimestamp,
+            isRelay: false,
+            isPrivate: true,
+            recipientNickname: nickname,
+            senderPeerID: convKey,
+            deliveryStatus: .delivered(to: nickname, at: Date())
+        )
+        
+        if privateChats[convKey] == nil {
+            privateChats[convKey] = []
+        }
+        privateChats[convKey]?.append(msg)
+        trimPrivateChatMessagesIfNeeded(for: convKey)
+        
+        let isViewing = selectedPrivateChatPeer == convKey
+        let wasReadBefore = sentReadReceipts.contains(messageId)
+        let isRecentMessage = Date().timeIntervalSince(messageTimestamp) < 30
+        let shouldMarkUnread = !wasReadBefore && !isViewing && isRecentMessage
+        if shouldMarkUnread {
+            unreadPrivateMessages.insert(convKey)
+        }
+        
+        // Send READ if viewing this conversation
+        if isViewing {
+            // pared back: omit pre-send READ log
+            if !wasReadBefore {
+                let nostrTransport = NostrTransport(keychain: keychain)
+                nostrTransport.senderPeerID = meshService.myPeerID
+                nostrTransport.sendReadReceiptGeohash(messageId, toRecipientHex: senderPubkey, from: id)
+                sentReadReceipts.insert(messageId)
+            }
+        } else {
+            // pared back: omit defer READ log
+        }
+        
+        // Notify for truly unread and recent messages when not viewing
+        if !isViewing && shouldMarkUnread {
+            NotificationService.shared.sendPrivateMessageNotification(
+                from: senderName,
+                message: pm.content,
+                peerID: convKey
+            )
+        }
+        
+        objectWillChange.send()
     }
     
     private func handleDeliveredReadReceipt(noisePayload: NoisePayload, senderPubkey: String, convKey: String) {
