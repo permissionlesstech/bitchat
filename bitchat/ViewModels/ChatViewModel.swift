@@ -2148,68 +2148,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         
         // Geohash DM routing: conversation keys start with "nostr_"
         if peerID.hasPrefix("nostr_") {
-            guard case .location(let ch) = activeChannel else {
-                addSystemMessage("cannot send: not in a location channel")
-                return
-            }
-            let messageID = UUID().uuidString
-            // Local echo in the DM thread
-            let message = BitchatMessage(
-                id: messageID,
-                sender: nickname,
-                content: content,
-                timestamp: Date(),
-                isRelay: false,
-                originalSender: nil,
-                isPrivate: true,
-                recipientNickname: nickname,
-                senderPeerID: meshService.myPeerID,
-                mentions: nil,
-                deliveryStatus: .sending
-            )
-            if privateChats[peerID] == nil { privateChats[peerID] = [] }
-            privateChats[peerID]?.append(message)
-            trimPrivateChatMessagesIfNeeded(for: peerID)
-            objectWillChange.send()
-
-            // Resolve recipient hex from mapping
-            guard let recipientHex = nostrKeyMapping[peerID] else {
-                if let msgIdx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
-                    privateChats[peerID]?[msgIdx].deliveryStatus = .failed(reason: "unknown recipient")
-                }
-                return
-            }
-            // Respect geohash blocks
-            if identityManager.isNostrBlocked(pubkeyHexLowercased: recipientHex) {
-                if let msgIdx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
-                    privateChats[peerID]?[msgIdx].deliveryStatus = .failed(reason: "user is blocked")
-                }
-                addSystemMessage("cannot send message: user is blocked.")
-                return
-            }
-            // Send via Nostr using per-geohash identity
-            do {
-                let id = try NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash)
-                // Prevent messaging ourselves
-                if recipientHex.lowercased() == id.publicKeyHex.lowercased() {
-                    if let idx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
-                        privateChats[peerID]?[idx].deliveryStatus = .failed(reason: "cannot message yourself")
-                    }
-                    return
-                }
-                SecureLogger.debug("GeoDM: local send mid=\(messageID.prefix(8))… to=\(recipientHex.prefix(8))… conv=\(peerID)", category: .session)
-                let nostrTransport = NostrTransport(keychain: keychain)
-                nostrTransport.senderPeerID = meshService.myPeerID
-                nostrTransport.sendPrivateMessageGeohash(content: content, toRecipientHex: recipientHex, from: id, messageID: messageID)
-                if let msgIdx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
-                    privateChats[peerID]?[msgIdx].deliveryStatus = .sent
-                }
-            } catch {
-                if let idx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
-                    privateChats[peerID]?[idx].deliveryStatus = .failed(reason: "send error")
-                }
-            }
-            return
+            sendGeohashDM(content, to: peerID)
         }
 
         // Check if blocked
@@ -2275,6 +2214,75 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                 privateChats[peerID]?[index].deliveryStatus = .failed(reason: "Peer not reachable")
             }
             addSystemMessage("Cannot send message to \(recipientNickname ?? "user") - peer is not reachable via mesh or Nostr.")
+        }
+    }
+    
+    private func sendGeohashDM(_ content: String, to peerID: String) {
+        guard case .location(let ch) = activeChannel else {
+            addSystemMessage("cannot send: not in a location channel")
+            return
+        }
+        let messageID = UUID().uuidString
+        
+        // Local echo in the DM thread
+        let message = BitchatMessage(
+            id: messageID,
+            sender: nickname,
+            content: content,
+            timestamp: Date(),
+            isRelay: false,
+            isPrivate: true,
+            recipientNickname: nickname,
+            senderPeerID: meshService.myPeerID,
+            deliveryStatus: .sending
+        )
+        
+        if privateChats[peerID] == nil {
+            privateChats[peerID] = []
+        }
+        
+        privateChats[peerID]?.append(message)
+        trimPrivateChatMessagesIfNeeded(for: peerID)
+        objectWillChange.send()
+
+        // Resolve recipient hex from mapping
+        guard let recipientHex = nostrKeyMapping[peerID] else {
+            if let msgIdx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
+                privateChats[peerID]?[msgIdx].deliveryStatus = .failed(reason: "unknown recipient")
+            }
+            return
+        }
+        
+        // Respect geohash blocks
+        if identityManager.isNostrBlocked(pubkeyHexLowercased: recipientHex) {
+            if let msgIdx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
+                privateChats[peerID]?[msgIdx].deliveryStatus = .failed(reason: "user is blocked")
+            }
+            addSystemMessage("cannot send message: user is blocked.")
+            return
+        }
+        
+        // Send via Nostr using per-geohash identity
+        do {
+            let id = try NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash)
+            // Prevent messaging ourselves
+            if recipientHex.lowercased() == id.publicKeyHex.lowercased() {
+                if let idx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
+                    privateChats[peerID]?[idx].deliveryStatus = .failed(reason: "cannot message yourself")
+                }
+                return
+            }
+            SecureLogger.debug("GeoDM: local send mid=\(messageID.prefix(8))… to=\(recipientHex.prefix(8))… conv=\(peerID)", category: .session)
+            let nostrTransport = NostrTransport(keychain: keychain)
+            nostrTransport.senderPeerID = meshService.myPeerID
+            nostrTransport.sendPrivateMessageGeohash(content: content, toRecipientHex: recipientHex, from: id, messageID: messageID)
+            if let msgIdx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
+                privateChats[peerID]?[msgIdx].deliveryStatus = .sent
+            }
+        } catch {
+            if let idx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
+                privateChats[peerID]?[idx].deliveryStatus = .failed(reason: "send error")
+            }
         }
     }
 
