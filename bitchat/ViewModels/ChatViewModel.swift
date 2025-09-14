@@ -1653,19 +1653,23 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             }
         }
 
-        // Subscribe to Nostr gift wraps (DMs) for this geohash identity
-        if let id = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
-            let dmSub = "geo-dm-\(ch.geohash)"
-            geoDmSubscriptionID = dmSub
-            // pared back logging: subscribe debug only
-            // Log GeoDM subscribe only when Tor is ready to avoid early noise
-            if TorManager.shared.isReady {
-                SecureLogger.debug("GeoDM: subscribing DMs pub=\(id.publicKeyHex.prefix(8))… sub=\(dmSub)", category: .session)
-            }
-            let dmFilter = NostrFilter.giftWrapsFor(pubkey: id.publicKeyHex, since: Date().addingTimeInterval(-TransportConfig.nostrDMSubscribeLookbackSeconds))
-            NostrRelayManager.shared.subscribe(filter: dmFilter, id: dmSub) { [weak self] giftWrap in
-                self?.handleGiftWrap(giftWrap, id: id)
-            }
+        subscribeToGeoChat(ch)
+    }
+    
+    @MainActor
+    private func subscribeToGeoChat(_ ch: GeohashChannel) {
+        guard let id = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) else { return }
+        
+        let dmSub = "geo-dm-\(ch.geohash)"
+        geoDmSubscriptionID = dmSub
+        // pared back logging: subscribe debug only
+        // Log GeoDM subscribe only when Tor is ready to avoid early noise
+        if TorManager.shared.isReady {
+            SecureLogger.debug("GeoDM: subscribing DMs pub=\(id.publicKeyHex.prefix(8))… sub=\(dmSub)", category: .session)
+        }
+        let dmFilter = NostrFilter.giftWrapsFor(pubkey: id.publicKeyHex, since: Date().addingTimeInterval(-TransportConfig.nostrDMSubscribeLookbackSeconds))
+        NostrRelayManager.shared.subscribe(filter: dmFilter, id: dmSub) { [weak self] giftWrap in
+            self?.handleGiftWrap(giftWrap, id: id)
         }
     }
     
