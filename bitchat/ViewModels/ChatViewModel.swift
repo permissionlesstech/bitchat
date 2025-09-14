@@ -1528,7 +1528,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         }
         // If switching to a location channel, flush any pending geohash-only system messages
         if case .location = channel, !pendingGeohashSystemMessages.isEmpty {
-            for m in pendingGeohashSystemMessages { addPublicSystemMessage(m) }
+            for m in pendingGeohashSystemMessages {
+                addPublicSystemMessage(m)
+            }
             pendingGeohashSystemMessages.removeAll(keepingCapacity: false)
         }
         // Unsubscribe previous
@@ -1547,9 +1549,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         
         guard case .location(let ch) = channel else { return }
         currentGeohash = ch.geohash
+        
         // Ensure self appears immediately in the people list; mark teleported state only when truly teleported
         if let id = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
-            self.recordGeoParticipant(pubkeyHex: id.publicKeyHex)
+            recordGeoParticipant(pubkeyHex: id.publicKeyHex)
             let hasRegional = !LocationChannelManager.shared.availableChannels.isEmpty
             let inRegional = LocationChannelManager.shared.availableChannels.contains { $0.geohash == ch.geohash }
             let key = id.publicKeyHex.lowercased()
@@ -1560,14 +1563,12 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                 teleportedGeo.remove(key)
             }
         }
+        
         let subID = "geo-\(ch.geohash)"
         geoSubscriptionID = subID
         startGeoParticipantsTimer()
-        let filter = NostrFilter.geohashEphemeral(
-            ch.geohash,
-            since: Date().addingTimeInterval(-TransportConfig.nostrGeohashInitialLookbackSeconds),
-            limit: TransportConfig.nostrGeohashInitialLimit
-        )
+        let ts = Date().addingTimeInterval(-TransportConfig.nostrGeohashInitialLookbackSeconds)
+        let filter = NostrFilter.geohashEphemeral(ch.geohash, since: ts, limit: TransportConfig.nostrGeohashInitialLimit)
         let subRelays = GeoRelayDirectory.shared.closestRelays(toGeohash: ch.geohash, count: 5)
         NostrRelayManager.shared.subscribe(filter: filter, id: subID, relayUrls: subRelays) { [weak self] event in
             self?.handleNostrEvent(event)
