@@ -1743,37 +1743,39 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                     }
                     self.objectWillChange.send()
                 default:
-                    // Handle delivered/read receipts for our sent messages
-                    switch noisePayload.type {
-                    case .delivered:
-                        if let messageID = String(data: noisePayload.data, encoding: .utf8) {
-                            if let idx = self.privateChats[convKey]?.firstIndex(where: { $0.id == messageID }) {
-                                self.privateChats[convKey]?[idx].deliveryStatus = .delivered(to: self.displayNameForNostrPubkey(senderPubkey), at: Date())
-                                self.objectWillChange.send()
-                                SecureLogger.info("GeoDM: recv DELIVERED for mid=\(messageID.prefix(8))… from=\(senderPubkey.prefix(8))…", category: .session)
-                            } else {
-                                SecureLogger.warning("GeoDM: delivered ack for unknown mid=\(messageID.prefix(8))… conv=\(convKey)", category: .session)
-                            }
-                        }
-                    case .readReceipt:
-                        if let messageID = String(data: noisePayload.data, encoding: .utf8) {
-                            if let idx = self.privateChats[convKey]?.firstIndex(where: { $0.id == messageID }) {
-                                self.privateChats[convKey]?[idx].deliveryStatus = .read(by: self.displayNameForNostrPubkey(senderPubkey), at: Date())
-                                self.objectWillChange.send()
-                                SecureLogger.info("GeoDM: recv READ for mid=\(messageID.prefix(8))… from=\(senderPubkey.prefix(8))…", category: .session)
-                            } else {
-                                SecureLogger.warning("GeoDM: read ack for unknown mid=\(messageID.prefix(8))… conv=\(convKey)", category: .session)
-                            }
-                        }
-                    default:
-                        break
-                    }
+                    handleDeliveredReadReceipt(noisePayload: noisePayload, senderPubkey: senderPubkey, convKey: convKey)
                 }
             }
         } catch {
             // ignore
         }
         //
+    }
+    
+    private func handleDeliveredReadReceipt(noisePayload: NoisePayload, senderPubkey: String, convKey: String) {
+        guard let messageID = String(data: noisePayload.data, encoding: .utf8) else { return }
+        
+        switch noisePayload.type {
+        case .delivered:
+            if let idx = privateChats[convKey]?.firstIndex(where: { $0.id == messageID }) {
+                privateChats[convKey]?[idx].deliveryStatus = .delivered(to: displayNameForNostrPubkey(senderPubkey), at: Date())
+                objectWillChange.send()
+                SecureLogger.info("GeoDM: recv DELIVERED for mid=\(messageID.prefix(8))… from=\(senderPubkey.prefix(8))…", category: .session)
+            } else {
+                SecureLogger.warning("GeoDM: delivered ack for unknown mid=\(messageID.prefix(8))… conv=\(convKey)", category: .session)
+            }
+        case .readReceipt:
+            if let idx = privateChats[convKey]?.firstIndex(where: { $0.id == messageID }) {
+                privateChats[convKey]?[idx].deliveryStatus = .read(by: displayNameForNostrPubkey(senderPubkey), at: Date())
+                objectWillChange.send()
+                SecureLogger.info("GeoDM: recv READ for mid=\(messageID.prefix(8))… from=\(senderPubkey.prefix(8))…", category: .session)
+            } else {
+                SecureLogger.warning("GeoDM: read ack for unknown mid=\(messageID.prefix(8))… conv=\(convKey)", category: .session)
+            }
+        // Explicitly list other cases so we get compile-time check if a new case is added in the future
+        case .privateMessage, .verifyChallenge, .verifyResponse:
+            break
+        }
     }
 
     // MARK: - Geohash Participants
