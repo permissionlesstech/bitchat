@@ -1570,87 +1570,102 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         )
         let subRelays = GeoRelayDirectory.shared.closestRelays(toGeohash: ch.geohash, count: 5)
         NostrRelayManager.shared.subscribe(filter: filter, id: subID, relayUrls: subRelays) { [weak self] event in
-            guard let self = self else { return }
-            // Only handle ephemeral kind 20000 with matching tag
-            guard event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue else { return }
-            // Deduplicate
-            if self.processedNostrEvents.contains(event.id) { return }
-            self.recordProcessedEvent(event.id)
-            // Log incoming tags for diagnostics
-            let tagSummary = event.tags.map { "[" + $0.joined(separator: ",") + "]" }.joined(separator: ",")
-            SecureLogger.debug("GeoTeleport: recv pub=\(event.pubkey.prefix(8))… tags=\(tagSummary)", category: .session)
-            // Track teleport tag for participants – only our format ["t", "teleport"]
-            let hasTeleportTag: Bool = event.tags.contains(where: { tag in
-                tag.count >= 2 && tag[0].lowercased() == "t" && tag[1].lowercased() == "teleport"
-            })
-            if hasTeleportTag {
-                let key = event.pubkey.lowercased()
-                // Avoid marking our own key from historical events; rely on manager.teleported for self
-                let isSelf: Bool = {
-                    if let gh = self.currentGeohash, let my = try? NostrIdentityBridge.deriveIdentity(forGeohash: gh) {
-                        return my.publicKeyHex.lowercased() == key
-                    }
-                    return false
-                }()
-                if !isSelf {
-                    Task { @MainActor in
-                        self.teleportedGeo = self.teleportedGeo.union([key])
-                        SecureLogger.info("GeoTeleport: mark peer teleported key=\(key.prefix(8))… total=\(self.teleportedGeo.count)", category: .session)
-                    }
-                }
-            }
-            // Skip only very recent self-echo from relay; include older self events for hydration
-            if let gh = self.currentGeohash,
-               let myGeoIdentity = try? NostrIdentityBridge.deriveIdentity(forGeohash: gh),
-               myGeoIdentity.publicKeyHex.lowercased() == event.pubkey.lowercased() {
-                let eventTime = Date(timeIntervalSince1970: TimeInterval(event.created_at))
-                if Date().timeIntervalSince(eventTime) < 15 { return }
-            }
-            // Cache nickname from tag if present
-            if let nickTag = event.tags.first(where: { $0.first == "n" }), nickTag.count >= 2 {
-                let nick = nickTag[1].trimmingCharacters(in: .whitespacesAndNewlines)
-                self.geoNicknames[event.pubkey.lowercased()] = nick
-            }
-            // If this pubkey is blocked, skip mapping, participants, and timeline
-            if identityManager.isNostrBlocked(pubkeyHexLowercased: event.pubkey) {
-                return
-            }
-            // Store mapping for geohash DM initiation
-            let key16 = "nostr_" + String(event.pubkey.prefix(TransportConfig.nostrConvKeyPrefixLength))
-            self.nostrKeyMapping[key16] = event.pubkey
-            let key8 = "nostr:" + String(event.pubkey.prefix(TransportConfig.nostrShortKeyDisplayLength))
-            self.nostrKeyMapping[key8] = event.pubkey
-            // Update participants last-seen for this pubkey
-            self.recordGeoParticipant(pubkeyHex: event.pubkey)
-            
-            let senderName = self.displayNameForNostrPubkey(event.pubkey)
-            let content = event.content
-            // If this is a teleport presence event (no content), don't add to timeline
-            if let teleTag = event.tags.first(where: { $0.first == "t" }), teleTag.count >= 2, (teleTag[1] == "teleport"),
-               content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return
-            }
-            // Clamp future timestamps
-            let rawTs = Date(timeIntervalSince1970: TimeInterval(event.created_at))
-            let timestamp = min(rawTs, Date())
-            let mentions = self.parseMentions(from: content)
-            let msg = BitchatMessage(
-                id: event.id,
-                sender: senderName,
-                content: content,
-                timestamp: timestamp,
-                isRelay: false,
-                senderPeerID: "nostr:\(event.pubkey.prefix(TransportConfig.nostrShortKeyDisplayLength))",
-                mentions: mentions.isEmpty ? nil : mentions
-            )
-            Task { @MainActor in
-                self.handlePublicMessage(msg)
-                self.checkForMentions(msg)
-                self.sendHapticFeedback(for: msg)
-            }
+            self?.handleNostrEvent(event)
         }
 
         subscribeToGeoChat(ch)
+    }
+    
+    private func handleNostrEvent(_ event: NostrEvent) {
+        // Only handle ephemeral kind 20000 with matching tag
+        guard event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue else { return }
+        
+        // Deduplicate
+        if processedNostrEvents.contains(event.id) { return }
+        recordProcessedEvent(event.id)
+        
+        // Log incoming tags for diagnostics
+        let tagSummary = event.tags.map { "[" + $0.joined(separator: ",") + "]" }.joined(separator: ",")
+        SecureLogger.debug("GeoTeleport: recv pub=\(event.pubkey.prefix(8))… tags=\(tagSummary)", category: .session)
+        
+        // Track teleport tag for participants – only our format ["t", "teleport"]
+        let hasTeleportTag: Bool = event.tags.contains { tag in
+            tag.count >= 2 && tag[0].lowercased() == "t" && tag[1].lowercased() == "teleport"
+        }
+        
+        let isSelf: Bool = {
+            if let gh = currentGeohash, let my = try? NostrIdentityBridge.deriveIdentity(forGeohash: gh) {
+                return my.publicKeyHex.lowercased() == event.pubkey.lowercased()
+            }
+            return false
+        }()
+
+        if hasTeleportTag {
+            // Avoid marking our own key from historical events; rely on manager.teleported for self
+            if !isSelf {
+                let key = event.pubkey.lowercased()
+                Task { @MainActor in
+                    teleportedGeo = teleportedGeo.union([key])
+                    SecureLogger.info("GeoTeleport: mark peer teleported key=\(key.prefix(8))… total=\(teleportedGeo.count)", category: .session)
+                }
+            }
+        }
+        
+        // Skip only very recent self-echo from relay; include older self events for hydration
+        if isSelf {
+            let eventTime = Date(timeIntervalSince1970: TimeInterval(event.created_at))
+            if Date().timeIntervalSince(eventTime) < 15 {
+                return
+            }
+        }
+        
+        // Cache nickname from tag if present
+        if let nickTag = event.tags.first(where: { $0.first == "n" }), nickTag.count >= 2 {
+            let nick = nickTag[1].trimmingCharacters(in: .whitespacesAndNewlines)
+            geoNicknames[event.pubkey.lowercased()] = nick
+        }
+        
+        // If this pubkey is blocked, skip mapping, participants, and timeline
+        if identityManager.isNostrBlocked(pubkeyHexLowercased: event.pubkey) {
+            return
+        }
+        
+        // Store mapping for geohash DM initiation
+        let key16 = "nostr_" + String(event.pubkey.prefix(TransportConfig.nostrConvKeyPrefixLength))
+        nostrKeyMapping[key16] = event.pubkey
+        let key8 = "nostr:" + String(event.pubkey.prefix(TransportConfig.nostrShortKeyDisplayLength))
+        nostrKeyMapping[key8] = event.pubkey
+        
+        // Update participants last-seen for this pubkey
+        recordGeoParticipant(pubkeyHex: event.pubkey)
+        
+        let senderName = displayNameForNostrPubkey(event.pubkey)
+        let content = event.content
+        
+        // If this is a teleport presence event (no content), don't add to timeline
+        if let teleTag = event.tags.first(where: { $0.first == "t" }), teleTag.count >= 2, (teleTag[1] == "teleport"),
+           content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return
+        }
+        
+        // Clamp future timestamps
+        let rawTs = Date(timeIntervalSince1970: TimeInterval(event.created_at))
+        let mentions = parseMentions(from: content)
+        let msg = BitchatMessage(
+            id: event.id,
+            sender: senderName,
+            content: content,
+            timestamp: min(rawTs, Date()),
+            isRelay: false,
+            senderPeerID: "nostr:\(event.pubkey.prefix(TransportConfig.nostrShortKeyDisplayLength))",
+            mentions: mentions.isEmpty ? nil : mentions
+        )
+        
+        Task { @MainActor in
+            handlePublicMessage(msg)
+            checkForMentions(msg)
+            sendHapticFeedback(for: msg)
+        }
     }
     
     @MainActor
