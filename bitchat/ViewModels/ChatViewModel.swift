@@ -2146,16 +2146,16 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     func sendPrivateMessage(_ content: String, to peerID: String) {
         guard !content.isEmpty else { return }
         
-        // Geohash DM routing: conversation keys start with "nostr_"
-        if peerID.hasPrefix("nostr_") {
-            sendGeohashDM(content, to: peerID)
-        }
-
         // Check if blocked
         if unifiedPeerService.isBlocked(peerID) {
             let nickname = meshService.peerNickname(peerID: peerID) ?? "user"
             addSystemMessage("cannot send message to \(nickname): user is blocked.")
             return
+        }
+        
+        // Geohash DM routing: conversation keys start with "nostr_"
+        if peerID.hasPrefix("nostr_") {
+            sendGeohashDM(content, to: peerID)
         }
         
         // Determine routing method and recipient nickname
