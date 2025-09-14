@@ -132,6 +132,7 @@ enum MessageType: UInt8 {
     
     // Fragmentation (simplified)
     case fragment = 0x20        // Single fragment type for large messages
+    case requestSync = 0x21     // Bloom filter-based sync request (local-only)
     
     var description: String {
         switch self {
@@ -141,6 +142,7 @@ enum MessageType: UInt8 {
         case .noiseHandshake: return "noiseHandshake"
         case .noiseEncrypted: return "noiseEncrypted"
         case .fragment: return "fragment"
+        case .requestSync: return "requestSync"
         }
     }
 }
