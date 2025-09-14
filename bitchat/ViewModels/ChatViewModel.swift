@@ -1686,8 +1686,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                 switch noisePayload.type {
                 case .privateMessage:
                     handlePrivateMessage(noisePayload: noisePayload, senderPubkey: senderPubkey, convKey: convKey, id: id, messageTimestamp: messageTimestamp)
-                default:
-                    handleDeliveredReadReceipt(noisePayload: noisePayload, senderPubkey: senderPubkey, convKey: convKey)
+                case .delivered:
+                    handleDelivered(noisePayload: noisePayload, senderPubkey: senderPubkey, convKey: convKey)
+                case .readReceipt:
+                    handleReadReceipt(noisePayload: noisePayload, senderPubkey: senderPubkey, convKey: convKey)
+                // Explicitly list other cases so we get compile-time check if a new case is added in the future
+                case .verifyChallenge, .verifyResponse:
+                    break
                 }
             }
         } catch {
@@ -1771,29 +1776,27 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         objectWillChange.send()
     }
     
-    private func handleDeliveredReadReceipt(noisePayload: NoisePayload, senderPubkey: String, convKey: String) {
+    private func handleDelivered(noisePayload: NoisePayload, senderPubkey: String, convKey: String) {
         guard let messageID = String(data: noisePayload.data, encoding: .utf8) else { return }
         
-        switch noisePayload.type {
-        case .delivered:
-            if let idx = privateChats[convKey]?.firstIndex(where: { $0.id == messageID }) {
-                privateChats[convKey]?[idx].deliveryStatus = .delivered(to: displayNameForNostrPubkey(senderPubkey), at: Date())
-                objectWillChange.send()
-                SecureLogger.info("GeoDM: recv DELIVERED for mid=\(messageID.prefix(8))… from=\(senderPubkey.prefix(8))…", category: .session)
-            } else {
-                SecureLogger.warning("GeoDM: delivered ack for unknown mid=\(messageID.prefix(8))… conv=\(convKey)", category: .session)
-            }
-        case .readReceipt:
-            if let idx = privateChats[convKey]?.firstIndex(where: { $0.id == messageID }) {
-                privateChats[convKey]?[idx].deliveryStatus = .read(by: displayNameForNostrPubkey(senderPubkey), at: Date())
-                objectWillChange.send()
-                SecureLogger.info("GeoDM: recv READ for mid=\(messageID.prefix(8))… from=\(senderPubkey.prefix(8))…", category: .session)
-            } else {
-                SecureLogger.warning("GeoDM: read ack for unknown mid=\(messageID.prefix(8))… conv=\(convKey)", category: .session)
-            }
-        // Explicitly list other cases so we get compile-time check if a new case is added in the future
-        case .privateMessage, .verifyChallenge, .verifyResponse:
-            break
+        if let idx = privateChats[convKey]?.firstIndex(where: { $0.id == messageID }) {
+            privateChats[convKey]?[idx].deliveryStatus = .delivered(to: displayNameForNostrPubkey(senderPubkey), at: Date())
+            objectWillChange.send()
+            SecureLogger.info("GeoDM: recv DELIVERED for mid=\(messageID.prefix(8))… from=\(senderPubkey.prefix(8))…", category: .session)
+        } else {
+            SecureLogger.warning("GeoDM: delivered ack for unknown mid=\(messageID.prefix(8))… conv=\(convKey)", category: .session)
+        }
+    }
+    
+    private func handleReadReceipt(noisePayload: NoisePayload, senderPubkey: String, convKey: String) {
+        guard let messageID = String(data: noisePayload.data, encoding: .utf8) else { return }
+        
+        if let idx = privateChats[convKey]?.firstIndex(where: { $0.id == messageID }) {
+            privateChats[convKey]?[idx].deliveryStatus = .read(by: displayNameForNostrPubkey(senderPubkey), at: Date())
+            objectWillChange.send()
+            SecureLogger.info("GeoDM: recv READ for mid=\(messageID.prefix(8))… from=\(senderPubkey.prefix(8))…", category: .session)
+        } else {
+            SecureLogger.warning("GeoDM: read ack for unknown mid=\(messageID.prefix(8))… conv=\(convKey)", category: .session)
         }
     }
 
