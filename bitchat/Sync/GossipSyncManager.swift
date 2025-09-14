@@ -23,7 +23,6 @@ final class GossipSyncManager {
     private var messages: [String: BitchatPacket] = [:] // idHex -> packet
     private var messageOrder: [String] = []
     private var latestAnnouncementByPeer: [String: (id: String, packet: BitchatPacket)] = [:]
-    private var pruneTimer: DispatchSourceTimer?
 
     // Timer
     private var periodicTimer: DispatchSourceTimer?
@@ -41,17 +40,10 @@ final class GossipSyncManager {
         timer.setEventHandler { [weak self] in self?.sendRequestSync() }
         timer.resume()
         periodicTimer = timer
-
-        let prune = DispatchSource.makeTimerSource(queue: queue)
-        prune.schedule(deadline: .now() + 15.0, repeating: 30.0, leeway: .seconds(1))
-        prune.setEventHandler { [weak self] in self?.pruneOldAnnouncements(maxAgeSeconds: 300) }
-        prune.resume()
-        pruneTimer = prune
     }
 
     func stop() {
         periodicTimer?.cancel(); periodicTimer = nil
-        pruneTimer?.cancel(); pruneTimer = nil
     }
 
     func scheduleInitialSyncToPeer(_ peerID: String, delaySeconds: TimeInterval = 5.0) {
@@ -188,27 +180,21 @@ final class GossipSyncManager {
         return req.encode()
     }
 
-    // Remove announcements older than maxAgeSeconds
-    private func pruneOldAnnouncements(maxAgeSeconds: TimeInterval) {
-        let cutoffMs = UInt64((Date().timeIntervalSince1970 - maxAgeSeconds) * 1000)
-        var toRemove: [String] = []
-        for (peer, pair) in latestAnnouncementByPeer {
-            if pair.packet.timestamp < cutoffMs { toRemove.append(peer) }
-        }
-        if !toRemove.isEmpty {
-            for k in toRemove { latestAnnouncementByPeer.removeValue(forKey: k) }
-        }
-        // remove messages without announcements
-        for (id, message) in messages {
-            let sender = message.senderID.hexEncodedString()
-            if !latestAnnouncementByPeer.contains(where: { $0.key == sender }) {
-                messages.removeValue(forKey: id)
-            }
-        }
-    }
-
     // Explicit removal hook for LEAVE/stale peer
     func removeAnnouncementForPeer(_ peerID: String) {
-        _ = latestAnnouncementByPeer.removeValue(forKey: peerID.lowercased())
+        let normalizedPeerID = peerID.lowercased()
+        _ = latestAnnouncementByPeer.removeValue(forKey: normalizedPeerID)
+        
+        // Remove messages from this peer
+        // Collect IDs to remove first to avoid concurrent modification
+        let messageIdsToRemove = messages.compactMap { (id, message) -> String? in
+            message.senderID.hexEncodedString().lowercased() == normalizedPeerID ? id : nil
+        }
+        
+        // Remove messages and update messageOrder
+        for id in messageIdsToRemove {
+            messages.removeValue(forKey: id)
+            messageOrder.removeAll { $0 == id }
+        }
     }
 }
