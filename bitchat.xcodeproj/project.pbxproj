@@ -122,6 +122,11 @@
 			path = bitchatTests;
 			sourceTree = "<group>";
 		};
+		A6E367C92E76469E0032EA8A /* Configs */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Configs;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -160,6 +165,7 @@
 				E0A1B2C3D4E5F6012345678A /* relays/online_relays_gps.csv */,
 				A6E32D212E762EAB0032EA8A /* bitchatShareExtension */,
 				A6E32D412E762EAE0032EA8A /* bitchatTests */,
+				A6E367C92E76469E0032EA8A /* Configs */,
 				0481A3542E6D877600FC845E /* Frameworks */,
 				9F37F9F2C353B58AC809E93B /* Products */,
 			);
@@ -397,6 +403,8 @@
 /* Begin XCBuildConfiguration section */
 		077A5203074247CF8F766E2F /* Debug configuration for PBXNativeTarget "bitchatTests_iOS" */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = A6E367C92E76469E0032EA8A /* Configs */;
+			baseConfigurationReferenceRelativePath = Debug.xcconfig;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGNING_ALLOWED = YES;
@@ -419,6 +427,8 @@
 		};
 		0DACAA261446D178EDD30ECA /* Release configuration for PBXNativeTarget "bitchatTests_iOS" */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = A6E367C92E76469E0032EA8A /* Configs */;
+			baseConfigurationReferenceRelativePath = Release.xcconfig;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGNING_ALLOWED = YES;
@@ -441,6 +451,8 @@
 		};
 		147FDAE548082D5B921C6F0B /* Release configuration for PBXNativeTarget "bitchatTests_macOS" */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = A6E367C92E76469E0032EA8A /* Configs */;
+			baseConfigurationReferenceRelativePath = Release.xcconfig;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGNING_ALLOWED = YES;
@@ -464,6 +476,8 @@
 		};
 		3DCF45111852FB2AEBE05E31 /* Release configuration for PBXNativeTarget "bitchatShareExtension" */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = A6E367C92E76469E0032EA8A /* Configs */;
+			baseConfigurationReferenceRelativePath = Release.xcconfig;
 			buildSettings = {
 				CODE_SIGNING_ALLOWED = YES;
 				CODE_SIGNING_REQUIRED = YES;
@@ -492,6 +506,8 @@
 		};
 		702E7395723CADA4B830F4A9 /* Debug configuration for PBXNativeTarget "bitchat_iOS" */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = A6E367C92E76469E0032EA8A /* Configs */;
+			baseConfigurationReferenceRelativePath = Debug.xcconfig;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
@@ -524,6 +540,8 @@
 		};
 		7FA2BADBF3B325125030CAB1 /* Debug configuration for PBXNativeTarget "bitchatTests_macOS" */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = A6E367C92E76469E0032EA8A /* Configs */;
+			baseConfigurationReferenceRelativePath = Debug.xcconfig;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGNING_ALLOWED = YES;
@@ -547,6 +565,8 @@
 		};
 		B36671AEACCBF92BE10852E9 /* Release configuration for PBXNativeTarget "bitchat_iOS" */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = A6E367C92E76469E0032EA8A /* Configs */;
+			baseConfigurationReferenceRelativePath = Release.xcconfig;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
@@ -579,6 +599,8 @@
 		};
 		BB044400A0F06B93F22D0D55 /* Release configuration for PBXNativeTarget "bitchat_macOS" */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = A6E367C92E76469E0032EA8A /* Configs */;
+			baseConfigurationReferenceRelativePath = Release.xcconfig;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
@@ -668,6 +690,8 @@
 		};
 		CC79F65842D42034ACEE79B7 /* Debug configuration for PBXNativeTarget "bitchat_macOS" */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = A6E367C92E76469E0032EA8A /* Configs */;
+			baseConfigurationReferenceRelativePath = Debug.xcconfig;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
@@ -764,6 +788,8 @@
 		};
 		DAC5E82049F8A97360BE63D6 /* Debug configuration for PBXNativeTarget "bitchatShareExtension" */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = A6E367C92E76469E0032EA8A /* Configs */;
+			baseConfigurationReferenceRelativePath = Debug.xcconfig;
 			buildSettings = {
 				CODE_SIGNING_ALLOWED = YES;
 				CODE_SIGNING_REQUIRED = YES;
