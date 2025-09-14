@@ -1395,108 +1395,118 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             updatePrivateChatPeerIfNeeded()
             
             if let selectedPeer = selectedPrivateChatPeer {
-                // Send as private message
                 sendPrivateMessage(content, to: selectedPeer)
-            } else {
+            }
+            return
+        }
+        
+        // Parse mentions from the content (use original content for user intent)
+        let mentions = parseMentions(from: content)
+        
+        // Add message to local display
+        var displaySender = nickname
+        var localSenderPeerID = meshService.myPeerID
+        if case .location(let ch) = activeChannel,
+           let myGeoIdentity = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
+            let suffix = String(myGeoIdentity.publicKeyHex.suffix(4))
+            displaySender = nickname + "#" + suffix
+            localSenderPeerID = "nostr:\(myGeoIdentity.publicKeyHex.prefix(TransportConfig.nostrShortKeyDisplayLength))"
+        }
+
+        let message = BitchatMessage(
+            sender: displaySender,
+            content: trimmed,
+            timestamp: Date(),
+            isRelay: false,
+            senderPeerID: localSenderPeerID,
+            mentions: mentions.isEmpty ? nil : mentions
+        )
+        
+        // Add to main messages immediately for user feedback
+        messages.append(message)
+        
+        // Update content LRU for near-dup detection
+        let ckey = normalizedContentKey(message.content)
+        recordContentKey(ckey, timestamp: message.timestamp)
+        
+        // Persist to channel-specific timelines
+        switch activeChannel {
+        case .mesh:
+            meshTimeline.append(message)
+            trimMeshTimelineIfNeeded()
+        case .location(let ch):
+            var arr = geoTimelines[ch.geohash] ?? []
+            arr.append(message)
+            if arr.count > geoTimelineCap {
+                arr = Array(arr.suffix(geoTimelineCap))
+            }
+            geoTimelines[ch.geohash] = arr
+        }
+        trimMessagesIfNeeded()
+        
+        // Force immediate UI update for user's own messages
+        objectWillChange.send()
+
+        // Update channel activity time on send
+        switch activeChannel {
+        case .mesh:
+            lastPublicActivityAt["mesh"] = Date()
+        case .location(let ch):
+            lastPublicActivityAt["geo:\(ch.geohash)"] = Date()
+        }
+        
+        if case .location(let ch) = activeChannel {
+            // Send to geohash channel via Nostr ephemeral
+            Task { @MainActor in
+                sendGeohash(ch: ch, content: trimmed)
             }
         } else {
-            // Parse mentions from the content (use original content for user intent)
-            let mentions = parseMentions(from: content)
+            // Send via mesh with mentions
+            meshService.sendMessage(content, mentions: mentions)
+        }
+    }
+    
+    @MainActor
+    private func sendGeohash(ch: GeohashChannel, content: String) {
+        do {
+            let identity = try NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash)
             
-            // Add message to local display
-            var displaySender = nickname
-            var localSenderPeerID = meshService.myPeerID
-            if case .location(let ch) = activeChannel,
-               let myGeoIdentity = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
-                let suffix = String(myGeoIdentity.publicKeyHex.suffix(4))
-                displaySender = nickname + "#" + suffix
-                localSenderPeerID = "nostr:\(myGeoIdentity.publicKeyHex.prefix(TransportConfig.nostrShortKeyDisplayLength))"
-            }
-
-            let message = BitchatMessage(
-                sender: displaySender,
-                content: trimmed,
-                timestamp: Date(),
-                isRelay: false,
-                originalSender: nil,
-                isPrivate: false,
-                recipientNickname: nil,
-                senderPeerID: localSenderPeerID,
-                mentions: mentions.isEmpty ? nil : mentions
+            let event = try NostrProtocol.createEphemeralGeohashEvent(
+                content: content,
+                geohash: ch.geohash,
+                senderIdentity: identity,
+                nickname: nickname,
+                teleported: LocationChannelManager.shared.teleported
             )
             
-            // Add to main messages immediately for user feedback
-            messages.append(message)
-            // Update content LRU for near-dup detection
-            let ckey = normalizedContentKey(message.content)
-            recordContentKey(ckey, timestamp: message.timestamp)
-            // Persist to channel-specific timelines
-            switch activeChannel {
-            case .mesh:
-                meshTimeline.append(message)
-                trimMeshTimelineIfNeeded()
-            case .location(let ch):
-                var arr = geoTimelines[ch.geohash] ?? []
-                arr.append(message)
-                if arr.count > geoTimelineCap { arr = Array(arr.suffix(geoTimelineCap)) }
-                geoTimelines[ch.geohash] = arr
-            }
-            trimMessagesIfNeeded()
+            let targetRelays = GeoRelayDirectory.shared.closestRelays(
+                toGeohash: ch.geohash,
+                count: TransportConfig.nostrGeoRelayCount
+            )
             
-            // Force immediate UI update for user's own messages
-            objectWillChange.send()
-
-            // Update channel activity time on send
-            switch activeChannel {
-            case .mesh:
-                lastPublicActivityAt["mesh"] = Date()
-            case .location(let ch):
-                lastPublicActivityAt["geo:\(ch.geohash)"] = Date()
-            }
-            
-            if case .location(let ch) = activeChannel {
-                // Send to geohash channel via Nostr ephemeral
-                Task { @MainActor in
-                    do {
-                        let identity = try NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash)
-                        let event = try NostrProtocol.createEphemeralGeohashEvent(
-                            content: trimmed,
-                            geohash: ch.geohash,
-                            senderIdentity: identity,
-                            nickname: self.nickname,
-                            teleported: LocationChannelManager.shared.teleported
-                        )
-                        let targetRelays = GeoRelayDirectory.shared.closestRelays(
-                            toGeohash: ch.geohash,
-                            count: TransportConfig.nostrGeoRelayCount
-                        )
-                        if targetRelays.isEmpty {
-                            SecureLogger.warning("Geo: no geohash relays available for \(ch.geohash); not sending", category: .session)
-                        } else {
-                            NostrRelayManager.shared.sendEvent(event, to: targetRelays)
-                        }
-                        // Track ourselves as active participant
-                        self.recordGeoParticipant(pubkeyHex: identity.publicKeyHex)
-                        SecureLogger.debug("GeoTeleport: sent geo message pub=\(identity.publicKeyHex.prefix(8))… teleported=\(LocationChannelManager.shared.teleported)", category: .session)
-                        // If we tagged this as teleported, also mark our pubkey in teleportedGeo for UI
-                        // Only when not in our regional set (and regional list is known)
-                        let hasRegional = !LocationChannelManager.shared.availableChannels.isEmpty
-                        let inRegional = LocationChannelManager.shared.availableChannels.contains { $0.geohash == ch.geohash }
-                        if LocationChannelManager.shared.teleported && hasRegional && !inRegional {
-                            let key = identity.publicKeyHex.lowercased()
-                            self.teleportedGeo = self.teleportedGeo.union([key])
-                            SecureLogger.info("GeoTeleport: mark self teleported key=\(key.prefix(8))… total=\(self.teleportedGeo.count)", category: .session)
-                        }
-                    } catch {
-                        SecureLogger.error("❌ Failed to send geohash message: \(error)", category: .session)
-                        self.addSystemMessage("failed to send to location channel")
-                    }
-                }
+            if targetRelays.isEmpty {
+                SecureLogger.warning("Geo: no geohash relays available for \(ch.geohash); not sending", category: .session)
             } else {
-                // Send via mesh with mentions
-                meshService.sendMessage(content, mentions: mentions)
+                NostrRelayManager.shared.sendEvent(event, to: targetRelays)
             }
             
+            // Track ourselves as active participant
+            recordGeoParticipant(pubkeyHex: identity.publicKeyHex)
+            SecureLogger.debug("GeoTeleport: sent geo message pub=\(identity.publicKeyHex.prefix(8))… teleported=\(LocationChannelManager.shared.teleported)", category: .session)
+            
+            // If we tagged this as teleported, also mark our pubkey in teleportedGeo for UI
+            // Only when not in our regional set (and regional list is known)
+            let hasRegional = !LocationChannelManager.shared.availableChannels.isEmpty
+            let inRegional = LocationChannelManager.shared.availableChannels.contains { $0.geohash == ch.geohash }
+            
+            if LocationChannelManager.shared.teleported && hasRegional && !inRegional {
+                let key = identity.publicKeyHex.lowercased()
+                teleportedGeo = teleportedGeo.union([key])
+                SecureLogger.info("GeoTeleport: mark self teleported key=\(key.prefix(8))… total=\(teleportedGeo.count)", category: .session)
+            }
+        } catch {
+            SecureLogger.error("❌ Failed to send geohash message: \(error)", category: .session)
+            addSystemMessage("failed to send to location channel")
         }
     }
 
