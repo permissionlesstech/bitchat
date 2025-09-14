@@ -83,7 +83,9 @@ final class GossipSyncManager {
     }
 
     private func sendRequestSync() {
-        let snap = bloom.snapshotActive()
+        // Build a Bloom snapshot that excludes our own packets so peers will
+        // consider our self-origin broadcasts as missing and send them back.
+        let snap = buildSnapshotExcludingSelf()
         let payload = RequestSyncPacket(mBytes: snap.mBytes, k: snap.k, bits: snap.bits).encode()
         let pkt = BitchatPacket(
             type: MessageType.requestSync.rawValue,
@@ -99,7 +101,9 @@ final class GossipSyncManager {
     }
 
     private func sendRequestSync(to peerID: String) {
-        let snap = bloom.snapshotActive()
+        // Build a Bloom snapshot that excludes our own packets so the target
+        // peer will send us our self-origin broadcasts during initial sync.
+        let snap = buildSnapshotExcludingSelf()
         let payload = RequestSyncPacket(mBytes: snap.mBytes, k: snap.k, bits: snap.bits).encode()
         var recipient = Data()
         var temp = peerID
@@ -119,6 +123,33 @@ final class GossipSyncManager {
         )
         let signed = delegate?.signPacketForBroadcast(pkt) ?? pkt
         delegate?.sendPacket(to: peerID, packet: signed)
+    }
+
+    // Build a Bloom snapshot from our knowledge but excluding any packets that we originated.
+    private func buildSnapshotExcludingSelf() -> SeenPacketsBloomFilter.Snapshot {
+        // Reconstruct a Bloom with the same configuration, and add only others' packets we know.
+        let temp = SeenPacketsBloomFilter(maxBytes: config.bloomMaxBytes, targetFpr: config.bloomTargetFpr)
+
+        // 1) Latest announces per peer (exclude self)
+        for (sender, pair) in latestAnnouncementByPeer {
+            guard sender != myPeerID else { continue }
+            let pkt = pair.packet
+            let idBytes = PacketIdUtil.computeId(pkt)
+            temp.add(idBytes)
+        }
+
+        // 2) Broadcast messages (exclude self)
+        // Use the current order to avoid large dictionary iteration penalties
+        for id in messageOrder {
+            if let pkt = messages[id] {
+                let sender = pkt.senderID.hexEncodedString()
+                if sender == myPeerID { continue }
+                let idBytes = PacketIdUtil.computeId(pkt)
+                temp.add(idBytes)
+            }
+        }
+
+        return temp.snapshotActive()
     }
 
     func handleRequestSync(fromPeerID: String, request: RequestSyncPacket) {
@@ -165,4 +196,3 @@ final class GossipSyncManager {
         }
     }
 }
-
