@@ -43,8 +43,8 @@ final class GossipSyncManager {
         periodicTimer = timer
 
         let prune = DispatchSource.makeTimerSource(queue: queue)
-        prune.schedule(deadline: .now() + 15.0, repeating: 15.0, leeway: .seconds(1))
-        prune.setEventHandler { [weak self] in self?.pruneOldAnnouncements(maxAgeSeconds: 60) }
+        prune.schedule(deadline: .now() + 15.0, repeating: 30.0, leeway: .seconds(1))
+        prune.setEventHandler { [weak self] in self?.pruneOldAnnouncements(maxAgeSeconds: 300) }
         prune.resume()
         pruneTimer = prune
     }
@@ -197,6 +197,13 @@ final class GossipSyncManager {
         }
         if !toRemove.isEmpty {
             for k in toRemove { latestAnnouncementByPeer.removeValue(forKey: k) }
+        }
+        // remove messages without announcements
+        for (id, message) in messages {
+            let sender = message.senderID.hexEncodedString()
+            if !latestAnnouncementByPeer.contains(where: { $0.key == sender }) {
+                messages.removeValue(forKey: id)
+            }
         }
     }
 
