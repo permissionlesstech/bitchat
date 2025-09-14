@@ -12,6 +12,9 @@ import UniformTypeIdentifiers
 /// Modern share extension using UIKit + UTTypes.
 /// Avoids deprecated Social framework and SLComposeServiceViewController.
 final class ShareViewController: UIViewController {
+    // Bundle.main.bundleIdentifier would get the extension's bundleID
+    private static let groupID = "group.chat.bitchat"
+    
     private let statusLabel: UILabel = {
         let l = UILabel()
         l.translatesAutoresizingMaskIntoConstraints = false
@@ -149,7 +152,7 @@ final class ShareViewController: UIViewController {
     }
 
     private func saveToSharedDefaults(content: String, type: String) {
-        guard let userDefaults = UserDefaults(suiteName: "group.chat.bitchat") else { return }
+        guard let userDefaults = UserDefaults(suiteName: Self.groupID) else { return }
         userDefaults.set(content, forKey: "sharedContent")
         userDefaults.set(type, forKey: "sharedContentType")
         userDefaults.set(Date(), forKey: "sharedContentDate")
