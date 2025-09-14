@@ -173,7 +173,7 @@ extension BitchatMessage {
         return data
     }
     
-    static func fromBinaryPayload(_ data: Data) -> BitchatMessage? {
+    convenience init?(_ data: Data) {
         // Create an immutable copy to prevent threading issues
         let dataCopy = Data(data)
         
@@ -293,7 +293,7 @@ extension BitchatMessage {
             }
         }
         
-        let message = BitchatMessage(
+        self.init(
             id: id,
             sender: sender,
             content: content,
@@ -305,6 +305,5 @@ extension BitchatMessage {
             senderPeerID: senderPeerID,
             mentions: mentions
         )
-        return message
     }
 }
