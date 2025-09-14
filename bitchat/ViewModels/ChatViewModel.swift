@@ -3129,13 +3129,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     
     // MARK: - Message Formatting
     
-    func getSenderColor(for message: BitchatMessage, colorScheme: ColorScheme) -> Color {
-        let isDark = colorScheme == .dark
-        let primaryColor = isDark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
-        
-        return primaryColor
-    }
-    
     @MainActor
     func formatMessageAsText(_ message: BitchatMessage, colorScheme: ColorScheme) -> AttributedString {
         // Determine if this message was sent by self (mesh, geo, or DM)
