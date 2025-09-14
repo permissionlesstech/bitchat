@@ -1640,9 +1640,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                 content: content,
                 timestamp: timestamp,
                 isRelay: false,
-                originalSender: nil,
-                isPrivate: false,
-                recipientNickname: nil,
                 senderPeerID: "nostr:\(event.pubkey.prefix(TransportConfig.nostrShortKeyDisplayLength))",
                 mentions: mentions.isEmpty ? nil : mentions
             )
@@ -1691,7 +1688,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
               let packetData = Self.base64URLDecode(String(content.dropFirst("bitchat1:".count))),
               let packet = BitchatPacket.from(packetData),
               packet.type == MessageType.noiseEncrypted.rawValue,
-              let noisePayload = NoisePayload.decode(packet.payload)
+              let payload = NoisePayload.decode(packet.payload)
         else {
             return
         }
@@ -1699,14 +1696,14 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         let convKey = "nostr_" + String(senderPubkey.prefix(16))
         nostrKeyMapping[convKey] = senderPubkey
         
-        switch noisePayload.type {
+        switch payload.type {
         case .privateMessage:
             let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(rumorTs))
-            handlePrivateMessage(noisePayload: noisePayload, senderPubkey: senderPubkey, convKey: convKey, id: id, messageTimestamp: messageTimestamp)
+            handlePrivateMessage(payload, senderPubkey: senderPubkey, convKey: convKey, id: id, messageTimestamp: messageTimestamp)
         case .delivered:
-            handleDelivered(noisePayload: noisePayload, senderPubkey: senderPubkey, convKey: convKey)
+            handleDelivered(payload, senderPubkey: senderPubkey, convKey: convKey)
         case .readReceipt:
-            handleReadReceipt(noisePayload: noisePayload, senderPubkey: senderPubkey, convKey: convKey)
+            handleReadReceipt(payload, senderPubkey: senderPubkey, convKey: convKey)
         
         // Explicitly list other cases so we get compile-time check if a new case is added in the future
         case .verifyChallenge, .verifyResponse:
@@ -1714,8 +1711,14 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         }
     }
     
-    private func handlePrivateMessage(noisePayload: NoisePayload, senderPubkey: String, convKey: String, id: NostrIdentity, messageTimestamp: Date) {
-        guard let pm = PrivateMessagePacket.decode(from: noisePayload.data) else { return }
+    private func handlePrivateMessage(
+        _ payload: NoisePayload,
+        senderPubkey: String,
+        convKey: String,
+        id: NostrIdentity,
+        messageTimestamp: Date
+    ) {
+        guard let pm = PrivateMessagePacket.decode(from: payload.data) else { return }
         let messageId = pm.messageID
         
         SecureLogger.info("GeoDM: recv PM <- sender=\(senderPubkey.prefix(8))… mid=\(messageId.prefix(8))…", category: .session)
@@ -1789,8 +1792,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         objectWillChange.send()
     }
     
-    private func handleDelivered(noisePayload: NoisePayload, senderPubkey: String, convKey: String) {
-        guard let messageID = String(data: noisePayload.data, encoding: .utf8) else { return }
+    private func handleDelivered(_ payload: NoisePayload, senderPubkey: String, convKey: String) {
+        guard let messageID = String(data: payload.data, encoding: .utf8) else { return }
         
         if let idx = privateChats[convKey]?.firstIndex(where: { $0.id == messageID }) {
             privateChats[convKey]?[idx].deliveryStatus = .delivered(to: displayNameForNostrPubkey(senderPubkey), at: Date())
@@ -1801,8 +1804,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         }
     }
     
-    private func handleReadReceipt(noisePayload: NoisePayload, senderPubkey: String, convKey: String) {
-        guard let messageID = String(data: noisePayload.data, encoding: .utf8) else { return }
+    private func handleReadReceipt(_ payload: NoisePayload, senderPubkey: String, convKey: String) {
+        guard let messageID = String(data: payload.data, encoding: .utf8) else { return }
         
         if let idx = privateChats[convKey]?.firstIndex(where: { $0.id == messageID }) {
             privateChats[convKey]?[idx].deliveryStatus = .read(by: displayNameForNostrPubkey(senderPubkey), at: Date())
