@@ -1521,29 +1521,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             geohashPeople = []
             teleportedGeo.removeAll()
         case .location(let ch):
-            // Sanitize existing timeline (filter any prior empty-content entries)
-            var arr = geoTimelines[ch.geohash] ?? []
-            arr.removeAll { $0.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-            // Deduplicate by ID while preserving order (from oldest to newest)
-            if arr.count > 1 {
-                var seen = Set<String>()
-                var dedup: [BitchatMessage] = []
-                for m in arr.sorted(by: { $0.timestamp < $1.timestamp }) {
-                    if !seen.contains(m.id) {
-                        dedup.append(m)
-                        seen.insert(m.id)
-                    }
-                }
-                arr = dedup
-            }
             // Persist the cleaned/sorted timeline for this geohash
-            geoTimelines[ch.geohash] = arr
-            messages = arr
-            // Debug: log if any empty messages are present post-sanitize
-            let emptyGeo = messages.filter { $0.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count
-            if emptyGeo > 0 {
-                SecureLogger.debug("RenderGuard: geohash \(ch.geohash) timeline has \(emptyGeo) empty messages after sanitize", category: .session)
-            }
+            let deduped = geoTimelines[ch.geohash]?.cleanedAndDeduped() ?? []
+            geoTimelines[ch.geohash] = deduped
+            messages = deduped
         }
         // If switching to a location channel, flush any pending geohash-only system messages
         if case .location = channel, !pendingGeohashSystemMessages.isEmpty {
