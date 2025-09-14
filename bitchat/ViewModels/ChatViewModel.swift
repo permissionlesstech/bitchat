@@ -3068,17 +3068,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         
     }
     
-    
-    
-    // MARK: - Formatting Helpers
-    
-    func formatTimestamp(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm:ss"
-        return formatter.string(from: date)
-    }
-    
-    
     // MARK: - Autocomplete
     
     func updateAutocomplete(for text: String, cursorPosition: Int) {
@@ -3178,7 +3167,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         
         if message.sender != "system" {
             // Sender (at the beginning) with light-gray suffix styling if present
-            let (baseName, suffix) = splitSuffix(from: message.sender)
+            let (baseName, suffix) = message.sender.splitSuffix()
             var senderStyle = AttributeContainer()
             // Use consistent color for all senders
             senderStyle.foregroundColor = baseColor
@@ -3329,7 +3318,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                     let matchText = String(content[nsRange])
                     if type == "mention" {
                         // Split optional '#abcd' suffix and color suffix light grey
-                        let (mBase, mSuffix) = splitSuffix(from: matchText.replacingOccurrences(of: "@", with: ""))
+                        let (mBase, mSuffix) = matchText.splitSuffix()
                         // Determine if this mention targets me (resolves with optional suffix per active channel)
                         let mySuffix: String? = {
                             if case .location(let ch) = activeChannel, let id = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
@@ -3453,7 +3442,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             }
             
             // Add timestamp at the end (smaller, light grey)
-            let timestamp = AttributedString(" [\(formatTimestamp(message.timestamp))]")
+            let timestamp = AttributedString(" [\(message.formattedTimestamp)]")
             var timestampStyle = AttributeContainer()
             timestampStyle.foregroundColor = Color.gray.opacity(0.7)
             timestampStyle.font = .system(size: 10, design: .monospaced)
@@ -3467,7 +3456,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             result.append(content.mergingAttributes(contentStyle))
             
             // Add timestamp at the end for system messages too
-            let timestamp = AttributedString(" [\(formatTimestamp(message.timestamp))]")
+            let timestamp = AttributedString(" [\(message.formattedTimestamp)]")
             var timestampStyle = AttributeContainer()
             timestampStyle.foregroundColor = Color.gray.opacity(0.5)
             timestampStyle.font = .system(size: 10, design: .monospaced)
@@ -3478,19 +3467,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         message.setCachedFormattedText(result, isDark: isDark, isSelf: isSelf)
         
         return result
-    }
-
-    // Split a nickname into base and a '#abcd' suffix if present
-    private func splitSuffix(from name: String) -> (String, String) {
-        guard name.count >= 5 else { return (name, "") }
-        let suffix = String(name.suffix(5))
-        if suffix.first == "#", suffix.dropFirst().allSatisfy({ c in
-            ("0"..."9").contains(String(c)) || ("a"..."f").contains(String(c)) || ("A"..."F").contains(String(c))
-        }) {
-            let base = String(name.dropLast(5))
-            return (base, suffix)
-        }
-        return (name, "")
     }
     
     func formatMessage(_ message: BitchatMessage, colorScheme: ColorScheme) -> AttributedString {
@@ -3507,7 +3483,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             result.append(content.mergingAttributes(contentStyle))
             
             // Add timestamp at the end for system messages
-            let timestamp = AttributedString(" [\(formatTimestamp(message.timestamp))]")
+            let timestamp = AttributedString(" [\(message.formattedTimestamp)]")
             var timestampStyle = AttributeContainer()
             timestampStyle.foregroundColor = Color.gray.opacity(0.5)
             timestampStyle.font = .system(size: 10, design: .monospaced)
@@ -3581,7 +3557,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             }
             
             // Add timestamp at the end (smaller, light grey)
-            let timestamp = AttributedString(" [\(formatTimestamp(message.timestamp))]")
+            let timestamp = AttributedString(" [\(message.formattedTimestamp)]")
             var timestampStyle = AttributeContainer()
             timestampStyle.foregroundColor = Color.gray.opacity(0.7)
             timestampStyle.font = .system(size: 10, design: .monospaced)

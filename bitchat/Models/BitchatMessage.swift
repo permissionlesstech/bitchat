@@ -310,6 +310,19 @@ extension BitchatMessage {
 
 // MARK: - Helpers
 
+extension BitchatMessage {
+    
+    private static let timestampFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss"
+        return formatter
+    }()
+    
+    var formattedTimestamp: String {
+        Self.timestampFormatter.string(from: timestamp)
+    }
+}
+
 extension Array where Element == BitchatMessage {
     /// Filters out empty ones and deduplicate by ID while preserving order (from oldest to newest)
     func cleanedAndDeduped() -> [Element] {
