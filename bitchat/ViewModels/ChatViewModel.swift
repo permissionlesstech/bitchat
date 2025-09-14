@@ -1654,8 +1654,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         }
 
         // Subscribe to Nostr gift wraps (DMs) for this geohash identity
-        do {
-            let id = try NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash)
+        if let id = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
             let dmSub = "geo-dm-\(ch.geohash)"
             geoDmSubscriptionID = dmSub
             // pared back logging: subscribe debug only
@@ -1665,40 +1664,50 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             }
             let dmFilter = NostrFilter.giftWrapsFor(pubkey: id.publicKeyHex, since: Date().addingTimeInterval(-TransportConfig.nostrDMSubscribeLookbackSeconds))
             NostrRelayManager.shared.subscribe(filter: dmFilter, id: dmSub) { [weak self] giftWrap in
-                guard let self = self else { return }
-                // Dedup basic
-                if self.processedNostrEvents.contains(giftWrap.id) { return }
-                self.recordProcessedEvent(giftWrap.id)
-                // Decrypt with per-geohash identity
-                guard let (content, senderPubkey, rumorTs) = try? NostrProtocol.decryptPrivateMessage(giftWrap: giftWrap, recipientIdentity: id) else {
-                    SecureLogger.warning("GeoDM: failed decrypt giftWrap id=\(giftWrap.id.prefix(8))…", category: .session)
-                    return
-                }
-                SecureLogger.debug("GeoDM: decrypted gift-wrap id=\(giftWrap.id.prefix(16))... from=\(senderPubkey.prefix(8))...", category: .session)
-                guard content.hasPrefix("bitchat1:") else { return }
-                guard let packetData = Self.base64URLDecode(String(content.dropFirst("bitchat1:".count))),
-                      let packet = BitchatPacket.from(packetData) else { return }
-                guard packet.type == MessageType.noiseEncrypted.rawValue else { return }
-                guard let noisePayload = NoisePayload.decode(packet.payload) else { return }
-                let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(rumorTs))
-                let convKey = "nostr_" + String(senderPubkey.prefix(16))
-                self.nostrKeyMapping[convKey] = senderPubkey
-                switch noisePayload.type {
-                case .privateMessage:
-                    handlePrivateMessage(noisePayload: noisePayload, senderPubkey: senderPubkey, convKey: convKey, id: id, messageTimestamp: messageTimestamp)
-                case .delivered:
-                    handleDelivered(noisePayload: noisePayload, senderPubkey: senderPubkey, convKey: convKey)
-                case .readReceipt:
-                    handleReadReceipt(noisePayload: noisePayload, senderPubkey: senderPubkey, convKey: convKey)
-                // Explicitly list other cases so we get compile-time check if a new case is added in the future
-                case .verifyChallenge, .verifyResponse:
-                    break
-                }
+                self?.handleGiftWrap(giftWrap, id: id)
             }
-        } catch {
-            // ignore
         }
-        //
+    }
+    
+    private func handleGiftWrap(_ giftWrap: NostrEvent, id: NostrIdentity) {
+        if processedNostrEvents.contains(giftWrap.id) {
+            return
+        }
+        recordProcessedEvent(giftWrap.id)
+        
+        // Decrypt with per-geohash identity
+        guard let (content, senderPubkey, rumorTs) = try? NostrProtocol.decryptPrivateMessage(giftWrap: giftWrap, recipientIdentity: id) else {
+            SecureLogger.warning("GeoDM: failed decrypt giftWrap id=\(giftWrap.id.prefix(8))…", category: .session)
+            return
+        }
+        
+        SecureLogger.debug("GeoDM: decrypted gift-wrap id=\(giftWrap.id.prefix(16))... from=\(senderPubkey.prefix(8))...", category: .session)
+        
+        guard content.hasPrefix("bitchat1:"),
+              let packetData = Self.base64URLDecode(String(content.dropFirst("bitchat1:".count))),
+              let packet = BitchatPacket.from(packetData),
+              packet.type == MessageType.noiseEncrypted.rawValue,
+              let noisePayload = NoisePayload.decode(packet.payload)
+        else {
+            return
+        }
+        
+        let convKey = "nostr_" + String(senderPubkey.prefix(16))
+        nostrKeyMapping[convKey] = senderPubkey
+        
+        switch noisePayload.type {
+        case .privateMessage:
+            let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(rumorTs))
+            handlePrivateMessage(noisePayload: noisePayload, senderPubkey: senderPubkey, convKey: convKey, id: id, messageTimestamp: messageTimestamp)
+        case .delivered:
+            handleDelivered(noisePayload: noisePayload, senderPubkey: senderPubkey, convKey: convKey)
+        case .readReceipt:
+            handleReadReceipt(noisePayload: noisePayload, senderPubkey: senderPubkey, convKey: convKey)
+        
+        // Explicitly list other cases so we get compile-time check if a new case is added in the future
+        case .verifyChallenge, .verifyResponse:
+            break
+        }
     }
     
     private func handlePrivateMessage(noisePayload: NoisePayload, senderPubkey: String, convKey: String, id: NostrIdentity, messageTimestamp: Date) {
