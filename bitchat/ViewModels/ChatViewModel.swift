@@ -194,7 +194,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         let collapsed = trimmed.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
         let prefix = String(collapsed.prefix(TransportConfig.contentKeyPrefixLength))
         // Fast djb2 hash
-        let h = djb2(prefix)
+        let h = prefix.djb2()
         return String(format: "h:%016llx", h)
     }
 
@@ -3696,38 +3696,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         }
     }
 
-    // MARK: - Per-Peer Colors
-    private var peerColorCache: [String: Color] = [:]
-
-    private func djb2(_ s: String) -> UInt64 {
-        var hash: UInt64 = 5381
-        for b in s.utf8 { hash = ((hash << 5) &+ hash) &+ UInt64(b) }
-        return hash
-    }
-
-    @MainActor
-    func colorForPeerSeed(_ seed: String, isDark: Bool) -> Color {
-        let cacheKey = seed + (isDark ? "|dark" : "|light")
-        if let cached = peerColorCache[cacheKey] { return cached }
-        let h = djb2(seed)
-        var hue = Double(h % 1000) / 1000.0
-        let orange = 30.0 / 360.0
-        if abs(hue - orange) < TransportConfig.uiColorHueAvoidanceDelta {
-            hue = fmod(hue + TransportConfig.uiColorHueOffset, 1.0)
-        }
-        let sRand = Double((h >> 17) & 0x3FF) / 1023.0
-        let bRand = Double((h >> 27) & 0x3FF) / 1023.0
-        let sBase: Double = isDark ? 0.80 : 0.70
-        let sRange: Double = 0.20
-        let bBase: Double = isDark ? 0.75 : 0.45
-        let bRange: Double = isDark ? 0.16 : 0.14
-        let saturation = min(1.0, max(0.50, sBase + (sRand - 0.5) * sRange))
-        let brightness = min(1.0, max(0.35, bBase + (bRand - 0.5) * bRange))
-        let c = Color(hue: hue, saturation: saturation, brightness: brightness)
-        peerColorCache[cacheKey] = c
-        return c
-    }
-
     @MainActor
     private func peerColor(for message: BitchatMessage, isDark: Bool) -> Color {
         if let spid = message.senderPeerID {
@@ -3747,7 +3715,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             }
         }
         // Fallback when we only have a display name
-        return colorForPeerSeed(message.sender.lowercased(), isDark: isDark)
+        return Color(peerSeed: message.sender.lowercased(), isDark: isDark)
     }
 
     // Public helpers for views to color peers consistently in lists
@@ -3796,8 +3764,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             return Color(hue: e.hue, saturation: saturation, brightness: brightness)
         }
         // Fallback to seed color if not in palette (e.g., transient)
-        let seed = meshSeed(for: peerID)
-        return colorForPeerSeed(seed, isDark: isDark)
+        return Color(peerSeed: meshSeed(for: peerID), isDark: isDark)
     }
 
     @MainActor
@@ -3841,7 +3808,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         let peers = currentSeeds.keys.sorted() // stable order
         // Preferred slot index by seed (wrapping to available slots)
         let prefIndex: [String: Int] = Dictionary(uniqueKeysWithValues: peers.map { id in
-            let h = djb2(currentSeeds[id] ?? id)
+            let h = (currentSeeds[id] ?? id).djb2()
             // Map to available slot range deterministically
             let idx = Int(h % UInt64(slots.count))
             return (id, idx)
@@ -3936,7 +3903,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             return Color(hue: e.hue, saturation: saturation, brightness: brightness)
         }
         // Fallback to seed color if not in palette (e.g., transient)
-        return colorForPeerSeed("nostr:" + pubkeyHexLowercased, isDark: isDark)
+        return Color(peerSeed: "nostr:" + pubkeyHexLowercased, isDark: isDark)
     }
 
     @MainActor
@@ -3980,7 +3947,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
 
         let peers = currentSeeds.keys.sorted()
         let prefIndex: [String: Int] = Dictionary(uniqueKeysWithValues: peers.map { id in
-            let h = djb2(currentSeeds[id] ?? id)
+            let h = (currentSeeds[id] ?? id).djb2()
             let idx = Int(h % UInt64(slots.count))
             return (id, idx)
         })
