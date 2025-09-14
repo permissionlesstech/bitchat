@@ -16,6 +16,8 @@
 		885BBED78092484A5B069461 /* P256K in Frameworks */ = {isa = PBXBuildFile; productRef = 4EB6BA1B8464F1EA38F4E286 /* P256K */; };
 		A6E3E5702E77036A0032EA8A /* BitLogger in Frameworks */ = {isa = PBXBuildFile; productRef = A6E3E56F2E77036A0032EA8A /* BitLogger */; };
 		A6E3E5722E7703760032EA8A /* BitLogger in Frameworks */ = {isa = PBXBuildFile; productRef = A6E3E5712E7703760032EA8A /* BitLogger */; };
+		A6E3EA7F2E7706720032EA8A /* Tor in Frameworks */ = {isa = PBXBuildFile; productRef = A6E3EA7E2E7706720032EA8A /* Tor */; };
+		A6E3EA812E7706A80032EA8A /* Tor in Frameworks */ = {isa = PBXBuildFile; productRef = A6E3EA802E7706A80032EA8A /* Tor */; };
 		E0A1B2C3D4E5F6012345678D /* relays/online_relays_gps.csv in Resources */ = {isa = PBXBuildFile; fileRef = E0A1B2C3D4E5F6012345678A /* relays/online_relays_gps.csv */; };
 		E0A1B2C3D4E5F6012345678E /* relays/online_relays_gps.csv in Resources */ = {isa = PBXBuildFile; fileRef = E0A1B2C3D4E5F6012345678A /* relays/online_relays_gps.csv */; };
 /* End PBXBuildFile section */
@@ -139,6 +141,7 @@
 				048A88812E76FD18000FBCDD /* libz.tbd in Frameworks */,
 				0481A3A02E744D6300FC845E /* tor-nolzma.xcframework in Frameworks */,
 				3EE336D150427F736F32B56C /* P256K in Frameworks */,
+				A6E3EA812E7706A80032EA8A /* Tor in Frameworks */,
 			);
 		};
 		B5A5CC493FFB3D8966548140 /* Frameworks */ = {
@@ -148,6 +151,7 @@
 				0481A35D2E6DA18600FC845E /* libz.tbd in Frameworks */,
 				0481A3A12E744D6300FC845E /* tor-nolzma.xcframework in Frameworks */,
 				885BBED78092484A5B069461 /* P256K in Frameworks */,
+				A6E3EA7F2E7706720032EA8A /* Tor in Frameworks */,
 			);
 		};
 /* End PBXFrameworksBuildPhase section */
@@ -207,6 +211,7 @@
 			packageProductDependencies = (
 				B1D9136AA0083366353BFA2F /* P256K */,
 				A6E3E5712E7703760032EA8A /* BitLogger */,
+				A6E3EA802E7706A80032EA8A /* Tor */,
 			);
 			productName = bitchat_macOS;
 			productReference = 8F3A7C058C2C8E1A06C8CF8B /* bitchat.app */;
@@ -284,6 +289,7 @@
 			packageProductDependencies = (
 				4EB6BA1B8464F1EA38F4E286 /* P256K */,
 				A6E3E56F2E77036A0032EA8A /* BitLogger */,
+				A6E3EA7E2E7706720032EA8A /* Tor */,
 			);
 			productName = bitchat_iOS;
 			productReference = 96D0D41CA19EE5A772AA8434 /* bitchat.app */;
@@ -323,6 +329,7 @@
 			packageReferences = (
 				B8C407587481BBB190741C93 /* XCRemoteSwiftPackageReference "swift-secp256k1" */,
 				A6E3E56E2E77036A0032EA8A /* XCLocalSwiftPackageReference "localPackages/BitLogger" */,
+				A6E3EA7D2E7706720032EA8A /* XCLocalSwiftPackageReference "localPackages/Tor" */,
 			);
 			preferredProjectObjectVersion = 90;
 			projectDirPath = "";
@@ -880,6 +887,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = localPackages/BitLogger;
 		};
+		A6E3EA7D2E7706720032EA8A /* XCLocalSwiftPackageReference "localPackages/Tor" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = localPackages/Tor;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
@@ -906,6 +917,14 @@
 		A6E3E5712E7703760032EA8A /* BitLogger */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = BitLogger;
+		};
+		A6E3EA7E2E7706720032EA8A /* Tor */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Tor;
+		};
+		A6E3EA802E7706A80032EA8A /* Tor */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Tor;
 		};
 		B1D9136AA0083366353BFA2F /* P256K */ = {
 			isa = XCSwiftPackageProductDependency;
