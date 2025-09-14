@@ -10,8 +10,8 @@ final class GossipSyncManager {
     }
 
     struct Config {
-        var seenCapacity: Int = 100          // max packets per sync (cap across types)
-        var gcsMaxBytes: Int = 256           // filter size budget (128..1024)
+        var seenCapacity: Int = 1000          // max packets per sync (cap across types)
+        var gcsMaxBytes: Int = 400           // filter size budget (128..1024)
         var gcsTargetFpr: Double = 0.01      // 1%
     }
 
