@@ -85,7 +85,6 @@
 			membershipExceptions = (
 				Info.plist,
 				LaunchScreen.storyboard,
-				Services/Tor/C/include/.gitkeep,
 			);
 			target = 0576A29205865664C0937536 /* bitchat_macOS */;
 		};
