@@ -338,6 +338,16 @@ final class BLEService: NSObject {
         let fingerprint = noiseService.getIdentityFingerprint() // 64 hex chars
         self.myPeerID = String(fingerprint.prefix(16))
         self.myPeerIDData = Data(hexString: myPeerID) ?? Data()
+        // Upsert our own cryptographic identity so signature verification succeeds for
+        // self-origin messages returned via sync or other indirect paths.
+        let myNoisePub = noiseService.getStaticPublicKeyData()
+        let mySignPub = noiseService.getSigningPublicKeyData()
+        identityManager.upsertCryptographicIdentity(
+            fingerprint: fingerprint,
+            noisePublicKey: myNoisePub,
+            signingPublicKey: mySignPub,
+            claimedNickname: myNickname
+        )
         
         // Set queue key for identification
         messageQueue.setSpecific(key: messageQueueKey, value: ())
@@ -1359,7 +1369,9 @@ final class BLEService: NSObject {
         
         // Efficient deduplication
         // Important: do not dedup fragment packets globally (each piece must pass)
-        if packet.type != MessageType.fragment.rawValue && messageDeduplicator.isDuplicate(messageID) {
+        // Special-case: allow self-origin broadcast messages returned via sync (TTL==0)
+        let isSelfSyncReturn = (packet.ttl == 0 && senderID == myPeerID && packet.type == MessageType.message.rawValue)
+        if packet.type != MessageType.fragment.rawValue && !isSelfSyncReturn && messageDeduplicator.isDuplicate(messageID) {
             // Announce packets (type 1) are sent every 10 seconds for peer discovery
             // It's normal to see these as duplicates - don't log them to reduce noise
             if packet.type != MessageType.announce.rawValue {
@@ -1376,6 +1388,12 @@ final class BLEService: NSObject {
                 }
             }
             return // Duplicate ignored
+        }
+        // Ensure we only process a self-origin sync return once per ID
+        if isSelfSyncReturn {
+            let selfSyncID = "selfsync-\(messageID)"
+            if messageDeduplicator.contains(selfSyncID) { return }
+            messageDeduplicator.markProcessed(selfSyncID)
         }
         
         // Update peer info without verbose logging - update the peer we received from, not the original sender
@@ -1645,13 +1663,17 @@ final class BLEService: NSObject {
     // Mention parsing moved to ChatViewModel
     
     private func handleMessage(_ packet: BitchatPacket, from peerID: String) {
-        // Ignore self-origin public messages that may be seen again via relay
-        if peerID == myPeerID { return }
+        // Ignore self-origin public messages except when returned via sync (TTL==0)
+        if peerID == myPeerID && packet.ttl != 0 { return }
 
         var accepted = false
         var senderNickname: String = ""
 
-        if let info = peers[peerID], info.isVerifiedNickname {
+        if peerID == myPeerID && packet.ttl == 0 {
+            // Self-origin message returned via sync; accept and use our nickname
+            accepted = true
+            senderNickname = myNickname
+        } else if let info = peers[peerID], info.isVerifiedNickname {
             // Known verified peer path
             accepted = true
             senderNickname = info.nickname
