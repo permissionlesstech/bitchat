@@ -1359,7 +1359,10 @@ final class BLEService: NSObject {
         
         // Efficient deduplication
         // Important: do not dedup fragment packets globally (each piece must pass)
-        if packet.type != MessageType.fragment.rawValue && messageDeduplicator.isDuplicate(messageID) {
+        // Special case: allow our own packets recovered via sync (TTL==0) to pass
+        // through even if we've marked them as seen at send time.
+        let allowSelfSyncReplay = (packet.ttl == 0) && (senderID == myPeerID)
+        if packet.type != MessageType.fragment.rawValue && !allowSelfSyncReplay && messageDeduplicator.isDuplicate(messageID) {
             // Announce packets (type 1) are sent every 10 seconds for peer discovery
             // It's normal to see these as duplicates - don't log them to reduce noise
             if packet.type != MessageType.announce.rawValue {
@@ -1659,7 +1662,12 @@ final class BLEService: NSObject {
         var accepted = false
         var senderNickname: String = ""
 
-        if let info = peers[peerID], info.isVerifiedNickname {
+        // If the packet is from ourselves (e.g., recovered via sync TTL==0), accept immediately
+        if peerID == myPeerID {
+            accepted = true
+            senderNickname = myNickname
+        }
+        else if let info = peers[peerID], info.isVerifiedNickname {
             // Known verified peer path
             accepted = true
             senderNickname = info.nickname
@@ -1686,6 +1694,13 @@ final class BLEService: NSObject {
                         break
                     }
                 }
+            }
+            // If still not accepted and this is a sync-returned packet (TTL==0),
+            // accept with a generic nickname so history can be restored even for
+            // peers we haven't verified yet.
+            if !accepted && packet.ttl == 0 {
+                accepted = true
+                senderNickname = "anon" + String(peerID.prefix(4))
             }
         }
 
