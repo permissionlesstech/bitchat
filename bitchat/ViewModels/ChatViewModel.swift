@@ -1467,7 +1467,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     private func sendGeohash(ch: GeohashChannel, content: String) {
         do {
             let identity = try NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash)
-            
+
             let event = try NostrProtocol.createEphemeralGeohashEvent(
                 content: content,
                 geohash: ch.geohash,
@@ -1486,9 +1486,11 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             } else {
                 NostrRelayManager.shared.sendEvent(event, to: targetRelays)
             }
-            
+
             // Track ourselves as active participant
             recordGeoParticipant(pubkeyHex: identity.publicKeyHex)
+            let shortKey = "nostr:" + identity.publicKeyHex.prefix(TransportConfig.nostrShortKeyDisplayLength)
+            nostrKeyMapping[shortKey] = identity.publicKeyHex
             SecureLogger.debug("GeoTeleport: sent geo message pub=\(identity.publicKeyHex.prefix(8))… teleported=\(LocationChannelManager.shared.teleported)", category: .session)
             
             // If we tagged this as teleported, also mark our pubkey in teleportedGeo for UI
@@ -1882,6 +1884,33 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             }
             .sorted { $0.lastSeen > $1.lastSeen }
         geohashPeople = people
+    }
+
+    @MainActor
+    func isSelfSender(peerID: String?, displayName: String?) -> Bool {
+        guard let peerID else { return false }
+        if peerID == meshService.myPeerID { return true }
+        let lowerPeer = peerID.lowercased()
+        guard lowerPeer.hasPrefix("nostr") else { return false }
+
+        if let mapped = nostrKeyMapping[peerID]?.lowercased(),
+           let gh = currentGeohash,
+           let myIdentity = try? NostrIdentityBridge.deriveIdentity(forGeohash: gh) {
+            if mapped == myIdentity.publicKeyHex.lowercased() { return true }
+        }
+
+        if let gh = currentGeohash,
+           let myIdentity = try? NostrIdentityBridge.deriveIdentity(forGeohash: gh) {
+            let myLower = myIdentity.publicKeyHex.lowercased()
+            let shortLen = TransportConfig.nostrShortKeyDisplayLength
+            let shortKey = "nostr:" + myLower.prefix(shortLen)
+            if lowerPeer == shortKey { return true }
+            let suffix = myIdentity.publicKeyHex.suffix(4)
+            let expected = (nickname + "#" + suffix).lowercased()
+            if let display = displayName?.lowercased(), display == expected { return true }
+        }
+
+        return false
     }
 
     private func startGeoParticipantsTimer() {
