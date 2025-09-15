@@ -29,7 +29,7 @@ enum GCSFilter {
 
     static func buildFilter(ids: [Data], maxBytes: Int, targetFpr: Double) -> Params {
         let p = deriveP(targetFpr: targetFpr)
-        var cap = estimateMaxElements(sizeBytes: maxBytes, p: p)
+        let cap = estimateMaxElements(sizeBytes: maxBytes, p: p)
         let n = min(ids.count, cap)
         let selected = Array(ids.prefix(n))
         // Map to [0, M)
