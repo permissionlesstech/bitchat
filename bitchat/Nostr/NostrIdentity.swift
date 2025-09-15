@@ -150,13 +150,31 @@ struct NostrIdentityBridge {
     
     /// Clear all Nostr identity associations and current identity
     static func clearAllAssociations() {
-        // Delete current Nostr identity
-        KeychainHelper.delete(key: currentIdentityKey, service: keychainService)
-        KeychainHelper.delete(key: deviceSeedKey, service: keychainService)
-        
-        // Note: We can't efficiently delete all noise-nostr associations 
-        // without tracking them, but they'll be orphaned and eventually cleaned up
-        // The important part is deleting the current identity so a new one is generated
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: keychainService,
+            kSecMatchLimit as String: kSecMatchLimitAll,
+            kSecReturnAttributes as String: true
+        ]
+
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status == errSecSuccess, let items = result as? [[String: Any]] {
+            for item in items {
+                var deleteQuery: [String: Any] = [
+                    kSecClass as String: kSecClassGenericPassword,
+                    kSecAttrService as String: keychainService
+                ]
+                if let account = item[kSecAttrAccount as String] as? String {
+                    deleteQuery[kSecAttrAccount as String] = account
+                }
+                SecItemDelete(deleteQuery as CFDictionary)
+            }
+        } else if status == errSecItemNotFound {
+            // nothing persisted; no action needed
+        }
+
+        deviceSeedCache = nil
     }
 
     // MARK: - Per-Geohash Identities (Location Channels)
