@@ -309,7 +309,7 @@ final class MockBLEService: NSObject {
 
     func simulateIncomingPacket(_ packet: BitchatPacket) {
         // Process through the actual handling logic
-        if let message = BitchatMessage.fromBinaryPayload(packet.payload) {
+        if let message = BitchatMessage(packet.payload) {
             var shouldDeliver = false
             seenLock.lock()
             if !seenMessageIDs.contains(message.id) {

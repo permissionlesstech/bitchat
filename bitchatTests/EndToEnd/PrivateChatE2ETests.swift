@@ -139,7 +139,7 @@ final class PrivateChatE2ETests: XCTestCase {
         alice.packetDeliveryHandler = { packet in
             // Encrypt outgoing private messages
             if packet.type == 0x01,
-               let message = BitchatMessage.fromBinaryPayload(packet.payload),
+               let message = BitchatMessage(packet.payload),
                message.isPrivate {
                 do {
                     let encrypted = try aliceManager.encrypt(packet.payload, for: TestConstants.testPeerID2)
@@ -164,7 +164,7 @@ final class PrivateChatE2ETests: XCTestCase {
             if packet.type == 0x02 {
                 do {
                     let decrypted = try bobManager.decrypt(packet.payload, from: TestConstants.testPeerID1)
-                    if let message = BitchatMessage.fromBinaryPayload(decrypted) {
+                    if let message = BitchatMessage(decrypted) {
                         XCTAssertEqual(message.content, TestConstants.testMessage1)
                         XCTAssertTrue(message.isPrivate)
                         expectation.fulfill()

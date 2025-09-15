@@ -531,7 +531,7 @@ final class IntegrationTests: XCTestCase {
         // Setup encryption at Alice
         nodes["Alice"]!.packetDeliveryHandler = { packet in
             if packet.type == 0x01,
-               let message = BitchatMessage.fromBinaryPayload(packet.payload),
+               let message = BitchatMessage(packet.payload),
                message.isPrivate && packet.recipientID != nil {
                 // Encrypt private messages
                 if let encrypted = try? self.noiseManagers["Alice"]!.encrypt(packet.payload, for: TestConstants.testPeerID2) {
@@ -553,7 +553,7 @@ final class IntegrationTests: XCTestCase {
         nodes["Bob"]!.packetDeliveryHandler = { packet in
             if packet.type == 0x02 {
                 if let decrypted = try? self.noiseManagers["Bob"]!.decrypt(packet.payload, from: TestConstants.testPeerID1),
-                   let message = BitchatMessage.fromBinaryPayload(decrypted) {
+                   let message = BitchatMessage(decrypted) {
                     bobDecrypted = message.content == "Secret message"
                     expectation.fulfill()
                 }
@@ -626,7 +626,7 @@ final class IntegrationTests: XCTestCase {
         node.packetDeliveryHandler = { packet in
             guard packet.ttl > 1 else { return }
             
-            if let message = BitchatMessage.fromBinaryPayload(packet.payload) {
+            if let message = BitchatMessage(packet.payload) {
                 guard message.senderPeerID != node.peerID else { return }
                 
                 let relayMessage = BitchatMessage(

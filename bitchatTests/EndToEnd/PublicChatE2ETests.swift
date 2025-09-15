@@ -98,7 +98,7 @@ final class PublicChatE2ETests: XCTestCase {
         // Set up relay in Bob
         bob.packetDeliveryHandler = { packet in
             // Bob should relay to Charlie
-            if let message = BitchatMessage.fromBinaryPayload(packet.payload),
+            if let message = BitchatMessage(packet.payload),
                message.sender == TestConstants.testNickname1 {
                 
                 // Create relay message
@@ -437,7 +437,7 @@ final class PublicChatE2ETests: XCTestCase {
             // Check if should relay
             guard packet.ttl > 1 else { return }
             
-            if let message = BitchatMessage.fromBinaryPayload(packet.payload) {
+            if let message = BitchatMessage(packet.payload) {
                 // Don't relay own messages
                 guard message.senderPeerID != node.peerID else { return }
                 

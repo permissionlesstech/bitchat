@@ -1522,29 +1522,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             geohashPeople = []
             teleportedGeo.removeAll()
         case .location(let ch):
-            // Sanitize existing timeline (filter any prior empty-content entries)
-            var arr = geoTimelines[ch.geohash] ?? []
-            arr.removeAll { $0.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-            // Deduplicate by ID while preserving order (from oldest to newest)
-            if arr.count > 1 {
-                var seen = Set<String>()
-                var dedup: [BitchatMessage] = []
-                for m in arr.sorted(by: { $0.timestamp < $1.timestamp }) {
-                    if !seen.contains(m.id) {
-                        dedup.append(m)
-                        seen.insert(m.id)
-                    }
-                }
-                arr = dedup
-            }
             // Persist the cleaned/sorted timeline for this geohash
-            geoTimelines[ch.geohash] = arr
-            messages = arr
-            // Debug: log if any empty messages are present post-sanitize
-            let emptyGeo = messages.filter { $0.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count
-            if emptyGeo > 0 {
-                SecureLogger.debug("RenderGuard: geohash \(ch.geohash) timeline has \(emptyGeo) empty messages after sanitize", category: .session)
-            }
+            let deduped = geoTimelines[ch.geohash]?.cleanedAndDeduped() ?? []
+            geoTimelines[ch.geohash] = deduped
+            messages = deduped
         }
         // If switching to a location channel, flush any pending geohash-only system messages
         if case .location = channel, !pendingGeohashSystemMessages.isEmpty {
@@ -3088,17 +3069,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         
     }
     
-    
-    
-    // MARK: - Formatting Helpers
-    
-    func formatTimestamp(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm:ss"
-        return formatter.string(from: date)
-    }
-    
-    
     // MARK: - Autocomplete
     
     func updateAutocomplete(for text: String, cursorPosition: Int) {
@@ -3160,87 +3130,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     
     // MARK: - Message Formatting
     
-    func getSenderColor(for message: BitchatMessage, colorScheme: ColorScheme) -> Color {
-        let isDark = colorScheme == .dark
-        let primaryColor = isDark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
-        
-        return primaryColor
-    }
-    
-    
-    func formatMessageContent(_ message: BitchatMessage, colorScheme: ColorScheme) -> AttributedString {
-        let isDark = colorScheme == .dark
-        let contentText = message.content
-        var processedContent = AttributedString()
-        
-        // Regular expressions for mentions and hashtags
-        let mentionPattern = "@([\\p{L}0-9_]+)"
-        let hashtagPattern = "#([a-zA-Z0-9_]+)"
-        
-        let mentionRegex = try? NSRegularExpression(pattern: mentionPattern, options: [])
-        let hashtagRegex = try? NSRegularExpression(pattern: hashtagPattern, options: [])
-        
-        let nsContent = contentText as NSString
-        let nsLen = nsContent.length
-        let mentionMatches = mentionRegex?.matches(in: contentText, options: [], range: NSRange(location: 0, length: nsLen)) ?? []
-        let hashtagMatches = hashtagRegex?.matches(in: contentText, options: [], range: NSRange(location: 0, length: nsLen)) ?? []
-        
-        // Combine and sort all matches
-        var allMatches: [(range: NSRange, type: String)] = []
-        for match in mentionMatches {
-            allMatches.append((match.range(at: 0), "mention"))
-        }
-        for match in hashtagMatches {
-            allMatches.append((match.range(at: 0), "hashtag"))
-        }
-        allMatches.sort { $0.range.location < $1.range.location }
-        
-        var lastEndIndex = contentText.startIndex
-        
-        for (matchRange, matchType) in allMatches {
-            // Add text before the match
-            if let range = Range(matchRange, in: contentText) {
-                if lastEndIndex < range.lowerBound {
-                    let beforeText = String(contentText[lastEndIndex..<range.lowerBound])
-                    if !beforeText.isEmpty {
-                        var normalStyle = AttributeContainer()
-                        normalStyle.font = .system(size: 14, design: .monospaced)
-                        normalStyle.foregroundColor = isDark ? Color.white : Color.black
-                        processedContent.append(AttributedString(beforeText).mergingAttributes(normalStyle))
-                    }
-                }
-                
-                // Add the match with appropriate styling
-                let matchText = String(contentText[range])
-                var matchStyle = AttributeContainer()
-                matchStyle.font = .system(size: 14, weight: .semibold, design: .monospaced)
-                
-                if matchType == "mention" {
-                    matchStyle.foregroundColor = Color.orange
-                } else {
-                    // Hashtag
-                    matchStyle.foregroundColor = Color.blue
-                    matchStyle.underlineStyle = .single
-                }
-                
-                processedContent.append(AttributedString(matchText).mergingAttributes(matchStyle))
-                
-                if lastEndIndex < range.upperBound { lastEndIndex = range.upperBound }
-            }
-        }
-        
-        // Add any remaining text
-        if lastEndIndex < contentText.endIndex {
-            let remainingText = String(contentText[lastEndIndex...])
-            var normalStyle = AttributeContainer()
-            normalStyle.font = .system(size: 14, design: .monospaced)
-            normalStyle.foregroundColor = isDark ? Color.white : Color.black
-            processedContent.append(AttributedString(remainingText).mergingAttributes(normalStyle))
-        }
-        
-        return processedContent
-    }
-    
     @MainActor
     func formatMessageAsText(_ message: BitchatMessage, colorScheme: ColorScheme) -> AttributedString {
         // Determine if this message was sent by self (mesh, geo, or DM)
@@ -3272,7 +3161,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         
         if message.sender != "system" {
             // Sender (at the beginning) with light-gray suffix styling if present
-            let (baseName, suffix) = splitSuffix(from: message.sender)
+            let (baseName, suffix) = message.sender.splitSuffix()
             var senderStyle = AttributeContainer()
             // Use consistent color for all senders
             senderStyle.foregroundColor = baseColor
@@ -3423,7 +3312,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                     let matchText = String(content[nsRange])
                     if type == "mention" {
                         // Split optional '#abcd' suffix and color suffix light grey
-                        let (mBase, mSuffix) = splitSuffix(from: matchText.replacingOccurrences(of: "@", with: ""))
+                        let (mBase, mSuffix) = matchText.splitSuffix()
                         // Determine if this mention targets me (resolves with optional suffix per active channel)
                         let mySuffix: String? = {
                             if case .location(let ch) = activeChannel, let id = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
@@ -3547,7 +3436,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             }
             
             // Add timestamp at the end (smaller, light grey)
-            let timestamp = AttributedString(" [\(formatTimestamp(message.timestamp))]")
+            let timestamp = AttributedString(" [\(message.formattedTimestamp)]")
             var timestampStyle = AttributeContainer()
             timestampStyle.foregroundColor = Color.gray.opacity(0.7)
             timestampStyle.font = .system(size: 10, design: .monospaced)
@@ -3561,7 +3450,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             result.append(content.mergingAttributes(contentStyle))
             
             // Add timestamp at the end for system messages too
-            let timestamp = AttributedString(" [\(formatTimestamp(message.timestamp))]")
+            let timestamp = AttributedString(" [\(message.formattedTimestamp)]")
             var timestampStyle = AttributeContainer()
             timestampStyle.foregroundColor = Color.gray.opacity(0.5)
             timestampStyle.font = .system(size: 10, design: .monospaced)
@@ -3572,19 +3461,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         message.setCachedFormattedText(result, isDark: isDark, isSelf: isSelf)
         
         return result
-    }
-
-    // Split a nickname into base and a '#abcd' suffix if present
-    private func splitSuffix(from name: String) -> (String, String) {
-        guard name.count >= 5 else { return (name, "") }
-        let suffix = String(name.suffix(5))
-        if suffix.first == "#", suffix.dropFirst().allSatisfy({ c in
-            ("0"..."9").contains(String(c)) || ("a"..."f").contains(String(c)) || ("A"..."F").contains(String(c))
-        }) {
-            let base = String(name.dropLast(5))
-            return (base, suffix)
-        }
-        return (name, "")
     }
     
     func formatMessage(_ message: BitchatMessage, colorScheme: ColorScheme) -> AttributedString {
@@ -3601,7 +3477,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             result.append(content.mergingAttributes(contentStyle))
             
             // Add timestamp at the end for system messages
-            let timestamp = AttributedString(" [\(formatTimestamp(message.timestamp))]")
+            let timestamp = AttributedString(" [\(message.formattedTimestamp)]")
             var timestampStyle = AttributeContainer()
             timestampStyle.foregroundColor = Color.gray.opacity(0.5)
             timestampStyle.font = .system(size: 10, design: .monospaced)
@@ -3675,7 +3551,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             }
             
             // Add timestamp at the end (smaller, light grey)
-            let timestamp = AttributedString(" [\(formatTimestamp(message.timestamp))]")
+            let timestamp = AttributedString(" [\(message.formattedTimestamp)]")
             var timestampStyle = AttributeContainer()
             timestampStyle.foregroundColor = Color.gray.opacity(0.7)
             timestampStyle.font = .system(size: 10, design: .monospaced)
