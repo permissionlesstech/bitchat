@@ -68,6 +68,7 @@ final class TorManager: ObservableObject {
     private var controlMonitorStarted = false
     private var pathMonitor: NWPathMonitor?
     private var isAppForeground: Bool = true
+    private var isDormant: Bool = false
     private var lastRestartAt: Date? = nil
     // Global policy gate: only allow Tor to start when true
     private(set) var allowAutoStart: Bool = false
@@ -83,6 +84,7 @@ final class TorManager: ObservableObject {
         guard isAppForeground else { return }
         guard !didStart else { return }
         didStart = true
+        isDormant = false
         isStarting = true
         lastError = nil
         // Announce initial start so UI can show a status message
@@ -492,18 +494,39 @@ final class TorManager: ObservableObject {
                 return true
             }
             if !claimed { return }
+            if await self.resumeTorIfPossible() {
+                await MainActor.run {
+                    self.restarting = false
+                    self.isStarting = false
+                }
+                return
+            }
             await self.restartTor()
             await MainActor.run { self.restarting = false }
         }
     }
 
     func goDormantOnBackground() {
-        // Stricter model: fully stop Tor when app backgrounds to save power
-        // and avoid half-suspended states. We'll restart cleanly on .active.
+        // Prefer Tor's DORMANT mode so we can resume on foreground without a full restart.
+        // If the control port is unreachable, fall back to a hard shutdown.
         Task.detached { [weak self] in
             guard let self = self else { return }
+            let signaled = await self.controlSendSignal("DORMANT")
+            if signaled {
+                SecureLogger.info("TorManager: signalled DORMANT", category: .session)
+                await MainActor.run {
+                    self.isDormant = true
+                    self.isReady = false
+                    self.socksReady = false
+                    self.isStarting = false
+                }
+                return
+            }
+
+            SecureLogger.warning("TorManager: DORMANT signal failed; shutting down", category: .session)
             _ = tor_host_shutdown()
             await MainActor.run {
+                self.isDormant = false
                 self.isReady = false
                 self.socksReady = false
                 self.bootstrapProgress = 0
@@ -525,14 +548,28 @@ final class TorManager: ObservableObject {
             self.bootstrapProgress = 0
             self.bootstrapSummary = ""
             self.isStarting = true
+            self.isDormant = false
             self.lastRestartAt = Date()
         }
         // Prefer clean shutdown via owning controller FD; join the tor thread
         _ = tor_host_shutdown()
         // As a fallback, try control signal if needed (harmless if tor already down)
         _ = await controlSendSignal("SHUTDOWN")
+        // Allow Tor thread to fully terminate before re-starting.
+        var waited = 0
+        while tor_host_is_running() != 0 && waited < 40 {
+            try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+            waited += 1
+        }
+        if waited >= 40 {
+            SecureLogger.warning("TorManager: tor_host_is_running still true before restart", category: .session)
+        }
+        // Allow control monitor and start logic to reinitialize cleanly
+        await MainActor.run {
+            self.controlMonitorStarted = false
+            self.didStart = false
+        }
         // Now start fresh
-        await MainActor.run { self.didStart = false }
         await MainActor.run { self.startIfNeeded() }
     }
 
@@ -596,6 +633,62 @@ final class TorManager: ObservableObject {
     private func controlSendSignal(_ signal: String, timeout: TimeInterval = 3.0) async -> Bool {
         let text = await controlExchange(lines: ["SIGNAL \(signal)"], timeout: timeout)
         return (text?.contains("250")) == true
+    }
+
+    private func resumeTorIfPossible() async -> Bool {
+        let wasDormant = await MainActor.run { self.isDormant }
+        let pendingReady = await MainActor.run { self.socksReady && !self.isReady }
+        let needsWake = wasDormant || pendingReady
+        if !needsWake {
+            return false
+        }
+
+        let activated = await controlSendSignal("ACTIVE")
+        let pinged = await controlPingBootstrap(timeout: 3.0)
+        if !activated && !pinged {
+            SecureLogger.warning("TorManager: ACTIVE signal failed", category: .session)
+            return false
+        }
+
+        if let info = await controlGetBootstrapInfo() {
+            await MainActor.run {
+                self.bootstrapProgress = info.progress
+                self.bootstrapSummary = info.summary
+            }
+        }
+
+        await MainActor.run {
+            self.isDormant = false
+            self.isStarting = true
+            self.socksReady = false
+        }
+
+        let firstReady = await waitForSocksReady(timeout: 12.0)
+        if firstReady {
+            await MainActor.run {
+                self.socksReady = true
+                self.isStarting = false
+            }
+            SecureLogger.info("TorManager: resumed Tor via ACTIVE signal", category: .session)
+            return true
+        }
+
+        if pinged {
+            let secondReady = await waitForSocksReady(timeout: 20.0)
+            await MainActor.run {
+                self.socksReady = secondReady
+                self.isStarting = !secondReady
+            }
+            if secondReady {
+                SecureLogger.info("TorManager: resumed Tor after extended wait", category: .session)
+                return true
+            }
+        } else {
+            await MainActor.run { self.isStarting = false }
+        }
+
+        SecureLogger.warning("TorManager: ACTIVE resume failed; will restart", category: .session)
+        return false
     }
 
     private func controlExchange(lines: [String], timeout: TimeInterval) async -> String? {
