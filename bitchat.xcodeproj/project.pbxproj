@@ -14,6 +14,8 @@
 		17901751FD8010AFC8E750F2 /* bitchatShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 61F92EBA29C47C0FCC482F1F /* bitchatShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		3EE336D150427F736F32B56C /* P256K in Frameworks */ = {isa = PBXBuildFile; productRef = B1D9136AA0083366353BFA2F /* P256K */; };
 		885BBED78092484A5B069461 /* P256K in Frameworks */ = {isa = PBXBuildFile; productRef = 4EB6BA1B8464F1EA38F4E286 /* P256K */; };
+		A6E3E5702E77036A0032EA8A /* BitLogger in Frameworks */ = {isa = PBXBuildFile; productRef = A6E3E56F2E77036A0032EA8A /* BitLogger */; };
+		A6E3E5722E7703760032EA8A /* BitLogger in Frameworks */ = {isa = PBXBuildFile; productRef = A6E3E5712E7703760032EA8A /* BitLogger */; };
 		E0A1B2C3D4E5F6012345678D /* relays/online_relays_gps.csv in Resources */ = {isa = PBXBuildFile; fileRef = E0A1B2C3D4E5F6012345678A /* relays/online_relays_gps.csv */; };
 		E0A1B2C3D4E5F6012345678E /* relays/online_relays_gps.csv in Resources */ = {isa = PBXBuildFile; fileRef = E0A1B2C3D4E5F6012345678A /* relays/online_relays_gps.csv */; };
 /* End PBXBuildFile section */
@@ -133,6 +135,7 @@
 		31F6FDADA63050361C14F3A1 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
+				A6E3E5722E7703760032EA8A /* BitLogger in Frameworks */,
 				048A88812E76FD18000FBCDD /* libz.tbd in Frameworks */,
 				0481A3A02E744D6300FC845E /* tor-nolzma.xcframework in Frameworks */,
 				3EE336D150427F736F32B56C /* P256K in Frameworks */,
@@ -141,6 +144,7 @@
 		B5A5CC493FFB3D8966548140 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
+				A6E3E5702E77036A0032EA8A /* BitLogger in Frameworks */,
 				0481A35D2E6DA18600FC845E /* libz.tbd in Frameworks */,
 				0481A3A12E744D6300FC845E /* tor-nolzma.xcframework in Frameworks */,
 				885BBED78092484A5B069461 /* P256K in Frameworks */,
@@ -202,6 +206,7 @@
 			name = bitchat_macOS;
 			packageProductDependencies = (
 				B1D9136AA0083366353BFA2F /* P256K */,
+				A6E3E5712E7703760032EA8A /* BitLogger */,
 			);
 			productName = bitchat_macOS;
 			productReference = 8F3A7C058C2C8E1A06C8CF8B /* bitchat.app */;
@@ -278,6 +283,7 @@
 			name = bitchat_iOS;
 			packageProductDependencies = (
 				4EB6BA1B8464F1EA38F4E286 /* P256K */,
+				A6E3E56F2E77036A0032EA8A /* BitLogger */,
 			);
 			productName = bitchat_iOS;
 			productReference = 96D0D41CA19EE5A772AA8434 /* bitchat.app */;
@@ -303,6 +309,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				B8C407587481BBB190741C93 /* XCRemoteSwiftPackageReference "swift-secp256k1" */,
+				A6E3E56E2E77036A0032EA8A /* XCLocalSwiftPackageReference "localPackages/BitLogger" */,
 			);
 			preferredProjectObjectVersion = 90;
 			projectDirPath = "";
@@ -853,6 +860,13 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		A6E3E56E2E77036A0032EA8A /* XCLocalSwiftPackageReference "localPackages/BitLogger" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = localPackages/BitLogger;
+		};
+/* End XCLocalSwiftPackageReference section */
+
 /* Begin XCRemoteSwiftPackageReference section */
 		B8C407587481BBB190741C93 /* XCRemoteSwiftPackageReference "swift-secp256k1" */ = {
 			isa = XCRemoteSwiftPackageReference;
@@ -869,6 +883,14 @@
 			isa = XCSwiftPackageProductDependency;
 			package = B8C407587481BBB190741C93 /* XCRemoteSwiftPackageReference "swift-secp256k1" */;
 			productName = P256K;
+		};
+		A6E3E56F2E77036A0032EA8A /* BitLogger */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = BitLogger;
+		};
+		A6E3E5712E7703760032EA8A /* BitLogger */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = BitLogger;
 		};
 		B1D9136AA0083366353BFA2F /* P256K */ = {
 			isa = XCSwiftPackageProductDependency;

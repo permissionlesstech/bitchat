@@ -83,6 +83,7 @@
 /// - Background queue for CPU-intensive operations
 ///
 
+import BitLogger
 import Foundation
 import CryptoKit
 

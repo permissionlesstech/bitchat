@@ -1,3 +1,4 @@
+import BitLogger
 import Foundation
 
 /// Persistent location notes (Nostr kind 1) scoped to a street-level geohash (precision 7).

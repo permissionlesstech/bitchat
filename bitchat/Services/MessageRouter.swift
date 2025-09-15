@@ -1,3 +1,4 @@
+import BitLogger
 import Foundation
 
 /// Routes messages between BLE and Nostr transports
