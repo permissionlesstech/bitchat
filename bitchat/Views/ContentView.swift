@@ -462,7 +462,12 @@ struct ContentView: View {
                         selectedMessageSender = viewModel.messages.last(where: { $0.senderPeerID == peerID && $0.sender != "system" })?.sender
                     }
                 }
-                showMessageActions = true
+                if viewModel.isSelfSender(peerID: selectedMessageSenderID, displayName: selectedMessageSender) {
+                    selectedMessageSender = nil
+                    selectedMessageSenderID = nil
+                } else {
+                    showMessageActions = true
+                }
             }
             .onOpenURL { url in
                 guard url.scheme == "bitchat", url.host == "geohash" else { return }
