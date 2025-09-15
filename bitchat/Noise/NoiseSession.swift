@@ -308,6 +308,15 @@ final class NoiseSessionManager {
             _ = sessions.removeValue(forKey: peerID)
         }
     }
+
+    func removeAllSessions() {
+        managerQueue.sync(flags: .barrier) {
+            for (_, session) in sessions {
+                session.reset()
+            }
+            sessions.removeAll()
+        }
+    }
     
     func getEstablishedSessions() -> [String: NoiseSession] {
         return managerQueue.sync {

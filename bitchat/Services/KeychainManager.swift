@@ -282,6 +282,7 @@ final class KeychainManager: KeychainManagerProtocol {
             "com.bitchat.deviceidentity", 
             "com.bitchat.noise.identity",
             "chat.bitchat.passwords",
+            "chat.bitchat.nostr",
             "bitchat.keychain",
             "bitchat",
             "com.bitchat"
