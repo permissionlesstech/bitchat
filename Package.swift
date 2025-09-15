@@ -15,6 +15,7 @@ let package = Package(
         ),
     ],
     dependencies:[
+        .package(path: "localPackages/Tor"),
         .package(path: "localPackages/BitLogger"),
         .package(url: "https://github.com/21-DOT-DEV/swift-secp256k1", exact: "0.21.1")
     ],
@@ -24,8 +25,7 @@ let package = Package(
             dependencies: [
                 .product(name: "P256K", package: "swift-secp256k1"),
                 .product(name: "BitLogger", package: "BitLogger"),
-                .target(name: "TorC"),
-                .target(name: "tor-nolzma")
+                .product(name: "Tor", package: "Tor")
             ],
             path: "bitchat",
             exclude: [
@@ -33,20 +33,8 @@ let package = Package(
                 "Assets.xcassets",
                 "bitchat.entitlements",
                 "bitchat-macOS.entitlements",
-                "LaunchScreen.storyboard",
-                "Services/Tor/C/"
-            ],
-            linkerSettings: [
-                .linkedLibrary("z")
+                "LaunchScreen.storyboard"
             ]
-        ),
-        .target(
-            name: "TorC",
-            path: "bitchat/Services/Tor/C"
-        ),
-        .binaryTarget(
-            name: "tor-nolzma",
-            path: "Frameworks/tor-nolzma.xcframework"
         ),
         .testTarget(
             name: "bitchatTests",
