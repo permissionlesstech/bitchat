@@ -86,6 +86,8 @@ final class NostrRelayManager: ObservableObject {
     
     /// Connect to all configured relays
     func connect() {
+        // Global network policy gate
+        if !TorManager.shared.isAutoStartAllowed() { return }
         // Ensure Tor is started early and wait for readiness off-main; then hop back to connect.
         Task.detached {
             let ready = await TorManager.shared.awaitReady()
@@ -117,6 +119,8 @@ final class NostrRelayManager: ObservableObject {
     
     /// Ensure connections exist to the given relay URLs (idempotent).
     func ensureConnections(to relayUrls: [String]) {
+        // Global network policy gate
+        if !TorManager.shared.isAutoStartAllowed() { return }
         if TorManager.shared.torEnforced && !TorManager.shared.isReady {
             // Defer until Tor is fully ready; avoid queuing connection attempts early
             Task.detached { [weak self] in
@@ -139,6 +143,8 @@ final class NostrRelayManager: ObservableObject {
 
     /// Send an event to specified relays (or all if none specified)
     func sendEvent(_ event: NostrEvent, to relayUrls: [String]? = nil) {
+        // Global network policy gate
+        if !TorManager.shared.isAutoStartAllowed() { return }
         if TorManager.shared.torEnforced && !TorManager.shared.isReady {
             // Defer sends until Tor is ready to avoid premature queueing
             Task.detached { [weak self] in
@@ -213,6 +219,8 @@ final class NostrRelayManager: ObservableObject {
         handler: @escaping (NostrEvent) -> Void,
         onEOSE: (() -> Void)? = nil
     ) {
+        // Global network policy gate
+        if !TorManager.shared.isAutoStartAllowed() { return }
         // Coalesce rapid duplicate subscribe requests only if a handler already exists
         let now = Date()
         if messageHandlers[id] != nil {
@@ -317,6 +325,8 @@ final class NostrRelayManager: ObservableObject {
     // MARK: - Private Methods
     
     private func connectToRelay(_ urlString: String) {
+        // Global network policy gate
+        if !TorManager.shared.isAutoStartAllowed() { return }
         guard let url = URL(string: urlString) else { 
             SecureLogger.warning("Invalid relay URL: \(urlString)", category: .session)
             return 
@@ -523,6 +533,13 @@ final class NostrRelayManager: ObservableObject {
     }
     
     private func handleDisconnection(relayUrl: String, error: Error) {
+        // If networking is disallowed, do not schedule reconnection
+        if !TorManager.shared.isAutoStartAllowed() {
+            connections.removeValue(forKey: relayUrl)
+            subscriptions.removeValue(forKey: relayUrl)
+            updateRelayStatus(relayUrl, isConnected: false, error: error)
+            return
+        }
         connections.removeValue(forKey: relayUrl)
         subscriptions.removeValue(forKey: relayUrl)
         updateRelayStatus(relayUrl, isConnected: false, error: error)

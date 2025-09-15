@@ -57,8 +57,8 @@ struct BitchatApp: App {
                     #elseif os(macOS)
                     appDelegate.chatViewModel = chatViewModel
                     #endif
-                    // Spin up Tor early; all internet will gate on Tor 100%
-                    TorManager.shared.startIfNeeded()
+                    // Initialize network activation policy; will start Tor/Nostr only when allowed
+                    NetworkActivationService.shared.start()
                     // Check for shared content
                     checkForSharedContent()
                 }
@@ -70,7 +70,7 @@ struct BitchatApp: App {
                     switch newPhase {
                     case .background:
                         // Keep BLE mesh running in background; BLEService adapts scanning automatically
-                        // Optionally nudge Tor to dormant to save power
+                        // Always send Tor to dormant on background for a clean restart later.
                         TorManager.shared.setAppForeground(false)
                         TorManager.shared.goDormantOnBackground()
                         // Stop geohash sampling while backgrounded
@@ -87,18 +87,22 @@ struct BitchatApp: App {
                         // On initial cold launch, Tor was just started in onAppear.
                         // Skip the deterministic restart the first time we become active.
                         if didHandleInitialActive && didEnterBackground {
-                            TorManager.shared.ensureRunningOnForeground()
+                            if TorManager.shared.isAutoStartAllowed() && !TorManager.shared.isReady {
+                                TorManager.shared.ensureRunningOnForeground()
+                            }
                         } else {
                             didHandleInitialActive = true
                         }
                         didEnterBackground = false
-                        Task.detached {
-                            let _ = await TorManager.shared.awaitReady(timeout: 60)
-                            await MainActor.run {
-                                // Rebuild proxied sessions to bind to the live Tor after readiness
-                                TorURLSession.shared.rebuild()
-                                // Reconnect Nostr via fresh sessions; will gate until Tor 100%
-                                NostrRelayManager.shared.resetAllConnections()
+                        if TorManager.shared.isAutoStartAllowed() {
+                            Task.detached {
+                                let _ = await TorManager.shared.awaitReady(timeout: 60)
+                                await MainActor.run {
+                                    // Rebuild proxied sessions to bind to the live Tor after readiness
+                                    TorURLSession.shared.rebuild()
+                                    // Reconnect Nostr via fresh sessions; will gate until Tor 100%
+                                    NostrRelayManager.shared.resetAllConnections()
+                                }
                             }
                         }
                         checkForSharedContent()
