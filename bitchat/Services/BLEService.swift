@@ -89,8 +89,9 @@ final class BLEService: NSObject {
     
     var myPeerID: String = ""
     var myNickname: String = "anon"
-    private let noiseService: NoiseEncryptionService
+    private var noiseService: NoiseEncryptionService
     private let identityManager: SecureIdentityStateManagerProtocol
+    private let keychain: KeychainManagerProtocol
     private var myPeerIDData: Data = Data()
 
     // MARK: - Advertising Privacy
@@ -330,33 +331,44 @@ final class BLEService: NSObject {
         }
     }
     
-    init(keychain: KeychainManagerProtocol, identityManager: SecureIdentityStateManagerProtocol) {
-        noiseService = NoiseEncryptionService(keychain: keychain)
-        self.identityManager = identityManager
-        super.init()
-        
-        // Derive stable peer ID from Noise static public key fingerprint (first 8 bytes → 16 hex chars)
-        let fingerprint = noiseService.getIdentityFingerprint() // 64 hex chars
-        self.myPeerID = String(fingerprint.prefix(16))
-        self.myPeerIDData = Data(hexString: myPeerID) ?? Data()
-        
-        // Set queue key for identification
-        messageQueue.setSpecific(key: messageQueueKey, value: ())
-        
-        // Set up Noise session establishment callback
-        // This ensures we send pending messages only when session is truly established
-        noiseService.onPeerAuthenticated = { [weak self] peerID, fingerprint in
+    private func configureNoiseServiceCallbacks(for service: NoiseEncryptionService) {
+        service.onPeerAuthenticated = { [weak self] peerID, fingerprint in
             SecureLogger.debug("🔐 Noise session authenticated with \(peerID), fingerprint: \(fingerprint.prefix(16))...")
-            // Send any messages that were queued during handshake
             self?.messageQueue.async { [weak self] in
                 self?.sendPendingMessagesAfterHandshake(for: peerID)
                 self?.sendPendingNoisePayloadsAfterHandshake(for: peerID)
             }
-            // Proactive presence nudge: announce immediately after handshake
             self?.messageQueue.async { [weak self] in
                 self?.sendAnnounce(forceSend: true)
             }
         }
+    }
+
+    private func refreshPeerIdentity() {
+        let fingerprint = noiseService.getIdentityFingerprint()
+        myPeerID = String(fingerprint.prefix(16))
+        myPeerIDData = Data(hexString: myPeerID) ?? Data()
+    }
+
+    private func restartGossipManager() {
+        gossipSyncManager?.stop()
+        let sync = GossipSyncManager(myPeerID: myPeerID)
+        sync.delegate = self
+        sync.start()
+        gossipSyncManager = sync
+    }
+
+    init(keychain: KeychainManagerProtocol, identityManager: SecureIdentityStateManagerProtocol) {
+        self.keychain = keychain
+        noiseService = NoiseEncryptionService(keychain: keychain)
+        self.identityManager = identityManager
+        super.init()
+        
+        configureNoiseServiceCallbacks(for: noiseService)
+        refreshPeerIdentity()
+        
+        // Set queue key for identification
+        messageQueue.setSpecific(key: messageQueueKey, value: ())
         
         // Set up application state tracking (iOS only)
         #if os(iOS)
@@ -407,10 +419,7 @@ final class BLEService: NSObject {
         requestPeerDataPublish()
 
         // Initialize gossip sync manager
-        let sync = GossipSyncManager(myPeerID: myPeerID)
-        sync.delegate = self
-        sync.start()
-        self.gossipSyncManager = sync
+        restartGossipManager()
     }
     
     func setNickname(_ nickname: String) {
@@ -737,6 +746,46 @@ final class BLEService: NSObject {
         peerToPeripheralUUID.removeAll()
         subscribedCentrals.removeAll()
         centralToPeerID.removeAll()
+    }
+
+    func resetIdentityForPanic(currentNickname: String) {
+        messageQueue.sync(flags: .barrier) {
+            pendingMessagesAfterHandshake.removeAll()
+            pendingNoisePayloadsAfterHandshake.removeAll()
+        }
+
+        collectionsQueue.sync(flags: .barrier) {
+            recentAnnounceBySender.removeAll()
+            recentAnnounceOrder.removeAll()
+            pendingPeripheralWrites.removeAll()
+            pendingNotifications.removeAll()
+            pendingDirectedRelays.removeAll()
+            ingressByMessageID.removeAll()
+            recentPacketTimestamps.removeAll()
+            scheduledRelays.values.forEach { $0.cancel() }
+            scheduledRelays.removeAll()
+        }
+
+        bleQueue.sync {
+            pendingWriteBuffers.removeAll()
+            recentConnectTimeouts.removeAll()
+        }
+        recentDisconnectNotifies.removeAll()
+
+        noiseService.clearEphemeralStateForPanic()
+        noiseService.clearPersistentIdentity()
+
+        let newNoise = NoiseEncryptionService(keychain: keychain)
+        noiseService = newNoise
+        configureNoiseServiceCallbacks(for: newNoise)
+        refreshPeerIdentity()
+        restartGossipManager()
+
+        setNickname(currentNickname)
+
+        messageDeduplicator.reset()
+        requestPeerDataPublish()
+        startServices()
     }
     
     func getNoiseService() -> NoiseEncryptionService {

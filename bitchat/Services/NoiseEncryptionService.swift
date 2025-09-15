@@ -526,6 +526,15 @@ final class NoiseEncryptionService {
         
         SecureLogger.info(.sessionExpired(peerID: peerID))
     }
+
+    func clearEphemeralStateForPanic() {
+        sessionManager.removeAllSessions()
+        serviceQueue.sync(flags: .barrier) {
+            peerFingerprints.removeAll()
+            fingerprintToPeerID.removeAll()
+        }
+        rateLimiter.resetAll()
+    }
     
     // MARK: - Private Helpers
     

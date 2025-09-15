@@ -3088,8 +3088,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         // Clear persistent favorites from keychain
         FavoritesPersistenceService.shared.clearAllFavorites()
         
-        // Clear identity data from secure storage
-        identityManager.clearAllIdentityData()
+        // Identity manager has cleared persisted identity data above
         
         // Clear autocomplete state
         autocompleteSuggestions.removeAll()
@@ -3119,6 +3118,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         // Disconnect from all peers and clear persistent identity
         // This will force creation of a new identity (new fingerprint) on next launch
         meshService.emergencyDisconnectAll()
+        if let bleService = meshService as? BLEService {
+            bleService.resetIdentityForPanic(currentNickname: nickname)
+        }
         
         // No need to force UserDefaults synchronization
         

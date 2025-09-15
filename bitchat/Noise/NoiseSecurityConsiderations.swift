@@ -210,6 +210,15 @@ final class NoiseRateLimiter {
             self.messageTimestamps.removeValue(forKey: peerID)
         }
     }
+
+    func resetAll() {
+        queue.async(flags: .barrier) {
+            self.handshakeTimestamps.removeAll()
+            self.messageTimestamps.removeAll()
+            self.globalHandshakeTimestamps.removeAll()
+            self.globalMessageTimestamps.removeAll()
+        }
+    }
 }
 
 // MARK: - Security Errors
