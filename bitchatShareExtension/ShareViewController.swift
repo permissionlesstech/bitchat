@@ -35,7 +35,7 @@ final class ShareViewController: UIViewController {
             statusLabel.leadingAnchor.constraint(greaterThanOrEqualTo: view.layoutMarginsGuide.leadingAnchor),
             statusLabel.trailingAnchor.constraint(lessThanOrEqualTo: view.layoutMarginsGuide.trailingAnchor)
         ])
-        DispatchQueue.global(qos: .default).async {
+        DispatchQueue.global().async {
             self.processShare()
         }
     }
