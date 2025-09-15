@@ -1651,8 +1651,10 @@ final class BLEService: NSObject {
     // Mention parsing moved to ChatViewModel
     
     private func handleMessage(_ packet: BitchatPacket, from peerID: String) {
-        // Ignore self-origin public messages that may be seen again via relay
-        if peerID == myPeerID { return }
+        // Ignore self-origin public messages except when returned via sync (TTL==0).
+        // This allows our own messages to be surfaced when they come back via
+        // the sync path without re-processing regular relayed copies.
+        if peerID == myPeerID && packet.ttl != 0 { return }
 
         var accepted = false
         var senderNickname: String = ""
