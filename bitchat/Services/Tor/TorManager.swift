@@ -69,18 +69,24 @@ final class TorManager: ObservableObject {
     private var pathMonitor: NWPathMonitor?
     private var isAppForeground: Bool = true
     private var lastRestartAt: Date? = nil
+    // Global policy gate: only allow Tor to start when true
+    private(set) var allowAutoStart: Bool = false
 
     private init() {}
 
     // MARK: - Public API
 
     func startIfNeeded() {
+        // Respect global start policy
+        guard allowAutoStart else { return }
         // Do not start in background; caller should wait for foreground
         guard isAppForeground else { return }
         guard !didStart else { return }
         didStart = true
         isStarting = true
         lastError = nil
+        // Announce initial start so UI can show a status message
+        NotificationCenter.default.post(name: .TorWillStart, object: nil)
         ensureFilesystemLayout()
         startTor()
         startPathMonitorIfNeeded()
@@ -473,6 +479,8 @@ final class TorManager: ObservableObject {
     // MARK: - Foreground recovery and control helpers
 
     func ensureRunningOnForeground() {
+        // Respect global start policy
+        if !allowAutoStart { return }
         // iOS can suspend Tor harshly; the most reliable approach for
         // embedding is to restart Tor every time we become active.
         Task.detached(priority: .userInitiated) { [weak self] in
@@ -635,4 +643,15 @@ final class TorManager: ObservableObject {
         conn.cancel()
         return resultText
     }
+}
+
+// MARK: - Start policy configuration
+extension TorManager {
+    @MainActor
+    func setAutoStartAllowed(_ allow: Bool) {
+        allowAutoStart = allow
+    }
+
+    @MainActor
+    func isAutoStartAllowed() -> Bool { allowAutoStart }
 }
