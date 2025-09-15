@@ -482,6 +482,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     
     // Track app startup phase to prevent marking old messages as unread
     private var isStartupPhase = true
+    // Announce Tor initial readiness once per launch to avoid duplicates
+    private var torInitialReadyAnnounced: Bool = false
     
     // Track Nostr pubkey mappings for unknown senders
     private var nostrKeyMapping: [String: String] = [:]  // senderPeerID -> nostrPubkey
@@ -548,81 +550,51 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         // Start mesh service immediately
         meshService.startServices()
         
-        // Announce Tor status (geohash-only; do not show in mesh chat)
-        if TorManager.shared.torEnforced && !torStatusAnnounced {
+        // Announce Tor status (geohash-only; do not show in mesh chat). Only when auto-start is allowed.
+        if TorManager.shared.torEnforced && !torStatusAnnounced && TorManager.shared.isAutoStartAllowed() {
             torStatusAnnounced = true
             addGeohashOnlySystemMessage("starting tor...")
-            // Suppress incremental Tor progress messages; only show initial start and readiness.
+            // Suppress incremental Tor progress messages
             torProgressCancellable = nil
-            Task.detached {
-                let ready = await TorManager.shared.awaitReady()
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    if ready { self.addGeohashOnlySystemMessage("tor started. routing all chats via tor for privacy.") }
-                    else { self.addGeohashOnlySystemMessage("still waiting for tor to start...") }
-                }
-            }
         } else if !TorManager.shared.torEnforced && !torStatusAnnounced {
             torStatusAnnounced = true
             addGeohashOnlySystemMessage("development build: tor bypass enabled.")
         }
 
-        // Initialize Nostr services only after Tor is fully ready, to avoid
-        // interleaving setup logs during Tor startup.
+        // Initialize Nostr relay manager regardless of Tor readiness; connection is controlled elsewhere
+        nostrRelayManager = NostrRelayManager.shared
+        // Attempt to flush any queued outbox (mesh/Nostr routing will gate appropriately)
+        messageRouter.flushAllOutbox()
+        // End startup phase after a short delay
         Task { @MainActor in
-            // Wait for Tor readiness before Nostr init
-            let ready = await TorManager.shared.awaitReady(timeout: 60)
-            guard ready else {
-                SecureLogger.error("Nostr init skipped: Tor not ready", category: .session)
-                return
-            }
-            nostrRelayManager = NostrRelayManager.shared
-            SecureLogger.debug("Initializing Nostr relay connections", category: .session)
-            // Connect is managed centrally on scene activation; avoid duplicate connects here
-
-            // Attempt to flush any queued outbox after Nostr comes online
-            messageRouter.flushAllOutbox()
-            
-            // End startup phase after 2 seconds
-            // During startup phase, we:
-            // 1. Skip cleanup of read receipts
-            // 2. Only block OLD messages from being marked as unread
-            Task { @MainActor in
-                try? await Task.sleep(nanoseconds: UInt64(TransportConfig.uiStartupPhaseDurationSeconds * 1_000_000_000)) // 2 seconds
-                self.isStartupPhase = false
-            }
-            
-            // Bind unified peer service's peer list to our published property
-            let cancellable = unifiedPeerService.$peers
-                .receive(on: DispatchQueue.main)
-                .sink { [weak self] peers in
-                    guard let self = self else { return }
-                    // Update peers directly; @Published drives UI updates
-                    self.allPeers = peers
-                    // Update peer index for O(1) lookups
-                    // Deduplicate peers by ID to prevent crash from duplicate keys
-                    var uniquePeers: [String: BitchatPeer] = [:]
-                    for peer in peers {
-                        // Keep the first occurrence of each peer ID
-                        if uniquePeers[peer.id] == nil {
-                            uniquePeers[peer.id] = peer
-                        } else {
-                            SecureLogger.warning("⚠️ Duplicate peer ID detected: \(peer.id) (\(peer.displayName))", category: .session)
-                        }
-                    }
-                    self.peerIndex = uniquePeers
-                    // Schedule UI update if peers changed
-                    if peers.count > 0 || self.allPeers.count > 0 {
-                        // UI will update automatically
-                    }
-                    
-                    // Update private chat peer ID if needed when peers change
-                    if self.selectedPrivateChatFingerprint != nil {
-                        self.updatePrivateChatPeerIfNeeded()
+            try? await Task.sleep(nanoseconds: UInt64(TransportConfig.uiStartupPhaseDurationSeconds * 1_000_000_000))
+            self.isStartupPhase = false
+        }
+        // Bind unified peer service's peer list to our published property
+        let peersCancellable = unifiedPeerService.$peers
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] peers in
+                guard let self = self else { return }
+                // Update peers directly; @Published drives UI updates
+                self.allPeers = peers
+                // Update peer index for O(1) lookups
+                // Deduplicate peers by ID to prevent crash from duplicate keys
+                var uniquePeers: [String: BitchatPeer] = [:]
+                for peer in peers {
+                    // Keep the first occurrence of each peer ID
+                    if uniquePeers[peer.id] == nil {
+                        uniquePeers[peer.id] = peer
+                    } else {
+                        SecureLogger.warning("⚠️ Duplicate peer ID detected: \(peer.id) (\(peer.displayName))", category: .session)
                     }
                 }
-            
-            self.cancellables.insert(cancellable)
+                self.peerIndex = uniquePeers
+                // Update private chat peer ID if needed when peers change
+                if self.selectedPrivateChatFingerprint != nil {
+                    self.updatePrivateChatPeerIfNeeded()
+                }
+            }
+        self.cancellables.insert(peersCancellable)
 
         // Resubscribe geohash on relay reconnect
         if let relayMgr = self.nostrRelayManager {
@@ -651,7 +623,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                     }
                 }
                 .store(in: &self.cancellables)
-        }
         }
 
         // Set up Noise encryption callbacks
@@ -801,6 +772,12 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             name: .TorDidBecomeReady,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleTorWillStart),
+            name: .TorWillStart,
+            object: nil
+        )
         #else
         NotificationCenter.default.addObserver(
             self,
@@ -845,6 +822,12 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             name: .TorDidBecomeReady,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleTorWillStart),
+            name: .TorWillStart,
+            object: nil
+        )
         #endif
     }
     
@@ -855,6 +838,15 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     }
 
     // MARK: - Tor notifications
+    @objc private func handleTorWillStart() {
+        Task { @MainActor in
+            if !self.torStatusAnnounced && TorManager.shared.torEnforced {
+                self.torStatusAnnounced = true
+                // Post only in geohash channels (queue if not active)
+                self.addGeohashOnlySystemMessage("starting tor...")
+            }
+        }
+    }
     @objc private func handleTorWillRestart() {
         Task { @MainActor in
             self.torRestartPending = true
@@ -870,6 +862,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                 // Post only in geohash channels (queue if not active)
                 self.addGeohashOnlySystemMessage("tor restarted. network routing restored.")
                 self.torRestartPending = false
+            } else if TorManager.shared.torEnforced && !self.torInitialReadyAnnounced {
+                // Initial start completed
+                self.addGeohashOnlySystemMessage("tor started. routing all chats via tor for privacy.")
+                self.torInitialReadyAnnounced = true
             }
         }
     }
