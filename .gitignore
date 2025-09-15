@@ -75,3 +75,6 @@ TestResult.xcresult/
 *.xcresult/
 build.log
 *.log
+
+# Local configs
+Local.xcconfig

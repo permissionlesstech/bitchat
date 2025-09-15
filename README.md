@@ -94,45 +94,25 @@ For detailed protocol documentation, see the [Technical Whitepaper](WHITEPAPER.m
 
 ## Setup
 
-### Option 1: Using XcodeGen (Recommended)
-
-1. Install XcodeGen if you haven't already:
-
-   ```bash
-   brew install xcodegen
-   ```
-
-2. Generate the Xcode project:
+### Option 1: Using Xcode
 
    ```bash
    cd bitchat
-   xcodegen generate
-   ```
-
-3. Open the generated project:
-   ```bash
    open bitchat.xcodeproj
    ```
 
-### Option 2: Using Swift Package Manager
+   To run on a device there're a few steps to prepare the code:
+   - Clone the local configs: `cp Configs/Local.xcconfig.example Configs/Local.xcconfig`
+   - Add your Developer Team ID into the newly created `Configs/Local.xcconfig`
+      - Bundle ID would be set to `chat.bitchat.<team_id>` (unless you set to something else)
+   - Entitlements need to be updated manually (TODO: Automate):
+      - Search and replace `group.chat.bitchat` with `group.<your_bundle_id>` (e.g. `group.chat.bitchat.ABC123`)
 
-1. Open the project in Xcode:
+### Option 2: Using `just`
 
    ```bash
-   cd bitchat
-   open Package.swift
+   brew install just
    ```
-
-2. Select your target device and run
-
-### Option 3: Manual Xcode Project
-
-1. Open Xcode and create a new iOS/macOS App
-2. Copy all Swift files from the `bitchat` directory into your project
-3. Update Info.plist with Bluetooth permissions
-4. Set deployment target to iOS 16.0 / macOS 13.0
-
-### Option 4: just
 
 Want to try this on macos: `just run` will set it up and run from source.
 Run `just clean` afterwards to restore things to original state for mobile app building and development.

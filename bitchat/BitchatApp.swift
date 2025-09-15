@@ -11,6 +11,9 @@ import UserNotifications
 
 @main
 struct BitchatApp: App {
+    static let bundleID = Bundle.main.bundleIdentifier ?? "chat.bitchat"
+    static let groupID = "group.\(bundleID)"
+    
     @StateObject private var chatViewModel: ChatViewModel
     #if os(iOS)
     @Environment(\.scenePhase) var scenePhase
@@ -130,7 +133,7 @@ struct BitchatApp: App {
     
     private func checkForSharedContent() {
         // Check app group for shared content from extension
-        guard let userDefaults = UserDefaults(suiteName: "group.chat.bitchat") else {
+        guard let userDefaults = UserDefaults(suiteName: BitchatApp.groupID) else {
             return
         }
         
