@@ -285,11 +285,17 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
         } else if let locality = pm.locality, !locality.isEmpty {
             dict[.neighborhood] = locality
         }
-        // Block: reuse neighborhood/locality granularity without exposing street level
+        // Block: reuse neighborhood/locality granularity
         if let subLocality = pm.subLocality, !subLocality.isEmpty {
             dict[.block] = subLocality
         } else if let locality = pm.locality, !locality.isEmpty {
             dict[.block] = locality
+        }
+        // Building: prefer place name/street/venue when available
+        if let name = pm.name, !name.isEmpty {
+            dict[.building] = name
+        } else if let thoroughfare = pm.thoroughfare, !thoroughfare.isEmpty {
+            dict[.building] = thoroughfare
         }
         return dict
     }

@@ -93,13 +93,51 @@
 import Foundation
 import CryptoKit
 
+protocol SecureIdentityStateManagerProtocol {
+    // MARK: Secure Loading/Saving
+    func forceSave()
+    
+    // MARK: Social Identity Management
+    func getSocialIdentity(for fingerprint: String) -> SocialIdentity?
+    
+    // MARK: Cryptographic Identities
+    func upsertCryptographicIdentity(fingerprint: String, noisePublicKey: Data, signingPublicKey: Data?, claimedNickname: String?)
+    func getCryptoIdentitiesByPeerIDPrefix(_ peerID: String) -> [CryptographicIdentity]
+    func updateSocialIdentity(_ identity: SocialIdentity)
+    
+    // MARK: Favorites Management
+    func getFavorites() -> Set<String>
+    func setFavorite(_ fingerprint: String, isFavorite: Bool)
+    func isFavorite(fingerprint: String) -> Bool
+    
+    // MARK: Blocked Users Management
+    func isBlocked(fingerprint: String) -> Bool
+    func setBlocked(_ fingerprint: String, isBlocked: Bool)
+    
+    // MARK: Geohash (Nostr) Blocking
+    func isNostrBlocked(pubkeyHexLowercased: String) -> Bool
+    func setNostrBlocked(_ pubkeyHexLowercased: String, isBlocked: Bool)
+    func getBlockedNostrPubkeys() -> Set<String>
+    
+    // MARK: Ephemeral Session Management
+    func registerEphemeralSession(peerID: String, handshakeState: HandshakeState)
+    func updateHandshakeState(peerID: String, state: HandshakeState)
+    
+    // MARK: Cleanup
+    func clearAllIdentityData()
+    func removeEphemeralSession(peerID: String)
+    
+    // MARK: Verification
+    func setVerified(fingerprint: String, verified: Bool)
+    func isVerified(fingerprint: String) -> Bool
+    func getVerifiedFingerprints() -> Set<String>
+}
+
 /// Singleton manager for secure identity state persistence and retrieval.
 /// Provides thread-safe access to identity mappings with encryption at rest.
 /// All identity data is stored encrypted in the device Keychain for security.
-final class SecureIdentityStateManager {
-    static let shared = SecureIdentityStateManager()
-    
-    private let keychain = KeychainManager.shared
+final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
+    private let keychain: KeychainManagerProtocol
     private let cacheKey = "bitchat.identityCache.v2"
     private let encryptionKeyName = "identityCacheEncryptionKey"
     
@@ -107,9 +145,6 @@ final class SecureIdentityStateManager {
     private var ephemeralSessions: [String: EphemeralIdentity] = [:]
     private var cryptographicIdentities: [String: CryptographicIdentity] = [:]
     private var cache: IdentityCache = IdentityCache()
-    
-    // Pending actions before handshake
-    private var pendingActions: [String: PendingActions] = [:]
     
     // Thread safety
     private let queue = DispatchQueue(label: "bitchat.identity.state", attributes: .concurrent)
@@ -122,7 +157,9 @@ final class SecureIdentityStateManager {
     // Encryption key
     private let encryptionKey: SymmetricKey
     
-    private init() {
+    init(_ keychain: KeychainManagerProtocol) {
+        self.keychain = keychain
+        
         // Generate or retrieve encryption key from keychain
         let loadedKey: SymmetricKey
         
@@ -146,9 +183,13 @@ final class SecureIdentityStateManager {
         loadIdentityCache()
     }
     
+    deinit {
+        forceSave()
+    }
+    
     // MARK: - Secure Loading/Saving
     
-    func loadIdentityCache() {
+    private func loadIdentityCache() {
         guard let encryptedData = keychain.getIdentityKey(forKey: cacheKey) else {
             // No existing cache, start fresh
             return
@@ -164,12 +205,7 @@ final class SecureIdentityStateManager {
         }
     }
     
-    deinit {
-        // Force save any pending changes
-        forceSave()
-    }
-    
-    func saveIdentityCache() {
+    private func saveIdentityCache() {
         // Mark that we need to save
         pendingSave = true
         
@@ -201,25 +237,7 @@ final class SecureIdentityStateManager {
     // Force immediate save (for app termination)
     func forceSave() {
         saveTimer?.invalidate()
-        if pendingSave {
-            performSave()
-        }
-    }
-    
-    // MARK: - Identity Resolution
-    
-    func resolveIdentity(peerID: String, claimedNickname: String) -> IdentityHint {
-        queue.sync {
-            // Check if we have candidates based on nickname
-            if let fingerprints = cache.nicknameIndex[claimedNickname] {
-                if fingerprints.count == 1 {
-                    return .likelyKnown(fingerprint: fingerprints.first!)
-                } else {
-                    return .ambiguous(candidates: fingerprints)
-                }
-            }
-            return .unknown
-        }
+        performSave()
     }
     
     // MARK: - Social Identity Management
@@ -301,23 +319,12 @@ final class SecureIdentityStateManager {
         }
     }
 
-    /// Retrieve cryptographic identity by fingerprint
-    func getCryptographicIdentity(for fingerprint: String) -> CryptographicIdentity? {
-        queue.sync { cryptographicIdentities[fingerprint] }
-    }
-
     /// Find cryptographic identities whose fingerprint prefix matches a peerID (16-hex) short ID
     func getCryptoIdentitiesByPeerIDPrefix(_ peerID: String) -> [CryptographicIdentity] {
         queue.sync {
             // Defensive: ensure hex and correct length
             guard peerID.count == 16, peerID.allSatisfy({ $0.isHexDigit }) else { return [] }
             return cryptographicIdentities.values.filter { $0.fingerprint.hasPrefix(peerID) }
-        }
-    }
-    
-    func getAllSocialIdentities() -> [SocialIdentity] {
-        queue.sync {
-            return Array(cache.socialIdentities.values)
         }
     }
     
@@ -469,53 +476,6 @@ final class SecureIdentityStateManager {
         }
     }
     
-    func getHandshakeState(peerID: String) -> HandshakeState? {
-        queue.sync {
-            return ephemeralSessions[peerID]?.handshakeState
-        }
-    }
-    
-    // MARK: - Pending Actions
-    
-    func setPendingAction(peerID: String, action: PendingActions) {
-        queue.async(flags: .barrier) {
-            self.pendingActions[peerID] = action
-        }
-    }
-    
-    func applyPendingActions(peerID: String, fingerprint: String) {
-        queue.async(flags: .barrier) {
-            guard let actions = self.pendingActions[peerID] else { return }
-            
-            // Get or create social identity
-            var identity = self.cache.socialIdentities[fingerprint] ?? SocialIdentity(
-                fingerprint: fingerprint,
-                localPetname: nil,
-                claimedNickname: "Unknown",
-                trustLevel: .unknown,
-                isFavorite: false,
-                isBlocked: false,
-                notes: nil
-            )
-            
-            // Apply pending actions
-            if let toggleFavorite = actions.toggleFavorite {
-                identity.isFavorite = toggleFavorite
-            }
-            if let trustLevel = actions.setTrustLevel {
-                identity.trustLevel = trustLevel
-            }
-            if let petname = actions.setPetname {
-                identity.localPetname = petname
-            }
-            
-            // Save updated identity
-            self.cache.socialIdentities[fingerprint] = identity
-            self.pendingActions.removeValue(forKey: peerID)
-            self.saveIdentityCache()
-        }
-    }
-    
     // MARK: - Cleanup
     
     func clearAllIdentityData() {
@@ -525,7 +485,6 @@ final class SecureIdentityStateManager {
             self.cache = IdentityCache()
             self.ephemeralSessions.removeAll()
             self.cryptographicIdentities.removeAll()
-            self.pendingActions.removeAll()
             
             // Delete from keychain
             let deleted = self.keychain.deleteIdentityKey(forKey: self.cacheKey)
@@ -536,7 +495,6 @@ final class SecureIdentityStateManager {
     func removeEphemeralSession(peerID: String) {
         queue.async(flags: .barrier) {
             self.ephemeralSessions.removeValue(forKey: peerID)
-            self.pendingActions.removeValue(forKey: peerID)
         }
     }
     

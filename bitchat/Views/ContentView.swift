@@ -25,6 +25,7 @@ struct ContentView: View {
     @EnvironmentObject var viewModel: ChatViewModel
     @ObservedObject private var locationManager = LocationChannelManager.shared
     @ObservedObject private var bookmarks = GeohashBookmarksStore.shared
+    @ObservedObject private var notesCounter = LocationNotesCounter.shared
     @State private var messageText = ""
     @State private var textFieldSelection: NSRange? = nil
     @FocusState private var isTextFieldFocused: Bool
@@ -49,6 +50,10 @@ struct ContentView: View {
     @State private var showLocationChannelsSheet = false
     @State private var showVerifySheet = false
     @State private var expandedMessageIDs: Set<String> = []
+    @State private var showLocationNotes = false
+    @State private var notesGeohash: String? = nil
+    @State private var sheetNotesCount: Int = 0
+    // Timer-based refresh removed; use LocationChannelManager live updates instead
     // Window sizes for rendering (infinite scroll up)
     @State private var windowCountPublic: Int = 300
     @State private var windowCountPrivate: [String: Int] = [:]
@@ -466,14 +471,14 @@ struct ContentView: View {
                 guard (2...12).contains(gh.count), gh.allSatisfy({ allowed.contains($0) }) else { return }
                 func levelForLength(_ len: Int) -> GeohashChannelLevel {
                     switch len {
-                    case 0...2: return .region
-                    case 3...4: return .province
-                    case 5: return .city
-                    case 6: return .neighborhood
+                        case 0...2: return .region
+                        case 3...4: return .province
+                        case 5: return .city
+                        case 6: return .neighborhood
                     case 7: return .block
                     default: return .block
+                        }
                     }
-                }
                 let level = levelForLength(gh.count)
                 let ch = GeohashChannel(level: level, geohash: gh)
                 // Do not mark teleported when opening a geohash that is in our regional set.
@@ -1091,7 +1096,7 @@ struct ContentView: View {
                 TextField("nickname", text: $viewModel.nickname)
                     .textFieldStyle(.plain)
                     .font(.system(size: 14, design: .monospaced))
-                    .frame(maxWidth: 100)
+                    .frame(maxWidth: 80)
                     .foregroundColor(textColor)
                     .focused($isNicknameFieldFocused)
                     .autocorrectionDisabled(true)
@@ -1135,7 +1140,31 @@ struct ContentView: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("Open unread private chat")
                 }
-                // Bookmark toggle for current geohash (not shown for mesh)
+                // Notes icon (mesh only and when location is authorized), to the left of #mesh
+                if case .mesh = locationManager.selectedChannel, locationManager.permissionState == .authorized {
+                    Button(action: {
+                        // Kick a one-shot refresh and show the sheet immediately.
+                        LocationChannelManager.shared.enableLocationChannels()
+                        LocationChannelManager.shared.refreshChannels()
+                        // If we already have a block geohash, pass it; otherwise wait in the sheet.
+                        notesGeohash = LocationChannelManager.shared.availableChannels.first(where: { $0.level == .building })?.geohash
+                        showLocationNotes = true
+                    }) {
+                        HStack(alignment: .center, spacing: 4) {
+                            let currentCount = (notesCounter.count ?? 0)
+                            let hasNotes = (!notesCounter.initialLoadComplete ? max(currentCount, sheetNotesCount) : currentCount) > 0
+                            Image(systemName: "long.text.page.and.pencil")
+                                .font(.system(size: 12))
+                                .foregroundColor(hasNotes ? textColor : Color.gray)
+                                .padding(.top, 1)
+                        }
+                        .fixedSize(horizontal: true, vertical: false)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Location notes for this place")
+                }
+
+                // Bookmark toggle (geochats): to the left of #geohash
                 if case .location(let ch) = locationManager.selectedChannel {
                     Button(action: { GeohashBookmarksStore.shared.toggle(ch.geohash) }) {
                         Image(systemName: GeohashBookmarksStore.shared.isBookmarked(ch.geohash) ? "bookmark.fill" : "bookmark")
@@ -1144,6 +1173,7 @@ struct ContentView: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("Toggle bookmark for #\(ch.geohash)")
                 }
+
                 // Location channels button '#'
                 Button(action: { showLocationChannelsSheet = true }) {
                     let badgeText: String = {
@@ -1169,6 +1199,8 @@ struct ContentView: View {
                         .accessibilityLabel("location channels")
                 }
                 .buttonStyle(.plain)
+                .padding(.leading, 4)
+                .padding(.trailing, 2)
 
                 HStack(spacing: 4) {
                     // People icon with count
@@ -1180,9 +1212,13 @@ struct ContentView: View {
                         .accessibilityHidden(true)
                 }
                 .foregroundColor(headerCountColor)
+                .padding(.leading, 2)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
 
                 // QR moved to the PEOPLE header in the sidebar when on mesh channel
             }
+            .layoutPriority(3)
             .onTapGesture {
                 withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
                     showSidebar.toggle()
@@ -1200,6 +1236,90 @@ struct ContentView: View {
             LocationChannelsSheet(isPresented: $showLocationChannelsSheet)
                 .onAppear { viewModel.isLocationChannelsSheetPresented = true }
                 .onDisappear { viewModel.isLocationChannelsSheetPresented = false }
+        }
+        .sheet(isPresented: $showLocationNotes) {
+            Group {
+                if let gh = notesGeohash ?? LocationChannelManager.shared.availableChannels.first(where: { $0.level == .building })?.geohash {
+                    LocationNotesView(geohash: gh, onNotesCountChanged: { cnt in sheetNotesCount = cnt })
+                        .environmentObject(viewModel)
+                } else {
+                    VStack(spacing: 12) {
+                        HStack {
+                            Text("notes")
+                                .font(.system(size: 16, weight: .bold, design: .monospaced))
+                            Spacer()
+                            Button(action: { showLocationNotes = false }) {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                                    .foregroundColor(textColor)
+                                    .frame(width: 32, height: 32)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Close")
+                        }
+                        .frame(height: 44)
+                        .padding(.horizontal, 12)
+                        .background(backgroundColor.opacity(0.95))
+                        Text("location unavailable")
+                            .font(.system(size: 14, design: .monospaced))
+                            .foregroundColor(secondaryTextColor)
+                        Button("enable location") {
+                            LocationChannelManager.shared.enableLocationChannels()
+                            LocationChannelManager.shared.refreshChannels()
+                        }
+                        .buttonStyle(.bordered)
+                        Spacer()
+                    }
+                    .background(backgroundColor)
+                    .foregroundColor(textColor)
+                    // per-sheet global onChange added below
+                }
+            }
+            .onAppear {
+                // Ensure we are authorized and start live location updates (distance-filtered)
+                LocationChannelManager.shared.enableLocationChannels()
+                LocationChannelManager.shared.beginLiveRefresh()
+            }
+            .onDisappear {
+                LocationChannelManager.shared.endLiveRefresh()
+            }
+            .onChange(of: locationManager.availableChannels) { channels in
+                if let current = channels.first(where: { $0.level == .building })?.geohash,
+                    notesGeohash != current {
+                    notesGeohash = current
+                    #if os(iOS)
+                    // Light taptic when geohash changes while the sheet is open
+                    let generator = UIImpactFeedbackGenerator(style: .light)
+                    generator.prepare()
+                    generator.impactOccurred()
+                    #endif
+                }
+            }
+        }
+        .onAppear {
+            updateNotesCounterSubscription()
+            if case .mesh = locationManager.selectedChannel,
+               locationManager.permissionState == .authorized,
+               LocationChannelManager.shared.availableChannels.isEmpty {
+                LocationChannelManager.shared.refreshChannels()
+            }
+        }
+        .onChange(of: locationManager.selectedChannel) { _ in
+            updateNotesCounterSubscription()
+            if case .mesh = locationManager.selectedChannel,
+               locationManager.permissionState == .authorized,
+               LocationChannelManager.shared.availableChannels.isEmpty {
+                LocationChannelManager.shared.refreshChannels()
+            }
+        }
+        .onChange(of: locationManager.availableChannels) { _ in updateNotesCounterSubscription() }
+        .onChange(of: locationManager.permissionState) { _ in
+            updateNotesCounterSubscription()
+            if case .mesh = locationManager.selectedChannel,
+               locationManager.permissionState == .authorized,
+               LocationChannelManager.shared.availableChannels.isEmpty {
+                LocationChannelManager.shared.refreshChannels()
+            }
         }
         .alert("heads up", isPresented: $viewModel.showScreenshotPrivacyWarning) {
             Button("ok", role: .cancel) {}
@@ -1247,15 +1367,15 @@ struct ContentView: View {
                !fav.peerNickname.isEmpty { return fav.peerNickname }
             // Fallback: resolve from persisted social identity via fingerprint mapping
             if headerPeerID.count == 16 {
-                let candidates = SecureIdentityStateManager.shared.getCryptoIdentitiesByPeerIDPrefix(headerPeerID)
+                let candidates = viewModel.identityManager.getCryptoIdentitiesByPeerIDPrefix(headerPeerID)
                 if let id = candidates.first,
-                   let social = SecureIdentityStateManager.shared.getSocialIdentity(for: id.fingerprint) {
+                   let social = viewModel.identityManager.getSocialIdentity(for: id.fingerprint) {
                     if let pet = social.localPetname, !pet.isEmpty { return pet }
                     if !social.claimedNickname.isEmpty { return social.claimedNickname }
                 }
             } else if headerPeerID.count == 64, let keyData = Data(hexString: headerPeerID) {
                 let fp = keyData.sha256Fingerprint()
-                if let social = SecureIdentityStateManager.shared.getSocialIdentity(for: fp) {
+                if let social = viewModel.identityManager.getSocialIdentity(for: fp) {
                     if let pet = social.localPetname, !pet.isEmpty { return pet }
                     if !social.claimedNickname.isEmpty { return social.claimedNickname }
                 }
@@ -1397,6 +1517,34 @@ struct ContentView: View {
                 .background(backgroundColor.opacity(0.95))
     }
     
+}
+
+// MARK: - Notes Counter Subscription Helper
+extension ContentView {
+    private func updateNotesCounterSubscription() {
+        switch locationManager.selectedChannel {
+        case .mesh:
+            // Ensure we have a fresh one-shot location fix so building geohash is current
+            if locationManager.permissionState == .authorized {
+                LocationChannelManager.shared.refreshChannels()
+            }
+            if locationManager.permissionState == .authorized {
+                if let building = LocationChannelManager.shared.availableChannels.first(where: { $0.level == .building })?.geohash {
+                    LocationNotesCounter.shared.subscribe(geohash: building)
+                } else {
+                    // Keep existing subscription if we had one to avoid flicker
+                    // Only cancel if we have no known geohash
+                    if LocationNotesCounter.shared.geohash == nil {
+                        LocationNotesCounter.shared.cancel()
+                    }
+                }
+            } else {
+                LocationNotesCounter.shared.cancel()
+            }
+        case .location:
+            LocationNotesCounter.shared.cancel()
+        }
+    }
 }
 
 // MARK: - Helper Views

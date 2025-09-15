@@ -45,6 +45,14 @@ final class NostrRelayManager: ObservableObject {
     // Coalesce duplicate subscribe requests for the same id within a short window
     private var subscribeCoalesce: [String: Date] = [:]
     private var cancellables = Set<AnyCancellable>()
+
+    // Track EOSE per subscription to signal when initial stored events are done
+    private struct EOSETracker {
+        var pendingRelays: Set<String>
+        var callback: () -> Void
+        var timer: Timer?
+    }
+    private var eoseTrackers: [String: EOSETracker] = [:]
     
     // Message queue for reliability
     // Pending sends held only for relays that are not yet connected.
@@ -201,7 +209,8 @@ final class NostrRelayManager: ObservableObject {
         filter: NostrFilter,
         id: String = UUID().uuidString,
         relayUrls: [String]? = nil,
-        handler: @escaping (NostrEvent) -> Void
+        handler: @escaping (NostrEvent) -> Void,
+        onEOSE: (() -> Void)? = nil
     ) {
         // Coalesce rapid duplicate subscribe requests only if a handler already exists
         let now = Date()
@@ -249,6 +258,22 @@ final class NostrRelayManager: ObservableObject {
                 var map = self.pendingSubscriptions[url] ?? [:]
                 map[id] = messageString
                 self.pendingSubscriptions[url] = map
+            }
+            // Initialize EOSE tracking if requested
+            if let onEOSE = onEOSE {
+                var tracker = EOSETracker(pendingRelays: Set(urls), callback: onEOSE, timer: nil)
+                // Fallback timeout to avoid hanging if a relay never sends EOSE
+                tracker.timer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { [weak self] _ in
+                    Task { @MainActor in
+                        guard let self = self else { return }
+                        if let t = self.eoseTrackers[id] {
+                            t.timer?.invalidate()
+                            self.eoseTrackers.removeValue(forKey: id)
+                            onEOSE()
+                        }
+                    }
+                }
+                eoseTrackers[id] = tracker
             }
             SecureLogger.debug("📋 Queued subscription id=\(id) for \(urls.count) relay(s)", category: .session)
             // Ensure we actually have sockets opening to these relays so queued REQs can flush
@@ -418,9 +443,17 @@ final class NostrRelayManager: ObservableObject {
             } else {
                 SecureLogger.warning("⚠️ No handler for subscription \(subId)", category: .session)
             }
-        case .eose:
-            // No-op for now
-            break
+        case .eose(let subId):
+            if var tracker = eoseTrackers[subId] {
+                tracker.pendingRelays.remove(relayUrl)
+                if tracker.pendingRelays.isEmpty {
+                    tracker.timer?.invalidate()
+                    eoseTrackers.removeValue(forKey: subId)
+                    tracker.callback()
+                } else {
+                    eoseTrackers[subId] = tracker
+                }
+            }
         case .ok(let eventId, let success, let reason):
             if success {
                 _ = Self.pendingGiftWrapIDs.remove(eventId)
@@ -750,6 +783,16 @@ struct NostrFilter: Encodable {
     static func geohashEphemeral(_ geohash: String, since: Date? = nil, limit: Int = 200) -> NostrFilter {
         var filter = NostrFilter()
         filter.kinds = [20000]
+        filter.since = since?.timeIntervalSince1970.toInt()
+        filter.tagFilters = ["g": [geohash]]
+        filter.limit = limit
+        return filter
+    }
+
+    // For location notes: persistent text notes (kind 1) tagged with geohash
+    static func geohashNotes(_ geohash: String, since: Date? = nil, limit: Int = 200) -> NostrFilter {
+        var filter = NostrFilter()
+        filter.kinds = [1]
         filter.since = since?.timeIntervalSince1970.toInt()
         filter.tagFilters = ["g": [geohash]]
         filter.limit = limit

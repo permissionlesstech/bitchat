@@ -9,15 +9,22 @@
 import Foundation
 import Security
 
-final class KeychainManager {
-    static let shared = KeychainManager()
+protocol KeychainManagerProtocol {
+    func saveIdentityKey(_ keyData: Data, forKey key: String) -> Bool
+    func getIdentityKey(forKey key: String) -> Data?
+    func deleteIdentityKey(forKey key: String) -> Bool
+    func deleteAllKeychainData() -> Bool
     
+    func secureClear(_ data: inout Data)
+    func secureClear(_ string: inout String)
+    
+    func verifyIdentityKeyExists() -> Bool
+}
+
+final class KeychainManager: KeychainManagerProtocol {
     // Use consistent service name for all keychain items
     private let service = "chat.bitchat"
     private let appGroup = "group.chat.bitchat"
-    
-    private init() {}
-    
     
     private func isSandboxed() -> Bool {
         #if os(macOS)
@@ -310,7 +317,7 @@ final class KeychainManager {
     // MARK: - Security Utilities
     
     /// Securely clear sensitive data from memory
-    static func secureClear(_ data: inout Data) {
+    func secureClear(_ data: inout Data) {
         _ = data.withUnsafeMutableBytes { bytes in
             // Use volatile memset to prevent compiler optimization
             memset_s(bytes.baseAddress, bytes.count, 0, bytes.count)
@@ -319,7 +326,7 @@ final class KeychainManager {
     }
     
     /// Securely clear sensitive string from memory
-    static func secureClear(_ string: inout String) {
+    func secureClear(_ string: inout String) {
         // Convert to mutable data and clear
         if var data = string.data(using: .utf8) {
             secureClear(&data)

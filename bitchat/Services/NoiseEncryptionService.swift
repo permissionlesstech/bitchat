@@ -155,6 +155,7 @@ final class NoiseEncryptionService {
     
     // Security components
     private let rateLimiter = NoiseRateLimiter()
+    private let keychain: KeychainManagerProtocol
     
     // Session maintenance
     private var rekeyTimer: Timer?
@@ -181,12 +182,14 @@ final class NoiseEncryptionService {
         }
     }
     
-    init() {
+    init(keychain: KeychainManagerProtocol) {
+        self.keychain = keychain
+        
         // Load or create static identity key (ONLY from keychain)
         let loadedKey: Curve25519.KeyAgreement.PrivateKey
         
         // Try to load from keychain
-        if let identityData = KeychainManager.shared.getIdentityKey(forKey: "noiseStaticKey"),
+        if let identityData = keychain.getIdentityKey(forKey: "noiseStaticKey"),
            let key = try? Curve25519.KeyAgreement.PrivateKey(rawRepresentation: identityData) {
             loadedKey = key
             SecureLogger.logKeyOperation(.load, keyType: "noiseStaticKey", success: true)
@@ -197,7 +200,7 @@ final class NoiseEncryptionService {
             let keyData = loadedKey.rawRepresentation
             
             // Save to keychain
-            let saved = KeychainManager.shared.saveIdentityKey(keyData, forKey: "noiseStaticKey")
+            let saved = keychain.saveIdentityKey(keyData, forKey: "noiseStaticKey")
             SecureLogger.logKeyOperation(.create, keyType: "noiseStaticKey", success: saved)
         }
         
@@ -209,7 +212,7 @@ final class NoiseEncryptionService {
         let loadedSigningKey: Curve25519.Signing.PrivateKey
         
         // Try to load from keychain
-        if let signingData = KeychainManager.shared.getIdentityKey(forKey: "ed25519SigningKey"),
+        if let signingData = keychain.getIdentityKey(forKey: "ed25519SigningKey"),
            let key = try? Curve25519.Signing.PrivateKey(rawRepresentation: signingData) {
             loadedSigningKey = key
             SecureLogger.logKeyOperation(.load, keyType: "ed25519SigningKey", success: true)
@@ -220,7 +223,7 @@ final class NoiseEncryptionService {
             let keyData = loadedSigningKey.rawRepresentation
             
             // Save to keychain
-            let saved = KeychainManager.shared.saveIdentityKey(keyData, forKey: "ed25519SigningKey")
+            let saved = keychain.saveIdentityKey(keyData, forKey: "ed25519SigningKey")
             SecureLogger.logKeyOperation(.create, keyType: "ed25519SigningKey", success: saved)
         }
         
@@ -229,7 +232,7 @@ final class NoiseEncryptionService {
         self.signingPublicKey = signingKey.publicKey
         
         // Initialize session manager
-        self.sessionManager = NoiseSessionManager(localStaticKey: staticIdentityKey)
+        self.sessionManager = NoiseSessionManager(localStaticKey: staticIdentityKey, keychain: keychain)
         
         // Set up session callbacks
         sessionManager.onSessionEstablished = { [weak self] peerID, remoteStaticKey in
@@ -266,8 +269,8 @@ final class NoiseEncryptionService {
     /// Clear persistent identity (for panic mode)
     func clearPersistentIdentity() {
         // Clear from keychain
-        let deletedStatic = KeychainManager.shared.deleteIdentityKey(forKey: "noiseStaticKey")
-        let deletedSigning = KeychainManager.shared.deleteIdentityKey(forKey: "ed25519SigningKey")
+        let deletedStatic = keychain.deleteIdentityKey(forKey: "noiseStaticKey")
+        let deletedSigning = keychain.deleteIdentityKey(forKey: "ed25519SigningKey")
         SecureLogger.logKeyOperation(.delete, keyType: "identity keys", success: deletedStatic && deletedSigning)
         SecureLogger.warning("Panic mode activated - identity cleared", category: .security)
         // Stop rekey timer

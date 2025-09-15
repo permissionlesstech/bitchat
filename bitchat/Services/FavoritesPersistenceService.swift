@@ -13,12 +13,16 @@ final class FavoritesPersistenceService: ObservableObject {
         let theyFavoritedUs: Bool
         let favoritedAt: Date
         let lastUpdated: Date
+        // Track what we last sent as OUR npub to this peer, to avoid resending unless it changes
+        // Note: we do not track which npub we last sent to them; sending happens only on favorite toggle
         
         var isMutual: Bool {
             isFavorite && theyFavoritedUs
         }
     }
     
+    // We intentionally do not track when we last sent our npub; sending happens only on favorite toggle.
+
     private static let storageKey = "chat.bitchat.favorites"
     private static let keychainService = "chat.bitchat.favorites"
     

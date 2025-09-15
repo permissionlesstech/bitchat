@@ -1,0 +1,27 @@
+name: Build & Test
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    name: Run Swift Tests
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Swift
+        uses: swift-actions/setup-swift@v2
+
+      - name: Build the package
+        run: swift build
+
+      - name: Run Tests
+        run: swift test --parallel --disable-swift-testing  # so it only runs xctests: https://github.com/swiftlang/swift-package-manager/issues/8529#issuecomment-2815711345

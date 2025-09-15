@@ -74,6 +74,7 @@ final class MessageRouter {
     }
 
     func sendFavoriteNotification(to peerID: String, isFavorite: Bool) {
+        // Route via mesh when connected; else use Nostr
         if mesh.isPeerConnected(peerID) {
             mesh.sendFavoriteNotification(to: peerID, isFavorite: isFavorite)
         } else {
