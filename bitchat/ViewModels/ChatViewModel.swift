@@ -195,7 +195,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         let collapsed = trimmed.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
         let prefix = String(collapsed.prefix(TransportConfig.contentKeyPrefixLength))
         // Fast djb2 hash
-        let h = djb2(prefix)
+        let h = prefix.djb2()
         return String(format: "h:%016llx", h)
     }
 
@@ -1396,108 +1396,118 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             updatePrivateChatPeerIfNeeded()
             
             if let selectedPeer = selectedPrivateChatPeer {
-                // Send as private message
                 sendPrivateMessage(content, to: selectedPeer)
-            } else {
+            }
+            return
+        }
+        
+        // Parse mentions from the content (use original content for user intent)
+        let mentions = parseMentions(from: content)
+        
+        // Add message to local display
+        var displaySender = nickname
+        var localSenderPeerID = meshService.myPeerID
+        if case .location(let ch) = activeChannel,
+           let myGeoIdentity = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
+            let suffix = String(myGeoIdentity.publicKeyHex.suffix(4))
+            displaySender = nickname + "#" + suffix
+            localSenderPeerID = "nostr:\(myGeoIdentity.publicKeyHex.prefix(TransportConfig.nostrShortKeyDisplayLength))"
+        }
+
+        let message = BitchatMessage(
+            sender: displaySender,
+            content: trimmed,
+            timestamp: Date(),
+            isRelay: false,
+            senderPeerID: localSenderPeerID,
+            mentions: mentions.isEmpty ? nil : mentions
+        )
+        
+        // Add to main messages immediately for user feedback
+        messages.append(message)
+        
+        // Update content LRU for near-dup detection
+        let ckey = normalizedContentKey(message.content)
+        recordContentKey(ckey, timestamp: message.timestamp)
+        
+        // Persist to channel-specific timelines
+        switch activeChannel {
+        case .mesh:
+            meshTimeline.append(message)
+            trimMeshTimelineIfNeeded()
+        case .location(let ch):
+            var arr = geoTimelines[ch.geohash] ?? []
+            arr.append(message)
+            if arr.count > geoTimelineCap {
+                arr = Array(arr.suffix(geoTimelineCap))
+            }
+            geoTimelines[ch.geohash] = arr
+        }
+        trimMessagesIfNeeded()
+        
+        // Force immediate UI update for user's own messages
+        objectWillChange.send()
+
+        // Update channel activity time on send
+        switch activeChannel {
+        case .mesh:
+            lastPublicActivityAt["mesh"] = Date()
+        case .location(let ch):
+            lastPublicActivityAt["geo:\(ch.geohash)"] = Date()
+        }
+        
+        if case .location(let ch) = activeChannel {
+            // Send to geohash channel via Nostr ephemeral
+            Task { @MainActor in
+                sendGeohash(ch: ch, content: trimmed)
             }
         } else {
-            // Parse mentions from the content (use original content for user intent)
-            let mentions = parseMentions(from: content)
+            // Send via mesh with mentions
+            meshService.sendMessage(content, mentions: mentions)
+        }
+    }
+    
+    @MainActor
+    private func sendGeohash(ch: GeohashChannel, content: String) {
+        do {
+            let identity = try NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash)
             
-            // Add message to local display
-            var displaySender = nickname
-            var localSenderPeerID = meshService.myPeerID
-            if case .location(let ch) = activeChannel,
-               let myGeoIdentity = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
-                let suffix = String(myGeoIdentity.publicKeyHex.suffix(4))
-                displaySender = nickname + "#" + suffix
-                localSenderPeerID = "nostr:\(myGeoIdentity.publicKeyHex.prefix(TransportConfig.nostrShortKeyDisplayLength))"
-            }
-
-            let message = BitchatMessage(
-                sender: displaySender,
-                content: trimmed,
-                timestamp: Date(),
-                isRelay: false,
-                originalSender: nil,
-                isPrivate: false,
-                recipientNickname: nil,
-                senderPeerID: localSenderPeerID,
-                mentions: mentions.isEmpty ? nil : mentions
+            let event = try NostrProtocol.createEphemeralGeohashEvent(
+                content: content,
+                geohash: ch.geohash,
+                senderIdentity: identity,
+                nickname: nickname,
+                teleported: LocationChannelManager.shared.teleported
             )
             
-            // Add to main messages immediately for user feedback
-            messages.append(message)
-            // Update content LRU for near-dup detection
-            let ckey = normalizedContentKey(message.content)
-            recordContentKey(ckey, timestamp: message.timestamp)
-            // Persist to channel-specific timelines
-            switch activeChannel {
-            case .mesh:
-                meshTimeline.append(message)
-                trimMeshTimelineIfNeeded()
-            case .location(let ch):
-                var arr = geoTimelines[ch.geohash] ?? []
-                arr.append(message)
-                if arr.count > geoTimelineCap { arr = Array(arr.suffix(geoTimelineCap)) }
-                geoTimelines[ch.geohash] = arr
-            }
-            trimMessagesIfNeeded()
+            let targetRelays = GeoRelayDirectory.shared.closestRelays(
+                toGeohash: ch.geohash,
+                count: TransportConfig.nostrGeoRelayCount
+            )
             
-            // Force immediate UI update for user's own messages
-            objectWillChange.send()
-
-            // Update channel activity time on send
-            switch activeChannel {
-            case .mesh:
-                lastPublicActivityAt["mesh"] = Date()
-            case .location(let ch):
-                lastPublicActivityAt["geo:\(ch.geohash)"] = Date()
-            }
-            
-            if case .location(let ch) = activeChannel {
-                // Send to geohash channel via Nostr ephemeral
-                Task { @MainActor in
-                    do {
-                        let identity = try NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash)
-                        let event = try NostrProtocol.createEphemeralGeohashEvent(
-                            content: trimmed,
-                            geohash: ch.geohash,
-                            senderIdentity: identity,
-                            nickname: self.nickname,
-                            teleported: LocationChannelManager.shared.teleported
-                        )
-                        let targetRelays = GeoRelayDirectory.shared.closestRelays(
-                            toGeohash: ch.geohash,
-                            count: TransportConfig.nostrGeoRelayCount
-                        )
-                        if targetRelays.isEmpty {
-                            SecureLogger.warning("Geo: no geohash relays available for \(ch.geohash); not sending", category: .session)
-                        } else {
-                            NostrRelayManager.shared.sendEvent(event, to: targetRelays)
-                        }
-                        // Track ourselves as active participant
-                        self.recordGeoParticipant(pubkeyHex: identity.publicKeyHex)
-                        SecureLogger.debug("GeoTeleport: sent geo message pub=\(identity.publicKeyHex.prefix(8))… teleported=\(LocationChannelManager.shared.teleported)", category: .session)
-                        // If we tagged this as teleported, also mark our pubkey in teleportedGeo for UI
-                        // Only when not in our regional set (and regional list is known)
-                        let hasRegional = !LocationChannelManager.shared.availableChannels.isEmpty
-                        let inRegional = LocationChannelManager.shared.availableChannels.contains { $0.geohash == ch.geohash }
-                        if LocationChannelManager.shared.teleported && hasRegional && !inRegional {
-                            let key = identity.publicKeyHex.lowercased()
-                            self.teleportedGeo = self.teleportedGeo.union([key])
-                            SecureLogger.info("GeoTeleport: mark self teleported key=\(key.prefix(8))… total=\(self.teleportedGeo.count)", category: .session)
-                        }
-                    } catch {
-                        SecureLogger.error("❌ Failed to send geohash message: \(error)", category: .session)
-                        self.addSystemMessage("failed to send to location channel")
-                    }
-                }
+            if targetRelays.isEmpty {
+                SecureLogger.warning("Geo: no geohash relays available for \(ch.geohash); not sending", category: .session)
             } else {
-                // Send via mesh with mentions
-                meshService.sendMessage(content, mentions: mentions)
+                NostrRelayManager.shared.sendEvent(event, to: targetRelays)
             }
             
+            // Track ourselves as active participant
+            recordGeoParticipant(pubkeyHex: identity.publicKeyHex)
+            SecureLogger.debug("GeoTeleport: sent geo message pub=\(identity.publicKeyHex.prefix(8))… teleported=\(LocationChannelManager.shared.teleported)", category: .session)
+            
+            // If we tagged this as teleported, also mark our pubkey in teleportedGeo for UI
+            // Only when not in our regional set (and regional list is known)
+            let hasRegional = !LocationChannelManager.shared.availableChannels.isEmpty
+            let inRegional = LocationChannelManager.shared.availableChannels.contains { $0.geohash == ch.geohash }
+            
+            if LocationChannelManager.shared.teleported && hasRegional && !inRegional {
+                let key = identity.publicKeyHex.lowercased()
+                teleportedGeo = teleportedGeo.union([key])
+                SecureLogger.info("GeoTeleport: mark self teleported key=\(key.prefix(8))… total=\(teleportedGeo.count)", category: .session)
+            }
+        } catch {
+            SecureLogger.error("❌ Failed to send geohash message: \(error)", category: .session)
+            addSystemMessage("failed to send to location channel")
         }
     }
 
@@ -1529,7 +1539,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         }
         // If switching to a location channel, flush any pending geohash-only system messages
         if case .location = channel, !pendingGeohashSystemMessages.isEmpty {
-            for m in pendingGeohashSystemMessages { addPublicSystemMessage(m) }
+            for m in pendingGeohashSystemMessages {
+                addPublicSystemMessage(m)
+            }
             pendingGeohashSystemMessages.removeAll(keepingCapacity: false)
         }
         // Unsubscribe previous
@@ -1548,9 +1560,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         
         guard case .location(let ch) = channel else { return }
         currentGeohash = ch.geohash
+        
         // Ensure self appears immediately in the people list; mark teleported state only when truly teleported
         if let id = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
-            self.recordGeoParticipant(pubkeyHex: id.publicKeyHex)
+            recordGeoParticipant(pubkeyHex: id.publicKeyHex)
             let hasRegional = !LocationChannelManager.shared.availableChannels.isEmpty
             let inRegional = LocationChannelManager.shared.availableChannels.contains { $0.geohash == ch.geohash }
             let key = id.publicKeyHex.lowercased()
@@ -1561,220 +1574,273 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                 teleportedGeo.remove(key)
             }
         }
+        
         let subID = "geo-\(ch.geohash)"
         geoSubscriptionID = subID
         startGeoParticipantsTimer()
-        let filter = NostrFilter.geohashEphemeral(
-            ch.geohash,
-            since: Date().addingTimeInterval(-TransportConfig.nostrGeohashInitialLookbackSeconds),
-            limit: TransportConfig.nostrGeohashInitialLimit
-        )
+        let ts = Date().addingTimeInterval(-TransportConfig.nostrGeohashInitialLookbackSeconds)
+        let filter = NostrFilter.geohashEphemeral(ch.geohash, since: ts, limit: TransportConfig.nostrGeohashInitialLimit)
         let subRelays = GeoRelayDirectory.shared.closestRelays(toGeohash: ch.geohash, count: 5)
         NostrRelayManager.shared.subscribe(filter: filter, id: subID, relayUrls: subRelays) { [weak self] event in
-            guard let self = self else { return }
-            // Only handle ephemeral kind 20000 with matching tag
-            guard event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue else { return }
-            // Deduplicate
-            if self.processedNostrEvents.contains(event.id) { return }
-            self.recordProcessedEvent(event.id)
-            // Log incoming tags for diagnostics
-            let tagSummary = event.tags.map { "[" + $0.joined(separator: ",") + "]" }.joined(separator: ",")
-            SecureLogger.debug("GeoTeleport: recv pub=\(event.pubkey.prefix(8))… tags=\(tagSummary)", category: .session)
-            // Track teleport tag for participants – only our format ["t", "teleport"]
-            let hasTeleportTag: Bool = event.tags.contains(where: { tag in
-                tag.count >= 2 && tag[0].lowercased() == "t" && tag[1].lowercased() == "teleport"
-            })
-            if hasTeleportTag {
-                let key = event.pubkey.lowercased()
-                // Avoid marking our own key from historical events; rely on manager.teleported for self
-                let isSelf: Bool = {
-                    if let gh = self.currentGeohash, let my = try? NostrIdentityBridge.deriveIdentity(forGeohash: gh) {
-                        return my.publicKeyHex.lowercased() == key
-                    }
-                    return false
-                }()
-                if !isSelf {
-                    Task { @MainActor in
-                        self.teleportedGeo = self.teleportedGeo.union([key])
-                        SecureLogger.info("GeoTeleport: mark peer teleported key=\(key.prefix(8))… total=\(self.teleportedGeo.count)", category: .session)
-                    }
-                }
-            }
-            // Skip only very recent self-echo from relay; include older self events for hydration
-            if let gh = self.currentGeohash,
-               let myGeoIdentity = try? NostrIdentityBridge.deriveIdentity(forGeohash: gh),
-               myGeoIdentity.publicKeyHex.lowercased() == event.pubkey.lowercased() {
-                let eventTime = Date(timeIntervalSince1970: TimeInterval(event.created_at))
-                if Date().timeIntervalSince(eventTime) < 15 { return }
-            }
-            // Cache nickname from tag if present
-            if let nickTag = event.tags.first(where: { $0.first == "n" }), nickTag.count >= 2 {
-                let nick = nickTag[1].trimmingCharacters(in: .whitespacesAndNewlines)
-                self.geoNicknames[event.pubkey.lowercased()] = nick
-            }
-            // If this pubkey is blocked, skip mapping, participants, and timeline
-            if identityManager.isNostrBlocked(pubkeyHexLowercased: event.pubkey) {
-                return
-            }
-            // Store mapping for geohash DM initiation
-            let key16 = "nostr_" + String(event.pubkey.prefix(TransportConfig.nostrConvKeyPrefixLength))
-            self.nostrKeyMapping[key16] = event.pubkey
-            let key8 = "nostr:" + String(event.pubkey.prefix(TransportConfig.nostrShortKeyDisplayLength))
-            self.nostrKeyMapping[key8] = event.pubkey
-            // Update participants last-seen for this pubkey
-            self.recordGeoParticipant(pubkeyHex: event.pubkey)
-            
-            let senderName = self.displayNameForNostrPubkey(event.pubkey)
-            let content = event.content
-            // If this is a teleport presence event (no content), don't add to timeline
-            if let teleTag = event.tags.first(where: { $0.first == "t" }), teleTag.count >= 2, (teleTag[1] == "teleport"),
-               content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return
-            }
-            // Clamp future timestamps
-            let rawTs = Date(timeIntervalSince1970: TimeInterval(event.created_at))
-            let timestamp = min(rawTs, Date())
-            let mentions = self.parseMentions(from: content)
-            let msg = BitchatMessage(
-                id: event.id,
-                sender: senderName,
-                content: content,
-                timestamp: timestamp,
-                isRelay: false,
-                originalSender: nil,
-                isPrivate: false,
-                recipientNickname: nil,
-                senderPeerID: "nostr:\(event.pubkey.prefix(TransportConfig.nostrShortKeyDisplayLength))",
-                mentions: mentions.isEmpty ? nil : mentions
-            )
-            Task { @MainActor in
-                self.handlePublicMessage(msg)
-                self.checkForMentions(msg)
-                self.sendHapticFeedback(for: msg)
-            }
+            self?.handleNostrEvent(event)
         }
 
-        // Subscribe to Nostr gift wraps (DMs) for this geohash identity
-        do {
-            let id = try NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash)
-            let dmSub = "geo-dm-\(ch.geohash)"
-            geoDmSubscriptionID = dmSub
-            // pared back logging: subscribe debug only
-            // Log GeoDM subscribe only when Tor is ready to avoid early noise
-            if TorManager.shared.isReady {
-                SecureLogger.debug("GeoDM: subscribing DMs pub=\(id.publicKeyHex.prefix(8))… sub=\(dmSub)", category: .session)
-            }
-            let dmFilter = NostrFilter.giftWrapsFor(pubkey: id.publicKeyHex, since: Date().addingTimeInterval(-TransportConfig.nostrDMSubscribeLookbackSeconds))
-            NostrRelayManager.shared.subscribe(filter: dmFilter, id: dmSub) { [weak self] giftWrap in
-                guard let self = self else { return }
-                // Dedup basic
-                if self.processedNostrEvents.contains(giftWrap.id) { return }
-                self.recordProcessedEvent(giftWrap.id)
-                // Decrypt with per-geohash identity
-                guard let (content, senderPubkey, rumorTs) = try? NostrProtocol.decryptPrivateMessage(giftWrap: giftWrap, recipientIdentity: id) else {
-                    SecureLogger.warning("GeoDM: failed decrypt giftWrap id=\(giftWrap.id.prefix(8))…", category: .session)
-                    return
-                }
-                SecureLogger.debug("GeoDM: decrypted gift-wrap id=\(giftWrap.id.prefix(16))... from=\(senderPubkey.prefix(8))...", category: .session)
-                guard content.hasPrefix("bitchat1:") else { return }
-                guard let packetData = Self.base64URLDecode(String(content.dropFirst("bitchat1:".count))),
-                      let packet = BitchatPacket.from(packetData) else { return }
-                guard packet.type == MessageType.noiseEncrypted.rawValue else { return }
-                guard let noisePayload = NoisePayload.decode(packet.payload) else { return }
-                let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(rumorTs))
-                let convKey = "nostr_" + String(senderPubkey.prefix(16))
-                self.nostrKeyMapping[convKey] = senderPubkey
-                switch noisePayload.type {
-                case .privateMessage:
-                    guard let pm = PrivateMessagePacket.decode(from: noisePayload.data) else { return }
-                    let messageId = pm.messageID
-                    SecureLogger.info("GeoDM: recv PM <- sender=\(senderPubkey.prefix(8))… mid=\(messageId.prefix(8))…", category: .session)
-                    // Send delivery ACK immediately (even if duplicate), once per messageID
-                    if !self.sentGeoDeliveryAcks.contains(messageId) {
-                        let nostrTransport = NostrTransport(keychain: keychain)
-                        nostrTransport.senderPeerID = self.meshService.myPeerID
-                    // pared back: omit pre-send log
-                        nostrTransport.sendDeliveryAckGeohash(for: messageId, toRecipientHex: senderPubkey, from: id)
-                        self.sentGeoDeliveryAcks.insert(messageId)
-                    }
-                    // Duplicate check
-                    if self.privateChats[convKey]?.contains(where: { $0.id == messageId }) == true { return }
-                    for (_, arr) in self.privateChats { if arr.contains(where: { $0.id == messageId }) { return } }
-                    let senderName = self.displayNameForNostrPubkey(senderPubkey)
-                    let isViewing = (self.selectedPrivateChatPeer == convKey)
-                    let wasReadBefore = self.sentReadReceipts.contains(messageId)
-                    let isRecentMessage = Date().timeIntervalSince(messageTimestamp) < 30
-                    let shouldMarkUnread = !wasReadBefore && !isViewing && isRecentMessage
-                    let msg = BitchatMessage(
-                        id: messageId,
-                        sender: senderName,
-                        content: pm.content,
-                        timestamp: messageTimestamp,
-                        isRelay: false,
-                        originalSender: nil,
-                        isPrivate: true,
-                        recipientNickname: self.nickname,
-                        senderPeerID: convKey,
-                        mentions: nil,
-                        deliveryStatus: .delivered(to: self.nickname, at: Date())
-                    )
-                    if self.privateChats[convKey] == nil { self.privateChats[convKey] = [] }
-                    self.privateChats[convKey]?.append(msg)
-                    self.trimPrivateChatMessagesIfNeeded(for: convKey)
-                    if shouldMarkUnread { self.unreadPrivateMessages.insert(convKey) }
-                    // Send READ if viewing this conversation
-                    if isViewing {
-                        // pared back: omit pre-send READ log
-                        if !wasReadBefore {
-                            let nostrTransport = NostrTransport(keychain: keychain)
-                            nostrTransport.senderPeerID = self.meshService.myPeerID
-                            nostrTransport.sendReadReceiptGeohash(messageId, toRecipientHex: senderPubkey, from: id)
-                            self.sentReadReceipts.insert(messageId)
-                        }
-                    } else {
-                        // pared back: omit defer READ log
-                    }
-                    // Notify for truly unread and recent messages when not viewing
-                    if !isViewing && shouldMarkUnread {
-                        NotificationService.shared.sendPrivateMessageNotification(
-                            from: senderName,
-                            message: pm.content,
-                            peerID: convKey
-                        )
-                    }
-                    self.objectWillChange.send()
-                default:
-                    // Handle delivered/read receipts for our sent messages
-                    switch noisePayload.type {
-                    case .delivered:
-                        if let messageID = String(data: noisePayload.data, encoding: .utf8) {
-                            if let idx = self.privateChats[convKey]?.firstIndex(where: { $0.id == messageID }) {
-                                self.privateChats[convKey]?[idx].deliveryStatus = .delivered(to: self.displayNameForNostrPubkey(senderPubkey), at: Date())
-                                self.objectWillChange.send()
-                                SecureLogger.info("GeoDM: recv DELIVERED for mid=\(messageID.prefix(8))… from=\(senderPubkey.prefix(8))…", category: .session)
-                            } else {
-                                SecureLogger.warning("GeoDM: delivered ack for unknown mid=\(messageID.prefix(8))… conv=\(convKey)", category: .session)
-                            }
-                        }
-                    case .readReceipt:
-                        if let messageID = String(data: noisePayload.data, encoding: .utf8) {
-                            if let idx = self.privateChats[convKey]?.firstIndex(where: { $0.id == messageID }) {
-                                self.privateChats[convKey]?[idx].deliveryStatus = .read(by: self.displayNameForNostrPubkey(senderPubkey), at: Date())
-                                self.objectWillChange.send()
-                                SecureLogger.info("GeoDM: recv READ for mid=\(messageID.prefix(8))… from=\(senderPubkey.prefix(8))…", category: .session)
-                            } else {
-                                SecureLogger.warning("GeoDM: read ack for unknown mid=\(messageID.prefix(8))… conv=\(convKey)", category: .session)
-                            }
-                        }
-                    default:
-                        break
-                    }
-                }
-            }
-        } catch {
-            // ignore
+        subscribeToGeoChat(ch)
+    }
+    
+    private func handleNostrEvent(_ event: NostrEvent) {
+        // Only handle ephemeral kind 20000 with matching tag
+        guard event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue else { return }
+        
+        // Deduplicate
+        if processedNostrEvents.contains(event.id) { return }
+        recordProcessedEvent(event.id)
+        
+        // Log incoming tags for diagnostics
+        let tagSummary = event.tags.map { "[" + $0.joined(separator: ",") + "]" }.joined(separator: ",")
+        SecureLogger.debug("GeoTeleport: recv pub=\(event.pubkey.prefix(8))… tags=\(tagSummary)", category: .session)
+        
+        // Track teleport tag for participants – only our format ["t", "teleport"]
+        let hasTeleportTag: Bool = event.tags.contains { tag in
+            tag.count >= 2 && tag[0].lowercased() == "t" && tag[1].lowercased() == "teleport"
         }
-        //
+        
+        let isSelf: Bool = {
+            if let gh = currentGeohash, let my = try? NostrIdentityBridge.deriveIdentity(forGeohash: gh) {
+                return my.publicKeyHex.lowercased() == event.pubkey.lowercased()
+            }
+            return false
+        }()
+
+        if hasTeleportTag {
+            // Avoid marking our own key from historical events; rely on manager.teleported for self
+            if !isSelf {
+                let key = event.pubkey.lowercased()
+                Task { @MainActor in
+                    teleportedGeo = teleportedGeo.union([key])
+                    SecureLogger.info("GeoTeleport: mark peer teleported key=\(key.prefix(8))… total=\(teleportedGeo.count)", category: .session)
+                }
+            }
+        }
+        
+        // Skip only very recent self-echo from relay; include older self events for hydration
+        if isSelf {
+            let eventTime = Date(timeIntervalSince1970: TimeInterval(event.created_at))
+            if Date().timeIntervalSince(eventTime) < 15 {
+                return
+            }
+        }
+        
+        // Cache nickname from tag if present
+        if let nickTag = event.tags.first(where: { $0.first == "n" }), nickTag.count >= 2 {
+            let nick = nickTag[1].trimmingCharacters(in: .whitespacesAndNewlines)
+            geoNicknames[event.pubkey.lowercased()] = nick
+        }
+        
+        // If this pubkey is blocked, skip mapping, participants, and timeline
+        if identityManager.isNostrBlocked(pubkeyHexLowercased: event.pubkey) {
+            return
+        }
+        
+        // Store mapping for geohash DM initiation
+        let key16 = "nostr_" + String(event.pubkey.prefix(TransportConfig.nostrConvKeyPrefixLength))
+        nostrKeyMapping[key16] = event.pubkey
+        let key8 = "nostr:" + String(event.pubkey.prefix(TransportConfig.nostrShortKeyDisplayLength))
+        nostrKeyMapping[key8] = event.pubkey
+        
+        // Update participants last-seen for this pubkey
+        recordGeoParticipant(pubkeyHex: event.pubkey)
+        
+        let senderName = displayNameForNostrPubkey(event.pubkey)
+        let content = event.content
+        
+        // If this is a teleport presence event (no content), don't add to timeline
+        if let teleTag = event.tags.first(where: { $0.first == "t" }), teleTag.count >= 2, (teleTag[1] == "teleport"),
+           content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return
+        }
+        
+        // Clamp future timestamps
+        let rawTs = Date(timeIntervalSince1970: TimeInterval(event.created_at))
+        let mentions = parseMentions(from: content)
+        let msg = BitchatMessage(
+            id: event.id,
+            sender: senderName,
+            content: content,
+            timestamp: min(rawTs, Date()),
+            isRelay: false,
+            senderPeerID: "nostr:\(event.pubkey.prefix(TransportConfig.nostrShortKeyDisplayLength))",
+            mentions: mentions.isEmpty ? nil : mentions
+        )
+        
+        Task { @MainActor in
+            handlePublicMessage(msg)
+            checkForMentions(msg)
+            sendHapticFeedback(for: msg)
+        }
+    }
+    
+    @MainActor
+    private func subscribeToGeoChat(_ ch: GeohashChannel) {
+        guard let id = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) else { return }
+        
+        let dmSub = "geo-dm-\(ch.geohash)"
+        geoDmSubscriptionID = dmSub
+        // pared back logging: subscribe debug only
+        // Log GeoDM subscribe only when Tor is ready to avoid early noise
+        if TorManager.shared.isReady {
+            SecureLogger.debug("GeoDM: subscribing DMs pub=\(id.publicKeyHex.prefix(8))… sub=\(dmSub)", category: .session)
+        }
+        let dmFilter = NostrFilter.giftWrapsFor(pubkey: id.publicKeyHex, since: Date().addingTimeInterval(-TransportConfig.nostrDMSubscribeLookbackSeconds))
+        NostrRelayManager.shared.subscribe(filter: dmFilter, id: dmSub) { [weak self] giftWrap in
+            self?.handleGiftWrap(giftWrap, id: id)
+        }
+    }
+    
+    private func handleGiftWrap(_ giftWrap: NostrEvent, id: NostrIdentity) {
+        if processedNostrEvents.contains(giftWrap.id) {
+            return
+        }
+        recordProcessedEvent(giftWrap.id)
+        
+        // Decrypt with per-geohash identity
+        guard let (content, senderPubkey, rumorTs) = try? NostrProtocol.decryptPrivateMessage(giftWrap: giftWrap, recipientIdentity: id) else {
+            SecureLogger.warning("GeoDM: failed decrypt giftWrap id=\(giftWrap.id.prefix(8))…", category: .session)
+            return
+        }
+        
+        SecureLogger.debug("GeoDM: decrypted gift-wrap id=\(giftWrap.id.prefix(16))... from=\(senderPubkey.prefix(8))...", category: .session)
+        
+        guard content.hasPrefix("bitchat1:"),
+              let packetData = Self.base64URLDecode(String(content.dropFirst("bitchat1:".count))),
+              let packet = BitchatPacket.from(packetData),
+              packet.type == MessageType.noiseEncrypted.rawValue,
+              let payload = NoisePayload.decode(packet.payload)
+        else {
+            return
+        }
+        
+        let convKey = "nostr_" + String(senderPubkey.prefix(16))
+        nostrKeyMapping[convKey] = senderPubkey
+        
+        switch payload.type {
+        case .privateMessage:
+            let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(rumorTs))
+            handlePrivateMessage(payload, senderPubkey: senderPubkey, convKey: convKey, id: id, messageTimestamp: messageTimestamp)
+        case .delivered:
+            handleDelivered(payload, senderPubkey: senderPubkey, convKey: convKey)
+        case .readReceipt:
+            handleReadReceipt(payload, senderPubkey: senderPubkey, convKey: convKey)
+        
+        // Explicitly list other cases so we get compile-time check if a new case is added in the future
+        case .verifyChallenge, .verifyResponse:
+            break
+        }
+    }
+    
+    private func handlePrivateMessage(
+        _ payload: NoisePayload,
+        senderPubkey: String,
+        convKey: String,
+        id: NostrIdentity,
+        messageTimestamp: Date
+    ) {
+        guard let pm = PrivateMessagePacket.decode(from: payload.data) else { return }
+        let messageId = pm.messageID
+        
+        SecureLogger.info("GeoDM: recv PM <- sender=\(senderPubkey.prefix(8))… mid=\(messageId.prefix(8))…", category: .session)
+        
+        // Send delivery ACK immediately (even if duplicate), once per messageID
+        if !sentGeoDeliveryAcks.contains(messageId) {
+            let nostrTransport = NostrTransport(keychain: keychain)
+            nostrTransport.senderPeerID = meshService.myPeerID
+            // pared back: omit pre-send log
+            nostrTransport.sendDeliveryAckGeohash(for: messageId, toRecipientHex: senderPubkey, from: id)
+            sentGeoDeliveryAcks.insert(messageId)
+        }
+        
+        // Duplicate check
+        if privateChats[convKey]?.contains(where: { $0.id == messageId }) == true { return }
+        for (_, arr) in privateChats {
+            if arr.contains(where: { $0.id == messageId }) {
+                return
+            }
+        }
+        
+        let senderName = displayNameForNostrPubkey(senderPubkey)
+        let msg = BitchatMessage(
+            id: messageId,
+            sender: senderName,
+            content: pm.content,
+            timestamp: messageTimestamp,
+            isRelay: false,
+            isPrivate: true,
+            recipientNickname: nickname,
+            senderPeerID: convKey,
+            deliveryStatus: .delivered(to: nickname, at: Date())
+        )
+        
+        if privateChats[convKey] == nil {
+            privateChats[convKey] = []
+        }
+        privateChats[convKey]?.append(msg)
+        trimPrivateChatMessagesIfNeeded(for: convKey)
+        
+        let isViewing = selectedPrivateChatPeer == convKey
+        let wasReadBefore = sentReadReceipts.contains(messageId)
+        let isRecentMessage = Date().timeIntervalSince(messageTimestamp) < 30
+        let shouldMarkUnread = !wasReadBefore && !isViewing && isRecentMessage
+        if shouldMarkUnread {
+            unreadPrivateMessages.insert(convKey)
+        }
+        
+        // Send READ if viewing this conversation
+        if isViewing {
+            // pared back: omit pre-send READ log
+            if !wasReadBefore {
+                let nostrTransport = NostrTransport(keychain: keychain)
+                nostrTransport.senderPeerID = meshService.myPeerID
+                nostrTransport.sendReadReceiptGeohash(messageId, toRecipientHex: senderPubkey, from: id)
+                sentReadReceipts.insert(messageId)
+            }
+        } else {
+            // pared back: omit defer READ log
+        }
+        
+        // Notify for truly unread and recent messages when not viewing
+        if !isViewing && shouldMarkUnread {
+            NotificationService.shared.sendPrivateMessageNotification(
+                from: senderName,
+                message: pm.content,
+                peerID: convKey
+            )
+        }
+        
+        objectWillChange.send()
+    }
+    
+    private func handleDelivered(_ payload: NoisePayload, senderPubkey: String, convKey: String) {
+        guard let messageID = String(data: payload.data, encoding: .utf8) else { return }
+        
+        if let idx = privateChats[convKey]?.firstIndex(where: { $0.id == messageID }) {
+            privateChats[convKey]?[idx].deliveryStatus = .delivered(to: displayNameForNostrPubkey(senderPubkey), at: Date())
+            objectWillChange.send()
+            SecureLogger.info("GeoDM: recv DELIVERED for mid=\(messageID.prefix(8))… from=\(senderPubkey.prefix(8))…", category: .session)
+        } else {
+            SecureLogger.warning("GeoDM: delivered ack for unknown mid=\(messageID.prefix(8))… conv=\(convKey)", category: .session)
+        }
+    }
+    
+    private func handleReadReceipt(_ payload: NoisePayload, senderPubkey: String, convKey: String) {
+        guard let messageID = String(data: payload.data, encoding: .utf8) else { return }
+        
+        if let idx = privateChats[convKey]?.firstIndex(where: { $0.id == messageID }) {
+            privateChats[convKey]?[idx].deliveryStatus = .read(by: displayNameForNostrPubkey(senderPubkey), at: Date())
+            objectWillChange.send()
+            SecureLogger.info("GeoDM: recv READ for mid=\(messageID.prefix(8))… from=\(senderPubkey.prefix(8))…", category: .session)
+        } else {
+            SecureLogger.warning("GeoDM: read ack for unknown mid=\(messageID.prefix(8))… conv=\(convKey)", category: .session)
+        }
     }
 
     // MARK: - Geohash Participants
@@ -2081,77 +2147,16 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     func sendPrivateMessage(_ content: String, to peerID: String) {
         guard !content.isEmpty else { return }
         
-        // Geohash DM routing: conversation keys start with "nostr_"
-        if peerID.hasPrefix("nostr_") {
-            guard case .location(let ch) = activeChannel else {
-                addSystemMessage("cannot send: not in a location channel")
-                return
-            }
-            let messageID = UUID().uuidString
-            // Local echo in the DM thread
-            let message = BitchatMessage(
-                id: messageID,
-                sender: nickname,
-                content: content,
-                timestamp: Date(),
-                isRelay: false,
-                originalSender: nil,
-                isPrivate: true,
-                recipientNickname: nickname,
-                senderPeerID: meshService.myPeerID,
-                mentions: nil,
-                deliveryStatus: .sending
-            )
-            if privateChats[peerID] == nil { privateChats[peerID] = [] }
-            privateChats[peerID]?.append(message)
-            trimPrivateChatMessagesIfNeeded(for: peerID)
-            objectWillChange.send()
-
-            // Resolve recipient hex from mapping
-            guard let recipientHex = nostrKeyMapping[peerID] else {
-                if let msgIdx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
-                    privateChats[peerID]?[msgIdx].deliveryStatus = .failed(reason: "unknown recipient")
-                }
-                return
-            }
-            // Respect geohash blocks
-            if identityManager.isNostrBlocked(pubkeyHexLowercased: recipientHex) {
-                if let msgIdx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
-                    privateChats[peerID]?[msgIdx].deliveryStatus = .failed(reason: "user is blocked")
-                }
-                addSystemMessage("cannot send message: user is blocked.")
-                return
-            }
-            // Send via Nostr using per-geohash identity
-            do {
-                let id = try NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash)
-                // Prevent messaging ourselves
-                if recipientHex.lowercased() == id.publicKeyHex.lowercased() {
-                    if let idx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
-                        privateChats[peerID]?[idx].deliveryStatus = .failed(reason: "cannot message yourself")
-                    }
-                    return
-                }
-                SecureLogger.debug("GeoDM: local send mid=\(messageID.prefix(8))… to=\(recipientHex.prefix(8))… conv=\(peerID)", category: .session)
-                let nostrTransport = NostrTransport(keychain: keychain)
-                nostrTransport.senderPeerID = meshService.myPeerID
-                nostrTransport.sendPrivateMessageGeohash(content: content, toRecipientHex: recipientHex, from: id, messageID: messageID)
-                if let msgIdx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
-                    privateChats[peerID]?[msgIdx].deliveryStatus = .sent
-                }
-            } catch {
-                if let idx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
-                    privateChats[peerID]?[idx].deliveryStatus = .failed(reason: "send error")
-                }
-            }
-            return
-        }
-
         // Check if blocked
         if unifiedPeerService.isBlocked(peerID) {
             let nickname = meshService.peerNickname(peerID: peerID) ?? "user"
             addSystemMessage("cannot send message to \(nickname): user is blocked.")
             return
+        }
+        
+        // Geohash DM routing: conversation keys start with "nostr_"
+        if peerID.hasPrefix("nostr_") {
+            sendGeohashDM(content, to: peerID)
         }
         
         // Determine routing method and recipient nickname
@@ -2210,6 +2215,75 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                 privateChats[peerID]?[index].deliveryStatus = .failed(reason: "Peer not reachable")
             }
             addSystemMessage("Cannot send message to \(recipientNickname ?? "user") - peer is not reachable via mesh or Nostr.")
+        }
+    }
+    
+    private func sendGeohashDM(_ content: String, to peerID: String) {
+        guard case .location(let ch) = activeChannel else {
+            addSystemMessage("cannot send: not in a location channel")
+            return
+        }
+        let messageID = UUID().uuidString
+        
+        // Local echo in the DM thread
+        let message = BitchatMessage(
+            id: messageID,
+            sender: nickname,
+            content: content,
+            timestamp: Date(),
+            isRelay: false,
+            isPrivate: true,
+            recipientNickname: nickname,
+            senderPeerID: meshService.myPeerID,
+            deliveryStatus: .sending
+        )
+        
+        if privateChats[peerID] == nil {
+            privateChats[peerID] = []
+        }
+        
+        privateChats[peerID]?.append(message)
+        trimPrivateChatMessagesIfNeeded(for: peerID)
+        objectWillChange.send()
+
+        // Resolve recipient hex from mapping
+        guard let recipientHex = nostrKeyMapping[peerID] else {
+            if let msgIdx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
+                privateChats[peerID]?[msgIdx].deliveryStatus = .failed(reason: "unknown recipient")
+            }
+            return
+        }
+        
+        // Respect geohash blocks
+        if identityManager.isNostrBlocked(pubkeyHexLowercased: recipientHex) {
+            if let msgIdx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
+                privateChats[peerID]?[msgIdx].deliveryStatus = .failed(reason: "user is blocked")
+            }
+            addSystemMessage("cannot send message: user is blocked.")
+            return
+        }
+        
+        // Send via Nostr using per-geohash identity
+        do {
+            let id = try NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash)
+            // Prevent messaging ourselves
+            if recipientHex.lowercased() == id.publicKeyHex.lowercased() {
+                if let idx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
+                    privateChats[peerID]?[idx].deliveryStatus = .failed(reason: "cannot message yourself")
+                }
+                return
+            }
+            SecureLogger.debug("GeoDM: local send mid=\(messageID.prefix(8))… to=\(recipientHex.prefix(8))… conv=\(peerID)", category: .session)
+            let nostrTransport = NostrTransport(keychain: keychain)
+            nostrTransport.senderPeerID = meshService.myPeerID
+            nostrTransport.sendPrivateMessageGeohash(content: content, toRecipientHex: recipientHex, from: id, messageID: messageID)
+            if let msgIdx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
+                privateChats[peerID]?[msgIdx].deliveryStatus = .sent
+            }
+        } catch {
+            if let idx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
+                privateChats[peerID]?[idx].deliveryStatus = .failed(reason: "send error")
+            }
         }
     }
 
@@ -3697,38 +3771,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         }
     }
 
-    // MARK: - Per-Peer Colors
-    private var peerColorCache: [String: Color] = [:]
-
-    private func djb2(_ s: String) -> UInt64 {
-        var hash: UInt64 = 5381
-        for b in s.utf8 { hash = ((hash << 5) &+ hash) &+ UInt64(b) }
-        return hash
-    }
-
-    @MainActor
-    func colorForPeerSeed(_ seed: String, isDark: Bool) -> Color {
-        let cacheKey = seed + (isDark ? "|dark" : "|light")
-        if let cached = peerColorCache[cacheKey] { return cached }
-        let h = djb2(seed)
-        var hue = Double(h % 1000) / 1000.0
-        let orange = 30.0 / 360.0
-        if abs(hue - orange) < TransportConfig.uiColorHueAvoidanceDelta {
-            hue = fmod(hue + TransportConfig.uiColorHueOffset, 1.0)
-        }
-        let sRand = Double((h >> 17) & 0x3FF) / 1023.0
-        let bRand = Double((h >> 27) & 0x3FF) / 1023.0
-        let sBase: Double = isDark ? 0.80 : 0.70
-        let sRange: Double = 0.20
-        let bBase: Double = isDark ? 0.75 : 0.45
-        let bRange: Double = isDark ? 0.16 : 0.14
-        let saturation = min(1.0, max(0.50, sBase + (sRand - 0.5) * sRange))
-        let brightness = min(1.0, max(0.35, bBase + (bRand - 0.5) * bRange))
-        let c = Color(hue: hue, saturation: saturation, brightness: brightness)
-        peerColorCache[cacheKey] = c
-        return c
-    }
-
     @MainActor
     private func peerColor(for message: BitchatMessage, isDark: Bool) -> Color {
         if let spid = message.senderPeerID {
@@ -3748,7 +3790,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             }
         }
         // Fallback when we only have a display name
-        return colorForPeerSeed(message.sender.lowercased(), isDark: isDark)
+        return Color(peerSeed: message.sender.lowercased(), isDark: isDark)
     }
 
     // Public helpers for views to color peers consistently in lists
@@ -3797,8 +3839,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             return Color(hue: e.hue, saturation: saturation, brightness: brightness)
         }
         // Fallback to seed color if not in palette (e.g., transient)
-        let seed = meshSeed(for: peerID)
-        return colorForPeerSeed(seed, isDark: isDark)
+        return Color(peerSeed: meshSeed(for: peerID), isDark: isDark)
     }
 
     @MainActor
@@ -3842,7 +3883,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         let peers = currentSeeds.keys.sorted() // stable order
         // Preferred slot index by seed (wrapping to available slots)
         let prefIndex: [String: Int] = Dictionary(uniqueKeysWithValues: peers.map { id in
-            let h = djb2(currentSeeds[id] ?? id)
+            let h = (currentSeeds[id] ?? id).djb2()
             // Map to available slot range deterministically
             let idx = Int(h % UInt64(slots.count))
             return (id, idx)
@@ -3937,7 +3978,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             return Color(hue: e.hue, saturation: saturation, brightness: brightness)
         }
         // Fallback to seed color if not in palette (e.g., transient)
-        return colorForPeerSeed("nostr:" + pubkeyHexLowercased, isDark: isDark)
+        return Color(peerSeed: "nostr:" + pubkeyHexLowercased, isDark: isDark)
     }
 
     @MainActor
@@ -3981,7 +4022,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
 
         let peers = currentSeeds.keys.sorted()
         let prefIndex: [String: Int] = Dictionary(uniqueKeysWithValues: peers.map { id in
-            let h = djb2(currentSeeds[id] ?? id)
+            let h = (currentSeeds[id] ?? id).djb2()
             let idx = Int(h % UInt64(slots.count))
             return (id, idx)
         })
