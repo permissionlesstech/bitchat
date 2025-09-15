@@ -25,7 +25,11 @@ let package = Package(
                 .target(name: "TorC"),
             ],
             path: "Sources",
-            exclude: ["C"]
+            exclude: ["C"],
+            swiftSettings: [
+                // For local dev: uncomment to disable Tor network (restart Xcode after toggling)
+                // .define("BITCHAT_DEV_ALLOW_CLEARNET", .when(configuration: .debug))
+            ]
         ),
         .target(
             name: "TorC",

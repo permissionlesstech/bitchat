@@ -47,8 +47,8 @@ public final class TorManager: ObservableObject {
     private var restarting: Bool = false
 
     // Whether the app must enforce Tor for all connections (fail-closed).
-    // This is the default. For local development, you may compile with
-    // `-DBITCHAT_DEV_ALLOW_CLEARNET` to temporarily allow direct network.
+    // This is the default. To disable Tor for local dev: uncomment
+    // `swiftSettings` from Tor's Package.swift then restart Xcode.
     public var torEnforced: Bool {
         #if BITCHAT_DEV_ALLOW_CLEARNET
         return false
