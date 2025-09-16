@@ -30,7 +30,8 @@ struct BitchatApp: App {
         _chatViewModel = StateObject(
             wrappedValue: ChatViewModel(
                 keychain: keychain,
-                identityManager: SecureIdentityStateManager(keychain)
+                identityManager: SecureIdentityStateManager(keychain),
+                storage: UserDefaultsKeyStorable()
             )
         )
         
