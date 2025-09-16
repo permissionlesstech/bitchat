@@ -10,9 +10,12 @@ final class NetworkActivationService: ObservableObject {
     static let shared = NetworkActivationService()
 
     @Published private(set) var activationAllowed: Bool = false
+    @Published private(set) var userTorEnabled: Bool = true
 
     private var cancellables = Set<AnyCancellable>()
     private var started = false
+    private let torPreferenceKey = "networkActivationService.userTorEnabled"
+    private var torAutoStartDesired: Bool = false
 
     private init() {}
 
@@ -20,9 +23,23 @@ final class NetworkActivationService: ObservableObject {
         guard !started else { return }
         started = true
 
+        if let stored = UserDefaults.standard.object(forKey: torPreferenceKey) as? Bool {
+            userTorEnabled = stored
+        } else {
+            userTorEnabled = true
+        }
+
         // Initial compute
-        activationAllowed = Self.computeAllowed()
-        TorManager.shared.setAutoStartAllowed(activationAllowed)
+        let allowed = basePolicyAllowed()
+        activationAllowed = allowed
+        torAutoStartDesired = allowed && userTorEnabled
+        TorManager.shared.setAutoStartAllowed(torAutoStartDesired)
+        applyTorState(torDesired: torAutoStartDesired)
+        if allowed {
+            NostrRelayManager.shared.connect()
+        } else {
+            NostrRelayManager.shared.disconnect()
+        }
 
         // React to location permission changes
         LocationChannelManager.shared.$permissionState
@@ -41,30 +58,56 @@ final class NetworkActivationService: ObservableObject {
             .store(in: &cancellables)
     }
 
+    func setUserTorEnabled(_ enabled: Bool) {
+        guard enabled != userTorEnabled else { return }
+        userTorEnabled = enabled
+        UserDefaults.standard.set(enabled, forKey: torPreferenceKey)
+        NotificationCenter.default.post(
+            name: .TorUserPreferenceChanged,
+            object: nil,
+            userInfo: ["enabled": enabled]
+        )
+        reevaluate()
+    }
+
     private func reevaluate() {
-        let allowed = Self.computeAllowed()
-        if allowed != activationAllowed {
+        let allowed = basePolicyAllowed()
+        let torDesired = allowed && userTorEnabled
+        let statusChanged = allowed != activationAllowed
+        let torChanged = torDesired != torAutoStartDesired
+        if statusChanged {
             SecureLogger.info("NetworkActivationService: activationAllowed -> \(allowed)", category: .session)
             activationAllowed = allowed
-            TorManager.shared.setAutoStartAllowed(allowed)
-            if allowed {
-                // Kick Tor + relays if we're now permitted
-                TorManager.shared.startIfNeeded()
-                // If app is in foreground, begin relay connections
-                if TorManager.shared.isForeground() {
-                    NostrRelayManager.shared.connect()
-                }
-            } else {
-                // Transitioned to disallowed: disconnect relays and shut down Tor
+        }
+        if statusChanged || torChanged {
+            torAutoStartDesired = torDesired
+            TorManager.shared.setAutoStartAllowed(torDesired)
+            applyTorState(torDesired: torDesired)
+        }
+
+        if allowed {
+            if torChanged {
+                // Reset relay sockets when switching transport path (Tor ↔︎ direct)
                 NostrRelayManager.shared.disconnect()
-                TorManager.shared.goDormantOnBackground()
             }
+            NostrRelayManager.shared.connect()
+        } else if statusChanged {
+            NostrRelayManager.shared.disconnect()
         }
     }
 
-    private static func computeAllowed() -> Bool {
+    private func basePolicyAllowed() -> Bool {
         let permOK = LocationChannelManager.shared.permissionState == .authorized
         let hasMutual = !FavoritesPersistenceService.shared.mutualFavorites.isEmpty
         return permOK || hasMutual
+    }
+
+    private func applyTorState(torDesired: Bool) {
+        TorURLSession.shared.setProxyMode(useTor: torDesired)
+        if torDesired {
+            TorManager.shared.startIfNeeded()
+        } else {
+            TorManager.shared.shutdownCompletely()
+        }
     }
 }

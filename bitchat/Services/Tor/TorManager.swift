@@ -539,6 +539,24 @@ final class TorManager: ObservableObject {
         }
     }
 
+    func shutdownCompletely() {
+        Task.detached { [weak self] in
+            guard let self = self else { return }
+            _ = tor_host_shutdown()
+            await MainActor.run {
+                self.isDormant = false
+                self.isReady = false
+                self.socksReady = false
+                self.bootstrapProgress = 0
+                self.bootstrapSummary = ""
+                self.isStarting = false
+                self.didStart = false
+                self.restarting = false
+                self.controlMonitorStarted = false
+            }
+        }
+    }
+
     private func restartTor() async {
         await MainActor.run {
             // Announce restart so UI can notify the user

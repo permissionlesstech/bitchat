@@ -778,6 +778,12 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             name: .TorWillStart,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleTorPreferenceChanged(_:)),
+            name: .TorUserPreferenceChanged,
+            object: nil
+        )
         #else
         NotificationCenter.default.addObserver(
             self,
@@ -828,6 +834,12 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             name: .TorWillStart,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleTorPreferenceChanged(_:)),
+            name: .TorUserPreferenceChanged,
+            object: nil
+        )
         #endif
     }
     
@@ -867,6 +879,14 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                 self.addGeohashOnlySystemMessage("tor started. routing all chats via tor for privacy.")
                 self.torInitialReadyAnnounced = true
             }
+        }
+    }
+
+    @objc private func handleTorPreferenceChanged(_ notification: Notification) {
+        Task { @MainActor in
+            self.torStatusAnnounced = false
+            self.torInitialReadyAnnounced = false
+            self.torRestartPending = false
         }
     }
     
