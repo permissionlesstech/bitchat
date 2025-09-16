@@ -139,23 +139,21 @@ struct BitchatApp: App {
     
     private func checkForSharedContent() {
         // Check app group for shared content from extension
-        guard let userDefaults = UserDefaults(suiteName: BitchatApp.groupID) else {
-            return
-        }
+        let storage = UserDefaultsKeyStorable(group: BitchatApp.groupID)
         
-        guard let sharedContent = userDefaults.string(forKey: "sharedContent"),
-              let sharedDate = userDefaults.object(forKey: "sharedContentDate") as? Date else {
+        guard let sharedContent = storage.string("sharedContent"),
+              let sharedDate = storage.object("sharedContentDate") as? Date else {
             return
         }
         
         // Only process if shared within configured window
         if Date().timeIntervalSince(sharedDate) < TransportConfig.uiShareAcceptWindowSeconds {
-            let contentType = userDefaults.string(forKey: "sharedContentType") ?? "text"
+            let contentType = storage.string("sharedContentType") ?? "text"
             
             // Clear the shared content
-            userDefaults.removeObject(forKey: "sharedContent")
-            userDefaults.removeObject(forKey: "sharedContentType")
-            userDefaults.removeObject(forKey: "sharedContentDate")
+            storage.remove("sharedContent")
+            storage.remove("sharedContentType")
+            storage.remove("sharedContentDate")
             // No need to force synchronize here
             
             // Send the shared content immediately on the main queue

@@ -23,6 +23,10 @@ final class UserDefaultsKeyStorable: KeyStorable {
     
     private let defaults: UserDefaults
     
+    init(group: String) {
+        self.defaults = UserDefaults(suiteName: group) ?? .standard
+    }
+    
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
     }
