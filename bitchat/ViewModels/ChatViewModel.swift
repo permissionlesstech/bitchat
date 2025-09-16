@@ -353,7 +353,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     private var processedNostrEvents = Set<String>()  // Simple deduplication
     private var processedNostrEventOrder: [String] = []
     private let maxProcessedNostrEvents = TransportConfig.uiProcessedNostrEventsCap
-    private let userDefaults = UserDefaults.standard
     private let keychain: KeychainManagerProtocol
     private let nicknameKey = "bitchat.nickname"
     // Location channel state (macOS supports manual geohash selection)
@@ -463,9 +462,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             // Only persist if there are changes
             guard oldValue != sentReadReceipts else { return }
             
+            
             // Persist to UserDefaults whenever it changes (no manual synchronize/verify re-read)
             if let data = try? JSONEncoder().encode(Array(sentReadReceipts)) {
-                UserDefaults.standard.set(data, forKey: "sentReadReceipts")
+                storage.save(data, key: "sentReadReceipts")
             } else {
                 SecureLogger.error("❌ Failed to encode read receipts for persistence", category: .session)
             }
@@ -487,23 +487,27 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     
     // Track Nostr pubkey mappings for unknown senders
     private var nostrKeyMapping: [String: String] = [:]  // senderPeerID -> nostrPubkey
+//    private let storage: KeyStorable = UserDefaultsKeyStorable()
+    private let storage: KeyStorable = UserDefaultsKeyStorable()
+    
+    private let storage = UserDefaultsKeyStorable()
     
     // MARK: - Initialization
     
     @MainActor
     init(
         keychain: KeychainManagerProtocol,
-        identityManager: SecureIdentityStateManagerProtocol
+        identityManager: SecureIdentityStateManagerProtocol,
+        storage: KeyStorable
     ) {
         self.keychain = keychain
         self.identityManager = identityManager
         self.meshService = BLEService(keychain: keychain, identityManager: identityManager)
         
         // Load persisted read receipts
-        if let data = UserDefaults.standard.data(forKey: "sentReadReceipts"),
+        if let data = storage.data("sentReadReceipts"),
            let receipts = try? JSONDecoder().decode([String].self, from: data) {
             self.sentReadReceipts = Set(receipts)
-            // Successfully loaded read receipts
         } else {
             // No persisted read receipts found
         }
@@ -1142,7 +1146,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     // MARK: - Nickname Management
     
     private func loadNickname() {
-        if let savedNickname = userDefaults.string(forKey: nicknameKey) {
+        if let savedNickname = storage.string(nicknameKey) {
             // Trim whitespace when loading
             nickname = savedNickname.trimmingCharacters(in: .whitespacesAndNewlines)
         } else {
@@ -1152,8 +1156,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     }
     
     func saveNickname() {
-        userDefaults.set(nickname, forKey: nicknameKey)
-        // Persist nickname; no need to force synchronize
+        storage.save(nickname, key: nicknameKey)
         
         // Send announce with new nickname to all peers
         meshService.sendBroadcastAnnounce()
@@ -3173,9 +3176,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         // Delete all keychain data (including Noise and Nostr keys)
         _ = keychain.deleteAllKeychainData()
         
-        // Clear UserDefaults identity data
-        userDefaults.removeObject(forKey: "bitchat.noiseIdentityKey")
-        userDefaults.removeObject(forKey: "bitchat.messageRetentionKey")
+        // Clear UserDefaultsKeyStorable identity data
+        storage.remove("bitchat.noiseIdentityKey")
+        storage.remove("bitchat.messageRetentionKey")
         
         // Clear verified fingerprints
         verifiedFingerprints.removeAll()
