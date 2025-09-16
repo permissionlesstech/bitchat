@@ -73,6 +73,7 @@
 			membershipExceptions = (
 				Services/TransportConfig.swift,
 				Utils/Localization.swift,
+				Shared/KeyStorableProtocol.swift,
 			);
 			target = 57CA17A36A2532A6CFF367BB /* bitchatShareExtension */;
 		};

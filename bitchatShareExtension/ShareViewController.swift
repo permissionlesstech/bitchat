@@ -162,10 +162,10 @@ final class ShareViewController: UIViewController {
     }
 
     private func saveToSharedDefaults(content: String, type: String) {
-        guard let userDefaults = UserDefaults(suiteName: Self.groupID) else { return }
-        userDefaults.set(content, forKey: "sharedContent")
-        userDefaults.set(type, forKey: "sharedContentType")
-        userDefaults.set(Date(), forKey: "sharedContentDate")
+        let storage = UserDefaultsKeyStorable(group: Self.groupID)
+        storage.save(content, key: "sharedContent")
+        storage.save(type, key: "sharedContentType")
+        storage.save(Date(), key: "sharedContentDate")
         // No need to force synchronize; the system persists changes
     }
 
