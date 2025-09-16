@@ -35,10 +35,12 @@ final class NostrRelayManager: ObservableObject {
         "wss://nostr21.com"
         // For local testing, you can add: "ws://localhost:8080"
     ]
+    private static let defaultRelaySet = Set(defaultRelays)
     
     @Published private(set) var relays: [Relay] = []
     @Published private(set) var isConnected = false
     
+    private var allowDefaultRelays: Bool = false
     private var connections: [String: URLSessionWebSocketTask] = [:]
     private var subscriptions: [String: Set<String>] = [:] // relay URL -> active subscription IDs
     private var pendingSubscriptions: [String: [String: String]] = [:] // relay URL -> (subscription id -> encoded REQ JSON)
@@ -65,6 +67,8 @@ final class NostrRelayManager: ObservableObject {
     private let messageQueueLock = NSLock()
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
+    private var networkService: NetworkActivationService { NetworkActivationService.shared }
+    private var shouldUseTor: Bool { networkService.userTorEnabled }
     
     // Exponential backoff configuration
     private let initialBackoffInterval: TimeInterval = TransportConfig.nostrRelayInitialBackoffSeconds
@@ -78,28 +82,44 @@ final class NostrRelayManager: ObservableObject {
     private var connectionGeneration: Int = 0
     
     init() {
-        // Initialize with default relays
-        self.relays = Self.defaultRelays.map { Relay(url: $0) }
+        let hasMutual = !FavoritesPersistenceService.shared.mutualFavorites.isEmpty
+        allowDefaultRelays = hasMutual
+        if hasMutual {
+            self.relays = Self.defaultRelays.map { Relay(url: $0) }
+        }
         // Deterministic JSON shape for outbound requests
         self.encoder.outputFormatting = .sortedKeys
+        FavoritesPersistenceService.shared.$mutualFavorites
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] favorites in
+                self?.updateDefaultRelayPolicy(hasMutual: !favorites.isEmpty)
+            }
+            .store(in: &cancellables)
     }
     
     /// Connect to all configured relays
     func connect() {
         // Global network policy gate
-        if !TorManager.shared.isAutoStartAllowed() { return }
-        // Ensure Tor is started early and wait for readiness off-main; then hop back to connect.
-        Task.detached {
-            let ready = await TorManager.shared.awaitReady()
-            await MainActor.run {
-                if !ready {
-                    SecureLogger.error("❌ Tor not ready; aborting relay connections (fail-closed)", category: .session)
-                    return
+        guard networkService.activationAllowed else { return }
+        if shouldUseTor {
+            // Ensure Tor is started early and wait for readiness off-main; then hop back to connect.
+            Task.detached {
+                let ready = await TorManager.shared.awaitReady()
+                await MainActor.run {
+                    if !ready {
+                        SecureLogger.error("❌ Tor not ready; aborting relay connections (fail-closed)", category: .session)
+                        return
+                    }
+                    SecureLogger.debug("🌐 Connecting to \(self.relays.count) Nostr relays (via Tor)", category: .session)
+                    for relay in self.relays {
+                        self.connectToRelay(relay.url)
+                    }
                 }
-                SecureLogger.debug("🌐 Connecting to \(self.relays.count) Nostr relays (via Tor)", category: .session)
-                for relay in self.relays {
-                    self.connectToRelay(relay.url)
-                }
+            }
+        } else {
+            SecureLogger.debug("🌐 Connecting to \(self.relays.count) Nostr relays (direct)", category: .session)
+            for relay in self.relays {
+                connectToRelay(relay.url)
             }
         }
     }
@@ -120,8 +140,10 @@ final class NostrRelayManager: ObservableObject {
     /// Ensure connections exist to the given relay URLs (idempotent).
     func ensureConnections(to relayUrls: [String]) {
         // Global network policy gate
-        if !TorManager.shared.isAutoStartAllowed() { return }
-        if TorManager.shared.torEnforced && !TorManager.shared.isReady {
+        guard networkService.activationAllowed else { return }
+        let targets = allowedRelayList(from: relayUrls)
+        guard !targets.isEmpty else { return }
+        if shouldUseTor && TorManager.shared.torEnforced && !TorManager.shared.isReady {
             // Defer until Tor is fully ready; avoid queuing connection attempts early
             Task.detached { [weak self] in
                 guard let self = self else { return }
@@ -130,22 +152,21 @@ final class NostrRelayManager: ObservableObject {
             }
             return
         }
-        let existing = Set(relays.map { $0.url })
-        for url in Set(relayUrls) {
-            if !existing.contains(url) {
-                relays.append(Relay(url: url))
-            }
-            if connections[url] == nil {
-                connectToRelay(url)
-            }
+        var existing = Set(relays.map { $0.url })
+        for url in targets where !existing.contains(url) {
+            relays.append(Relay(url: url))
+            existing.insert(url)
+        }
+        for url in targets where connections[url] == nil {
+            connectToRelay(url)
         }
     }
 
     /// Send an event to specified relays (or all if none specified)
     func sendEvent(_ event: NostrEvent, to relayUrls: [String]? = nil) {
         // Global network policy gate
-        if !TorManager.shared.isAutoStartAllowed() { return }
-        if TorManager.shared.torEnforced && !TorManager.shared.isReady {
+        guard networkService.activationAllowed else { return }
+        if shouldUseTor && TorManager.shared.torEnforced && !TorManager.shared.isReady {
             // Defer sends until Tor is ready to avoid premature queueing
             Task.detached { [weak self] in
                 guard let self = self else { return }
@@ -154,7 +175,9 @@ final class NostrRelayManager: ObservableObject {
             }
             return
         }
-        let targetRelays = relayUrls ?? Self.defaultRelays
+        let requestedRelays = relayUrls ?? Self.defaultRelays
+        let targetRelays = allowedRelayList(from: requestedRelays)
+        guard !targetRelays.isEmpty else { return }
         ensureConnections(to: targetRelays)
 
         // Attempt immediate send to relays with active connections; queue the rest
@@ -220,7 +243,7 @@ final class NostrRelayManager: ObservableObject {
         onEOSE: (() -> Void)? = nil
     ) {
         // Global network policy gate
-        if !TorManager.shared.isAutoStartAllowed() { return }
+        guard networkService.activationAllowed else { return }
         // Coalesce rapid duplicate subscribe requests only if a handler already exists
         let now = Date()
         if messageHandlers[id] != nil {
@@ -229,7 +252,7 @@ final class NostrRelayManager: ObservableObject {
             }
         }
         subscribeCoalesce[id] = now
-        if TorManager.shared.torEnforced && !TorManager.shared.isReady {
+        if shouldUseTor && TorManager.shared.torEnforced && !TorManager.shared.isReady {
             // Defer subscription setup until Tor is ready; avoid queuing subs early
             Task.detached { [weak self] in
                 guard let self = self else { return }
@@ -257,32 +280,37 @@ final class NostrRelayManager: ObservableObject {
             
             // Target specific relays if provided; else default. Filter permanently failed relays.
             let baseUrls = relayUrls ?? Self.defaultRelays
-            let urls = baseUrls.filter { !isPermanentlyFailed($0) }
+            let candidateUrls = baseUrls.filter { !isPermanentlyFailed($0) }
+            let urls = allowedRelayList(from: candidateUrls)
             // Always queue subscriptions; sending happens when a relay reports connected
             let existingSet = Set(relays.map { $0.url })
             for url in urls where !existingSet.contains(url) {
                 relays.append(Relay(url: url))
             }
-            for url in urls {
+            for url in candidateUrls {
                 var map = self.pendingSubscriptions[url] ?? [:]
                 map[id] = messageString
                 self.pendingSubscriptions[url] = map
             }
             // Initialize EOSE tracking if requested
             if let onEOSE = onEOSE {
-                var tracker = EOSETracker(pendingRelays: Set(urls), callback: onEOSE, timer: nil)
-                // Fallback timeout to avoid hanging if a relay never sends EOSE
-                tracker.timer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { [weak self] _ in
-                    Task { @MainActor in
-                        guard let self = self else { return }
-                        if let t = self.eoseTrackers[id] {
-                            t.timer?.invalidate()
-                            self.eoseTrackers.removeValue(forKey: id)
-                            onEOSE()
+                if urls.isEmpty {
+                    onEOSE()
+                } else {
+                    var tracker = EOSETracker(pendingRelays: Set(urls), callback: onEOSE, timer: nil)
+                    // Fallback timeout to avoid hanging if a relay never sends EOSE
+                    tracker.timer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { [weak self] _ in
+                        Task { @MainActor in
+                            guard let self = self else { return }
+                            if let t = self.eoseTrackers[id] {
+                                t.timer?.invalidate()
+                                self.eoseTrackers.removeValue(forKey: id)
+                                onEOSE()
+                            }
                         }
                     }
+                    eoseTrackers[id] = tracker
                 }
-                eoseTrackers[id] = tracker
             }
             SecureLogger.debug("📋 Queued subscription id=\(id) for \(urls.count) relay(s)", category: .session)
             // Ensure we actually have sockets opening to these relays so queued REQs can flush
@@ -296,6 +324,54 @@ final class NostrRelayManager: ObservableObject {
         } catch {
             SecureLogger.error("❌ Failed to encode subscription request: \(error)", category: .session)
         }
+    }
+
+    private func updateDefaultRelayPolicy(hasMutual: Bool) {
+        guard hasMutual != allowDefaultRelays else { return }
+        allowDefaultRelays = hasMutual
+        if hasMutual {
+            var existing = Set(relays.map { $0.url })
+            for url in Self.defaultRelays where !existing.contains(url) {
+                relays.append(Relay(url: url))
+                existing.insert(url)
+            }
+            if networkService.activationAllowed {
+                ensureConnections(to: Self.defaultRelays)
+            }
+        } else {
+            for url in Self.defaultRelays {
+                if let connection = connections[url] {
+                    connection.cancel(with: .goingAway, reason: nil)
+                }
+                connections.removeValue(forKey: url)
+                subscriptions.removeValue(forKey: url)
+            }
+            messageQueueLock.lock()
+            for index in (0..<messageQueue.count).reversed() {
+                var item = messageQueue[index]
+                item.pendingRelays.subtract(Self.defaultRelaySet)
+                if item.pendingRelays.isEmpty {
+                    messageQueue.remove(at: index)
+                } else {
+                    messageQueue[index] = item
+                }
+            }
+            messageQueueLock.unlock()
+            relays.removeAll { Self.defaultRelaySet.contains($0.url) }
+            updateConnectionStatus()
+        }
+    }
+
+    private func allowedRelayList(from urls: [String]) -> [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        for url in urls {
+            if !allowDefaultRelays && Self.defaultRelaySet.contains(url) { continue }
+            if seen.insert(url).inserted {
+                result.append(url)
+            }
+        }
+        return result
     }
     
     /// Unsubscribe from a subscription
@@ -326,14 +402,14 @@ final class NostrRelayManager: ObservableObject {
     
     private func connectToRelay(_ urlString: String) {
         // Global network policy gate
-        if !TorManager.shared.isAutoStartAllowed() { return }
+        guard networkService.activationAllowed else { return }
         guard let url = URL(string: urlString) else { 
             SecureLogger.warning("Invalid relay URL: \(urlString)", category: .session)
             return 
         }
 
         // Avoid initiating connections while app is backgrounded; we'll reconnect on foreground
-        if TorManager.shared.torEnforced && !TorManager.shared.isForeground() {
+        if shouldUseTor && TorManager.shared.torEnforced && !TorManager.shared.isForeground() {
             return
         }
         
@@ -348,7 +424,7 @@ final class NostrRelayManager: ObservableObject {
         // Attempting to connect to Nostr relay via the proxied session
         
         // If Tor is enforced but not ready, delay connection until it is.
-        if TorManager.shared.torEnforced && !TorManager.shared.isReady {
+        if shouldUseTor && TorManager.shared.torEnforced && !TorManager.shared.isReady {
             Task.detached { [weak self] in
                 guard let self = self else { return }
                 let ready = await TorManager.shared.awaitReady()
@@ -534,7 +610,7 @@ final class NostrRelayManager: ObservableObject {
     
     private func handleDisconnection(relayUrl: String, error: Error) {
         // If networking is disallowed, do not schedule reconnection
-        if !TorManager.shared.isAutoStartAllowed() {
+        if !networkService.activationAllowed {
             connections.removeValue(forKey: relayUrl)
             subscriptions.removeValue(forKey: relayUrl)
             updateRelayStatus(relayUrl, isConnected: false, error: error)
