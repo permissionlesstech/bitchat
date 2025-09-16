@@ -5,7 +5,7 @@ import CoreLocation
 #endif
 
 /// Stores a user-maintained list of bookmarked geohash channels.
-/// - Persistence: UserDefaults (JSON string array)
+/// - Persistence: KeyStorable (JSON string array)
 /// - Semantics: geohashes are normalized to lowercase base32 and de-duplicated
 final class GeohashBookmarksStore: ObservableObject {
     static let shared = GeohashBookmarksStore()
@@ -21,7 +21,10 @@ final class GeohashBookmarksStore: ObservableObject {
     private var resolving: Set<String> = []
     #endif
 
-    private init() {
+    private let storage: KeyStorable
+    
+    private init(storage: KeyStorable = UserDefaultsKeyStorable()) {
+        self.storage = storage
         load()
     }
 
@@ -64,7 +67,7 @@ final class GeohashBookmarksStore: ObservableObject {
 
     // MARK: - Persistence
     private func load() {
-        guard let data = UserDefaults.standard.data(forKey: storeKey) else { return }
+        guard let data = storage.data(storeKey) else { return }
         if let arr = try? JSONDecoder().decode([String].self, from: data) {
             // Sanitize, normalize, dedupe while preserving order (first occurrence wins)
             var seen = Set<String>()
@@ -81,7 +84,7 @@ final class GeohashBookmarksStore: ObservableObject {
             membership = seen
         }
         // Load any saved names
-        if let namesData = UserDefaults.standard.data(forKey: namesStoreKey),
+        if let namesData = storage.data(namesStoreKey),
            let dict = try? JSONDecoder().decode([String: String].self, from: namesData) {
             bookmarkNames = dict
         }
@@ -89,13 +92,13 @@ final class GeohashBookmarksStore: ObservableObject {
 
     private func persist() {
         if let data = try? JSONEncoder().encode(bookmarks) {
-            UserDefaults.standard.set(data, forKey: storeKey)
+            storage.save(data, key: storeKey)
         }
     }
 
     private func persistNames() {
         if let data = try? JSONEncoder().encode(bookmarkNames) {
-            UserDefaults.standard.set(data, forKey: namesStoreKey)
+            storage.save(data, key: namesStoreKey)
         }
     }
 
