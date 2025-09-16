@@ -10,6 +10,7 @@ import Foundation
 protocol KeyStorable {
     func save(_ value: Any?, key: String)
     func data(_ key: String) -> Data?
+    func object(_ key: String) -> Any?
     func string(_ key: String) -> String?
     func remove(_ key: String)
 }
@@ -32,6 +33,10 @@ final class UserDefaultsKeyStorable: KeyStorable {
     
     func data(_ key: String) -> Data? {
         defaults.data(forKey: key)
+    }
+    
+    func object(_ key: String) -> Any? {
+        defaults.object(forKey: key)
     }
     
     func string(_ key: String) -> String? {

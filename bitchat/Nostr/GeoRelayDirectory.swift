@@ -18,6 +18,8 @@ final class GeoRelayDirectory {
     private let remoteURL = URL(string: "https://raw.githubusercontent.com/permissionlesstech/georelays/refs/heads/main/nostr_relays.csv")!
     private let fetchInterval: TimeInterval = TransportConfig.geoRelayFetchIntervalSeconds // 24h
 
+    private let storage: KeyStorable = UserDefaultsKeyStorable()
+    
     private init() {
         // Load cached or bundled data synchronously
         self.entries = self.loadLocalEntries()
@@ -45,7 +47,7 @@ final class GeoRelayDirectory {
     // MARK: - Remote Fetch
     func prefetchIfNeeded() {
         let now = Date()
-        let last = UserDefaults.standard.object(forKey: lastFetchKey) as? Date ?? .distantPast
+        let last = (storage.object(lastFetchKey) as? Date) ?? .distantPast
         guard now.timeIntervalSince(last) >= fetchInterval else { return }
         fetchRemote()
     }
@@ -67,7 +69,7 @@ final class GeoRelayDirectory {
                         Task { @MainActor in
                             self.entries = parsed
                             self.persistCache(text)
-                            UserDefaults.standard.set(Date(), forKey: self.lastFetchKey)
+                            self.storage.save(Date(), key: self.lastFetchKey)
                             SecureLogger.info("GeoRelayDirectory: refreshed \(parsed.count) relays from remote", category: .session)
                         }
                         return
