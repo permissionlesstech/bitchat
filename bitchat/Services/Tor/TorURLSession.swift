@@ -4,41 +4,32 @@ import CFNetwork
 #endif
 
 /// Provides a shared URLSession that routes traffic via Tor's SOCKS5 proxy
-/// when Tor is enforced/ready. Falls back to a default session only when
-/// compiled with the `BITCHAT_DEV_ALLOW_CLEARNET` flag.
+/// when Tor is enforced/ready. Allows swapping between proxied and direct
+/// sessions so UI can toggle Tor usage at runtime.
 final class TorURLSession {
     static let shared = TorURLSession()
 
-    // Default (no proxy) session for local development when dev bypass is enabled.
-    private var defaultSession: URLSession = {
-        let cfg = URLSessionConfiguration.default
-        cfg.waitsForConnectivity = true
-        return URLSession(configuration: cfg)
-    }()
+    // Default (no proxy) session for direct Nostr access when Tor is disabled.
+    private var defaultSession: URLSession = TorURLSession.makeDefaultSession()
 
     // Proxied (SOCKS5) session that routes through Tor.
     private var torSession: URLSession = TorURLSession.makeTorSession()
+    private var useTorProxy: Bool = true
 
     var session: URLSession {
-        #if BITCHAT_DEV_ALLOW_CLEARNET
-        // Dev bypass: use direct session. Call sites may still await Tor if desired.
-        return defaultSession
-        #else
-        // Production: always use the Tor-proxied session. Call sites ensure readiness.
-        return torSession
-        #endif
+        useTorProxy ? torSession : defaultSession
     }
 
     // Recreate sessions so new clients bind to the fresh SOCKS/control ports after a Tor restart.
     func rebuild() {
-        #if BITCHAT_DEV_ALLOW_CLEARNET
-        defaultSession = {
-            let cfg = URLSessionConfiguration.default
-            cfg.waitsForConnectivity = true
-            return URLSession(configuration: cfg)
-        }()
-        #endif
+        defaultSession = TorURLSession.makeDefaultSession()
         torSession = TorURLSession.makeTorSession()
+    }
+
+    func setProxyMode(useTor: Bool) {
+        guard useTorProxy != useTor else { return }
+        useTorProxy = useTor
+        rebuild()
     }
 
     private static func makeTorSession() -> URLSession {
@@ -61,6 +52,12 @@ final class TorURLSession {
             "SOCKSPort": port
         ]
         #endif
+        return URLSession(configuration: cfg)
+    }
+
+    private static func makeDefaultSession() -> URLSession {
+        let cfg = URLSessionConfiguration.default
+        cfg.waitsForConnectivity = true
         return URLSession(configuration: cfg)
     }
 }

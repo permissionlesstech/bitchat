@@ -9,6 +9,7 @@ struct LocationChannelsSheet: View {
     @Binding var isPresented: Bool
     @ObservedObject private var manager = LocationChannelManager.shared
     @ObservedObject private var bookmarks = GeohashBookmarksStore.shared
+    @ObservedObject private var network = NetworkActivationService.shared
     @EnvironmentObject var viewModel: ChatViewModel
     @Environment(\.colorScheme) var colorScheme
     @State private var customGeohash: String = ""
@@ -266,6 +267,7 @@ struct LocationChannelsSheet: View {
 
             // Footer action inside the list
             if manager.permissionState == LocationChannelManager.PermissionState.authorized {
+                torToggleSection
                 Button(action: {
                     openSystemLocationSettings()
                 }) {
@@ -409,13 +411,69 @@ struct LocationChannelsSheet: View {
     }
 }
 
-// MARK: - Standardized Colors
+// MARK: - TOR Toggle & Standardized Colors
 extension LocationChannelsSheet {
+    private var torToggleBinding: Binding<Bool> {
+        Binding(
+            get: { network.userTorEnabled },
+            set: { network.setUserTorEnabled($0) }
+        )
+    }
+
+    private var torToggleSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle(isOn: torToggleBinding) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("tor routing")
+                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .foregroundColor(.primary)
+                    Text("hides your ip for location channels. recommended: on.")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+            }
+            .toggleStyle(IRCToggleStyle(accent: standardGreen))
+        }
+        .padding(12)
+        .background(Color.secondary.opacity(0.12))
+        .cornerRadius(8)
+        .listRowSeparator(.hidden)
+        .listRowBackground(Color.clear)
+    }
+
     private var standardGreen: Color {
         (colorScheme == .dark) ? Color.green : Color(red: 0, green: 0.5, blue: 0)
     }
     private var standardBlue: Color {
         Color(red: 0.0, green: 0.478, blue: 1.0)
+    }
+}
+
+private struct IRCToggleStyle: ToggleStyle {
+    let accent: Color
+
+    func makeBody(configuration: Configuration) -> some View {
+        Button(action: { configuration.isOn.toggle() }) {
+            HStack(spacing: 12) {
+                configuration.label
+                Spacer()
+                Text(configuration.isOn ? "on" : "off")
+                    .textCase(.uppercase)
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .foregroundColor(configuration.isOn ? accent : .secondary)
+                    .padding(.vertical, 4)
+                    .padding(.horizontal, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(accent.opacity(configuration.isOn ? 0.18 : 0.08))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(accent.opacity(configuration.isOn ? 0.35 : 0.15), lineWidth: 1)
+                    )
+            }
+        }
+        .buttonStyle(.plain)
     }
 }
 
