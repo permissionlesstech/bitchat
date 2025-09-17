@@ -35,8 +35,9 @@ final class ShareViewController: UIViewController {
             statusLabel.leadingAnchor.constraint(greaterThanOrEqualTo: view.layoutMarginsGuide.leadingAnchor),
             statusLabel.trailingAnchor.constraint(lessThanOrEqualTo: view.layoutMarginsGuide.trailingAnchor)
         ])
-
-        processShare()
+        DispatchQueue.global().async {
+            self.processShare()
+        }
     }
 
     // MARK: - Processing
@@ -163,7 +164,7 @@ final class ShareViewController: UIViewController {
         statusLabel.text = msg
         // Complete shortly after showing status
         DispatchQueue.main.asyncAfter(deadline: .now() + TransportConfig.uiShareExtensionDismissDelaySeconds) {
-            self.extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
+            self.extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
         }
     }
 }

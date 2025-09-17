@@ -188,7 +188,7 @@ enum TransportConfig {
     static let uiWindowStepCount: Int = 200
 
     // Share extension
-    static let uiShareExtensionDismissDelaySeconds: TimeInterval = 0.3
+    static let uiShareExtensionDismissDelaySeconds: TimeInterval = 2.0
     static let uiShareAcceptWindowSeconds: TimeInterval = 30.0
     static let uiMigrationCutoffSeconds: TimeInterval = 24 * 60 * 60
 }
