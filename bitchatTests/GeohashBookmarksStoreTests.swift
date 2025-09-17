@@ -4,16 +4,18 @@ import XCTest
 final class GeohashBookmarksStoreTests: XCTestCase {
     let storeKey = "locationChannel.bookmarks"
 
+    private let storage: KeyStorable = UserDefaultsKeyStorable()
+    
     override func setUp() {
         super.setUp()
         // Clear persisted state before each test
-        UserDefaults.standard.removeObject(forKey: storeKey)
+        storage.remove(storeKey)
         GeohashBookmarksStore.shared._resetForTesting()
     }
 
     override func tearDown() {
         // Clean after each test
-        UserDefaults.standard.removeObject(forKey: storeKey)
+        storage.remove(storeKey)
         GeohashBookmarksStore.shared._resetForTesting()
         super.tearDown()
     }
@@ -40,7 +42,7 @@ final class GeohashBookmarksStoreTests: XCTestCase {
         store.toggle("u4pruy")
 
         // Verify persisted JSON contains both (order not enforced here)
-        guard let data = UserDefaults.standard.data(forKey: storeKey) else {
+        guard let data = storage.data(storeKey) else {
             XCTFail("No persisted data found")
             return
         }
