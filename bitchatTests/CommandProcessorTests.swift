@@ -22,7 +22,8 @@ final class CommandProcessorTests: XCTestCase {
         let result = processor.process("/slap @system")
         switch result {
         case .error(let message):
-            XCTAssertEqual(message, "cannot slap system: not found")
+            let expectedMessage = String.localizedStringWithFormat(String(localized: "command.error.cannot_block_unblock"), "slap", "system")
+            XCTAssertEqual(message, expectedMessage)
         default:
             XCTFail("Expected error result")
         }
@@ -34,7 +35,8 @@ final class CommandProcessorTests: XCTestCase {
         let result = processor.process("/hug @system")
         switch result {
         case .error(let message):
-            XCTAssertEqual(message, "cannot hug system: not found")
+            let expectedMessage = String.localizedStringWithFormat(String(localized: "command.error.cannot_block_unblock"), "hug", "system")
+            XCTAssertEqual(message, expectedMessage)
         default:
             XCTFail("Expected error result")
         }
@@ -46,7 +48,8 @@ final class CommandProcessorTests: XCTestCase {
         let result = processor.process("/slap")
         switch result {
         case .error(let message):
-            XCTAssertEqual(message, "usage: /slap <nickname>")
+            let expectedMessage = String.localizedStringWithFormat(String(localized: "command.usage.block_unblock"), "slap")
+            XCTAssertEqual(message, expectedMessage)
         default:
             XCTFail("Expected error result for usage message")
         }
