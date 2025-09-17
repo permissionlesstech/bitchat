@@ -2,6 +2,7 @@ import Foundation
 import Combine
 import Security
 import CryptoKit
+import BitLogger
 
 final class AppLockManager: ObservableObject {
     enum Method: String { case off, deviceAuth, pin }

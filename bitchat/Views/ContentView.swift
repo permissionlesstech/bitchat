@@ -1101,6 +1101,8 @@ struct ContentView: View {
                 .onTapGesture(count: 3) {
                     // PANIC: Triple-tap to clear all data
                     viewModel.panicClearAllData()
+                    // Also clear app lock state to avoid locking user out
+                    appLock.panicClear()
                 }
                 .onTapGesture(count: 1) {
                     // Single tap for app info

@@ -27,7 +27,9 @@ struct AppLockView: View {
                         SecureField("Enter PIN", text: $pinInput)
                             .textFieldStyle(.roundedBorder)
                             .frame(maxWidth: 240)
+                            #if os(iOS)
                             .keyboardType(.numberPad)
+                            #endif
                         HStack(spacing: 12) {
                             Button("Unlock") {
                                 let ok = appLock.validate(pin: pinInput)
@@ -55,4 +57,3 @@ struct AppLockView: View {
         .accessibilityIdentifier("AppLockView")
     }
 }
-

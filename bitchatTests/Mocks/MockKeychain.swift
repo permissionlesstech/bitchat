@@ -43,4 +43,18 @@ final class MockKeychain: KeychainManagerProtocol {
     func verifyIdentityKeyExists() -> Bool {
         storage["identity_noiseStaticKey"] != nil
     }
+
+    // MARK: - App Lock Secrets
+    func saveAppLockSecret(_ data: Data, key: String) -> Bool {
+        storage["applock::\(key)"] = data
+        return true
+    }
+
+    func getAppLockSecret(key: String) -> Data? {
+        storage["applock::\(key)"]
+    }
+
+    func deleteAppLockSecret(key: String) -> Bool {
+        storage.removeValue(forKey: "applock::\(key)") != nil
+    }
 }

@@ -246,10 +246,14 @@ struct AppInfoView: View {
                     }
                     SecureField("enter pin", text: $pin1)
                         .textFieldStyle(.roundedBorder)
+                        #if os(iOS)
                         .keyboardType(.numberPad)
+                        #endif
                     SecureField("confirm pin", text: $pin2)
                         .textFieldStyle(.roundedBorder)
+                        #if os(iOS)
                         .keyboardType(.numberPad)
+                        #endif
                     if let err = pinError {
                         Text(err).foregroundColor(.red).font(.system(size: 12, design: .monospaced))
                     }
