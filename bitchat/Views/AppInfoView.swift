@@ -3,6 +3,11 @@ import SwiftUI
 struct AppInfoView: View {
     @Environment(\.dismiss) var dismiss
     @Environment(\.colorScheme) var colorScheme
+    @EnvironmentObject var appLock: AppLockManager
+    @State private var showSetPIN: Bool = false
+    @State private var pin1: String = ""
+    @State private var pin2: String = ""
+    @State private var pinError: String? = nil
     
     private var backgroundColor: Color {
         colorScheme == .dark ? Color.black : Color.white
@@ -160,6 +165,104 @@ struct AppInfoView: View {
                 FeatureRow(icon: Strings.Privacy.panic.0,
                           title: Strings.Privacy.panic.1,
                           description: Strings.Privacy.panic.2)
+            }
+
+            // App Lock
+            VStack(alignment: .leading, spacing: 12) {
+                SectionHeader("APP LOCK")
+
+                // Enable
+                Toggle("require unlock", isOn: Binding(
+                    get: { appLock.isEnabled },
+                    set: { appLock.setEnabled($0) }
+                ))
+                .font(.system(size: 14, design: .monospaced))
+                .foregroundColor(textColor)
+
+                if appLock.isEnabled {
+                    // Method
+                    HStack {
+                        Text("method")
+                        Spacer()
+                        Picker("method", selection: Binding(
+                            get: { appLock.method },
+                            set: { appLock.setMethod($0) }
+                        )) {
+                            Text("device").tag(AppLockManager.Method.deviceAuth)
+                            Text("pin").tag(AppLockManager.Method.pin)
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(maxWidth: 240)
+                    }
+                    .font(.system(size: 14, design: .monospaced))
+                    .foregroundColor(textColor)
+
+                    // Grace period
+                    HStack {
+                        Text("grace")
+                        Spacer()
+                        Picker("grace", selection: Binding(
+                            get: { appLock.gracePeriodSeconds },
+                            set: { appLock.setGrace($0) }
+                        )) {
+                            Text("off").tag(0)
+                            Text("15s").tag(15)
+                            Text("30s").tag(30)
+                            Text("1m").tag(60)
+                            Text("5m").tag(300)
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(maxWidth: 320)
+                    }
+                    .font(.system(size: 14, design: .monospaced))
+                    .foregroundColor(textColor)
+
+                    Toggle("lock on launch", isOn: Binding(
+                        get: { appLock.lockOnLaunch },
+                        set: { appLock.setLockOnLaunch($0) }
+                    ))
+                    .font(.system(size: 14, design: .monospaced))
+                    .foregroundColor(textColor)
+
+                    if appLock.method == .pin {
+                        HStack(spacing: 16) {
+                            Button("set pin") { showSetPIN = true }
+                                .buttonStyle(.plain)
+                                .foregroundColor(.blue)
+                            Button("clear pin") { appLock.clearPIN() }
+                                .buttonStyle(.plain)
+                                .foregroundColor(.red)
+                        }
+                    }
+                }
+            }
+            .sheet(isPresented: $showSetPIN) {
+                VStack(spacing: 12) {
+                    HStack {
+                        Text("set pin").font(.system(size: 16, weight: .bold, design: .monospaced))
+                        Spacer()
+                        Button("done") { showSetPIN = false }
+                            .buttonStyle(.plain)
+                    }
+                    SecureField("enter pin", text: $pin1)
+                        .textFieldStyle(.roundedBorder)
+                        .keyboardType(.numberPad)
+                    SecureField("confirm pin", text: $pin2)
+                        .textFieldStyle(.roundedBorder)
+                        .keyboardType(.numberPad)
+                    if let err = pinError {
+                        Text(err).foregroundColor(.red).font(.system(size: 12, design: .monospaced))
+                    }
+                    Button("save") {
+                        if pin1.count < 4 || pin1.count > 8 { pinError = "pin must be 4–8 digits"; return }
+                        guard pin1 == pin2 else { pinError = "pins do not match"; return }
+                        appLock.setPIN(pin1)
+                        pin1 = ""; pin2 = ""; pinError = nil
+                        showSetPIN = false
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                .padding()
             }
             
             // How to Use
