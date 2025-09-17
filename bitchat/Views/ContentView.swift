@@ -182,11 +182,11 @@ struct ContentView: View {
             }
         }
         .confirmationDialog(
-            selectedMessageSender.map { "@\($0)" } ?? "Actions",
+            selectedMessageSender.map { "@\($0)" } ?? String(localized: "actions.title"),
             isPresented: $showMessageActions,
             titleVisibility: .visible
         ) {
-            Button("mention") {
+            Button(String(localized: "actions.mention")) {
                 if let sender = selectedMessageSender {
                     // Pre-fill the input with an @mention and focus the field
                     messageText = "@\(sender) "
@@ -194,7 +194,7 @@ struct ContentView: View {
                 }
             }
 
-            Button("direct message") {
+            Button(String(localized: "actions.private_message")) {
                 if let peerID = selectedMessageSenderID {
                     if peerID.hasPrefix("nostr:") {
                         if let full = viewModel.fullNostrHex(forSenderPeerID: peerID) {
@@ -210,19 +210,19 @@ struct ContentView: View {
                 }
             }
             
-            Button("hug") {
+            Button(String(localized: "actions.hug")) {
                 if let sender = selectedMessageSender {
                     viewModel.sendMessage("/hug @\(sender)")
                 }
             }
             
-            Button("slap") {
+            Button(String(localized: "actions.slap")) {
                 if let sender = selectedMessageSender {
                     viewModel.sendMessage("/slap @\(sender)")
                 }
             }
             
-            Button("BLOCK", role: .destructive) {
+            Button(String(localized: "actions.block"), role: .destructive) {
                 // Prefer direct geohash block when we have a Nostr sender ID
                 if let peerID = selectedMessageSenderID, peerID.hasPrefix("nostr:"),
                    let full = viewModel.fullNostrHex(forSenderPeerID: peerID),
@@ -233,17 +233,17 @@ struct ContentView: View {
                 }
             }
             
-            Button("cancel", role: .cancel) {}
+            Button(String(localized: "common.cancel"), role: .cancel) {}
         }
-        .alert("Bluetooth Required", isPresented: $viewModel.showBluetoothAlert) {
-            Button("Settings") {
+        .alert(String(localized: "alert.bluetooth_required"), isPresented: $viewModel.showBluetoothAlert) {
+            Button(String(localized: "common.settings")) {
                 #if os(iOS)
                 if let url = URL(string: UIApplication.openSettingsURLString) {
                     UIApplication.shared.open(url)
                 }
                 #endif
             }
-            Button("OK", role: .cancel) {}
+            Button(String(localized: "common.ok"), role: .cancel) {}
         } message: {
             Text(viewModel.bluetoothAlertMessage)
         }
@@ -324,7 +324,7 @@ struct ContentView: View {
                                     // Expand/Collapse for very long messages
                                     if (message.content.count > TransportConfig.uiLongMessageLengthThreshold || message.content.hasVeryLongToken(threshold: TransportConfig.uiVeryLongTokenThreshold)) && cashuTokens.isEmpty {
                                         let isExpanded = expandedMessageIDs.contains(message.id)
-                                        Button(isExpanded ? "show less" : "show more") {
+                                        Button(isExpanded ? String(localized: "common.show_less") : String(localized: "common.show_more")) {
                                             if isExpanded { expandedMessageIDs.remove(message.id) }
                                             else { expandedMessageIDs.insert(message.id) }
                                         }
@@ -340,7 +340,7 @@ struct ContentView: View {
                                                 let link = lightningLinks[i]
                                                 PaymentChipView(
                                                     emoji: "⚡",
-                                                    label: "pay via lightning",
+                                                    label: String(localized: "actions.pay_lightning"),
                                                     colorScheme: colorScheme
                                                 ) {
                                                     #if os(iOS)
@@ -356,7 +356,7 @@ struct ContentView: View {
                                                 let urlStr = "cashu:\(enc)"
                                                 PaymentChipView(
                                                     emoji: "🥜",
-                                                    label: "pay via cashu",
+                                                    label: String(localized: "actions.pay_cashu"),
                                                     colorScheme: colorScheme
                                                 ) {
                                                     #if os(iOS)
@@ -426,7 +426,7 @@ struct ContentView: View {
                             }
                         }
                         .contextMenu {
-                            Button("Copy message") {
+                            Button(String(localized: "actions.copy_message")) {
                                 #if os(iOS)
                                 UIPasteboard.general.string = message.content
                                 #else
@@ -732,19 +732,19 @@ struct ContentView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     // Define commands with aliases and syntax
                     let baseInfo: [(commands: [String], syntax: String?, description: String)] = [
-                        (["/block"], "[nickname]", "block or list blocked peers"),
-                        (["/clear"], nil, "clear chat messages"),
-                        (["/hug"], "<nickname>", "send someone a warm hug"),
-                        (["/m", "/msg"], "<nickname> [message]", "send private message"),
-                        (["/slap"], "<nickname>", "slap someone with a trout"),
-                        (["/unblock"], "<nickname>", "unblock a peer"),
-                        (["/w"], nil, "see who's online")
+                        (["/block"], "[nickname]", String(localized: "help.command.block")),
+                        (["/clear"], nil, String(localized: "help.command.clear")),
+                        (["/hug"], "<nickname>", String(localized: "help.command.hug")),
+                        (["/m", "/msg"], "<nickname> [message]", String(localized: "help.command.msg")),
+                        (["/slap"], "<nickname>", String(localized: "help.command.slap")),
+                        (["/unblock"], "<nickname>", String(localized: "help.command.unblock")),
+                        (["/w"], nil, String(localized: "help.command.online"))
                     ]
                     let isGeoPublic: Bool = { if case .location = locationManager.selectedChannel { return true }; return false }()
                     let isGeoDM: Bool = (viewModel.selectedPrivateChatPeer?.hasPrefix("nostr_") == true)
                     let favInfo: [(commands: [String], syntax: String?, description: String)] = [
-                        (["/fav"], "<nickname>", "add to favorites"),
-                        (["/unfav"], "<nickname>", "remove from favorites")
+                        (["/fav"], "<nickname>", String(localized: "help.command.fav_add")),
+                        (["/unfav"], "<nickname>", String(localized: "help.command.fav_remove"))
                     ]
                     let commandInfo = baseInfo + ((isGeoPublic || isGeoDM) ? [] : favInfo)
                     
@@ -800,12 +800,13 @@ struct ContentView: View {
             }
             
             HStack(alignment: .center, spacing: 4) {
-            TextField("type a message...", text: $messageText)
+            TextField(String(localized: "placeholder.type_message"), text: $messageText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 14, design: .monospaced))
                 .foregroundColor(textColor)
                 .focused($isTextFieldFocused)
                 .padding(.leading, 12)
+                .accessibilityIdentifier("message-input")
                 // iOS keyboard autocomplete and capitalization enabled by default
                 .onChange(of: messageText) { newValue in
                     // Cancel previous debounce timer
@@ -827,18 +828,18 @@ struct ContentView: View {
                         }()
                         let isGeoDM: Bool = (viewModel.selectedPrivateChatPeer?.hasPrefix("nostr_") == true)
                         var commandDescriptions = [
-                            ("/block", "block or list blocked peers"),
-                            ("/clear", "clear chat messages"),
-                            ("/hug", "send someone a warm hug"),
-                            ("/m", "send private message"),
-                            ("/slap", "slap someone with a trout"),
-                            ("/unblock", "unblock a peer"),
-                            ("/w", "see who's online")
+                            ("/block", String(localized: "help.command.block")),
+                            ("/clear", String(localized: "help.command.clear")),
+                            ("/hug", String(localized: "help.command.hug")),
+                            ("/m", String(localized: "help.command.msg")),
+                            ("/slap", String(localized: "help.command.slap")),
+                            ("/unblock", String(localized: "help.command.unblock")),
+                            ("/w", String(localized: "help.command.online"))
                         ]
                         // Only show favorites commands when not in geohash context
                         if !(isGeoPublic || isGeoDM) {
-                            commandDescriptions.append(("/fav", "add to favorites"))
-                            commandDescriptions.append(("/unfav", "remove from favorites"))
+                            commandDescriptions.append(("/fav", String(localized: "help.command.fav_add")))
+                            commandDescriptions.append(("/unfav", String(localized: "help.command.fav_remove")))
                         }
                         
                         let input = newValue.lowercased()
@@ -884,8 +885,9 @@ struct ContentView: View {
             }
             .buttonStyle(.plain)
             .padding(.trailing, 12)
-            .accessibilityLabel("Send message")
-            .accessibilityHint(messageText.isEmpty ? "Enter a message to send" : "Double tap to send")
+            .accessibilityLabel(String(localized: "accessibility.send_message"))
+            .accessibilityIdentifier("send-button")
+            .accessibilityHint(messageText.isEmpty ? String(localized: "accessibility.enter_message_to_send") : String(localized: "accessibility.double_tap_to_send"))
             }
             .padding(.vertical, 8)
             .background(backgroundColor.opacity(0.95))
@@ -917,9 +919,10 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 0) {
                 // Header - match main toolbar height
                 HStack {
-                    Text("PEOPLE")
+                    Text(String(localized: "nav.people"))
                         .font(.system(size: 16, weight: .bold, design: .monospaced))
                         .foregroundColor(textColor)
+                        .accessibilityIdentifier("sidebar-people-header")
                     Spacer()
                     // Show QR in mesh on all platforms
                     if case .mesh = locationManager.selectedChannel {
@@ -928,7 +931,7 @@ struct ContentView: View {
                                 .font(.system(size: 14))
                         }
                         .buttonStyle(.plain)
-                        .help("Verification: show my QR or scan a friend")
+                        .help(String(localized: "help.verification_qr"))
                     }
                 }
                 .frame(height: 44) // Match header height
@@ -993,6 +996,7 @@ struct ContentView: View {
         }
         .background(backgroundColor)
         .foregroundColor(textColor)
+        .accessibilityIdentifier("main-chat-view")
         .gesture(
             DragGesture()
                 .onChanged { value in
@@ -1081,7 +1085,7 @@ struct ContentView: View {
     
     private var mainHeaderView: some View {
         HStack(spacing: 0) {
-            Text("bitchat/")
+            Text(String(localized: "app.title_prefix"))
                 .font(.system(size: 18, weight: .medium, design: .monospaced))
                 .foregroundColor(textColor)
                 .onTapGesture(count: 3) {
@@ -1094,11 +1098,11 @@ struct ContentView: View {
                 }
             
             HStack(spacing: 0) {
-                Text("@")
+                Text(String(localized: "ui.at_symbol"))
                     .font(.system(size: 14, design: .monospaced))
                     .foregroundColor(secondaryTextColor)
                 
-                TextField("nickname", text: $viewModel.nickname)
+                TextField(String(localized: "placeholder.nickname"), text: $viewModel.nickname)
                     .textFieldStyle(.plain)
                     .font(.system(size: 14, design: .monospaced))
                     .frame(maxWidth: 80)
@@ -1143,7 +1147,7 @@ struct ContentView: View {
                             .foregroundColor(Color.orange)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Open unread private chat")
+                    .accessibilityLabel(String(localized: "accessibility.open_unread_private_chat"))
                 }
                 // Notes icon (mesh only and when location is authorized), to the left of #mesh
                 if case .mesh = locationManager.selectedChannel, locationManager.permissionState == .authorized {
@@ -1166,7 +1170,7 @@ struct ContentView: View {
                         .fixedSize(horizontal: true, vertical: false)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Location notes for this place")
+                    .accessibilityLabel(String(localized: "accessibility.location_notes"))
                 }
 
                 // Bookmark toggle (geochats): to the left of #geohash
@@ -1176,7 +1180,7 @@ struct ContentView: View {
                             .font(.system(size: 12))
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Toggle bookmark for #\(ch.geohash)")
+                    .accessibilityLabel(String.localizedStringWithFormat(String(localized: "accessibility.bookmark_toggle_geohash"), ch.geohash))
                 }
 
                 // Location channels button '#'
@@ -1201,7 +1205,8 @@ struct ContentView: View {
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
                         .layoutPriority(2)
-                        .accessibilityLabel("location channels")
+                        .accessibilityLabel(String(localized: "accessibility.location_channels"))
+                        .accessibilityIdentifier("channel-button")
                 }
                 .buttonStyle(.plain)
                 .padding(.leading, 4)
@@ -1211,7 +1216,7 @@ struct ContentView: View {
                     // People icon with count
                     Image(systemName: "person.2.fill")
                         .font(.system(size: 11))
-                        .accessibilityLabel("\(headerOtherPeersCount) people")
+                        .accessibilityLabel(String.localizedStringWithFormat(NSLocalizedString("accessibility.people_count", comment: "People count with plural forms"), headerOtherPeersCount))
                     Text("\(headerOtherPeersCount)")
                         .font(.system(size: 12, design: .monospaced))
                         .accessibilityHidden(true)
@@ -1250,7 +1255,7 @@ struct ContentView: View {
                 } else {
                     VStack(spacing: 12) {
                         HStack {
-                            Text("notes")
+                            Text(String(localized: "location.notes.title"))
                                 .font(.system(size: 16, weight: .bold, design: .monospaced))
                             Spacer()
                             Button(action: { showLocationNotes = false }) {
@@ -1260,15 +1265,15 @@ struct ContentView: View {
                                     .frame(width: 32, height: 32)
                             }
                             .buttonStyle(.plain)
-                            .accessibilityLabel("Close")
+                            .accessibilityLabel(String(localized: "accessibility.close"))
                         }
                         .frame(height: 44)
                         .padding(.horizontal, 12)
                         .background(backgroundColor.opacity(0.95))
-                        Text("location unavailable")
+                        Text(String(localized: "location.unavailable"))
                             .font(.system(size: 14, design: .monospaced))
                             .foregroundColor(secondaryTextColor)
-                        Button("enable location") {
+                        Button(String(localized: "location.enable_action")) {
                             LocationChannelManager.shared.enableLocationChannels()
                             LocationChannelManager.shared.refreshChannels()
                         }
@@ -1326,10 +1331,10 @@ struct ContentView: View {
                 LocationChannelManager.shared.refreshChannels()
             }
         }
-        .alert("heads up", isPresented: $viewModel.showScreenshotPrivacyWarning) {
-            Button("ok", role: .cancel) {}
+        .alert(String(localized: "alert.heads_up"), isPresented: $viewModel.showScreenshotPrivacyWarning) {
+            Button(String(localized: "common.ok"), role: .cancel) {}
         } message: {
-            Text("screenshots of location channels will reveal your location. think before sharing publicly.")
+            Text(String(localized: "alert.screenshot_warning"))
         }
         .background(backgroundColor.opacity(0.95))
     }
@@ -1385,7 +1390,7 @@ struct ContentView: View {
                     if !social.claimedNickname.isEmpty { return social.claimedNickname }
                 }
             }
-            return "Unknown"
+            return String(localized: "common.unknown")
         }()
         let isNostrAvailable: Bool = {
             guard let connectionState = peer?.connectionState else { 
@@ -1419,19 +1424,19 @@ struct ContentView: View {
                                     Image(systemName: "dot.radiowaves.left.and.right")
                                         .font(.system(size: 14))
                                         .foregroundColor(textColor)
-                                        .accessibilityLabel("Connected via mesh")
+                                        .accessibilityLabel(String(localized: "accessibility.connected_mesh"))
                                 case .meshReachable:
                                     // point.3 filled icon for reachable via mesh (not directly connected)
                                     Image(systemName: "point.3.filled.connected.trianglepath.dotted")
                                         .font(.system(size: 14))
                                         .foregroundColor(textColor)
-                                        .accessibilityLabel("Reachable via mesh")
+                                        .accessibilityLabel(String(localized: "accessibility.reachable_mesh"))
                                 case .nostrAvailable:
                                     // Purple globe for Nostr
                                     Image(systemName: "globe")
                                         .font(.system(size: 14))
                                         .foregroundColor(.purple)
-                                        .accessibilityLabel("Available via Nostr")
+                                        .accessibilityLabel(String(localized: "accessibility.available_nostr"))
                                 case .offline:
                                     // Should not happen for PM header, but handle gracefully
                                     EmptyView()
@@ -1441,19 +1446,19 @@ struct ContentView: View {
                                 Image(systemName: "point.3.filled.connected.trianglepath.dotted")
                                     .font(.system(size: 14))
                                     .foregroundColor(textColor)
-                                    .accessibilityLabel("Reachable via mesh")
+                                    .accessibilityLabel(String(localized: "accessibility.reachable_mesh"))
                             } else if isNostrAvailable {
                                 // Fallback to Nostr if peer not in list but is mutual favorite
                                 Image(systemName: "globe")
                                     .font(.system(size: 14))
                                     .foregroundColor(.purple)
-                                    .accessibilityLabel("Available via Nostr")
+                                    .accessibilityLabel(String(localized: "accessibility.available_nostr"))
                             } else if viewModel.meshService.isPeerConnected(headerPeerID) || viewModel.connectedPeers.contains(headerPeerID) {
                                 // Fallback: if peer lookup is missing but mesh reports connected, show radio
                                 Image(systemName: "dot.radiowaves.left.and.right")
                                     .font(.system(size: 14))
                                     .foregroundColor(textColor)
-                                    .accessibilityLabel("Connected via mesh")
+                                    .accessibilityLabel(String(localized: "accessibility.connected_via_mesh"))
                             }
                             
                             Text("\(privatePeerNick)")
@@ -1474,12 +1479,15 @@ struct ContentView: View {
                                         .foregroundColor(encryptionStatus == .noiseVerified ? textColor : 
                                                        encryptionStatus == .noiseSecured ? textColor :
                                                        Color.red)
-                                        .accessibilityLabel("Encryption status: \(encryptionStatus == .noiseVerified ? "verified" : encryptionStatus == .noiseSecured ? "secured" : "not encrypted")")
+                                        .accessibilityLabel({
+                                            let statusText = encryptionStatus == .noiseVerified ? String(localized: "accessibility.encryption_status_verified") : encryptionStatus == .noiseSecured ? String(localized: "accessibility.encryption_status_secured") : String(localized: "accessibility.encryption_status_unencrypted")
+                                            return String.localizedStringWithFormat(String(localized: "accessibility.encryption_status_dynamic"), statusText)
+                                        }())
                                 }
                             }
                         }
-                        .accessibilityLabel("Private chat with \(privatePeerNick)")
-                        .accessibilityHint("Tap to view encryption fingerprint")
+                        .accessibilityLabel("\(String(localized: "accessibility.private_chat_with_user")): \(privatePeerNick)")
+                        .accessibilityHint(String(localized: "accessibility.private_chat_hint"))
                     }
                     .buttonStyle(.plain)
                     
@@ -1498,7 +1506,7 @@ struct ContentView: View {
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("Back to main chat")
+                        .accessibilityLabel(String(localized: "accessibility.back_to_main"))
                         
                         Spacer()
                         
@@ -1512,8 +1520,8 @@ struct ContentView: View {
                                     .foregroundColor(viewModel.isFavorite(peerID: headerPeerID) ? Color.yellow : textColor)
                             }
                             .buttonStyle(.plain)
-                            .accessibilityLabel(viewModel.isFavorite(peerID: privatePeerID) ? "Remove from favorites" : "Add to favorites")
-                            .accessibilityHint("Double tap to toggle favorite status")
+                            .accessibilityLabel(viewModel.isFavorite(peerID: privatePeerID) ? String(localized: "accessibility.remove_favorite") : String(localized: "accessibility.add_favorite"))
+                            .accessibilityHint(String(localized: "accessibility.favorite_toggle_hint"))
                         }
                     }
                 }
@@ -1631,7 +1639,7 @@ struct DeliveryStatusView: View {
                     .font(.system(size: 10))
             }
             .foregroundColor(textColor.opacity(0.8))
-            .help("Delivered to \(nickname)")
+            .help(String.localizedStringWithFormat(String(localized: "help.delivered_to_name"), nickname))
             
         case .read(let nickname, _):
             HStack(spacing: -2) {
@@ -1641,23 +1649,23 @@ struct DeliveryStatusView: View {
                     .font(.system(size: 10, weight: .bold))
             }
             .foregroundColor(Color(red: 0.0, green: 0.478, blue: 1.0))  // Bright blue
-            .help("Read by \(nickname)")
+            .help(String.localizedStringWithFormat(String(localized: "help.read_by_name"), nickname))
             
         case .failed(let reason):
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 10))
                 .foregroundColor(Color.red.opacity(0.8))
-                .help("Failed: \(reason)")
+                .help(String.localizedStringWithFormat(String(localized: "help.failed_reason"), reason))
             
         case .partiallyDelivered(let reached, let total):
             HStack(spacing: 1) {
                 Image(systemName: "checkmark")
                     .font(.system(size: 10))
-                Text("\(reached)/\(total)")
+                Text(String.localizedStringWithFormat(String(localized: "ui.delivery_ratio"), reached, total))
                     .font(.system(size: 10, design: .monospaced))
             }
             .foregroundColor(secondaryTextColor.opacity(0.6))
-            .help("Delivered to \(reached) of \(total) members")
+            .help(String.localizedStringWithFormat(String(localized: "help.delivered_group_members"), reached, total))
         }
     }
 }

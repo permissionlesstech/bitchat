@@ -15,12 +15,12 @@ struct MyQRView: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            Text("scan to verify me")
+            Text(String(localized: "verify.scan_to_verify"))
                 .font(.system(size: 16, weight: .bold, design: .monospaced))
 
             VStack(spacing: 10) {
                 QRCodeImage(data: qrString, size: 240)
-                    .accessibilityLabel("verification qr code")
+                    .accessibilityLabel(String(localized: "accessibility.verification_qr"))
 
                 // Non-scrolling, fully visible URL (wraps across lines)
                 Text(qrString)
@@ -59,7 +59,7 @@ struct QRCodeImage: View {
                     .stroke(Color.gray.opacity(0.5), lineWidth: 1)
                     .frame(width: size, height: size)
                     .overlay(
-                        Text("qr unavailable")
+                        Text(String(localized: "verify.qr_unavailable"))
                             .font(.system(size: 12, design: .monospaced))
                             .foregroundColor(.gray)
                     )
@@ -118,18 +118,21 @@ struct QRScanView: View {
             .frame(height: 260)
             .clipShape(RoundedRectangle(cornerRadius: 8))
             #else
-            Text("paste qr content to validate:")
+            Text(String(localized: "verify.paste_content"))
                 .font(.system(size: 14, weight: .medium, design: .monospaced))
             TextEditor(text: $input)
                 .frame(height: 100)
                 .border(Color.gray.opacity(0.4))
-            Button("validate") {
+            Button(action: {
                 if let qr = VerificationService.shared.verifyScannedQR(input) {
                     let ok = viewModel.beginQRVerification(with: qr)
-                    result = ok ? "verification requested for \(qr.nickname)" : "could not find matching peer"
+                    result = ok ? String.localizedStringWithFormat(String(localized: "verify.requested_for"), qr.nickname) : String(localized: "verify.could_not_find_peer")
                 } else {
-                    result = "invalid or expired qr payload"
+                    result = String(localized: "verify.invalid_or_expired_qr")
                 }
+            }) {
+                Text(String(localized: "verify.validate"))
+                    .accessibilityLabel(String(localized: "accessibility.button.validate"))
             }
             .buttonStyle(.bordered)
             #endif
@@ -254,7 +257,7 @@ struct VerificationSheetView: View {
         VStack(spacing: 0) {
             // Top header (always at top)
             HStack {
-                Text("VERIFY")
+                Text(String(localized: "verify.verify_button"))
                     .font(.system(size: 14, weight: .bold, design: .monospaced))
                     .foregroundColor(accentColor)
                 Spacer()
@@ -278,7 +281,7 @@ struct VerificationSheetView: View {
             Group {
                 if showingScanner {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("scan a friend's qr")
+                        Text(String(localized: "verify.scan_friend_qr"))
                             .font(.system(size: 16, weight: .bold, design: .monospaced))
                             .frame(maxWidth: .infinity)
                             .multilineTextAlignment(.center)
@@ -309,13 +312,13 @@ struct VerificationSheetView: View {
             VStack(spacing: 10) {
                 if showingScanner {
                     Button(action: { showingScanner = false }) {
-                        Label("show my qr", systemImage: "qrcode")
+                        Label(String(localized: "verify.show_my_qr"), systemImage: "qrcode")
                             .font(.system(size: 13, design: .monospaced))
                     }
                     .buttonStyle(.bordered)
                 } else {
                     Button(action: { showingScanner = true }) {
-                        Label("scan someone else's qr", systemImage: "camera.viewfinder")
+                        Label(String(localized: "verify.scan_someone_qr"), systemImage: "camera.viewfinder")
                             .font(.system(size: 13, weight: .medium, design: .monospaced))
                     }
                     .buttonStyle(.bordered)
@@ -327,7 +330,7 @@ struct VerificationSheetView: View {
                    let fp = viewModel.getFingerprint(for: pid),
                    viewModel.verifiedFingerprints.contains(fp) {
                     Button(action: { viewModel.unverifyFingerprint(for: pid) }) {
-                        Label("remove verification", systemImage: "minus.circle")
+                        Label(String(localized: "verify.remove_verification_action"), systemImage: "minus.circle")
                             .font(.system(size: 12, design: .monospaced))
                     }
                     .buttonStyle(.bordered)

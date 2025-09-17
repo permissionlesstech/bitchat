@@ -88,7 +88,7 @@ final class BLEService: NSObject {
     // MARK: - Identity
     
     var myPeerID: String = ""
-    var myNickname: String = "anon"
+    var myNickname: String = String(localized: "user.anonymous")
     private var noiseService: NoiseEncryptionService
     private let identityManager: SecureIdentityStateManagerProtocol
     private let keychain: KeychainManagerProtocol
@@ -1739,7 +1739,7 @@ final class BLEService: NSObject {
                         if let social = identityManager.getSocialIdentity(for: candidate.fingerprint) {
                             senderNickname = social.localPetname ?? social.claimedNickname
                         } else {
-                            senderNickname = "anon" + String(peerID.prefix(4))
+                            senderNickname = String.localizedStringWithFormat(String(localized: "user.anonymous_with_suffix"), String(peerID.prefix(4)))
                         }
                         break
                     }
@@ -1750,7 +1750,7 @@ final class BLEService: NSObject {
             // peers we haven't verified yet.
             if !accepted && packet.ttl == 0 {
                 accepted = true
-                senderNickname = "anon" + String(peerID.prefix(4))
+                senderNickname = String.localizedStringWithFormat(String(localized: "user.anonymous_with_suffix"), String(peerID.prefix(4)))
             }
         }
 

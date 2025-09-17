@@ -57,7 +57,8 @@ struct LocationNotesView: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
                     let c = manager.notes.count
-                    Text("\(c) \(c == 1 ? "note" : "notes") ")
+                    //Text("\(c) \(c == 1 ? "note" : "notes") ")
+                    Text(String.localizedStringWithFormat(String(localized: "location.notes.count"), c))
                         .font(.system(size: 16, weight: .bold, design: .monospaced))
                     Text("@ ")
                         .font(.system(size: 16, weight: .bold, design: .monospaced))
@@ -84,7 +85,7 @@ struct LocationNotesView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Close")
+            .accessibilityLabel(String(localized: "accessibility.close"))
         }
         .frame(height: 44)
         .padding(.horizontal, 12)
@@ -126,7 +127,7 @@ struct LocationNotesView: View {
 
     private var input: some View {
         HStack(alignment: .center, spacing: 8) {
-            TextField("add a note for this place", text: $draft, axis: .vertical)
+            TextField(String(localized: "location.notes.placeholder"), text: $draft, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(.system(size: 14, design: .monospaced))
                 .lineLimit(3, reservesSpace: true)
@@ -159,7 +160,7 @@ struct LocationNotesView: View {
         if let days = Calendar.current.dateComponents([.day], from: date, to: now).day, days < 7 {
             // Relative (minute/hour/day), no seconds
             let rel = Self.relativeFormatter.string(from: date, to: now) ?? ""
-            return rel.isEmpty ? "" : "\(rel) ago"
+            return rel.isEmpty ? "" : String.localizedStringWithFormat(String(localized: "time.ago"), rel)
         } else {
             // Absolute date (MMM d or MMM d, yyyy if different year)
             let sameYear = Calendar.current.isDate(date, equalTo: now, toGranularity: .year)

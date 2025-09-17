@@ -19,40 +19,32 @@ struct AppInfoView: View {
     // MARK: - Constants
     private enum Strings {
         static let appName = "bitchat"
-        static let tagline = "sidegroupchat"
+        static let tagline = String(localized: "appinfo.tagline")
         
         enum Features {
-            static let title = "FEATURES"
-            static let offlineComm = ("wifi.slash", "offline communication", "works without internet using Bluetooth low energy")
-            static let encryption = ("lock.shield", "end-to-end encryption", "private messages encrypted with noise protocol")
-            static let extendedRange = ("antenna.radiowaves.left.and.right", "extended range", "messages relay through peers, going the distance")
-            static let mentions = ("at", "mentions", "use @nickname to notify specific people")
-            static let favorites = ("star.fill", "favorites", "get notified when your favorite people join")
-            static let geohash = ("number", "local channels", "geohash channels to chat with people in nearby regions over decentralized anonymous relays")
+            static let title = String(localized: "appinfo.features.title")
+            static let offlineComm = ("wifi.slash", String(localized: "appinfo.feature.offline_comm"), String(localized: "appinfo.feature.offline_comm_desc"))
+            static let encryption = ("lock.shield", String(localized: "appinfo.feature.encryption"), String(localized: "appinfo.feature.encryption_desc"))
+            static let extendedRange = ("antenna.radiowaves.left.and.right", String(localized: "appinfo.feature.extended_range"), String(localized: "appinfo.feature.extended_range_desc"))
+            static let mentions = ("at", String(localized: "appinfo.feature.mentions"), String(localized: "appinfo.feature.mentions_desc"))
+            static let favorites = ("star.fill", String(localized: "appinfo.feature.favorites"), String(localized: "appinfo.feature.favorites_desc"))
+            static let geohash = ("number", String(localized: "appinfo.feature.geohash"), String(localized: "appinfo.feature.geohash_desc"))
         }
         
         enum Privacy {
-            static let title = "PRIVACY"
-            static let noTracking = ("eye.slash", "no tracking", "no servers, accounts, or data collection")
-            static let ephemeral = ("shuffle", "ephemeral identity", "new peer ID generated regularly")
-            static let panic = ("hand.raised.fill", "panic mode", "triple-tap logo to instantly clear all data")
+            static let title = String(localized: "appinfo.privacy.title")
+            static let noTracking = ("eye.slash", String(localized: "appinfo.privacy.no_tracking"), String(localized: "appinfo.privacy.no_tracking_desc"))
+            static let ephemeral = ("shuffle", String(localized: "appinfo.privacy.ephemeral"), String(localized: "appinfo.privacy.ephemeral_desc"))
+            static let panic = ("hand.raised.fill", String(localized: "appinfo.privacy.panic"), String(localized: "appinfo.privacy.panic_desc"))
         }
         
         enum HowToUse {
-            static let title = "HOW TO USE"
-            static let instructions = [
-                "• set your nickname by tapping it",
-                "• tap #mesh to change channels",
-                "• tap people icon for sidebar",
-                "• tap a peer's name to start a DM",
-                "• triple-tap chat to clear",
-                "• type / for commands"
-            ]
+            static let title = String(localized: "appinfo.howtouse.title")
         }
         
         enum Warning {
-            static let title = "WARNING"
-            static let message = "private message security has not yet been fully audited. do not use for critical situations until this warning disappears."
+            static let title = String(localized: "appinfo.warning.title")
+            static let message = String(localized: "appinfo.warning.message")
         }
     }
     
@@ -62,8 +54,11 @@ struct AppInfoView: View {
             // Custom header for macOS
             HStack {
                 Spacer()
-                Button("DONE") {
+                Button(action: {
                     dismiss()
+                }) {
+                    Text(String(localized: "nav.done"))
+                        .accessibilityLabel(String(localized: "accessibility.button.done"))
                 }
                 .buttonStyle(.plain)
                 .foregroundColor(textColor)
@@ -86,14 +81,13 @@ struct AppInfoView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: { dismiss() }) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                            .foregroundColor(textColor)
-                            .frame(width: 32, height: 32)
+                    Button(action: {
+                        dismiss()
+                    }) {
+                        Text(String(localized: "nav.close"))
+                            .accessibilityLabel(String(localized: "accessibility.button.close"))
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Close")
                 }
             }
         }
@@ -109,7 +103,7 @@ struct AppInfoView: View {
                     .font(.system(size: 32, weight: .bold, design: .monospaced))
                     .foregroundColor(textColor)
                 
-                Text(Strings.tagline)
+                Text(String(localized: "appinfo.tagline"))
                     .font(.system(size: 16, design: .monospaced))
                     .foregroundColor(secondaryTextColor)
             }
@@ -118,58 +112,61 @@ struct AppInfoView: View {
             
             // Features
             VStack(alignment: .leading, spacing: 16) {
-                SectionHeader(Strings.Features.title)
+                SectionHeader(String(localized: "appinfo.features.title"))
                 
-                FeatureRow(icon: Strings.Features.offlineComm.0, 
-                          title: Strings.Features.offlineComm.1,
-                          description: Strings.Features.offlineComm.2)
+                FeatureRow(icon: "wifi.slash", 
+                          title: String(localized: "appinfo.features.offline.title"),
+                          description: String(localized: "appinfo.features.offline.desc"))
                 
-                FeatureRow(icon: Strings.Features.encryption.0,
-                          title: Strings.Features.encryption.1,
-                          description: Strings.Features.encryption.2)
+                FeatureRow(icon: "lock.shield",
+                          title: String(localized: "appinfo.features.encryption.title"),
+                          description: String(localized: "appinfo.features.encryption.desc"))
                 
                 FeatureRow(icon: Strings.Features.extendedRange.0,
-                          title: Strings.Features.extendedRange.1,
-                          description: Strings.Features.extendedRange.2)
+                          title: String(localized: "appinfo.features.extended_range.title"),
+                          description: String(localized: "appinfo.features.extended_range.desc"))
                 
                 FeatureRow(icon: Strings.Features.favorites.0,
-                          title: Strings.Features.favorites.1,
-                          description: Strings.Features.favorites.2)
+                          title: String(localized: "appinfo.features.favorites.title"),
+                          description: String(localized: "appinfo.features.favorites.desc"))
                 
                 FeatureRow(icon: Strings.Features.geohash.0,
-                          title: Strings.Features.geohash.1,
-                          description: Strings.Features.geohash.2)
+                          title: String(localized: "appinfo.features.geohash.title"),
+                          description: String(localized: "appinfo.features.geohash.desc"))
                 
                 FeatureRow(icon: Strings.Features.mentions.0,
-                          title: Strings.Features.mentions.1,
-                          description: Strings.Features.mentions.2)
+                          title: String(localized: "appinfo.features.mentions.title"),
+                          description: String(localized: "appinfo.features.mentions.desc"))
             }
             
             // Privacy
             VStack(alignment: .leading, spacing: 16) {
-                SectionHeader(Strings.Privacy.title)
+                SectionHeader(String(localized: "appinfo.privacy.title"))
                 
                 FeatureRow(icon: Strings.Privacy.noTracking.0,
-                          title: Strings.Privacy.noTracking.1,
-                          description: Strings.Privacy.noTracking.2)
+                          title: String(localized: "appinfo.privacy.no_tracking.title"),
+                          description: String(localized: "appinfo.privacy.no_tracking.desc"))
                 
                 FeatureRow(icon: Strings.Privacy.ephemeral.0,
-                          title: Strings.Privacy.ephemeral.1,
-                          description: Strings.Privacy.ephemeral.2)
+                          title: String(localized: "appinfo.privacy.ephemeral.title"),
+                          description: String(localized: "appinfo.privacy.ephemeral.desc"))
                 
                 FeatureRow(icon: Strings.Privacy.panic.0,
-                          title: Strings.Privacy.panic.1,
-                          description: Strings.Privacy.panic.2)
+                          title: String(localized: "appinfo.privacy.panic.title"),
+                          description: String(localized: "appinfo.privacy.panic.desc"))
             }
             
             // How to Use
             VStack(alignment: .leading, spacing: 16) {
-                SectionHeader(Strings.HowToUse.title)
+                SectionHeader(String(localized: "appinfo.howto.title"))
                 
                 VStack(alignment: .leading, spacing: 8) {
-                    ForEach(Strings.HowToUse.instructions, id: \.self) { instruction in
-                        Text(instruction)
-                    }
+                    Text(String(localized: "appinfo.howto.set_nickname"))
+                    Text(String(localized: "appinfo.howto.tap_mesh"))
+                    Text(String(localized: "appinfo.howto.open_sidebar"))
+                    Text(String(localized: "appinfo.howto.start_dm"))
+                    Text(String(localized: "appinfo.howto.clear_chat"))
+                    Text(String(localized: "appinfo.howto.commands"))
                 }
                 .font(.system(size: 14, design: .monospaced))
                 .foregroundColor(textColor)
@@ -177,10 +174,10 @@ struct AppInfoView: View {
             
             // Warning
             VStack(alignment: .leading, spacing: 6) {
-                SectionHeader(Strings.Warning.title)
+                SectionHeader(String(localized: "appinfo.warning.title"))
                     .foregroundColor(Color.red)
                 
-                Text(Strings.Warning.message)
+                Text(String(localized: "appinfo.warning.message"))
                     .font(.system(size: 14, design: .monospaced))
                     .foregroundColor(Color.red)
                     .fixedSize(horizontal: false, vertical: true)

@@ -553,12 +553,20 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         // Announce Tor status (geohash-only; do not show in mesh chat). Only when auto-start is allowed.
         if TorManager.shared.torEnforced && !torStatusAnnounced && TorManager.shared.isAutoStartAllowed() {
             torStatusAnnounced = true
-            addGeohashOnlySystemMessage("starting tor...")
-            // Suppress incremental Tor progress messages
+            addGeohashOnlySystemMessage(String(localized: "system.tor_starting"))
+            // Suppress incremental Tor progress messages; only show initial start and readiness.
             torProgressCancellable = nil
+            Task.detached {
+                let ready = await TorManager.shared.awaitReady()
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    if ready { self.addGeohashOnlySystemMessage(String(localized: "system.tor_started")) }
+                    else { self.addGeohashOnlySystemMessage(String(localized: "system.tor_waiting")) }
+                }
+            }
         } else if !TorManager.shared.torEnforced && !torStatusAnnounced {
             torStatusAnnounced = true
-            addGeohashOnlySystemMessage("development build: tor bypass enabled.")
+            addGeohashOnlySystemMessage(String(localized: "system.tor_bypass_enabled"))
         }
 
         // Initialize Nostr relay manager regardless of Tor readiness; connection is controlled elsewhere
@@ -863,7 +871,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         Task { @MainActor in
             self.torRestartPending = true
             // Post only in geohash channels (queue if not active)
-            self.addGeohashOnlySystemMessage("tor restarting to recover connectivity...")
+            self.addGeohashOnlySystemMessage(String(localized: "system.tor_restarting"))
         }
     }
 
@@ -872,7 +880,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             // Only announce "restarted" if we actually restarted this session
             if self.torRestartPending {
                 // Post only in geohash channels (queue if not active)
-                self.addGeohashOnlySystemMessage("tor restarted. network routing restored.")
+                self.addGeohashOnlySystemMessage(String(localized: "system.tor_restarted"))
                 self.torRestartPending = false
             } else if TorManager.shared.torEnforced && !self.torInitialReadyAnnounced {
                 // Initial start completed
@@ -1201,7 +1209,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                         nickname = messages.first { $0.senderPeerID == peerID }?.sender
                     }
                     
-                    let finalNickname = nickname ?? "Unknown"
+                    let finalNickname = nickname ?? String(localized: "user.unknown")
                     let nostrKey = currentStatus?.peerNostrPublicKey ?? NostrIdentityBridge.getNostrPublicKey(for: noisePublicKey)
                     
                     FavoritesPersistenceService.shared.addFavorite(
@@ -1272,7 +1280,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         
         // Check if we have a claimed nickname for this peer
         let peerNicknames = meshService.getPeerNicknames()
-        if let nickname = peerNicknames[peerID], nickname != "Unknown" && nickname != "anon\(peerID.prefix(4))" {
+        if let nickname = peerNicknames[peerID], nickname != String(localized: "user.unknown") && nickname != "\(String(localized: "user.anonymous"))\(peerID.prefix(4))" {
             // Update or create social identity with the claimed nickname
             if var identity = identityManager.getSocialIdentity(for: fingerprintStr) {
                 identity.claimedNickname = nickname
@@ -1501,8 +1509,55 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                 count: TransportConfig.nostrGeoRelayCount
             )
             
-            if targetRelays.isEmpty {
-                SecureLogger.warning("Geo: no geohash relays available for \(ch.geohash); not sending", category: .session)
+            // Force immediate UI update for user's own messages
+            objectWillChange.send()
+
+            // Update channel activity time on send
+            switch activeChannel {
+            case .mesh:
+                lastPublicActivityAt["mesh"] = Date()
+            case .location(let ch):
+                lastPublicActivityAt["geo:\(ch.geohash)"] = Date()
+            }
+            
+            if case .location(let ch) = activeChannel {
+                // Send to geohash channel via Nostr ephemeral
+                Task { @MainActor in
+                    do {
+                        let identity = try NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash)
+                        let event = try NostrProtocol.createEphemeralGeohashEvent(
+                            content: content,
+                            geohash: ch.geohash,
+                            senderIdentity: identity,
+                            nickname: self.nickname,
+                            teleported: LocationChannelManager.shared.teleported
+                        )
+                        let targetRelays = GeoRelayDirectory.shared.closestRelays(
+                            toGeohash: ch.geohash,
+                            count: TransportConfig.nostrGeoRelayCount
+                        )
+                        if targetRelays.isEmpty {
+                            SecureLogger.warning("Geo: no geohash relays available for \(ch.geohash); not sending", category: .session)
+                        } else {
+                            NostrRelayManager.shared.sendEvent(event, to: targetRelays)
+                        }
+                        // Track ourselves as active participant
+                        self.recordGeoParticipant(pubkeyHex: identity.publicKeyHex)
+                        SecureLogger.debug("GeoTeleport: sent geo message pub=\(identity.publicKeyHex.prefix(8))… teleported=\(LocationChannelManager.shared.teleported)", category: .session)
+                        // If we tagged this as teleported, also mark our pubkey in teleportedGeo for UI
+                        // Only when not in our regional set (and regional list is known)
+                        let hasRegional = !LocationChannelManager.shared.availableChannels.isEmpty
+                        let inRegional = LocationChannelManager.shared.availableChannels.contains { $0.geohash == ch.geohash }
+                        if LocationChannelManager.shared.teleported && hasRegional && !inRegional {
+                            let key = identity.publicKeyHex.lowercased()
+                            self.teleportedGeo = self.teleportedGeo.union([key])
+                            SecureLogger.info("GeoTeleport: mark self teleported key=\(key.prefix(8))… total=\(self.teleportedGeo.count)", category: .session)
+                        }
+                    } catch {
+                        SecureLogger.error("❌ Failed to send geohash message: \(error)", category: .session)
+                        self.addSystemMessage(String(localized: "system.failed_send_location"))
+                    }
+                }
             } else {
                 NostrRelayManager.shared.sendEvent(event, to: targetRelays)
             }
@@ -2021,12 +2076,12 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         // Remove mapping keys pointing to this pubkey to avoid accidental resolution
         for (k, v) in nostrKeyMapping where v.lowercased() == hex { nostrKeyMapping.removeValue(forKey: k) }
         
-        addSystemMessage("blocked \(displayName) in geohash chats")
+        addSystemMessage(String.localizedStringWithFormat(String(localized: "system.blocked_geohash_user"), displayName))
     }
     @MainActor
     func unblockGeohashUser(pubkeyHexLowercased: String, displayName: String) {
         identityManager.setNostrBlocked(pubkeyHexLowercased, isBlocked: false)
-        addSystemMessage("unblocked \(displayName) in geohash chats")
+        addSystemMessage(String.localizedStringWithFormat(String(localized: "system.unblocked_geohash_user"), displayName))
     }
 
     /// Begin sampling multiple geohashes (used by channel sheet) without changing active channel.
@@ -2107,7 +2162,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                     var arr = self.geoTimelines[gh] ?? []
                     let senderSuffix = String(event.pubkey.suffix(4))
                     let nick = self.geoNicknames[event.pubkey.lowercased()]
-                    let senderName = (nick?.isEmpty == false ? nick! : "anon") + "#" + senderSuffix
+                    let senderName = (nick?.isEmpty == false ? nick! : String.localizedStringWithFormat(String(localized: "user.anonymous_with_suffix"), senderSuffix))
                     // Clamp future timestamps
                     let rawTs = Date(timeIntervalSince1970: TimeInterval(event.created_at))
                     let ts = min(rawTs, Date())
@@ -2155,7 +2210,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             return nick + "#" + suffix
         }
         // Otherwise, anonymous with collision-resistant suffix
-        return "anon#\(suffix)"
+        return String.localizedStringWithFormat(String(localized: "user.anonymous_with_suffix"), suffix)
     }
 
     // Helper: display name for current active channel (for notifications)
@@ -2192,10 +2247,76 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     func sendPrivateMessage(_ content: String, to peerID: String) {
         guard !content.isEmpty else { return }
         
+        // Geohash DM routing: conversation keys start with "nostr_"
+        if peerID.hasPrefix("nostr_") {
+            guard case .location(let ch) = activeChannel else {
+                addSystemMessage(String(localized: "system.not_in_location_channel"))
+                return
+            }
+            let messageID = UUID().uuidString
+            // Local echo in the DM thread
+            let message = BitchatMessage(
+                id: messageID,
+                sender: nickname,
+                content: content,
+                timestamp: Date(),
+                isRelay: false,
+                originalSender: nil,
+                isPrivate: true,
+                recipientNickname: nickname,
+                senderPeerID: meshService.myPeerID,
+                mentions: nil,
+                deliveryStatus: .sending
+            )
+            if privateChats[peerID] == nil { privateChats[peerID] = [] }
+            privateChats[peerID]?.append(message)
+            trimPrivateChatMessagesIfNeeded(for: peerID)
+            objectWillChange.send()
+
+            // Resolve recipient hex from mapping
+            guard let recipientHex = nostrKeyMapping[peerID] else {
+                if let msgIdx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
+                    privateChats[peerID]?[msgIdx].deliveryStatus = .failed(reason: String(localized: "error.unknown_recipient"))
+                }
+                return
+            }
+            // Respect geohash blocks
+            if identityManager.isNostrBlocked(pubkeyHexLowercased: recipientHex) {
+                if let msgIdx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
+                    privateChats[peerID]?[msgIdx].deliveryStatus = .failed(reason: String(localized: "error.user_blocked"))
+                }
+                addSystemMessage(String(localized: "system.user_blocked_generic"))
+                return
+            }
+            // Send via Nostr using per-geohash identity
+            do {
+                let id = try NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash)
+                // Prevent messaging ourselves
+                if recipientHex.lowercased() == id.publicKeyHex.lowercased() {
+                    if let idx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
+                        privateChats[peerID]?[idx].deliveryStatus = .failed(reason: String(localized: "error.cannot_message_self"))
+                    }
+                    return
+                }
+                SecureLogger.debug("GeoDM: local send mid=\(messageID.prefix(8))… to=\(recipientHex.prefix(8))… conv=\(peerID)", category: .session)
+                let nostrTransport = NostrTransport(keychain: keychain)
+                nostrTransport.senderPeerID = meshService.myPeerID
+                nostrTransport.sendPrivateMessageGeohash(content: content, toRecipientHex: recipientHex, from: id, messageID: messageID)
+                if let msgIdx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
+                    privateChats[peerID]?[msgIdx].deliveryStatus = .sent
+                }
+            } catch {
+                if let idx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
+                    privateChats[peerID]?[idx].deliveryStatus = .failed(reason: String(localized: "error.send_error"))
+                }
+            }
+            return
+        }
+
         // Check if blocked
         if unifiedPeerService.isBlocked(peerID) {
             let nickname = meshService.peerNickname(peerID: peerID) ?? "user"
-            addSystemMessage("cannot send message to \(nickname): user is blocked.")
+            addSystemMessage(String.localizedStringWithFormat(String(localized: "system.cannot_send_blocked"), nickname))
             return
         }
         
@@ -2257,9 +2378,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         } else {
             // Update delivery status to failed
             if let index = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
-                privateChats[peerID]?[index].deliveryStatus = .failed(reason: "Peer not reachable")
+                privateChats[peerID]?[index].deliveryStatus = .failed(reason: String(localized: "error.peer_not_reachable"))
             }
-            addSystemMessage("Cannot send message to \(recipientNickname ?? "user") - peer is not reachable via mesh or Nostr.")
+            addSystemMessage(String.localizedStringWithFormat(String(localized: "system.cannot_send_unreachable"), recipientNickname ?? String(localized: "common.user")))
         }
     }
     
@@ -2349,13 +2470,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     func geohashDisplayName(for convKey: String) -> String {
         guard let full = nostrKeyMapping[convKey] else {
             let suffix = String(convKey.suffix(4))
-            return "anon#\(suffix)"
+            return String.localizedStringWithFormat(String(localized: "user.anonymous_with_suffix"), suffix)
         }
         let suffix = String(full.suffix(4))
         if let nick = geoNicknames[full.lowercased()], !nick.isEmpty {
             return nick + "#" + suffix
         }
-        return "anon#\(suffix)"
+        return String.localizedStringWithFormat(String(localized: "user.anonymous_with_suffix"), suffix)
     }
     /// Add a local system message to a private chat (no network send)
     @MainActor
@@ -2422,14 +2543,14 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         
         // Check if the peer is blocked
         if unifiedPeerService.isBlocked(peerID) {
-            addSystemMessage("cannot start chat with \(peerNickname): user is blocked.")
+            addSystemMessage(String.localizedStringWithFormat(String(localized: "system.cannot_start_chat_blocked"), peerNickname))
             return
         }
         
         // Check mutual favorites for offline messaging
         if let peer = unifiedPeerService.getPeer(by: peerID),
            peer.isFavorite && !peer.theyFavoritedUs && !peer.isConnected {
-            addSystemMessage("cannot start chat with \(peerNickname): mutual favorite required for offline messaging.")
+            addSystemMessage(String.localizedStringWithFormat(String(localized: "system.mutual_favorite_required"), peerNickname))
             return
         }
         
@@ -2755,7 +2876,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             // Then handle favorite/unfavorite messages if applicable
             if let isFavorite = notification.userInfo?["isFavorite"] as? Bool {
                 let peerID = peerPublicKey.hexEncodedString()
-                let action = isFavorite ? "favorited" : "unfavorited"
+                let action = isFavorite ? String(localized: "system.favorited") : String(localized: "system.unfavorited")
                 
                 // Find peer nickname
                 let peerNickname: String
@@ -2764,13 +2885,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                 } else if let favorite = FavoritesPersistenceService.shared.getFavoriteStatus(for: peerPublicKey) {
                     peerNickname = favorite.peerNickname
                 } else {
-                    peerNickname = "Unknown"
+                    peerNickname = String(localized: "user.unknown")
                 }
                 
                 // Create system message
                 let systemMessage = BitchatMessage(
                     id: UUID().uuidString,
-                sender: "System",
+                sender: String(localized: "system.sender"),
                 content: "\(peerNickname) \(action) you",
                 timestamp: Date(),
                 isRelay: false,
@@ -2841,7 +2962,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             // Show local notification immediately as system message (only in chat)
             let localNotification = BitchatMessage(
                 sender: "system",
-                content: "you took a screenshot",
+                content: String(localized: "system.screenshot_taken"),
                 timestamp: Date(),
                 isRelay: false,
                 originalSender: nil,
@@ -2883,7 +3004,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                         self.recordGeoParticipant(pubkeyHex: identity.publicKeyHex)
                     } catch {
                         SecureLogger.error("❌ Failed to send geohash screenshot message: \(error)", category: .session)
-                        self.addSystemMessage("failed to send to location channel")
+                        self.addSystemMessage(String(localized: "system.failed_send_location"))
                     }
                 }
             }
@@ -2892,7 +3013,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             // Show local notification immediately as system message (only in chat)
             let localNotification = BitchatMessage(
                 sender: "system",
-                content: "you took a screenshot",
+                content: String(localized: "system.screenshot_taken"),
                 timestamp: Date(),
                 isRelay: false
             )
@@ -4244,10 +4365,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         let prefix = String(peerID.prefix(prefixLength))
         
         // Avoid "anonanon" by checking if ID already starts with "anon"
-        if prefix.starts(with: "anon") {
+        if prefix.starts(with: String(localized: "user.anonymous")) {
             return "peer\(prefix)"
         }
-        return "anon\(prefix)"
+        return String.localizedStringWithFormat(String(localized: "user.anonymous_with_suffix"), prefix)
     }
     
     func getMyFingerprint() -> String {
@@ -4405,7 +4526,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             switch type {
             case .privateMessage:
                 guard let pm = PrivateMessagePacket.decode(from: payload) else { return }
-                let senderName = unifiedPeerService.getPeer(by: peerID)?.nickname ?? "Unknown"
+                let senderName = unifiedPeerService.getPeer(by: peerID)?.nickname ?? String(localized: "user.unknown")
             let pmMentions = parseMentions(from: pm.content)
             let msg = BitchatMessage(
                 id: pm.messageID,
@@ -4460,8 +4581,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                             lastMutualToastAt[fp] = now
                             let name = unifiedPeerService.getPeer(by: peerID)?.nickname ?? resolveNickname(for: peerID)
                             NotificationService.shared.sendLocalNotification(
-                                title: "Mutual verification",
-                                body: "You and \(name) verified each other",
+                                title: String(localized: "notifications.mutual_verification.title"),
+                                body: String.localizedStringWithFormat(String(localized: "notifications.mutual_verification.body"), name),
                                 identifier: "verify-mutual-\(peerID)-\(UUID().uuidString)"
                             )
                         }
@@ -4486,8 +4607,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                         verifiedFingerprints.insert(fp)
                         let name = unifiedPeerService.getPeer(by: peerID)?.nickname ?? resolveNickname(for: peerID)
                         NotificationService.shared.sendLocalNotification(
-                            title: "Verified",
-                            body: "You verified \(name)",
+                            title: String(localized: "notifications.verification.title"),
+                            body: String.localizedStringWithFormat(String(localized: "notifications.verification.body"), name),
                             identifier: "verify-success-\(peerID)-\(UUID().uuidString)"
                         )
                         // If we also recently responded to their challenge, flag mutual and toast (initiator side)
@@ -4497,8 +4618,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                             if now.timeIntervalSince(lastToast) > 60 {
                                 lastMutualToastAt[fp] = now
                                 NotificationService.shared.sendLocalNotification(
-                                    title: "Mutual verification",
-                                    body: "You and \(name) verified each other",
+                                    title: String(localized: "notifications.mutual_verification.title"),
+                                    body: String.localizedStringWithFormat(String(localized: "notifications.mutual_verification.body"), name),
                                     identifier: "verify-mutual-\(peerID)-\(UUID().uuidString)"
                                 )
                             }
@@ -5095,7 +5216,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             let senderNoiseKey = findNoiseKey(for: senderPubkey)
             let actualSenderNoiseKey = senderNoiseKey // may be nil
             let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(rumorTimestamp))
-            let senderNickname = (actualSenderNoiseKey != nil) ? (FavoritesPersistenceService.shared.getFavoriteStatus(for: actualSenderNoiseKey!)?.peerNickname ?? "Unknown") : "Unknown"
+            let senderNickname = (actualSenderNoiseKey != nil) ? (FavoritesPersistenceService.shared.getFavoriteStatus(for: actualSenderNoiseKey!)?.peerNickname ?? String(localized: "user.unknown")) : String(localized: "user.unknown")
             // Stable target ID if we know Noise key; otherwise temporary Nostr-based peer
             let targetPeerID = actualSenderNoiseKey?.hexEncodedString() ?? ("nostr_" + senderPubkey.prefix(TransportConfig.nostrConvKeyPrefixLength))
 
@@ -5390,8 +5511,15 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
 
         // Only show a system message when the state changes, and only in mesh
         if prior != isFavorite {
-            let action = isFavorite ? "favorited" : "unfavorited"
+            let action = isFavorite ? String(localized: "system.favorited") : String(localized: "system.unfavorited")
             addMeshOnlySystemMessage("\(senderNickname) \(action) you")
+        }
+        
+        // Show system message
+        if isFavorite {
+            addSystemMessage(String.localizedStringWithFormat(String(localized: "system.user_action_favorited"), senderNickname))
+        } else {
+            addSystemMessage(String.localizedStringWithFormat(String(localized: "system.user_action_unfavorited"), senderNickname))
         }
     }
     
@@ -5433,7 +5561,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         let shouldMarkAsUnread = !wasReadBefore && !isViewingThisChat && (isRecentMessage || !isStartupPhase)
         
         // Use provided nickname or try to extract from previous messages
-        var finalSenderNickname = senderNickname ?? "Unknown"
+        var finalSenderNickname = senderNickname ?? String(localized: "user.unknown")
         
         // If no nickname provided, check if we have any previous messages from this Nostr key
         if senderNickname == nil {
