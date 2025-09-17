@@ -64,9 +64,10 @@ struct AppLockView: View {
                             .disabled(wait > 0)
                             .buttonStyle(.plain)
                             .foregroundColor(wait > 0 ? .gray : .blue)
-                            Button("Use Device") { appLock.unlockWithDeviceAuth() }
+                            Button(appLock.biometryType() == .faceID ? "Use Face ID" : (appLock.biometryType() == .touchID ? "Use Touch ID" : "Use Device")) { appLock.unlockWithDeviceAuth() }
                                 .buttonStyle(.plain)
                                 .foregroundColor(.blue)
+                                .accessibilityLabel(appLock.biometryType() == .faceID ? "Use Face ID to unlock" : (appLock.biometryType() == .touchID ? "Use Touch ID to unlock" : "Use device authentication to unlock"))
                         }
                     }
                     .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { _ in

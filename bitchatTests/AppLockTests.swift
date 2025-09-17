@@ -1,12 +1,14 @@
 import XCTest
 @testable import bitchat
 
+@MainActor
 final class AppLockTests: XCTestCase {
     final class MockAuth: LocalAuthProviderProtocol {
         var canEvaluate = true
         var nextResult: (Bool, Error?) = (true, nil)
         func canEvaluateOwnerAuth() -> Bool { canEvaluate }
-        func evaluateOwnerAuth(reason: String, completion: @escaping (Bool, Error?) -> Void) { completion(nextResult.0, nextResult.1) }
+        func evaluateOwnerAuth(reason: String, fallbackTitle: String?, completion: @escaping (Bool, Error?) -> Void) { completion(nextResult.0, nextResult.1) }
+        func biometryType() -> BiometryType { .none }
         func invalidate() {}
     }
 

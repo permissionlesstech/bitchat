@@ -1,9 +1,16 @@
 import Foundation
 import LocalAuthentication
 
+enum BiometryType {
+    case none
+    case touchID
+    case faceID
+}
+
 protocol LocalAuthProviderProtocol {
     func canEvaluateOwnerAuth() -> Bool
-    func evaluateOwnerAuth(reason: String, completion: @escaping (Bool, Error?) -> Void)
+    func evaluateOwnerAuth(reason: String, fallbackTitle: String?, completion: @escaping (Bool, Error?) -> Void)
+    func biometryType() -> BiometryType
     func invalidate()
 }
 
@@ -27,11 +34,25 @@ final class LocalAuthProvider: LocalAuthProviderProtocol {
         return can
     }
 
-    func evaluateOwnerAuth(reason: String, completion: @escaping (Bool, Error?) -> Void) {
+    func evaluateOwnerAuth(reason: String, fallbackTitle: String?, completion: @escaping (Bool, Error?) -> Void) {
         let ctx = freshContext()
+        if let ft = fallbackTitle {
+            ctx.localizedFallbackTitle = ft
+        }
         self.context = ctx
         ctx.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason) { success, error in
             completion(success, error)
+        }
+    }
+
+    func biometryType() -> BiometryType {
+        let ctx = freshContext()
+        var err: NSError?
+        _ = ctx.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &err)
+        switch ctx.biometryType {
+        case .touchID: return .touchID
+        case .faceID: return .faceID
+        default: return .none
         }
     }
 
@@ -40,4 +61,3 @@ final class LocalAuthProvider: LocalAuthProviderProtocol {
         context = nil
     }
 }
-

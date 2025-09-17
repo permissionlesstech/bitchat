@@ -4,6 +4,7 @@ import Security
 import CryptoKit
 import BitLogger
 
+@MainActor
 final class AppLockManager: ObservableObject {
     enum Method: String { case off, deviceAuth, pin }
 
@@ -18,6 +19,7 @@ final class AppLockManager: ObservableObject {
     private let keychain: KeychainManagerProtocol
     private let localAuth: LocalAuthProviderProtocol
     private let defaults: UserDefaults
+    private let nowProvider: () -> Date
 
     @Published private(set) var isLocked: Bool = false
     @Published var method: Method
@@ -39,10 +41,12 @@ final class AppLockManager: ObservableObject {
 
     init(keychain: KeychainManagerProtocol = KeychainManager(),
          localAuth: LocalAuthProviderProtocol = LocalAuthProvider(),
-         defaults: UserDefaults = .standard) {
+         defaults: UserDefaults = .standard,
+         nowProvider: @escaping () -> Date = { Date() }) {
         self.keychain = keychain
         self.localAuth = localAuth
         self.defaults = defaults
+        self.nowProvider = nowProvider
 
         self.isEnabled = defaults.bool(forKey: ConfigKeys.enabled)
         self.method = Method(rawValue: defaults.string(forKey: ConfigKeys.method) ?? Method.off.rawValue) ?? .off
@@ -98,7 +102,7 @@ final class AppLockManager: ObservableObject {
     func lockNow() { if isEnabled && method != .off { isLocked = true } }
 
     func unlockWithDeviceAuth(reason: String = "Unlock bitchat") {
-        localAuth.evaluateOwnerAuth(reason: reason) { [weak self] success, err in
+        localAuth.evaluateOwnerAuth(reason: reason, fallbackTitle: "Enter Passcode") { [weak self] success, err in
             DispatchQueue.main.async {
                 guard let self = self else { return }
                 if success {
@@ -150,7 +154,7 @@ final class AppLockManager: ObservableObject {
         let computed = Self.sha256(data: combined)
         let match = constantTimeEqual(computed, stored)
         // Update failure accounting
-        let now = Date()
+        let now = nowProvider()
         _ = saveDate(now, forKey: pinLastAttemptAtKey)
         if match {
             // Success: clear counters
@@ -177,7 +181,7 @@ final class AppLockManager: ObservableObject {
     }
 
     // MARK: - Backoff helpers
-    func canAttemptPIN(now: Date = Date()) -> (allowed: Bool, wait: TimeInterval) {
+    func canAttemptPIN(now: Date) -> (allowed: Bool, wait: TimeInterval) {
         // Apply decay based on inactivity
         if let last = loadDate(forKey: pinLastAttemptAtKey) {
             let elapsed = now.timeIntervalSince(last)
@@ -198,12 +202,20 @@ final class AppLockManager: ObservableObject {
         return (true, 0)
     }
 
-    func backoffRemaining(now: Date = Date()) -> TimeInterval {
+    func canAttemptPIN() -> (allowed: Bool, wait: TimeInterval) {
+        return canAttemptPIN(now: nowProvider())
+    }
+
+    func backoffRemaining(now: Date) -> TimeInterval {
         if let next = loadDate(forKey: pinNextAllowedAtKey) {
             return max(0, next.timeIntervalSince(now))
         }
         return 0
     }
+
+    func backoffRemaining() -> TimeInterval { backoffRemaining(now: nowProvider()) }
+
+    func biometryType() -> BiometryType { localAuth.biometryType() }
 
     func panicClear() {
         clearPIN()
