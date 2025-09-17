@@ -487,10 +487,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     
     // Track Nostr pubkey mappings for unknown senders
     private var nostrKeyMapping: [String: String] = [:]  // senderPeerID -> nostrPubkey
-//    private let storage: KeyStorable = UserDefaultsKeyStorable()
-    private let storage: KeyStorable = UserDefaultsKeyStorable()
-    
-    private let storage = UserDefaultsKeyStorable()
+    private let storage: KeyStorable
     
     // MARK: - Initialization
     
@@ -503,6 +500,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         self.keychain = keychain
         self.identityManager = identityManager
         self.meshService = BLEService(keychain: keychain, identityManager: identityManager)
+        self.storage = storage
         
         // Load persisted read receipts
         if let data = storage.data("sentReadReceipts"),
