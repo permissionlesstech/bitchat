@@ -1,6 +1,7 @@
 import Foundation
 import BitLogger
 import Combine
+import Tor
 
 /// Coordinates when the app is allowed to start Tor and connect to Nostr relays.
 /// Policy: permit start when either location permissions are authorized OR
