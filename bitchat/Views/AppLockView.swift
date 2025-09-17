@@ -1,4 +1,7 @@
 import SwiftUI
+#if os(iOS)
+import UIKit
+#endif
 
 struct AppLockView: View {
     @EnvironmentObject var appLock: AppLockManager
@@ -6,6 +9,7 @@ struct AppLockView: View {
     @State private var pinInput: String = ""
     @State private var authError: String? = nil
     @State private var now: Date = Date()
+    @State private var lastWait: TimeInterval = 0
 
     private var textColor: Color { colorScheme == .dark ? .green : Color(red: 0, green: 0.5, blue: 0) }
 
@@ -33,9 +37,12 @@ struct AppLockView: View {
                             #endif
                         let wait = appLock.backoffRemaining(now: now)
                         if wait > 0 {
-                            Text("try again in \(formatWait(wait))")
+                            Text("too many attempts — try again in \(formatWait(wait))")
                                 .font(.system(size: 12, design: .monospaced))
                                 .foregroundColor(.orange)
+                                #if os(iOS)
+                                .accessibilityLabel("Too many attempts. Try again in \(formatWait(wait))")
+                                #endif
                         }
                         HStack(spacing: 12) {
                             Button("Unlock") {
@@ -43,6 +50,15 @@ struct AppLockView: View {
                                 if !ok {
                                     if appLock.backoffRemaining(now: Date()) > 0 { authError = nil } else { authError = "Incorrect PIN" }
                                     pinInput = ""
+                                    let newWait = appLock.backoffRemaining(now: Date())
+                                    if newWait > 0 && lastWait == 0 {
+                                        #if os(iOS)
+                                        let gen = UINotificationFeedbackGenerator()
+                                        gen.notificationOccurred(.warning)
+                                        UIAccessibility.post(notification: .announcement, argument: "Too many attempts. Try again in \(formatWait(newWait))")
+                                        #endif
+                                        lastWait = newWait
+                                    }
                                 }
                             }
                             .disabled(wait > 0)
@@ -53,8 +69,10 @@ struct AppLockView: View {
                                 .foregroundColor(.blue)
                         }
                     }
-                    .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { t in
+                    .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { _ in
                         now = Date()
+                        let w = appLock.backoffRemaining(now: now)
+                        if w == 0 { lastWait = 0 }
                     }
                 case .off:
                     EmptyView()
