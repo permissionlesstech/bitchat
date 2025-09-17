@@ -4,6 +4,7 @@ import PackageDescription
 
 let package = Package(
     name: "bitchat",
+    defaultLocalization: "en",
     platforms: [
         .iOS(.v16),
         .macOS(.v13)
@@ -36,6 +37,10 @@ let package = Package(
                 "LaunchScreen.storyboard",
                 "Services/Tor/C/"
             ],
+            resources: [
+                .process("Localizable.xcstrings"),
+                .process("InfoPlist.xcstrings")
+            ],
             linkerSettings: [
                 .linkedLibrary("z")
             ]
@@ -55,6 +60,10 @@ let package = Package(
             exclude: [
                 "Info.plist",
                 "README.md"
+            ],
+            resources: [
+                .copy("../bitchat/Localizable.xcstrings"),
+                .copy("../bitchat/InfoPlist.xcstrings")
             ]
         )
     ]

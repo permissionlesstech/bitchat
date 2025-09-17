@@ -1,0 +1,35 @@
+name: Localization Validation
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  localization:
+    name: Validate Localization
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Validate Localization Files
+        run: |
+          # Make the script executable and run it
+          chmod +x scripts/github/localization_pre_commit_hook.sh
+          
+          # Run the localization validation script
+          # Note: We set CI=true to disable auto-fixing in CI environment
+          CI=true ./scripts/github/localization_pre_commit_hook.sh
+
+      - name: Run Localization Tests
+        run: swift test --filter LocalizationTests

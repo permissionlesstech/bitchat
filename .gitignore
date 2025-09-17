@@ -75,6 +75,8 @@ TestResult.xcresult/
 *.xcresult/
 build.log
 *.log
+*.backup
 
 # Local configs
 Local.xcconfig
+project.yml
