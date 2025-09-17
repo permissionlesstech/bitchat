@@ -23,6 +23,7 @@ struct ContentView: View {
     // MARK: - Properties
     
     @EnvironmentObject var viewModel: ChatViewModel
+    @EnvironmentObject var appLock: AppLockManager
     @ObservedObject private var locationManager = LocationChannelManager.shared
     @ObservedObject private var bookmarks = GeohashBookmarksStore.shared
     @ObservedObject private var notesCounter = LocationNotesCounter.shared
@@ -158,6 +159,12 @@ struct ContentView: View {
                     return showSidebar ? -dragOffset : width - dragOffset
                 }())
                 .animation(.easeInOut(duration: TransportConfig.uiAnimationSidebarSeconds), value: showSidebar)
+
+                // App Lock overlay gates UI
+                if appLock.isEnabled && appLock.method != .off && appLock.isLocked {
+                    AppLockView()
+                        .environmentObject(appLock)
+                }
             }
         }
         #if os(macOS)
