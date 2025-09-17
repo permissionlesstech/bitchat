@@ -258,11 +258,25 @@ struct AppInfoView: View {
                         Text(err).foregroundColor(.red).font(.system(size: 12, design: .monospaced))
                     }
                     Button("save") {
+                        // Basic PIN strength and validity checks
                         if pin1.count < 4 || pin1.count > 8 { pinError = "pin must be 4–8 digits"; return }
+                        // digits only
+                        if !pin1.allSatisfy({ $0.isNumber }) { pinError = "pin must contain only digits"; return }
+                        // all same digits
+                        if let f = pin1.first, pin1 == String(repeating: f, count: pin1.count) {
+                            pinError = "pin cannot be all same digits"; return
+                        }
+                        // common bad pins
+                        let badPins: Set<String> = ["1234","4321","0000","1111","2222","9999","1212","1122"]
+                        if badPins.contains(pin1) { pinError = "pin is too common"; return }
                         guard pin1 == pin2 else { pinError = "pins do not match"; return }
-                        appLock.setPIN(pin1)
-                        pin1 = ""; pin2 = ""; pinError = nil
-                        showSetPIN = false
+
+                        if appLock.setPIN(pin1) {
+                            pin1 = ""; pin2 = ""; pinError = nil
+                            showSetPIN = false
+                        } else {
+                            pinError = "failed to save pin"
+                        }
                     }
                     .buttonStyle(.borderedProminent)
                 }

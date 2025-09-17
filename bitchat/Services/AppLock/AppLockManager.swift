@@ -101,15 +101,22 @@ final class AppLockManager: ObservableObject {
         }
     }
 
-    func setPIN(_ pin: String) {
-        guard let data = pin.data(using: .utf8) else { return }
+    @discardableResult
+    func setPIN(_ pin: String) -> Bool {
+        guard let data = pin.data(using: .utf8) else { return false }
         let salt = Self.randomData(count: 16)
         var combined = Data(salt)
         combined.append(data)
         let hash = Self.sha256(data: combined)
-        _ = keychain.saveAppLockSecret(salt, key: pinSaltKey)
-        _ = keychain.saveAppLockSecret(hash, key: pinHashKey)
+        guard keychain.saveAppLockSecret(salt, key: pinSaltKey),
+              keychain.saveAppLockSecret(hash, key: pinHashKey) else {
+            _ = keychain.deleteAppLockSecret(key: pinSaltKey)
+            _ = keychain.deleteAppLockSecret(key: pinHashKey)
+            SecureLogger.error(NSError(domain: "AppLock", code: -1), context: "Failed to persist PIN salt/hash", category: .security)
+            return false
+        }
         SecureLogger.info("AppLock PIN set", category: .security)
+        return true
     }
 
     func clearPIN() {

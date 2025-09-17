@@ -65,9 +65,8 @@ final class AppLockTests: XCTestCase {
         mgr.setEnabled(true)
         mgr.setMethod(.pin)
         mgr.lockNow()
-        mgr.setPIN("1234")
+        XCTAssertTrue(mgr.setPIN("1234"))
         XCTAssertTrue(mgr.validate(pin: "1234"))
         XCTAssertFalse(mgr.validate(pin: "9999"))
     }
 }
-
