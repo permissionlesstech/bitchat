@@ -20,6 +20,11 @@ protocol KeychainManagerProtocol {
     func secureClear(_ string: inout String)
     
     func verifyIdentityKeyExists() -> Bool
+
+    // App Lock storage
+    func saveAppLockSecret(_ data: Data, key: String) -> Bool
+    func getAppLockSecret(key: String) -> Data?
+    func deleteAppLockSecret(key: String) -> Bool
 }
 
 final class KeychainManager: KeychainManagerProtocol {
@@ -125,6 +130,86 @@ final class KeychainManager: KeychainManagerProtocol {
             SecureLogger.error(NSError(domain: "Keychain", code: Int(status)), context: "Error saving to keychain", category: .keychain)
         }
         return false
+    }
+
+    // MARK: - App Lock Secrets (ThisDeviceOnly)
+    // Store secrets that should not sync or be restorable from backups
+    func saveAppLockSecret(_ data: Data, key: String) -> Bool {
+        // Delete any existing item first to ensure clean state
+        _ = deleteAppLockSecret(key: key)
+
+        var base: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: key,
+            kSecValueData as String: data,
+            kSecAttrService as String: service,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+            kSecAttrLabel as String: "bitchat-applock-\(key)"
+        ]
+        #if os(macOS)
+        base[kSecAttrSynchronizable as String] = false
+        #endif
+
+        func attempt(addAccessGroup: Bool) -> OSStatus {
+            var query = base
+            if addAccessGroup { query[kSecAttrAccessGroup as String] = appGroup }
+            return SecItemAdd(query as CFDictionary, nil)
+        }
+
+        #if os(iOS)
+        var status = attempt(addAccessGroup: true)
+        if status == -34018 { status = attempt(addAccessGroup: false) }
+        #else
+        let status = attempt(addAccessGroup: false)
+        #endif
+        if status != errSecSuccess && status != errSecDuplicateItem {
+            SecureLogger.error(NSError(domain: "Keychain", code: Int(status)), context: "Error saving applock secret", category: .keychain)
+        }
+        return status == errSecSuccess
+    }
+
+    func getAppLockSecret(key: String) -> Data? {
+        let base: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: key,
+            kSecAttrService as String: service,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+
+        var result: AnyObject?
+        func attempt(withAccessGroup: Bool) -> OSStatus {
+            var q = base
+            if withAccessGroup { q[kSecAttrAccessGroup as String] = appGroup }
+            return SecItemCopyMatching(q as CFDictionary, &result)
+        }
+        #if os(iOS)
+        var status = attempt(withAccessGroup: true)
+        if status == -34018 { status = attempt(withAccessGroup: false) }
+        #else
+        let status = attempt(withAccessGroup: false)
+        #endif
+        if status == errSecSuccess { return result as? Data }
+        return nil
+    }
+
+    func deleteAppLockSecret(key: String) -> Bool {
+        func attempt(withAccessGroup: Bool) -> OSStatus {
+            var q: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrAccount as String: key,
+                kSecAttrService as String: service
+            ]
+            if withAccessGroup { q[kSecAttrAccessGroup as String] = appGroup }
+            return SecItemDelete(q as CFDictionary)
+        }
+        #if os(iOS)
+        var status = attempt(withAccessGroup: true)
+        if status == -34018 { status = attempt(withAccessGroup: false) }
+        #else
+        let status = attempt(withAccessGroup: false)
+        #endif
+        return status == errSecSuccess || status == errSecItemNotFound
     }
     
     private func retrieve(forKey key: String) -> String? {
