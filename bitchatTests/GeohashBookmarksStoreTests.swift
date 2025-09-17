@@ -6,18 +6,19 @@ final class GeohashBookmarksStoreTests: XCTestCase {
     var storage: UserDefaults!
     var store: GeohashBookmarksStore!
 
+    private let storage: KeyStorable = UserDefaultsKeyStorable()
+    
     override func setUp() {
         super.setUp()
-        // Unique instance for each test to avoid race condition
-        storage = UserDefaults(suiteName: UUID().uuidString)
-        store = GeohashBookmarksStore(storage: storage!)
+        // Clear persisted state before each test
+        storage.remove(storeKey)
+        GeohashBookmarksStore.shared._resetForTesting()
     }
 
     override func tearDown() {
-        storage.removeObject(forKey: storeKey)
-        store._resetForTesting()
-        store = nil
-        storage = nil
+        // Clean after each test
+        storage.remove(storeKey)
+        GeohashBookmarksStore.shared._resetForTesting()
         super.tearDown()
     }
 
@@ -41,7 +42,7 @@ final class GeohashBookmarksStoreTests: XCTestCase {
         store.toggle("u4pruy")
 
         // Verify persisted JSON contains both (order not enforced here)
-        guard let data = storage.data(forKey: storeKey) else {
+        guard let data = storage.data(storeKey) else {
             XCTFail("No persisted data found")
             return
         }
