@@ -31,6 +31,7 @@ struct ContentView: View {
     @State private var textFieldSelection: NSRange? = nil
     @FocusState private var isTextFieldFocused: Bool
     @Environment(\.colorScheme) var colorScheme
+    @Environment(\.scenePhase) private var scenePhase
     @State private var showPeerList = false
     @State private var showSidebar = false
     @State private var sidebarDragOffset: CGFloat = 0
@@ -164,6 +165,12 @@ struct ContentView: View {
                 if appLock.isEnabled && appLock.method != .off && appLock.isLocked {
                     AppLockView()
                         .environmentObject(appLock)
+                }
+
+                // Privacy snapshot overlay for app switcher when not active
+                if scenePhase != .active {
+                    Color.black.opacity(colorScheme == .dark ? 0.9 : 0.92)
+                        .ignoresSafeArea()
                 }
             }
         }
