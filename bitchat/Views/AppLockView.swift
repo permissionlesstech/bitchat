@@ -5,6 +5,7 @@ struct AppLockView: View {
     @Environment(\.colorScheme) var colorScheme
     @State private var pinInput: String = ""
     @State private var authError: String? = nil
+    @State private var now: Date = Date()
 
     private var textColor: Color { colorScheme == .dark ? .green : Color(red: 0, green: 0.5, blue: 0) }
 
@@ -30,17 +31,30 @@ struct AppLockView: View {
                             #if os(iOS)
                             .keyboardType(.numberPad)
                             #endif
+                        let wait = appLock.backoffRemaining(now: now)
+                        if wait > 0 {
+                            Text("try again in \(formatWait(wait))")
+                                .font(.system(size: 12, design: .monospaced))
+                                .foregroundColor(.orange)
+                        }
                         HStack(spacing: 12) {
                             Button("Unlock") {
                                 let ok = appLock.validate(pin: pinInput)
-                                if !ok { authError = "Incorrect PIN"; pinInput = "" }
+                                if !ok {
+                                    if appLock.backoffRemaining(now: Date()) > 0 { authError = nil } else { authError = "Incorrect PIN" }
+                                    pinInput = ""
+                                }
                             }
+                            .disabled(wait > 0)
                             .buttonStyle(.plain)
-                            .foregroundColor(.blue)
+                            .foregroundColor(wait > 0 ? .gray : .blue)
                             Button("Use Device") { appLock.unlockWithDeviceAuth() }
                                 .buttonStyle(.plain)
                                 .foregroundColor(.blue)
                         }
+                    }
+                    .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { t in
+                        now = Date()
                     }
                 case .off:
                     EmptyView()
@@ -56,4 +70,11 @@ struct AppLockView: View {
         }
         .accessibilityIdentifier("AppLockView")
     }
+}
+
+private func formatWait(_ seconds: TimeInterval) -> String {
+    let s = Int(ceil(seconds))
+    let m = s / 60
+    let r = s % 60
+    return String(format: "%d:%02d", m, r)
 }
