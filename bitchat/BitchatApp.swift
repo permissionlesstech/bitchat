@@ -15,6 +15,7 @@ struct BitchatApp: App {
     static let groupID = "group.\(bundleID)"
     
     @StateObject private var chatViewModel: ChatViewModel
+    @StateObject private var appLock = AppLockManager()
     #if os(iOS)
     @Environment(\.scenePhase) var scenePhase
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
@@ -43,6 +44,7 @@ struct BitchatApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(chatViewModel)
+                .environmentObject(appLock)
                 .onAppear {
                     NotificationDelegate.shared.chatViewModel = chatViewModel
                     // Inject live Noise service into VerificationService to avoid creating new BLE instances
@@ -79,6 +81,8 @@ struct BitchatApp: App {
                         }
                         // Proactively disconnect Nostr to avoid spurious socket errors while Tor is down
                         NostrRelayManager.shared.disconnect()
+                        // App Lock: record background time and invalidate auth context
+                        appLock.onDidEnterBackground()
                         didEnterBackground = true
                     case .active:
                         // Restart services when becoming active
@@ -93,6 +97,8 @@ struct BitchatApp: App {
                         } else {
                             didHandleInitialActive = true
                         }
+                        // App Lock: decide whether to lock on activation
+                        appLock.onDidBecomeActive()
                         didEnterBackground = false
                         if TorManager.shared.isAutoStartAllowed() {
                             Task.detached {
@@ -119,6 +125,7 @@ struct BitchatApp: App {
                 #elseif os(macOS)
                 .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
                     // App became active
+                    appLock.onDidBecomeActive()
                 }
                 #endif
         }
