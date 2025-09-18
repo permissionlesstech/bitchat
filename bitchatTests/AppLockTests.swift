@@ -110,7 +110,9 @@ final class AppLockTests: XCTestCase {
         XCTAssertFalse(mgr.canAttemptPIN().allowed)
         // Now succeed and ensure counters clear
         // Force allow by simulating wait elapsed with sleep(1) + assume schedule minimal
-        // We just test that after success, allowed returns true again
+        // We need to manually clear the backoff for testing
+        // This simulates time passing by removing the nextAllowedAt restriction
+        kc.deleteAppLockSecret(key: "applock_pin_nextAllowedAt")
         _ = mgr.validate(pin: "1234")
         XCTAssertTrue(mgr.canAttemptPIN().allowed)
     }
