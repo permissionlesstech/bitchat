@@ -30,7 +30,8 @@ struct BitchatApp: App {
         _chatViewModel = StateObject(
             wrappedValue: ChatViewModel(
                 keychain: keychain,
-                identityManager: SecureIdentityStateManager(keychain)
+                identityManager: SecureIdentityStateManager(keychain),
+                storage: UserDefaultsKeyStorable()
             )
         )
         
@@ -140,20 +141,21 @@ struct BitchatApp: App {
         guard let userDefaults = UserDefaults(suiteName: BitchatApp.groupID) else {
             return
         }
+        let storage = UserDefaultsKeyStorable(defaults: userDefaults)
         
-        guard let sharedContent = userDefaults.string(forKey: "sharedContent"),
-              let sharedDate = userDefaults.object(forKey: "sharedContentDate") as? Date else {
+        guard let sharedContent: String = storage.get(key: "sharedContent"),
+              let sharedDate: Date = storage.get(key: "sharedContentDate") else {
             return
         }
         
         // Only process if shared within configured window
         if Date().timeIntervalSince(sharedDate) < TransportConfig.uiShareAcceptWindowSeconds {
-            let contentType = userDefaults.string(forKey: "sharedContentType") ?? "text"
+            let contentType: String = storage.get(key: "sharedContentType") ?? "text"
             
             // Clear the shared content
-            userDefaults.removeObject(forKey: "sharedContent")
-            userDefaults.removeObject(forKey: "sharedContentType")
-            userDefaults.removeObject(forKey: "sharedContentDate")
+            storage.remove("sharedContent")
+            storage.remove("sharedContentType")
+            storage.remove("sharedContentDate")
             // No need to force synchronize here
             
             // Send the shared content immediately on the main queue
