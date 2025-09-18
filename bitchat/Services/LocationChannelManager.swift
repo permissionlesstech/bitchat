@@ -36,20 +36,21 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
     // Persisted set of geohashes that were selected via teleport
     private var teleportedSet: Set<String> = []
     
-    private let storage: KeyStorable = UserDefaultsKeyStorable()
+    private let storage: StorageProtocol
 
-    private override init() {
+    init(storage: StorageProtocol = UserDefaultsStorage()) {
+        self.storage = storage
         super.init()
         cl.delegate = self
         cl.desiredAccuracy = kCLLocationAccuracyHundredMeters
         cl.distanceFilter = TransportConfig.locationDistanceFilterMeters // meters; we're not tracking continuously
         // Load selection
-        if let data = storage.data(userDefaultsKey),
+        if let data: Data = storage.get(userDefaultsKey),
            let channel = try? JSONDecoder().decode(ChannelID.self, from: data) {
             selectedChannel = channel
         }
         // Load persisted teleported set
-        if let data = storage.data(teleportedStoreKey),
+        if let data: Data = storage.get(teleportedStoreKey),
            let arr = try? JSONDecoder().decode([String].self, from: data) {
             teleportedSet = Set(arr)
         }
@@ -132,7 +133,7 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
         Task { @MainActor in
             self.selectedChannel = channel
             if let data = try? JSONEncoder().encode(channel) {
-                storage.save(data, key: self.userDefaultsKey)
+                storage.set(data, key: self.userDefaultsKey)
             }
             // Update teleported flag based on persisted state for immediate UI behavior
             switch channel {
@@ -147,7 +148,7 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
                     if self.teleportedSet.contains(ch.geohash) {
                         self.teleportedSet.remove(ch.geohash)
                         if let data = try? JSONEncoder().encode(Array(self.teleportedSet)) {
-                            storage.save(data, key: self.teleportedStoreKey)
+                            storage.set(data, key: self.teleportedStoreKey)
                         }
                     }
                 } else {
@@ -162,7 +163,7 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
     func markTeleported(for geohash: String, _ flag: Bool) {
         if flag { teleportedSet.insert(geohash) } else { teleportedSet.remove(geohash) }
         if let data = try? JSONEncoder().encode(Array(teleportedSet)) {
-            storage.save(data, key: teleportedStoreKey)
+            storage.set(data, key: teleportedStoreKey)
         }
         if case .location(let ch) = selectedChannel, ch.geohash == geohash {
             Task { @MainActor in self.teleported = flag }
@@ -238,7 +239,7 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
                     if self.teleportedSet.contains(ch.geohash) {
                         self.teleportedSet.remove(ch.geohash)
                         if let data = try? JSONEncoder().encode(Array(self.teleportedSet)) {
-                            storage.save(data, key: self.teleportedStoreKey)
+                            storage.set(data, key: self.teleportedStoreKey)
                         }
                     }
                 } else {

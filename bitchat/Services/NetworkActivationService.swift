@@ -18,15 +18,17 @@ final class NetworkActivationService: ObservableObject {
     private let torPreferenceKey = "networkActivationService.userTorEnabled"
     private var torAutoStartDesired: Bool = false
 
-    private let storage: KeyStorable = UserDefaultsKeyStorable()
+    private let storage: StorageProtocol
     
-    private init() {}
+    init(storage: StorageProtocol = UserDefaultsStorage()) {
+        self.storage = storage
+    }
 
     func start() {
         guard !started else { return }
         started = true
 
-        if let stored = storage.object(torPreferenceKey) as? Bool {
+        if let stored: Bool = storage.get(torPreferenceKey) {
             userTorEnabled = stored
         } else {
             userTorEnabled = true
@@ -64,7 +66,7 @@ final class NetworkActivationService: ObservableObject {
     func setUserTorEnabled(_ enabled: Bool) {
         guard enabled != userTorEnabled else { return }
         userTorEnabled = enabled
-        storage.save(enabled, key: torPreferenceKey)
+        storage.set(enabled, key: torPreferenceKey)
         NotificationCenter.default.post(
             name: .TorUserPreferenceChanged,
             object: nil,

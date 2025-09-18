@@ -6,43 +6,44 @@ final class GeohashBookmarksStoreTests: XCTestCase {
     var storage: UserDefaults!
     var store: GeohashBookmarksStore!
 
-    private let storage: KeyStorable = UserDefaultsKeyStorable()
+    private var store: UserDefaultsStorageMock!
+    private var sut: GeohashBookmarksStore!
     
     override func setUp() {
         super.setUp()
-        // Clear persisted state before each test
-        storage.remove(storeKey)
-        GeohashBookmarksStore.shared._resetForTesting()
+        store = UserDefaultsStorageMock()
+        sut = GeohashBookmarksStore(
+            store: store
+        )
     }
-
+    
     override func tearDown() {
-        // Clean after each test
-        storage.remove(storeKey)
-        GeohashBookmarksStore.shared._resetForTesting()
         super.tearDown()
+        store = nil
+        sut = nil
     }
 
     func testToggleAndNormalize() {
         // Start clean
-        XCTAssertTrue(store.bookmarks.isEmpty)
+        XCTAssertTrue(sut.bookmarks.isEmpty)
 
         // Add with mixed case and hash prefix
-        store.toggle("#U4PRUY")
-        XCTAssertTrue(store.isBookmarked("u4pruy"))
-        XCTAssertEqual(store.bookmarks.first, "u4pruy")
+        sut.toggle("#U4PRUY")
+        XCTAssertTrue(sut.isBookmarked("u4pruy"))
+        XCTAssertEqual(sut.bookmarks.first, "u4pruy")
 
         // Toggling again removes
-        store.toggle("u4pruy")
-        XCTAssertFalse(store.isBookmarked("u4pruy"))
-        XCTAssertTrue(store.bookmarks.isEmpty)
+        sut.toggle("u4pruy")
+        XCTAssertFalse(sut.isBookmarked("u4pruy"))
+        XCTAssertTrue(sut.bookmarks.isEmpty)
     }
 
     func testPersistenceWritten() throws {
-        store.toggle("ezs42")
-        store.toggle("u4pruy")
+        sut.toggle("ezs42")
+        sut.toggle("u4pruy")
 
         // Verify persisted JSON contains both (order not enforced here)
-        guard let data = storage.data(storeKey) else {
+        guard let data: Data = store.get(storeKey) else {
             XCTFail("No persisted data found")
             return
         }

@@ -462,10 +462,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             // Only persist if there are changes
             guard oldValue != sentReadReceipts else { return }
             
-            
             // Persist to UserDefaults whenever it changes (no manual synchronize/verify re-read)
             if let data = try? JSONEncoder().encode(Array(sentReadReceipts)) {
-                storage.save(data, key: "sentReadReceipts")
+                storage.set(data, key: "sentReadReceipts")
             } else {
                 SecureLogger.error("❌ Failed to encode read receipts for persistence", category: .session)
             }
@@ -487,7 +486,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     
     // Track Nostr pubkey mappings for unknown senders
     private var nostrKeyMapping: [String: String] = [:]  // senderPeerID -> nostrPubkey
-    private let storage: KeyStorable
+    private let storage: StorageProtocol
     
     // MARK: - Initialization
     
@@ -495,7 +494,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     init(
         keychain: KeychainManagerProtocol,
         identityManager: SecureIdentityStateManagerProtocol,
-        storage: KeyStorable
+        storage: StorageProtocol
     ) {
         self.keychain = keychain
         self.identityManager = identityManager
@@ -503,7 +502,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         self.storage = storage
         
         // Load persisted read receipts
-        if let data = storage.data("sentReadReceipts"),
+        if let data: Data = storage.get("sentReadReceipts"),
            let receipts = try? JSONDecoder().decode([String].self, from: data) {
             self.sentReadReceipts = Set(receipts)
         } else {
@@ -1144,7 +1143,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     // MARK: - Nickname Management
     
     private func loadNickname() {
-        if let savedNickname = storage.string(nicknameKey) {
+        if let savedNickname: String = storage.get(nicknameKey) {
             // Trim whitespace when loading
             nickname = savedNickname.trimmingCharacters(in: .whitespacesAndNewlines)
         } else {
@@ -1154,7 +1153,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     }
     
     func saveNickname() {
-        storage.save(nickname, key: nicknameKey)
+        storage.set(nickname, key: nicknameKey)
         
         // Send announce with new nickname to all peers
         meshService.sendBroadcastAnnounce()
@@ -3174,7 +3173,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         // Delete all keychain data (including Noise and Nostr keys)
         _ = keychain.deleteAllKeychainData()
         
-        // Clear UserDefaultsKeyStorable identity data
+        // Clear StorageProtocol identity data
         storage.remove("bitchat.noiseIdentityKey")
         storage.remove("bitchat.messageRetentionKey")
         

@@ -32,7 +32,7 @@ struct BitchatApp: App {
             wrappedValue: ChatViewModel(
                 keychain: keychain,
                 identityManager: SecureIdentityStateManager(keychain),
-                storage: UserDefaultsKeyStorable()
+                storage: UserDefaultsStorage()
             )
         )
         
@@ -139,16 +139,17 @@ struct BitchatApp: App {
     
     private func checkForSharedContent() {
         // Check app group for shared content from extension
-        let storage = UserDefaultsKeyStorable(group: BitchatApp.groupID)
-        
-        guard let sharedContent = storage.string("sharedContent"),
-              let sharedDate = storage.object("sharedContentDate") as? Date else {
+        guard let storage = UserDefaultsStorage(suiteName: BitchatApp.groupID) else {
+            return
+        }
+        guard let sharedContent: String = storage.get("sharedContent"),
+              let sharedDate: Date = storage.get("sharedContentDate") else {
             return
         }
         
         // Only process if shared within configured window
         if Date().timeIntervalSince(sharedDate) < TransportConfig.uiShareAcceptWindowSeconds {
-            let contentType = storage.string("sharedContentType") ?? "text"
+            let contentType = storage.get("sharedContentType") ?? "text"
             
             // Clear the shared content
             storage.remove("sharedContent")
