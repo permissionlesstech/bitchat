@@ -5,7 +5,7 @@ import CoreLocation
 #endif
 
 /// Stores a user-maintained list of bookmarked geohash channels.
-/// - Persistence: KeyStorable (JSON string array)
+/// - Persistence: StorageProtocol
 /// - Semantics: geohashes are normalized to lowercase base32 and de-duplicated
 final class GeohashBookmarksStore: ObservableObject {
     static let shared = GeohashBookmarksStore()
@@ -21,10 +21,10 @@ final class GeohashBookmarksStore: ObservableObject {
     private var resolving: Set<String> = []
     #endif
 
-    private let storage: KeyStorable
+    private let store: StorageProtocol
     
-    private init(storage: KeyStorable = UserDefaultsKeyStorable()) {
-        self.storage = storage
+    init(store: StorageProtocol = UserDefaultsStorage()) {
+        self.store = store
         load()
     }
 
@@ -67,7 +67,7 @@ final class GeohashBookmarksStore: ObservableObject {
 
     // MARK: - Persistence
     private func load() {
-        guard let data = storage.data(storeKey) else { return }
+        guard let data: Data = store.get(storeKey) else { return }
         if let arr = try? JSONDecoder().decode([String].self, from: data) {
             // Sanitize, normalize, dedupe while preserving order (first occurrence wins)
             var seen = Set<String>()
@@ -84,7 +84,7 @@ final class GeohashBookmarksStore: ObservableObject {
             membership = seen
         }
         // Load any saved names
-        if let namesData = storage.data(namesStoreKey),
+        if let namesData: Data = store.get(namesStoreKey),
            let dict = try? JSONDecoder().decode([String: String].self, from: namesData) {
             bookmarkNames = dict
         }
@@ -92,13 +92,13 @@ final class GeohashBookmarksStore: ObservableObject {
 
     private func persist() {
         if let data = try? JSONEncoder().encode(bookmarks) {
-            storage.save(data, key: storeKey)
+            store.set(data, key: storeKey)
         }
     }
 
     private func persistNames() {
         if let data = try? JSONEncoder().encode(bookmarkNames) {
-            storage.save(data, key: namesStoreKey)
+            store.set(data, key: namesStoreKey)
         }
     }
 
