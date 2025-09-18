@@ -217,6 +217,12 @@ final class AppLockManager: ObservableObject {
 
     func biometryType() -> BiometryType { localAuth.biometryType() }
 
+    func deviceAuthAvailable() -> Bool { localAuth.canEvaluateOwnerAuth() }
+
+    func hasPINConfigured() -> Bool {
+        return keychain.getAppLockSecret(key: pinSaltKey) != nil && keychain.getAppLockSecret(key: pinHashKey) != nil
+    }
+
     func panicClear() {
         clearPIN()
         setEnabled(false)

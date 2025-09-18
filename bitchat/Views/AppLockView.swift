@@ -23,10 +23,43 @@ struct AppLockView: View {
 
                 switch appLock.method {
                 case .deviceAuth:
-                    Button("Unlock") { appLock.unlockWithDeviceAuth() }
-                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.blue)
-                        .buttonStyle(.plain)
+                    if appLock.deviceAuthAvailable() {
+                        Button("Unlock") { appLock.unlockWithDeviceAuth() }
+                            .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                            .foregroundColor(.blue)
+                            .buttonStyle(.plain)
+                    } else if appLock.hasPINConfigured() {
+                        // Fallback to PIN entry when device auth is unavailable
+                        VStack(spacing: 8) {
+                            Text("device authentication unavailable — use your PIN")
+                                .font(.system(size: 12, design: .monospaced))
+                                .foregroundColor(.orange)
+                            SecureField("Enter PIN", text: $pinInput)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(maxWidth: 240)
+                                #if os(iOS)
+                                .keyboardType(.numberPad)
+                                #endif
+                            HStack(spacing: 12) {
+                                Button("Unlock") {
+                                    let ok = appLock.validate(pin: pinInput)
+                                    if !ok { authError = "Incorrect PIN"; pinInput = "" }
+                                }
+                                .buttonStyle(.plain)
+                                .foregroundColor(.blue)
+                            }
+                        }
+                    } else {
+                        VStack(spacing: 8) {
+                            Text("device authentication unavailable")
+                                .font(.system(size: 12, design: .monospaced))
+                                .foregroundColor(.orange)
+                            Button("Use Device") { appLock.unlockWithDeviceAuth() }
+                                .buttonStyle(.plain)
+                                .foregroundColor(.gray)
+                                .disabled(true)
+                        }
+                    }
                 case .pin:
                     VStack(spacing: 8) {
                         SecureField("Enter PIN", text: $pinInput)
