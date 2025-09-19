@@ -8,17 +8,23 @@
 
 import Foundation
 import Security
-import os.log
 
-class KeychainManager {
-    static let shared = KeychainManager()
+protocol KeychainManagerProtocol {
+    func saveIdentityKey(_ keyData: Data, forKey key: String) -> Bool
+    func getIdentityKey(forKey key: String) -> Data?
+    func deleteIdentityKey(forKey key: String) -> Bool
+    func deleteAllKeychainData() -> Bool
     
+    func secureClear(_ data: inout Data)
+    func secureClear(_ string: inout String)
+    
+    func verifyIdentityKeyExists() -> Bool
+}
+
+final class KeychainManager: KeychainManagerProtocol {
     // Use consistent service name for all keychain items
     private let service = "chat.bitchat"
     private let appGroup = "group.chat.bitchat"
-    
-    private init() {}
-    
     
     private func isSandboxed() -> Bool {
         #if os(macOS)
@@ -53,7 +59,7 @@ class KeychainManager {
     func saveIdentityKey(_ keyData: Data, forKey key: String) -> Bool {
         let fullKey = "identity_\(key)"
         let result = saveData(keyData, forKey: fullKey)
-        SecureLogger.logKeyOperation("save", keyType: key, success: result)
+        SecureLogger.logKeyOperation(.save, keyType: key, success: result)
         return result
     }
     
@@ -64,7 +70,7 @@ class KeychainManager {
     
     func deleteIdentityKey(forKey key: String) -> Bool {
         let result = delete(forKey: "identity_\(key)")
-        SecureLogger.logKeyOperation("delete", keyType: key, success: result)
+        SecureLogger.logKeyOperation(.delete, keyType: key, success: result)
         return result
     }
     
@@ -113,9 +119,9 @@ class KeychainManager {
 
         if status == errSecSuccess { return true }
         if status == -34018 && !triedWithoutGroup {
-            SecureLogger.logError(NSError(domain: "Keychain", code: -34018), context: "Missing keychain entitlement", category: SecureLogger.keychain)
+            SecureLogger.error(NSError(domain: "Keychain", code: -34018), context: "Missing keychain entitlement", category: .keychain)
         } else if status != errSecDuplicateItem {
-            SecureLogger.logError(NSError(domain: "Keychain", code: Int(status)), context: "Error saving to keychain", category: SecureLogger.keychain)
+            SecureLogger.error(NSError(domain: "Keychain", code: Int(status)), context: "Error saving to keychain", category: .keychain)
         }
         return false
     }
@@ -151,7 +157,7 @@ class KeychainManager {
 
         if status == errSecSuccess { return result as? Data }
         if status == -34018 {
-            SecureLogger.logError(NSError(domain: "Keychain", code: -34018), context: "Missing keychain entitlement", category: SecureLogger.keychain)
+            SecureLogger.error(NSError(domain: "Keychain", code: -34018), context: "Missing keychain entitlement", category: .keychain)
         }
         return nil
     }
@@ -198,7 +204,7 @@ class KeychainManager {
     
     // Delete ALL keychain data for panic mode
     func deleteAllKeychainData() -> Bool {
-        SecureLogger.log("Panic mode - deleting all keychain data", category: SecureLogger.security, level: .warning)
+        SecureLogger.warning("Panic mode - deleting all keychain data", category: .security)
         
         var totalDeleted = 0
         
@@ -261,7 +267,7 @@ class KeychainManager {
                     let deleteStatus = SecItemDelete(deleteQuery as CFDictionary)
                     if deleteStatus == errSecSuccess {
                         totalDeleted += 1
-                        SecureLogger.log("Deleted keychain item: \(account) from \(service)", category: SecureLogger.keychain, level: .info)
+                        SecureLogger.info("Deleted keychain item: \(account) from \(service)", category: .keychain)
                     }
                 }
             }
@@ -303,7 +309,7 @@ class KeychainManager {
             totalDeleted += 1
         }
         
-        SecureLogger.log("Panic mode cleanup completed. Total items deleted: \(totalDeleted)", category: SecureLogger.keychain, level: .warning)
+        SecureLogger.warning("Panic mode cleanup completed. Total items deleted: \(totalDeleted)", category: .keychain)
         
         return totalDeleted > 0
     }
@@ -311,7 +317,7 @@ class KeychainManager {
     // MARK: - Security Utilities
     
     /// Securely clear sensitive data from memory
-    static func secureClear(_ data: inout Data) {
+    func secureClear(_ data: inout Data) {
         _ = data.withUnsafeMutableBytes { bytes in
             // Use volatile memset to prevent compiler optimization
             memset_s(bytes.baseAddress, bytes.count, 0, bytes.count)
@@ -320,7 +326,7 @@ class KeychainManager {
     }
     
     /// Securely clear sensitive string from memory
-    static func secureClear(_ string: inout String) {
+    func secureClear(_ string: inout String) {
         // Convert to mutable data and clear
         if var data = string.data(using: .utf8) {
             secureClear(&data)

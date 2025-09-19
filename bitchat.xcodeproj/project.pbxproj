@@ -29,6 +29,18 @@
 		047502B72E55FED60083520F /* GeohashPeopleList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 047502B22E55FED60083520F /* GeohashPeopleList.swift */; };
 		047502B92E560F690083520F /* RelayController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 047502B82E560F690083520F /* RelayController.swift */; };
 		047502BA2E560F690083520F /* RelayController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 047502B82E560F690083520F /* RelayController.swift */; };
+		0481A3462E6D869F00FC845E /* TorManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3432E6D869F00FC845E /* TorManager.swift */; };
+		0481A3472E6D869F00FC845E /* TorURLSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3442E6D869F00FC845E /* TorURLSession.swift */; };
+		0481A3482E6D869F00FC845E /* TorManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3432E6D869F00FC845E /* TorManager.swift */; };
+		0481A3492E6D869F00FC845E /* TorURLSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A3442E6D869F00FC845E /* TorURLSession.swift */; };
+		0481A3552E6D877600FC845E /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 0481A3532E6D877600FC845E /* README.md */; };
+		0481A3562E6D877600FC845E /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 0481A3532E6D877600FC845E /* README.md */; };
+		0481A3582E6D929E00FC845E /* tor-nolzma.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0481A3572E6D929E00FC845E /* tor-nolzma.xcframework */; };
+		0481A3592E6D929E00FC845E /* tor-nolzma.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0481A3572E6D929E00FC845E /* tor-nolzma.xcframework */; };
+		0481A35B2E6D9BEF00FC845E /* libz.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 0481A35A2E6D9BEF00FC845E /* libz.tbd */; };
+		0481A35D2E6DA18600FC845E /* libz.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 0481A35C2E6DA18600FC845E /* libz.tbd */; };
+		0481A3902E734CAE00FC845E /* CommandProcessorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A38F2E734CAE00FC845E /* CommandProcessorTests.swift */; };
+		0481A3912E734CAE00FC845E /* CommandProcessorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0481A38F2E734CAE00FC845E /* CommandProcessorTests.swift */; };
 		048A4BE72E5CCCC300162C4A /* TransportConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 048A4BE62E5CCCC300162C4A /* TransportConfig.swift */; };
 		048A4BE82E5CCCC300162C4A /* TransportConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 048A4BE62E5CCCC300162C4A /* TransportConfig.swift */; };
 		048A4BE92E5CCCC300162C4B /* TransportConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 048A4BE62E5CCCC300162C4A /* TransportConfig.swift */; };
@@ -62,6 +74,10 @@
 		049BD3B52E51F319001A566B /* MessageRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 049BD3B02E51F319001A566B /* MessageRouter.swift */; };
 		0AE840940F21AFC07C226636 /* PrivateChatE2ETests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A262EDDC04B7D7B5E31F321 /* PrivateChatE2ETests.swift */; };
 		0B6F25559A21F8C69C8357C6 /* BinaryProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B3CC6FA298729906109F61B /* BinaryProtocolTests.swift */; };
+		0C0EFA112E6EAAAA00ABCDEF /* CTorHost.c in Sources */ = {isa = PBXBuildFile; fileRef = 0C0EFA102E6EAAAA00ABCDEF /* CTorHost.c */; };
+		0C0EFA122E6EAAAA00ABCDF0 /* CTorHost.c in Sources */ = {isa = PBXBuildFile; fileRef = 0C0EFA102E6EAAAA00ABCDEF /* CTorHost.c */; };
+		0C0EFA162E6EAABB00ABCDF4 /* TorNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C0EFA132E6EAABB00ABCDF1 /* TorNotifications.swift */; };
+		0C0EFA172E6EAABB00ABCDF5 /* TorNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C0EFA132E6EAABB00ABCDF1 /* TorNotifications.swift */; };
 		10E68BB889356219189E38EC /* BitchatApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF625BB3AD919322C01A46B2 /* BitchatApp.swift */; };
 		1234567890ABCDEFFEDCBA13 /* PeerDisplayNameResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1234567890ABCDEFFEDCBA02 /* PeerDisplayNameResolver.swift */; };
 		1234567890ABCDEFFEDCBA14 /* PeerDisplayNameResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1234567890ABCDEFFEDCBA02 /* PeerDisplayNameResolver.swift */; };
@@ -152,9 +168,15 @@
 		EE8C3ECADAB3083A2687D50B /* NostrProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C272F137CE00FC5A96E0CC06 /* NostrProtocolTests.swift */; };
 		EF49C600C1E464710DD6CA29 /* InputValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90CB7A5CD1D1A521CD31F380 /* InputValidator.swift */; };
 		F06732B1719EE13C5D09CE77 /* NostrProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E5A9FF4AEA8A923317ED26A /* NostrProtocol.swift */; };
+		F0A1B2C3D4E5F60718293A4B /* OSLog+Categories.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0A1B2C3D4E5F60718293A4A /* OSLog+Categories.swift */; };
+		F0A1B2C3D4E5F60718293A4C /* OSLog+Categories.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0A1B2C3D4E5F60718293A4A /* OSLog+Categories.swift */; };
 		F455F011B3B648ADA233F998 /* BinaryProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2136C3E22D02D4A8DBE7EAB /* BinaryProtocol.swift */; };
 		FB8819B4C84FAFEF5C36B216 /* KeychainManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 136696FC4436A02D98CE6A77 /* KeychainManager.swift */; };
 		FBC409E105493C491531B59A /* NostrProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E5A9FF4AEA8A923317ED26A /* NostrProtocol.swift */; };
+ 		A1B2C3D4E5F60123456789BA /* MockKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60123456789AA /* MockKeychain.swift */; };
+ 		A1B2C3D4E5F60123456789BB /* MockKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60123456789AA /* MockKeychain.swift */; };
+ 		A1B2C3D4E5F60123456789BC /* MockIdentityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60123456789AB /* MockIdentityManager.swift */; };
+ 		A1B2C3D4E5F60123456789BD /* MockIdentityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60123456789AB /* MockIdentityManager.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -208,6 +230,13 @@
 		047502B22E55FED60083520F /* GeohashPeopleList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeohashPeopleList.swift; sourceTree = "<group>"; };
 		047502B32E55FED60083520F /* MeshPeerList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeshPeerList.swift; sourceTree = "<group>"; };
 		047502B82E560F690083520F /* RelayController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayController.swift; sourceTree = "<group>"; };
+		0481A3432E6D869F00FC845E /* TorManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TorManager.swift; sourceTree = "<group>"; };
+		0481A3442E6D869F00FC845E /* TorURLSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TorURLSession.swift; sourceTree = "<group>"; };
+		0481A3532E6D877600FC845E /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		0481A3572E6D929E00FC845E /* tor-nolzma.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = "tor-nolzma.xcframework"; sourceTree = "<group>"; };
+		0481A35A2E6D9BEF00FC845E /* libz.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libz.tbd; path = usr/lib/libz.tbd; sourceTree = SDKROOT; };
+		0481A35C2E6DA18600FC845E /* libz.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libz.tbd; path = usr/lib/libz.tbd; sourceTree = SDKROOT; };
+		0481A38F2E734CAE00FC845E /* CommandProcessorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandProcessorTests.swift; sourceTree = "<group>"; };
 		048A4BE62E5CCCC300162C4A /* TransportConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransportConfig.swift; sourceTree = "<group>"; };
 		048A4C272E5FCD6600162C4A /* GeohashBookmarksStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeohashBookmarksStore.swift; sourceTree = "<group>"; };
 		048A4C2A2E5FCE0300162C4A /* GeohashBookmarksStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeohashBookmarksStoreTests.swift; sourceTree = "<group>"; };
@@ -225,6 +254,8 @@
 		049BD3B12E51F319001A566B /* NostrTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NostrTransport.swift; sourceTree = "<group>"; };
 		05BA20BC0F123F1507C5C247 /* IdentityModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdentityModels.swift; sourceTree = "<group>"; };
 		0B3CC6FA298729906109F61B /* BinaryProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BinaryProtocolTests.swift; sourceTree = "<group>"; };
+		0C0EFA102E6EAAAA00ABCDEF /* CTorHost.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = CTorHost.c; sourceTree = "<group>"; };
+		0C0EFA132E6EAABB00ABCDF1 /* TorNotifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TorNotifications.swift; sourceTree = "<group>"; };
 		11186E29A064E8D210880E1B /* BitchatPeer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitchatPeer.swift; sourceTree = "<group>"; };
 		1234567890ABCDEFFEDCBA02 /* PeerDisplayNameResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerDisplayNameResolver.swift; sourceTree = "<group>"; };
 		136696FC4436A02D98CE6A77 /* KeychainManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainManager.swift; sourceTree = "<group>"; };
@@ -276,9 +307,12 @@
 		EA706D8E5097785414646A8E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		EE7EFB209C86BBD956B749EC /* SecureLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureLogger.swift; sourceTree = "<group>"; };
 		EF625BB3AD919322C01A46B2 /* BitchatApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitchatApp.swift; sourceTree = "<group>"; };
+		F0A1B2C3D4E5F60718293A4A /* OSLog+Categories.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "OSLog+Categories.swift"; sourceTree = "<group>"; };
 		FC75901A0F0073B5BB8356E7 /* TestConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestConstants.swift; sourceTree = "<group>"; };
 		FDC18D910D6FF2E8B1B6C885 /* SecureIdentityStateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureIdentityStateManager.swift; sourceTree = "<group>"; };
 		FE7CCF2BD78A3F3DAE6DA145 /* MockBLEService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockBLEService.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60123456789AA /* MockKeychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockKeychain.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60123456789AB /* MockIdentityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockIdentityManager.swift; sourceTree = "<group>"; };
 		FF7AF93D874001FBD94C8306 /* bitchat-macOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "bitchat-macOS.entitlements"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -287,6 +321,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0481A35B2E6D9BEF00FC845E /* libz.tbd in Frameworks */,
+				0481A3582E6D929E00FC845E /* tor-nolzma.xcframework in Frameworks */,
 				3EE336D150427F736F32B56C /* P256K in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -295,6 +331,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0481A35D2E6DA18600FC845E /* libz.tbd in Frameworks */,
+				0481A3592E6D929E00FC845E /* tor-nolzma.xcframework in Frameworks */,
 				885BBED78092484A5B069461 /* P256K in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -318,6 +356,28 @@
 			path = Utils;
 			sourceTree = "<group>";
 		};
+		0481A3452E6D869F00FC845E /* Tor */ = {
+			isa = PBXGroup;
+			children = (
+				0481A3432E6D869F00FC845E /* TorManager.swift */,
+				0481A3442E6D869F00FC845E /* TorURLSession.swift */,
+				0C0EFA102E6EAAAA00ABCDEF /* CTorHost.c */,
+				0C0EFA132E6EAABB00ABCDF1 /* TorNotifications.swift */,
+			);
+			path = Tor;
+			sourceTree = "<group>";
+		};
+		0481A3542E6D877600FC845E /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				0481A35A2E6D9BEF00FC845E /* libz.tbd */,
+				0481A35C2E6DA18600FC845E /* libz.tbd */,
+				0481A3532E6D877600FC845E /* README.md */,
+				0481A3572E6D929E00FC845E /* tor-nolzma.xcframework */,
+			);
+			path = Frameworks;
+			sourceTree = "<group>";
+		};
 		0575DCBD15C7C719ADDCB67E /* Models */ = {
 			isa = PBXGroup;
 			children = (
@@ -333,6 +393,7 @@
 				E0A1B2C3D4E5F6012345678A /* relays/online_relays_gps.csv */,
 				A2E8C336FA1ADBEC03261DFD /* bitchatShareExtension */,
 				C3D98EB3E1B455E321F519F4 /* bitchatTests */,
+				0481A3542E6D877600FC845E /* Frameworks */,
 				9F37F9F2C353B58AC809E93B /* Products */,
 			);
 			sourceTree = "<group>";
@@ -409,6 +470,8 @@
 			children = (
 				C27328EE574221395B2B8E87 /* MockBluetoothMeshService.swift */,
 				FE7CCF2BD78A3F3DAE6DA145 /* MockBLEService.swift */,
+				A1B2C3D4E5F60123456789AA /* MockKeychain.swift */,
+				A1B2C3D4E5F60123456789AB /* MockIdentityManager.swift */,
 			);
 			path = Mocks;
 			sourceTree = "<group>";
@@ -422,6 +485,7 @@
 				32F149C43D1915831B60FE09 /* CompressionUtil.swift */,
 				90CB7A5CD1D1A521CD31F380 /* InputValidator.swift */,
 				EE7EFB209C86BBD956B749EC /* SecureLogger.swift */,
+				F0A1B2C3D4E5F60718293A4A /* OSLog+Categories.swift */,
 			);
 			path = Utils;
 			sourceTree = "<group>";
@@ -489,8 +553,9 @@
 		C3D98EB3E1B455E321F519F4 /* bitchatTests */ = {
 			isa = PBXGroup;
 			children = (
-				048A4C2A2E5FCE0300162C4A /* GeohashBookmarksStoreTests.swift */,
 				D69A18D27F9A565FD6041E12 /* Info.plist */,
+				0481A38F2E734CAE00FC845E /* CommandProcessorTests.swift */,
+				048A4C2A2E5FCE0300162C4A /* GeohashBookmarksStoreTests.swift */,
 				047502912E547ACC0083520F /* LocationChannelsTests.swift */,
 				C272F137CE00FC5A96E0CC06 /* NostrProtocolTests.swift */,
 				980B109CBA72BC996455C62B /* BLEServiceTests.swift */,
@@ -526,6 +591,7 @@
 		D98A3186D7E4C72E35BDF7FE /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				0481A3452E6D869F00FC845E /* Tor */,
 				048A4C272E5FCD6600162C4A /* GeohashBookmarksStore.swift */,
 				048A4BE62E5CCCC300162C4A /* TransportConfig.swift */,
 				AA77BB10CC22DD33EE44FF55 /* VerificationService.swift */,
@@ -667,6 +733,10 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1640;
 				TargetAttributes = {
+					0576A29205865664C0937536 = {
+						DevelopmentTeam = L3N5LHJD5Y;
+						ProvisioningStyle = Automatic;
+					};
 					47FF23248747DD7CB666CB91 = {
 						DevelopmentTeam = L3N5LHJD5Y;
 						ProvisioningStyle = Automatic;
@@ -715,6 +785,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0481A3552E6D877600FC845E /* README.md in Resources */,
 				7DD72D928FF9DD3CA81B46B0 /* Assets.xcassets in Resources */,
 				E0A1B2C3D4E5F6012345678D /* relays/online_relays_gps.csv in Resources */,
 			);
@@ -726,6 +797,7 @@
 			files = (
 				BCCFEDC1EBE59323C3C470BF /* Assets.xcassets in Resources */,
 				E65BBB6544FE0159F3C6C3A8 /* LaunchScreen.storyboard in Resources */,
+				0481A3562E6D877600FC845E /* README.md in Resources */,
 				E0A1B2C3D4E5F6012345678E /* relays/online_relays_gps.csv in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -746,6 +818,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F0A1B2C3D4E5F60718293A4C /* OSLog+Categories.swift in Sources */,
+				0C0EFA122E6EAAAA00ABCDF0 /* CTorHost.c in Sources */,
+				0C0EFA172E6EAABB00ABCDF5 /* TorNotifications.swift in Sources */,
 				048A4BE72E5CCCC300162C4A /* TransportConfig.swift in Sources */,
 				1234567890ABCDEFFEDCBA13 /* PeerDisplayNameResolver.swift in Sources */,
 				AA77BB12CC22DD33EE44FF56 /* VerificationService.swift in Sources */,
@@ -793,6 +868,8 @@
 				0475028A2E5416250083520F /* LocationChannel.swift in Sources */,
 				049BD3A12E51DBF4001A566B /* PeerID.swift in Sources */,
 				049BD3942E4EC4F0001A566B /* PrivateChatManager.swift in Sources */,
+				0481A3462E6D869F00FC845E /* TorManager.swift in Sources */,
+				0481A3472E6D869F00FC845E /* TorURLSession.swift in Sources */,
 				049BD3952E4EC4F0001A566B /* AutocompleteService.swift in Sources */,
 				049BD3962E4EC4F0001A566B /* CommandProcessor.swift in Sources */,
 				D111988977C3BC246AB27FA4 /* SecureLogger.swift in Sources */,
@@ -806,6 +883,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F0A1B2C3D4E5F60718293A4B /* OSLog+Categories.swift in Sources */,
+				0C0EFA112E6EAAAA00ABCDEF /* CTorHost.c in Sources */,
+				0C0EFA162E6EAABB00ABCDF4 /* TorNotifications.swift in Sources */,
 				048A4BE82E5CCCC300162C4A /* TransportConfig.swift in Sources */,
 				1234567890ABCDEFFEDCBA14 /* PeerDisplayNameResolver.swift in Sources */,
 				AA77BB11CC22DD33EE44FF55 /* VerificationService.swift in Sources */,
@@ -853,6 +933,8 @@
 				047502882E5416250083520F /* LocationChannel.swift in Sources */,
 				049BD3A32E51DBF4001A566B /* PeerID.swift in Sources */,
 				049BD3902E4EC4F0001A566B /* PrivateChatManager.swift in Sources */,
+				0481A3482E6D869F00FC845E /* TorManager.swift in Sources */,
+				0481A3492E6D869F00FC845E /* TorURLSession.swift in Sources */,
 				049BD3912E4EC4F0001A566B /* AutocompleteService.swift in Sources */,
 				049BD3922E4EC4F0001A566B /* CommandProcessor.swift in Sources */,
 				EC5241969D2550B97629EBD0 /* SecureLogger.swift in Sources */,
@@ -870,10 +952,13 @@
 				047502802E53A0FC0083520F /* FragmentationTests.swift in Sources */,
 				8F282E9CCA5AE1ECC001D2E4 /* IntegrationTests.swift in Sources */,
 				047502B12E55E8450083520F /* InputValidatorTests.swift in Sources */,
+				0481A3912E734CAE00FC845E /* CommandProcessorTests.swift in Sources */,
 				D727EA273CB214FC32612469 /* MockBluetoothMeshService.swift in Sources */,
 				047502932E547ACC0083520F /* LocationChannelsTests.swift in Sources */,
 				048A4C2B2E5FCE0300162C4A /* GeohashBookmarksStoreTests.swift in Sources */,
 				6C803BF930E7E19BE6E99EAA /* MockBLEService.swift in Sources */,
+				A1B2C3D4E5F60123456789BB /* MockKeychain.swift in Sources */,
+				A1B2C3D4E5F60123456789BD /* MockIdentityManager.swift in Sources */,
 				765254F56997F01054699AC0 /* NoiseProtocolTests.swift in Sources */,
 				968181D255CA7A804340B4DA /* NostrProtocolTests.swift in Sources */,
 				ED83C7AC1E6BEF15389C0132 /* PrivateChatE2ETests.swift in Sources */,
@@ -893,10 +978,14 @@
 				047502812E53A0FC0083520F /* FragmentationTests.swift in Sources */,
 				686441ABC2AF83EE98E6ECF2 /* IntegrationTests.swift in Sources */,
 				047502B02E55E8450083520F /* InputValidatorTests.swift in Sources */,
+				0481A3902E734CAE00FC845E /* CommandProcessorTests.swift in Sources */,
 				8851F08D88C5B1DE7B9F55C6 /* MockBluetoothMeshService.swift in Sources */,
 				047502922E547ACC0083520F /* LocationChannelsTests.swift in Sources */,
 				048A4C2C2E5FCE0300162C4A /* GeohashBookmarksStoreTests.swift in Sources */,
 				3849CA6D99B2D536636DF4A6 /* MockBLEService.swift in Sources */,
+				A1B2C3D4E5F60123456789BA /* MockKeychain.swift in Sources */,
+
+				A1B2C3D4E5F60123456789BC /* MockIdentityManager.swift in Sources */,
 				BC4DC75F4FB823FF40569676 /* NoiseProtocolTests.swift in Sources */,
 				EE8C3ECADAB3083A2687D50B /* NostrProtocolTests.swift in Sources */,
 				0AE840940F21AFC07C226636 /* PrivateChatE2ETests.swift in Sources */,
@@ -1012,7 +1101,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.3.3;
+				MARKETING_VERSION = 1.3.4;
 				PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat.ShareExtension;
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -1034,7 +1123,7 @@
 				CODE_SIGN_ENTITLEMENTS = bitchat/bitchat.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				ENABLE_PREVIEWS = YES;
+				ENABLE_PREVIEWS = NO;
 				INFOPLIST_FILE = bitchat/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = bitchat;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
@@ -1043,7 +1132,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.3.3;
+				MARKETING_VERSION = 1.3.4;
 				PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat;
 				PRODUCT_NAME = bitchat;
 				SDKROOT = iphoneos;
@@ -1098,7 +1187,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.3.3;
+				MARKETING_VERSION = 1.3.4;
 				PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat;
 				PRODUCT_NAME = bitchat;
 				SDKROOT = iphoneos;
@@ -1119,10 +1208,9 @@
 				CODE_SIGNING_ALLOWED = YES;
 				CODE_SIGNING_REQUIRED = YES;
 				CODE_SIGN_ENTITLEMENTS = "bitchat/bitchat-macOS.entitlements";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = bitchat/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = bitchat;
@@ -1131,10 +1219,9 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				MARKETING_VERSION = 1.3.3;
+				MARKETING_VERSION = 1.3.4;
 				PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat;
 				PRODUCT_NAME = bitchat;
-				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = macosx;
 				SWIFT_VERSION = 5.0;
@@ -1210,11 +1297,10 @@
 				CODE_SIGNING_ALLOWED = YES;
 				CODE_SIGNING_REQUIRED = YES;
 				CODE_SIGN_ENTITLEMENTS = "bitchat/bitchat-macOS.entitlements";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = "";
-				ENABLE_PREVIEWS = YES;
+				ENABLE_PREVIEWS = NO;
 				INFOPLIST_FILE = bitchat/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = bitchat;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1222,10 +1308,9 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				MARKETING_VERSION = 1.3.3;
+				MARKETING_VERSION = 1.3.4;
 				PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat;
 				PRODUCT_NAME = bitchat;
-				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = macosx;
 				SWIFT_VERSION = 5.0;
@@ -1316,7 +1401,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.3.3;
+				MARKETING_VERSION = 1.3.4;
 				PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat.ShareExtension;
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

@@ -13,7 +13,7 @@ import CryptoKit
 
 /// Single source of truth for peer state, combining mesh connectivity and favorites
 @MainActor
-class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
+final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
     
     // MARK: - Published Properties
     
@@ -27,14 +27,16 @@ class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
     private var peerIndex: [String: BitchatPeer] = [:]
     private var fingerprintCache: [String: String] = [:]  // peerID -> fingerprint
     private let meshService: Transport
+    private let identityManager: SecureIdentityStateManagerProtocol
     weak var messageRouter: MessageRouter?
     private let favoritesService = FavoritesPersistenceService.shared
     private var cancellables = Set<AnyCancellable>()
     
     // MARK: - Initialization
     
-    init(meshService: Transport) {
+    init(meshService: Transport, identityManager: SecureIdentityStateManagerProtocol) {
         self.meshService = meshService
+        self.identityManager = identityManager
         
         // Subscribe to changes from both services
         setupSubscriptions()
@@ -174,7 +176,7 @@ class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         // Determine reachability based on lastSeen and identity trust
         let now = Date()
         let fingerprint = peerInfo.noisePublicKey?.sha256Fingerprint()
-        let isVerified = fingerprint.map { SecureIdentityStateManager.shared.isVerified(fingerprint: $0) } ?? false
+        let isVerified = fingerprint.map { identityManager.isVerified(fingerprint: $0) } ?? false
         let isFav = peerInfo.noisePublicKey.flatMap { favorites[$0]?.isFavorite } ?? false
         let retention: TimeInterval = (isVerified || isFav) ? TransportConfig.bleReachabilityRetentionVerifiedSeconds : TransportConfig.bleReachabilityRetentionUnverifiedSeconds
         // A peer is reachable if we recently saw them AND we are attached to the mesh
@@ -195,31 +197,6 @@ class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
            let favoriteStatus = favorites[noiseKey] {
             peer.favoriteStatus = favoriteStatus
             peer.nostrPublicKey = favoriteStatus.peerNostrPublicKey
-        } else {
-            // Check by nickname for reconnected peers
-            let favoriteByNickname = favorites.values.first { 
-                $0.peerNickname == peerInfo.nickname 
-            }
-            
-            if let favorite = favoriteByNickname,
-               let noiseKey = peerInfo.noisePublicKey {
-                SecureLogger.log(
-                    "🔄 Found favorite for '\(peerInfo.nickname)' by nickname, updating noise key",
-                    category: SecureLogger.session,
-                    level: .debug
-                )
-                
-                // Update the favorite's key in persistence
-                favoritesService.updateNoisePublicKey(
-                    from: favorite.peerNoisePublicKey,
-                    to: noiseKey,
-                    peerNickname: peerInfo.nickname
-                )
-                
-                // Get updated favorite
-                peer.favoriteStatus = favoritesService.getFavoriteStatus(for: noiseKey)
-                peer.nostrPublicKey = peer.favoriteStatus?.peerNostrPublicKey ?? favorite.peerNostrPublicKey
-            }
         }
         
         return peer
@@ -272,7 +249,7 @@ class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         guard let fingerprint = getFingerprint(for: peerID) else { return false }
         
         // Check SecureIdentityStateManager for block status
-        if let identity = SecureIdentityStateManager.shared.getSocialIdentity(for: fingerprint) {
+        if let identity = identityManager.getSocialIdentity(for: fingerprint) {
             return identity.isBlocked
         }
         
@@ -282,8 +259,7 @@ class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
     /// Toggle favorite status
     func toggleFavorite(_ peerID: String) {
         guard let peer = getPeer(by: peerID) else { 
-            SecureLogger.log("⚠️ Cannot toggle favorite - peer not found: \(peerID)", 
-                           category: SecureLogger.session, level: .warning)
+            SecureLogger.warning("⚠️ Cannot toggle favorite - peer not found: \(peerID)", category: .session)
             return 
         }
         
@@ -293,15 +269,13 @@ class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         var actualNickname = peer.nickname
         
         // Debug logging to understand the issue
-        SecureLogger.log("🔍 Toggle favorite - peer.nickname: '\(peer.nickname)', peer.displayName: '\(peer.displayName)', peerID: \(peerID)", 
-                       category: SecureLogger.session, level: .debug)
+        SecureLogger.debug("🔍 Toggle favorite - peer.nickname: '\(peer.nickname)', peer.displayName: '\(peer.displayName)', peerID: \(peerID)", category: .session)
         
         if actualNickname.isEmpty {
             // Try to get from mesh service's current peer list
             if let meshPeerNickname = meshService.peerNickname(peerID: peerID) {
                 actualNickname = meshPeerNickname
-                SecureLogger.log("🔍 Got nickname from mesh service: '\(actualNickname)'", 
-                               category: SecureLogger.session, level: .debug)
+                SecureLogger.debug("🔍 Got nickname from mesh service: '\(actualNickname)'", category: .session)
             }
         }
         
@@ -328,8 +302,7 @@ class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         }
         
         // Log the final nickname being saved
-        SecureLogger.log("⭐️ Toggled favorite for '\(finalNickname)' (peerID: \(peerID), was: \(wasFavorite), now: \(!wasFavorite))",
-                       category: SecureLogger.session, level: .debug)
+        SecureLogger.debug("⭐️ Toggled favorite for '\(finalNickname)' (peerID: \(peerID), was: \(wasFavorite), now: \(!wasFavorite))", category: .session)
         
         // Send favorite notification to the peer via router (mesh or Nostr)
         if let router = messageRouter {
@@ -353,7 +326,7 @@ class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         guard let fingerprint = getFingerprint(for: peerID) else { return }
         
         // Get or create social identity
-        var identity = SecureIdentityStateManager.shared.getSocialIdentity(for: fingerprint)
+        var identity = identityManager.getSocialIdentity(for: fingerprint)
             ?? SocialIdentity(
                 fingerprint: fingerprint,
                 localPetname: nil,
@@ -376,7 +349,7 @@ class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
             }
         }
         
-        SecureIdentityStateManager.shared.updateSocialIdentity(identity)
+        identityManager.updateSocialIdentity(identity)
     }
     
     /// Get fingerprint for peer ID

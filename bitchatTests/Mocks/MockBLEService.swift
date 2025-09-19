@@ -26,7 +26,7 @@ import CoreBluetooth
 /// - `autoFloodEnabled` is disabled by default; Integration tests enable it in `setUp()` to
 ///   simulate broadcast propagation across the mesh. E2E tests keep it off and perform explicit
 ///   relays when needed.
-class MockBLEService: NSObject {
+final class MockBLEService: NSObject {
     // Enable automatic flooding for public messages in integration tests only
     static var autoFloodEnabled: Bool = false
     
@@ -35,6 +35,8 @@ class MockBLEService: NSObject {
     weak var delegate: BitchatDelegate?
     var myPeerID: String = "MOCK1234"
     var myNickname: String = "MockUser"
+    
+    private let mockKeychain = MockKeychain()
     
     // Test-specific properties
     var sentMessages: [(message: BitchatMessage, packet: BitchatPacket)] = []
@@ -272,7 +274,7 @@ class MockBLEService: NSObject {
     }
     
     func getNoiseService() -> NoiseEncryptionService {
-        return NoiseEncryptionService()
+        return NoiseEncryptionService(keychain: mockKeychain)
     }
     
     func getFingerprint(for peerID: String) -> String? {

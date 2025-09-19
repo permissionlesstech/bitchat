@@ -11,15 +11,26 @@ import UserNotifications
 
 @main
 struct BitchatApp: App {
-    @StateObject private var chatViewModel = ChatViewModel()
+    @StateObject private var chatViewModel: ChatViewModel
     #if os(iOS)
     @Environment(\.scenePhase) var scenePhase
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    // Skip the very first .active-triggered Tor restart on cold launch
+    @State private var didHandleInitialActive: Bool = false
+    @State private var didEnterBackground: Bool = false
     #elseif os(macOS)
     @NSApplicationDelegateAdaptor(MacAppDelegate.self) var appDelegate
     #endif
     
     init() {
+        let keychain = KeychainManager()
+        _chatViewModel = StateObject(
+            wrappedValue: ChatViewModel(
+                keychain: keychain,
+                identityManager: SecureIdentityStateManager(keychain)
+            )
+        )
+        
         UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
         // Warm up georelay directory and refresh if stale (once/day)
         GeoRelayDirectory.shared.prefetchIfNeeded()
@@ -43,6 +54,8 @@ struct BitchatApp: App {
                     #elseif os(macOS)
                     appDelegate.chatViewModel = chatViewModel
                     #endif
+                    // Spin up Tor early; all internet will gate on Tor 100%
+                    TorManager.shared.startIfNeeded()
                     // Check for shared content
                     checkForSharedContent()
                 }
@@ -54,10 +67,37 @@ struct BitchatApp: App {
                     switch newPhase {
                     case .background:
                         // Keep BLE mesh running in background; BLEService adapts scanning automatically
-                        break
+                        // Optionally nudge Tor to dormant to save power
+                        TorManager.shared.setAppForeground(false)
+                        TorManager.shared.goDormantOnBackground()
+                        // Stop geohash sampling while backgrounded
+                        Task { @MainActor in
+                            chatViewModel.endGeohashSampling()
+                        }
+                        // Proactively disconnect Nostr to avoid spurious socket errors while Tor is down
+                        NostrRelayManager.shared.disconnect()
+                        didEnterBackground = true
                     case .active:
                         // Restart services when becoming active
                         chatViewModel.meshService.startServices()
+                        TorManager.shared.setAppForeground(true)
+                        // On initial cold launch, Tor was just started in onAppear.
+                        // Skip the deterministic restart the first time we become active.
+                        if didHandleInitialActive && didEnterBackground {
+                            TorManager.shared.ensureRunningOnForeground()
+                        } else {
+                            didHandleInitialActive = true
+                        }
+                        didEnterBackground = false
+                        Task.detached {
+                            let _ = await TorManager.shared.awaitReady(timeout: 60)
+                            await MainActor.run {
+                                // Rebuild proxied sessions to bind to the live Tor after readiness
+                                TorURLSession.shared.rebuild()
+                                // Reconnect Nostr via fresh sessions; will gate until Tor 100%
+                                NostrRelayManager.shared.resetAllConnections()
+                            }
+                        }
                         checkForSharedContent()
                     case .inactive:
                         break
@@ -131,7 +171,7 @@ struct BitchatApp: App {
 }
 
 #if os(iOS)
-class AppDelegate: NSObject, UIApplicationDelegate {
+final class AppDelegate: NSObject, UIApplicationDelegate {
     weak var chatViewModel: ChatViewModel?
     
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
@@ -143,7 +183,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 #if os(macOS)
 import AppKit
 
-class MacAppDelegate: NSObject, NSApplicationDelegate {
+final class MacAppDelegate: NSObject, NSApplicationDelegate {
     weak var chatViewModel: ChatViewModel?
     
     func applicationWillTerminate(_ notification: Notification) {
@@ -156,7 +196,7 @@ class MacAppDelegate: NSObject, NSApplicationDelegate {
 }
 #endif
 
-class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
+final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
     static let shared = NotificationDelegate()
     weak var chatViewModel: ChatViewModel?
     

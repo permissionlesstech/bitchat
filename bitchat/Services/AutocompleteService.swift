@@ -9,7 +9,7 @@
 import Foundation
 
 /// Manages autocomplete functionality for chat
-class AutocompleteService {
+final class AutocompleteService {
     private let mentionRegex = try? NSRegularExpression(pattern: "@([\\p{L}0-9_]*)$", options: [])
     private let commandRegex = try? NSRegularExpression(pattern: "^/([a-z]*)$", options: [])
     

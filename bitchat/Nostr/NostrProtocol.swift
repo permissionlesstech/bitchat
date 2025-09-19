@@ -79,8 +79,7 @@ struct NostrProtocol {
             )
             // Successfully unwrapped gift wrap
         } catch {
-            SecureLogger.log("❌ Failed to unwrap gift wrap: \(error)", 
-                            category: SecureLogger.session, level: .error)
+            SecureLogger.error("❌ Failed to unwrap gift wrap: \(error)", category: .session)
             throw error
         }
         
@@ -93,8 +92,7 @@ struct NostrProtocol {
             )
             // Successfully opened seal
         } catch {
-            SecureLogger.log("❌ Failed to open seal: \(error)", 
-                            category: SecureLogger.session, level: .error)
+            SecureLogger.error("❌ Failed to open seal: \(error)", category: .session)
             throw error
         }
         
@@ -110,7 +108,7 @@ struct NostrProtocol {
         teleported: Bool = false
     ) throws -> NostrEvent {
         var tags = [["g", geohash]]
-        if let nickname = nickname, !nickname.isEmpty {
+        if let nickname = nickname?.trimmingCharacters(in: .whitespacesAndNewlines), !nickname.isEmpty {
             tags.append(["n", nickname])
         }
         if teleported {

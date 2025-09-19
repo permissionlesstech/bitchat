@@ -50,23 +50,31 @@ final class GeoRelayDirectory {
 
     private func fetchRemote() {
         let req = URLRequest(url: remoteURL, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
-        let task = URLSession.shared.dataTask(with: req) { [weak self] data, _, error in
-            guard let self = self else { return }
-            if let data = data, error == nil, let text = String(data: data, encoding: .utf8) {
-                let parsed = GeoRelayDirectory.parseCSV(text)
-                if !parsed.isEmpty {
-                    Task { @MainActor in
-                        self.entries = parsed
-                        self.persistCache(text)
-                        UserDefaults.standard.set(Date(), forKey: self.lastFetchKey)
-                        SecureLogger.log("GeoRelayDirectory: refreshed \(parsed.count) relays from remote", category: SecureLogger.session, level: .info)
-                    }
-                    return
-                }
+        // Ensure Tor readiness before fetching (fail-closed by default)
+        Task.detached {
+            let ready = await TorManager.shared.awaitReady()
+            if !ready {
+                SecureLogger.warning("GeoRelayDirectory: Tor not ready; skipping remote fetch (fail-closed)", category: .session)
+                return
             }
-            SecureLogger.log("GeoRelayDirectory: remote fetch failed; keeping local entries", category: SecureLogger.session, level: .warning)
+            let task = TorURLSession.shared.session.dataTask(with: req) { [weak self] data, _, error in
+                guard let self = self else { return }
+                if let data = data, error == nil, let text = String(data: data, encoding: .utf8) {
+                    let parsed = GeoRelayDirectory.parseCSV(text)
+                    if !parsed.isEmpty {
+                        Task { @MainActor in
+                            self.entries = parsed
+                            self.persistCache(text)
+                            UserDefaults.standard.set(Date(), forKey: self.lastFetchKey)
+                            SecureLogger.info("GeoRelayDirectory: refreshed \(parsed.count) relays from remote", category: .session)
+                        }
+                        return
+                    }
+                }
+                SecureLogger.warning("GeoRelayDirectory: remote fetch failed; keeping local entries", category: .session)
+            }
+            task.resume()
         }
-        task.resume()
     }
 
     private func persistCache(_ text: String) {
@@ -74,7 +82,7 @@ final class GeoRelayDirectory {
         do {
             try text.data(using: .utf8)?.write(to: url, options: .atomic)
         } catch {
-            SecureLogger.log("GeoRelayDirectory: failed to write cache: \(error)", category: SecureLogger.session, level: .warning)
+            SecureLogger.warning("GeoRelayDirectory: failed to write cache: \(error)", category: .session)
         }
     }
 
@@ -105,7 +113,7 @@ final class GeoRelayDirectory {
            let text = String(data: data, encoding: .utf8) {
             return Self.parseCSV(text)
         }
-        SecureLogger.log("GeoRelayDirectory: no local CSV found; entries empty", category: SecureLogger.session, level: .warning)
+        SecureLogger.warning("GeoRelayDirectory: no local CSV found; entries empty", category: .session)
         return []
     }
 

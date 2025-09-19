@@ -37,7 +37,7 @@ This three-message pattern provides:
 #### NoiseEncryptionService
 The main service managing all Noise operations:
 ```swift
-class NoiseEncryptionService {
+final class NoiseEncryptionService {
     private let staticIdentityKey: Curve25519.KeyAgreement.PrivateKey
     private let sessionManager: NoiseSessionManager
     private let channelEncryption = NoiseChannelEncryption()
@@ -47,7 +47,7 @@ class NoiseEncryptionService {
 #### NoiseSession
 Individual session state for each peer:
 ```swift
-class NoiseSession {
+final class NoiseSession {
     private var handshakeState: NoiseHandshakeState?
     private var sendCipher: NoiseCipherState?
     private var receiveCipher: NoiseCipherState?
@@ -58,7 +58,7 @@ class NoiseSession {
 #### NoiseSessionManager
 Thread-safe session management:
 ```swift
-class NoiseSessionManager {
+final class NoiseSessionManager {
     private var sessions: [String: NoiseSession] = [:]
     private let sessionsQueue = DispatchQueue(label: "noise.sessions", attributes: .concurrent)
 }

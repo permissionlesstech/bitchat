@@ -458,7 +458,19 @@ struct ContentView: View {
                 let id = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
                 let peerID = id.removingPercentEncoding ?? id
                 selectedMessageSenderID = peerID
-                selectedMessageSender = viewModel.messages.last(where: { $0.senderPeerID == peerID })?.sender
+                // Derive a stable display name from the peerID instead of peeking at the last message,
+                // which may be a transformed system action (sender == "system").
+                if peerID.hasPrefix("nostr") {
+                    // For geohash senders, resolve display name via mapping (works for "nostr:" and "nostr_" keys)
+                    selectedMessageSender = viewModel.geohashDisplayName(for: peerID)
+                } else {
+                    // Mesh sender: use current mesh nickname if available; otherwise fall back to last non-system message
+                    if let name = viewModel.meshService.peerNickname(peerID: peerID) {
+                        selectedMessageSender = name
+                    } else {
+                        selectedMessageSender = viewModel.messages.last(where: { $0.senderPeerID == peerID && $0.sender != "system" })?.sender
+                    }
+                }
                 showMessageActions = true
             }
             .onOpenURL { url in
@@ -1598,15 +1610,15 @@ struct ContentView: View {
                !fav.peerNickname.isEmpty { return fav.peerNickname }
             // Fallback: resolve from persisted social identity via fingerprint mapping
             if headerPeerID.count == 16 {
-                let candidates = SecureIdentityStateManager.shared.getCryptoIdentitiesByPeerIDPrefix(headerPeerID)
+                let candidates = viewModel.identityManager.getCryptoIdentitiesByPeerIDPrefix(headerPeerID)
                 if let id = candidates.first,
-                   let social = SecureIdentityStateManager.shared.getSocialIdentity(for: id.fingerprint) {
+                   let social = viewModel.identityManager.getSocialIdentity(for: id.fingerprint) {
                     if let pet = social.localPetname, !pet.isEmpty { return pet }
                     if !social.claimedNickname.isEmpty { return social.claimedNickname }
                 }
             } else if headerPeerID.count == 64, let keyData = Data(hexString: headerPeerID) {
                 let fp = keyData.sha256Fingerprint()
-                if let social = SecureIdentityStateManager.shared.getSocialIdentity(for: fp) {
+                if let social = viewModel.identityManager.getSocialIdentity(for: fp) {
                     if let pet = social.localPetname, !pet.isEmpty { return pet }
                     if !social.claimedNickname.isEmpty { return social.claimedNickname }
                 }

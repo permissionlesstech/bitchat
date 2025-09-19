@@ -10,7 +10,7 @@ import Foundation
 import SwiftUI
 
 /// Manages all private chat functionality
-class PrivateChatManager: ObservableObject {
+final class PrivateChatManager: ObservableObject {
     @Published var privateChats: [String: [BitchatMessage]] = [:]
     @Published var selectedPeer: String? = nil
     @Published var unreadMessages: Set<String> = []
@@ -228,8 +228,7 @@ class PrivateChatManager: ObservableObject {
         
         // Route via MessageRouter to avoid handshakeRequired spam when session isn't established
         if let router = messageRouter {
-            SecureLogger.log("PrivateChatManager: sending READ ack for \(message.id.prefix(8))… to \(senderPeerID.prefix(8))… via router",
-                            category: SecureLogger.session, level: .debug)
+            SecureLogger.debug("PrivateChatManager: sending READ ack for \(message.id.prefix(8))… to \(senderPeerID.prefix(8))… via router", category: .session)
             Task { @MainActor in
                 router.sendReadReceipt(receipt, to: senderPeerID)
             }
