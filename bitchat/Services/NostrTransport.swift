@@ -4,6 +4,10 @@ import Combine
 
 // Minimal Nostr transport conforming to Transport for offline sending
 final class NostrTransport: Transport {
+    func sendFileTransferTLV(_ payload: Data, recipientPeerID: String?, transferId: String, messageID: String) {
+        return
+    }
+    
     weak var delegate: BitchatDelegate?
     weak var peerEventsDelegate: TransportPeerEventsDelegate?
     var peerSnapshotPublisher: AnyPublisher<[TransportPeerSnapshot], Never> {

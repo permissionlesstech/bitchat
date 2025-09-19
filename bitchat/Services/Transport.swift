@@ -47,6 +47,9 @@ protocol Transport: AnyObject {
     func sendBroadcastAnnounce()
     func sendDeliveryAck(for messageID: String, to peerID: String)
 
+    // Media transfer (file transfer TLV)
+    func sendFileTransferTLV(_ payload: Data, recipientPeerID: String?, transferId: String, messageID: String)
+
     // QR verification (optional for transports)
     func sendVerifyChallenge(to peerID: String, noiseKeyHex: String, nonceA: Data)
     func sendVerifyResponse(to peerID: String, noiseKeyHex: String, nonceA: Data)

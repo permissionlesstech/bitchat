@@ -22,11 +22,12 @@
 ///
 /// ## Wire Format
 /// ```
-/// Header (Fixed 13 bytes):
-/// +--------+------+-----+-----------+-------+----------------+
-/// |Version | Type | TTL | Timestamp | Flags | PayloadLength  |
-/// |1 byte  |1 byte|1byte| 8 bytes   | 1 byte| 2 bytes        |
-/// +--------+------+-----+-----------+-------+----------------+
+/// Header (13 bytes for v1, 15 bytes for v2):
+/// +--------+------+-----+-----------+-------+---------------+
+/// |Version | Type | TTL | Timestamp | Flags | PayloadLength |
+/// |1 byte  |1 byte|1byte| 8 bytes   | 1 byte| 2 bytes (v1)  |
+/// |        |      |     |           |       | 4 bytes (v2)  |
+/// +--------+------+-----+-----------+-------+---------------+
 ///
 /// Variable sections:
 /// +----------+-------------+---------+------------+
@@ -56,9 +57,10 @@
 /// - Bits 3-7: Reserved for future use
 ///
 /// ## Size Constraints
-/// - Maximum packet size: 65,535 bytes (16-bit length field)
+/// - Maximum packet size: 4.2GB (32-bit length field for v2+)
 /// - Typical packet size: < 512 bytes (BLE MTU)
 /// - Minimum packet size: 21 bytes (header + sender ID)
+/// - Legacy v1 packets: max 65,535 bytes (16-bit length field)
 ///
 /// ## Encoding Process
 /// 1. Construct header with fixed fields
@@ -105,15 +107,21 @@ extension Data {
 /// their binary wire format representation.
 /// - Note: All multi-byte values use network byte order (big-endian)
 struct BinaryProtocol {
-    static let headerSize = 13
+    static let headerSizeV1 = 13
+    static let headerSizeV2 = 15
     static let senderIDSize = 8
     static let recipientIDSize = 8
     static let signatureSize = 64
-    
+
     struct Flags {
         static let hasRecipient: UInt8 = 0x01
         static let hasSignature: UInt8 = 0x02
         static let isCompressed: UInt8 = 0x04
+    }
+
+    /// Get header size based on protocol version
+    static func getHeaderSize(_ version: UInt8) -> Int {
+        return version >= 2 ? headerSizeV2 : headerSizeV1
     }
     
     // Encode BitchatPacket to binary format
@@ -138,9 +146,10 @@ struct BinaryProtocol {
         } else {
         }
         
-        // Header
+        // Header with version-dependent size
+        let headerSize = getHeaderSize(packet.version)
         // Reserve capacity to reduce reallocations. Estimate base size conservatively.
-        // header(13) + sender(8) + opt recipient(8) + opt originalSize(2) + payload + opt signature(64) + up to 255 pad
+        // header + sender(8) + opt recipient(8) + opt originalSize(2) + payload + opt signature(64) + up to 255 pad
         let estimatedPayload = payload.count + (isCompressed ? 2 : 0)
         let estimated = headerSize + senderIDSize + (packet.recipientID == nil ? 0 : recipientIDSize) + estimatedPayload + (packet.signature == nil ? 0 : signatureSize) + 255
         data.reserveCapacity(estimated)
@@ -166,13 +175,20 @@ struct BinaryProtocol {
         }
         data.append(flags)
         
-        // Payload length (2 bytes, big-endian) - includes original size if compressed
+        // Payload length - version-dependent (2 bytes for v1, 4 bytes for v2)
         let payloadDataSize = payload.count + (isCompressed ? 2 : 0)
-        let payloadLength = UInt16(payloadDataSize)
-        
-        
-        data.append(UInt8((payloadLength >> 8) & 0xFF))
-        data.append(UInt8(payloadLength & 0xFF))
+        if packet.version >= 2 {
+            // v2+: 4 bytes big-endian
+            data.append(UInt8((payloadDataSize >> 24) & 0xFF))
+            data.append(UInt8((payloadDataSize >> 16) & 0xFF))
+            data.append(UInt8((payloadDataSize >> 8) & 0xFF))
+            data.append(UInt8(payloadDataSize & 0xFF))
+        } else {
+            // v1: 2 bytes big-endian
+            let payloadLength16 = UInt16(payloadDataSize)
+            data.append(UInt8((payloadLength16 >> 8) & 0xFF))
+            data.append(UInt8(payloadLength16 & 0xFF))
+        }
         
         // SenderID (exactly 8 bytes)
         let senderBytes = packet.senderID.prefix(senderIDSize)
@@ -227,8 +243,8 @@ struct BinaryProtocol {
 
     // Core decoding implementation used by decode(_:) with and without padding removal
     private static func decodeCore(_ raw: Data) -> BitchatPacket? {
-        // Minimum size: header + senderID
-        guard raw.count >= headerSize + senderIDSize else { return nil }
+        // Minimum size: smallest header (v1) + senderID
+        guard raw.count >= headerSizeV1 + senderIDSize else { return nil }
 
         return raw.withUnsafeBytes { (buf: UnsafeRawBufferPointer) -> BitchatPacket? in
             guard let base = buf.baseAddress else { return nil }
@@ -249,6 +265,14 @@ struct BinaryProtocol {
                 offset += 2
                 return v
             }
+            // Read big-endian 32-bit
+            func read32() -> UInt32? {
+                guard require(4) else { return nil }
+                let p = base.advanced(by: offset).assumingMemoryBound(to: UInt8.self)
+                let v = (UInt32(p[0]) << 24) | (UInt32(p[1]) << 16) | (UInt32(p[2]) << 8) | UInt32(p[3])
+                offset += 4
+                return v
+            }
             // Copy N bytes into Data
             func readData(_ n: Int) -> Data? {
                 guard require(n) else { return nil }
@@ -258,8 +282,8 @@ struct BinaryProtocol {
                 return d
             }
 
-            // Version
-            guard let version = read8(), version == 1 else { return nil }
+            // Version - accept both v1 and v2+
+            guard let version = read8(), version >= 1 else { return nil }
             guard let type = read8() else { return nil }
             guard let ttl = read8() else { return nil }
 
@@ -277,8 +301,15 @@ struct BinaryProtocol {
             let hasSignature = (flags & Flags.hasSignature) != 0
             let isCompressed = (flags & Flags.isCompressed) != 0
 
-            // Payload length
-            guard let payloadLen = read16(), payloadLen <= 65535 else { return nil }
+            // Payload length - version-dependent (2 bytes for v1, 4 bytes for v2+)
+            let payloadLen: UInt32
+            if version >= 2 {
+                guard let len32 = read32(), len32 <= 4_294_967_295 else { return nil }
+                payloadLen = len32
+            } else {
+                guard let len16 = read16(), len16 <= 65535 else { return nil }
+                payloadLen = UInt32(len16)
+            }
 
             // SenderID
             guard let senderID = readData(senderIDSize) else { return nil }
@@ -317,6 +348,7 @@ struct BinaryProtocol {
             guard offset <= buf.count else { return nil }
 
             return BitchatPacket(
+                version: version,
                 type: type,
                 senderID: senderID,
                 recipientID: recipientID,
