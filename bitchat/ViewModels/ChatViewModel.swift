@@ -4874,36 +4874,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         return Array(Set(mentions)) // Remove duplicates
     }
     
-    @MainActor
-    func handlePeerFavoritedUs(peerID: String, favorited: Bool, nickname: String, nostrNpub: String? = nil) {
-        // Get peer's noise public key
-        guard let noisePublicKey = Data(hexString: peerID) else { return }
-        
-        // Decode npub to hex if provided
-        var nostrPublicKey: String? = nil
-        if let npub = nostrNpub {
-            do {
-                let (hrp, data) = try Bech32.decode(npub)
-                if hrp == "npub" {
-                    nostrPublicKey = data.hexEncodedString()
-                }
-            } catch {
-                SecureLogger.error("Failed to decode Nostr npub: \(error)", category: .session)
-            }
-        }
-        
-        // Update favorite status in persistence service
-        FavoritesPersistenceService.shared.updatePeerFavoritedUs(
-            peerNoisePublicKey: noisePublicKey,
-            favorited: favorited,
-            peerNickname: nickname,
-            peerNostrPublicKey: nostrPublicKey
-        )
-        
-        // Update peer list to reflect the change
-        // UnifiedPeerService updates automatically via subscriptions
-    }
-    
     func isFavorite(fingerprint: String) -> Bool {
         return identityManager.isFavorite(fingerprint: fingerprint)
     }
