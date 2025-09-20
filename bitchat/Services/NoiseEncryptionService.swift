@@ -407,7 +407,7 @@ final class NoiseEncryptionService {
     func initiateHandshake(with peerID: String) throws -> Data {
         
         // Validate peer ID
-        guard NoiseSecurityValidator.validatePeerID(peerID) else {
+        guard PeerID(str: peerID).isValid else {
             SecureLogger.warning(.authenticationFailed(peerID: peerID))
             throw NoiseSecurityError.invalidPeerID
         }
@@ -430,7 +430,7 @@ final class NoiseEncryptionService {
     func processHandshakeMessage(from peerID: String, message: Data) throws -> Data? {
         
         // Validate peer ID
-        guard NoiseSecurityValidator.validatePeerID(peerID) else {
+        guard PeerID(str: peerID).isValid else {
             SecureLogger.warning(.authenticationFailed(peerID: peerID))
             throw NoiseSecurityError.invalidPeerID
         }

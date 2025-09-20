@@ -52,11 +52,6 @@ struct NoiseSecurityValidator {
     static func validateHandshakeMessageSize(_ data: Data) -> Bool {
         return data.count <= NoiseSecurityConstants.maxHandshakeMessageSize
     }
-    
-    /// Validate peer ID format using unified validator
-    static func validatePeerID(_ peerID: String) -> Bool {
-        return InputValidator.validatePeerID(peerID)
-    }
 }
 
 // MARK: - Enhanced Noise Session with Security
