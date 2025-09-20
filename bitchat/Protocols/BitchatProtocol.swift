@@ -133,6 +133,9 @@ enum MessageType: UInt8 {
     // Fragmentation (simplified)
     case fragment = 0x20        // Single fragment type for large messages
     
+    // File transfer (unencrypted broadcast large frames); private file transfers ride inside noiseEncrypted
+    case fileTransfer = 0x22    // New: File transfer packet (matches Android 0x22)
+    
     var description: String {
         switch self {
         case .announce: return "announce"
@@ -141,6 +144,7 @@ enum MessageType: UInt8 {
         case .noiseHandshake: return "noiseHandshake"
         case .noiseEncrypted: return "noiseEncrypted"
         case .fragment: return "fragment"
+        case .fileTransfer: return "fileTransfer"
         }
     }
 }
@@ -205,6 +209,18 @@ struct BitchatPacket: Codable {
     
     init(type: UInt8, senderID: Data, recipientID: Data?, timestamp: UInt64, payload: Data, signature: Data?, ttl: UInt8) {
         self.version = 1
+        self.type = type
+        self.senderID = senderID
+        self.recipientID = recipientID
+        self.timestamp = timestamp
+        self.payload = payload
+        self.signature = signature
+        self.ttl = ttl
+    }
+    
+    // New: Versioned initializer (supports v2 with 4-byte payload length)
+    init(version: UInt8, type: UInt8, senderID: Data, recipientID: Data?, timestamp: UInt64, payload: Data, signature: Data?, ttl: UInt8) {
+        self.version = version
         self.type = type
         self.senderID = senderID
         self.recipientID = recipientID

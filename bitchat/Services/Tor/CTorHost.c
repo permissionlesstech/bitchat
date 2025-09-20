@@ -5,15 +5,25 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <TargetConditionals.h>
 
+#if TARGET_OS_SIMULATOR
+// Simulator stubs: do not reference Tor symbols; allow app to build without xcframework slice.
+int tor_host_is_running(void) { return 0; }
+int tor_host_start(const char *data_dir, const char *socks_addr, const char *control_addr, int shutdown_fast) { (void)data_dir; (void)socks_addr; (void)control_addr; (void)shutdown_fast; return -1; }
+int tor_host_shutdown(void) { return 0; }
+int tor_host_restart(const char *data_dir, const char *socks_addr, const char *control_addr, int shutdown_fast) { (void)data_dir; (void)socks_addr; (void)control_addr; (void)shutdown_fast; return -1; }
+
+#else
 // Forward declarations from Tor's public embedding API (tor_api.h)
 typedef struct tor_main_configuration_t tor_main_configuration_t;
-tor_main_configuration_t *tor_main_configuration_new(void);
+// Mark as weak imports so builds succeed even if the symbols are not linked; we detect NULL at runtime.
+tor_main_configuration_t *tor_main_configuration_new(void) __attribute__((weak_import));
 int tor_main_configuration_set_command_line(tor_main_configuration_t *cfg,
                                             int argc,
-                                            char **argv);
-void tor_main_configuration_free(tor_main_configuration_t *cfg);
-int tor_run_main(const tor_main_configuration_t *);
+                                            char **argv) __attribute__((weak_import));
+void tor_main_configuration_free(tor_main_configuration_t *cfg) __attribute__((weak_import));
+int tor_run_main(const tor_main_configuration_t *) __attribute__((weak_import));
 
 static pthread_t tor_thread;
 static int tor_thread_started = 0;
@@ -45,6 +55,10 @@ static void *tor_thread_main(void *arg) {
 }
 
 static int build_cfg(tor_main_configuration_t **out_cfg) {
+  // Ensure embed API is available
+  if (!tor_main_configuration_new || !tor_main_configuration_set_command_line || !tor_main_configuration_free || !tor_run_main) {
+    return -10; // embed API not present in linked tor library
+  }
   tor_main_configuration_t *cfg = tor_main_configuration_new();
   if (!cfg) return -1;
 
@@ -171,3 +185,5 @@ int tor_host_restart(const char *data_dir, const char *socks_addr, const char *c
   (void)tor_host_shutdown();
   return tor_host_start(data_dir_copy, socks_arg_copy, control_arg_copy, shutdown_fast);
 }
+
+#endif

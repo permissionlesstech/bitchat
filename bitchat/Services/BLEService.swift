@@ -1045,7 +1045,7 @@ final class BLEService: NSObject {
         sendOnAllLinks(packet: packet, data: data, pad: pad, directedOnlyPeer: nil)
     }
 
-    private func sendOnAllLinks(packet: BitchatPacket, data: Data, pad: Bool, directedOnlyPeer: String?) {
+    private func sendOnAllLinks(packet: BitchatPacket, data: Data, pad: Bool, directedOnlyPeer: String?, transferId: String? = nil) {
         // Determine last-hop link for this message to avoid echoing back
         let messageID = makeMessageID(for: packet)
         let ingressLink: LinkID? = collectionsQueue.sync { ingressByMessageID[messageID]?.link }
@@ -1071,8 +1071,11 @@ final class BLEService: NSObject {
            data.count > minLen {
             let overhead = 13 + 8 + 8 + 13
             let chunk = max(64, minLen - overhead)
-            sendFragmentedPacket(packet, pad: pad, maxChunk: chunk, directedOnlyPeer: directedOnlyPeer)
+            sendFragmentedPacket(packet, pad: pad, maxChunk: chunk, directedOnlyPeer: directedOnlyPeer, transferId: transferId)
             return
+        }
+        if let tid = transferId {
+            TransferProgressManager.shared.start(tid, total: 1)
         }
         // Build link lists and apply K-of-N fanout for broadcasts; always exclude ingress link
         let connectedPeripheralIDs: [String] = states.filter { $0.isConnected }.map { $0.peripheral.identifier.uuidString }
@@ -1130,6 +1133,9 @@ final class BLEService: NSObject {
             if !targets.isEmpty {
                 _ = peripheralManager?.updateValue(data, for: ch, onSubscribedCentrals: targets)
             }
+        }
+        if let tid = transferId {
+            TransferProgressManager.shared.complete(tid)
         }
     }
 
@@ -1199,7 +1205,7 @@ final class BLEService: NSObject {
     
     // MARK: - Fragmentation (Required for messages > BLE MTU)
     
-    private func sendFragmentedPacket(_ packet: BitchatPacket, pad: Bool, maxChunk: Int? = nil, directedOnlyPeer: String? = nil) {
+    private func sendFragmentedPacket(_ packet: BitchatPacket, pad: Bool, maxChunk: Int? = nil, directedOnlyPeer: String? = nil, transferId: String? = nil) {
         guard let fullData = packet.toBinaryData(padding: pad) else { return }
         // Fragment the unpadded frame; each fragment will be encoded independently
         
@@ -1212,6 +1218,9 @@ final class BLEService: NSObject {
         // Lightweight pacing to reduce floods and allow BLE buffers to drain
         // Also briefly pause scanning during long fragment trains to save battery
         let totalFragments = fragments.count
+        if let tid = transferId {
+            TransferProgressManager.shared.start(tid, total: totalFragments)
+        }
         if totalFragments > 4 {
             bleQueue.async { [weak self] in
                 guard let self = self, let c = self.centralManager, c.state == .poweredOn else { return }
@@ -1251,7 +1260,10 @@ final class BLEService: NSObject {
             let perFragMs = (directedOnlyPeer != nil || packet.recipientID != nil) ? TransportConfig.bleFragmentSpacingDirectedMs : TransportConfig.bleFragmentSpacingMs
             let delayMs = index * perFragMs
             messageQueue.asyncAfter(deadline: .now() + .milliseconds(delayMs)) { [weak self] in
+                if let tid = transferId, TransferProgressManager.shared.isCancelled(tid) { return }
                 self?.broadcastPacket(fragmentPacket)
+                if let tid = transferId { TransferProgressManager.shared.step(tid) }
+                if let tid = transferId, index + 1 == totalFragments { TransferProgressManager.shared.complete(tid) }
             }
         }
     }
@@ -2259,9 +2271,9 @@ final class BLEService: NSObject {
     /// Send a small file inline to a specific peer. The entire file payload must be <= 64KB before Noise encryption.
     /// This relies on BLEService's existing fragmentation if the outer packet exceeds MTU.
     func sendInlineFile(to recipientPeerID: String, filename: String, mimeType: String, data fileData: Data) {
-        // Validate size constraint per NoiseSecurityValidator (<= 65535 before encryption)
+        // Validate size constraint per security validator
         guard fileData.count > 0 && fileData.count <= NoiseSecurityConstants.maxMessageSize else {
-            SecureLogger.log("Inline file exceeds max allowed size (\(fileData.count) bytes)", category: SecureLogger.session, level: .error)
+            SecureLogger.error("Inline file exceeds max allowed size (\(fileData.count) bytes)", category: .session)
             return
         }
         
@@ -2269,13 +2281,12 @@ final class BLEService: NSObject {
             guard let self = self else { return }
             // Ensure session
             guard self.noiseService.hasEstablishedSession(with: recipientPeerID) else {
-                // Queue handshake and drop for now (minimal impl). A robust version would queue the send.
                 self.noiseService.onHandshakeRequired?(recipientPeerID)
-                SecureLogger.log("Handshake required before sending inline file", category: SecureLogger.noise, level: .warning)
+                SecureLogger.warning("Handshake required before sending inline file", category: .noise)
                 return
             }
             
-            // Build a naive TLV: [filenameLen(2)][filename][mimeLen(2)][mime][dataLen(4)][bytes]
+            // Build a simple TLV: [filenameLen(2)][filename][mimeLen(2)][mime][dataLen(4)][bytes]
             var payloadData = Data()
             let fnameBytes = Array(filename.utf8)
             let mimeBytes = Array(mimeType.utf8)
@@ -2295,7 +2306,9 @@ final class BLEService: NSObject {
             
             do {
                 let encrypted = try self.noiseService.encrypt(typedPayload, for: recipientPeerID)
+                // Use version 2 for large encrypted payloads (4-byte length) to allow fragmentation of big frames
                 let packet = BitchatPacket(
+                    version: 2,
                     type: MessageType.noiseEncrypted.rawValue,
                     senderID: self.myPeerIDData,
                     recipientID: Data(hexString: recipientPeerID),
@@ -2304,10 +2317,14 @@ final class BLEService: NSObject {
                     signature: nil,
                     ttl: self.messageTTL
                 )
-                self.broadcastPacket(packet)
-                SecureLogger.log("📦 Sent inline file \(filename) (\(fileData.count) bytes) to \(recipientPeerID.prefix(8))…", category: SecureLogger.session, level: .info)
+                let padForBLE = self.padPolicy(for: packet.type)
+                guard let data = packet.toBinaryData(padding: padForBLE) else { return }
+                // Stable transferId: sha256 of raw file bytes
+                let transferId = SHA256.hash(data: fileData).map { String(format: "%02x", $0) }.joined()
+                self.sendOnAllLinks(packet: packet, data: data, pad: padForBLE, directedOnlyPeer: recipientPeerID, transferId: transferId)
+                SecureLogger.info("📦 Sent inline file \(filename) (\(fileData.count) bytes) to \(recipientPeerID.prefix(8))…", category: .session)
             } catch {
-                SecureLogger.log("Failed to encrypt/send inline file: \(error)", category: SecureLogger.noise, level: .error)
+                SecureLogger.error("Failed to encrypt/send inline file: \(error)", category: .noise)
             }
         }
     }

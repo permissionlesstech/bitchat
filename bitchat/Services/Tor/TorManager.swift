@@ -2,9 +2,10 @@ import Foundation
 import Network
 import Darwin
 
-// Declare C entrypoint for Tor when statically linked from an xcframework.
+#if BITCHAT_LINK_TOR_MAIN
 @_silgen_name("tor_main")
 private func tor_main_c(_ argc: Int32, _ argv: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?) -> Int32
+#endif
 
 // Preferred: tiny C glue that uses Tor's embedding API (tor_api.h)
 @_silgen_name("tor_host_start")
@@ -378,6 +379,7 @@ final class TorManager: ObservableObject {
     }
 
     // MARK: - Static-link path (no module import)
+    #if BITCHAT_LINK_TOR_MAIN
     private func startTorViaLinkedSymbol() -> Bool {
         // Attempt to start tor_run_main directly (statically linked). If the
         // symbol is not present at link-time, builds will fail — which is
@@ -419,6 +421,7 @@ final class TorManager: ObservableObject {
         }
         return true
     }
+    #endif
     
     // MARK: - ControlPort monitoring (bootstrap progress)
     private func startControlMonitorIfNeeded() {

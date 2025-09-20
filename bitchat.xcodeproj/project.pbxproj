@@ -8,6 +8,14 @@
 
 /* Begin PBXBuildFile section */
 		047502802E53A0FC0083520F /* FragmentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0475027E2E53A0FC0083520F /* FragmentationTests.swift */; };
+		FEEDC0DE0001000000000001 /* TransferProgressManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEEDBEEF0000000000000001 /* TransferProgressManager.swift */; };
+		FEEDC0DE0002000000000002 /* VoiceRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEEDBEEF0000000000000002 /* VoiceRecorder.swift */; };
+		FEEDC0DE0003000000000003 /* FileUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEEDBEEF0000000000000003 /* FileUtils.swift */; };
+		FEEDC0DE0004000000000004 /* BitchatFilePacket.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEEDBEEF0000000000000004 /* BitchatFilePacket.swift */; };
+		FEEDC0DE0011000000000011 /* TransferProgressManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEEDBEEF0000000000000001 /* TransferProgressManager.swift */; };
+		FEEDC0DE0012000000000012 /* VoiceRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEEDBEEF0000000000000002 /* VoiceRecorder.swift */; };
+		FEEDC0DE0013000000000013 /* FileUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEEDBEEF0000000000000003 /* FileUtils.swift */; };
+		FEEDC0DE0014000000000014 /* BitchatFilePacket.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEEDBEEF0000000000000004 /* BitchatFilePacket.swift */; };
 		047502812E53A0FC0083520F /* FragmentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0475027E2E53A0FC0083520F /* FragmentationTests.swift */; };
 		047502872E5416250083520F /* Geohash.swift in Sources */ = {isa = PBXBuildFile; fileRef = 047502852E5416250083520F /* Geohash.swift */; };
 		047502882E5416250083520F /* LocationChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 047502862E5416250083520F /* LocationChannel.swift */; };
@@ -128,6 +136,10 @@
 		9CCF09F7527EC681A13FC246 /* NoiseSecurityConsiderations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43B4548DAFC9F7AA8873DA53 /* NoiseSecurityConsiderations.swift */; };
 		A0A1C26EFBFDD5B8EFEEDE57 /* PublicChatE2ETests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D22BF09A49010947CEFE45E2 /* PublicChatE2ETests.swift */; };
 		A1B2C3D44E5F60718293A4B5 /* XChaCha20Poly1305Compat.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D44E5F60718293A4B4 /* XChaCha20Poly1305Compat.swift */; };
+		A1B2C3D4E5F60123456789BA /* MockKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60123456789AA /* MockKeychain.swift */; };
+		A1B2C3D4E5F60123456789BB /* MockKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60123456789AA /* MockKeychain.swift */; };
+		A1B2C3D4E5F60123456789BC /* MockIdentityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60123456789AB /* MockIdentityManager.swift */; };
+		A1B2C3D4E5F60123456789BD /* MockIdentityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60123456789AB /* MockIdentityManager.swift */; };
 		A1B2C3D54E5F60718293A4B6 /* XChaCha20Poly1305Compat.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D44E5F60718293A4B4 /* XChaCha20Poly1305Compat.swift */; };
 		A2977428C1D9EF9944C4BFAF /* BLEServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 980B109CBA72BC996455C62B /* BLEServiceTests.swift */; };
 		A7187D48B07C6857DE01D0ED /* NoiseProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43613045E63D21D429396805 /* NoiseProtocol.swift */; };
@@ -173,10 +185,6 @@
 		F455F011B3B648ADA233F998 /* BinaryProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2136C3E22D02D4A8DBE7EAB /* BinaryProtocol.swift */; };
 		FB8819B4C84FAFEF5C36B216 /* KeychainManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 136696FC4436A02D98CE6A77 /* KeychainManager.swift */; };
 		FBC409E105493C491531B59A /* NostrProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E5A9FF4AEA8A923317ED26A /* NostrProtocol.swift */; };
- 		A1B2C3D4E5F60123456789BA /* MockKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60123456789AA /* MockKeychain.swift */; };
- 		A1B2C3D4E5F60123456789BB /* MockKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60123456789AA /* MockKeychain.swift */; };
- 		A1B2C3D4E5F60123456789BC /* MockIdentityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60123456789AB /* MockIdentityManager.swift */; };
- 		A1B2C3D4E5F60123456789BD /* MockIdentityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60123456789AB /* MockIdentityManager.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -219,6 +227,10 @@
 
 /* Begin PBXFileReference section */
 		03C57F452B55FD0FD8F51421 /* bitchatTests_macOS.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = bitchatTests_macOS.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		FEEDBEEF0000000000000001 /* TransferProgressManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransferProgressManager.swift; sourceTree = "<group>"; };
+		FEEDBEEF0000000000000002 /* VoiceRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceRecorder.swift; sourceTree = "<group>"; };
+		FEEDBEEF0000000000000003 /* FileUtils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileUtils.swift; sourceTree = "<group>"; };
+		FEEDBEEF0000000000000004 /* BitchatFilePacket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitchatFilePacket.swift; sourceTree = "<group>"; };
 		0475027E2E53A0FC0083520F /* FragmentationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FragmentationTests.swift; sourceTree = "<group>"; };
 		047502852E5416250083520F /* Geohash.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Geohash.swift; sourceTree = "<group>"; };
 		047502862E5416250083520F /* LocationChannel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationChannel.swift; sourceTree = "<group>"; };
@@ -289,6 +301,8 @@
 		9AB6BE4ABD7F5088E9865E56 /* NoiseSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoiseSession.swift; sourceTree = "<group>"; };
 		A08E03AA0C63E97C91749AEC /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		A1B2C3D44E5F60718293A4B4 /* XChaCha20Poly1305Compat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XChaCha20Poly1305Compat.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60123456789AA /* MockKeychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockKeychain.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60123456789AB /* MockIdentityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockIdentityManager.swift; sourceTree = "<group>"; };
 		A2136C3E22D02D4A8DBE7EAB /* BinaryProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BinaryProtocol.swift; sourceTree = "<group>"; };
 		AA11BB22CC33DD44EE55FF68 /* MessageTextHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageTextHelpers.swift; sourceTree = "<group>"; };
 		AA77BB10CC22DD33EE44FF55 /* VerificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerificationService.swift; sourceTree = "<group>"; };
@@ -311,8 +325,6 @@
 		FC75901A0F0073B5BB8356E7 /* TestConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestConstants.swift; sourceTree = "<group>"; };
 		FDC18D910D6FF2E8B1B6C885 /* SecureIdentityStateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureIdentityStateManager.swift; sourceTree = "<group>"; };
 		FE7CCF2BD78A3F3DAE6DA145 /* MockBLEService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockBLEService.swift; sourceTree = "<group>"; };
-		A1B2C3D4E5F60123456789AA /* MockKeychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockKeychain.swift; sourceTree = "<group>"; };
-		A1B2C3D4E5F60123456789AB /* MockIdentityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockIdentityManager.swift; sourceTree = "<group>"; };
 		FF7AF93D874001FBD94C8306 /* bitchat-macOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "bitchat-macOS.entitlements"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -322,8 +334,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				0481A35B2E6D9BEF00FC845E /* libz.tbd in Frameworks */,
-				0481A3582E6D929E00FC845E /* tor-nolzma.xcframework in Frameworks */,
 				3EE336D150427F736F32B56C /* P256K in Frameworks */,
+				0481A3582E6D929E00FC845E /* tor-nolzma.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -332,7 +344,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				0481A35D2E6DA18600FC845E /* libz.tbd in Frameworks */,
-				0481A3592E6D929E00FC845E /* tor-nolzma.xcframework in Frameworks */,
 				885BBED78092484A5B069461 /* P256K in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -378,10 +389,11 @@
 			path = Frameworks;
 			sourceTree = "<group>";
 		};
-		0575DCBD15C7C719ADDCB67E /* Models */ = {
+0575DCBD15C7C719ADDCB67E /* Models */ = {
 			isa = PBXGroup;
 			children = (
 				11186E29A064E8D210880E1B /* BitchatPeer.swift */,
+				FEEDBEEF0000000000000004 /* BitchatFilePacket.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -476,7 +488,7 @@
 			path = Mocks;
 			sourceTree = "<group>";
 		};
-		9A78348821A7D3374607D4E3 /* Utils */ = {
+9A78348821A7D3374607D4E3 /* Utils */ = {
 			isa = PBXGroup;
 			children = (
 				1234567890ABCDEFFEDCBA02 /* PeerDisplayNameResolver.swift */,
@@ -486,6 +498,7 @@
 				90CB7A5CD1D1A521CD31F380 /* InputValidator.swift */,
 				EE7EFB209C86BBD956B749EC /* SecureLogger.swift */,
 				F0A1B2C3D4E5F60718293A4A /* OSLog+Categories.swift */,
+				FEEDBEEF0000000000000003 /* FileUtils.swift */,
 			);
 			path = Utils;
 			sourceTree = "<group>";
@@ -588,7 +601,7 @@
 			path = Noise;
 			sourceTree = "<group>";
 		};
-		D98A3186D7E4C72E35BDF7FE /* Services */ = {
+D98A3186D7E4C72E35BDF7FE /* Services */ = {
 			isa = PBXGroup;
 			children = (
 				0481A3452E6D869F00FC845E /* Tor */,
@@ -609,6 +622,8 @@
 				394E8A1AC76EFAE352075BE9 /* NoiseEncryptionService.swift */,
 				3448F84BF86A42A3CC4A9379 /* NotificationService.swift */,
 				8C6FDA03416FDB2157A0A8C7 /* BLEService.swift */,
+				FEEDBEEF0000000000000001 /* TransferProgressManager.swift */,
+				FEEDBEEF0000000000000002 /* VoiceRecorder.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -731,11 +746,11 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastUpgradeCheck = 1640;
+				LastUpgradeCheck = 2600;
 				TargetAttributes = {
 					0576A29205865664C0937536 = {
-						DevelopmentTeam = L3N5LHJD5Y;
-						ProvisioningStyle = Automatic;
+						DevelopmentTeam = "";
+						ProvisioningStyle = Manual;
 					};
 					47FF23248747DD7CB666CB91 = {
 						DevelopmentTeam = L3N5LHJD5Y;
@@ -814,10 +829,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		137ABE739BF20ACDDF8CC605 /* Sources */ = {
+137ABE739BF20ACDDF8CC605 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FEEDC0DE0011000000000011 /* TransferProgressManager.swift in Sources */,
+				FEEDC0DE0012000000000012 /* VoiceRecorder.swift in Sources */,
+				FEEDC0DE0013000000000013 /* FileUtils.swift in Sources */,
+				FEEDC0DE0014000000000014 /* BitchatFilePacket.swift in Sources */,
 				F0A1B2C3D4E5F60718293A4C /* OSLog+Categories.swift in Sources */,
 				0C0EFA122E6EAAAA00ABCDF0 /* CTorHost.c in Sources */,
 				0C0EFA172E6EAABB00ABCDF5 /* TorNotifications.swift in Sources */,
@@ -879,10 +898,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		4E49E34F00154C051AE90FED /* Sources */ = {
+4E49E34F00154C051AE90FED /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FEEDC0DE0001000000000001 /* TransferProgressManager.swift in Sources */,
+				FEEDC0DE0002000000000002 /* VoiceRecorder.swift in Sources */,
+				FEEDC0DE0003000000000003 /* FileUtils.swift in Sources */,
+				FEEDC0DE0004000000000004 /* BitchatFilePacket.swift in Sources */,
 				F0A1B2C3D4E5F60718293A4B /* OSLog+Categories.swift in Sources */,
 				0C0EFA112E6EAAAA00ABCDEF /* CTorHost.c in Sources */,
 				0C0EFA162E6EAABB00ABCDF4 /* TorNotifications.swift in Sources */,
@@ -984,7 +1007,6 @@
 				048A4C2C2E5FCE0300162C4A /* GeohashBookmarksStoreTests.swift in Sources */,
 				3849CA6D99B2D536636DF4A6 /* MockBLEService.swift in Sources */,
 				A1B2C3D4E5F60123456789BA /* MockKeychain.swift in Sources */,
-
 				A1B2C3D4E5F60123456789BC /* MockIdentityManager.swift in Sources */,
 				BC4DC75F4FB823FF40569676 /* NoiseProtocolTests.swift in Sources */,
 				EE8C3ECADAB3083A2687D50B /* NostrProtocolTests.swift in Sources */,
@@ -1123,7 +1145,9 @@
 				CODE_SIGN_ENTITLEMENTS = bitchat/bitchat.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
+				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = NO;
+				ENABLE_RESOURCE_ACCESS_BLUETOOTH = YES;
 				INFOPLIST_FILE = bitchat/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = bitchat;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
@@ -1178,7 +1202,9 @@
 				CODE_SIGN_ENTITLEMENTS = bitchat/bitchat.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
+				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_RESOURCE_ACCESS_BLUETOOTH = YES;
 				INFOPLIST_FILE = bitchat/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = bitchat;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
@@ -1205,13 +1231,20 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
-				CODE_SIGNING_ALLOWED = YES;
-				CODE_SIGNING_REQUIRED = YES;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_ENTITLEMENTS = "bitchat/bitchat-macOS.entitlements";
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_RESOURCE_ACCESS_BLUETOOTH = YES;
+				ENABLE_RESOURCE_ACCESS_LOCATION = YES;
 				INFOPLIST_FILE = bitchat/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = bitchat;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1222,6 +1255,7 @@
 				MARKETING_VERSION = 1.3.4;
 				PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat;
 				PRODUCT_NAME = bitchat;
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = macosx;
 				SWIFT_VERSION = 5.0;
@@ -1232,6 +1266,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -1265,7 +1300,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = L3N5LHJD5Y;
+				DEVELOPMENT_TEAM = "";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -1283,6 +1318,7 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.0;
@@ -1294,13 +1330,20 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
-				CODE_SIGNING_ALLOWED = YES;
-				CODE_SIGNING_REQUIRED = YES;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_ENTITLEMENTS = "bitchat/bitchat-macOS.entitlements";
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = NO;
+				ENABLE_RESOURCE_ACCESS_BLUETOOTH = YES;
+				ENABLE_RESOURCE_ACCESS_LOCATION = YES;
 				INFOPLIST_FILE = bitchat/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = bitchat;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1311,6 +1354,7 @@
 				MARKETING_VERSION = 1.3.4;
 				PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat;
 				PRODUCT_NAME = bitchat;
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = macosx;
 				SWIFT_VERSION = 5.0;
@@ -1321,6 +1365,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -1354,7 +1399,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = L3N5LHJD5Y;
+				DEVELOPMENT_TEAM = "";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -1379,6 +1424,7 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;

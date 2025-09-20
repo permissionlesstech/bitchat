@@ -29,6 +29,7 @@ struct ContentView: View {
     @EnvironmentObject var viewModel: ChatViewModel
     @ObservedObject private var locationManager = LocationChannelManager.shared
     @ObservedObject private var bookmarks = GeohashBookmarksStore.shared
+    @ObservedObject private var transferMgr = TransferProgressManager.shared
     @State private var messageText = ""
     @State private var textFieldSelection: NSRange? = nil
     @FocusState private var isTextFieldFocused: Bool
@@ -60,6 +61,9 @@ struct ContentView: View {
     // Minimal file attach state
     @State private var showFileImporter = false
     @State private var fileImportError: String? = nil
+    
+    // Voice recorder sheet
+    @State private var showVoiceRecorder = false
     
     // Incoming file presentation state
     @State private var incomingFileData: Data? = nil
@@ -129,6 +133,30 @@ struct ContentView: View {
                                 }
                         )
                 }
+                
+                // Transfer progress overlay (bottom stacked)
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(Array(transferMgr.progresses.keys).sorted(), id: \.self) { tid in
+                        if let p = transferMgr.progresses[tid], !p.completed {
+                            HStack(spacing: 12) {
+                                ProgressView(value: Double(p.sent), total: Double(max(p.total, 1)))
+                                    .progressViewStyle(.linear)
+                                    .frame(maxWidth: .infinity)
+                                Text("\(p.sent)/\(p.total)")
+                                    .font(.system(size: 12, weight: .regular, design: .monospaced))
+                                    .foregroundColor(secondaryTextColor)
+                                Button("cancel") { TransferProgressManager.shared.cancel(tid) }
+                                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                            }
+                            .padding(8)
+                            .background(Color.gray.opacity(0.15))
+                            .cornerRadius(8)
+                        }
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 8)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                 
                 // Sidebar overlay
                 HStack(spacing: 0) {
@@ -853,8 +881,9 @@ struct ContentView: View {
     
     @ViewBuilder
     private var attachButtonOverlay: some View {
-        HStack {
+        HStack(spacing: 12) {
             attachButton
+            voiceRecordButton
             Spacer()
         }
     }
@@ -869,6 +898,33 @@ struct ContentView: View {
         .buttonStyle(.plain)
         .padding(.leading, 12)
         .disabled(!attachButtonEnabled)
+    }
+    
+    @ViewBuilder
+    private var voiceRecordButton: some View {
+        Button(action: { showVoiceRecorder = true }) {
+            Image(systemName: "mic.circle.fill")
+                .font(.system(size: 20))
+                .foregroundColor(attachButtonEnabled ? Color.red : Color.gray)
+        }
+        .buttonStyle(.plain)
+        .disabled(!attachButtonEnabled)
+        .sheet(isPresented: $showVoiceRecorder) {
+            VoiceRecorderSheet { url in
+                showVoiceRecorder = false
+                // Only private chat for now
+                if let peerID = viewModel.selectedPrivateChatPeer,
+                   let data = try? Data(contentsOf: url) {
+                    let filename = url.lastPathComponent.isEmpty ? "voice_\(Int(Date().timeIntervalSince1970)).m4a" : url.lastPathComponent
+                    let mime = "audio/mp4" // M4A (AAC)
+                    if let ble = viewModel.meshService as? BLEService {
+                        ble.sendInlineFile(to: peerID, filename: filename, mimeType: mime, data: data)
+                    } else {
+                        fileImportError = "Inline voice send not supported on current transport."
+                    }
+                }
+            }
+        }
     }
     
     private var attachButtonColor: Color {
@@ -1134,6 +1190,51 @@ struct ContentView: View {
         }
     }
     #endif
+    
+    // Simple voice recorder sheet
+    private struct VoiceRecorderSheet: View {
+        @Environment(\.dismiss) private var dismiss
+        let onFinished: (URL) -> Void
+        @State private var status: String = "Press Record"
+        @State private var seconds: TimeInterval = 0
+        @State private var estBytes: UInt64 = 0
+        private let recorder = VoiceRecorder()
+        
+        var body: some View {
+            VStack(spacing: 16) {
+                Text(status).font(.system(size: 14, weight: .regular, design: .monospaced))
+                Text(String(format: "%02d:%02d", Int(seconds)/60, Int(seconds)%60))
+                    .font(.system(size: 24, weight: .bold, design: .monospaced))
+                Text("~\(FileUtils.formatFileSize(estBytes))")
+                    .font(.system(size: 12, weight: .regular, design: .monospaced))
+                    .foregroundColor(.secondary)
+                HStack(spacing: 12) {
+                    Button("Record") { start() }.buttonStyle(.borderedProminent)
+                    Button("Stop") { stop() }.buttonStyle(.bordered)
+                    Button("Cancel") { recorder.cancel(); dismiss() }.buttonStyle(.bordered)
+                }
+            }
+            .padding()
+            .onAppear { recorder.delegate = DelegateProxy(seconds: $seconds, estBytes: $estBytes, status: $status, finish: { url in onFinished(url) }) }
+        }
+        
+        private func start() { status = "Recording…"; recorder.start() }
+        private func stop() { recorder.stop() }
+        
+        private final class DelegateProxy: NSObject, VoiceRecorderDelegate {
+            @Binding var seconds: TimeInterval
+            @Binding var estBytes: UInt64
+            @Binding var status: String
+            let finish: (URL) -> Void
+            init(seconds: Binding<TimeInterval>, estBytes: Binding<UInt64>, status: Binding<String>, finish: @escaping (URL) -> Void) {
+                _seconds = seconds; _estBytes = estBytes; _status = status; self.finish = finish
+            }
+            func voiceRecorderDidStart(_ url: URL) { status = "Recording…" }
+            func voiceRecorderDidUpdate(seconds: TimeInterval, estimatedSize: UInt64) { self.seconds = seconds; self.estBytes = estimatedSize }
+            func voiceRecorderDidFinish(_ url: URL) { status = "Done"; finish(url) }
+            func voiceRecorderDidError(_ error: Error) { status = "Error: \(error.localizedDescription)" }
+        }
+    }
     
     // Helper view for sharing files that handles file writing outside ViewBuilder context
     private struct ShareSheetView: View {
