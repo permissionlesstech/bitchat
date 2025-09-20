@@ -8,6 +8,7 @@
 
 import UIKit
 import UniformTypeIdentifiers
+@_implementationOnly import bitchat
 
 /// Modern share extension using UIKit + UTTypes.
 /// Avoids deprecated Social framework and SLComposeServiceViewController.
@@ -36,8 +37,9 @@ final class ShareViewController: UIViewController {
             statusLabel.leadingAnchor.constraint(greaterThanOrEqualTo: view.layoutMarginsGuide.leadingAnchor),
             statusLabel.trailingAnchor.constraint(lessThanOrEqualTo: view.layoutMarginsGuide.trailingAnchor)
         ])
-
-        processShare()
+        DispatchQueue.global().async {
+            self.processShare()
+        }
     }
 
     // MARK: - Processing
@@ -163,7 +165,7 @@ final class ShareViewController: UIViewController {
     private func finishWithMessage(_ msg: String) {
         statusLabel.text = msg
         // Complete shortly after showing status
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + TransportConfig.uiShareExtensionDismissDelaySeconds) {
             self.extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
         }
     }
