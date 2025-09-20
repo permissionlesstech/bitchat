@@ -8,6 +8,7 @@
 
 import UIKit
 import UniformTypeIdentifiers
+@_implementationOnly import bitchat
 
 /// Modern share extension using UIKit + UTTypes.
 /// Avoids deprecated Social framework and SLComposeServiceViewController.
@@ -22,6 +23,7 @@ final class ShareViewController: UIViewController {
         l.textAlignment = .center
         l.numberOfLines = 0
         l.textColor = .label
+        l.accessibilityLabel = String.localizedFromMainApp("accessibility.share_status")
         return l
     }()
 
@@ -44,7 +46,7 @@ final class ShareViewController: UIViewController {
     private func processShare() {
         guard let ctx = self.extensionContext,
               let item = ctx.inputItems.first as? NSExtensionItem else {
-            finishWithMessage("Nothing to share")
+            finishWithMessage(String.localizedFromMainApp("share.nothing_to_share"))
             return
         }
 
@@ -61,7 +63,7 @@ final class ShareViewController: UIViewController {
             if let title = item.attributedTitle?.string, !title.isEmpty {
                 saveAndFinish(text: title)
             } else {
-                finishWithMessage("No shareable content")
+                finishWithMessage(String.localizedFromMainApp("share.no_shareable_content"))
             }
             return
         }
@@ -81,7 +83,7 @@ final class ShareViewController: UIViewController {
                             self.saveAndFinish(text: t)
                         }
                     } else {
-                        self.finishWithMessage("No shareable content")
+                        self.finishWithMessage(String.localizedFromMainApp("share.no_shareable_content"))
                     }
                 }
             }
@@ -136,20 +138,20 @@ final class ShareViewController: UIViewController {
     private func saveAndFinish(url: URL, title: String?) {
         let payload: [String: String] = [
             "url": url.absoluteString,
-            "title": title ?? url.host ?? "Shared Link"
+            "title": title ?? url.host ?? String.localizedFromMainApp("share.shared_link")
         ]
         if let json = try? JSONSerialization.data(withJSONObject: payload),
            let s = String(data: json, encoding: .utf8) {
             saveToSharedDefaults(content: s, type: "url")
-            finishWithMessage("✓ Shared link to bitchat")
+            finishWithMessage(String.localizedFromMainApp("share.link_success"))
         } else {
-            finishWithMessage("Failed to encode link")
+            finishWithMessage(String.localizedFromMainApp("share.failed_to_encode"))
         }
     }
 
     private func saveAndFinish(text: String) {
         saveToSharedDefaults(content: text, type: "text")
-        finishWithMessage("✓ Shared text to bitchat")
+        finishWithMessage(String.localizedFromMainApp("share.text_success"))
     }
 
     private func saveToSharedDefaults(content: String, type: String) {

@@ -331,7 +331,7 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
             ?? SocialIdentity(
                 fingerprint: fingerprint,
                 localPetname: nil,
-                claimedNickname: getPeer(by: peerID)?.displayName ?? "Unknown",
+                claimedNickname: getPeer(by: peerID)?.displayName ?? String(localized: "user.unknown"),
                 trustLevel: .unknown,
                 isFavorite: false,
                 isBlocked: false,

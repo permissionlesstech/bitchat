@@ -20,9 +20,10 @@ struct LocationChannelsSheet: View {
     var body: some View {
         NavigationView {
             VStack(alignment: .leading, spacing: 12) {
-                Text("#location channels")
+                Text(String(localized: "location.title"))
                     .font(.system(size: 18, design: .monospaced))
-                Text("chat with people near you using geohash channels. only a coarse geohash is shared, never exact gps. your IP address is hidden by routing all traffic over tor.")
+                    .accessibilityIdentifier("location-sheet-title")
+                Text(String(localized: "location.about"))
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundColor(.secondary)
 
@@ -30,7 +31,7 @@ struct LocationChannelsSheet: View {
                     switch manager.permissionState {
                     case LocationChannelManager.PermissionState.notDetermined:
                         Button(action: { manager.enableLocationChannels() }) {
-                            Text("get location and my geohashes")
+                            Text(String(localized: "location.enable_action"))
                                 .font(.system(size: 12, design: .monospaced))
                                 .foregroundColor(standardGreen)
                                 .frame(maxWidth: .infinity)
@@ -41,10 +42,11 @@ struct LocationChannelsSheet: View {
                         .buttonStyle(.plain)
                     case LocationChannelManager.PermissionState.denied, LocationChannelManager.PermissionState.restricted:
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("location permission denied. enable in settings to use location channels.")
+                            Text(String(localized: "location.permission_denied"))
                                 .font(.system(size: 12, design: .monospaced))
                                 .foregroundColor(.secondary)
-                            Button("open settings") { openSystemLocationSettings() }
+                            Button(String(localized: "common.open_settings")) { openSystemLocationSettings() }
+                            .accessibilityLabel(String(localized: "accessibility.button.open_settings"))
                             .buttonStyle(.plain)
                         }
                     case LocationChannelManager.PermissionState.authorized:
@@ -62,25 +64,19 @@ struct LocationChannelsSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: { isPresented = false }) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                            .frame(width: 32, height: 32)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Close")
+                    Button(String(localized: "nav.close")) { isPresented = false }
+                        .accessibilityLabel(String(localized: "accessibility.button.close"))
+                        .font(.system(size: 14, design: .monospaced))
+                        .accessibilityIdentifier("location-sheet-close")
                 }
             }
             #else
             .toolbar {
                 ToolbarItem(placement: .automatic) {
-                    Button(action: { isPresented = false }) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                            .frame(width: 20, height: 20)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Close")
+                    Button(String(localized: "nav.close")) { isPresented = false }
+                        .accessibilityLabel(String(localized: "accessibility.button.close"))
+                        .font(.system(size: 14, design: .monospaced))
+                        .accessibilityIdentifier("location-sheet-close")
                 }
             }
             #endif
@@ -138,6 +134,7 @@ struct LocationChannelsSheet: View {
                             Button(action: { bookmarks.toggle(channel.geohash) }) {
                                 Image(systemName: bookmarks.isBookmarked(channel.geohash) ? "bookmark.fill" : "bookmark")
                                     .font(.system(size: 14))
+                                    .accessibilityLabel(bookmarks.isBookmarked(channel.geohash) ? String(localized: "accessibility.remove_bookmark") : String(localized: "accessibility.add_bookmark"))
                             }
                             .buttonStyle(.plain)
                             .padding(.leading, 8)
@@ -152,7 +149,7 @@ struct LocationChannelsSheet: View {
             } else {
                 HStack {
                     ProgressView()
-                    Text("finding nearby channels…")
+                    Text(String(localized: "location.finding"))
                         .font(.system(size: 12, design: .monospaced))
                 }
             }
@@ -160,10 +157,11 @@ struct LocationChannelsSheet: View {
             // Custom geohash teleport
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 2) {
-                    Text("#")
+                    Text(String(localized: "ui.hash_symbol"))
                         .font(.system(size: 14, design: .monospaced))
                         .foregroundColor(.secondary)
-                    TextField("geohash", text: $customGeohash)
+                    TextField(String(localized: "placeholder.geohash"), text: $customGeohash)
+                        .accessibilityIdentifier("geohash-input")
                         #if os(iOS)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled(true)
@@ -187,7 +185,7 @@ struct LocationChannelsSheet: View {
                     let isValid = validateGeohash(normalized)
                     Button(action: {
                         let gh = normalized
-                        guard isValid else { customError = "invalid geohash"; return }
+                        guard isValid else { customError = String(localized: "error.invalid_geohash"); return }
                         let level = levelForLength(gh.count)
                         let ch = GeohashChannel(level: level, geohash: gh)
                         // Mark this selection as a manual teleport
@@ -196,10 +194,11 @@ struct LocationChannelsSheet: View {
                         isPresented = false
                     }) {
                         HStack(spacing: 6) {
-                            Text("teleport")
+                            Text(String(localized: "location.teleport"))
                                 .font(.system(size: 14, design: .monospaced))
                             Image(systemName: "face.dashed")
                                 .font(.system(size: 14))
+                                .accessibilityLabel(String(localized: "accessibility.teleport"))
                         }
                     }
                     .buttonStyle(.plain)
@@ -220,8 +219,8 @@ struct LocationChannelsSheet: View {
 
             // Bookmarked geohashes
             if !bookmarks.bookmarks.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("bookmarked")
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(String(localized: "location.bookmarked"))
                         .font(.system(size: 12, design: .monospaced))
                         .foregroundColor(.secondary)
                     VStack(spacing: 6) {
@@ -271,7 +270,7 @@ struct LocationChannelsSheet: View {
                 Button(action: {
                     openSystemLocationSettings()
                 }) {
-                    Text("remove location access")
+                    Text(String(localized: "location.remove_access_action"))
                         .font(.system(size: 12, design: .monospaced))
                         .foregroundColor(Color(red: 0.75, green: 0.1, blue: 0.1))
                         .frame(maxWidth: .infinity)
@@ -342,7 +341,7 @@ struct LocationChannelsSheet: View {
                 }
                 Spacer()
                 if isSelected {
-                    Text("✔︎")
+                    Text(String(localized: "ui.checkmark"))
                         .font(.system(size: 16, design: .monospaced))
                         .foregroundColor(standardGreen)
                 }
@@ -365,8 +364,9 @@ struct LocationChannelsSheet: View {
     private func meshTitleWithCount() -> String {
         // Count currently connected mesh peers (excluding self)
         let meshCount = meshCount()
-        let noun = meshCount == 1 ? "person" : "people"
-        return "mesh [\(meshCount) \(noun)]"
+        //let noun = meshCount == 1 ? "person" : "people"
+        //return "mesh [\(meshCount) \(noun)]"
+        return String.localizedStringWithFormat(String(localized: "location.mesh_with_count"), meshCount)
     }
 
     private func meshCount() -> Int {
@@ -381,15 +381,15 @@ struct LocationChannelsSheet: View {
     private func geohashTitleWithCount(for channel: GeohashChannel) -> String {
         // Main list: keep level labels (block/neighborhood/city/province/region)
         let count = viewModel.geohashParticipantCount(for: channel.geohash)
-        let noun = count == 1 ? "person" : "people"
-        return "\(channel.level.displayName.lowercased()) [\(count) \(noun)]"
+        return String.localizedStringWithFormat(String(localized: "location.geohash_with_count"), channel.level.displayName.lowercased(), count)
     }
 
     private func geohashHashTitleWithCount(_ geohash: String) -> String {
         // Bookmarked list: show the #geohash as the main label
         let count = viewModel.geohashParticipantCount(for: geohash)
-        let noun = count == 1 ? "person" : "people"
-        return "#\(geohash) [\(count) \(noun)]"
+        //let noun = count == 1 ? "person" : "people"
+        //return "#\(geohash) [\(count) \(noun)]"
+        return String.localizedStringWithFormat(String(localized: "location.geohash_hash_with_count"), geohash, count)
     }
 
     private func validateGeohash(_ s: String) -> Bool {
@@ -424,10 +424,10 @@ extension LocationChannelsSheet {
         VStack(alignment: .leading, spacing: 8) {
             Toggle(isOn: torToggleBinding) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("tor routing")
+                    Text(String(localized: "tor.routing_title"))
                         .font(.system(size: 12, weight: .semibold, design: .monospaced))
                         .foregroundColor(.primary)
-                    Text("hides your ip for location channels. recommended: on.")
+                    Text(String(localized: "tor.routing_description"))
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundColor(.secondary)
                 }

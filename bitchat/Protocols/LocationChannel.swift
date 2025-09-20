@@ -23,12 +23,12 @@ enum GeohashChannelLevel: CaseIterable, Codable, Equatable {
 
     var displayName: String {
         switch self {
-        case .building: return "Building"
-        case .block: return "Block"
-        case .neighborhood: return "Neighborhood"
-        case .city: return "City"
-        case .province: return "Province"
-        case .region: return "Region"
+        case .building: return String(localized: "location.level.building")
+        case .block: return String(localized: "location.level.block")
+        case .neighborhood: return String(localized: "location.level.neighborhood")
+        case .city: return String(localized: "location.level.city")
+        case .province: return String(localized: "location.level.province")
+        case .region: return String(localized: "location.level.region")
     }
 }
 }
@@ -97,7 +97,7 @@ enum ChannelID: Equatable, Codable {
     var displayName: String {
         switch self {
         case .mesh:
-            return "Mesh"
+            return String(localized: "location.channel.mesh")
         case .location(let ch):
             return ch.displayName
         }
