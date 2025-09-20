@@ -35,7 +35,7 @@ final class NoiseHandshakeCoordinator {
     
     // MARK: - Properties
     
-    private var handshakeStates: [String: HandshakeState] = [:]
+    private var handshakeStates: [Peer: HandshakeState] = [:]
     private var handshakeQueue = DispatchQueue(label: "chat.bitchat.noise.handshake", attributes: .concurrent)
     
     // Configuration
@@ -54,22 +54,22 @@ final class NoiseHandshakeCoordinator {
     
     /// Deterministically determine who should initiate the handshake
     /// Lower peer ID becomes the initiator to prevent simultaneous attempts
-    func determineHandshakeRole(myPeerID: String, remotePeerID: String) -> NoiseRole {
+    func determineHandshakeRole(myPeer: Peer, remotePeer: Peer) -> NoiseRole {
         // Use simple string comparison for deterministic ordering
-        return myPeerID < remotePeerID ? .initiator : .responder
+        return myPeer < remotePeer ? .initiator : .responder
     }
     
     /// Check if we should initiate handshake with a peer
-    func shouldInitiateHandshake(myPeerID: String, remotePeerID: String, forceIfStale: Bool = false) -> Bool {
+    func shouldInitiateHandshake(myPeer: Peer, remotePeer: Peer, forceIfStale: Bool = false) -> Bool {
         return handshakeQueue.sync {
             // Check if we're already in an active handshake
-            if let state = handshakeStates[remotePeerID], state.isActive {
+            if let state = handshakeStates[remotePeer], state.isActive {
                 // Check if the handshake is stale and we should force a new one
                 if forceIfStale {
                     switch state {
                     case .initiating(_, let lastAttempt):
                         if Date().timeIntervalSince(lastAttempt) > handshakeTimeout {
-                            SecureLogger.warning("Forcing new handshake with \(remotePeerID) - previous stuck in initiating", category: .handshake)
+                            SecureLogger.warning("Forcing new handshake with \(remotePeer.id) - previous stuck in initiating", category: .handshake)
                             return true
                         }
                     default:
@@ -77,18 +77,18 @@ final class NoiseHandshakeCoordinator {
                     }
                 }
                 
-                SecureLogger.debug("Already in active handshake with \(remotePeerID), state: \(state)", category: .handshake)
+                SecureLogger.debug("Already in active handshake with \(remotePeer.id), state: \(state)", category: .handshake)
                 return false
             }
             
             // Check role
-            let role = determineHandshakeRole(myPeerID: myPeerID, remotePeerID: remotePeerID)
+            let role = determineHandshakeRole(myPeer: myPeer, remotePeer: remotePeer)
             if role != .initiator {
                 return false
             }
             
             // Check if we've failed recently and can't retry yet
-            if case .failed(_, let canRetry, let lastAttempt) = handshakeStates[remotePeerID] {
+            if case .failed(_, let canRetry, let lastAttempt) = handshakeStates[remotePeer] {
                 if !canRetry {
                     return false
                 }
@@ -102,56 +102,56 @@ final class NoiseHandshakeCoordinator {
     }
     
     /// Record that we're initiating a handshake
-    func recordHandshakeInitiation(peerID: String) {
+    func recordHandshakeInitiation(peer: Peer) {
         handshakeQueue.async(flags: .barrier) {
-            let attempt = self.getCurrentAttempt(for: peerID) + 1
-            self.handshakeStates[peerID] = .initiating(attempt: attempt, lastAttempt: Date())
-            SecureLogger.info("Recording handshake initiation with \(peerID), attempt \(attempt)", category: .handshake)
+            let attempt = self.getCurrentAttempt(for: peer) + 1
+            self.handshakeStates[peer] = .initiating(attempt: attempt, lastAttempt: Date())
+            SecureLogger.info("Recording handshake initiation with \(peer.id), attempt \(attempt)", category: .handshake)
         }
     }
     
     /// Record that we're responding to a handshake
-    func recordHandshakeResponse(peerID: String) {
+    func recordHandshakeResponse(peer: Peer) {
         handshakeQueue.async(flags: .barrier) {
-            self.handshakeStates[peerID] = .responding(since: Date())
-            SecureLogger.info("Recording handshake response to \(peerID)", category: .handshake)
+            self.handshakeStates[peer] = .responding(since: Date())
+            SecureLogger.info("Recording handshake response to \(peer.id)", category: .handshake)
         }
     }
     
     /// Record successful handshake completion
-    func recordHandshakeSuccess(peerID: String) {
+    func recordHandshakeSuccess(peer: Peer) {
         handshakeQueue.async(flags: .barrier) {
-            self.handshakeStates[peerID] = .established(since: Date())
-            SecureLogger.info("Handshake successfully established with \(peerID)", category: .handshake)
+            self.handshakeStates[peer] = .established(since: Date())
+            SecureLogger.info("Handshake successfully established with \(peer.id)", category: .handshake)
         }
     }
     
     /// Record handshake failure
-    func recordHandshakeFailure(peerID: String, reason: String) {
+    func recordHandshakeFailure(peer: Peer, reason: String) {
         handshakeQueue.async(flags: .barrier) {
-            let attempts = self.getCurrentAttempt(for: peerID)
+            let attempts = self.getCurrentAttempt(for: peer)
             let canRetry = attempts < self.maxHandshakeAttempts
-            self.handshakeStates[peerID] = .failed(reason: reason, canRetry: canRetry, lastAttempt: Date())
-            SecureLogger.warning("Handshake failed with \(peerID): \(reason), canRetry: \(canRetry)", category: .handshake)
+            self.handshakeStates[peer] = .failed(reason: reason, canRetry: canRetry, lastAttempt: Date())
+            SecureLogger.warning("Handshake failed with \(peer.id): \(reason), canRetry: \(canRetry)", category: .handshake)
         }
     }
     
     /// Check if we should accept an incoming handshake initiation
-    func shouldAcceptHandshakeInitiation(myPeerID: String, remotePeerID: String) -> Bool {
+    func shouldAcceptHandshakeInitiation(myPeer: Peer, remotePeer: Peer) -> Bool {
         return handshakeQueue.sync {
             // If we're already established, reject new handshakes
-            if case .established = handshakeStates[remotePeerID] {
-                SecureLogger.debug("Rejecting handshake from \(remotePeerID) - already established", category: .handshake)
+            if case .established = handshakeStates[remotePeer] {
+                SecureLogger.debug("Rejecting handshake from \(remotePeer.id) - already established", category: .handshake)
                 return false
             }
             
-            let role = determineHandshakeRole(myPeerID: myPeerID, remotePeerID: remotePeerID)
+            let role = determineHandshakeRole(myPeer: myPeer, remotePeer: remotePeer)
             
             // If we're the initiator and already initiating, this is a race condition
             if role == .initiator {
-                if case .initiating = handshakeStates[remotePeerID] {
+                if case .initiating = handshakeStates[remotePeer] {
                     // They shouldn't be initiating, but accept it to recover from race condition
-                    SecureLogger.warning("Accepting handshake from \(remotePeerID) despite being initiator (race condition recovery)", category: .handshake)
+                    SecureLogger.warning("Accepting handshake from \(remotePeer.id) despite being initiator (race condition recovery)", category: .handshake)
                     return true
                 }
             }
@@ -178,9 +178,9 @@ final class NoiseHandshakeCoordinator {
     }
     
     /// Get time to wait before next handshake attempt
-    func getRetryDelay(for peerID: String) -> TimeInterval? {
+    func getRetryDelay(for peer: Peer) -> TimeInterval? {
         return handshakeQueue.sync {
-            guard let state = handshakeStates[peerID] else { return nil }
+            guard let state = handshakeStates[peer] else { return nil }
             
             switch state {
             case .failed(_, let canRetry, let lastAttempt):
@@ -205,21 +205,21 @@ final class NoiseHandshakeCoordinator {
     }
     
     /// Reset handshake state for a peer
-    func resetHandshakeState(for peerID: String) {
+    func resetHandshakeState(for peer: Peer) {
         handshakeQueue.async(flags: .barrier) {
-            self.handshakeStates.removeValue(forKey: peerID)
-            SecureLogger.debug("Reset handshake state for \(peerID)", category: .handshake)
+            self.handshakeStates.removeValue(forKey: peer)
+            SecureLogger.debug("Reset handshake state for \(peer.id)", category: .handshake)
         }
     }
     
     /// Clean up stale handshake states and old established sessions
-    func cleanupStaleHandshakes(staleTimeout: TimeInterval = 30.0) -> [String] {
+    func cleanupStaleHandshakes(staleTimeout: TimeInterval = 30.0) -> [Peer] {
         return handshakeQueue.sync {
             let now = Date()
-            var stalePeerIDs: [String] = []
-            var establishedSessions: [(peerID: String, since: Date)] = []
+            var stalePeers: [Peer] = []
+            var establishedSessions: [(peer: Peer, since: Date)] = []
             
-            for (peerID, state) in handshakeStates {
+            for (peer, state) in handshakeStates {
                 var isStale = false
                 
                 switch state {
@@ -237,7 +237,7 @@ final class NoiseHandshakeCoordinator {
                     }
                 case .established(let since):
                     // Track established sessions for potential cleanup
-                    establishedSessions.append((peerID, since))
+                    establishedSessions.append((peer, since))
                     // Clean up very old established sessions
                     if now.timeIntervalSince(since) > establishedSessionTTL {
                         isStale = true
@@ -247,8 +247,8 @@ final class NoiseHandshakeCoordinator {
                 }
                 
                 if isStale {
-                    stalePeerIDs.append(peerID)
-                    SecureLogger.warning("Found stale handshake state for \(peerID): \(state)", category: .handshake)
+                    stalePeers.append(peer)
+                    SecureLogger.warning("Found stale handshake state for \(peer.id): \(state)", category: .handshake)
                 }
             }
             
@@ -259,36 +259,36 @@ final class NoiseHandshakeCoordinator {
                 let sessionsToRemove = sortedSessions.count - maxEstablishedSessions
                 
                 for i in 0..<sessionsToRemove {
-                    let peerID = sortedSessions[i].peerID
-                    stalePeerIDs.append(peerID)
-                    SecureLogger.info("Removing old established session for \(peerID) to maintain session limit", category: .handshake)
+                    let peer = sortedSessions[i].peer
+                    stalePeers.append(peer)
+                    SecureLogger.info("Removing old established session for \(peer.id) to maintain session limit", category: .handshake)
                 }
             }
             
             // Clean up stale states
-            for peerID in stalePeerIDs {
-                handshakeStates.removeValue(forKey: peerID)
+            for peer in stalePeers {
+                handshakeStates.removeValue(forKey: peer)
             }
             
-            if !stalePeerIDs.isEmpty {
-                SecureLogger.info("Cleaned up \(stalePeerIDs.count) stale handshake states", category: .handshake)
+            if !stalePeers.isEmpty {
+                SecureLogger.info("Cleaned up \(stalePeers.count) stale handshake states", category: .handshake)
             }
             
-            return stalePeerIDs
+            return stalePeers
         }
     }
     
     /// Get current handshake state
-    func getHandshakeState(for peerID: String) -> HandshakeState {
+    func getHandshakeState(for peer: Peer) -> HandshakeState {
         return handshakeQueue.sync {
-            return handshakeStates[peerID] ?? .idle
+            return handshakeStates[peer] ?? .idle
         }
     }
     
     /// Get current retry count for a peer
-    func getRetryCount(for peerID: String) -> Int {
+    func getRetryCount(for peer: Peer) -> Int {
         return handshakeQueue.sync {
-            switch handshakeStates[peerID] {
+            switch handshakeStates[peer] {
             case .initiating(let attempt, _):
                 return attempt - 1  // Attempts start at 1, retries start at 0
             default:
@@ -298,17 +298,17 @@ final class NoiseHandshakeCoordinator {
     }
     
     /// Increment retry count for a peer
-    func incrementRetryCount(for peerID: String) {
+    func incrementRetryCount(for peer: Peer) {
         handshakeQueue.async(flags: .barrier) {
-            let currentAttempt = self.getCurrentAttempt(for: peerID)
-            self.handshakeStates[peerID] = .initiating(attempt: currentAttempt + 1, lastAttempt: Date())
+            let currentAttempt = self.getCurrentAttempt(for: peer)
+            self.handshakeStates[peer] = .initiating(attempt: currentAttempt + 1, lastAttempt: Date())
         }
     }
     
     // MARK: - Private Helpers
     
-    private func getCurrentAttempt(for peerID: String) -> Int {
-        switch handshakeStates[peerID] {
+    private func getCurrentAttempt(for peer: Peer) -> Int {
+        switch handshakeStates[peer] {
         case .initiating(let attempt, _):
             return attempt
         case .failed(_, _, _):
@@ -323,7 +323,7 @@ final class NoiseHandshakeCoordinator {
     func logHandshakeStates() {
         handshakeQueue.sync {
             SecureLogger.debug("=== Handshake States ===", category: .handshake)
-            for (peerID, state) in handshakeStates {
+            for (peer, state) in handshakeStates {
                 let stateDesc: String
                 switch state {
                 case .idle:
@@ -341,7 +341,7 @@ final class NoiseHandshakeCoordinator {
                 case .failed(let reason, let canRetry, let lastAttempt):
                     stateDesc = "failed: \(reason) (canRetry: \(canRetry), last: \(lastAttempt))"
                 }
-                SecureLogger.debug("  \(peerID): \(stateDesc)", category: .handshake)
+                SecureLogger.debug("  \(peer.id): \(stateDesc)", category: .handshake)
             }
             SecureLogger.debug("========================", category: .handshake)
         }

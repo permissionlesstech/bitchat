@@ -41,8 +41,8 @@ final class BinaryProtocolTests: XCTestCase {
     }
     
     func testPacketWithRecipient() throws {
-        let recipientID = TestConstants.testPeerID2
-        let packet = TestHelpers.createTestPacket(recipientID: recipientID)
+        let recipient = TestConstants.testPeer2
+        let packet = TestHelpers.createTestPacket(recipient: recipient)
         
         // Encode and decode
         guard let encodedData = BinaryProtocol.encode(packet),
@@ -54,7 +54,7 @@ final class BinaryProtocolTests: XCTestCase {
         // Verify recipient
         XCTAssertNotNil(decodedPacket.recipientID)
         let decodedRecipientID = decodedPacket.recipientID?.trimmingNullBytes()
-        XCTAssertEqual(String(data: decodedRecipientID!, encoding: .utf8), recipientID)
+        XCTAssertEqual(Peer(data: decodedRecipientID!), recipient)
     }
     
     func testPacketWithSignature() throws {
@@ -204,7 +204,7 @@ final class BinaryProtocolTests: XCTestCase {
         
         XCTAssertEqual(decodedMessage.content, message.content)
         XCTAssertEqual(decodedMessage.sender, message.sender)
-        XCTAssertEqual(decodedMessage.senderPeerID, message.senderPeerID)
+        XCTAssertEqual(decodedMessage.senderPeer, message.senderPeer)
         XCTAssertEqual(decodedMessage.isPrivate, message.isPrivate)
         
         // Timestamp should be close (within 1 second due to conversion)
@@ -251,7 +251,7 @@ final class BinaryProtocolTests: XCTestCase {
             originalSender: TestConstants.testNickname3,
             isPrivate: false,
             recipientNickname: nil,
-            senderPeerID: TestConstants.testPeerID1,
+            senderPeer: TestConstants.testPeer1,
             mentions: nil
         )
         

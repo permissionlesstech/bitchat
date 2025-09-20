@@ -28,7 +28,7 @@ final class MockIdentityManager: SecureIdentityStateManagerProtocol {
     
     func upsertCryptographicIdentity(fingerprint: String, noisePublicKey: Data, signingPublicKey: Data?, claimedNickname: String?) {}
     
-    func getCryptoIdentitiesByPeerIDPrefix(_ peerID: String) -> [CryptographicIdentity] {
+    func getCryptoIdentitiesByPeerIDPrefix(_ peer: Peer) -> [CryptographicIdentity] {
         []
     }
     
@@ -60,13 +60,13 @@ final class MockIdentityManager: SecureIdentityStateManagerProtocol {
         Set()
     }
     
-    func registerEphemeralSession(peerID: String, handshakeState: HandshakeState) {}
+    func registerEphemeralSession(peer: Peer, handshakeState: HandshakeState) {}
     
-    func updateHandshakeState(peerID: String, state: HandshakeState) {}
+    func updateHandshakeState(peer: Peer, state: HandshakeState) {}
     
     func clearAllIdentityData() {}
     
-    func removeEphemeralSession(peerID: String) {}
+    func removeEphemeralSession(peer: Peer) {}
     
     func setVerified(fingerprint: String, verified: Bool) {}
     

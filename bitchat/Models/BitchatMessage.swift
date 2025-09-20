@@ -21,7 +21,7 @@ final class BitchatMessage: Codable {
     let originalSender: String?
     let isPrivate: Bool
     let recipientNickname: String?
-    let senderPeerID: String?
+    let senderPeer: Peer?
     let mentions: [String]?  // Array of mentioned nicknames
     var deliveryStatus: DeliveryStatus? // Delivery tracking
     
@@ -39,10 +39,23 @@ final class BitchatMessage: Codable {
     // Codable implementation
     enum CodingKeys: String, CodingKey {
         case id, sender, content, timestamp, isRelay, originalSender
-        case isPrivate, recipientNickname, senderPeerID, mentions, deliveryStatus
+        case isPrivate, recipientNickname, mentions, deliveryStatus
+        case senderPeer = "senderPeerID" // backwards compatibility
     }
     
-    init(id: String? = nil, sender: String, content: String, timestamp: Date, isRelay: Bool, originalSender: String? = nil, isPrivate: Bool = false, recipientNickname: String? = nil, senderPeerID: String? = nil, mentions: [String]? = nil, deliveryStatus: DeliveryStatus? = nil) {
+    init(
+        id: String? = nil,
+        sender: String,
+        content: String,
+        timestamp: Date,
+        isRelay: Bool,
+        originalSender: String? = nil,
+        isPrivate: Bool = false,
+        recipientNickname: String? = nil,
+        senderPeer: Peer? = nil,
+        mentions: [String]? = nil,
+        deliveryStatus: DeliveryStatus? = nil
+    ) {
         self.id = id ?? UUID().uuidString
         self.sender = sender
         self.content = content
@@ -51,7 +64,7 @@ final class BitchatMessage: Codable {
         self.originalSender = originalSender
         self.isPrivate = isPrivate
         self.recipientNickname = recipientNickname
-        self.senderPeerID = senderPeerID
+        self.senderPeer = senderPeer
         self.mentions = mentions
         self.deliveryStatus = deliveryStatus ?? (isPrivate ? .sending : nil)
     }
@@ -69,7 +82,7 @@ extension BitchatMessage: Equatable {
                lhs.originalSender == rhs.originalSender &&
                lhs.isPrivate == rhs.isPrivate &&
                lhs.recipientNickname == rhs.recipientNickname &&
-               lhs.senderPeerID == rhs.senderPeerID &&
+               lhs.senderPeer == rhs.senderPeer &&
                lhs.mentions == rhs.mentions &&
                lhs.deliveryStatus == rhs.deliveryStatus
     }
@@ -101,7 +114,7 @@ extension BitchatMessage {
         if isPrivate { flags |= 0x02 }
         if originalSender != nil { flags |= 0x04 }
         if recipientNickname != nil { flags |= 0x08 }
-        if senderPeerID != nil { flags |= 0x10 }
+        if senderPeer != nil { flags |= 0x10 }
         if mentions != nil && !mentions!.isEmpty { flags |= 0x20 }
         
         data.append(flags)
@@ -151,7 +164,7 @@ extension BitchatMessage {
             data.append(recipData.prefix(255))
         }
         
-        if let senderPeerID = senderPeerID, let peerData = senderPeerID.data(using: .utf8) {
+        if let peerData = senderPeer?.data {
             data.append(UInt8(min(peerData.count, 255)))
             data.append(peerData.prefix(255))
         }
@@ -264,11 +277,11 @@ extension BitchatMessage {
             }
         }
         
-        var senderPeerID: String?
+        var senderPeer: Peer?
         if hasSenderPeerID && offset < dataCopy.count {
             let length = Int(dataCopy[offset]); offset += 1
             if offset + length <= dataCopy.count {
-                senderPeerID = String(data: dataCopy[offset..<offset+length], encoding: .utf8)
+                senderPeer = Peer(data: dataCopy[offset..<offset+length])
                 offset += length
             }
         }
@@ -302,7 +315,7 @@ extension BitchatMessage {
             originalSender: originalSender,
             isPrivate: isPrivate,
             recipientNickname: recipientNickname,
-            senderPeerID: senderPeerID,
+            senderPeer: senderPeer,
             mentions: mentions
         )
     }

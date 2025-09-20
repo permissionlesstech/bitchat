@@ -10,27 +10,6 @@ struct InputValidator {
         static let maxNicknameLength = 50
         static let maxMessageLength = 10_000
         static let maxReasonLength = 200
-        static let maxPeerIDLength = 64
-        static let hexPeerIDLength = 16 // 8 bytes = 16 hex chars
-    }
-    
-    // MARK: - Peer ID Validation
-    
-    /// Validates a peer ID from any source (short 16-hex, full 64-hex, or internal alnum/-/_ up to 64)
-    static func validatePeerID(_ peerID: String) -> Bool {
-        // Accept short routing IDs (exact 16-hex)
-        if PeerIDResolver.isShortID(peerID) { return true }
-        // If length equals short-hex length but isn't valid hex, reject
-        if peerID.count == Limits.hexPeerIDLength { return false }
-        // Accept full Noise key hex (exact 64-hex)
-        if PeerIDResolver.isNoiseKeyHex(peerID) { return true }
-        // If length equals full key length but isn't valid hex, reject
-        if peerID.count == Limits.maxPeerIDLength { return false }
-        // Internal format: alphanumeric + dash/underscore up to 63 (not 16 or 64)
-        let validCharset = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
-        return !peerID.isEmpty &&
-               peerID.count < Limits.maxPeerIDLength &&
-               peerID.rangeOfCharacter(from: validCharset.inverted) == nil
     }
     
     // MARK: - String Content Validation

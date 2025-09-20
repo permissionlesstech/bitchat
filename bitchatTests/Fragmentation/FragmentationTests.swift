@@ -27,27 +27,27 @@ final class FragmentationTests: XCTestCase {
     }
 
     private final class CaptureDelegate: BitchatDelegate {
-        var publicMessages: [(peerID: String, nickname: String, content: String)] = []
+        var publicMessages: [(peer: Peer, nickname: String, content: String)] = []
         func didReceiveMessage(_ message: BitchatMessage) {}
-        func didConnectToPeer(_ peerID: String) {}
-        func didDisconnectFromPeer(_ peerID: String) {}
-        func didUpdatePeerList(_ peers: [String]) {}
+        func didConnectToPeer(_ peer: Peer) {}
+        func didDisconnectFromPeer(_ peer: Peer) {}
+        func didUpdatePeerList(_ peers: [Peer]) {}
         func isFavorite(fingerprint: String) -> Bool { false }
         func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) {}
-        func didReceiveNoisePayload(from peerID: String, type: NoisePayloadType, payload: Data, timestamp: Date) {}
-        func didReceivePublicMessage(from peerID: String, nickname: String, content: String, timestamp: Date) {
-            publicMessages.append((peerID, nickname, content))
+        func didReceiveNoisePayload(from peer: Peer, type: NoisePayloadType, payload: Data, timestamp: Date) {}
+        func didReceivePublicMessage(from peer: Peer, nickname: String, content: String, timestamp: Date) {
+            publicMessages.append((peer, nickname, content))
         }
-        func didReceiveRegionalPublicMessage(from peerID: String, nickname: String, content: String, timestamp: Date) {}
+        func didReceiveRegionalPublicMessage(from peer: Peer, nickname: String, content: String, timestamp: Date) {}
     }
 
     // Helper: build a large message packet (unencrypted public message)
-    private func makeLargePublicPacket(senderShortHex: String, size: Int) -> BitchatPacket {
+    private func makeLargePublicPacket(senderShortHex: Peer, size: Int) -> BitchatPacket {
         let content = String(repeating: "A", count: size)
         let payload = Data(content.utf8)
         let pkt = BitchatPacket(
             type: MessageType.message.rawValue,
-            senderID: Data(hexString: senderShortHex) ?? Data(),
+            senderID: Data(hexString: senderShortHex.id) ?? Data(),
             recipientID: nil,
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
             payload: payload,
@@ -95,8 +95,8 @@ final class FragmentationTests: XCTestCase {
         ble.delegate = capture
 
         // Construct a big packet (3KB) from a remote sender (not our own ID)
-        let remoteShortID = "1122334455667788"
-        let original = makeLargePublicPacket(senderShortHex: remoteShortID, size: 3_000)
+        let remoteShort: Peer = "1122334455667788"
+        let original = makeLargePublicPacket(senderShortHex: remoteShort, size: 3_000)
         // Use a small fragment size to ensure multiple pieces
         let fragments = fragmentPacket(original, fragmentSize: 400)
 
@@ -107,7 +107,7 @@ final class FragmentationTests: XCTestCase {
         for (i, f) in shuffled.enumerated() {
             let delay = DispatchTime.now() + .milliseconds(5 * i)
             DispatchQueue.global().asyncAfter(deadline: delay) {
-                ble._test_handlePacket(f, fromPeerID: remoteShortID)
+                ble._test_handlePacket(f, fromPeer: remoteShort)
             }
         }
 
@@ -125,8 +125,8 @@ final class FragmentationTests: XCTestCase {
         let capture = CaptureDelegate()
         ble.delegate = capture
 
-        let remoteShortID = "A1B2C3D4E5F60708"
-        let original = makeLargePublicPacket(senderShortHex: remoteShortID, size: 2048)
+        let remoteShort: Peer = "A1B2C3D4E5F60708"
+        let original = makeLargePublicPacket(senderShortHex: remoteShort, size: 2048)
         var frags = fragmentPacket(original, fragmentSize: 300)
         // Duplicate one fragment
         if let dup = frags.first { frags.insert(dup, at: 1) }
@@ -134,7 +134,7 @@ final class FragmentationTests: XCTestCase {
         for (i, f) in frags.enumerated() {
             let delay = DispatchTime.now() + .milliseconds(5 * i)
             DispatchQueue.global().asyncAfter(deadline: delay) {
-                ble._test_handlePacket(f, fromPeerID: remoteShortID)
+                ble._test_handlePacket(f, fromPeer: remoteShort)
             }
         }
 
@@ -151,8 +151,8 @@ final class FragmentationTests: XCTestCase {
         let capture = CaptureDelegate()
         ble.delegate = capture
 
-        let remoteShortID = "0011223344556677"
-        let original = makeLargePublicPacket(senderShortHex: remoteShortID, size: 1000)
+        let remoteShort: Peer = "0011223344556677"
+        let original = makeLargePublicPacket(senderShortHex: remoteShort, size: 1000)
         let fragments = fragmentPacket(original, fragmentSize: 250)
 
         // Corrupt one fragment: make payload too short (header incomplete)
@@ -174,7 +174,7 @@ final class FragmentationTests: XCTestCase {
         for (i, f) in corrupted.enumerated() {
             let delay = DispatchTime.now() + .milliseconds(5 * i)
             DispatchQueue.global().asyncAfter(deadline: delay) {
-                ble._test_handlePacket(f, fromPeerID: remoteShortID)
+                ble._test_handlePacket(f, fromPeer: remoteShort)
             }
         }
 

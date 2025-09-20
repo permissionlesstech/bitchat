@@ -216,7 +216,7 @@ final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
             // Get peer ID from userInfo
             if let peerID = userInfo["peerID"] as? String {
                 DispatchQueue.main.async {
-                    self.chatViewModel?.startPrivateChat(with: peerID)
+                    self.chatViewModel?.startPrivateChat(with: Peer(str: peerID))
                 }
             }
         }
@@ -241,7 +241,7 @@ final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
             // Get peer ID from userInfo
             if let peerID = userInfo["peerID"] as? String {
                 // Don't show notification if the private chat is already open
-                if chatViewModel?.selectedPrivateChatPeer == peerID {
+                if chatViewModel?.selectedPrivateChatPeer?.id == peerID {
                     completionHandler([])
                     return
                 }

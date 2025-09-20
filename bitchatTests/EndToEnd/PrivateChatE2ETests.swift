@@ -23,9 +23,9 @@ final class PrivateChatE2ETests: XCTestCase {
         MockBLEService.resetTestBus()
         
         // Create services
-        alice = createMockService(peerID: TestConstants.testPeerID1, nickname: TestConstants.testNickname1)
-        bob = createMockService(peerID: TestConstants.testPeerID2, nickname: TestConstants.testNickname2)
-        charlie = createMockService(peerID: TestConstants.testPeerID3, nickname: TestConstants.testNickname3)
+        alice = createMockService(peer: TestConstants.testPeer1, nickname: TestConstants.testNickname1)
+        bob = createMockService(peer: TestConstants.testPeer2, nickname: TestConstants.testNickname2)
+        charlie = createMockService(peer: TestConstants.testPeer3, nickname: TestConstants.testNickname3)
         mockKeychain = MockKeychain()
         
         // Delivery tracking is now handled internally by BLEService
@@ -57,7 +57,7 @@ final class PrivateChatE2ETests: XCTestCase {
         // Alice sends private message to Bob
         alice.sendPrivateMessage(
             TestConstants.testMessage1,
-            to: TestConstants.testPeerID2,
+            to: TestConstants.testPeer2,
             recipientNickname: TestConstants.testNickname2
         )
         
@@ -90,7 +90,7 @@ final class PrivateChatE2ETests: XCTestCase {
             // Alice sends private message to Bob only
             self.alice.sendPrivateMessage(
                 TestConstants.testMessage1,
-                to: TestConstants.testPeerID2,
+                to: TestConstants.testPeer2,
                 recipientNickname: TestConstants.testNickname2
             )
         }
@@ -125,10 +125,10 @@ final class PrivateChatE2ETests: XCTestCase {
         
         // Establish encrypted session
         do {
-            let handshake1 = try aliceManager.initiateHandshake(with: TestConstants.testPeerID2)
-            let handshake2 = try bobManager.handleIncomingHandshake(from: TestConstants.testPeerID1, message: handshake1)!
-            let handshake3 = try aliceManager.handleIncomingHandshake(from: TestConstants.testPeerID2, message: handshake2)!
-            _ = try bobManager.handleIncomingHandshake(from: TestConstants.testPeerID1, message: handshake3)
+            let handshake1 = try aliceManager.initiateHandshake(with: TestConstants.testPeer2)
+            let handshake2 = try bobManager.handleIncomingHandshake(from: TestConstants.testPeer1, message: handshake1)!
+            let handshake3 = try aliceManager.handleIncomingHandshake(from: TestConstants.testPeer2, message: handshake2)!
+            _ = try bobManager.handleIncomingHandshake(from: TestConstants.testPeer1, message: handshake3)
         } catch {
             XCTFail("Failed to establish Noise session: \(error)")
         }
@@ -142,7 +142,7 @@ final class PrivateChatE2ETests: XCTestCase {
                let message = BitchatMessage(packet.payload),
                message.isPrivate {
                 do {
-                    let encrypted = try aliceManager.encrypt(packet.payload, for: TestConstants.testPeerID2)
+                    let encrypted = try aliceManager.encrypt(packet.payload, for: TestConstants.testPeer2)
                     let encryptedPacket = BitchatPacket(
                         type: 0x02, // Encrypted message type
                         senderID: packet.senderID,
@@ -163,7 +163,7 @@ final class PrivateChatE2ETests: XCTestCase {
             // Decrypt incoming encrypted messages
             if packet.type == 0x02 {
                 do {
-                    let decrypted = try bobManager.decrypt(packet.payload, from: TestConstants.testPeerID1)
+                    let decrypted = try bobManager.decrypt(packet.payload, from: TestConstants.testPeer1)
                     if let message = BitchatMessage(decrypted) {
                         XCTAssertEqual(message.content, TestConstants.testMessage1)
                         XCTAssertTrue(message.isPrivate)
@@ -178,7 +178,7 @@ final class PrivateChatE2ETests: XCTestCase {
         // Send encrypted private message
         alice.sendPrivateMessage(
             TestConstants.testMessage1,
-            to: TestConstants.testPeerID2,
+            to: TestConstants.testPeer2,
             recipientNickname: TestConstants.testNickname2
         )
         
@@ -197,7 +197,7 @@ final class PrivateChatE2ETests: XCTestCase {
         // Bob relays private messages for Charlie
         bob.packetDeliveryHandler = { packet in
             if let recipientID = packet.recipientID,
-               String(data: recipientID, encoding: .utf8) == TestConstants.testPeerID3 {
+               Peer(data: recipientID) == TestConstants.testPeer3 {
                 // Relay to Charlie
                 var relayPacket = packet
                 relayPacket.ttl = packet.ttl - 1
@@ -216,7 +216,7 @@ final class PrivateChatE2ETests: XCTestCase {
         // Alice sends private message to Charlie (through Bob)
         alice.sendPrivateMessage(
             TestConstants.testMessage1,
-            to: TestConstants.testPeerID3,
+            to: TestConstants.testPeer3,
             recipientNickname: TestConstants.testNickname3
         )
         
@@ -245,7 +245,7 @@ final class PrivateChatE2ETests: XCTestCase {
         for i in 0..<messageCount {
             alice.sendPrivateMessage(
                 "Private message \(i)",
-                to: TestConstants.testPeerID2,
+                to: TestConstants.testPeer2,
                 recipientNickname: TestConstants.testNickname2
             )
         }
@@ -267,7 +267,7 @@ final class PrivateChatE2ETests: XCTestCase {
         
         alice.sendPrivateMessage(
             TestConstants.testLongMessage,
-            to: TestConstants.testPeerID2,
+            to: TestConstants.testPeer2,
             recipientNickname: TestConstants.testNickname2
         )
         
@@ -284,16 +284,16 @@ final class PrivateChatE2ETests: XCTestCase {
     
     // MARK: - Helper Methods
     
-    private func createMockService(peerID: String, nickname: String) -> MockBluetoothMeshService {
+    private func createMockService(peer: Peer, nickname: String) -> MockBluetoothMeshService {
         let service = MockBluetoothMeshService()
-        service.myPeerID = peerID
+        service.myPeer = peer
         service.mockNickname = nickname
         service._testRegister()
         return service
     }
     
     private func simulateConnection(_ peer1: MockBluetoothMeshService, _ peer2: MockBluetoothMeshService) {
-        peer1.simulateConnectedPeer(peer2.peerID)
-        peer2.simulateConnectedPeer(peer1.peerID)
+        peer1.simulateConnectedPeer(peer2.peer)
+        peer2.simulateConnectedPeer(peer1.peer)
     }
 }

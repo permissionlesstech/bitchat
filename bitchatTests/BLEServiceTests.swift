@@ -17,7 +17,7 @@ final class BLEServiceTests: XCTestCase {
     override func setUp() {
         super.setUp()
         service = MockBLEService()
-        service.myPeerID = "TEST1234"
+        service.myPeer = "TEST1234"
         service.mockNickname = "TestUser"
     }
     
@@ -30,7 +30,7 @@ final class BLEServiceTests: XCTestCase {
     
     func testServiceInitialization() {
         XCTAssertNotNil(service)
-        XCTAssertEqual(service.myPeerID, "TEST1234")
+        XCTAssertEqual(service.myPeer, "TEST1234")
         XCTAssertEqual(service.myNickname, "TestUser")
     }
     
@@ -134,7 +134,7 @@ final class BLEServiceTests: XCTestCase {
             originalSender: nil,
             isPrivate: false,
             recipientNickname: nil,
-            senderPeerID: "REMOTE123",
+            senderPeer: "REMOTE123",
             mentions: nil
         )
         
@@ -161,7 +161,7 @@ final class BLEServiceTests: XCTestCase {
             originalSender: nil,
             isPrivate: false,
             recipientNickname: nil,
-            senderPeerID: "PACKET123",
+            senderPeer: "PACKET123",
             mentions: nil
         )
         
@@ -193,8 +193,8 @@ final class BLEServiceTests: XCTestCase {
         
         let nicknames = service.getPeerNicknames()
         XCTAssertEqual(nicknames.count, 2)
-        XCTAssertEqual(nicknames["PEER1"], "MockPeer_PEER1")
-        XCTAssertEqual(nicknames["PEER2"], "MockPeer_PEER2")
+        XCTAssertEqual(nicknames["PEER1"], "MockPeer_peer1") // ids are always lowercased now
+        XCTAssertEqual(nicknames["PEER2"], "MockPeer_peer2") // ids are always lowercased now
     }
     
     // MARK: - Service State Tests
@@ -243,7 +243,7 @@ final class BLEServiceTests: XCTestCase {
             originalSender: nil,
             isPrivate: false,
             recipientNickname: nil,
-            senderPeerID: "TEST123",
+            senderPeer: "TEST123",
             mentions: nil
         )
         
@@ -281,9 +281,9 @@ private final class MockBitchatDelegate: BitchatDelegate {
         messageHandler(message)
     }
     
-    func didConnectToPeer(_ peerID: String) {}
-    func didDisconnectFromPeer(_ peerID: String) {}
-    func didUpdatePeerList(_ peers: [String]) {}
+    func didConnectToPeer(_ peer: Peer) {}
+    func didDisconnectFromPeer(_ peer: Peer) {}
+    func didUpdatePeerList(_ peers: [Peer]) {}
     func isFavorite(fingerprint: String) -> Bool { return false }
     func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) {}
 }

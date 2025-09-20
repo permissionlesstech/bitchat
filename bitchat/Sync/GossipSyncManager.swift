@@ -5,7 +5,7 @@ import CryptoKit
 final class GossipSyncManager {
     protocol Delegate: AnyObject {
         func sendPacket(_ packet: BitchatPacket)
-        func sendPacket(to peerID: String, packet: BitchatPacket)
+        func sendPacket(to peer: Peer, packet: BitchatPacket)
         func signPacketForBroadcast(_ packet: BitchatPacket) -> BitchatPacket
     }
 
@@ -15,7 +15,7 @@ final class GossipSyncManager {
         var gcsTargetFpr: Double = 0.01      // 1%
     }
 
-    private let myPeerID: String
+    private let myPeer: Peer
     private let config: Config
     weak var delegate: Delegate?
 
@@ -28,8 +28,8 @@ final class GossipSyncManager {
     private var periodicTimer: DispatchSourceTimer?
     private let queue = DispatchQueue(label: "mesh.sync", qos: .utility)
 
-    init(myPeerID: String, config: Config = Config()) {
-        self.myPeerID = myPeerID
+    init(myPeer: Peer, config: Config = Config()) {
+        self.myPeer = myPeer
         self.config = config
     }
 
@@ -46,9 +46,9 @@ final class GossipSyncManager {
         periodicTimer?.cancel(); periodicTimer = nil
     }
 
-    func scheduleInitialSyncToPeer(_ peerID: String, delaySeconds: TimeInterval = 5.0) {
+    func scheduleInitialSyncToPeer(_ peer: Peer, delaySeconds: TimeInterval = 5.0) {
         queue.asyncAfter(deadline: .now() + delaySeconds) { [weak self] in
-            self?.sendRequestSync(to: peerID)
+            self?.sendRequestSync(to: peer)
         }
     }
 
@@ -85,7 +85,7 @@ final class GossipSyncManager {
         let payload = buildGcsPayload()
         let pkt = BitchatPacket(
             type: MessageType.requestSync.rawValue,
-            senderID: Data(hexString: myPeerID) ?? Data(),
+            senderID: Data(hexString: myPeer.id) ?? Data(),
             recipientID: nil, // broadcast
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
             payload: payload,
@@ -96,10 +96,10 @@ final class GossipSyncManager {
         delegate?.sendPacket(signed)
     }
 
-    private func sendRequestSync(to peerID: String) {
+    private func sendRequestSync(to peer: Peer) {
         let payload = buildGcsPayload()
         var recipient = Data()
-        var temp = peerID
+        var temp = peer.id
         while temp.count >= 2 && recipient.count < 8 {
             let hexByte = String(temp.prefix(2))
             if let b = UInt8(hexByte, radix: 16) { recipient.append(b) }
@@ -107,7 +107,7 @@ final class GossipSyncManager {
         }
         let pkt = BitchatPacket(
             type: MessageType.requestSync.rawValue,
-            senderID: Data(hexString: myPeerID) ?? Data(),
+            senderID: Data(hexString: myPeer.id) ?? Data(),
             recipientID: recipient,
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
             payload: payload,
@@ -115,10 +115,10 @@ final class GossipSyncManager {
             ttl: 0 // local-only
         )
         let signed = delegate?.signPacketForBroadcast(pkt) ?? pkt
-        delegate?.sendPacket(to: peerID, packet: signed)
+        delegate?.sendPacket(to: peer, packet: signed)
     }
 
-    func handleRequestSync(fromPeerID: String, request: RequestSyncPacket) {
+    func handleRequestSync(from peer: Peer, request: RequestSyncPacket) {
         // Decode GCS into sorted set and prepare membership checker
         let sorted = GCSFilter.decodeToSortedSet(p: request.p, m: request.m, data: request.data)
         func mightContain(_ id: Data) -> Bool {
@@ -140,7 +140,7 @@ final class GossipSyncManager {
             if !mightContain(idBytes) {
                 var toSend = pkt
                 toSend.ttl = 0
-                delegate?.sendPacket(to: fromPeerID, packet: toSend)
+                delegate?.sendPacket(to: peer, packet: toSend)
             }
         }
 
@@ -151,7 +151,7 @@ final class GossipSyncManager {
             if !mightContain(idBytes) {
                 var toSend = pkt
                 toSend.ttl = 0
-                delegate?.sendPacket(to: fromPeerID, packet: toSend)
+                delegate?.sendPacket(to: peer, packet: toSend)
             }
         }
     }
@@ -181,14 +181,13 @@ final class GossipSyncManager {
     }
 
     // Explicit removal hook for LEAVE/stale peer
-    func removeAnnouncementForPeer(_ peerID: String) {
-        let normalizedPeerID = peerID.lowercased()
-        _ = latestAnnouncementByPeer.removeValue(forKey: normalizedPeerID)
+    func removeAnnouncementForPeer(_ peer: Peer) {
+        _ = latestAnnouncementByPeer.removeValue(forKey: peer.id)
         
         // Remove messages from this peer
         // Collect IDs to remove first to avoid concurrent modification
         let messageIdsToRemove = messages.compactMap { (id, message) -> String? in
-            message.senderID.hexEncodedString().lowercased() == normalizedPeerID ? id : nil
+            message.senderID.hexEncodedString().lowercased() == peer.id ? id : nil
         }
         
         // Remove messages and update messageOrder

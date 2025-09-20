@@ -25,10 +25,10 @@ final class IntegrationTests: XCTestCase {
         mockKeychain = MockKeychain()
         
         // Create a network of nodes
-        createNode("Alice", peerID: TestConstants.testPeerID1)
-        createNode("Bob", peerID: TestConstants.testPeerID2)
-        createNode("Charlie", peerID: TestConstants.testPeerID3)
-        createNode("David", peerID: TestConstants.testPeerID4)
+        createNode("Alice", peer: TestConstants.testPeer1)
+        createNode("Bob", peer: TestConstants.testPeer2)
+        createNode("Charlie", peer: TestConstants.testPeer3)
+        createNode("David", peer: TestConstants.testPeer4)
     }
     
     override func tearDown() {
@@ -177,7 +177,7 @@ final class IntegrationTests: XCTestCase {
         
         // Alice sends mixed messages
         nodes["Alice"]!.sendMessage("Public 1", mentions: [], to: nil)
-        nodes["Alice"]!.sendPrivateMessage("Private to Bob", to: TestConstants.testPeerID2, recipientNickname: "Bob")
+        nodes["Alice"]!.sendPrivateMessage("Private to Bob", to: TestConstants.testPeer2, recipientNickname: "Bob")
         nodes["Alice"]!.sendMessage("Public 2", mentions: [], to: nil)
         
         wait(for: [expectation], timeout: TestConstants.defaultTimeout)
@@ -204,10 +204,10 @@ final class IntegrationTests: XCTestCase {
 
         // Encrypted path: use NoiseSessionManager explicitly
         let plaintext = "Encrypted message".data(using: .utf8)!
-        let ciphertext = try noiseManagers["Alice"]!.encrypt(plaintext, for: TestConstants.testPeerID2)
+        let ciphertext = try noiseManagers["Alice"]!.encrypt(plaintext, for: TestConstants.testPeer2)
         nodes["Bob"]!.packetDeliveryHandler = { packet in
             if packet.type == MessageType.noiseEncrypted.rawValue {
-                if let data = try? self.noiseManagers["Bob"]!.decrypt(ciphertext, from: TestConstants.testPeerID1),
+                if let data = try? self.noiseManagers["Bob"]!.decrypt(ciphertext, from: TestConstants.testPeer1),
                    data == plaintext {
                     encryptedCount = 1
                     if plainCount == 1 { expectation.fulfill() }
@@ -305,7 +305,7 @@ final class IntegrationTests: XCTestCase {
             }
         }
         
-        nodes["Alice"]!.sendPrivateMessage("Before restart", to: TestConstants.testPeerID2, recipientNickname: "Bob")
+        nodes["Alice"]!.sendPrivateMessage("Before restart", to: TestConstants.testPeer2, recipientNickname: "Bob")
         wait(for: [firstExpectation], timeout: TestConstants.defaultTimeout)
         
         // Simulate Bob restart by recreating his Noise manager
@@ -314,10 +314,10 @@ final class IntegrationTests: XCTestCase {
         
         // Re-establish Noise handshake explicitly via managers
         do {
-            let m1 = try noiseManagers["Bob"]!.initiateHandshake(with: TestConstants.testPeerID1)
-            let m2 = try noiseManagers["Alice"]!.handleIncomingHandshake(from: TestConstants.testPeerID2, message: m1)!
-            let m3 = try noiseManagers["Bob"]!.handleIncomingHandshake(from: TestConstants.testPeerID1, message: m2)!
-            _ = try noiseManagers["Alice"]!.handleIncomingHandshake(from: TestConstants.testPeerID2, message: m3)
+            let m1 = try noiseManagers["Bob"]!.initiateHandshake(with: TestConstants.testPeer1)
+            let m2 = try noiseManagers["Alice"]!.handleIncomingHandshake(from: TestConstants.testPeer2, message: m1)!
+            let m3 = try noiseManagers["Bob"]!.handleIncomingHandshake(from: TestConstants.testPeer1, message: m2)!
+            _ = try noiseManagers["Alice"]!.handleIncomingHandshake(from: TestConstants.testPeer2, message: m3)
         } catch {
             XCTFail("Failed to re-establish Noise session after restart: \(error)")
         }
@@ -333,11 +333,11 @@ final class IntegrationTests: XCTestCase {
         // Simulate encrypted message using managers
         do {
             let plaintext = "After restart success".data(using: .utf8)!
-            let ciphertext = try noiseManagers["Bob"]!.encrypt(plaintext, for: TestConstants.testPeerID1)
+            let ciphertext = try noiseManagers["Bob"]!.encrypt(plaintext, for: TestConstants.testPeer1)
             let packet = TestHelpers.createTestPacket(type: MessageType.noiseEncrypted.rawValue, payload: ciphertext)
             nodes["Alice"]!.packetDeliveryHandler = { pkt in
                 if pkt.type == MessageType.noiseEncrypted.rawValue {
-                    if let data = try? self.noiseManagers["Alice"]!.decrypt(pkt.payload, from: TestConstants.testPeerID2),
+                    if let data = try? self.noiseManagers["Alice"]!.decrypt(pkt.payload, from: TestConstants.testPeer2),
                        String(data: data, encoding: .utf8) == "After restart success" {
                         secondExpectation.fulfill()
                     }
@@ -353,7 +353,7 @@ final class IntegrationTests: XCTestCase {
     func testLargeScaleNetwork() {
         // Create larger network
         for i in 5...10 {
-            createNode("Node\(i)", peerID: "PEER\(i)")
+            createNode("Node\(i)", peer: "PEER\(i)")
         }
         
         // Connect in ring topology with cross-connections
@@ -454,7 +454,7 @@ final class IntegrationTests: XCTestCase {
         
         // Generate mixed traffic
         nodes["Alice"]!.sendMessage("Public broadcast", mentions: [], to: nil)
-        nodes["Alice"]!.sendPrivateMessage("Private to Bob", to: TestConstants.testPeerID2, recipientNickname: "Bob")
+        nodes["Alice"]!.sendPrivateMessage("Private to Bob", to: TestConstants.testPeer2, recipientNickname: "Bob")
         nodes["Bob"]!.sendMessage("Mentioning @Charlie", mentions: ["Charlie"], to: nil)
         
         // Disconnect to force relay
@@ -484,8 +484,8 @@ final class IntegrationTests: XCTestCase {
 
         guard let aliceManager = noiseManagers["Alice"],
               let bobManager = noiseManagers["Bob"],
-              let alicePeerID = nodes["Alice"]?.peerID,
-              let bobPeerID = nodes["Bob"]?.peerID else {
+              let alicePeerID = nodes["Alice"]?.peer,
+              let bobPeerID = nodes["Bob"]?.peer else {
             return XCTFail("Missing managers or peer IDs")
         }
 
@@ -534,7 +534,7 @@ final class IntegrationTests: XCTestCase {
                let message = BitchatMessage(packet.payload),
                message.isPrivate && packet.recipientID != nil {
                 // Encrypt private messages
-                if let encrypted = try? self.noiseManagers["Alice"]!.encrypt(packet.payload, for: TestConstants.testPeerID2) {
+                if let encrypted = try? self.noiseManagers["Alice"]!.encrypt(packet.payload, for: TestConstants.testPeer2) {
                     let encPacket = BitchatPacket(
                         type: 0x02,
                         senderID: packet.senderID,
@@ -552,7 +552,7 @@ final class IntegrationTests: XCTestCase {
         // Bob can decrypt
         nodes["Bob"]!.packetDeliveryHandler = { packet in
             if packet.type == 0x02 {
-                if let decrypted = try? self.noiseManagers["Bob"]!.decrypt(packet.payload, from: TestConstants.testPeerID1),
+                if let decrypted = try? self.noiseManagers["Bob"]!.decrypt(packet.payload, from: TestConstants.testPeer1),
                    let message = BitchatMessage(decrypted) {
                     bobDecrypted = message.content == "Secret message"
                     expectation.fulfill()
@@ -569,7 +569,7 @@ final class IntegrationTests: XCTestCase {
                 charlieIntercepted = true
                 // Try to decrypt (should fail)
                 do {
-                    _ = try self.noiseManagers["Charlie"]?.decrypt(packet.payload, from: TestConstants.testPeerID1)
+                    _ = try self.noiseManagers["Charlie"]?.decrypt(packet.payload, from: TestConstants.testPeer1)
                     XCTFail("Charlie should not be able to decrypt")
                 } catch {
                     // Expected
@@ -578,7 +578,7 @@ final class IntegrationTests: XCTestCase {
         }
         
         // Send encrypted private message
-        nodes["Alice"]!.sendPrivateMessage("Secret message", to: TestConstants.testPeerID2, recipientNickname: "Bob")
+        nodes["Alice"]!.sendPrivateMessage("Secret message", to: TestConstants.testPeer2, recipientNickname: "Bob")
         
         wait(for: [expectation], timeout: TestConstants.defaultTimeout)
         XCTAssertTrue(bobDecrypted)
@@ -587,9 +587,9 @@ final class IntegrationTests: XCTestCase {
     
     // MARK: - Helper Methods
     
-    private func createNode(_ name: String, peerID: String) {
+    private func createNode(_ name: String, peer: Peer) {
         let node = MockBluetoothMeshService()
-        node.myPeerID = peerID
+        node.myPeer = peer
         node.mockNickname = name
         node._testRegister()
         nodes[name] = node
@@ -601,14 +601,14 @@ final class IntegrationTests: XCTestCase {
     
     private func connect(_ node1: String, _ node2: String) {
         guard let n1 = nodes[node1], let n2 = nodes[node2] else { return }
-        n1.simulateConnectedPeer(n2.peerID)
-        n2.simulateConnectedPeer(n1.peerID)
+        n1.simulateConnectedPeer(n2.peer)
+        n2.simulateConnectedPeer(n1.peer)
     }
     
     private func disconnect(_ node1: String, _ node2: String) {
         guard let n1 = nodes[node1], let n2 = nodes[node2] else { return }
-        n1.simulateDisconnectedPeer(n2.peerID)
-        n2.simulateDisconnectedPeer(n1.peerID)
+        n1.simulateDisconnectedPeer(n2.peer)
+        n2.simulateDisconnectedPeer(n1.peer)
     }
     
     private func connectFullMesh() {
@@ -627,7 +627,7 @@ final class IntegrationTests: XCTestCase {
             guard packet.ttl > 1 else { return }
             
             if let message = BitchatMessage(packet.payload) {
-                guard message.senderPeerID != node.peerID else { return }
+                guard message.senderPeer != node.peer else { return }
                 
                 let relayMessage = BitchatMessage(
                     id: message.id,
@@ -638,7 +638,7 @@ final class IntegrationTests: XCTestCase {
                     originalSender: message.isRelay ? message.originalSender : message.sender,
                     isPrivate: message.isPrivate,
                     recipientNickname: message.recipientNickname,
-                    senderPeerID: message.senderPeerID,
+                    senderPeer: message.senderPeer,
                     mentions: message.mentions
                 )
                 
@@ -664,8 +664,8 @@ final class IntegrationTests: XCTestCase {
     private func establishNoiseSession(_ node1: String, _ node2: String) throws {
         guard let manager1 = noiseManagers[node1],
               let manager2 = noiseManagers[node2],
-              let peer1ID = nodes[node1]?.peerID,
-              let peer2ID = nodes[node2]?.peerID else { return }
+              let peer1ID = nodes[node1]?.peer,
+              let peer2ID = nodes[node2]?.peer else { return }
         
         let msg1 = try manager1.initiateHandshake(with: peer2ID)
         let msg2 = try manager2.handleIncomingHandshake(from: peer1ID, message: msg1)!

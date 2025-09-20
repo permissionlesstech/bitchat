@@ -42,7 +42,7 @@ final class CommandProcessor {
             case .location: return true
             }
         }()
-        let inGeoDM = (chatViewModel?.selectedPrivateChatPeer?.hasPrefix("nostr_") == true)
+        let inGeoDM = chatViewModel?.selectedPrivateChatPeer?.isNostrUnderscore == true
 
         switch cmd {
         case "/m", "/msg":
@@ -84,15 +84,15 @@ final class CommandProcessor {
         let targetName = String(parts[0])
         let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
         
-        guard let peerID = chatViewModel?.getPeerIDForNickname(nickname) else {
+        guard let peer = chatViewModel?.getPeer(for: nickname) else {
             return .error(message: "'\(nickname)' not found")
         }
         
-        chatViewModel?.startPrivateChat(with: peerID)
+        chatViewModel?.startPrivateChat(with: peer)
         
         if parts.count > 1 {
             let message = String(parts[1])
-            chatViewModel?.sendPrivateMessage(message, to: peerID)
+            chatViewModel?.sendPrivateMessage(message, to: peer)
         }
         
         return .success(message: "started private chat with \(nickname)")
@@ -123,8 +123,8 @@ final class CommandProcessor {
     }
     
     private func handleClear() -> CommandResult {
-        if let peerID = chatViewModel?.selectedPrivateChatPeer {
-            chatViewModel?.privateChats[peerID]?.removeAll()
+        if let peer = chatViewModel?.selectedPrivateChatPeer {
+            chatViewModel?.privateChats[peer]?.removeAll()
         } else {
             chatViewModel?.clearCurrentPublicTimeline()
         }
@@ -139,7 +139,7 @@ final class CommandProcessor {
         
         let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
         
-        guard let targetPeerID = chatViewModel?.getPeerIDForNickname(nickname),
+        guard let targetPeer = chatViewModel?.getPeer(for: nickname),
               let myNickname = chatViewModel?.nickname else {
             return .error(message: "cannot \(command) \(nickname): not found")
         }
@@ -148,11 +148,11 @@ final class CommandProcessor {
         
         if chatViewModel?.selectedPrivateChatPeer != nil {
             // In private chat
-            if let peerNickname = meshService?.peerNickname(peerID: targetPeerID) {
+            if let peerNickname = meshService?.peerNickname(peer: targetPeer) {
                 let personalMessage = "* \(emoji) \(myNickname) \(action) you\(suffix) *"
-                meshService?.sendPrivateMessage(personalMessage, to: targetPeerID, 
-                                               recipientNickname: peerNickname, 
-                                               messageID: UUID().uuidString)
+                meshService?.sendPrivateMessage(personalMessage, to: targetPeer,
+                                                recipientNickname: peerNickname,
+                                                messageID: UUID().uuidString)
                 // Also add a local system message so the sender sees a natural-language confirmation
                 let pastAction: String = {
                     switch action {
@@ -162,7 +162,7 @@ final class CommandProcessor {
                     }
                 }()
                 let localText = "\(emoji) you \(pastAction) \(nickname)\(suffix)"
-                chatViewModel?.addLocalPrivateSystemMessage(localText, to: targetPeerID)
+                chatViewModel?.addLocalPrivateSystemMessage(localText, to: targetPeer)
             }
         } else {
             // In public chat: send to active public channel (mesh or geohash)
@@ -182,8 +182,8 @@ final class CommandProcessor {
             let meshBlocked = chatViewModel?.blockedUsers ?? []
             var blockedNicknames: [String] = []
             if let peers = meshService?.getPeerNicknames() {
-                for (peerID, nickname) in peers {
-                    if let fingerprint = meshService?.getFingerprint(for: peerID),
+                for (peer, nickname) in peers {
+                    if let fingerprint = meshService?.getFingerprint(for: peer),
                        meshBlocked.contains(fingerprint) {
                         blockedNicknames.append(nickname)
                     }
@@ -213,8 +213,7 @@ final class CommandProcessor {
         
         let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
         
-        if let peerID = chatViewModel?.getPeerIDForNickname(nickname),
-           let fingerprint = meshService?.getFingerprint(for: peerID) {
+        if let peer = chatViewModel?.getPeer(for: nickname), let fingerprint = meshService?.getFingerprint(for: peer) {
             if identityManager.isBlocked(fingerprint: fingerprint) {
                 return .success(message: "\(nickname) is already blocked")
             }
@@ -257,8 +256,7 @@ final class CommandProcessor {
         
         let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
         
-        if let peerID = chatViewModel?.getPeerIDForNickname(nickname),
-           let fingerprint = meshService?.getFingerprint(for: peerID) {
+        if let peer = chatViewModel?.getPeer(for: nickname), let fingerprint = meshService?.getFingerprint(for: peer) {
             if !identityManager.isBlocked(fingerprint: fingerprint) {
                 return .success(message: "\(nickname) is not blocked")
             }
@@ -284,8 +282,8 @@ final class CommandProcessor {
         
         let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
         
-        guard let peerID = chatViewModel?.getPeerIDForNickname(nickname),
-              let noisePublicKey = Data(hexString: peerID) else {
+        guard let peer = chatViewModel?.getPeer(for: nickname),
+              let noisePublicKey = Data(hexString: peer.id) else {
             return .error(message: "can't find peer: \(nickname)")
         }
         
@@ -297,15 +295,15 @@ final class CommandProcessor {
                 peerNickname: nickname
             )
             
-            chatViewModel?.toggleFavorite(peerID: peerID)
-            chatViewModel?.sendFavoriteNotification(to: peerID, isFavorite: true)
+            chatViewModel?.toggleFavorite(peer: peer)
+            chatViewModel?.sendFavoriteNotification(to: peer, isFavorite: true)
             
             return .success(message: "added \(nickname) to favorites")
         } else {
             FavoritesPersistenceService.shared.removeFavorite(peerNoisePublicKey: noisePublicKey)
             
-            chatViewModel?.toggleFavorite(peerID: peerID)
-            chatViewModel?.sendFavoriteNotification(to: peerID, isFavorite: false)
+            chatViewModel?.toggleFavorite(peer: peer)
+            chatViewModel?.sendFavoriteNotification(to: peer, isFavorite: false)
             
             return .success(message: "removed \(nickname) from favorites")
         }

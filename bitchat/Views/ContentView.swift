@@ -40,7 +40,7 @@ struct ContentView: View {
     @State private var showPrivateChat = false
     @State private var showMessageActions = false
     @State private var selectedMessageSender: String?
-    @State private var selectedMessageSenderID: String?
+    @State private var selectedMessageSenderPeer: Peer?
     @FocusState private var isNicknameFieldFocused: Bool
     @State private var isAtBottomPublic: Bool = true
     @State private var isAtBottomPrivate: Bool = true
@@ -56,7 +56,7 @@ struct ContentView: View {
     // Timer-based refresh removed; use LocationChannelManager live updates instead
     // Window sizes for rendering (infinite scroll up)
     @State private var windowCountPublic: Int = 300
-    @State private var windowCountPrivate: [String: Int] = [:]
+    @State private var windowCountPrivate: [Peer: Int] = [:]
     
     // MARK: - Computed Properties
     
@@ -177,8 +177,8 @@ struct ContentView: View {
             get: { viewModel.showingFingerprintFor != nil },
             set: { _ in viewModel.showingFingerprintFor = nil }
         )) {
-            if let peerID = viewModel.showingFingerprintFor {
-                FingerprintView(viewModel: viewModel, peerID: peerID)
+            if let peer = viewModel.showingFingerprintFor {
+                FingerprintView(viewModel: viewModel, peer: peer)
             }
         }
         .confirmationDialog(
@@ -195,13 +195,13 @@ struct ContentView: View {
             }
 
             Button("direct message") {
-                if let peerID = selectedMessageSenderID {
-                    if peerID.hasPrefix("nostr:") {
-                        if let full = viewModel.fullNostrHex(forSenderPeerID: peerID) {
+                if let peer = selectedMessageSenderPeer {
+                    if peer.isNostrColon {
+                        if let full = viewModel.fullNostrHex(forSender: peer) {
                             viewModel.startGeohashDM(withPubkeyHex: full)
                         }
                     } else {
-                        viewModel.startPrivateChat(with: peerID)
+                        viewModel.startPrivateChat(with: peer)
                     }
                     withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
                         showSidebar = false
@@ -224,8 +224,8 @@ struct ContentView: View {
             
             Button("BLOCK", role: .destructive) {
                 // Prefer direct geohash block when we have a Nostr sender ID
-                if let peerID = selectedMessageSenderID, peerID.hasPrefix("nostr:"),
-                   let full = viewModel.fullNostrHex(forSenderPeerID: peerID),
+                if let peer = selectedMessageSenderPeer, peer.isNostrColon,
+                   let full = viewModel.fullNostrHex(forSender: peer),
                    let sender = selectedMessageSender {
                     viewModel.blockGeohashUser(pubkeyHexLowercased: full, displayName: sender)
                 } else if let sender = selectedMessageSender {
@@ -256,15 +256,14 @@ struct ContentView: View {
     
     // MARK: - Message List View
     
-    private func messagesView(privatePeer: String?, isAtBottom: Binding<Bool>) -> some View {
+    private func messagesView(privatePeer: Peer?, isAtBottom: Binding<Bool>) -> some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     // Extract messages based on context (private or public chat)
                     let messages: [BitchatMessage] = {
-                        if let privatePeer = privatePeer {
-                            let msgs = viewModel.getPrivateChatMessages(for: privatePeer)
-                            return msgs
+                        if let privatePeer {
+                            return viewModel.getPrivateChatMessages(for: privatePeer)
                         } else {
                             return viewModel.messages
                         }
@@ -279,7 +278,7 @@ struct ContentView: View {
 
                     // Build stable UI IDs with a context key to avoid ID collisions when switching channels
                     let contextKey: String = {
-                        if let peer = privatePeer { return "dm:\(peer)" }
+                        if let peer = privatePeer { return "dm:\(peer.id)" }
                         switch locationManager.selectedChannel {
                         case .mesh: return "mesh"
                         case .location(let ch): return "geo:\(ch.geohash)"
@@ -383,7 +382,7 @@ struct ContentView: View {
                             if message.id == windowedMessages.first?.id, messages.count > windowedMessages.count {
                                 let step = TransportConfig.uiWindowStepCount
                                 let contextKey: String = {
-                                    if let peer = privatePeer { return "dm:\(peer)" }
+                                    if let peer = privatePeer { return "dm:\(peer.id)" }
                                     switch locationManager.selectedChannel {
                                     case .mesh: return "mesh"
                                     case .location(let ch): return "geo:\(ch.geohash)"
@@ -447,24 +446,24 @@ struct ContentView: View {
             .onOpenURL { url in
                 guard url.scheme == "bitchat", url.host == "user" else { return }
                 let id = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-                let peerID = id.removingPercentEncoding ?? id
-                selectedMessageSenderID = peerID
-                // Derive a stable display name from the peerID instead of peeking at the last message,
+                let peer = Peer(str: id.removingPercentEncoding ?? id)
+                selectedMessageSenderPeer = peer
+                // Derive a stable display name from the peer instead of peeking at the last message,
                 // which may be a transformed system action (sender == "system").
-                if peerID.hasPrefix("nostr") {
+                if peer.isNostr {
                     // For geohash senders, resolve display name via mapping (works for "nostr:" and "nostr_" keys)
-                    selectedMessageSender = viewModel.geohashDisplayName(for: peerID)
+                    selectedMessageSender = viewModel.geohashDisplayName(for: peer.id)
                 } else {
                     // Mesh sender: use current mesh nickname if available; otherwise fall back to last non-system message
-                    if let name = viewModel.meshService.peerNickname(peerID: peerID) {
+                    if let name = viewModel.meshService.peerNickname(peer: peer) {
                         selectedMessageSender = name
                     } else {
-                        selectedMessageSender = viewModel.messages.last(where: { $0.senderPeerID == peerID && $0.sender != "system" })?.sender
+                        selectedMessageSender = viewModel.messages.last(where: { $0.senderPeer == peer && $0.sender != "system" })?.sender
                     }
                 }
-                if viewModel.isSelfSender(peerID: selectedMessageSenderID, displayName: selectedMessageSender) {
+                if let peer = selectedMessageSenderPeer, viewModel.isSelfSender(peer: peer, displayName: selectedMessageSender) {
                     selectedMessageSender = nil
-                    selectedMessageSenderID = nil
+                    selectedMessageSenderPeer = nil
                 } else {
                     showMessageActions = true
                 }
@@ -504,7 +503,7 @@ struct ContentView: View {
                 let targetID: String? = {
                     if let peer = privatePeer,
                        let last = viewModel.getPrivateChatMessages(for: peer).suffix(300).last?.id {
-                        return "dm:\(peer)|\(last)"
+                        return "dm:\(peer.id)|\(last)"
                     }
                     let contextKey: String = {
                         switch locationManager.selectedChannel {
@@ -524,7 +523,7 @@ struct ContentView: View {
                     let targetID2: String? = {
                         if let peer = privatePeer,
                            let last = viewModel.getPrivateChatMessages(for: peer).suffix(300).last?.id {
-                            return "dm:\(peer)|\(last)"
+                            return "dm:\(peer.id)|\(last)"
                         }
                         let contextKey: String = {
                             switch locationManager.selectedChannel {
@@ -543,7 +542,7 @@ struct ContentView: View {
                 let targetID: String? = {
                     if let peer = privatePeer,
                        let last = viewModel.getPrivateChatMessages(for: peer).suffix(300).last?.id {
-                        return "dm:\(peer)|\(last)"
+                        return "dm:\(peer.id)|\(last)"
                     }
                     let contextKey: String = {
                         switch locationManager.selectedChannel {
@@ -608,8 +607,8 @@ struct ContentView: View {
                 }
             }
             .onChange(of: viewModel.privateChats) { _ in
-                if let peerID = privatePeer,
-                   let messages = viewModel.privateChats[peerID],
+                if let peer = privatePeer,
+                   let messages = viewModel.privateChats[peer],
                    !messages.isEmpty {
                     // If the newest private message is from me, always scroll
                     let lastMsg = messages.last!
@@ -624,8 +623,8 @@ struct ContentView: View {
                     let now = Date()
                     if now.timeIntervalSince(lastScrollTime) > TransportConfig.uiScrollThrottleSeconds {
                         lastScrollTime = now
-                        let contextKey = "dm:\(peerID)"
-                        let count = windowCountPrivate[peerID] ?? 300
+                        let contextKey = "dm:\(peer.id)"
+                        let count = windowCountPrivate[peer] ?? 300
                         let target = messages.suffix(count).last.map { "\(contextKey)|\($0.id)" }
                         DispatchQueue.main.async {
                             if let target = target { proxy.scrollTo(target, anchor: .bottom) }
@@ -634,8 +633,8 @@ struct ContentView: View {
                         scrollThrottleTimer?.invalidate()
                         scrollThrottleTimer = Timer.scheduledTimer(withTimeInterval: TransportConfig.uiScrollThrottleSeconds, repeats: false) { _ in
                             lastScrollTime = Date()
-                            let contextKey = "dm:\(peerID)"
-                            let count = windowCountPrivate[peerID] ?? 300
+                            let contextKey = "dm:\(peer.id)"
+                            let count = windowCountPrivate[peer] ?? 300
                             let target = messages.suffix(count).last.map { "\(contextKey)|\($0.id)" }
                             DispatchQueue.main.async {
                                 if let target = target { proxy.scrollTo(target, anchor: .bottom) }
@@ -664,16 +663,16 @@ struct ContentView: View {
             }
             .onAppear {
                 // Also check when view appears
-                if let peerID = privatePeer {
+                if let peer = privatePeer {
                     // Try multiple times to ensure read receipts are sent
-                    viewModel.markPrivateMessagesAsRead(from: peerID)
+                    viewModel.markPrivateMessagesAsRead(from: peer)
                     
                     DispatchQueue.main.asyncAfter(deadline: .now() + TransportConfig.uiReadReceiptRetryShortSeconds) {
-                        viewModel.markPrivateMessagesAsRead(from: peerID)
+                        viewModel.markPrivateMessagesAsRead(from: peer)
                     }
                     
                     DispatchQueue.main.asyncAfter(deadline: .now() + TransportConfig.uiReadReceiptRetryLongSeconds) {
-                        viewModel.markPrivateMessagesAsRead(from: peerID)
+                        viewModel.markPrivateMessagesAsRead(from: peer)
                     }
                 }
             }
@@ -741,7 +740,7 @@ struct ContentView: View {
                         (["/w"], nil, "see who's online")
                     ]
                     let isGeoPublic: Bool = { if case .location = locationManager.selectedChannel { return true }; return false }()
-                    let isGeoDM: Bool = (viewModel.selectedPrivateChatPeer?.hasPrefix("nostr_") == true)
+                    let isGeoDM = viewModel.selectedPrivateChatPeer?.isNostrUnderscore == true
                     let favInfo: [(commands: [String], syntax: String?, description: String)] = [
                         (["/fav"], "<nickname>", "add to favorites"),
                         (["/unfav"], "<nickname>", "remove from favorites")
@@ -825,7 +824,7 @@ struct ContentView: View {
                             if case .location = locationManager.selectedChannel { return true }
                             return false
                         }()
-                        let isGeoDM: Bool = (viewModel.selectedPrivateChatPeer?.hasPrefix("nostr_") == true)
+                        let isGeoDM = viewModel.selectedPrivateChatPeer?.isNostrUnderscore == true
                         var commandDescriptions = [
                             ("/block", "block or list blocked peers"),
                             ("/clear", "clear chat messages"),
@@ -956,23 +955,23 @@ struct ContentView: View {
                     MeshPeerList(viewModel: viewModel,
                                  textColor: textColor,
                                  secondaryTextColor: secondaryTextColor,
-                                 onTapPeer: { peerID in
-                                     viewModel.startPrivateChat(with: peerID)
+                                 onTapPeer: { peer in
+                                     viewModel.startPrivateChat(with: peer)
                                      withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
                                          showSidebar = false
                                          sidebarDragOffset = 0
                                      }
                                  },
-                                 onToggleFavorite: { peerID in
-                                     viewModel.toggleFavorite(peerID: peerID)
+                                 onToggleFavorite: { peer in
+                                     viewModel.toggleFavorite(peer: peer)
                                  },
-                                 onShowFingerprint: { peerID in
-                                     viewModel.showFingerprint(for: peerID)
+                                 onShowFingerprint: { peer in
+                                     viewModel.showFingerprint(for: peer)
                                  })
                 }
                     }
                 }
-                .id(viewModel.allPeers.map { "\($0.id)-\($0.isConnected)" }.joined())
+                .id(viewModel.allBitchatPeers.map { "\($0.id)-\($0.isConnected)" }.joined())
             }
             
             Spacer()
@@ -1067,10 +1066,10 @@ struct ContentView: View {
             let standardGreen = (colorScheme == .dark) ? Color.green : Color(red: 0, green: 0.5, blue: 0)
             return (n, n > 0 ? standardGreen : Color.secondary)
         case .mesh:
-            let counts = viewModel.allPeers.reduce(into: (others: 0, mesh: 0)) { counts, peer in
-                guard peer.id != viewModel.meshService.myPeerID else { return }
-                if peer.isConnected { counts.mesh += 1; counts.others += 1 }
-                else if peer.isReachable { counts.others += 1 }
+            let counts = viewModel.allBitchatPeers.reduce(into: (others: 0, mesh: 0)) { counts, bitchatPeer in
+                guard bitchatPeer.id != viewModel.meshService.myPeer.id else { return }
+                if bitchatPeer.isConnected { counts.mesh += 1; counts.others += 1 }
+                else if bitchatPeer.isReachable { counts.others += 1 }
             }
             let meshBlue = Color(hue: 0.60, saturation: 0.85, brightness: 0.82)
             let color: Color = counts.mesh > 0 ? meshBlue : Color.secondary
@@ -1336,49 +1335,51 @@ struct ContentView: View {
     
     private var privateHeaderView: some View {
         Group {
-            if let privatePeerID = viewModel.selectedPrivateChatPeer {
-                privateHeaderContent(for: privatePeerID)
+            if let privatePeer = viewModel.selectedPrivateChatPeer {
+                privateHeaderContent(for: privatePeer)
             }
         }
     }
     
     @ViewBuilder
-    private func privateHeaderContent(for privatePeerID: String) -> some View {
+    private func privateHeaderContent(for privatePeer: Peer) -> some View {
         // Prefer short (mesh) ID whenever available for encryption/session status; keep stable key for display resolution only.
-        let headerPeerID: String = {
-            if privatePeerID.count == 64 {
+        let headerPeer: Peer = {
+            if privatePeer.id.count == 64 {
                 // Map stable Noise key to short ID if we know it (even if not directly connected)
-                if let short = viewModel.getShortIDForNoiseKey(privatePeerID) { return short }
+                if let short = viewModel.getShortIDForNoiseKey(privatePeer.id) {
+                    return Peer(str: short)
+                }
             }
-            return privatePeerID
+            return privatePeer
         }()
         
         // Resolve peer object for header context (may be offline favorite)
-        let peer = viewModel.getPeer(byID: headerPeerID)
+        let bitchatPeer = viewModel.getBitchatPeer(for: headerPeer)
         let privatePeerNick: String = {
-            if privatePeerID.hasPrefix("nostr_") {
+            if privatePeer.isNostrUnderscore {
                 // Build geohash DM header: "#<ghash>/@name#abcd"
                 if case .location(let ch) = locationManager.selectedChannel {
-                    let disp = viewModel.geohashDisplayName(for: privatePeerID)
+                    let disp = viewModel.geohashDisplayName(for: privatePeer.id)
                     return "#\(ch.geohash)/@\(disp)"
                 }
             }
             // Try mesh/unified peer display
-            if let name = peer?.displayName { return name }
+            if let name = bitchatPeer?.displayName { return name }
             // Try direct mesh nickname (connected-only)
-            if let name = viewModel.meshService.peerNickname(peerID: headerPeerID) { return name }
+            if let name = viewModel.meshService.peerNickname(peer: headerPeer) { return name }
             // Try favorite nickname by stable Noise key
-            if let fav = FavoritesPersistenceService.shared.getFavoriteStatus(for: Data(hexString: headerPeerID) ?? Data()),
+            if let fav = FavoritesPersistenceService.shared.getFavoriteStatus(for: Data(hexString: headerPeer.id) ?? Data()),
                !fav.peerNickname.isEmpty { return fav.peerNickname }
             // Fallback: resolve from persisted social identity via fingerprint mapping
-            if headerPeerID.count == 16 {
-                let candidates = viewModel.identityManager.getCryptoIdentitiesByPeerIDPrefix(headerPeerID)
+            if headerPeer.isShort {
+                let candidates = viewModel.identityManager.getCryptoIdentitiesByPeerIDPrefix(headerPeer)
                 if let id = candidates.first,
                    let social = viewModel.identityManager.getSocialIdentity(for: id.fingerprint) {
                     if let pet = social.localPetname, !pet.isEmpty { return pet }
                     if !social.claimedNickname.isEmpty { return social.claimedNickname }
                 }
-            } else if headerPeerID.count == 64, let keyData = Data(hexString: headerPeerID) {
+            } else if let keyData = headerPeer.noiseKey {
                 let fp = keyData.sha256Fingerprint()
                 if let social = viewModel.identityManager.getSocialIdentity(for: fp) {
                     if let pet = social.localPetname, !pet.isEmpty { return pet }
@@ -1388,9 +1389,9 @@ struct ContentView: View {
             return "Unknown"
         }()
         let isNostrAvailable: Bool = {
-            guard let connectionState = peer?.connectionState else { 
-                // Check if we can reach this peer via Nostr even if not in allPeers
-                if let noiseKey = Data(hexString: headerPeerID),
+            guard let connectionState = bitchatPeer?.connectionState else { 
+                // Check if we can reach this peer via Nostr even if not in allBitchatPeers
+                if let noiseKey = Data(hexString: headerPeer.id),
                    let favoriteStatus = FavoritesPersistenceService.shared.getFavoriteStatus(for: noiseKey),
                    favoriteStatus.isMutual {
                     return true
@@ -1408,11 +1409,11 @@ struct ContentView: View {
         ZStack {
                     // Center content - always perfectly centered
                     Button(action: {
-                        viewModel.showFingerprint(for: headerPeerID)
+                        viewModel.showFingerprint(for: headerPeer)
                     }) {
                         HStack(spacing: 6) {
                             // Show transport icon based on connection state (like peer list)
-                            if let connectionState = peer?.connectionState {
+                            if let connectionState = bitchatPeer?.connectionState {
                                 switch connectionState {
                                 case .bluetoothConnected:
                                     // Radio icon for mesh connection
@@ -1436,7 +1437,7 @@ struct ContentView: View {
                                     // Should not happen for PM header, but handle gracefully
                                     EmptyView()
                                 }
-                            } else if viewModel.meshService.isPeerReachable(headerPeerID) {
+                            } else if viewModel.meshService.isPeerReachable(headerPeer) {
                                 // Fallback: reachable via mesh but not in current peer list
                                 Image(systemName: "point.3.filled.connected.trianglepath.dotted")
                                     .font(.system(size: 14))
@@ -1448,7 +1449,7 @@ struct ContentView: View {
                                     .font(.system(size: 14))
                                     .foregroundColor(.purple)
                                     .accessibilityLabel("Available via Nostr")
-                            } else if viewModel.meshService.isPeerConnected(headerPeerID) || viewModel.connectedPeers.contains(headerPeerID) {
+                            } else if viewModel.meshService.isPeerConnected(headerPeer) || viewModel.connectedPeers.contains(headerPeer) {
                                 // Fallback: if peer lookup is missing but mesh reports connected, show radio
                                 Image(systemName: "dot.radiowaves.left.and.right")
                                     .font(.system(size: 14))
@@ -1459,15 +1460,15 @@ struct ContentView: View {
                             Text("\(privatePeerNick)")
                                 .font(.system(size: 16, weight: .medium, design: .monospaced))
                                 .foregroundColor(textColor)                            // Dynamic encryption status icon (hide for geohash DMs)
-                            if !privatePeerID.hasPrefix("nostr_") {
+                            if !privatePeer.isNostrUnderscore {
                                 // Use short peer ID if available for encryption status (sessions keyed by short ID)
-                                let statusPeerID: String = {
-                                    if privatePeerID.count == 64, let short = viewModel.getShortIDForNoiseKey(privatePeerID) {
-                                        return short
+                                let statusPeer: Peer = {
+                                    if privatePeer.id.count == 64, let short = viewModel.getShortIDForNoiseKey(privatePeer.id) {
+                                        return Peer(str: short)
                                     }
-                                    return headerPeerID
+                                    return headerPeer
                                 }()
-                                let encryptionStatus = viewModel.getEncryptionStatus(for: statusPeerID)
+                                let encryptionStatus = viewModel.getEncryptionStatus(for: statusPeer)
                                 if let icon = encryptionStatus.icon {
                                     Image(systemName: icon)
                                         .font(.system(size: 14))
@@ -1503,16 +1504,17 @@ struct ContentView: View {
                         Spacer()
                         
                         // Favorite button (hidden for geohash DMs)
-                        if !(privatePeerID.hasPrefix("nostr_")) {
+                        if !privatePeer.isNostrUnderscore {
+                            let isFavorite = viewModel.isFavorite(peer: headerPeer)
                             Button(action: {
-                                viewModel.toggleFavorite(peerID: headerPeerID)
+                                viewModel.toggleFavorite(peer: headerPeer)
                             }) {
-                                Image(systemName: viewModel.isFavorite(peerID: headerPeerID) ? "star.fill" : "star")
+                                Image(systemName: isFavorite ? "star.fill" : "star")
                                     .font(.system(size: 16))
-                                    .foregroundColor(viewModel.isFavorite(peerID: headerPeerID) ? Color.yellow : textColor)
+                                    .foregroundColor(isFavorite ? Color.yellow : textColor)
                             }
                             .buttonStyle(.plain)
-                            .accessibilityLabel(viewModel.isFavorite(peerID: privatePeerID) ? "Remove from favorites" : "Add to favorites")
+                            .accessibilityLabel(isFavorite ? "Remove from favorites" : "Add to favorites")
                             .accessibilityHint("Double tap to toggle favorite status")
                         }
                     }

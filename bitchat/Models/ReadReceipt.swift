@@ -11,23 +11,23 @@ import Foundation
 struct ReadReceipt: Codable {
     let originalMessageID: String
     let receiptID: String
-    var readerID: String  // Who read it
+    var reader: Peer  // Who read it
     let readerNickname: String
     let timestamp: Date
     
-    init(originalMessageID: String, readerID: String, readerNickname: String) {
+    init(originalMessageID: String, reader: Peer, readerNickname: String) {
         self.originalMessageID = originalMessageID
         self.receiptID = UUID().uuidString
-        self.readerID = readerID
+        self.reader = reader
         self.readerNickname = readerNickname
         self.timestamp = Date()
     }
     
     // For binary decoding
-    private init(originalMessageID: String, receiptID: String, readerID: String, readerNickname: String, timestamp: Date) {
+    private init(originalMessageID: String, receiptID: String, reader: Peer, readerNickname: String, timestamp: Date) {
         self.originalMessageID = originalMessageID
         self.receiptID = receiptID
-        self.readerID = readerID
+        self.reader = reader
         self.readerNickname = readerNickname
         self.timestamp = timestamp
     }
@@ -48,7 +48,7 @@ struct ReadReceipt: Codable {
         data.appendUUID(receiptID)
         // ReaderID as 8-byte hex string
         var readerData = Data()
-        var tempID = readerID
+        var tempID = reader.id
         while tempID.count >= 2 && readerData.count < 8 {
             let hexByte = String(tempID.prefix(2))
             if let byte = UInt8(hexByte, radix: 16) {
@@ -78,8 +78,8 @@ struct ReadReceipt: Codable {
               let receiptID = dataCopy.readUUID(at: &offset) else { return nil }
         
         guard let readerIDData = dataCopy.readFixedBytes(at: &offset, count: 8) else { return nil }
-        let readerID = readerIDData.hexEncodedString()
-        guard InputValidator.validatePeerID(readerID) else { return nil }
+        let reader = Peer(str: readerIDData.hexEncodedString())
+        guard reader.isValid else { return nil }
         
         guard let timestamp = dataCopy.readDate(at: &offset),
               InputValidator.validateTimestamp(timestamp),
@@ -88,7 +88,7 @@ struct ReadReceipt: Codable {
         
         return ReadReceipt(originalMessageID: originalMessageID,
                           receiptID: receiptID,
-                          readerID: readerID,
+                          reader: reader,
                           readerNickname: readerNickname,
                           timestamp: timestamp)
     }

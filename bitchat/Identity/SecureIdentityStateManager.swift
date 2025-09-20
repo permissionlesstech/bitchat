@@ -103,7 +103,7 @@ protocol SecureIdentityStateManagerProtocol {
     
     // MARK: Cryptographic Identities
     func upsertCryptographicIdentity(fingerprint: String, noisePublicKey: Data, signingPublicKey: Data?, claimedNickname: String?)
-    func getCryptoIdentitiesByPeerIDPrefix(_ peerID: String) -> [CryptographicIdentity]
+    func getCryptoIdentitiesByPeerIDPrefix(_ peer: Peer) -> [CryptographicIdentity]
     func updateSocialIdentity(_ identity: SocialIdentity)
     
     // MARK: Favorites Management
@@ -121,12 +121,12 @@ protocol SecureIdentityStateManagerProtocol {
     func getBlockedNostrPubkeys() -> Set<String>
     
     // MARK: Ephemeral Session Management
-    func registerEphemeralSession(peerID: String, handshakeState: HandshakeState)
-    func updateHandshakeState(peerID: String, state: HandshakeState)
+    func registerEphemeralSession(peer: Peer, handshakeState: HandshakeState)
+    func updateHandshakeState(peer: Peer, state: HandshakeState)
     
     // MARK: Cleanup
     func clearAllIdentityData()
-    func removeEphemeralSession(peerID: String)
+    func removeEphemeralSession(peer: Peer)
     
     // MARK: Verification
     func setVerified(fingerprint: String, verified: Bool)
@@ -143,7 +143,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     private let encryptionKeyName = "identityCacheEncryptionKey"
     
     // In-memory state
-    private var ephemeralSessions: [String: EphemeralIdentity] = [:]
+    private var ephemeralSessions: [Peer: EphemeralIdentity] = [:]
     private var cryptographicIdentities: [String: CryptographicIdentity] = [:]
     private var cache: IdentityCache = IdentityCache()
     
@@ -321,11 +321,11 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     }
 
     /// Find cryptographic identities whose fingerprint prefix matches a peerID (16-hex) short ID
-    func getCryptoIdentitiesByPeerIDPrefix(_ peerID: String) -> [CryptographicIdentity] {
+    func getCryptoIdentitiesByPeerIDPrefix(_ peer: Peer) -> [CryptographicIdentity] {
         queue.sync {
             // Defensive: ensure hex and correct length
-            guard peerID.count == 16, peerID.allSatisfy({ $0.isHexDigit }) else { return [] }
-            return cryptographicIdentities.values.filter { $0.fingerprint.hasPrefix(peerID) }
+            guard peer.isShort else { return [] }
+            return cryptographicIdentities.values.filter { $0.fingerprint.hasPrefix(peer.id) }
         }
     }
     
@@ -455,19 +455,19 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     
     // MARK: - Ephemeral Session Management
     
-    func registerEphemeralSession(peerID: String, handshakeState: HandshakeState = .none) {
+    func registerEphemeralSession(peer: Peer, handshakeState: HandshakeState = .none) {
         queue.async(flags: .barrier) {
-            self.ephemeralSessions[peerID] = EphemeralIdentity(
-                peerID: peerID,
+            self.ephemeralSessions[peer] = EphemeralIdentity(
+                peer: peer,
                 sessionStart: Date(),
                 handshakeState: handshakeState
             )
         }
     }
     
-    func updateHandshakeState(peerID: String, state: HandshakeState) {
+    func updateHandshakeState(peer: Peer, state: HandshakeState) {
         queue.async(flags: .barrier) {
-            self.ephemeralSessions[peerID]?.handshakeState = state
+            self.ephemeralSessions[peer]?.handshakeState = state
             
             // If handshake completed, update last interaction
             if case .completed(let fingerprint) = state {
@@ -493,9 +493,9 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
         }
     }
     
-    func removeEphemeralSession(peerID: String) {
+    func removeEphemeralSession(peer: Peer) {
         queue.async(flags: .barrier) {
-            self.ephemeralSessions.removeValue(forKey: peerID)
+            self.ephemeralSessions.removeValue(forKey: peer)
         }
     }
     

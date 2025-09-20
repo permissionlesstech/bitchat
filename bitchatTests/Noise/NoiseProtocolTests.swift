@@ -37,14 +37,14 @@ final class NoiseProtocolTests: XCTestCase {
     func testXXPatternHandshake() throws {
         // Create sessions
         aliceSession = NoiseSession(
-            peerID: TestConstants.testPeerID2,
+            peer: TestConstants.testPeer2,
             role: .initiator,
             keychain: mockKeychain,
             localStaticKey: aliceKey
         )
         
         bobSession = NoiseSession(
-            peerID: TestConstants.testPeerID1,
+            peer: TestConstants.testPeer1,
             role: .responder,
             keychain: mockKeychain,
             localStaticKey: bobKey
@@ -83,7 +83,7 @@ final class NoiseProtocolTests: XCTestCase {
     
     func testHandshakeStateValidation() throws {
         aliceSession = NoiseSession(
-            peerID: TestConstants.testPeerID2,
+            peer: TestConstants.testPeer2,
             role: .initiator,
             keychain: mockKeychain,
             localStaticKey: aliceKey
@@ -148,7 +148,7 @@ final class NoiseProtocolTests: XCTestCase {
     
     func testEncryptionBeforeHandshake() {
         aliceSession = NoiseSession(
-            peerID: TestConstants.testPeerID2,
+            peer: TestConstants.testPeer2,
             role: .initiator,
             keychain: mockKeychain,
             localStaticKey: aliceKey
@@ -167,28 +167,28 @@ final class NoiseProtocolTests: XCTestCase {
         let manager = NoiseSessionManager(localStaticKey: aliceKey, keychain: mockKeychain)
         
         // Create session
-        let session = manager.createSession(for: TestConstants.testPeerID2, role: .initiator)
+        let session = manager.createSession(for: TestConstants.testPeer2, role: .initiator)
         XCTAssertNotNil(session)
         
         // Get session
-        let retrieved = manager.getSession(for: TestConstants.testPeerID2)
+        let retrieved = manager.getSession(for: TestConstants.testPeer2)
         XCTAssertNotNil(retrieved)
         XCTAssertTrue(session === retrieved)
         
         // Remove session
-        manager.removeSession(for: TestConstants.testPeerID2)
-        XCTAssertNil(manager.getSession(for: TestConstants.testPeerID2))
+        manager.removeSession(for: TestConstants.testPeer2)
+        XCTAssertNil(manager.getSession(for: TestConstants.testPeer2))
     }
     
     func testSessionManagerHandshakeInitiation() throws {
         let manager = NoiseSessionManager(localStaticKey: aliceKey, keychain: mockKeychain)
         
         // Initiate handshake
-        let handshakeData = try manager.initiateHandshake(with: TestConstants.testPeerID2)
+        let handshakeData = try manager.initiateHandshake(with: TestConstants.testPeer2)
         XCTAssertFalse(handshakeData.isEmpty)
         
         // Session should exist
-        let session = manager.getSession(for: TestConstants.testPeerID2)
+        let session = manager.getSession(for: TestConstants.testPeer2)
         XCTAssertNotNil(session)
         XCTAssertEqual(session?.getState(), .handshaking)
     }
@@ -198,23 +198,23 @@ final class NoiseProtocolTests: XCTestCase {
         let bobManager = NoiseSessionManager(localStaticKey: bobKey, keychain: mockKeychain)
         
         // Alice initiates
-        let message1 = try aliceManager.initiateHandshake(with: TestConstants.testPeerID2)
+        let message1 = try aliceManager.initiateHandshake(with: TestConstants.testPeer2)
         
         // Bob responds
-        let message2 = try bobManager.handleIncomingHandshake(from: TestConstants.testPeerID1, message: message1)
+        let message2 = try bobManager.handleIncomingHandshake(from: TestConstants.testPeer1, message: message1)
         XCTAssertNotNil(message2)
         
         // Continue handshake
-        let message3 = try aliceManager.handleIncomingHandshake(from: TestConstants.testPeerID2, message: message2!)
+        let message3 = try aliceManager.handleIncomingHandshake(from: TestConstants.testPeer2, message: message2!)
         XCTAssertNotNil(message3)
         
         // Complete handshake
-        let finalMessage = try bobManager.handleIncomingHandshake(from: TestConstants.testPeerID1, message: message3!)
+        let finalMessage = try bobManager.handleIncomingHandshake(from: TestConstants.testPeer1, message: message3!)
         XCTAssertNil(finalMessage)
         
         // Both should have established sessions
-        XCTAssertTrue(aliceManager.getSession(for: TestConstants.testPeerID2)?.isEstablished() ?? false)
-        XCTAssertTrue(bobManager.getSession(for: TestConstants.testPeerID1)?.isEstablished() ?? false)
+        XCTAssertTrue(aliceManager.getSession(for: TestConstants.testPeer2)?.isEstablished() ?? false)
+        XCTAssertTrue(bobManager.getSession(for: TestConstants.testPeer1)?.isEstablished() ?? false)
     }
     
     func testSessionManagerEncryptionDecryption() throws {
@@ -226,10 +226,10 @@ final class NoiseProtocolTests: XCTestCase {
         
         // Encrypt with manager
         let plaintext = "Test message".data(using: .utf8)!
-        let ciphertext = try aliceManager.encrypt(plaintext, for: TestConstants.testPeerID2)
+        let ciphertext = try aliceManager.encrypt(plaintext, for: TestConstants.testPeer2)
         
         // Decrypt with manager
-        let decrypted = try bobManager.decrypt(ciphertext, from: TestConstants.testPeerID1)
+        let decrypted = try bobManager.decrypt(ciphertext, from: TestConstants.testPeer1)
         XCTAssertEqual(decrypted, plaintext)
     }
     
@@ -263,11 +263,11 @@ final class NoiseProtocolTests: XCTestCase {
     
     func testSessionIsolation() throws {
         // Create two separate session pairs
-        let aliceSession1 = NoiseSession(peerID: "peer1", role: .initiator, keychain: mockKeychain, localStaticKey: aliceKey)
-        let bobSession1 = NoiseSession(peerID: "alice1", role: .responder, keychain: mockKeychain, localStaticKey: bobKey)
+        let aliceSession1 = NoiseSession(peer: "peer1", role: .initiator, keychain: mockKeychain, localStaticKey: aliceKey)
+        let bobSession1 = NoiseSession(peer: "alice1", role: .responder, keychain: mockKeychain, localStaticKey: bobKey)
         
-        let aliceSession2 = NoiseSession(peerID: "peer2", role: .initiator, keychain: mockKeychain, localStaticKey: aliceKey)
-        let bobSession2 = NoiseSession(peerID: "alice2", role: .responder, keychain: mockKeychain, localStaticKey: bobKey)
+        let aliceSession2 = NoiseSession(peer: "peer2", role: .initiator, keychain: mockKeychain, localStaticKey: aliceKey)
+        let bobSession2 = NoiseSession(peer: "alice2", role: .responder, keychain: mockKeychain, localStaticKey: bobKey)
         
         // Establish both pairs
         try performHandshake(initiator: aliceSession1, responder: bobSession1)
@@ -295,38 +295,38 @@ final class NoiseProtocolTests: XCTestCase {
         try establishManagerSessions(aliceManager: aliceManager, bobManager: bobManager)
         
         // Exchange some messages to establish nonce state
-        let message1 = try aliceManager.encrypt("Hello".data(using: .utf8)!, for: TestConstants.testPeerID2)
-        _ = try bobManager.decrypt(message1, from: TestConstants.testPeerID1)
+        let message1 = try aliceManager.encrypt("Hello".data(using: .utf8)!, for: TestConstants.testPeer2)
+        _ = try bobManager.decrypt(message1, from: TestConstants.testPeer1)
         
-        let message2 = try bobManager.encrypt("World".data(using: .utf8)!, for: TestConstants.testPeerID1)
-        _ = try aliceManager.decrypt(message2, from: TestConstants.testPeerID2)
+        let message2 = try bobManager.encrypt("World".data(using: .utf8)!, for: TestConstants.testPeer1)
+        _ = try aliceManager.decrypt(message2, from: TestConstants.testPeer2)
         
         // Simulate Bob restart by creating new manager with same key
         let bobManagerRestarted = NoiseSessionManager(localStaticKey: bobKey, keychain: mockKeychain)
         
         // Bob initiates new handshake after restart
-        let newHandshake1 = try bobManagerRestarted.initiateHandshake(with: TestConstants.testPeerID1)
+        let newHandshake1 = try bobManagerRestarted.initiateHandshake(with: TestConstants.testPeer1)
         
         // Alice should accept the new handshake (clearing old session)
-        let newHandshake2 = try aliceManager.handleIncomingHandshake(from: TestConstants.testPeerID2, message: newHandshake1)
+        let newHandshake2 = try aliceManager.handleIncomingHandshake(from: TestConstants.testPeer2, message: newHandshake1)
         XCTAssertNotNil(newHandshake2)
         
         // Complete the new handshake
-        let newHandshake3 = try bobManagerRestarted.handleIncomingHandshake(from: TestConstants.testPeerID1, message: newHandshake2!)
+        let newHandshake3 = try bobManagerRestarted.handleIncomingHandshake(from: TestConstants.testPeer1, message: newHandshake2!)
         XCTAssertNotNil(newHandshake3)
-        _ = try aliceManager.handleIncomingHandshake(from: TestConstants.testPeerID2, message: newHandshake3!)
+        _ = try aliceManager.handleIncomingHandshake(from: TestConstants.testPeer2, message: newHandshake3!)
         
         // Should be able to exchange messages with new sessions
         let testMessage = "After restart".data(using: .utf8)!
-        let encrypted = try bobManagerRestarted.encrypt(testMessage, for: TestConstants.testPeerID1)
-        let decrypted = try aliceManager.decrypt(encrypted, from: TestConstants.testPeerID2)
+        let encrypted = try bobManagerRestarted.encrypt(testMessage, for: TestConstants.testPeer1)
+        let decrypted = try aliceManager.decrypt(encrypted, from: TestConstants.testPeer2)
         XCTAssertEqual(decrypted, testMessage)
     }
     
     func testNonceDesynchronizationRecovery() throws {
         // Create two sessions
-        aliceSession = NoiseSession(peerID: TestConstants.testPeerID2, role: .initiator, keychain: mockKeychain, localStaticKey: aliceKey)
-        bobSession = NoiseSession(peerID: TestConstants.testPeerID1, role: .responder, keychain: mockKeychain, localStaticKey: bobKey)
+        aliceSession = NoiseSession(peer: TestConstants.testPeer2, role: .initiator, keychain: mockKeychain, localStaticKey: aliceKey)
+        bobSession = NoiseSession(peer: TestConstants.testPeer1, role: .responder, keychain: mockKeychain, localStaticKey: bobKey)
         
         // Establish sessions
         try performHandshake(initiator: aliceSession, responder: bobSession)
@@ -362,7 +362,7 @@ final class NoiseProtocolTests: XCTestCase {
         // Encrypt messages sequentially to avoid nonce races in manager
         for i in 0..<messageCount {
             let plaintext = "Concurrent message \(i)".data(using: .utf8)!
-            let encrypted = try aliceManager.encrypt(plaintext, for: TestConstants.testPeerID2)
+            let encrypted = try aliceManager.encrypt(plaintext, for: TestConstants.testPeer2)
             encryptedMessages[i] = encrypted
         }
         
@@ -373,7 +373,7 @@ final class NoiseProtocolTests: XCTestCase {
                     XCTFail("Missing encrypted message \(i)")
                     return
                 }
-                let decrypted = try bobManager.decrypt(encrypted, from: TestConstants.testPeerID1)
+                let decrypted = try bobManager.decrypt(encrypted, from: TestConstants.testPeer1)
                 let expected = "Concurrent message \(i)".data(using: .utf8)!
                 XCTAssertEqual(decrypted, expected)
                 expectation.fulfill()
@@ -408,14 +408,14 @@ final class NoiseProtocolTests: XCTestCase {
         try establishManagerSessions(aliceManager: aliceManager, bobManager: bobManager)
         
         // Create a corrupted message
-        var encrypted = try aliceManager.encrypt("Test".data(using: .utf8)!, for: TestConstants.testPeerID2)
+        var encrypted = try aliceManager.encrypt("Test".data(using: .utf8)!, for: TestConstants.testPeer2)
         encrypted[10] ^= 0xFF // Corrupt the data
         
         // Decryption should fail
-        XCTAssertThrowsError(try bobManager.decrypt(encrypted, from: TestConstants.testPeerID1))
+        XCTAssertThrowsError(try bobManager.decrypt(encrypted, from: TestConstants.testPeer1))
         
         // Bob should still have the session (it's not removed on single failure)
-        XCTAssertNotNil(bobManager.getSession(for: TestConstants.testPeerID1))
+        XCTAssertNotNil(bobManager.getSession(for: TestConstants.testPeer1))
     }
     
     func testHandshakeAlwaysAcceptedWithExistingSession() throws {
@@ -427,34 +427,34 @@ final class NoiseProtocolTests: XCTestCase {
         try establishManagerSessions(aliceManager: aliceManager, bobManager: bobManager)
         
         // Verify sessions are established
-        XCTAssertTrue(aliceManager.getSession(for: TestConstants.testPeerID2)?.isEstablished() ?? false)
-        XCTAssertTrue(bobManager.getSession(for: TestConstants.testPeerID1)?.isEstablished() ?? false)
+        XCTAssertTrue(aliceManager.getSession(for: TestConstants.testPeer2)?.isEstablished() ?? false)
+        XCTAssertTrue(bobManager.getSession(for: TestConstants.testPeer1)?.isEstablished() ?? false)
         
         // Exchange messages to verify sessions work
         let testMessage = "Session works".data(using: .utf8)!
-        let encrypted = try aliceManager.encrypt(testMessage, for: TestConstants.testPeerID2)
-        let decrypted = try bobManager.decrypt(encrypted, from: TestConstants.testPeerID1)
+        let encrypted = try aliceManager.encrypt(testMessage, for: TestConstants.testPeer2)
+        let decrypted = try bobManager.decrypt(encrypted, from: TestConstants.testPeer1)
         XCTAssertEqual(decrypted, testMessage)
         
         // Alice clears her session (simulating decryption failure)
-        aliceManager.removeSession(for: TestConstants.testPeerID2)
+        aliceManager.removeSession(for: TestConstants.testPeer2)
         
         // Alice initiates new handshake despite Bob having valid session
-        let newHandshake1 = try aliceManager.initiateHandshake(with: TestConstants.testPeerID2)
+        let newHandshake1 = try aliceManager.initiateHandshake(with: TestConstants.testPeer2)
         
         // Bob should accept the new handshake even though he has a valid session
-        let newHandshake2 = try bobManager.handleIncomingHandshake(from: TestConstants.testPeerID1, message: newHandshake1)
+        let newHandshake2 = try bobManager.handleIncomingHandshake(from: TestConstants.testPeer1, message: newHandshake1)
         XCTAssertNotNil(newHandshake2, "Bob should accept handshake despite having valid session")
         
         // Complete the handshake
-        let newHandshake3 = try aliceManager.handleIncomingHandshake(from: TestConstants.testPeerID2, message: newHandshake2!)
+        let newHandshake3 = try aliceManager.handleIncomingHandshake(from: TestConstants.testPeer2, message: newHandshake2!)
         XCTAssertNotNil(newHandshake3)
-        _ = try bobManager.handleIncomingHandshake(from: TestConstants.testPeerID1, message: newHandshake3!)
+        _ = try bobManager.handleIncomingHandshake(from: TestConstants.testPeer1, message: newHandshake3!)
         
         // Verify new sessions work
         let testMessage2 = "New session works".data(using: .utf8)!
-        let encrypted2 = try aliceManager.encrypt(testMessage2, for: TestConstants.testPeerID2)
-        let decrypted2 = try bobManager.decrypt(encrypted2, from: TestConstants.testPeerID1)
+        let encrypted2 = try aliceManager.encrypt(testMessage2, for: TestConstants.testPeer2)
+        let decrypted2 = try bobManager.decrypt(encrypted2, from: TestConstants.testPeer1)
         XCTAssertEqual(decrypted2, testMessage2)
     }
     
@@ -468,36 +468,36 @@ final class NoiseProtocolTests: XCTestCase {
         
         // Exchange messages normally
         for i in 0..<5 {
-            let msg = try aliceManager.encrypt("Message \(i)".data(using: .utf8)!, for: TestConstants.testPeerID2)
-            _ = try bobManager.decrypt(msg, from: TestConstants.testPeerID1)
+            let msg = try aliceManager.encrypt("Message \(i)".data(using: .utf8)!, for: TestConstants.testPeer2)
+            _ = try bobManager.decrypt(msg, from: TestConstants.testPeer1)
         }
         
         // Simulate desynchronization - Alice sends messages that Bob doesn't receive
         for i in 0..<3 {
-            _ = try aliceManager.encrypt("Lost message \(i)".data(using: .utf8)!, for: TestConstants.testPeerID2)
+            _ = try aliceManager.encrypt("Lost message \(i)".data(using: .utf8)!, for: TestConstants.testPeer2)
         }
         
         // With nonce carried in packet, decryption should not throw here
-        let desyncMessage = try aliceManager.encrypt("This now succeeds".data(using: .utf8)!, for: TestConstants.testPeerID2)
-        XCTAssertNoThrow(try bobManager.decrypt(desyncMessage, from: TestConstants.testPeerID1))
+        let desyncMessage = try aliceManager.encrypt("This now succeeds".data(using: .utf8)!, for: TestConstants.testPeer2)
+        XCTAssertNoThrow(try bobManager.decrypt(desyncMessage, from: TestConstants.testPeer1))
         
         // Bob clears session and initiates new handshake
-        bobManager.removeSession(for: TestConstants.testPeerID1)
-        let rehandshake1 = try bobManager.initiateHandshake(with: TestConstants.testPeerID1)
+        bobManager.removeSession(for: TestConstants.testPeer1)
+        let rehandshake1 = try bobManager.initiateHandshake(with: TestConstants.testPeer1)
         
         // Alice should accept despite having a "valid" (but desynced) session
-        let rehandshake2 = try aliceManager.handleIncomingHandshake(from: TestConstants.testPeerID2, message: rehandshake1)
+        let rehandshake2 = try aliceManager.handleIncomingHandshake(from: TestConstants.testPeer2, message: rehandshake1)
         XCTAssertNotNil(rehandshake2, "Alice should accept handshake to fix desync")
         
         // Complete handshake
-        let rehandshake3 = try bobManager.handleIncomingHandshake(from: TestConstants.testPeerID1, message: rehandshake2!)
+        let rehandshake3 = try bobManager.handleIncomingHandshake(from: TestConstants.testPeer1, message: rehandshake2!)
         XCTAssertNotNil(rehandshake3)
-        _ = try aliceManager.handleIncomingHandshake(from: TestConstants.testPeerID2, message: rehandshake3!)
+        _ = try aliceManager.handleIncomingHandshake(from: TestConstants.testPeer2, message: rehandshake3!)
         
         // Verify communication works again
         let testResynced = "Resynced".data(using: .utf8)!
-        let encryptedResync = try aliceManager.encrypt(testResynced, for: TestConstants.testPeerID2)
-        let decryptedResync = try bobManager.decrypt(encryptedResync, from: TestConstants.testPeerID1)
+        let encryptedResync = try aliceManager.encrypt(testResynced, for: TestConstants.testPeer2)
+        let decryptedResync = try bobManager.decrypt(encryptedResync, from: TestConstants.testPeer1)
         XCTAssertEqual(decryptedResync, testResynced)
     }
     
@@ -506,8 +506,8 @@ final class NoiseProtocolTests: XCTestCase {
     func testHandshakePerformance() throws {
         measure {
             do {
-                let alice = NoiseSession(peerID: "bob", role: .initiator, keychain: mockKeychain, localStaticKey: aliceKey)
-                let bob = NoiseSession(peerID: "alice", role: .responder, keychain: mockKeychain, localStaticKey: bobKey)
+                let alice = NoiseSession(peer: "bob", role: .initiator, keychain: mockKeychain, localStaticKey: aliceKey)
+                let bob = NoiseSession(peer: "alice", role: .responder, keychain: mockKeychain, localStaticKey: bobKey)
                 try performHandshake(initiator: alice, responder: bob)
             } catch {
                 XCTFail("Handshake failed: \(error)")
@@ -535,14 +535,14 @@ final class NoiseProtocolTests: XCTestCase {
     
     private func establishSessions() throws {
         aliceSession = NoiseSession(
-            peerID: TestConstants.testPeerID2,
+            peer: TestConstants.testPeer2,
             role: .initiator,
             keychain: mockKeychain,
             localStaticKey: aliceKey
         )
         
         bobSession = NoiseSession(
-            peerID: TestConstants.testPeerID1,
+            peer: TestConstants.testPeer1,
             role: .responder,
             keychain: mockKeychain,
             localStaticKey: bobKey
@@ -559,9 +559,9 @@ final class NoiseProtocolTests: XCTestCase {
     }
     
     private func establishManagerSessions(aliceManager: NoiseSessionManager, bobManager: NoiseSessionManager) throws {
-        let msg1 = try aliceManager.initiateHandshake(with: TestConstants.testPeerID2)
-        let msg2 = try bobManager.handleIncomingHandshake(from: TestConstants.testPeerID1, message: msg1)!
-        let msg3 = try aliceManager.handleIncomingHandshake(from: TestConstants.testPeerID2, message: msg2)!
-        _ = try bobManager.handleIncomingHandshake(from: TestConstants.testPeerID1, message: msg3)
+        let msg1 = try aliceManager.initiateHandshake(with: TestConstants.testPeer2)
+        let msg2 = try bobManager.handleIncomingHandshake(from: TestConstants.testPeer1, message: msg1)!
+        let msg3 = try aliceManager.handleIncomingHandshake(from: TestConstants.testPeer2, message: msg2)!
+        _ = try bobManager.handleIncomingHandshake(from: TestConstants.testPeer1, message: msg3)
     }
 }

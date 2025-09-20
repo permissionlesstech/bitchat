@@ -179,12 +179,11 @@ final class FavoritesPersistenceService: ObservableObject {
 
     /// Resolve favorite status by short peer ID (16-hex derived from Noise pubkey)
     /// Falls back to scanning favorites and matching on derived peer ID.
-    func getFavoriteStatus(forPeerID peerID: String) -> FavoriteRelationship? {
-        // Quick sanity: peerID should be 16 hex chars (8 bytes)
-        guard peerID.count == 16 else { return nil }
-        for (pubkey, rel) in favorites {
-            let derived = PeerIDUtils.derivePeerID(fromPublicKey: pubkey)
-            if derived == peerID { return rel }
+    func getFavoriteStatus(for peer: Peer) -> FavoriteRelationship? {
+        // Quick sanity: peer.id should be 16 hex chars (8 bytes)
+        guard peer.isShort else { return nil }
+        for (pubkey, rel) in favorites where Peer(publicKey: pubkey) == peer {
+            return rel
         }
         return nil
     }

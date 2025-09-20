@@ -23,10 +23,10 @@ final class PublicChatE2ETests: XCTestCase {
         MockBLEService.resetTestBus()
         
         // Create mock services
-        alice = createMockService(peerID: TestConstants.testPeerID1, nickname: TestConstants.testNickname1)
-        bob = createMockService(peerID: TestConstants.testPeerID2, nickname: TestConstants.testNickname2)
-        charlie = createMockService(peerID: TestConstants.testPeerID3, nickname: TestConstants.testNickname3)
-        david = createMockService(peerID: TestConstants.testPeerID4, nickname: TestConstants.testNickname4)
+        alice = createMockService(peer: TestConstants.testPeer1, nickname: TestConstants.testNickname1)
+        bob = createMockService(peer: TestConstants.testPeer2, nickname: TestConstants.testNickname2)
+        charlie = createMockService(peer: TestConstants.testPeer3, nickname: TestConstants.testNickname3)
+        david = createMockService(peer: TestConstants.testPeer4, nickname: TestConstants.testNickname4)
         
         // Clear received messages
         receivedMessages.removeAll()
@@ -111,7 +111,7 @@ final class PublicChatE2ETests: XCTestCase {
                     originalSender: message.sender,
                     isPrivate: message.isPrivate,
                     recipientNickname: message.recipientNickname,
-                    senderPeerID: message.senderPeerID,
+                    senderPeer: message.senderPeer,
                     mentions: message.mentions
                 )
                 
@@ -200,9 +200,9 @@ final class PublicChatE2ETests: XCTestCase {
         }
         
         // Inject at Bob with TTL=2 so Charlie sees it (TTL->1) and does not relay to David
-        let msg = TestHelpers.createTestMessage(content: TestConstants.testMessage1, sender: TestConstants.testNickname1, senderPeerID: alice.peerID)
+        let msg = TestHelpers.createTestMessage(content: TestConstants.testMessage1, sender: TestConstants.testNickname1, senderPeer: alice.peer)
         if let payload = msg.toBinaryPayload() {
-            let pkt = TestHelpers.createTestPacket(senderID: alice.peerID, payload: payload, ttl: 2)
+            let pkt = TestHelpers.createTestPacket(sender: alice.peer, payload: payload, ttl: 2)
             bob.simulateIncomingPacket(pkt)
         }
         
@@ -419,17 +419,17 @@ final class PublicChatE2ETests: XCTestCase {
     
     // MARK: - Helper Methods
     
-    private func createMockService(peerID: String, nickname: String) -> MockBluetoothMeshService {
+    private func createMockService(peer: Peer, nickname: String) -> MockBluetoothMeshService {
         let service = MockBluetoothMeshService()
-        service.myPeerID = peerID
+        service.myPeer = peer
         service.mockNickname = nickname
         service._testRegister()
         return service
     }
     
     private func simulateConnection(_ peer1: MockBluetoothMeshService, _ peer2: MockBluetoothMeshService) {
-        peer1.simulateConnectedPeer(peer2.peerID)
-        peer2.simulateConnectedPeer(peer1.peerID)
+        peer1.simulateConnectedPeer(peer2.peer)
+        peer2.simulateConnectedPeer(peer1.peer)
     }
     
     private func setupRelayHandler(_ node: MockBluetoothMeshService, nextHops: [MockBluetoothMeshService]) {
@@ -439,7 +439,7 @@ final class PublicChatE2ETests: XCTestCase {
             
             if let message = BitchatMessage(packet.payload) {
                 // Don't relay own messages
-                guard message.senderPeerID != node.peerID else { return }
+                guard message.senderPeer != node.peer else { return }
                 
                 // Create relay message
                 let relayMessage = BitchatMessage(
@@ -451,14 +451,14 @@ final class PublicChatE2ETests: XCTestCase {
                     originalSender: message.isRelay ? message.originalSender : message.sender,
                     isPrivate: message.isPrivate,
                     recipientNickname: message.recipientNickname,
-                    senderPeerID: message.senderPeerID,
+                    senderPeer: message.senderPeer,
                     mentions: message.mentions
                 )
                 
                 if let relayPayload = relayMessage.toBinaryPayload() {
                     let relayPacket = BitchatPacket(
                         type: packet.type,
-                        senderID: node.peerID.data(using: .utf8)!,
+                        senderID: node.peer.data!,
                         recipientID: packet.recipientID,
                         timestamp: packet.timestamp,
                         payload: relayPayload,

@@ -53,11 +53,6 @@ struct NoiseSecurityValidator {
     static func validateHandshakeMessageSize(_ data: Data) -> Bool {
         return data.count <= NoiseSecurityConstants.maxHandshakeMessageSize
     }
-    
-    /// Validate peer ID format using unified validator
-    static func validatePeerID(_ peerID: String) -> Bool {
-        return InputValidator.validatePeerID(peerID)
-    }
 }
 
 // MARK: - Enhanced Noise Session with Security
@@ -137,8 +132,8 @@ final class SecureNoiseSession: NoiseSession {
 // MARK: - Rate Limiter
 
 final class NoiseRateLimiter {
-    private var handshakeTimestamps: [String: [Date]] = [:] // peerID -> timestamps
-    private var messageTimestamps: [String: [Date]] = [:] // peerID -> timestamps
+    private var handshakeTimestamps: [Peer: [Date]] = [:]
+    private var messageTimestamps: [Peer: [Date]] = [:]
     
     // Global rate limiting
     private var globalHandshakeTimestamps: [Date] = []
@@ -146,7 +141,7 @@ final class NoiseRateLimiter {
     
     private let queue = DispatchQueue(label: "chat.bitchat.noise.ratelimit", attributes: .concurrent)
     
-    func allowHandshake(from peerID: String) -> Bool {
+    func allowHandshake(from peer: Peer) -> Bool {
         return queue.sync(flags: .barrier) {
             let now = Date()
             let oneMinuteAgo = now.addingTimeInterval(-60)
@@ -159,23 +154,23 @@ final class NoiseRateLimiter {
             }
             
             // Check per-peer rate limit
-            var timestamps = handshakeTimestamps[peerID] ?? []
+            var timestamps = handshakeTimestamps[peer] ?? []
             timestamps = timestamps.filter { $0 > oneMinuteAgo }
             
             if timestamps.count >= NoiseSecurityConstants.maxHandshakesPerMinute {
-                SecureLogger.warning("Per-peer handshake rate limit exceeded for \(peerID): \(timestamps.count)/\(NoiseSecurityConstants.maxHandshakesPerMinute) per minute", category: .security)
+                SecureLogger.warning("Per-peer handshake rate limit exceeded for \(peer.id): \(timestamps.count)/\(NoiseSecurityConstants.maxHandshakesPerMinute) per minute", category: .security)
                 return false
             }
             
             // Record new handshake
             timestamps.append(now)
-            handshakeTimestamps[peerID] = timestamps
+            handshakeTimestamps[peer] = timestamps
             globalHandshakeTimestamps.append(now)
             return true
         }
     }
     
-    func allowMessage(from peerID: String) -> Bool {
+    func allowMessage(from peer: Peer) -> Bool {
         return queue.sync(flags: .barrier) {
             let now = Date()
             let oneSecondAgo = now.addingTimeInterval(-1)
@@ -188,26 +183,26 @@ final class NoiseRateLimiter {
             }
             
             // Check per-peer rate limit
-            var timestamps = messageTimestamps[peerID] ?? []
+            var timestamps = messageTimestamps[peer] ?? []
             timestamps = timestamps.filter { $0 > oneSecondAgo }
             
             if timestamps.count >= NoiseSecurityConstants.maxMessagesPerSecond {
-                SecureLogger.warning("Per-peer message rate limit exceeded for \(peerID): \(timestamps.count)/\(NoiseSecurityConstants.maxMessagesPerSecond) per second", category: .security)
+                SecureLogger.warning("Per-peer message rate limit exceeded for \(peer.id): \(timestamps.count)/\(NoiseSecurityConstants.maxMessagesPerSecond) per second", category: .security)
                 return false
             }
             
             // Record new message
             timestamps.append(now)
-            messageTimestamps[peerID] = timestamps
+            messageTimestamps[peer] = timestamps
             globalMessageTimestamps.append(now)
             return true
         }
     }
     
-    func reset(for peerID: String) {
+    func reset(for peer: Peer) {
         queue.async(flags: .barrier) {
-            self.handshakeTimestamps.removeValue(forKey: peerID)
-            self.messageTimestamps.removeValue(forKey: peerID)
+            self.handshakeTimestamps.removeValue(forKey: peer)
+            self.messageTimestamps.removeValue(forKey: peer)
         }
     }
 

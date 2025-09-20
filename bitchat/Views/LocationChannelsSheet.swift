@@ -371,8 +371,8 @@ struct LocationChannelsSheet: View {
 
     private func meshCount() -> Int {
         // Count mesh-connected OR mesh-reachable peers (exclude self)
-        let myID = viewModel.meshService.myPeerID
-        return viewModel.allPeers.reduce(0) { acc, peer in
+        let myID = viewModel.meshService.myPeer.id
+        return viewModel.allBitchatPeers.reduce(0) { acc, peer in
             if peer.id != myID && (peer.isConnected || peer.isReachable) { return acc + 1 }
             return acc
         }

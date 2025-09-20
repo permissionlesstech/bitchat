@@ -130,8 +130,8 @@ final class NostrProtocolTests: XCTestCase {
 
         // Build a DELIVERED ack embedded payload (geohash-style, no recipient peer ID)
         let messageID = "TEST-MSG-DELIVERED-1"
-        let senderPeerID = "0123456789abcdef" // 8-byte hex peer ID
-        guard let embedded = NostrEmbeddedBitChat.encodeAckForNostrNoRecipient(type: .delivered, messageID: messageID, senderPeerID: senderPeerID) else {
+        let senderPeer: Peer = "0123456789abcdef" // 8-byte hex peer ID
+        guard let embedded = NostrEmbeddedBitChat.encodeAckForNostrNoRecipient(type: .delivered, messageID: messageID, senderPeer: senderPeer) else {
             XCTFail("Failed to embed delivered ack")
             return
         }
@@ -181,8 +181,8 @@ final class NostrProtocolTests: XCTestCase {
         let recipient = try NostrIdentity.generate()
 
         let messageID = "TEST-MSG-READ-1"
-        let senderPeerID = "fedcba9876543210" // 8-byte hex peer ID
-        guard let embedded = NostrEmbeddedBitChat.encodeAckForNostrNoRecipient(type: .readReceipt, messageID: messageID, senderPeerID: senderPeerID) else {
+        let senderPeer: Peer = "fedcba9876543210" // 8-byte hex peer ID
+        guard let embedded = NostrEmbeddedBitChat.encodeAckForNostrNoRecipient(type: .readReceipt, messageID: messageID, senderPeer: senderPeer) else {
             XCTFail("Failed to embed read ack")
             return
         }

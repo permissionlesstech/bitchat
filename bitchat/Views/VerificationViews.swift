@@ -323,10 +323,10 @@ struct VerificationSheetView: View {
                 }
 
                 // Optional: Remove verification for selected peer (if verified)
-                if let pid = viewModel.selectedPrivateChatPeer,
-                   let fp = viewModel.getFingerprint(for: pid),
+                if let peer = viewModel.selectedPrivateChatPeer,
+                   let fp = viewModel.getFingerprint(for: peer),
                    viewModel.verifiedFingerprints.contains(fp) {
-                    Button(action: { viewModel.unverifyFingerprint(for: pid) }) {
+                    Button(action: { viewModel.unverifyFingerprint(for: peer) }) {
                         Label("remove verification", systemImage: "minus.circle")
                             .font(.system(size: 12, design: .monospaced))
                     }

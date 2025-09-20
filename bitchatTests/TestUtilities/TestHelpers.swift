@@ -30,7 +30,7 @@ final class TestHelpers {
     static func createTestMessage(
         content: String = TestConstants.testMessage1,
         sender: String = TestConstants.testNickname1,
-        senderPeerID: String = TestConstants.testPeerID1,
+        senderPeer: Peer = TestConstants.testPeer1,
         isPrivate: Bool = false,
         recipientNickname: String? = nil,
         mentions: [String]? = nil
@@ -44,23 +44,23 @@ final class TestHelpers {
             originalSender: nil,
             isPrivate: isPrivate,
             recipientNickname: recipientNickname,
-            senderPeerID: senderPeerID,
+            senderPeer: senderPeer,
             mentions: mentions
         )
     }
     
     static func createTestPacket(
         type: UInt8 = 0x01,
-        senderID: String = TestConstants.testPeerID1,
-        recipientID: String? = nil,
+        sender: Peer = TestConstants.testPeer1,
+        recipient: Peer? = nil,
         payload: Data = "test payload".data(using: .utf8)!,
         signature: Data? = nil,
         ttl: UInt8 = 3
     ) -> BitchatPacket {
         return BitchatPacket(
             type: type,
-            senderID: senderID.data(using: .utf8)!,
-            recipientID: recipientID?.data(using: .utf8),
+            senderID: sender.data!,
+            recipientID: recipient?.data,
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
             payload: payload,
             signature: signature,

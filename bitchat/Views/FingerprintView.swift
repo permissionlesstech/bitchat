@@ -10,7 +10,7 @@ import SwiftUI
 
 struct FingerprintView: View {
     @ObservedObject var viewModel: ChatViewModel
-    let peerID: String
+    let peer: Peer
     @Environment(\.dismiss) var dismiss
     @Environment(\.colorScheme) var colorScheme
     
@@ -42,15 +42,17 @@ struct FingerprintView: View {
             
             VStack(alignment: .leading, spacing: 16) {
                 // Prefer short mesh ID for session/encryption status
-                let statusPeerID: String = {
-                    if peerID.count == 64, let short = viewModel.getShortIDForNoiseKey(peerID) { return short }
-                    return peerID
+                let statusPeer: Peer = {
+                    if peer.id.count == 64, let short = viewModel.getShortIDForNoiseKey(peer.id) {
+                        return Peer(str: short)
+                    }
+                    return peer
                 }()
                 // Resolve a friendly name
                 let peerNickname: String = {
-                    if let p = viewModel.getPeer(byID: statusPeerID) { return p.displayName }
-                    if let name = viewModel.meshService.peerNickname(peerID: statusPeerID) { return name }
-                    if peerID.count == 64, let data = Data(hexString: peerID) {
+                    if let p = viewModel.getBitchatPeer(for: statusPeer) { return p.displayName }
+                    if let name = viewModel.meshService.peerNickname(peer: statusPeer) { return name }
+                    if let data = peer.noiseKey {
                         if let fav = FavoritesPersistenceService.shared.getFavoriteStatus(for: data), !fav.peerNickname.isEmpty { return fav.peerNickname }
                         let fp = data.sha256Fingerprint()
                         if let social = viewModel.identityManager.getSocialIdentity(for: fp) {
@@ -61,7 +63,7 @@ struct FingerprintView: View {
                     return "Unknown"
                 }()
                 // Accurate encryption state based on short ID session
-                let encryptionStatus = viewModel.getEncryptionStatus(for: statusPeerID)
+                let encryptionStatus = viewModel.getEncryptionStatus(for: statusPeer)
                 
                 HStack {
                     if let icon = encryptionStatus.icon {
@@ -92,7 +94,7 @@ struct FingerprintView: View {
                         .font(.system(size: 12, weight: .bold, design: .monospaced))
                         .foregroundColor(textColor.opacity(0.7))
                     
-                    if let fingerprint = viewModel.getFingerprint(for: statusPeerID) {
+                    if let fingerprint = viewModel.getFingerprint(for: statusPeer) {
                         Text(formatFingerprint(fingerprint))
                             .font(.system(size: 14, design: .monospaced))
                             .foregroundColor(textColor)
@@ -172,7 +174,7 @@ struct FingerprintView: View {
                         
                         if !isVerified {
                             Button(action: {
-                                viewModel.verifyFingerprint(for: peerID)
+                                viewModel.verifyFingerprint(for: peer)
                                 dismiss()
                             }) {
                                 Text("MARK AS VERIFIED")
@@ -186,7 +188,7 @@ struct FingerprintView: View {
                             .buttonStyle(PlainButtonStyle())
                         } else {
                             Button(action: {
-                                viewModel.unverifyFingerprint(for: peerID)
+                                viewModel.unverifyFingerprint(for: peer)
                                 dismiss()
                             }) {
                                 Text("REMOVE VERIFICATION")
