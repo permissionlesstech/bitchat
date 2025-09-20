@@ -25,8 +25,8 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
     
     // MARK: - Private Properties
     
-    private var peerIndex: [String: BitchatPeer] = [:]
-    private var fingerprintCache: [Peer: String] = [:]  // Peer -> fingerprint
+    private var bitchatPeerIndex: [Peer: BitchatPeer] = [:]
+    private var fingerprintCache: [Peer: String] = [:]
     private let meshService: Transport
     private let identityManager: SecureIdentityStateManagerProtocol
     weak var messageRouter: MessageRouter?
@@ -77,7 +77,7 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         let hasAnyConnected = meshPeers.contains { $0.isConnected }
         let favorites = favoritesService.favorites
         
-        var enrichedPeers: [BitchatPeer] = []
+        var enrichedBitchatPeers: [BitchatPeer] = []
         var connected: Set<Peer> = []
         var addedPeers: Set<Peer> = []
         
@@ -92,7 +92,7 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
                 meshAttached: hasAnyConnected
             )
             
-            enrichedPeers.append(bitchatPeer)
+            enrichedBitchatPeers.append(bitchatPeer)
             if bitchatPeer.isConnected { connected.insert(peer) }
             addedPeers.insert(peer)
             
@@ -110,13 +110,13 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
             if addedPeers.contains(peer) { continue }
             
             // Skip if connected under different ID but same nickname
-            let isConnectedByNickname = enrichedPeers.contains { 
+            let isConnectedByNickname = enrichedBitchatPeers.contains { 
                 $0.nickname == favorite.peerNickname && $0.isConnected 
             }
             if isConnectedByNickname { continue }
             
             let bitchatPeer = buildPeerFromFavorite(favorite: favorite, peer: peer)
-            enrichedPeers.append(bitchatPeer)
+            enrichedBitchatPeers.append(bitchatPeer)
             addedPeers.insert(peer)
             
             // Update fingerprint cache
@@ -124,7 +124,7 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         }
         
         // Phase 3: Sort peers
-        enrichedPeers.sort { lhs, rhs in
+        enrichedBitchatPeers.sort { lhs, rhs in
             // Connectivity rank: connected > reachable > others
             func rank(_ p: BitchatPeer) -> Int { p.isConnected ? 2 : (p.isReachable ? 1 : 0) }
             let lr = rank(lhs), rr = rank(rhs)
@@ -138,28 +138,28 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         // Phase 4: Build subsets and indices
         var favoritesList: [BitchatPeer] = []
         var mutualsList: [BitchatPeer] = []
-        var newIndex: [String: BitchatPeer] = [:]
+        var newIndex: [Peer: BitchatPeer] = [:]
         
-        for peer in enrichedPeers {
-            newIndex[peer.id] = peer
+        for bitchatPeer in enrichedBitchatPeers {
+            newIndex[Peer(str: bitchatPeer.id)] = bitchatPeer
             
-            if peer.isFavorite {
-                favoritesList.append(peer)
+            if bitchatPeer.isFavorite {
+                favoritesList.append(bitchatPeer)
             }
-            if peer.isMutualFavorite {
-                mutualsList.append(peer)
+            if bitchatPeer.isMutualFavorite {
+                mutualsList.append(bitchatPeer)
             }
         }
         
         // Phase 5: Filter out offline non-mutual peers and update published properties
-        let filtered = enrichedPeers.filter { p in
+        let filtered = enrichedBitchatPeers.filter { p in
             p.isConnected || p.isReachable || p.isMutualFavorite
         }
         self.bitchatPeers = filtered
         self.connectedPeers = connected
         self.favorites = favoritesList
         self.mutualFavorites = mutualsList
-        self.peerIndex = newIndex
+        self.bitchatPeerIndex = newIndex
         
         // Log summary (commented out to reduce noise)
         // let connectedCount = connected.count
@@ -224,12 +224,11 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
     
     // MARK: - Public Methods
     
-    /// Get peer by ID
     func getBitchatPeer(for peer: Peer) -> BitchatPeer? {
-        return peerIndex[peer.id]
+        return bitchatPeerIndex[peer]
     }
     
-    /// Get peer ID for nickname
+    /// Get peer for nickname
     func getPeer(for nickname: String) -> Peer? {
         for bitchatPeer in bitchatPeers where bitchatPeer.displayName == nickname || bitchatPeer.nickname == nickname {
             return Peer(str: bitchatPeer.id)

@@ -218,7 +218,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     private let maxMessages = TransportConfig.meshTimelineCap // Maximum messages before oldest are removed
     @Published var isConnected = false
     private var hasNotifiedNetworkAvailable = false
-    private var recentlySeenPeers: Set<String> = []
+    private var recentlySeenPeers: Set<Peer> = []
     private var lastNetworkNotificationTime = Date.distantPast
     private var networkResetTimer: Timer? = nil
     private let networkResetGraceSeconds: TimeInterval = TransportConfig.networkResetGraceSeconds // avoid refiring on short drops/reconnects
@@ -325,7 +325,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         }
         return nil
     }
-    private var peerIndex: [String: BitchatPeer] = [:]
+    private var bitchatPeerIndex: [Peer: BitchatPeer] = [:]
     
     // MARK: - Autocomplete Properties
     
@@ -434,7 +434,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     }
     private var pendingQRVerifications: [Peer: PendingVerification] = [:]
     // Last handled challenge nonce per peer to avoid duplicate responses
-    private var lastVerifyNonceByPeer: [String: Data] = [:]
+    private var lastVerifyNonceByPeer: [Peer: Data] = [:]
     // Track when we last received a verify challenge from a peer (fingerprint-keyed)
     private var lastInboundVerifyChallengeAt: [String: Date] = [:] // key: fingerprint
     // Throttle mutual verification toasts per fingerprint
@@ -567,22 +567,22 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         // Bind unified peer service's peer list to our published property
         let peersCancellable = unifiedPeerService.$bitchatPeers
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] peers in
+            .sink { [weak self] bitchatPeers in
                 guard let self = self else { return }
                 // Update bitchatPeers directly; @Published drives UI updates
-                self.allBitchatPeers = peers
+                self.allBitchatPeers = bitchatPeers
                 // Update peer index for O(1) lookups
                 // Deduplicate bitchatPeers by ID to prevent crash from duplicate keys
-                var uniquePeers: [String: BitchatPeer] = [:]
-                for peer in peers {
+                var uniquePeers: [Peer: BitchatPeer] = [:]
+                for bitchatPeer in bitchatPeers {
                     // Keep the first occurrence of each peer ID
-                    if uniquePeers[peer.id] == nil {
-                        uniquePeers[peer.id] = peer
+                    if uniquePeers[Peer(str: bitchatPeer.id)] == nil {
+                        uniquePeers[Peer(str: bitchatPeer.id)] = bitchatPeer
                     } else {
-                        SecureLogger.warning("⚠️ Duplicate peer ID detected: \(peer.id) (\(peer.displayName))", category: .session)
+                        SecureLogger.warning("⚠️ Duplicate peer ID detected: \(bitchatPeer.id) (\(bitchatPeer.displayName))", category: .session)
                     }
                 }
-                self.peerIndex = uniquePeers
+                self.bitchatPeerIndex = uniquePeers
                 // Update private chat peer ID if needed when peers change
                 if self.selectedPrivateChatFingerprint != nil {
                     self.updatePrivateChatPeerIfNeeded()
@@ -1016,16 +1016,16 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         }
         
         let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(rumorTs))
-        let convKey = "nostr_" + String(senderPubkey.prefix(TransportConfig.nostrConvKeyPrefixLength))
-        nostrKeyMapping[Peer(str: convKey)] = senderPubkey
+        let convPeer: Peer = "nostr_\(senderPubkey.prefix(TransportConfig.nostrConvKeyPrefixLength))"
+        nostrKeyMapping[convPeer] = senderPubkey
         
         switch noisePayload.type {
         case .privateMessage:
-            handlePrivateMessage(payload: noisePayload, senderPubkey: senderPubkey, convKey: convKey, id: id, messageTimestamp: messageTimestamp)
+            handlePrivateMessage(payload: noisePayload, senderPubkey: senderPubkey, convPeer: convPeer, id: id, messageTimestamp: messageTimestamp)
         case .delivered:
-            handleDelivered(noisePayload, senderPubkey: senderPubkey, convKey: convKey)
+            handleDelivered(noisePayload, senderPubkey: senderPubkey, convPeer: convPeer)
         case .readReceipt:
-            handleReadReceipt(noisePayload, senderPubkey: senderPubkey, convKey: convKey)
+            handleReadReceipt(noisePayload, senderPubkey: senderPubkey, convPeer: convPeer)
         case .verifyChallenge, .verifyResponse:
             // QR verification payloads over Nostr are not supported; ignore in geohash DMs
             break
@@ -1035,7 +1035,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     private func handlePrivateMessage(
         payload: NoisePayload,
         senderPubkey: String,
-        convKey: String,
+        convPeer: Peer,
         id: NostrIdentity,
         messageTimestamp: Date
     ) {
@@ -1048,8 +1048,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         if identityManager.isNostrBlocked(pubkeyHexLowercased: senderPubkey) {
             return
         }
-        
-        let convPeer = Peer(str: convKey)
         
         // Dedup storage
         if privateChats[convPeer]?.contains(where: { $0.id == messageId }) == true { return }
@@ -1168,8 +1166,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             }
             // Also check for geohash (Nostr) DM conv key if this peer has a known Nostr pubkey
             if let nostrHex = bitchatPeer.nostrPublicKey {
-                let convKey = "nostr_" + String(nostrHex.prefix(TransportConfig.nostrConvKeyPrefixLength))
-                if unreadPrivateMessages.contains(Peer(str: convKey)) {
+                let convPeer: Peer = "nostr_\(nostrHex.prefix(TransportConfig.nostrConvKeyPrefixLength))"
+                if unreadPrivateMessages.contains(convPeer) {
                     return true
                 }
             }
@@ -1705,17 +1703,17 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             return
         }
         
-        let convKey = "nostr_" + String(senderPubkey.prefix(16))
-        nostrKeyMapping[Peer(str: convKey)] = senderPubkey
+        let convPeer: Peer = "nostr_\(senderPubkey.prefix(16))"
+        nostrKeyMapping[convPeer] = senderPubkey
         
         switch payload.type {
         case .privateMessage:
             let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(rumorTs))
-            handlePrivateMessage(payload, senderPubkey: senderPubkey, convKey: convKey, id: id, messageTimestamp: messageTimestamp)
+            handlePrivateMessage(payload, senderPubkey: senderPubkey, convPeer: convPeer, id: id, messageTimestamp: messageTimestamp)
         case .delivered:
-            handleDelivered(payload, senderPubkey: senderPubkey, convKey: convKey)
+            handleDelivered(payload, senderPubkey: senderPubkey, convPeer: convPeer)
         case .readReceipt:
-            handleReadReceipt(payload, senderPubkey: senderPubkey, convKey: convKey)
+            handleReadReceipt(payload, senderPubkey: senderPubkey, convPeer: convPeer)
         
         // Explicitly list other cases so we get compile-time check if a new case is added in the future
         case .verifyChallenge, .verifyResponse:
@@ -1726,7 +1724,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     private func handlePrivateMessage(
         _ payload: NoisePayload,
         senderPubkey: String,
-        convKey: String,
+        convPeer: Peer,
         id: NostrIdentity,
         messageTimestamp: Date
     ) {
@@ -1736,8 +1734,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         SecureLogger.info("GeoDM: recv PM <- sender=\(senderPubkey.prefix(8))… mid=\(messageId.prefix(8))…", category: .session)
         
         sendDeliveryAckIfNeeded(to: messageId, senderPubKey: senderPubkey, from: id)
-        
-        let convPeer = Peer(str: convKey)
         
         // Duplicate check
         if privateChats[convPeer]?.contains(where: { $0.id == messageId }) == true { return }
@@ -1793,9 +1789,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         objectWillChange.send()
     }
     
-    private func handleDelivered(_ payload: NoisePayload, senderPubkey: String, convKey: String) {
+    private func handleDelivered(_ payload: NoisePayload, senderPubkey: String, convPeer: Peer) {
         guard let messageID = String(data: payload.data, encoding: .utf8) else { return }
-        let convPeer = Peer(str: convKey)
+        
         if let idx = privateChats[convPeer]?.firstIndex(where: { $0.id == messageID }) {
             privateChats[convPeer]?[idx].deliveryStatus = .delivered(to: displayNameForNostrPubkey(senderPubkey), at: Date())
             objectWillChange.send()
@@ -1805,9 +1801,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         }
     }
     
-    private func handleReadReceipt(_ payload: NoisePayload, senderPubkey: String, convKey: String) {
+    private func handleReadReceipt(_ payload: NoisePayload, senderPubkey: String, convPeer: Peer) {
         guard let messageID = String(data: payload.data, encoding: .utf8) else { return }
-        let convPeer = Peer(str: convKey)
+        
         if let idx = privateChats[convPeer]?.firstIndex(where: { $0.id == messageID }) {
             privateChats[convPeer]?[idx].deliveryStatus = .read(by: displayNameForNostrPubkey(senderPubkey), at: Date())
             objectWillChange.send()
@@ -2314,9 +2310,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     }
 
     @MainActor
-    func geohashDisplayName(for convKey: String) -> String {
-        guard let full = nostrKeyMapping[Peer(str: convKey)] else {
-            let suffix = String(convKey.suffix(4))
+    func geohashDisplayName(for convPeer: Peer) -> String {
+        guard let full = nostrKeyMapping[convPeer] else {
+            let suffix = String(convPeer.id.suffix(4))
             return "anon#\(suffix)"
         }
         let suffix = String(full.suffix(4))
@@ -4149,7 +4145,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     // MARK: - Peer Lookup Helpers
     
     func getBitchatPeer(for peer: Peer) -> BitchatPeer? {
-        return peerIndex[peer.id]
+        return bitchatPeerIndex[peer]
     }
     
     @MainActor
@@ -4403,8 +4399,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                 let myNoiseHex = meshService.getNoiseService().getStaticPublicKeyData().hexEncodedString().lowercased()
                 guard tlv.noiseKeyHex.lowercased() == myNoiseHex else { return }
                 // Deduplicate: ignore if we've already responded to this nonce for this peer
-                if let last = lastVerifyNonceByPeer[peer.id], last == tlv.nonceA { return }
-                lastVerifyNonceByPeer[peer.id] = tlv.nonceA
+                if let last = lastVerifyNonceByPeer[peer], last == tlv.nonceA { return }
+                lastVerifyNonceByPeer[peer] = tlv.nonceA
                 // Record inbound challenge time keyed by stable fingerprint if available
                 if let fp = getFingerprint(for: peer) {
                     lastInboundVerifyChallengeAt[fp] = Date()
@@ -4639,7 +4635,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                 }
                 
                 // Rising-edge only: previously zero peers, now > 0 peers
-                let currentPeerSet = Set(meshPeers.map(\.id))
+                let currentPeerSet = Set(meshPeers)
                 let hadNone = self.recentlySeenPeers.isEmpty
                 if meshPeers.count > 0 && hadNone && !self.hasNotifiedNetworkAvailable {
                     self.hasNotifiedNetworkAvailable = true

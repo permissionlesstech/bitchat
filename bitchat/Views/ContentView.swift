@@ -452,7 +452,7 @@ struct ContentView: View {
                 // which may be a transformed system action (sender == "system").
                 if peer.isNostr {
                     // For geohash senders, resolve display name via mapping (works for "nostr:" and "nostr_" keys)
-                    selectedMessageSender = viewModel.geohashDisplayName(for: peer.id)
+                    selectedMessageSender = viewModel.geohashDisplayName(for: peer)
                 } else {
                     // Mesh sender: use current mesh nickname if available; otherwise fall back to last non-system message
                     if let name = viewModel.meshService.peerNickname(peer: peer) {
@@ -1360,7 +1360,7 @@ struct ContentView: View {
             if privatePeer.isNostrUnderscore {
                 // Build geohash DM header: "#<ghash>/@name#abcd"
                 if case .location(let ch) = locationManager.selectedChannel {
-                    let disp = viewModel.geohashDisplayName(for: privatePeer.id)
+                    let disp = viewModel.geohashDisplayName(for: privatePeer)
                     return "#\(ch.geohash)/@\(disp)"
                 }
             }

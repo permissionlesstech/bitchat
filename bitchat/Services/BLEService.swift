@@ -1889,7 +1889,7 @@ final class BLEService: NSObject {
         let packet = BitchatPacket(
             type: MessageType.leave.rawValue,
             ttl: messageTTL,
-            senderID: myPeer.id,
+            sender: myPeer,
             payload: Data(myNickname.utf8)
         )
         broadcastPacket(packet)
