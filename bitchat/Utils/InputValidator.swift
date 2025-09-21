@@ -20,6 +20,13 @@ struct InputValidator {
     
     /// Validates a peer ID from any source (short 16-hex, full 64-hex, or internal alnum/-/_ up to 64)
     static func validatePeerID(_ peerID: String) -> Bool {
+        // Handle different prefixes
+        if peerID.starts(with: "nostr_") || peerID.starts(with: "nostr:") || peerID.starts(with: "noise:") {
+            return validatePeerID(String(peerID.dropFirst(6)))
+        } else if peerID.starts(with: "mesh:") || peerID.starts(with: "name:") {
+            return validatePeerID(String(peerID.dropFirst(5)))
+        }
+        
         // Accept short routing IDs (exact 16-hex)
         if PeerIDResolver.isShortID(peerID) { return true }
         // If length equals short-hex length but isn't valid hex, reject
