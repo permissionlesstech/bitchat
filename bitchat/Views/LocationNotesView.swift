@@ -18,30 +18,23 @@ struct LocationNotesView: View {
         _manager = StateObject(wrappedValue: LocationNotesManager(geohash: gh))
     }
 
-    private var backgroundColor: Color {
-        colorScheme == .dark ? Color.black : Color.white
-    }
-    private var textColor: Color {
-        colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
-    }
-    private var secondaryTextColor: Color {
-        colorScheme == .dark ? Color.green.opacity(0.8) : Color(red: 0, green: 0.5, blue: 0).opacity(0.8)
-    }
-    // Slightly darker green for hash suffix emphasis
-    private var darkerTextColor: Color {
-        colorScheme == .dark ? Color.green : Color(red: 0, green: 0.4, blue: 0)
-    }
+    private var backgroundColor: Color { colorScheme == .dark ? .black : .white }
+    private var accentGreen: Color { colorScheme == .dark ? .green : Color(red: 0, green: 0.5, blue: 0) }
 
     var body: some View {
+#if os(macOS)
         VStack(spacing: 0) {
-            header
-            Divider()
-            list
-            Divider()
-            input
+            ScrollView {
+                VStack(spacing: 0) {
+                    headerSection
+                    notesContent
+                }
+            }
+            .background(backgroundColor)
+            inputSection
         }
+        .frame(minWidth: 420, idealWidth: 440, minHeight: 620, idealHeight: 680)
         .background(backgroundColor)
-        .foregroundColor(textColor)
         .onDisappear { manager.cancel() }
         .onChange(of: geohash) { newValue in
             manager.setGeohash(newValue)
@@ -50,100 +43,202 @@ struct LocationNotesView: View {
         .onChange(of: manager.notes.count) { newValue in
             onNotesCountChanged?(newValue)
         }
+#else
+        NavigationView {
+            VStack(spacing: 0) {
+                headerSection
+                ScrollView {
+                    notesContent
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                inputSection
+            }
+            .background(backgroundColor)
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarHidden(true)
+            #else
+            .navigationTitle("")
+            #endif
+        }
+       #if os(iOS)
+        .presentationDetents([.large])
+        #endif
+        .background(backgroundColor)
+        .onDisappear { manager.cancel() }
+        .onChange(of: geohash) { newValue in
+            manager.setGeohash(newValue)
+        }
+        .onAppear { onNotesCountChanged?(manager.notes.count) }
+        .onChange(of: manager.notes.count) { newValue in
+            onNotesCountChanged?(newValue)
+        }
+#endif
     }
 
-    private var header: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 4) {
-                    let c = manager.notes.count
-                    Text("\(c) \(c == 1 ? "note" : "notes") ")
-                        .font(.system(size: 16, weight: .bold, design: .monospaced))
-                    Text("@ ")
-                        .font(.system(size: 16, weight: .bold, design: .monospaced))
-                    Text("#\(geohash)")
-                        .font(.system(size: 16, weight: .bold, design: .monospaced))
-                        .foregroundColor(textColor)
-                }
-                if let buildingName = locationManager.locationNames[.building], !buildingName.isEmpty {
-                    Text(buildingName)
-                        .font(.system(size: 12, design: .monospaced))
-                        .foregroundColor(secondaryTextColor)
-                } else if let blockName = locationManager.locationNames[.block], !blockName.isEmpty {
-                    Text(blockName)
-                        .font(.system(size: 12, design: .monospaced))
-                        .foregroundColor(secondaryTextColor)
-                }
-            }
-            Spacer()
-            Button(action: { dismiss() }) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                    .foregroundColor(textColor)
-                    .frame(width: 32, height: 32)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Close")
+    private var closeButton: some View {
+        Button(action: { dismiss() }) {
+            Image(systemName: "xmark")
+                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                .frame(width: 32, height: 32)
         }
-        .frame(height: 44)
-        .padding(.horizontal, 12)
-        .background(backgroundColor.opacity(0.95))
+        .buttonStyle(.plain)
+        .accessibilityLabel("Close")
     }
 
-    private var list: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 8) {
-                ForEach(manager.notes) { note in
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 6) {
-                            // Show @name without the #abcd suffix; timestamp in brackets
-                            HStack(spacing: 0) {
-                                Text("@")
-                                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                                    .foregroundColor(textColor)
-                                let parts = splitSuffix(from: note.displayName)
-                                Text(parts.0)
-                                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                                    .foregroundColor(textColor)
-                            }
-                            let ts = timestampText(for: note.createdAt)
-                            Text(ts.isEmpty ? "" : "[\(ts)]")
-                                .font(.system(size: 11, design: .monospaced))
-                                .foregroundColor(secondaryTextColor.opacity(0.8))
-                        }
-                        Text(note.content)
-                            .font(.system(size: 14, design: .monospaced))
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .padding(.horizontal, 12)
-                }
+    private var headerSection: some View {
+        let count = manager.notes.count
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                Text("#\(geohash) • \(count) \(count == 1 ? "note" : "notes")")
+                    .font(.system(size: 18, design: .monospaced))
+                Spacer()
+                closeButton
             }
-            .padding(.vertical, 8)
+            if let building = locationManager.locationNames[.building], !building.isEmpty {
+                Text(building)
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundColor(accentGreen)
+            } else if let block = locationManager.locationNames[.block], !block.isEmpty {
+                Text(block)
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundColor(accentGreen)
+            }
+            Text("add short permanent notes to this location for other visitors to find.")
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if manager.state == .loading && !manager.initialLoadComplete {
+                Text("loading recent notes…")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.secondary)
+            } else if manager.state == .noRelays {
+                Text("geo relays unavailable; notes paused")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.secondary)
+            }
         }
+        .padding(.horizontal, 16)
+        .padding(.top, 16)
+        .padding(.bottom, 12)
         .background(backgroundColor)
     }
 
-    private var input: some View {
-        HStack(alignment: .center, spacing: 8) {
+    private var notesContent: some View {
+        LazyVStack(alignment: .leading, spacing: 12) {
+            if manager.state == .noRelays {
+                noRelaysRow
+            } else if manager.state == .loading && !manager.initialLoadComplete {
+                loadingRow
+            } else if manager.notes.isEmpty {
+                emptyRow
+            } else {
+                ForEach(manager.notes) { note in
+                    noteRow(note)
+                }
+            }
+
+            if let error = manager.errorMessage, manager.state != .noRelays {
+                errorRow(message: error)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+    }
+
+    private func noteRow(_ note: LocationNotesManager.Note) -> some View {
+        let baseName = note.displayName.split(separator: "#", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? note.displayName
+        let ts = timestampText(for: note.createdAt)
+        return VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                Text("@\(baseName)")
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                if !ts.isEmpty {
+                    Text(ts)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+            }
+            Text(note.content)
+                .font(.system(size: 14, design: .monospaced))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var noRelaysRow: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("no geo relays nearby")
+                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+            Text("notes rely on geo relays. check connection and try again.")
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundColor(.secondary)
+            Button("retry") { manager.refresh() }
+                .font(.system(size: 12, design: .monospaced))
+                .buttonStyle(.plain)
+        }
+        .padding(.vertical, 6)
+    }
+
+    private var loadingRow: some View {
+        HStack(spacing: 10) {
+            ProgressView()
+            Text("loading notes…")
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundColor(.secondary)
+            Spacer()
+        }
+        .padding(.vertical, 8)
+    }
+
+    private var emptyRow: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("no notes yet")
+                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+            Text("be the first to add one for this spot.")
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundColor(.secondary)
+        }
+        .padding(.vertical, 6)
+    }
+
+    private func errorRow(message: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 12, design: .monospaced))
+                Text(message)
+                    .font(.system(size: 12, design: .monospaced))
+                Spacer()
+            }
+            Button("dismiss") { manager.clearError() }
+                .font(.system(size: 12, design: .monospaced))
+                .buttonStyle(.plain)
+        }
+        .padding(.vertical, 6)
+    }
+
+    private var inputSection: some View {
+        HStack(alignment: .top, spacing: 10) {
             TextField("add a note for this place", text: $draft, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(.system(size: 14, design: .monospaced))
                 .lineLimit(3, reservesSpace: true)
-                .padding(.horizontal, 12)
-
+                .padding(.vertical, 6)
             Button(action: send) {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 20))
-                    .foregroundColor(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color.gray : textColor)
+                    .foregroundColor(sendButtonEnabled ? accentGreen : .secondary)
             }
+            .padding(.top, 2)
             .buttonStyle(.plain)
-            .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            .padding(.trailing, 12)
+            .disabled(!sendButtonEnabled)
         }
-        .frame(minHeight: 44)
-        .padding(.vertical, 8)
-        .background(backgroundColor.opacity(0.95))
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .background(backgroundColor)
+        .overlay(Divider(), alignment: .top)
     }
 
     private func send() {
@@ -153,15 +248,17 @@ struct LocationNotesView: View {
         draft = ""
     }
 
+    private var sendButtonEnabled: Bool {
+        !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && manager.state != .noRelays
+    }
+
     // MARK: - Timestamp Formatting
     private func timestampText(for date: Date) -> String {
         let now = Date()
         if let days = Calendar.current.dateComponents([.day], from: date, to: now).day, days < 7 {
-            // Relative (minute/hour/day), no seconds
             let rel = Self.relativeFormatter.string(from: date, to: now) ?? ""
             return rel.isEmpty ? "" : "\(rel) ago"
         } else {
-            // Absolute date (MMM d or MMM d, yyyy if different year)
             let sameYear = Calendar.current.isDate(date, equalTo: now, toGranularity: .year)
             let fmt = sameYear ? Self.absDateFormatter : Self.absDateYearFormatter
             return fmt.string(from: date)
@@ -188,17 +285,4 @@ struct LocationNotesView: View {
         f.setLocalizedDateFormatFromTemplate("MMM d, y")
         return f
     }()
-}
-
-// Helper to split a trailing #abcd suffix
-private func splitSuffix(from name: String) -> (String, String) {
-    guard name.count >= 5 else { return (name, "") }
-    let suffix = String(name.suffix(5))
-    if suffix.first == "#", suffix.dropFirst().allSatisfy({ c in
-        ("0"..."9").contains(String(c)) || ("a"..."f").contains(String(c)) || ("A"..."F").contains(String(c))
-    }) {
-        let base = String(name.dropLast(5))
-        return (base, suffix)
-    }
-    return (name, "")
 }

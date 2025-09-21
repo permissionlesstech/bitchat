@@ -116,6 +116,19 @@ struct AppInfoView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical)
             
+            // How to Use
+            VStack(alignment: .leading, spacing: 16) {
+                SectionHeader(Strings.HowToUse.title)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(Strings.HowToUse.instructions, id: \.self) { instruction in
+                        Text(instruction)
+                    }
+                }
+                .font(.system(size: 14, design: .monospaced))
+                .foregroundColor(textColor)
+            }
+
             // Features
             VStack(alignment: .leading, spacing: 16) {
                 SectionHeader(Strings.Features.title)
@@ -160,19 +173,6 @@ struct AppInfoView: View {
                 FeatureRow(icon: Strings.Privacy.panic.0,
                           title: Strings.Privacy.panic.1,
                           description: Strings.Privacy.panic.2)
-            }
-            
-            // How to Use
-            VStack(alignment: .leading, spacing: 16) {
-                SectionHeader(Strings.HowToUse.title)
-                
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(Strings.HowToUse.instructions, id: \.self) { instruction in
-                        Text(instruction)
-                    }
-                }
-                .font(.system(size: 14, design: .monospaced))
-                .foregroundColor(textColor)
             }
             
             // Warning
