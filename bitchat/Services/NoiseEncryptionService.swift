@@ -62,7 +62,6 @@
 /// ## Integration Points
 /// - **BLEService**: Calls this service for all private messages
 /// - **ChatViewModel**: Monitors encryption status for UI indicators
-/// - **NoiseHandshakeCoordinator**: Prevents handshake race conditions
 /// - **KeychainManager**: Secure storage for identity keys
 ///
 /// ## Thread Safety
