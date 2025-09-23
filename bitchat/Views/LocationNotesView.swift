@@ -7,6 +7,7 @@ struct LocationNotesView: View {
     let onNotesCountChanged: ((Int) -> Void)?
 
     @Environment(\.colorScheme) var colorScheme
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @ObservedObject private var locationManager = LocationChannelManager.shared
     @Environment(\.dismiss) private var dismiss
     @State private var draft: String = ""
@@ -20,6 +21,7 @@ struct LocationNotesView: View {
 
     private var backgroundColor: Color { colorScheme == .dark ? .black : .white }
     private var accentGreen: Color { colorScheme == .dark ? .green : Color(red: 0, green: 0.5, blue: 0) }
+    private var maxDraftLines: Int { dynamicTypeSize.isAccessibilitySize ? 5 : 3 }
 
     var body: some View {
 #if os(macOS)
@@ -79,7 +81,7 @@ struct LocationNotesView: View {
     private var closeButton: some View {
         Button(action: { dismiss() }) {
             Image(systemName: "xmark")
-                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                .font(.bitchatSystem(size: 13, weight: .semibold, design: .monospaced))
                 .frame(width: 32, height: 32)
         }
         .buttonStyle(.plain)
@@ -91,30 +93,30 @@ struct LocationNotesView: View {
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
                 Text("#\(geohash) • \(count) \(count == 1 ? "note" : "notes")")
-                    .font(.system(size: 18, design: .monospaced))
+                    .font(.bitchatSystem(size: 18, design: .monospaced))
                 Spacer()
                 closeButton
             }
             if let building = locationManager.locationNames[.building], !building.isEmpty {
                 Text(building)
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(.bitchatSystem(size: 12, design: .monospaced))
                     .foregroundColor(accentGreen)
             } else if let block = locationManager.locationNames[.block], !block.isEmpty {
                 Text(block)
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(.bitchatSystem(size: 12, design: .monospaced))
                     .foregroundColor(accentGreen)
             }
             Text("add short permanent notes to this location for other visitors to find.")
-                .font(.system(size: 12, design: .monospaced))
+                .font(.bitchatSystem(size: 12, design: .monospaced))
                 .foregroundColor(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             if manager.state == .loading && !manager.initialLoadComplete {
                 Text("loading recent notes…")
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.bitchatSystem(size: 11, design: .monospaced))
                     .foregroundColor(.secondary)
             } else if manager.state == .noRelays {
                 Text("geo relays unavailable; notes paused")
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.bitchatSystem(size: 11, design: .monospaced))
                     .foregroundColor(.secondary)
             }
         }
@@ -152,16 +154,16 @@ struct LocationNotesView: View {
         return VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 6) {
                 Text("@\(baseName)")
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .font(.bitchatSystem(size: 12, weight: .semibold, design: .monospaced))
                 if !ts.isEmpty {
                     Text(ts)
-                        .font(.system(size: 11, design: .monospaced))
+                        .font(.bitchatSystem(size: 11, design: .monospaced))
                         .foregroundColor(.secondary)
                 }
                 Spacer()
             }
             Text(note.content)
-                .font(.system(size: 14, design: .monospaced))
+                .font(.bitchatSystem(size: 14, design: .monospaced))
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.vertical, 4)
@@ -170,12 +172,12 @@ struct LocationNotesView: View {
     private var noRelaysRow: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("no geo relays nearby")
-                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                .font(.bitchatSystem(size: 13, weight: .semibold, design: .monospaced))
             Text("notes rely on geo relays. check connection and try again.")
-                .font(.system(size: 12, design: .monospaced))
+                .font(.bitchatSystem(size: 12, design: .monospaced))
                 .foregroundColor(.secondary)
             Button("retry") { manager.refresh() }
-                .font(.system(size: 12, design: .monospaced))
+                .font(.bitchatSystem(size: 12, design: .monospaced))
                 .buttonStyle(.plain)
         }
         .padding(.vertical, 6)
@@ -185,7 +187,7 @@ struct LocationNotesView: View {
         HStack(spacing: 10) {
             ProgressView()
             Text("loading notes…")
-                .font(.system(size: 12, design: .monospaced))
+                .font(.bitchatSystem(size: 12, design: .monospaced))
                 .foregroundColor(.secondary)
             Spacer()
         }
@@ -195,9 +197,9 @@ struct LocationNotesView: View {
     private var emptyRow: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("no notes yet")
-                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                .font(.bitchatSystem(size: 13, weight: .semibold, design: .monospaced))
             Text("be the first to add one for this spot.")
-                .font(.system(size: 12, design: .monospaced))
+                .font(.bitchatSystem(size: 12, design: .monospaced))
                 .foregroundColor(.secondary)
         }
         .padding(.vertical, 6)
@@ -207,13 +209,13 @@ struct LocationNotesView: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(.bitchatSystem(size: 12, design: .monospaced))
                 Text(message)
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(.bitchatSystem(size: 12, design: .monospaced))
                 Spacer()
             }
             Button("dismiss") { manager.clearError() }
-                .font(.system(size: 12, design: .monospaced))
+                .font(.bitchatSystem(size: 12, design: .monospaced))
                 .buttonStyle(.plain)
         }
         .padding(.vertical, 6)
@@ -223,12 +225,12 @@ struct LocationNotesView: View {
         HStack(alignment: .top, spacing: 10) {
             TextField("add a note for this place", text: $draft, axis: .vertical)
                 .textFieldStyle(.plain)
-                .font(.system(size: 14, design: .monospaced))
-                .lineLimit(3, reservesSpace: true)
+                .font(.bitchatSystem(size: 14, design: .monospaced))
+                .lineLimit(maxDraftLines, reservesSpace: true)
                 .padding(.vertical, 6)
             Button(action: send) {
                 Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 20))
+                    .font(.bitchatSystem(size: 20))
                     .foregroundColor(sendButtonEnabled ? accentGreen : .secondary)
             }
             .padding(.top, 2)
