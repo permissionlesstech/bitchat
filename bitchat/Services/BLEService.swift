@@ -50,7 +50,17 @@ struct NotificationStreamAssembler {
                 break
             }
 
-            guard buffer.count >= frameLength else { break }
+            if buffer.count < frameLength {
+                // Check if a new frame start exists within the incomplete buffer; if so, drop leading partial bytes.
+                if let nextStart = buffer.dropFirst().firstIndex(of: 1) {
+                    let dropCount = buffer.distance(from: buffer.startIndex, to: nextStart)
+                    if dropCount > 0 {
+                        buffer.removeFirst(dropCount)
+                        dropped.append(1) // treat as dropped partial start
+                    }
+                }
+                break
+            }
 
             let frame = Data(buffer.prefix(frameLength))
             frames.append(frame)
