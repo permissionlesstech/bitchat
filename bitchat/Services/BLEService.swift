@@ -264,7 +264,9 @@ final class BLEService: NSObject {
     // MARK: - Helpers: IDs, selection, and write backpressure
     private func makeMessageID(for packet: BitchatPacket) -> String {
         let senderID = packet.senderID.hexEncodedString()
-        return "\(senderID)-\(packet.timestamp)-\(packet.type)"
+        let digest = SHA256.hash(data: packet.payload)
+        let digestPrefix = digest.prefix(4).map { String(format: "%02x", $0) }.joined()
+        return "\(senderID)-\(packet.timestamp)-\(packet.type)-\(digestPrefix)"
     }
 
     private func subsetSizeForFanout(_ n: Int) -> Int {
@@ -1183,6 +1185,13 @@ final class BLEService: NSObject {
         // Determine last-hop link for this message to avoid echoing back
         let messageID = makeMessageID(for: packet)
         let ingressLink: LinkID? = collectionsQueue.sync { ingressByMessageID[messageID]?.link }
+        let directedPeerHint: String? = {
+            if let explicit = directedOnlyPeer { return explicit }
+            if let recipient = packet.recipientID?.hexEncodedString(), !recipient.isEmpty {
+                return recipient
+            }
+            return nil
+        }()
 
         let states = snapshotPeripheralStates()
         var minCentralWriteLen: Int?
@@ -1236,7 +1245,7 @@ final class BLEService: NSObject {
         // Special-case control/presence messages: do NOT subset to maximize immediate coverage
         var selectedPeripheralIDs = Set(allowedPeripheralIDs)
         var selectedCentralIDs = Set(allowedCentralIDs)
-        if directedOnlyPeer == nil
+        if directedPeerHint == nil
             && packet.type != MessageType.fragment.rawValue
             && packet.type != MessageType.announce.rawValue
             && packet.type != MessageType.requestSync.rawValue {
@@ -1247,7 +1256,7 @@ final class BLEService: NSObject {
         }
 
         // If directed and we currently have no links to forward on, spool for a short window
-        if let only = directedOnlyPeer,
+        if let only = directedPeerHint,
            selectedPeripheralIDs.isEmpty && selectedCentralIDs.isEmpty,
            (packet.type == MessageType.noiseEncrypted.rawValue || packet.type == MessageType.noiseHandshake.rawValue) {
             spoolDirectedPacket(packet, recipientPeerID: only)
