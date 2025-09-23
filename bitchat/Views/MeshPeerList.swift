@@ -15,7 +15,7 @@ struct MeshPeerList: View {
         if viewModel.allPeers.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
                 Text("nobody around...")
-                    .font(.system(size: 14, design: .monospaced))
+                    .font(.bitchatSystem(size: 14, design: .monospaced))
                     .foregroundColor(secondaryTextColor)
                     .padding(.horizontal)
                     .padding(.top, 12)
@@ -45,27 +45,27 @@ struct MeshPeerList: View {
                         let baseColor = isMe ? Color.orange : assigned
                         if isMe {
                             Image(systemName: "person.fill")
-                                .font(.system(size: 10))
+                                .font(.bitchatSystem(size: 10))
                                 .foregroundColor(baseColor)
                         } else if peer.isConnected {
                             // Mesh-connected peer: radio icon
                             Image(systemName: "antenna.radiowaves.left.and.right")
-                                .font(.system(size: 10))
+                                .font(.bitchatSystem(size: 10))
                                 .foregroundColor(baseColor)
                         } else if peer.isReachable {
                             // Mesh-reachable (relayed): point.3 icon
                             Image(systemName: "point.3.filled.connected.trianglepath.dotted")
-                                .font(.system(size: 10))
+                                .font(.bitchatSystem(size: 10))
                                 .foregroundColor(baseColor)
                         } else if peer.isMutualFavorite {
                             // Mutual favorite reachable via Nostr: globe icon (purple)
                             Image(systemName: "globe")
-                                .font(.system(size: 10))
+                                .font(.bitchatSystem(size: 10))
                                 .foregroundColor(.purple)
                         } else {
                             // Fallback icon for others (dimmed)
                             Image(systemName: "person")
-                                .font(.system(size: 10))
+                                .font(.bitchatSystem(size: 10))
                                 .foregroundColor(secondaryTextColor)
                         }
 
@@ -73,19 +73,19 @@ struct MeshPeerList: View {
                         let (base, suffix) = splitSuffix(from: displayName)
                         HStack(spacing: 0) {
                             Text(base)
-                                .font(.system(size: 14, design: .monospaced))
+                                .font(.bitchatSystem(size: 14, design: .monospaced))
                                 .foregroundColor(baseColor)
                             if !suffix.isEmpty {
                                 let suffixColor = isMe ? Color.orange.opacity(0.6) : baseColor.opacity(0.6)
                                 Text(suffix)
-                                    .font(.system(size: 14, design: .monospaced))
+                                    .font(.bitchatSystem(size: 14, design: .monospaced))
                                     .foregroundColor(suffixColor)
                             }
                         }
 
                         if !isMe, viewModel.isPeerBlocked(peer.id) {
                             Image(systemName: "nosign")
-                                .font(.system(size: 10))
+                                .font(.bitchatSystem(size: 10))
                                 .foregroundColor(.red)
                                 .help("Blocked")
                         }
@@ -94,7 +94,7 @@ struct MeshPeerList: View {
                             if peer.isConnected {
                                 if let icon = item.enc.icon {
                                     Image(systemName: icon)
-                                        .font(.system(size: 10))
+                                        .font(.bitchatSystem(size: 10))
                                         .foregroundColor(baseColor)
                                 }
                             } else {
@@ -102,12 +102,12 @@ struct MeshPeerList: View {
                                 if let fp = viewModel.getFingerprint(for: peer.id),
                                    viewModel.verifiedFingerprints.contains(fp) {
                                     Image(systemName: "checkmark.seal.fill")
-                                        .font(.system(size: 10))
+                                        .font(.bitchatSystem(size: 10))
                                         .foregroundColor(baseColor)
                                 } else if let icon = item.enc.icon {
                                     // Fallback to whatever status says (likely lock if we had a past session)
                                     Image(systemName: icon)
-                                        .font(.system(size: 10))
+                                        .font(.bitchatSystem(size: 10))
                                         .foregroundColor(baseColor)
                                 }
                             }
@@ -118,7 +118,7 @@ struct MeshPeerList: View {
                         // Unread message indicator for this peer
                         if !isMe, item.hasUnread {
                             Image(systemName: "envelope.fill")
-                                .font(.system(size: 10))
+                                .font(.bitchatSystem(size: 10))
                                 .foregroundColor(.orange)
                                 .help("New messages")
                         }
@@ -126,7 +126,7 @@ struct MeshPeerList: View {
                         if !isMe {
                             Button(action: { onToggleFavorite(peer.id) }) {
                                 Image(systemName: (peer.favoriteStatus?.isFavorite ?? false) ? "star.fill" : "star")
-                                    .font(.system(size: 12))
+                                    .font(.bitchatSystem(size: 12))
                                     .foregroundColor((peer.favoriteStatus?.isFavorite ?? false) ? .yellow : secondaryTextColor)
                             }
                             .buttonStyle(.plain)

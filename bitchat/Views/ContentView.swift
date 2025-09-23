@@ -30,6 +30,7 @@ struct ContentView: View {
     @State private var textFieldSelection: NSRange? = nil
     @FocusState private var isTextFieldFocused: Bool
     @Environment(\.colorScheme) var colorScheme
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var showPeerList = false
     @State private var showSidebar = false
     @State private var sidebarDragOffset: CGFloat = 0
@@ -53,6 +54,7 @@ struct ContentView: View {
     @State private var showLocationNotes = false
     @State private var notesGeohash: String? = nil
     @State private var sheetNotesCount: Int = 0
+    @ScaledMetric(relativeTo: .body) private var headerHeight: CGFloat = 44
     // Timer-based refresh removed; use LocationChannelManager live updates instead
     // Window sizes for rendering (infinite scroll up)
     @State private var windowCountPublic: Int = 300
@@ -63,13 +65,17 @@ struct ContentView: View {
     private var backgroundColor: Color {
         colorScheme == .dark ? Color.black : Color.white
     }
-    
+
     private var textColor: Color {
         colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
     }
-    
+
     private var secondaryTextColor: Color {
         colorScheme == .dark ? Color.green.opacity(0.8) : Color(red: 0, green: 0.5, blue: 0).opacity(0.8)
+    }
+
+    private var headerLineLimit: Int? {
+        dynamicTypeSize.isAccessibilitySize ? 2 : 1
     }
     
     // MARK: - Body
@@ -328,7 +334,7 @@ struct ContentView: View {
                                             if isExpanded { expandedMessageIDs.remove(message.id) }
                                             else { expandedMessageIDs.insert(message.id) }
                                         }
-                                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                        .font(.bitchatSystem(size: 11, weight: .medium, design: .monospaced))
                                         .foregroundColor(Color.blue)
                                         .padding(.top, 4)
                                     }
@@ -706,7 +712,7 @@ struct ContentView: View {
                         }) {
                             HStack {
                                 Text(suggestion)
-                                    .font(.system(size: 11, design: .monospaced))
+                                    .font(.bitchatSystem(size: 11, design: .monospaced))
                                     .foregroundColor(textColor)
                                     .fontWeight(.medium)
                                 Spacer()
@@ -764,14 +770,14 @@ struct ContentView: View {
                                 HStack {
                                     // Show all aliases together
                                     Text(info.commands.joined(separator: ", "))
-                                        .font(.system(size: 11, design: .monospaced))
+                                        .font(.bitchatSystem(size: 11, design: .monospaced))
                                         .foregroundColor(textColor)
                                         .fontWeight(.medium)
                                     
                                     // Show syntax if any
                                     if let syntax = info.syntax {
                                         Text(syntax)
-                                            .font(.system(size: 10, design: .monospaced))
+                                            .font(.bitchatSystem(size: 10, design: .monospaced))
                                             .foregroundColor(secondaryTextColor.opacity(0.8))
                                     }
                                     
@@ -779,7 +785,7 @@ struct ContentView: View {
                                     
                                     // Show description
                                     Text(info.description)
-                                        .font(.system(size: 10, design: .monospaced))
+                                        .font(.bitchatSystem(size: 10, design: .monospaced))
                                         .foregroundColor(secondaryTextColor)
                                 }
                                 .padding(.horizontal, 12)
@@ -802,7 +808,7 @@ struct ContentView: View {
             HStack(alignment: .center, spacing: 4) {
             TextField("type a message...", text: $messageText)
                 .textFieldStyle(.plain)
-                .font(.system(size: 14, design: .monospaced))
+                .font(.bitchatSystem(size: 14, design: .monospaced))
                 .foregroundColor(textColor)
                 .focused($isTextFieldFocused)
                 .padding(.leading, 12)
@@ -877,7 +883,7 @@ struct ContentView: View {
             
             Button(action: sendMessage) {
                 Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 20))
+                    .font(.bitchatSystem(size: 20))
                     .foregroundColor(messageText.isEmpty ? Color.gray :
                                             viewModel.selectedPrivateChatPeer != nil
                                              ? Color.orange : textColor)
@@ -918,20 +924,20 @@ struct ContentView: View {
                 // Header - match main toolbar height
                 HStack {
                     Text("PEOPLE")
-                        .font(.system(size: 16, weight: .bold, design: .monospaced))
+                        .font(.bitchatSystem(size: 16, weight: .bold, design: .monospaced))
                         .foregroundColor(textColor)
                     Spacer()
                     // Show QR in mesh on all platforms
                     if case .mesh = locationManager.selectedChannel {
                         Button(action: { showVerifySheet = true }) {
                             Image(systemName: "qrcode")
-                                .font(.system(size: 14))
+                                .font(.bitchatSystem(size: 14))
                         }
                         .buttonStyle(.plain)
                         .help("Verification: show my QR or scan a friend")
                     }
                 }
-                .frame(height: 44) // Match header height
+                .frame(height: headerHeight) // Match header height
                 .padding(.horizontal, 12)
                 .background(backgroundColor.opacity(0.95))
                 
@@ -1082,7 +1088,7 @@ struct ContentView: View {
     private var mainHeaderView: some View {
         HStack(spacing: 0) {
             Text("bitchat/")
-                .font(.system(size: 18, weight: .medium, design: .monospaced))
+                .font(.bitchatSystem(size: 18, weight: .medium, design: .monospaced))
                 .foregroundColor(textColor)
                 .onTapGesture(count: 3) {
                     // PANIC: Triple-tap to clear all data
@@ -1095,12 +1101,12 @@ struct ContentView: View {
             
             HStack(spacing: 0) {
                 Text("@")
-                    .font(.system(size: 14, design: .monospaced))
+                    .font(.bitchatSystem(size: 14, design: .monospaced))
                     .foregroundColor(secondaryTextColor)
                 
                 TextField("nickname", text: $viewModel.nickname)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 14, design: .monospaced))
+                    .font(.bitchatSystem(size: 14, design: .monospaced))
                     .frame(maxWidth: 80)
                     .foregroundColor(textColor)
                     .focused($isNicknameFieldFocused)
@@ -1139,7 +1145,7 @@ struct ContentView: View {
                 if viewModel.hasAnyUnreadMessages {
                     Button(action: { viewModel.openMostRelevantPrivateChat() }) {
                         Image(systemName: "envelope.fill")
-                            .font(.system(size: 12))
+                            .font(.bitchatSystem(size: 12))
                             .foregroundColor(Color.orange)
                     }
                     .buttonStyle(.plain)
@@ -1159,7 +1165,7 @@ struct ContentView: View {
                             let currentCount = (notesCounter.count ?? 0)
                             let hasNotes = (!notesCounter.initialLoadComplete ? max(currentCount, sheetNotesCount) : currentCount) > 0
                             Image(systemName: "long.text.page.and.pencil")
-                                .font(.system(size: 12))
+                                .font(.bitchatSystem(size: 12))
                                 .foregroundColor(hasNotes ? textColor : Color.gray)
                                 .padding(.top, 1)
                         }
@@ -1173,7 +1179,7 @@ struct ContentView: View {
                 if case .location(let ch) = locationManager.selectedChannel {
                     Button(action: { GeohashBookmarksStore.shared.toggle(ch.geohash) }) {
                         Image(systemName: GeohashBookmarksStore.shared.isBookmarked(ch.geohash) ? "bookmark.fill" : "bookmark")
-                            .font(.system(size: 12))
+                            .font(.bitchatSystem(size: 12))
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Toggle bookmark for #\(ch.geohash)")
@@ -1196,9 +1202,9 @@ struct ContentView: View {
                         }
                     }()
                     Text(badgeText)
-                        .font(.system(size: 14, design: .monospaced))
+                        .font(.bitchatSystem(size: 14, design: .monospaced))
                         .foregroundColor(badgeColor)
-                        .lineLimit(1)
+                        .lineLimit(headerLineLimit)
                         .fixedSize(horizontal: true, vertical: false)
                         .layoutPriority(2)
                         .accessibilityLabel("location channels")
@@ -1210,15 +1216,15 @@ struct ContentView: View {
                 HStack(spacing: 4) {
                     // People icon with count
                     Image(systemName: "person.2.fill")
-                        .font(.system(size: 11))
+                        .font(.bitchatSystem(size: 11))
                         .accessibilityLabel("\(headerOtherPeersCount) people")
                     Text("\(headerOtherPeersCount)")
-                        .font(.system(size: 12, design: .monospaced))
+                        .font(.bitchatSystem(size: 12, design: .monospaced))
                         .accessibilityHidden(true)
                 }
                 .foregroundColor(headerCountColor)
                 .padding(.leading, 2)
-                .lineLimit(1)
+                .lineLimit(headerLineLimit)
                 .fixedSize(horizontal: true, vertical: false)
 
                 // QR moved to the PEOPLE header in the sidebar when on mesh channel
@@ -1235,7 +1241,7 @@ struct ContentView: View {
                     .environmentObject(viewModel)
             }
         }
-        .frame(height: 44)
+        .frame(height: headerHeight)
         .padding(.horizontal, 12)
         .sheet(isPresented: $showLocationChannelsSheet) {
             LocationChannelsSheet(isPresented: $showLocationChannelsSheet)
@@ -1251,22 +1257,22 @@ struct ContentView: View {
                     VStack(spacing: 12) {
                         HStack {
                             Text("notes")
-                                .font(.system(size: 16, weight: .bold, design: .monospaced))
+                                .font(.bitchatSystem(size: 16, weight: .bold, design: .monospaced))
                             Spacer()
                             Button(action: { showLocationNotes = false }) {
                                 Image(systemName: "xmark")
-                                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                                    .font(.bitchatSystem(size: 13, weight: .semibold, design: .monospaced))
                                     .foregroundColor(textColor)
                                     .frame(width: 32, height: 32)
                             }
                             .buttonStyle(.plain)
                             .accessibilityLabel("Close")
                         }
-                        .frame(height: 44)
+                        .frame(height: headerHeight)
                         .padding(.horizontal, 12)
                         .background(backgroundColor.opacity(0.95))
                         Text("location unavailable")
-                            .font(.system(size: 14, design: .monospaced))
+                            .font(.bitchatSystem(size: 14, design: .monospaced))
                             .foregroundColor(secondaryTextColor)
                         Button("enable location") {
                             LocationChannelManager.shared.enableLocationChannels()
@@ -1417,19 +1423,19 @@ struct ContentView: View {
                                 case .bluetoothConnected:
                                     // Radio icon for mesh connection
                                     Image(systemName: "dot.radiowaves.left.and.right")
-                                        .font(.system(size: 14))
+                                        .font(.bitchatSystem(size: 14))
                                         .foregroundColor(textColor)
                                         .accessibilityLabel("Connected via mesh")
                                 case .meshReachable:
                                     // point.3 filled icon for reachable via mesh (not directly connected)
                                     Image(systemName: "point.3.filled.connected.trianglepath.dotted")
-                                        .font(.system(size: 14))
+                                        .font(.bitchatSystem(size: 14))
                                         .foregroundColor(textColor)
                                         .accessibilityLabel("Reachable via mesh")
                                 case .nostrAvailable:
                                     // Purple globe for Nostr
                                     Image(systemName: "globe")
-                                        .font(.system(size: 14))
+                                        .font(.bitchatSystem(size: 14))
                                         .foregroundColor(.purple)
                                         .accessibilityLabel("Available via Nostr")
                                 case .offline:
@@ -1439,25 +1445,25 @@ struct ContentView: View {
                             } else if viewModel.meshService.isPeerReachable(headerPeerID) {
                                 // Fallback: reachable via mesh but not in current peer list
                                 Image(systemName: "point.3.filled.connected.trianglepath.dotted")
-                                    .font(.system(size: 14))
+                                    .font(.bitchatSystem(size: 14))
                                     .foregroundColor(textColor)
                                     .accessibilityLabel("Reachable via mesh")
                             } else if isNostrAvailable {
                                 // Fallback to Nostr if peer not in list but is mutual favorite
                                 Image(systemName: "globe")
-                                    .font(.system(size: 14))
+                                    .font(.bitchatSystem(size: 14))
                                     .foregroundColor(.purple)
                                     .accessibilityLabel("Available via Nostr")
                             } else if viewModel.meshService.isPeerConnected(headerPeerID) || viewModel.connectedPeers.contains(headerPeerID) {
                                 // Fallback: if peer lookup is missing but mesh reports connected, show radio
                                 Image(systemName: "dot.radiowaves.left.and.right")
-                                    .font(.system(size: 14))
+                                    .font(.bitchatSystem(size: 14))
                                     .foregroundColor(textColor)
                                     .accessibilityLabel("Connected via mesh")
                             }
                             
                             Text("\(privatePeerNick)")
-                                .font(.system(size: 16, weight: .medium, design: .monospaced))
+                                .font(.bitchatSystem(size: 16, weight: .medium, design: .monospaced))
                                 .foregroundColor(textColor)                            // Dynamic encryption status icon (hide for geohash DMs)
                             if !privatePeerID.hasPrefix("nostr_") {
                                 // Use short peer ID if available for encryption status (sessions keyed by short ID)
@@ -1470,7 +1476,7 @@ struct ContentView: View {
                                 let encryptionStatus = viewModel.getEncryptionStatus(for: statusPeerID)
                                 if let icon = encryptionStatus.icon {
                                     Image(systemName: icon)
-                                        .font(.system(size: 14))
+                                        .font(.bitchatSystem(size: 14))
                                         .foregroundColor(encryptionStatus == .noiseVerified ? textColor : 
                                                        encryptionStatus == .noiseSecured ? textColor :
                                                        Color.red)
@@ -1492,7 +1498,7 @@ struct ContentView: View {
                             }
                         }) {
                             Image(systemName: "chevron.left")
-                                .font(.system(size: 12))
+                                .font(.bitchatSystem(size: 12))
                                 .foregroundColor(textColor)
                                 .frame(width: 44, height: 44, alignment: .leading)
                                 .contentShape(Rectangle())
@@ -1508,7 +1514,7 @@ struct ContentView: View {
                                 viewModel.toggleFavorite(peerID: headerPeerID)
                             }) {
                                 Image(systemName: viewModel.isFavorite(peerID: headerPeerID) ? "star.fill" : "star")
-                                    .font(.system(size: 16))
+                                    .font(.bitchatSystem(size: 16))
                                     .foregroundColor(viewModel.isFavorite(peerID: headerPeerID) ? Color.yellow : textColor)
                             }
                             .buttonStyle(.plain)
@@ -1517,7 +1523,7 @@ struct ContentView: View {
                         }
                     }
                 }
-                .frame(height: 44)
+                .frame(height: headerHeight)
                 .padding(.horizontal, 12)
                 .background(backgroundColor.opacity(0.95))
     }
@@ -1574,7 +1580,7 @@ private struct PaymentChipView: View {
             HStack(spacing: 6) {
                 Text(emoji)
                 Text(label)
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .font(.bitchatSystem(size: 12, weight: .semibold, design: .monospaced))
             }
             .padding(.vertical, 6)
             .padding(.horizontal, 12)
@@ -1615,20 +1621,20 @@ struct DeliveryStatusView: View {
         switch status {
         case .sending:
             Image(systemName: "circle")
-                .font(.system(size: 10))
+                .font(.bitchatSystem(size: 10))
                 .foregroundColor(secondaryTextColor.opacity(0.6))
             
         case .sent:
             Image(systemName: "checkmark")
-                .font(.system(size: 10))
+                .font(.bitchatSystem(size: 10))
                 .foregroundColor(secondaryTextColor.opacity(0.6))
             
         case .delivered(let nickname, _):
             HStack(spacing: -2) {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 10))
+                    .font(.bitchatSystem(size: 10))
                 Image(systemName: "checkmark")
-                    .font(.system(size: 10))
+                    .font(.bitchatSystem(size: 10))
             }
             .foregroundColor(textColor.opacity(0.8))
             .help("Delivered to \(nickname)")
@@ -1636,25 +1642,25 @@ struct DeliveryStatusView: View {
         case .read(let nickname, _):
             HStack(spacing: -2) {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.bitchatSystem(size: 10, weight: .bold))
                 Image(systemName: "checkmark")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.bitchatSystem(size: 10, weight: .bold))
             }
             .foregroundColor(Color(red: 0.0, green: 0.478, blue: 1.0))  // Bright blue
             .help("Read by \(nickname)")
             
         case .failed(let reason):
             Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 10))
+                .font(.bitchatSystem(size: 10))
                 .foregroundColor(Color.red.opacity(0.8))
                 .help("Failed: \(reason)")
             
         case .partiallyDelivered(let reached, let total):
             HStack(spacing: 1) {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 10))
+                    .font(.bitchatSystem(size: 10))
                 Text("\(reached)/\(total)")
-                    .font(.system(size: 10, design: .monospaced))
+                    .font(.bitchatSystem(size: 10, design: .monospaced))
             }
             .foregroundColor(secondaryTextColor.opacity(0.6))
             .help("Delivered to \(reached) of \(total) members")

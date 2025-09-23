@@ -3323,7 +3323,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             senderStyle.foregroundColor = baseColor
             // Bold the user's own nickname
             let fontWeight: Font.Weight = isSelf ? .bold : .medium
-            senderStyle.font = .system(size: 14, weight: fontWeight, design: .monospaced)
+            senderStyle.font = .bitchatSystem(size: 14, weight: fontWeight, design: .monospaced)
             // Make sender clickable: encode senderPeerID into a custom URL
             if let spid = message.senderPeerID, let url = URL(string: "bitchat://user/\(spid.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? spid)") {
                 senderStyle.link = url
@@ -3358,8 +3358,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                 var plainStyle = AttributeContainer()
                 plainStyle.foregroundColor = baseColor
                 plainStyle.font = isSelf
-                    ? .system(size: 14, weight: .bold, design: .monospaced)
-                    : .system(size: 14, design: .monospaced)
+                    ? .bitchatSystem(size: 14, weight: .bold, design: .monospaced)
+                    : .bitchatSystem(size: 14, design: .monospaced)
                 result.append(AttributedString(content).mergingAttributes(plainStyle))
             } else {
             // Reuse compiled regexes and detector
@@ -3455,8 +3455,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                             var beforeStyle = AttributeContainer()
                             beforeStyle.foregroundColor = baseColor
                             beforeStyle.font = isSelf
-                                ? .system(size: 14, weight: .bold, design: .monospaced)
-                                : .system(size: 14, design: .monospaced)
+                                ? .bitchatSystem(size: 14, weight: .bold, design: .monospaced)
+                                : .bitchatSystem(size: 14, design: .monospaced)
                             if isMentioned {
                                 beforeStyle.font = beforeStyle.font?.bold()
                             }
@@ -3486,7 +3486,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                             return false
                         }()
                         var mentionStyle = AttributeContainer()
-                        mentionStyle.font = .system(size: 14, weight: isSelf ? .bold : .semibold, design: .monospaced)
+                        mentionStyle.font = .bitchatSystem(size: 14, weight: isSelf ? .bold : .semibold, design: .monospaced)
                         let mentionColor: Color = isMentionToMe ? .orange : baseColor
                         mentionStyle.foregroundColor = mentionColor
                         // Emit '@'
@@ -3530,8 +3530,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                             }()
                             var tagStyle = AttributeContainer()
                             tagStyle.font = isSelf
-                                ? .system(size: 14, weight: .bold, design: .monospaced)
-                                : .system(size: 14, design: .monospaced)
+                                ? .bitchatSystem(size: 14, weight: .bold, design: .monospaced)
+                                : .bitchatSystem(size: 14, design: .monospaced)
                             tagStyle.foregroundColor = baseColor
                             if isGeohash && !attachedToMention && standalone, let url = URL(string: "bitchat://geohash/\(token)") {
                                 tagStyle.link = url
@@ -3544,21 +3544,21 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                             var spacer = AttributeContainer()
                             spacer.foregroundColor = baseColor
                             spacer.font = isSelf
-                                ? .system(size: 14, weight: .bold, design: .monospaced)
-                                : .system(size: 14, design: .monospaced)
+                                ? .bitchatSystem(size: 14, weight: .bold, design: .monospaced)
+                                : .bitchatSystem(size: 14, design: .monospaced)
                             result.append(AttributedString(" ").mergingAttributes(spacer))
                         } else if type == "lightning" || type == "bolt11" || type == "lnurl" {
                             // Skip inline invoice/link; a styled chip is rendered below the message
                             var spacer = AttributeContainer()
                             spacer.foregroundColor = baseColor
                             spacer.font = isSelf
-                                ? .system(size: 14, weight: .bold, design: .monospaced)
-                                : .system(size: 14, design: .monospaced)
+                                ? .bitchatSystem(size: 14, weight: .bold, design: .monospaced)
+                                : .bitchatSystem(size: 14, design: .monospaced)
                             result.append(AttributedString(" ").mergingAttributes(spacer))
                         } else {
                             // Keep URL styling and make it tappable via .link attribute
                             var matchStyle = AttributeContainer()
-                            matchStyle.font = .system(size: 14, weight: isSelf ? .bold : .semibold, design: .monospaced)
+                            matchStyle.font = .bitchatSystem(size: 14, weight: isSelf ? .bold : .semibold, design: .monospaced)
                             if type == "url" {
                                 matchStyle.foregroundColor = isSelf ? .orange : .blue
                                 matchStyle.underlineStyle = .single
@@ -3582,8 +3582,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                 var remainingStyle = AttributeContainer()
                 remainingStyle.foregroundColor = baseColor
                 remainingStyle.font = isSelf
-                    ? .system(size: 14, weight: .bold, design: .monospaced)
-                    : .system(size: 14, design: .monospaced)
+                    ? .bitchatSystem(size: 14, weight: .bold, design: .monospaced)
+                    : .bitchatSystem(size: 14, design: .monospaced)
                 if isMentioned {
                     remainingStyle.font = remainingStyle.font?.bold()
                 }
@@ -3595,21 +3595,21 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             let timestamp = AttributedString(" [\(message.formattedTimestamp)]")
             var timestampStyle = AttributeContainer()
             timestampStyle.foregroundColor = Color.gray.opacity(0.7)
-            timestampStyle.font = .system(size: 10, design: .monospaced)
+            timestampStyle.font = .bitchatSystem(size: 10, design: .monospaced)
             result.append(timestamp.mergingAttributes(timestampStyle))
         } else {
             // System message
             var contentStyle = AttributeContainer()
             contentStyle.foregroundColor = Color.gray
             let content = AttributedString("* \(message.content) *")
-            contentStyle.font = .system(size: 12, design: .monospaced).italic()
+            contentStyle.font = .bitchatSystem(size: 12, design: .monospaced).italic()
             result.append(content.mergingAttributes(contentStyle))
             
             // Add timestamp at the end for system messages too
             let timestamp = AttributedString(" [\(message.formattedTimestamp)]")
             var timestampStyle = AttributeContainer()
             timestampStyle.foregroundColor = Color.gray.opacity(0.5)
-            timestampStyle.font = .system(size: 10, design: .monospaced)
+            timestampStyle.font = .bitchatSystem(size: 10, design: .monospaced)
             result.append(timestamp.mergingAttributes(timestampStyle))
         }
         
@@ -3629,14 +3629,14 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             let content = AttributedString("* \(message.content) *")
             var contentStyle = AttributeContainer()
             contentStyle.foregroundColor = Color.gray
-            contentStyle.font = .system(size: 12, design: .monospaced).italic()
+            contentStyle.font = .bitchatSystem(size: 12, design: .monospaced).italic()
             result.append(content.mergingAttributes(contentStyle))
             
             // Add timestamp at the end for system messages
             let timestamp = AttributedString(" [\(message.formattedTimestamp)]")
             var timestampStyle = AttributeContainer()
             timestampStyle.foregroundColor = Color.gray.opacity(0.5)
-            timestampStyle.font = .system(size: 10, design: .monospaced)
+            timestampStyle.font = .bitchatSystem(size: 10, design: .monospaced)
             result.append(timestamp.mergingAttributes(timestampStyle))
         } else {
             let sender = AttributedString("<@\(message.sender)> ")
@@ -3646,7 +3646,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             senderStyle.foregroundColor = primaryColor
             // Bold the user's own nickname
             let fontWeight: Font.Weight = message.sender == nickname ? .bold : .medium
-            senderStyle.font = .system(size: 12, weight: fontWeight, design: .monospaced)
+            senderStyle.font = .bitchatSystem(size: 12, weight: fontWeight, design: .monospaced)
             result.append(sender.mergingAttributes(senderStyle))
             
             
@@ -3670,7 +3670,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                         let beforeText = String(contentText[lastEndIndex..<range.lowerBound])
                         if !beforeText.isEmpty {
                             var normalStyle = AttributeContainer()
-                            normalStyle.font = .system(size: 14, design: .monospaced)
+                            normalStyle.font = .bitchatSystem(size: 14, design: .monospaced)
                             normalStyle.foregroundColor = isDark ? Color.white : Color.black
                             processedContent.append(AttributedString(beforeText).mergingAttributes(normalStyle))
                         }
@@ -3679,7 +3679,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                     // Add the mention with highlight
                     let mentionText = String(contentText[range])
                     var mentionStyle = AttributeContainer()
-                    mentionStyle.font = .system(size: 14, weight: .semibold, design: .monospaced)
+                    mentionStyle.font = .bitchatSystem(size: 14, weight: .semibold, design: .monospaced)
                     mentionStyle.foregroundColor = Color.orange
                     processedContent.append(AttributedString(mentionText).mergingAttributes(mentionStyle))
                     
@@ -3691,7 +3691,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             if lastEndIndex < contentText.endIndex {
                 let remainingText = String(contentText[lastEndIndex...])
                 var normalStyle = AttributeContainer()
-                normalStyle.font = .system(size: 14, design: .monospaced)
+                normalStyle.font = .bitchatSystem(size: 14, design: .monospaced)
                 normalStyle.foregroundColor = isDark ? Color.white : Color.black
                 processedContent.append(AttributedString(remainingText).mergingAttributes(normalStyle))
             }
@@ -3702,7 +3702,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                 let relay = AttributedString(" (via \(originalSender))")
                 var relayStyle = AttributeContainer()
                 relayStyle.foregroundColor = primaryColor.opacity(0.7)
-                relayStyle.font = .system(size: 11, design: .monospaced)
+                relayStyle.font = .bitchatSystem(size: 11, design: .monospaced)
                 result.append(relay.mergingAttributes(relayStyle))
             }
             
@@ -3710,7 +3710,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             let timestamp = AttributedString(" [\(message.formattedTimestamp)]")
             var timestampStyle = AttributeContainer()
             timestampStyle.foregroundColor = Color.gray.opacity(0.7)
-            timestampStyle.font = .system(size: 10, design: .monospaced)
+            timestampStyle.font = .bitchatSystem(size: 10, design: .monospaced)
             result.append(timestamp.mergingAttributes(timestampStyle))
         }
         

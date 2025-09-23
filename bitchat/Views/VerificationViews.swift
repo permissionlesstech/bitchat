@@ -16,7 +16,7 @@ struct MyQRView: View {
     var body: some View {
         VStack(spacing: 12) {
             Text("scan to verify me")
-                .font(.system(size: 16, weight: .bold, design: .monospaced))
+                .font(.bitchatSystem(size: 16, weight: .bold, design: .monospaced))
 
             VStack(spacing: 10) {
                 QRCodeImage(data: qrString, size: 240)
@@ -24,7 +24,7 @@ struct MyQRView: View {
 
                 // Non-scrolling, fully visible URL (wraps across lines)
                 Text(qrString)
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.bitchatSystem(size: 11, design: .monospaced))
                     .textSelection(.enabled)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
@@ -60,7 +60,7 @@ struct QRCodeImage: View {
                     .frame(width: size, height: size)
                     .overlay(
                         Text("qr unavailable")
-                            .font(.system(size: 12, design: .monospaced))
+                            .font(.bitchatSystem(size: 12, design: .monospaced))
                             .foregroundColor(.gray)
                     )
             }
@@ -119,7 +119,7 @@ struct QRScanView: View {
             .clipShape(RoundedRectangle(cornerRadius: 8))
             #else
             Text("paste qr content to validate:")
-                .font(.system(size: 14, weight: .medium, design: .monospaced))
+                .font(.bitchatSystem(size: 14, weight: .medium, design: .monospaced))
             TextEditor(text: $input)
                 .frame(height: 100)
                 .border(Color.gray.opacity(0.4))
@@ -255,7 +255,7 @@ struct VerificationSheetView: View {
             // Top header (always at top)
             HStack {
                 Text("VERIFY")
-                    .font(.system(size: 14, weight: .bold, design: .monospaced))
+                    .font(.bitchatSystem(size: 14, weight: .bold, design: .monospaced))
                     .foregroundColor(accentColor)
                 Spacer()
                 Button(action: {
@@ -263,7 +263,7 @@ struct VerificationSheetView: View {
                     isPresented = false
                 }) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.bitchatSystem(size: 14, weight: .semibold))
                         .foregroundColor(accentColor)
                 }
                 .buttonStyle(.plain)
@@ -279,7 +279,7 @@ struct VerificationSheetView: View {
                 if showingScanner {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("scan a friend's qr")
-                            .font(.system(size: 16, weight: .bold, design: .monospaced))
+                            .font(.bitchatSystem(size: 16, weight: .bold, design: .monospaced))
                             .frame(maxWidth: .infinity)
                             .multilineTextAlignment(.center)
                             .foregroundColor(accentColor)
@@ -310,13 +310,13 @@ struct VerificationSheetView: View {
                 if showingScanner {
                     Button(action: { showingScanner = false }) {
                         Label("show my qr", systemImage: "qrcode")
-                            .font(.system(size: 13, design: .monospaced))
+                            .font(.bitchatSystem(size: 13, design: .monospaced))
                     }
                     .buttonStyle(.bordered)
                 } else {
                     Button(action: { showingScanner = true }) {
                         Label("scan someone else's qr", systemImage: "camera.viewfinder")
-                            .font(.system(size: 13, weight: .medium, design: .monospaced))
+                            .font(.bitchatSystem(size: 13, weight: .medium, design: .monospaced))
                     }
                     .buttonStyle(.bordered)
                     .tint(.gray)
@@ -328,7 +328,7 @@ struct VerificationSheetView: View {
                    viewModel.verifiedFingerprints.contains(fp) {
                     Button(action: { viewModel.unverifyFingerprint(for: pid) }) {
                         Label("remove verification", systemImage: "minus.circle")
-                            .font(.system(size: 12, design: .monospaced))
+                            .font(.bitchatSystem(size: 12, design: .monospaced))
                     }
                     .buttonStyle(.bordered)
                     .tint(.gray)
