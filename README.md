@@ -9,7 +9,7 @@ A decentralized peer-to-peer messaging app with dual transport architecture: loc
 📲 [App Store](https://apps.apple.com/us/app/bitchat-mesh/id6748219622)
 
 > [!WARNING]
-> Private messages have not received external security review and may contain vulnerabilities. Do not use for sensitive use cases, and do not rely on its security until it has been reviewed. Now uses the [Noise Protocol](http://www.noiseprotocol.org) for identity and encryption. Public local chat (the main feature) has no security concerns.
+> Private messages have not received external security review and may contain vulnerabilities. Do not use for sensitive use cases, and do not rely on its security until it has been reviewed. Now uses the [Noise Protocol](https://www.noiseprotocol.org) for identity and encryption. Public local chat (the main feature) has no security concerns.
 
 ## License
 
@@ -22,7 +22,7 @@ This project is released into the public domain. See the [LICENSE](LICENSE) file
 - **Intelligent Message Routing**: Automatically chooses best transport (Bluetooth → Nostr fallback)
 - **Decentralized Mesh Network**: Automatic peer discovery and multi-hop message relay over Bluetooth LE
 - **Privacy First**: No accounts, no phone numbers, no persistent identifiers
-- **Private Message End-to-End Encryption**: [Noise Protocol](http://noiseprotocol.org) for mesh, NIP-17 for Nostr
+- **Private Message End-to-End Encryption**: [Noise Protocol](https://noiseprotocol.org) for mesh, NIP-17 for Nostr
 - **IRC-Style Commands**: Familiar `/slap`, `/msg`, `/who` style interface
 - **Universal App**: Native support for iOS and macOS
 - **Emergency Wipe**: Triple-tap to instantly clear all data
