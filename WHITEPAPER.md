@@ -184,6 +184,28 @@ To minimize bandwidth, `BitchatPacket`s are serialized into a compact binary for
 
 **Padding:** All packets are padded to the next standard block size (256, 512, 1024, or 2048 bytes) using a PKCS#7-style scheme to obscure the true message length from network observers.
 
+```mermaid
+---
+config:
+  theme: dark
+---
+---
+title: "BitchatPacket"
+---
+packet
++8: "Version"
++8: "Type"
++8: "TTL"
++64: "Timestamp"
++8: "Flags"
++16: "Payload Length"
++64: "Sender ID"
++64: "Recipient ID (optional)"
++48: "Payload (variable)"
++64: "Signature (optional)"
+```
+_A representation of the sizes of the fields in `BitchatPacket`_
+
 ### 6.2. Application Message Format (`BitchatMessage`)
 
 For packets of type `message`, the payload is a binary-serialized `BitchatMessage` containing the chat content.
@@ -197,6 +219,25 @@ For packets of type `message`, the payload is a binary-serialized `BitchatMessag
 | Content             | 2 + len      | The UTF-8 encoded message content.                                       |
 | Original Sender     | 1 + len (opt)| Nickname of the original sender if the message is a relay.               |
 | Recipient Nickname  | 1 + len (opt)| Nickname of the recipient for private messages.                          |
+
+```mermaid
+---
+config:
+  theme: dark
+---
+---
+title: "BitchatMessage"
+---
+packet
++8: "Flags"
++64: "Timestamp"
++24: "ID (variable)"
++32: "Sender (variable)"
++32: "Content (variable)"
++32: "Original Sender (variable) (optional)"
++32: "Recipient Nickname (variable) (optional)"
+```
+_A representation of the sizes of the fields in `BitchatMessage`_
 
 ---
 
