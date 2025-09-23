@@ -9,6 +9,7 @@
 import SwiftUI
 #if os(iOS)
 import UIKit
+import PhotosUI
 #endif
 
 // MARK: - Supporting Types
@@ -57,6 +58,21 @@ struct ContentView: View {
     // Window sizes for rendering (infinite scroll up)
     @State private var windowCountPublic: Int = 300
     @State private var windowCountPrivate: [String: Int] = [:]
+    // Measure input field height so recorder overlay matches it
+    @State private var inputFieldMeasuredHeight: CGFloat = 0
+    private struct InputHeightPreferenceKey: PreferenceKey {
+        static var defaultValue: CGFloat = 0
+        static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+    }
+    #if os(iOS)
+    @State private var voiceRecorder = VoiceRecorder()
+    @State private var isRecordingVoice = false
+    @State private var recordingTimer: Timer? = nil
+    @State private var recordingElapsedMs: Int = 0
+    @State private var recordingAmplitudeNorm: CGFloat = 0
+    @State private var currentRecordingURL: URL? = nil
+    @State private var isShowingImagePicker = false
+    #endif
     
     // MARK: - Computed Properties
     
@@ -252,6 +268,16 @@ struct ContentView: View {
             scrollThrottleTimer?.invalidate()
             autocompleteDebounceTimer?.invalidate()
         }
+        #if os(iOS)
+        .sheet(isPresented: $isShowingImagePicker) {
+            ImagePickerView { image in
+                if let img = image {
+                    viewModel.sendImage(img)
+                }
+                isShowingImagePicker = false
+            }
+        }
+        #endif
     }
     
     // MARK: - Message List View
@@ -305,19 +331,56 @@ struct ContentView: View {
                                     // Precompute heavy token scans once per row
                                     let cashuTokens = message.content.extractCashuTokens()
                                     let lightningLinks = message.content.extractLightningLinks()
-                                    HStack(alignment: .top, spacing: 0) {
-                                        let isLong = (message.content.count > TransportConfig.uiLongMessageLengthThreshold || message.content.hasVeryLongToken(threshold: TransportConfig.uiVeryLongTokenThreshold)) && cashuTokens.isEmpty
-                                        let isExpanded = expandedMessageIDs.contains(message.id)
-                                        Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme))
-                                            .fixedSize(horizontal: false, vertical: true)
-                                            .lineLimit(isLong && !isExpanded ? TransportConfig.uiLongMessageLineLimit : nil)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                        
-                                        // Delivery status indicator for private messages
+                                    let isVoice = message.content.hasPrefix("[voice] ")
+                                    let isImage = message.content.hasPrefix("[image] ")
+                                    
+                                    if isVoice {
+                                        // Header line above media: sender + timestamp
+                                        MessageHeaderLine(message: message)
+                                            .environmentObject(viewModel)
+                                        // Hide the raw marker text; render custom voice view
+                                        HStack(alignment: .center, spacing: 8) {
+                                            let path = String(message.content.dropFirst("[voice] ".count))
+                                            let prog: Double? = {
+                                                if let st = message.deliveryStatus {
+                                                    if case .partiallyDelivered(let r, let t) = st, t > 0 {
+                                                        return min(1.0, max(0.0, Double(r) / Double(t)))
+                                                    }
+                                                }
+                                                return nil
+                                            }()
+                                            VoiceMessageRow(fileURL: URL(fileURLWithPath: path), sendProgress: prog)
+                                        }
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        // Delivery status for our own private voice messages
                                         if message.isPrivate && message.sender == viewModel.nickname,
                                            let status = message.deliveryStatus {
                                             DeliveryStatusView(status: status, colorScheme: colorScheme)
                                                 .padding(.leading, 4)
+                                        }
+                                    } else if isImage {
+                                        // Header line above image: sender + timestamp
+                                        MessageHeaderLine(message: message)
+                                            .environmentObject(viewModel)
+                                        // Hide the raw marker text; render image view
+                                        let path = String(message.content.dropFirst("[image] ".count))
+                                        ImageMessageRow(path: path, message: message)
+                                            .environmentObject(viewModel)
+                                    } else {
+                                        HStack(alignment: .top, spacing: 0) {
+                                            let isLong = (message.content.count > TransportConfig.uiLongMessageLengthThreshold || message.content.hasVeryLongToken(threshold: TransportConfig.uiVeryLongTokenThreshold)) && cashuTokens.isEmpty
+                                            let isExpanded = expandedMessageIDs.contains(message.id)
+                                            Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme))
+                                                .fixedSize(horizontal: false, vertical: true)
+                                                .lineLimit(isLong && !isExpanded ? TransportConfig.uiLongMessageLineLimit : nil)
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                            
+                                            // Delivery status indicator for private messages
+                                            if message.isPrivate && message.sender == viewModel.nickname,
+                                               let status = message.deliveryStatus {
+                                                DeliveryStatusView(status: status, colorScheme: colorScheme)
+                                                    .padding(.leading, 4)
+                                            }
                                         }
                                     }
                                     
@@ -800,92 +863,171 @@ struct ContentView: View {
             }
             
             HStack(alignment: .center, spacing: 4) {
-            TextField("type a message...", text: $messageText)
-                .textFieldStyle(.plain)
-                .font(.system(size: 14, design: .monospaced))
-                .foregroundColor(textColor)
-                .focused($isTextFieldFocused)
-                .padding(.leading, 12)
-                // iOS keyboard autocomplete and capitalization enabled by default
-                .onChange(of: messageText) { newValue in
-                    // Cancel previous debounce timer
-                    autocompleteDebounceTimer?.invalidate()
-                    
-                    // Debounce autocomplete updates to reduce calls during rapid typing
-                    autocompleteDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: false) { _ in
-                        // Get cursor position (approximate - end of text for now)
-                        let cursorPosition = newValue.count
-                        viewModel.updateAutocomplete(for: newValue, cursorPosition: cursorPosition)
+            ZStack(alignment: .leading) {
+                // Always keep the TextField mounted so the keyboard state doesn't change
+                TextField("type a message...", text: $messageText)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 14, design: .monospaced))
+                    .foregroundColor(textColor)
+                    .focused($isTextFieldFocused)
+                    .padding(.leading, 12)
+                    .opacity(isRecordingVoice ? 0.0 : 1.0)
+                    // Measure the text field height so we can match recorder height
+                    .background(GeometryReader { geo in
+                        Color.clear.preference(key: InputHeightPreferenceKey.self, value: geo.size.height)
+                    })
+
+                // Recording overlay: live waveform + elapsed/max time, same height as input field
+                if isRecordingVoice {
+                    HStack(alignment: .center, spacing: 12) {
+                        RealtimeScrollingWaveform(
+                            amplitudeNorm: recordingAmplitudeNorm,
+                            bars: 240,
+                            barColor: (colorScheme == .dark ? Color.green : Color(red: 0, green: 0.6, blue: 0.3))
+                        )
+                        .frame(height: max(28, inputFieldMeasuredHeight))
+                        let secs = max(0, recordingElapsedMs / 1000)
+                        let mm = secs / 60
+                        let ss = secs % 60
+                        Text(String(format: "%02d:%02d / 00:10", mm, ss))
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundColor(textColor)
+                            .padding(.trailing, 4)
                     }
-                    
-                    // Check for command autocomplete (instant, no debounce needed)
-                    if newValue.hasPrefix("/") && newValue.count >= 1 {
-                        // Build context-aware command list
-                        let isGeoPublic: Bool = {
-                            if case .location = locationManager.selectedChannel { return true }
-                            return false
-                        }()
-                        let isGeoDM: Bool = (viewModel.selectedPrivateChatPeer?.hasPrefix("nostr_") == true)
-                        var commandDescriptions = [
-                            ("/block", "block or list blocked peers"),
-                            ("/clear", "clear chat messages"),
-                            ("/hug", "send someone a warm hug"),
-                            ("/m", "send private message"),
-                            ("/slap", "slap someone with a trout"),
-                            ("/unblock", "unblock a peer"),
-                            ("/w", "see who's online")
-                        ]
-                        // Only show favorites commands when not in geohash context
-                        if !(isGeoPublic || isGeoDM) {
-                            commandDescriptions.append(("/fav", "add to favorites"))
-                            commandDescriptions.append(("/unfav", "remove from favorites"))
-                        }
-                        
-                        let input = newValue.lowercased()
-                        
-                        // Map of aliases to primary commands
-                        let aliases: [String: String] = [
-                            "/join": "/j",
-                            "/msg": "/m"
-                        ]
-                        
-                        // Filter commands, but convert aliases to primary
-                        commandSuggestions = commandDescriptions
-                            .filter { $0.0.starts(with: input) }
-                            .map { $0.0 }
-                        
-                        // Also check if input matches an alias
-                        for (alias, primary) in aliases {
-                            if alias.starts(with: input) && !commandSuggestions.contains(primary) {
-                                if commandDescriptions.contains(where: { $0.0 == primary }) {
-                                    commandSuggestions.append(primary)
-                                }
+                    .padding(.leading, 12)
+                    .frame(height: max(28, inputFieldMeasuredHeight))
+                }
+
+            }
+            .onChange(of: messageText) { newValue in
+                // Cancel previous debounce timer
+                autocompleteDebounceTimer?.invalidate()
+
+                // Debounce autocomplete updates to reduce calls during rapid typing
+                autocompleteDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: false) { _ in
+                    // Get cursor position (approximate - end of text for now)
+                    let cursorPosition = newValue.count
+                    viewModel.updateAutocomplete(for: newValue, cursorPosition: cursorPosition)
+                }
+
+                // Check for command autocomplete (instant, no debounce needed)
+                if newValue.hasPrefix("/") && newValue.count >= 1 {
+                    // Build context-aware command list
+                    let isGeoPublic: Bool = {
+                        if case .location = locationManager.selectedChannel { return true }
+                        return false
+                    }()
+                    let isGeoDM: Bool = (viewModel.selectedPrivateChatPeer?.hasPrefix("nostr_") == true)
+                    var commandDescriptions = [
+                        ("/block", "block or list blocked peers"),
+                        ("/clear", "clear chat messages"),
+                        ("/hug", "send someone a warm hug"),
+                        ("/m", "send private message"),
+                        ("/slap", "slap someone with a trout"),
+                        ("/unblock", "unblock a peer"),
+                        ("/w", "see who's online")
+                    ]
+                    // Only show favorites commands when not in geohash context
+                    if !(isGeoPublic || isGeoDM) {
+                        commandDescriptions.append(("/fav", "add to favorites"))
+                        commandDescriptions.append(("/unfav", "remove from favorites"))
+                    }
+
+                    let input = newValue.lowercased()
+
+                    // Map of aliases to primary commands
+                    let aliases: [String: String] = [
+                        "/join": "/j",
+                        "/msg": "/m"
+                    ]
+
+                    // Filter commands, but convert aliases to primary
+                    commandSuggestions = commandDescriptions
+                        .filter { $0.0.starts(with: input) }
+                        .map { $0.0 }
+
+                    // Also check if input matches an alias
+                    for (alias, primary) in aliases {
+                        if alias.starts(with: input) && !commandSuggestions.contains(primary) {
+                            if commandDescriptions.contains(where: { $0.0 == primary }) {
+                                commandSuggestions.append(primary)
                             }
                         }
-                        
-                        // Remove duplicates and sort
-                        commandSuggestions = Array(Set(commandSuggestions)).sorted()
-                        showCommandSuggestions = !commandSuggestions.isEmpty
-                    } else {
-                        showCommandSuggestions = false
-                        commandSuggestions = []
                     }
+
+                    // Remove duplicates and sort
+                    commandSuggestions = Array(Set(commandSuggestions)).sorted()
+                    showCommandSuggestions = !commandSuggestions.isEmpty
+                } else {
+                    showCommandSuggestions = false
+                    commandSuggestions = []
                 }
-                .onSubmit {
-                    sendMessage()
-                }
-            
-            Button(action: sendMessage) {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 20))
-                    .foregroundColor(messageText.isEmpty ? Color.gray :
-                                            viewModel.selectedPrivateChatPeer != nil
-                                             ? Color.orange : textColor)
             }
-            .buttonStyle(.plain)
-            .padding(.trailing, 12)
-            .accessibilityLabel("Send message")
-            .accessibilityHint(messageText.isEmpty ? "Enter a message to send" : "Double tap to send")
+            .onSubmit { sendMessage() }
+            .onPreferenceChange(InputHeightPreferenceKey.self) { inputFieldMeasuredHeight = $0 }
+            
+            Group {
+                if messageText.isEmpty {
+                    #if os(iOS)
+                    HStack(spacing: 8) {
+                        // Plus button for image picker (hidden while recording)
+                        if !isRecordingVoice {
+                            Button(action: { showImagePicker() }) {
+                                Image(systemName: "plus.circle")
+                                    .font(.system(size: 22))
+                                    .foregroundColor(viewModel.selectedPrivateChatPeer != nil ? Color.orange : textColor)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Add media")
+                        }
+
+                        Image(systemName: isRecordingVoice ? "mic.circle.fill" : "mic.circle")
+                            .font(.system(size: 22))
+                            .foregroundColor(isRecordingVoice ? .red : (viewModel.selectedPrivateChatPeer != nil ? Color.orange : textColor))
+                            .highPriorityGesture(
+                                DragGesture(minimumDistance: 0)
+                                    .onChanged { _ in
+                                        if !isRecordingVoice {
+                                            do {
+                                                let url = try VoiceRecorderPaths.outgoingURL()
+                                                try voiceRecorder.startRecording(to: url)
+                                                currentRecordingURL = url
+                                                isRecordingVoice = true
+                                                startRecordingMeters()
+                                                hapticStart()
+                                            } catch {
+                                                isRecordingVoice = false
+                                            }
+                                        }
+                                    }
+                                    .onEnded { _ in
+                                        finishRecordingAndSend()
+                                    }
+                            )
+                    }
+                    .padding(.trailing, 12)
+                    #else
+                        // Non-iOS: keep send button placeholder
+                        Button(action: sendMessage) {
+                            Image(systemName: "arrow.up.circle.fill")
+                                .font(.system(size: 20))
+                                .foregroundColor(Color.gray)
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.trailing, 12)
+                    #endif
+                } else {
+                    Button(action: sendMessage) {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(viewModel.selectedPrivateChatPeer != nil ? Color.orange : textColor)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.trailing, 12)
+                    .accessibilityLabel("Send message")
+                    .accessibilityHint("Double tap to send")
+                }
+            }
             }
             .padding(.vertical, 8)
             .background(backgroundColor.opacity(0.95))
@@ -904,6 +1046,67 @@ struct ContentView: View {
         viewModel.sendMessage(messageText)
         messageText = ""
     }
+    
+    #if os(iOS)
+
+    private func startRecordingMeters() {
+        recordingTimer?.invalidate()
+        recordingElapsedMs = 0
+        recordingAmplitudeNorm = 0
+        // Poll meters ~12.5Hz for elapsed and ~50Hz for waveform via the view's ticker.
+        recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.08, repeats: true) { _ in
+            recordingAmplitudeNorm = voiceRecorder.pollNormalizedAmplitude()
+            recordingElapsedMs = voiceRecorder.currentTimeMs()
+            if recordingElapsedMs >= 10_000 {
+                // Auto-stop at 10s
+                finishRecordingAndSend()
+            }
+        }
+    }
+
+    private func finishRecordingAndSend() {
+        guard isRecordingVoice else { return }
+        voiceRecorder.stopRecording { 
+            isRecordingVoice = false
+            recordingTimer?.invalidate(); recordingTimer = nil
+            hapticStop()
+            let url = currentRecordingURL
+            currentRecordingURL = nil
+            if let u = url {
+                viewModel.sendVoiceNote(fileURL: u)
+            } else {
+                // Fallback to latest file in case we lost the URL
+                do {
+                    let fm = FileManager.default
+                    let base = try fm.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+                    let folder = base.appendingPathComponent("bitchat_voicenotes/outgoing", isDirectory: true)
+                    let files = try fm.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.contentModificationDateKey], options: [.skipsHiddenFiles])
+                    let latest = files.sorted { (a, b) -> Bool in
+                        let ad = (try? a.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+                        let bd = (try? b.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+                        return ad > bd
+                    }.first
+                    if let u = latest { viewModel.sendVoiceNote(fileURL: u) }
+                } catch {
+                    // ignore
+                }
+            }
+        }
+    }
+
+    private func showImagePicker() {
+        isShowingImagePicker = true
+    }
+
+    private func hapticStart() {
+        let gen = UIImpactFeedbackGenerator(style: .medium)
+        gen.prepare(); gen.impactOccurred()
+    }
+    private func hapticStop() {
+        let gen = UINotificationFeedbackGenerator()
+        gen.prepare(); gen.notificationOccurred(.success)
+    }
+    #endif
     
     // MARK: - Sidebar View
     

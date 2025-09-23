@@ -21,7 +21,20 @@ struct BitchatPacket: Codable {
     let payload: Data
     var signature: Data?
     var ttl: UInt8
-    
+
+    // Full initialization with explicit version
+    init(version: UInt8, type: UInt8, senderID: Data, recipientID: Data?, timestamp: UInt64, payload: Data, signature: Data?, ttl: UInt8) {
+        self.version = version
+        self.type = type
+        self.senderID = senderID
+        self.recipientID = recipientID
+        self.timestamp = timestamp
+        self.payload = payload
+        self.signature = signature
+        self.ttl = ttl
+    }
+
+    // Backward compatible constructor (defaults to v1)
     init(type: UInt8, senderID: Data, recipientID: Data?, timestamp: UInt64, payload: Data, signature: Data?, ttl: UInt8) {
         self.version = 1
         self.type = type
@@ -74,6 +87,7 @@ struct BitchatPacket: Codable {
         // Create a copy without signature and with fixed TTL for signing
         // TTL must be excluded because it changes during relay
         let unsignedPacket = BitchatPacket(
+            version: version, // Preserve packet version for signing
             type: type,
             senderID: senderID,
             recipientID: recipientID,

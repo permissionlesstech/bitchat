@@ -86,6 +86,9 @@ import CommonCrypto
 import CoreBluetooth
 #if os(iOS)
 import UIKit
+#if canImport(PhotosUI)
+import PhotosUI
+#endif
 #endif
 
 /// Manages the application state and business logic for BitChat.
@@ -3854,7 +3857,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     }
 
     @MainActor
-    private func peerColor(for message: BitchatMessage, isDark: Bool) -> Color {
+    func peerColor(for message: BitchatMessage, isDark: Bool) -> Color {
         if let spid = message.senderPeerID {
             if spid.hasPrefix("nostr:") || spid.hasPrefix("nostr_") {
                 let bare: String = {
@@ -6196,6 +6199,7 @@ private func checkForMentions(_ message: BitchatMessage) {
             impactFeedback.prepare()
             
             for i in 0..<8 {
+
                 DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * TransportConfig.uiBatchDispatchStaggerSeconds) {
                     impactFeedback.impactOccurred()
                 }
@@ -6207,6 +6211,68 @@ private func checkForMentions(_ message: BitchatMessage) {
             impactFeedback.impactOccurred()
         }
         #endif
+    }
+
+    // MARK: - Voice Notes (Audio)
+    @MainActor
+    func sendVoiceNote(fileURL: URL) {
+        // Read file data
+        guard let data = try? Data(contentsOf: fileURL) else { return }
+        let name = fileURL.lastPathComponent
+        let mime = "audio/mp4"
+        let tlv = BitchatFilePacket(fileName: name, fileSize: UInt32(data.count), mimeType: mime, content: data)
+        guard let payload = tlv.encode() else { return }
+        let transferId = payload.sha256Hex()
+
+        let contentMarker = "[voice] \(fileURL.path)"
+        let now = Date()
+
+        if let peer = selectedPrivateChatPeer {
+            let messageID = UUID().uuidString
+            let msg = BitchatMessage(
+                id: messageID,
+                sender: nickname,
+                content: contentMarker,
+                timestamp: now,
+                isRelay: false,
+                originalSender: nil,
+                isPrivate: true,
+                recipientNickname: meshService.peerNickname(peerID: peer),
+                senderPeerID: meshService.myPeerID,
+                mentions: nil,
+                deliveryStatus: .sending
+            )
+            appendToPrivateChat(peerID: peer, message: msg)
+            meshService.sendFileTransferTLV(payload, recipientPeerID: peer, transferId: transferId, messageID: messageID)
+        } else {
+            let messageID = UUID().uuidString
+            let msg = BitchatMessage(
+                id: messageID,
+                sender: nickname,
+                content: contentMarker,
+                timestamp: now,
+                isRelay: false,
+                originalSender: nil,
+                isPrivate: false,
+                recipientNickname: nil,
+                senderPeerID: meshService.myPeerID,
+                mentions: nil,
+                deliveryStatus: .sending
+            )
+            publicBuffer.append(msg)
+            schedulePublicFlush()
+            meshService.sendFileTransferTLV(payload, recipientPeerID: nil, transferId: transferId, messageID: messageID)
+        }
+    }
+    
+    // Images code moved to ChatViewModel+Images.swift
+
+    @MainActor
+    private func appendToPrivateChat(peerID: String, message: BitchatMessage) {
+        var arr = privateChats[peerID] ?? []
+        arr.append(message)
+        privateChats[peerID] = arr
+        objectWillChange.send()
     }
 }
 // End of ChatViewModel class
