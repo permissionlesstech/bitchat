@@ -1,0 +1,14 @@
+/*
+  Localizable.strings
+  bitchatShareExtension
+
+  Base English strings for the share extension.
+*/
+
+"share.status.nothing_to_share" = "Nothing to share";
+"share.status.no_shareable_content" = "No shareable content";
+"share.fallback.shared_link_title" = "Shared Link";
+"share.status.shared_link" = "✓ Shared link to bitchat";
+"share.status.shared_text" = "✓ Shared text to bitchat";
+"share.status.failed_to_encode" = "Failed to encode link";
+
