@@ -55,6 +55,8 @@ struct ContentView: View {
     @State private var notesGeohash: String? = nil
     @State private var sheetNotesCount: Int = 0
     @ScaledMetric(relativeTo: .body) private var headerHeight: CGFloat = 44
+    @ScaledMetric(relativeTo: .subheadline) private var headerPeerIconSize: CGFloat = 11
+    @ScaledMetric(relativeTo: .subheadline) private var headerPeerCountFontSize: CGFloat = 12
     // Timer-based refresh removed; use LocationChannelManager live updates instead
     // Window sizes for rendering (infinite scroll up)
     @State private var windowCountPublic: Int = 300
@@ -1216,10 +1218,10 @@ struct ContentView: View {
                 HStack(spacing: 4) {
                     // People icon with count
                     Image(systemName: "person.2.fill")
-                        .font(.bitchatSystem(size: 11))
+                        .font(.system(size: headerPeerIconSize, weight: .regular))
                         .accessibilityLabel("\(headerOtherPeersCount) people")
                     Text("\(headerOtherPeersCount)")
-                        .font(.bitchatSystem(size: 12, design: .monospaced))
+                        .font(.system(size: headerPeerCountFontSize, weight: .regular, design: .monospaced))
                         .accessibilityHidden(true)
                 }
                 .foregroundColor(headerCountColor)

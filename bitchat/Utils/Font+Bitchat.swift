@@ -20,15 +20,19 @@ private extension Font.TextStyle {
             return .caption2
         case ..<13.0:
             return .caption
-        case ..<14.0:
+        case ..<13.75:
             return .footnote
-        case ..<16.5:
+        case ..<15.5:
+            return .subheadline
+        case ..<17.5:
+            return .callout
+        case ..<19.5:
             return .body
-        case ..<19.0:
+        case ..<22.5:
             return .title3
-        case ..<23.0:
+        case ..<27.5:
             return .title2
-        case ..<30.0:
+        case ..<34.0:
             return .title
         default:
             return .largeTitle
