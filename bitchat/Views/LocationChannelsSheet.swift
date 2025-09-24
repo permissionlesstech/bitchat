@@ -14,6 +14,7 @@ struct LocationChannelsSheet: View {
     @Environment(\.colorScheme) var colorScheme
     @State private var customGeohash: String = ""
     @State private var customError: String? = nil
+    @State private var showGeohashMap = false
 
     private var backgroundColor: Color { colorScheme == .dark ? .black : .white }
 
@@ -167,6 +168,55 @@ struct LocationChannelsSheet: View {
                         .padding(.vertical, 8)
                 }
 
+
+            // Custom geohash entry with map picker and teleport
+            VStack(alignment: .leading, spacing: 6) {
+                let normalized = customGeohash.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().replacingOccurrences(of: "#", with: "")
+                let isValid = validateGeohash(normalized)
+
+                HStack(spacing: 8) {
+                    Text("#")
+                        .font(.bitchatSystem(size: 14, design: .monospaced))
+                        .foregroundColor(.secondary)
+                    TextField("geohash", text: $customGeohash)
+                        #if os(iOS)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled(true)
+                        .keyboardType(.asciiCapable)
+                        #endif
+                        .font(.bitchatSystem(size: 14, design: .monospaced))
+                        .onChange(of: customGeohash) { newValue in
+                            // Allow only geohash base32 characters, strip '#', limit length
+                            let allowed = Set("0123456789bcdefghjkmnpqrstuvwxyz")
+                            let filtered = newValue
+                                .lowercased()
+                                .replacingOccurrences(of: "#", with: "")
+                                .filter { allowed.contains($0) }
+                            if filtered.count > 12 {
+                                customGeohash = String(filtered.prefix(12))
+                            } else if filtered != newValue {
+                                customGeohash = filtered
+                            }
+                        }
+
+                    // Map picker button
+                    Button(action: { showGeohashMap = true }) {
+                        Image(systemName: "map")
+                            .font(.bitchatSystem(size: 14))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.vertical, 6)
+                    .background(Color.secondary.opacity(0.12))
+                    .cornerRadius(6)
+                    .sheet(isPresented: $showGeohashMap) {
+                        GeohashPickerSheet(isPresented: $showGeohashMap) { selectedGeohash in
+                            customGeohash = selectedGeohash
+                            showGeohashMap = false
+                        }
+                        .environmentObject(viewModel)
+                    }
+
+                    // Teleport button
                 if manager.permissionState == LocationChannelManager.PermissionState.authorized {
                     sectionDivider
                     torToggleSection
