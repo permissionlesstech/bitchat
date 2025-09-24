@@ -108,66 +108,52 @@ struct LocationChannelsSheet: View {
     }
 
     private var channelList: some View {
-        ScrollView {
-            LazyVStack(spacing: 0) {
-                channelRow(title: meshTitleWithCount(), subtitlePrefix: "#bluetooth • \(bluetoothRangeString())", isSelected: isMeshSelected, titleColor: standardBlue, titleBold: meshCount() > 0) {
-                    manager.select(ChannelID.mesh)
-                    isPresented = false
-                }
-                .padding(.vertical, 6)
+        List {
+            // Mesh option first (no bookmark)
+            channelRow(title: meshTitleWithCount(), subtitlePrefix: "#bluetooth • \(bluetoothRangeString())", isSelected: isMeshSelected, titleColor: standardBlue, titleBold: meshCount() > 0) {
+                manager.select(ChannelID.mesh)
+                isPresented = false
+            }
+            .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
 
-                let nearby = manager.availableChannels.filter { $0.level != .building }
-                if !nearby.isEmpty {
-                    ForEach(nearby) { channel in
-                        sectionDivider
-                        let coverage = coverageString(forPrecision: channel.geohash.count)
-                        let nameBase = locationName(for: channel.level)
-                        let namePart = nameBase.map { formattedNamePrefix(for: channel.level) + $0 }
-                        let subtitlePrefix = "#\(channel.geohash) • \(coverage)"
-                        let highlight = viewModel.geohashParticipantCount(for: channel.geohash) > 0
-                        channelRow(
-                            title: geohashTitleWithCount(for: channel),
-                            subtitlePrefix: subtitlePrefix,
-                            subtitleName: namePart,
-                            isSelected: isSelected(channel),
-                            titleBold: highlight,
-                            trailingAccessory: {
-                                Button(action: { bookmarks.toggle(channel.geohash) }) {
-                                    Image(systemName: bookmarks.isBookmarked(channel.geohash) ? "bookmark.fill" : "bookmark")
-                                        .font(.bitchatSystem(size: 14))
-                                }
-                                .buttonStyle(.plain)
-                                .padding(.leading, 8)
+            // Nearby options
+            if !manager.availableChannels.isEmpty {
+                ForEach(manager.availableChannels.filter { $0.level != .building }) { channel in
+                    let coverage = coverageString(forPrecision: channel.geohash.count)
+                    let nameBase = locationName(for: channel.level)
+                    let namePart = nameBase.map { formattedNamePrefix(for: channel.level) + $0 }
+                    let subtitlePrefix = "#\(channel.geohash) • \(coverage)"
+                    let highlight = viewModel.geohashParticipantCount(for: channel.geohash) > 0
+                    channelRow(
+                        title: geohashTitleWithCount(for: channel),
+                        subtitlePrefix: subtitlePrefix,
+                        subtitleName: namePart,
+                        isSelected: isSelected(channel),
+                        titleBold: highlight,
+                        trailingAccessory: {
+                            Button(action: { bookmarks.toggle(channel.geohash) }) {
+                                Image(systemName: bookmarks.isBookmarked(channel.geohash) ? "bookmark.fill" : "bookmark")
+                                    .font(.bitchatSystem(size: 14))
                             }
-                        ) {
-                            manager.markTeleported(for: channel.geohash, false)
-                            manager.select(ChannelID.location(channel))
-                            isPresented = false
+                            .buttonStyle(.plain)
+                            .padding(.leading, 8)
                         }
-                        .padding(.vertical, 6)
+                    ) {
+                        // Selecting a suggested nearby channel is not a teleport. Persist this.
+                        manager.markTeleported(for: channel.geohash, false)
+                        manager.select(ChannelID.location(channel))
+                        isPresented = false
                     }
-                } else {
-                    sectionDivider
-                    HStack(spacing: 8) {
-                        ProgressView()
-                        Text("finding nearby channels…")
-                            .font(.bitchatSystem(size: 12, design: .monospaced))
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 10)
+                    .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
                 }
-
-                sectionDivider
-                customTeleportSection
-                    .padding(.vertical, 8)
-
-                let bookmarkedList = bookmarks.bookmarks
-                if !bookmarkedList.isEmpty {
-                    sectionDivider
-                    bookmarkedSection(bookmarkedList)
-                        .padding(.vertical, 8)
+            } else {
+                HStack {
+                    ProgressView()
+                    Text("finding nearby channels…")
+                        .font(.bitchatSystem(size: 12, design: .monospaced))
                 }
-
+                .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+            }
 
             // Custom geohash entry with map picker and teleport
             VStack(alignment: .leading, spacing: 6) {
@@ -217,151 +203,112 @@ struct LocationChannelsSheet: View {
                     }
 
                     // Teleport button
-                if manager.permissionState == LocationChannelManager.PermissionState.authorized {
-                    sectionDivider
-                    torToggleSection
-                        .padding(.top, 12)
                     Button(action: {
-                        openSystemLocationSettings()
+                        let gh = normalized
+                        guard isValid else { customError = "invalid geohash"; return }
+                        let level = levelForLength(gh.count)
+                        let ch = GeohashChannel(level: level, geohash: gh)
+                        // Mark this selection as a manual teleport
+                        manager.markTeleported(for: ch.geohash, true)
+                        manager.select(ChannelID.location(ch))
+                        isPresented = false
                     }) {
-                        Text("remove location access")
-                            .font(.bitchatSystem(size: 12, design: .monospaced))
-                            .foregroundColor(Color(red: 0.75, green: 0.1, blue: 0.1))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 6)
-                            .background(Color.red.opacity(0.08))
-                            .cornerRadius(6)
+                        HStack(spacing: 6) {
+                            Text("teleport")
+                                .font(.bitchatSystem(size: 14, design: .monospaced))
+                            Image(systemName: "face.dashed")
+                                .font(.bitchatSystem(size: 14))
+                        }
                     }
                     .buttonStyle(.plain)
-                    .padding(.vertical, 8)
+                    .font(.bitchatSystem(size: 14, design: .monospaced))
+                    .padding(.vertical, 6)
+                    .background(Color.secondary.opacity(0.12))
+                    .cornerRadius(6)
+                    .opacity(isValid ? 1.0 : 0.4)
+                    .disabled(!isValid)
+                }
+                if let err = customError {
+                    Text(err)
+                        .font(.bitchatSystem(size: 12, design: .monospaced))
+                        .foregroundColor(.red)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, 6)
-            .background(backgroundColor)
-        }
-        .background(backgroundColor)
-    }
+            .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
 
-    private var sectionDivider: some View {
-        Rectangle()
-            .fill(dividerColor)
-            .frame(height: 1)
-    }
-
-    private var dividerColor: Color {
-        colorScheme == .dark ? Color.white.opacity(0.12) : Color.black.opacity(0.08)
-    }
-
-    private var customTeleportSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 2) {
-                Text("#")
-                    .font(.bitchatSystem(size: 14, design: .monospaced))
-                    .foregroundColor(.secondary)
-                TextField("geohash", text: $customGeohash)
-                    #if os(iOS)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled(true)
-                    .keyboardType(.asciiCapable)
-                    #endif
-                    .font(.bitchatSystem(size: 14, design: .monospaced))
-                    .onChange(of: customGeohash) { newValue in
-                        let allowed = Set("0123456789bcdefghjkmnpqrstuvwxyz")
-                        let filtered = newValue
-                            .lowercased()
-                            .replacingOccurrences(of: "#", with: "")
-                            .filter { allowed.contains($0) }
-                        if filtered.count > 12 {
-                            customGeohash = String(filtered.prefix(12))
-                        } else if filtered != newValue {
-                            customGeohash = filtered
+            // Bookmarked geohashes
+            if !bookmarks.bookmarks.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("bookmarked")
+                        .font(.bitchatSystem(size: 12, design: .monospaced))
+                        .foregroundColor(.secondary)
+                    VStack(spacing: 6) {
+                        ForEach(bookmarks.bookmarks, id: \.self) { gh in
+                            let level = levelForLength(gh.count)
+                            let channel = GeohashChannel(level: level, geohash: gh)
+                            let coverage = coverageString(forPrecision: gh.count)
+                            let subtitle = "#\(gh) • \(coverage)"
+                            let name = bookmarks.bookmarkNames[gh]
+                            channelRow(
+                                title: geohashHashTitleWithCount(gh),
+                                subtitlePrefix: subtitle,
+                                subtitleName: name.map { formattedNamePrefix(for: level) + $0 },
+                                isSelected: isSelected(channel),
+                                trailingAccessory: {
+                                    Button(action: { bookmarks.toggle(gh) }) {
+                                        Image(systemName: bookmarks.isBookmarked(gh) ? "bookmark.fill" : "bookmark")
+                                            .font(.bitchatSystem(size: 14))
+                                    }
+                                    .buttonStyle(.plain)
+                                    .padding(.leading, 8)
+                                }
+                            ) {
+                                // For bookmarked selection, mark teleported based on regional membership
+                                let inRegional = manager.availableChannels.contains { $0.geohash == gh }
+                                if !inRegional && !manager.availableChannels.isEmpty {
+                                    manager.markTeleported(for: gh, true)
+                                } else {
+                                    manager.markTeleported(for: gh, false)
+                                }
+                                manager.select(ChannelID.location(channel))
+                                isPresented = false
+                            }
+                            .onAppear { bookmarks.resolveNameIfNeeded(for: gh) }
                         }
                     }
-                let normalized = customGeohash
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                    .lowercased()
-                    .replacingOccurrences(of: "#", with: "")
-                let isValid = validateGeohash(normalized)
+                    .padding(12)
+                    .background(Color.secondary.opacity(0.12))
+                    .cornerRadius(8)
+                }
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+            }
+
+            // Footer action inside the list
+            if manager.permissionState == LocationChannelManager.PermissionState.authorized {
+                torToggleSection
+                .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 4, trailing: 0))
                 Button(action: {
-                    let gh = normalized
-                    guard isValid else { customError = "invalid geohash"; return }
-                    let level = levelForLength(gh.count)
-                    let ch = GeohashChannel(level: level, geohash: gh)
-                    manager.markTeleported(for: ch.geohash, true)
-                    manager.select(ChannelID.location(ch))
-                    isPresented = false
+                    openSystemLocationSettings()
                 }) {
-                    HStack(spacing: 6) {
-                        Text("teleport")
-                            .font(.bitchatSystem(size: 14, design: .monospaced))
-                        Image(systemName: "face.dashed")
-                            .font(.bitchatSystem(size: 14))
-                    }
+                    Text("remove location access")
+                        .font(.bitchatSystem(size: 12, design: .monospaced))
+                        .foregroundColor(Color(red: 0.75, green: 0.1, blue: 0.1))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                        .background(Color.red.opacity(0.08))
+                        .cornerRadius(6)
                 }
                 .buttonStyle(.plain)
-                .font(.bitchatSystem(size: 14, design: .monospaced))
-                .padding(.vertical, 6)
-                .padding(.horizontal, 10)
-                .background(Color.secondary.opacity(0.12))
-                .cornerRadius(6)
-                .opacity(isValid ? 1.0 : 0.4)
-                .disabled(!isValid)
-            }
-            if let err = customError {
-                Text(err)
-                    .font(.bitchatSystem(size: 12, design: .monospaced))
-                    .foregroundColor(.red)
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 10, trailing: 0))
             }
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(backgroundColor)
     }
-
-    private func bookmarkedSection(_ entries: [String]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("bookmarked")
-                .font(.bitchatSystem(size: 12, design: .monospaced))
-                .foregroundColor(.secondary)
-            LazyVStack(spacing: 0) {
-                ForEach(Array(entries.enumerated()), id: \.offset) { index, gh in
-                    let level = levelForLength(gh.count)
-                    let channel = GeohashChannel(level: level, geohash: gh)
-                    let coverage = coverageString(forPrecision: gh.count)
-                    let subtitle = "#\(gh) • \(coverage)"
-                    let name = bookmarks.bookmarkNames[gh]
-                    channelRow(
-                        title: geohashHashTitleWithCount(gh),
-                        subtitlePrefix: subtitle,
-                        subtitleName: name.map { formattedNamePrefix(for: level) + $0 },
-                        isSelected: isSelected(channel),
-                        trailingAccessory: {
-                            Button(action: { bookmarks.toggle(gh) }) {
-                                Image(systemName: bookmarks.isBookmarked(gh) ? "bookmark.fill" : "bookmark")
-                                    .font(.bitchatSystem(size: 14))
-                            }
-                            .buttonStyle(.plain)
-                            .padding(.leading, 8)
-                        }
-                    ) {
-                        let inRegional = manager.availableChannels.contains { $0.geohash == gh }
-                        if !inRegional && !manager.availableChannels.isEmpty {
-                            manager.markTeleported(for: gh, true)
-                        } else {
-                            manager.markTeleported(for: gh, false)
-                        }
-                        manager.select(ChannelID.location(channel))
-                        isPresented = false
-                    }
-                    .padding(.vertical, 6)
-                    .onAppear { bookmarks.resolveNameIfNeeded(for: gh) }
-
-                    if index < entries.count - 1 {
-                        sectionDivider
-                    }
-                }
-            }
-        }
-    }
-
 
     private func isSelected(_ channel: GeohashChannel) -> Bool {
         if case .location(let ch) = manager.selectedChannel {
@@ -511,6 +458,8 @@ extension LocationChannelsSheet {
         .padding(12)
         .background(Color.secondary.opacity(0.12))
         .cornerRadius(8)
+        .listRowSeparator(.hidden)
+        .listRowBackground(Color.clear)
     }
 
     private var standardGreen: Color {
