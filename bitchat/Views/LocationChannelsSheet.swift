@@ -14,6 +14,7 @@ struct LocationChannelsSheet: View {
     @Environment(\.colorScheme) var colorScheme
     @State private var customGeohash: String = ""
     @State private var customError: String? = nil
+    @State private var showGeohashMap = false
 
     private var backgroundColor: Color { colorScheme == .dark ? .black : .white }
 
@@ -154,9 +155,12 @@ struct LocationChannelsSheet: View {
                 .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
             }
 
-            // Custom geohash teleport
+            // Custom geohash entry with map picker and teleport
             VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 2) {
+                let normalized = customGeohash.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().replacingOccurrences(of: "#", with: "")
+                let isValid = validateGeohash(normalized)
+
+                HStack(spacing: 8) {
                     Text("#")
                         .font(.bitchatSystem(size: 14, design: .monospaced))
                         .foregroundColor(.secondary)
@@ -180,8 +184,25 @@ struct LocationChannelsSheet: View {
                                 customGeohash = filtered
                             }
                         }
-                    let normalized = customGeohash.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().replacingOccurrences(of: "#", with: "")
-                    let isValid = validateGeohash(normalized)
+
+                    // Map picker button
+                    Button(action: { showGeohashMap = true }) {
+                        Image(systemName: "map")
+                            .font(.bitchatSystem(size: 14))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.vertical, 6)
+                    .background(Color.secondary.opacity(0.12))
+                    .cornerRadius(6)
+                    .sheet(isPresented: $showGeohashMap) {
+                        GeohashPickerSheet(isPresented: $showGeohashMap) { selectedGeohash in
+                            customGeohash = selectedGeohash
+                            showGeohashMap = false
+                        }
+                        .environmentObject(viewModel)
+                    }
+
+                    // Teleport button
                     Button(action: {
                         let gh = normalized
                         guard isValid else { customError = "invalid geohash"; return }
