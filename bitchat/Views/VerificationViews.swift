@@ -13,14 +13,22 @@ struct MyQRView: View {
     @Environment(\.colorScheme) var colorScheme
     private var boxColor: Color { Color.gray.opacity(0.1) }
 
+    private enum Strings {
+        static let title: LocalizedStringKey = "verification.my_qr.title"
+        static let accessibilityLabel = L10n.string(
+            "verification.my_qr.accessibility_label",
+            comment: "Accessibility label describing the verification QR code"
+        )
+    }
+
     var body: some View {
         VStack(spacing: 12) {
-            Text("scan to verify me")
+            Text(Strings.title)
                 .font(.bitchatSystem(size: 16, weight: .bold, design: .monospaced))
 
             VStack(spacing: 10) {
                 QRCodeImage(data: qrString, size: 240)
-                    .accessibilityLabel("verification qr code")
+                    .accessibilityLabel(Strings.accessibilityLabel)
 
                 // Non-scrolling, fully visible URL (wraps across lines)
                 Text(qrString)
@@ -49,6 +57,10 @@ struct QRCodeImage: View {
     private let context = CIContext()
     private let filter = CIFilter.qrCodeGenerator()
 
+    private enum Strings {
+        static let unavailable: LocalizedStringKey = "verification.my_qr.unavailable"
+    }
+
     var body: some View {
         Group {
             if let image = generateImage() {
@@ -59,7 +71,7 @@ struct QRCodeImage: View {
                     .stroke(Color.gray.opacity(0.5), lineWidth: 1)
                     .frame(width: size, height: size)
                     .overlay(
-                        Text("qr unavailable")
+                        Text(Strings.unavailable)
                             .font(.bitchatSystem(size: 12, design: .monospaced))
                             .foregroundColor(.gray)
                     )
@@ -103,6 +115,27 @@ struct QRScanView: View {
     @State private var input = ""
     @State private var result: String = "" // not shown for iOS scanner
     @State private var lastValid: String = ""
+
+    private enum Strings {
+        static let pastePrompt: LocalizedStringKey = "verification.scan.paste_prompt"
+        static let validate: LocalizedStringKey = "verification.scan.validate"
+        static func requested(_ nickname: String) -> String {
+            L10n.format(
+                "verification.scan.status.requested",
+                comment: "Status text when verification is requested for a nickname",
+                nickname
+            )
+        }
+        static let notFound = L10n.string(
+            "verification.scan.status.no_peer",
+            comment: "Status when no matching peer is found for a verification request"
+        )
+        static let invalid = L10n.string(
+            "verification.scan.status.invalid",
+            comment: "Status when a scanned QR payload is invalid"
+        )
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             #if os(iOS)
@@ -118,17 +151,17 @@ struct QRScanView: View {
             .frame(height: 260)
             .clipShape(RoundedRectangle(cornerRadius: 8))
             #else
-            Text("paste qr content to validate:")
+            Text(Strings.pastePrompt)
                 .font(.bitchatSystem(size: 14, weight: .medium, design: .monospaced))
             TextEditor(text: $input)
                 .frame(height: 100)
                 .border(Color.gray.opacity(0.4))
-            Button("validate") {
+            Button(Strings.validate) {
                 if let qr = VerificationService.shared.verifyScannedQR(input) {
                     let ok = viewModel.beginQRVerification(with: qr)
-                    result = ok ? "verification requested for \(qr.nickname)" : "could not find matching peer"
+                    result = ok ? Strings.requested(qr.nickname) : Strings.notFound
                 } else {
-                    result = "invalid or expired qr payload"
+                    result = Strings.invalid
                 }
             }
             .buttonStyle(.bordered)
@@ -254,7 +287,7 @@ struct VerificationSheetView: View {
         VStack(spacing: 0) {
             // Top header (always at top)
             HStack {
-                Text("VERIFY")
+                Text("verification.sheet.title")
                     .font(.bitchatSystem(size: 14, weight: .bold, design: .monospaced))
                     .foregroundColor(accentColor)
                 Spacer()
@@ -278,7 +311,7 @@ struct VerificationSheetView: View {
             Group {
                 if showingScanner {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("scan a friend's qr")
+                        Text("verification.scan.prompt_friend")
                             .font(.bitchatSystem(size: 16, weight: .bold, design: .monospaced))
                             .frame(maxWidth: .infinity)
                             .multilineTextAlignment(.center)

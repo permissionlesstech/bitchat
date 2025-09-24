@@ -23,6 +23,24 @@ struct LocationNotesView: View {
     private var accentGreen: Color { colorScheme == .dark ? .green : Color(red: 0, green: 0.5, blue: 0) }
     private var maxDraftLines: Int { dynamicTypeSize.isAccessibilitySize ? 5 : 3 }
 
+    private enum Strings {
+        static let closeAccessibility = L10n.string(
+            "common.close",
+            comment: "Accessibility label for close buttons"
+        )
+        static let description: LocalizedStringKey = "location_notes.description"
+        static let loadingRecent: LocalizedStringKey = "location_notes.loading_recent"
+        static let relaysPaused: LocalizedStringKey = "location_notes.relays_paused"
+        static let noRelaysNearby: LocalizedStringKey = "location_notes.no_relays_nearby"
+        static let retry: LocalizedStringKey = "location_notes.action.retry"
+        static let relaysRetryHint: LocalizedStringKey = "location_notes.relays_retry_hint"
+        static let loadingNotes: LocalizedStringKey = "location_notes.loading_notes"
+        static let emptyTitle: LocalizedStringKey = "location_notes.empty_title"
+        static let emptySubtitle: LocalizedStringKey = "location_notes.empty_subtitle"
+        static let dismissError: LocalizedStringKey = "location_notes.action.dismiss"
+        static let addPlaceholder: LocalizedStringKey = "location_notes.placeholder"
+    }
+
     var body: some View {
 #if os(macOS)
         VStack(spacing: 0) {
@@ -85,14 +103,14 @@ struct LocationNotesView: View {
                 .frame(width: 32, height: 32)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Close")
+        .accessibilityLabel(Strings.closeAccessibility)
     }
 
     private var headerSection: some View {
         let count = manager.notes.count
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
-                Text("#\(geohash) • \(count) \(count == 1 ? "note" : "notes")")
+                Text(headerTitle(for: count))
                     .font(.bitchatSystem(size: 18, design: .monospaced))
                 Spacer()
                 closeButton
@@ -106,16 +124,16 @@ struct LocationNotesView: View {
                     .font(.bitchatSystem(size: 12, design: .monospaced))
                     .foregroundColor(accentGreen)
             }
-            Text("add short permanent notes to this location for other visitors to find.")
+            Text(Strings.description)
                 .font(.bitchatSystem(size: 12, design: .monospaced))
                 .foregroundColor(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             if manager.state == .loading && !manager.initialLoadComplete {
-                Text("loading recent notes…")
+                Text(Strings.loadingRecent)
                     .font(.bitchatSystem(size: 11, design: .monospaced))
                     .foregroundColor(.secondary)
             } else if manager.state == .noRelays {
-                Text("geo relays unavailable; notes paused")
+                Text(Strings.relaysPaused)
                     .font(.bitchatSystem(size: 11, design: .monospaced))
                     .foregroundColor(.secondary)
             }
@@ -124,6 +142,14 @@ struct LocationNotesView: View {
         .padding(.top, 16)
         .padding(.bottom, 12)
         .background(backgroundColor)
+    }
+
+    private func headerTitle(for count: Int) -> String {
+        let format = NSLocalizedString(
+            "location_notes.header",
+            comment: "Header displaying the geohash and localized note count"
+        )
+        return NSString.localizedStringWithFormat(format as NSString, geohash, count) as String
     }
 
     private var notesContent: some View {
@@ -171,12 +197,12 @@ struct LocationNotesView: View {
 
     private var noRelaysRow: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("no geo relays nearby")
+            Text(Strings.noRelaysNearby)
                 .font(.bitchatSystem(size: 13, weight: .semibold, design: .monospaced))
-            Text("notes rely on geo relays. check connection and try again.")
+            Text(Strings.relaysRetryHint)
                 .font(.bitchatSystem(size: 12, design: .monospaced))
                 .foregroundColor(.secondary)
-            Button("retry") { manager.refresh() }
+            Button(Strings.retry) { manager.refresh() }
                 .font(.bitchatSystem(size: 12, design: .monospaced))
                 .buttonStyle(.plain)
         }
@@ -186,7 +212,7 @@ struct LocationNotesView: View {
     private var loadingRow: some View {
         HStack(spacing: 10) {
             ProgressView()
-            Text("loading notes…")
+            Text(Strings.loadingNotes)
                 .font(.bitchatSystem(size: 12, design: .monospaced))
                 .foregroundColor(.secondary)
             Spacer()
@@ -196,9 +222,9 @@ struct LocationNotesView: View {
 
     private var emptyRow: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("no notes yet")
+            Text(Strings.emptyTitle)
                 .font(.bitchatSystem(size: 13, weight: .semibold, design: .monospaced))
-            Text("be the first to add one for this spot.")
+            Text(Strings.emptySubtitle)
                 .font(.bitchatSystem(size: 12, design: .monospaced))
                 .foregroundColor(.secondary)
         }
@@ -214,7 +240,7 @@ struct LocationNotesView: View {
                     .font(.bitchatSystem(size: 12, design: .monospaced))
                 Spacer()
             }
-            Button("dismiss") { manager.clearError() }
+            Button(Strings.dismissError) { manager.clearError() }
                 .font(.bitchatSystem(size: 12, design: .monospaced))
                 .buttonStyle(.plain)
         }
@@ -223,7 +249,7 @@ struct LocationNotesView: View {
 
     private var inputSection: some View {
         HStack(alignment: .top, spacing: 10) {
-            TextField("add a note for this place", text: $draft, axis: .vertical)
+            TextField(Strings.addPlaceholder, text: $draft, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(.bitchatSystem(size: 14, design: .monospaced))
                 .lineLimit(maxDraftLines, reservesSpace: true)

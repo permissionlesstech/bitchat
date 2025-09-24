@@ -76,6 +76,21 @@ final class LocationNotesManager: ObservableObject {
     private var subscriptionID: String?
     private let dependencies: LocationNotesDependencies
 
+    private enum Strings {
+        static let noRelays = NSLocalizedString(
+            "location_notes.error.no_relays",
+            comment: "Shown when no geo relays are available near the selected location"
+        )
+
+        static func failedToSend(_ detail: String) -> String {
+            let format = NSLocalizedString(
+                "location_notes.error.failed_to_send",
+                comment: "Shown when a location note fails to send"
+            )
+            return String(format: format, detail)
+        }
+    }
+
     init(geohash: String, dependencies: LocationNotesDependencies = .live) {
         self.geohash = geohash.lowercased()
         self.dependencies = dependencies
@@ -120,7 +135,7 @@ final class LocationNotesManager: ObservableObject {
             subscriptionID = nil
             initialLoadComplete = true
             state = .noRelays
-            errorMessage = "No geo relays available near this location. Try again soon."
+            errorMessage = Strings.noRelays
             SecureLogger.warning("LocationNotesManager: no geo relays for geohash=\(geohash)", category: .session)
             return
         }
@@ -158,7 +173,7 @@ final class LocationNotesManager: ObservableObject {
         let relays = dependencies.relayLookup(geohash, TransportConfig.nostrGeoRelayCount)
         guard !relays.isEmpty else {
             state = .noRelays
-            errorMessage = "No geo relays available near this location. Try again soon."
+            errorMessage = Strings.noRelays
             SecureLogger.warning("LocationNotesManager: send blocked, no geo relays for geohash=\(geohash)", category: .session)
             return
         }
@@ -184,7 +199,7 @@ final class LocationNotesManager: ObservableObject {
             self.errorMessage = nil
         } catch {
             SecureLogger.error("LocationNotesManager: failed to send note: \(error)", category: .session)
-            errorMessage = "Failed to send note. \(error.localizedDescription)"
+            errorMessage = Strings.failedToSend(error.localizedDescription)
         }
     }
 
