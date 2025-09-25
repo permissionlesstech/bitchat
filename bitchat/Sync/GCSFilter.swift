@@ -4,7 +4,7 @@ import CryptoKit
 // Golomb-Coded Set (GCS) filter utilities for sync.
 // Hashing:
 //  - Packet ID is 16 bytes (see PacketIdUtil). For GCS mapping, use h64 = first 8 bytes of SHA-256 over the 16-byte ID.
-//  - Map to [0, M) via (h64 % M).
+//  - Map to [1, M) by computing (h64 % M) and remapping 0 -> 1 to avoid zero-length deltas.
 // Encoding (v1):
 //  - Sort mapped values ascending; encode deltas (first is v0, then vi - v{i-1}) as positive integers x >= 1.
 //  - Golomb-Rice with parameter P: q = (x - 1) >> P encoded as unary (q ones then a zero), then write P-bit remainder r = (x - 1) & ((1<<P)-1).
@@ -29,25 +29,40 @@ enum GCSFilter {
 
     static func buildFilter(ids: [Data], maxBytes: Int, targetFpr: Double) -> Params {
         let p = deriveP(targetFpr: targetFpr)
+        guard !ids.isEmpty else {
+            return Params(p: p, m: 1, data: Data())
+        }
+
         let cap = estimateMaxElements(sizeBytes: maxBytes, p: p)
-        let n = min(ids.count, cap)
-        let selected = Array(ids.prefix(n))
-        // Map to [0, M)
-        let mInit = UInt32(n << p)
-        var mapped = selected.map { id16 -> UInt64 in
-            let h = h64(id16)
-            return UInt64(h % UInt64(max(1, mInit)))
-        }.sorted()
+        let selected = Array(ids.prefix(cap))
+        let range = max(1, hashRange(count: selected.count, p: p))
+        let modulo = UInt64(range)
+
+        var mapped = selected
+            .map { h64($0) }
+            .map { mapHash($0, modulo: modulo) }
+            .sorted()
+        mapped = normalizeMappedValues(mapped, modulo: modulo)
+
+        if mapped.isEmpty {
+            return Params(p: p, m: range, data: Data())
+        }
+
         var encoded = encode(sorted: mapped, p: p)
-        var trimmedN = n
-        // Trim if over budget
-        while encoded.count > maxBytes && trimmedN > 0 {
-            trimmedN = (trimmedN * 9) / 10 // drop ~10%
-            mapped = Array(mapped.prefix(trimmedN))
+        var trimmedCount = mapped.count
+
+        while encoded.count > maxBytes && trimmedCount > 0 {
+            if trimmedCount == 1 {
+                mapped.removeAll()
+                encoded = Data()
+                break
+            }
+            trimmedCount = max(1, (trimmedCount * 9) / 10)
+            mapped = Array(mapped.prefix(trimmedCount))
             encoded = encode(sorted: mapped, p: p)
         }
-        let finalM = UInt32(max(1, trimmedN << p))
-        return Params(p: p, m: finalM, data: encoded)
+
+        return Params(p: p, m: range, data: encoded)
     }
 
     static func decodeToSortedSet(p: Int, m: UInt32, data: Data) -> [UInt64] {
@@ -77,6 +92,12 @@ enum GCSFilter {
         return false
     }
 
+    static func bucket(for id: Data, modulus m: UInt32) -> UInt64 {
+        let modulo = UInt64(max(1, m))
+        guard modulo > 1 else { return 0 }
+        return mapHash(h64(id), modulo: modulo)
+    }
+
     private static func h64(_ id16: Data) -> UInt64 {
         var hasher = SHA256()
         hasher.update(data: id16)
@@ -86,6 +107,39 @@ enum GCSFilter {
         let take = min(8, db.count)
         for i in 0..<take { x = (x << 8) | UInt64(db[i]) }
         return x & 0x7fff_ffff_ffff_ffff
+    }
+
+    private static func hashRange(count: Int, p: Int) -> UInt32 {
+        guard count > 0 else { return 1 }
+        if p >= 64 { return UInt32.max }
+        let multiplier = UInt64(1) << UInt64(p)
+        let (product, overflow) = UInt64(count).multipliedReportingOverflow(by: multiplier)
+        if overflow { return UInt32.max }
+        if product == 0 { return 1 }
+        return product > UInt64(UInt32.max) ? UInt32.max : UInt32(product)
+    }
+
+    private static func mapHash(_ hash: UInt64, modulo: UInt64) -> UInt64 {
+        guard modulo > 1 else { return 0 }
+        let value = hash % modulo
+        if value == 0 { return 1 }
+        return value
+    }
+
+    private static func normalizeMappedValues(_ values: [UInt64], modulo: UInt64) -> [UInt64] {
+        guard modulo > 1 else { return [] }
+        guard !values.isEmpty else { return [] }
+        var result: [UInt64] = []
+        result.reserveCapacity(values.count)
+        var last: UInt64 = 0
+        for value in values {
+            let normalized = min(value, modulo - 1)
+            if normalized > last {
+                result.append(normalized)
+                last = normalized
+            }
+        }
+        return result
     }
 
     private static func encode(sorted: [UInt64], p: Int) -> Data {

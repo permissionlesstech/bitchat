@@ -158,23 +158,6 @@ struct IdentityCache: Codable {
     var version: Int = 1
 }
 
-// MARK: - Identity Resolution
-
-enum IdentityHint {
-    case unknown
-    case likelyKnown(fingerprint: String)
-    case ambiguous(candidates: Set<String>)
-    case verified(fingerprint: String)
-}
-
-// MARK: - Pending Actions
-
-struct PendingActions {
-    var toggleFavorite: Bool?
-    var setTrustLevel: TrustLevel?
-    var setPetname: String?
-}
-
 //
 
 // MARK: - Migration Support

@@ -18,13 +18,17 @@ struct RelayController {
                        isAnnounce: Bool,
                        degree: Int,
                        highDegreeThreshold: Int) -> RelayDecision {
+        let ttlCap = min(ttl, TransportConfig.messageTTLDefault)
+
         // Suppress obvious non-relays
-        if ttl <= 1 || senderIsSelf { return RelayDecision(shouldRelay: false, newTTL: ttl, delayMs: 0) }
+        if ttlCap <= 1 || senderIsSelf {
+            return RelayDecision(shouldRelay: false, newTTL: ttlCap, delayMs: 0)
+        }
 
         // For session-critical or directed traffic, be deterministic and reliable
         if isHandshake || isDirectedFragment || isDirectedEncrypted {
             // Always relay with no TTL cap for these types
-            let newTTL = (ttl &- 1)
+            let newTTL = ttlCap &- 1
             // Slight jitter to desynchronize without adding too much latency
             // Tighter for faster multi-hop handshakes and directed DMs
             let delayRange: ClosedRange<Int> = isHandshake ? 10...35 : 20...60
@@ -32,28 +36,17 @@ struct RelayController {
             return RelayDecision(shouldRelay: true, newTTL: newTTL, delayMs: delayMs)
         }
 
-        // Degree-aware probability to reduce floods in dense graphs (broadcast/public)
-        let baseProb: Double
-        switch degree {
-        case 0...2: baseProb = 1.0
-        case 3...4: baseProb = 0.9
-        case 5...6: baseProb = 0.7
-        case 7...9: baseProb = 0.55
-        default:    baseProb = 0.45
-        }
-        let prob = baseProb
-        let shouldRelay = Double.random(in: 0...1) <= prob
-
         // TTL clamping for broadcast
-        // - Dense graphs: keep very low to avoid floods
-        // - Sparse graphs: allow slightly longer reach for multi-hop discovery
-        // - Announces in sparse graphs get a bit more headroom
-        let ttlCap: UInt8 = {
-            if degree >= highDegreeThreshold { return 3 }
-            return isAnnounce ? 7 : 6
+        // - Dense graphs: keep lower but still allow multi-hop bridging
+        // - Announces get a bit more headroom
+        let ttlLimit: UInt8 = {
+            if degree >= highDegreeThreshold {
+                return max(UInt8(2), min(ttlCap, UInt8(5)))
+            }
+            let preferred = UInt8(isAnnounce ? 7 : 6)
+            return max(UInt8(2), min(ttlCap, preferred))
         }()
-        let clamped = max(1, min(ttl, ttlCap))
-        let newTTL = clamped &- 1
+        let newTTL = ttlLimit &- 1
 
         // Wider jitter window to allow duplicate suppression to win more often
         // For sparse graphs (<=2), relay quickly to avoid cancellation races
@@ -64,6 +57,6 @@ struct RelayController {
         case 6...9: delayMs = Int.random(in: 80...180)
         default:    delayMs = Int.random(in: 100...220)
         }
-        return RelayDecision(shouldRelay: shouldRelay, newTTL: newTTL, delayMs: delayMs)
+        return RelayDecision(shouldRelay: true, newTTL: newTTL, delayMs: delayMs)
     }
 }

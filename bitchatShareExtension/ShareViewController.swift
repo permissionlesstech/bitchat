@@ -14,6 +14,15 @@ import UniformTypeIdentifiers
 final class ShareViewController: UIViewController {
     // Bundle.main.bundleIdentifier would get the extension's bundleID
     private static let groupID = "group.chat.bitchat"
+
+    private enum Strings {
+        static let nothingToShare = NSLocalizedString("share.status.nothing_to_share", comment: "Shown when the share extension receives no content")
+        static let noShareableContent = NSLocalizedString("share.status.no_shareable_content", comment: "Shown when provided content cannot be shared")
+        static let sharedLinkTitleFallback = NSLocalizedString("share.fallback.shared_link_title", comment: "Fallback title when saving a shared link")
+        static let sharedLinkConfirmation = NSLocalizedString("share.status.shared_link", comment: "Confirmation after successfully sharing a link")
+        static let sharedTextConfirmation = NSLocalizedString("share.status.shared_text", comment: "Confirmation after successfully sharing text")
+        static let failedToEncode = NSLocalizedString("share.status.failed_to_encode", comment: "Shown when the share payload cannot be encoded")
+    }
     
     private let statusLabel: UILabel = {
         let l = UILabel()
@@ -44,7 +53,7 @@ final class ShareViewController: UIViewController {
     private func processShare() {
         guard let ctx = self.extensionContext,
               let item = ctx.inputItems.first as? NSExtensionItem else {
-            finishWithMessage("Nothing to share")
+            finishWithMessage(Strings.nothingToShare)
             return
         }
 
@@ -61,7 +70,7 @@ final class ShareViewController: UIViewController {
             if let title = item.attributedTitle?.string, !title.isEmpty {
                 saveAndFinish(text: title)
             } else {
-                finishWithMessage("No shareable content")
+                finishWithMessage(Strings.noShareableContent)
             }
             return
         }
@@ -81,7 +90,7 @@ final class ShareViewController: UIViewController {
                             self.saveAndFinish(text: t)
                         }
                     } else {
-                        self.finishWithMessage("No shareable content")
+                        self.finishWithMessage(Strings.noShareableContent)
                     }
                 }
             }
@@ -136,20 +145,20 @@ final class ShareViewController: UIViewController {
     private func saveAndFinish(url: URL, title: String?) {
         let payload: [String: String] = [
             "url": url.absoluteString,
-            "title": title ?? url.host ?? "Shared Link"
+            "title": title ?? url.host ?? Strings.sharedLinkTitleFallback
         ]
         if let json = try? JSONSerialization.data(withJSONObject: payload),
            let s = String(data: json, encoding: .utf8) {
             saveToSharedDefaults(content: s, type: "url")
-            finishWithMessage("✓ Shared link to bitchat")
+            finishWithMessage(Strings.sharedLinkConfirmation)
         } else {
-            finishWithMessage("Failed to encode link")
+            finishWithMessage(Strings.failedToEncode)
         }
     }
 
     private func saveAndFinish(text: String) {
         saveToSharedDefaults(content: text, type: "text")
-        finishWithMessage("✓ Shared text to bitchat")
+        finishWithMessage(Strings.sharedTextConfirmation)
     }
 
     private func saveToSharedDefaults(content: String, type: String) {
