@@ -4,6 +4,7 @@ import PackageDescription
 
 let package = Package(
     name: "bitchat",
+    defaultLocalization: "en",
     platforms: [
         .iOS(.v16),
         .macOS(.v13)

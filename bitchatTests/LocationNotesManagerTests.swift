@@ -21,7 +21,7 @@ final class LocationNotesManagerTests: XCTestCase {
         XCTAssertFalse(subscribeCalled)
         XCTAssertEqual(manager.state, .noRelays)
         XCTAssertTrue(manager.initialLoadComplete)
-        XCTAssertEqual(manager.errorMessage, "No geo relays available near this location. Try again soon.")
+        XCTAssertEqual(manager.errorMessage, "no geo relays available near this location. try again soon.")
     }
 
     func testSendWhenNoRelaysSurfacesError() {
@@ -40,7 +40,7 @@ final class LocationNotesManagerTests: XCTestCase {
 
         XCTAssertFalse(sendCalled)
         XCTAssertEqual(manager.state, .noRelays)
-        XCTAssertEqual(manager.errorMessage, "No geo relays available near this location. Try again soon.")
+        XCTAssertEqual(manager.errorMessage, "no geo relays available near this location. try again soon.")
     }
 
     func testSubscribeUsesGeoRelaysAndAppendsNotes() {
