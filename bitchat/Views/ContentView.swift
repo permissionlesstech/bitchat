@@ -1225,7 +1225,7 @@ struct ContentView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(
-                        L10n.format(
+                        L10n.string(
                             "content.accessibility.toggle_bookmark",
                             comment: "Accessibility label for toggling a geohash bookmark",
                             ch.geohash
@@ -1271,13 +1271,11 @@ struct ContentView: View {
                     Image(systemName: "person.2.fill")
                         .font(.system(size: headerPeerIconSize, weight: .regular))
                         .accessibilityLabel(
-                            NSString.localizedStringWithFormat(
-                                NSLocalizedString(
-                                    "content.accessibility.people_count",
-                                    comment: "Accessibility label announcing number of people in header"
-                                ) as NSString,
+                            L10n.string(
+                                "content.accessibility.people_count",
+                                comment: "Accessibility label announcing number of people in header",
                                 headerOtherPeersCount
-                            ) as String
+                            )
                         )
                     Text("\(headerOtherPeersCount)")
                         .font(.system(size: headerPeerCountFontSize, weight: .regular, design: .monospaced))
@@ -1578,7 +1576,7 @@ struct ContentView: View {
                                                        encryptionStatus == .noiseSecured ? textColor :
                                                        Color.red)
                                         .accessibilityLabel(
-                                            L10n.format(
+                                            L10n.string(
                                                 "content.accessibility.encryption_status",
                                                 comment: "Accessibility label announcing encryption status",
                                                 encryptionStatus.accessibilityDescription
@@ -1588,7 +1586,7 @@ struct ContentView: View {
                             }
                         }
                         .accessibilityLabel(
-                            L10n.format(
+                            L10n.string(
                                 "content.accessibility.private_chat_header",
                                 comment: "Accessibility label describing the private chat header",
                                 privatePeerNick
@@ -1751,7 +1749,7 @@ struct DeliveryStatusView: View {
 
     private enum Strings {
         static func delivered(to nickname: String) -> String {
-            L10n.format(
+            L10n.string(
                 "content.delivery.delivered_to",
                 comment: "Tooltip for delivered private messages",
                 nickname
@@ -1759,7 +1757,7 @@ struct DeliveryStatusView: View {
         }
 
         static func read(by nickname: String) -> String {
-            L10n.format(
+            L10n.string(
                 "content.delivery.read_by",
                 comment: "Tooltip for read private messages",
                 nickname
@@ -1767,7 +1765,7 @@ struct DeliveryStatusView: View {
         }
 
         static func failed(_ reason: String) -> String {
-            L10n.format(
+            L10n.string(
                 "content.delivery.failed",
                 comment: "Tooltip for failed message delivery",
                 reason
@@ -1775,7 +1773,7 @@ struct DeliveryStatusView: View {
         }
 
         static func deliveredToMembers(_ reached: Int, _ total: Int) -> String {
-            L10n.format(
+            L10n.string(
                 "content.delivery.delivered_members",
                 comment: "Tooltip for partially delivered messages",
                 reached,
