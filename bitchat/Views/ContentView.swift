@@ -926,8 +926,6 @@ struct ContentView: View {
             .background(backgroundColor)
             .gesture(
                 DragGesture()
-                    .onChanged { _ in
-                    }
                     .onEnded { value in
                         let translation = value.translation.width.isNaN ? 0 : value.translation.width
                         let velocity = value.velocity.width.isNaN ? 0 : value.velocity.width
