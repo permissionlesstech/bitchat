@@ -6,15 +6,9 @@
 //
 
 import XCTest
-import CryptoKit
 @testable import bitchat
 
 final class NostrProtocolTests: XCTestCase {
-    
-    override func setUp() {
-        super.setUp()
-        // SecureLogger is always enabled
-    }
     
     func testNIP17MessageRoundTrip() throws {
         // Create sender and recipient identities

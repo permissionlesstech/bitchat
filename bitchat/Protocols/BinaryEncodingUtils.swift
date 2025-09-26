@@ -197,7 +197,7 @@ extension Data {
         offset += 16
         
         // Convert 16 bytes to UUID string format
-        let uuid = uuidData.map { String(format: "%02x", $0) }.joined()
+        let uuid = uuidData.hexEncodedString()
         
         // Insert hyphens at proper positions: 8-4-4-4-12
         var result = ""
