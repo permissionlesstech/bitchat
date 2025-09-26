@@ -20,13 +20,11 @@ final class GeohashBookmarksStore: ObservableObject {
     private let geocoder = CLGeocoder()
     private var resolving: Set<String> = []
     #endif
-    
-    private let storage: UserDefaults
 
-    private let store: StorageProtocol
+    private let storage: StorageProtocol
     
-    init(store: StorageProtocol = UserDefaultsStorage()) {
-        self.store = store
+    init(storage: StorageProtocol = UserDefaultsStorage()) {
+        self.storage = storage
         load()
     }
 
@@ -69,7 +67,7 @@ final class GeohashBookmarksStore: ObservableObject {
 
     // MARK: - Persistence
     private func load() {
-        guard let data: Data = store.get(storeKey) else { return }
+        guard let data: Data = storage.get(storeKey) else { return }
         if let arr = try? JSONDecoder().decode([String].self, from: data) {
             // Sanitize, normalize, dedupe while preserving order (first occurrence wins)
             var seen = Set<String>()
@@ -86,7 +84,7 @@ final class GeohashBookmarksStore: ObservableObject {
             membership = seen
         }
         // Load any saved names
-        if let namesData: Data = store.get(namesStoreKey),
+        if let namesData: Data = storage.get(namesStoreKey),
            let dict = try? JSONDecoder().decode([String: String].self, from: namesData) {
             bookmarkNames = dict
         }
@@ -94,13 +92,13 @@ final class GeohashBookmarksStore: ObservableObject {
 
     private func persist() {
         if let data = try? JSONEncoder().encode(bookmarks) {
-            store.set(data, key: storeKey)
+            storage.set(data, key: storeKey)
         }
     }
 
     private func persistNames() {
         if let data = try? JSONEncoder().encode(bookmarkNames) {
-            store.set(data, key: namesStoreKey)
+            storage.set(data, key: namesStoreKey)
         }
     }
 

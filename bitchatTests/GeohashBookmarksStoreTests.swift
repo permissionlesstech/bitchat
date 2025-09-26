@@ -3,23 +3,21 @@ import XCTest
 
 final class GeohashBookmarksStoreTests: XCTestCase {
     let storeKey = "locationChannel.bookmarks"
-    var storage: UserDefaults!
-    var store: GeohashBookmarksStore!
 
-    private var store: UserDefaultsStorageMock!
+    private var storage: UserDefaultsStorageMock!
     private var sut: GeohashBookmarksStore!
     
     override func setUp() {
         super.setUp()
-        store = UserDefaultsStorageMock()
+        storage = UserDefaultsStorageMock()
         sut = GeohashBookmarksStore(
-            store: store
+            storage: storage
         )
     }
     
     override func tearDown() {
         super.tearDown()
-        store = nil
+        storage = nil
         sut = nil
     }
 
@@ -37,13 +35,13 @@ final class GeohashBookmarksStoreTests: XCTestCase {
         XCTAssertFalse(sut.isBookmarked("u4pruy"))
         XCTAssertTrue(sut.bookmarks.isEmpty)
     }
-
+    
     func testPersistenceWritten() throws {
         sut.toggle("ezs42")
         sut.toggle("u4pruy")
-
+        
         // Verify persisted JSON contains both (order not enforced here)
-        guard let data: Data = store.get(storeKey) else {
+        guard let data: Data = storage.get(storeKey) else {
             XCTFail("No persisted data found")
             return
         }
