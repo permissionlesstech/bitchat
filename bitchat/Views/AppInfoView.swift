@@ -18,41 +18,77 @@ struct AppInfoView: View {
     
     // MARK: - Constants
     private enum Strings {
-        static let appName = "bitchat"
-        static let tagline = "sidegroupchat"
-        
+        static let appName: LocalizedStringKey = "app_info.app_name"
+        static let tagline: LocalizedStringKey = "app_info.tagline"
+
         enum Features {
-            static let title = "FEATURES"
-            static let offlineComm = ("wifi.slash", "offline communication", "works without internet using Bluetooth low energy")
-            static let encryption = ("lock.shield", "end-to-end encryption", "private messages encrypted with noise protocol")
-            static let extendedRange = ("antenna.radiowaves.left.and.right", "extended range", "messages relay through peers, going the distance")
-            static let mentions = ("at", "mentions", "use @nickname to notify specific people")
-            static let favorites = ("star.fill", "favorites", "get notified when your favorite people join")
-            static let geohash = ("number", "local channels", "geohash channels to chat with people in nearby regions over decentralized anonymous relays")
+            static let title: LocalizedStringKey = "app_info.features.title"
+            static let offlineComm = AppInfoFeatureInfo(
+                icon: "wifi.slash",
+                title: "app_info.features.offline.title",
+                description: "app_info.features.offline.description"
+            )
+            static let encryption = AppInfoFeatureInfo(
+                icon: "lock.shield",
+                title: "app_info.features.encryption.title",
+                description: "app_info.features.encryption.description"
+            )
+            static let extendedRange = AppInfoFeatureInfo(
+                icon: "antenna.radiowaves.left.and.right",
+                title: "app_info.features.extended_range.title",
+                description: "app_info.features.extended_range.description"
+            )
+            static let mentions = AppInfoFeatureInfo(
+                icon: "at",
+                title: "app_info.features.mentions.title",
+                description: "app_info.features.mentions.description"
+            )
+            static let favorites = AppInfoFeatureInfo(
+                icon: "star.fill",
+                title: "app_info.features.favorites.title",
+                description: "app_info.features.favorites.description"
+            )
+            static let geohash = AppInfoFeatureInfo(
+                icon: "number",
+                title: "app_info.features.geohash.title",
+                description: "app_info.features.geohash.description"
+            )
         }
-        
+
         enum Privacy {
-            static let title = "PRIVACY"
-            static let noTracking = ("eye.slash", "no tracking", "no servers, accounts, or data collection")
-            static let ephemeral = ("shuffle", "ephemeral identity", "new peer ID generated regularly")
-            static let panic = ("hand.raised.fill", "panic mode", "triple-tap logo to instantly clear all data")
+            static let title: LocalizedStringKey = "app_info.privacy.title"
+            static let noTracking = AppInfoFeatureInfo(
+                icon: "eye.slash",
+                title: "app_info.privacy.no_tracking.title",
+                description: "app_info.privacy.no_tracking.description"
+            )
+            static let ephemeral = AppInfoFeatureInfo(
+                icon: "shuffle",
+                title: "app_info.privacy.ephemeral.title",
+                description: "app_info.privacy.ephemeral.description"
+            )
+            static let panic = AppInfoFeatureInfo(
+                icon: "hand.raised.fill",
+                title: "app_info.privacy.panic.title",
+                description: "app_info.privacy.panic.description"
+            )
         }
-        
+
         enum HowToUse {
-            static let title = "HOW TO USE"
-            static let instructions = [
-                "• set your nickname by tapping it",
-                "• tap #mesh to change channels",
-                "• tap people icon for sidebar",
-                "• tap a peer's name to start a DM",
-                "• triple-tap chat to clear",
-                "• type / for commands"
+            static let title: LocalizedStringKey = "app_info.how_to_use.title"
+            static let instructions: [LocalizedStringKey] = [
+                "app_info.how_to_use.set_nickname",
+                "app_info.how_to_use.change_channels",
+                "app_info.how_to_use.open_sidebar",
+                "app_info.how_to_use.start_dm",
+                "app_info.how_to_use.clear_chat",
+                "app_info.how_to_use.commands"
             ]
         }
-        
+
         enum Warning {
-            static let title = "WARNING"
-            static let message = "private message security has not yet been fully audited. do not use for critical situations until this warning disappears."
+            static let title: LocalizedStringKey = "app_info.warning.title"
+            static let message: LocalizedStringKey = "app_info.warning.message"
         }
     }
     
@@ -62,7 +98,7 @@ struct AppInfoView: View {
             // Custom header for macOS
             HStack {
                 Spacer()
-                Button("DONE") {
+                Button("app_info.done") {
                     dismiss()
                 }
                 .buttonStyle(.plain)
@@ -93,7 +129,7 @@ struct AppInfoView: View {
                             .frame(width: 32, height: 32)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Close")
+                    .accessibilityLabel("app_info.close")
                 }
             }
         }
@@ -121,7 +157,7 @@ struct AppInfoView: View {
                 SectionHeader(Strings.HowToUse.title)
 
                 VStack(alignment: .leading, spacing: 8) {
-                    ForEach(Strings.HowToUse.instructions, id: \.self) { instruction in
+                    ForEach(Array(Strings.HowToUse.instructions.enumerated()), id: \.offset) { _, instruction in
                         Text(instruction)
                     }
                 }
@@ -132,49 +168,31 @@ struct AppInfoView: View {
             // Features
             VStack(alignment: .leading, spacing: 16) {
                 SectionHeader(Strings.Features.title)
-                
-                FeatureRow(icon: Strings.Features.offlineComm.0, 
-                          title: Strings.Features.offlineComm.1,
-                          description: Strings.Features.offlineComm.2)
-                
-                FeatureRow(icon: Strings.Features.encryption.0,
-                          title: Strings.Features.encryption.1,
-                          description: Strings.Features.encryption.2)
-                
-                FeatureRow(icon: Strings.Features.extendedRange.0,
-                          title: Strings.Features.extendedRange.1,
-                          description: Strings.Features.extendedRange.2)
-                
-                FeatureRow(icon: Strings.Features.favorites.0,
-                          title: Strings.Features.favorites.1,
-                          description: Strings.Features.favorites.2)
-                
-                FeatureRow(icon: Strings.Features.geohash.0,
-                          title: Strings.Features.geohash.1,
-                          description: Strings.Features.geohash.2)
-                
-                FeatureRow(icon: Strings.Features.mentions.0,
-                          title: Strings.Features.mentions.1,
-                          description: Strings.Features.mentions.2)
+
+                FeatureRow(info: Strings.Features.offlineComm)
+
+                FeatureRow(info: Strings.Features.encryption)
+
+                FeatureRow(info: Strings.Features.extendedRange)
+
+                FeatureRow(info: Strings.Features.favorites)
+
+                FeatureRow(info: Strings.Features.geohash)
+
+                FeatureRow(info: Strings.Features.mentions)
             }
-            
+
             // Privacy
             VStack(alignment: .leading, spacing: 16) {
                 SectionHeader(Strings.Privacy.title)
-                
-                FeatureRow(icon: Strings.Privacy.noTracking.0,
-                          title: Strings.Privacy.noTracking.1,
-                          description: Strings.Privacy.noTracking.2)
-                
-                FeatureRow(icon: Strings.Privacy.ephemeral.0,
-                          title: Strings.Privacy.ephemeral.1,
-                          description: Strings.Privacy.ephemeral.2)
-                
-                FeatureRow(icon: Strings.Privacy.panic.0,
-                          title: Strings.Privacy.panic.1,
-                          description: Strings.Privacy.panic.2)
+
+                FeatureRow(info: Strings.Privacy.noTracking)
+
+                FeatureRow(info: Strings.Privacy.ephemeral)
+
+                FeatureRow(info: Strings.Privacy.panic)
             }
-            
+
             // Warning
             VStack(alignment: .leading, spacing: 6) {
                 SectionHeader(Strings.Warning.title)
@@ -197,15 +215,21 @@ struct AppInfoView: View {
     }
 }
 
+struct AppInfoFeatureInfo {
+    let icon: String
+    let title: LocalizedStringKey
+    let description: LocalizedStringKey
+}
+
 struct SectionHeader: View {
-    let title: String
+    let title: LocalizedStringKey
     @Environment(\.colorScheme) var colorScheme
     
     private var textColor: Color {
         colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
     }
     
-    init(_ title: String) {
+    init(_ title: LocalizedStringKey) {
         self.title = title
     }
     
@@ -218,9 +242,7 @@ struct SectionHeader: View {
 }
 
 struct FeatureRow: View {
-    let icon: String
-    let title: String
-    let description: String
+    let info: AppInfoFeatureInfo
     @Environment(\.colorScheme) var colorScheme
     
     private var textColor: Color {
@@ -233,17 +255,17 @@ struct FeatureRow: View {
     
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: icon)
+            Image(systemName: info.icon)
                 .font(.bitchatSystem(size: 20))
                 .foregroundColor(textColor)
                 .frame(width: 30)
             
             VStack(alignment: .leading, spacing: 4) {
-                Text(title)
+                Text(info.title)
                     .font(.bitchatSystem(size: 14, weight: .semibold, design: .monospaced))
                     .foregroundColor(textColor)
                 
-                Text(description)
+                Text(info.description)
                     .font(.bitchatSystem(size: 12, design: .monospaced))
                     .foregroundColor(secondaryTextColor)
                     .fixedSize(horizontal: false, vertical: true)

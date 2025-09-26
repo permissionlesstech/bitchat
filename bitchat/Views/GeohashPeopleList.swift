@@ -8,10 +8,21 @@ struct GeohashPeopleList: View {
     @Environment(\.colorScheme) var colorScheme
     @State private var orderedIDs: [String] = []
 
+    private enum Strings {
+        static let noneNearby: LocalizedStringKey = "geohash_people.none_nearby"
+        static let youSuffix: LocalizedStringKey = "geohash_people.you_suffix"
+        static let blockedTooltip = L10n.string(
+            "geohash_people.tooltip.blocked",
+            comment: "Tooltip shown next to users blocked in geohash channels"
+        )
+        static let unblock: LocalizedStringKey = "geohash_people.action.unblock"
+        static let block: LocalizedStringKey = "geohash_people.action.block"
+    }
+
     var body: some View {
         if viewModel.visibleGeohashPeople().isEmpty {
             VStack(alignment: .leading, spacing: 0) {
-                Text("nobody around...")
+                Text(Strings.noneNearby)
                     .font(.bitchatSystem(size: 14, design: .monospaced))
                     .foregroundColor(secondaryTextColor)
                     .padding(.horizontal)
@@ -53,7 +64,7 @@ struct GeohashPeopleList: View {
                         let rowColor: Color = isMe ? .orange : assignedColor
                         Image(systemName: icon).font(.bitchatSystem(size: 12)).foregroundColor(rowColor)
 
-                        let (base, suffix) = splitSuffix(from: person.displayName)
+                        let (base, suffix) = person.displayName.splitSuffix()
                         HStack(spacing: 0) {
                             Text(base)
                                 .font(.bitchatSystem(size: 14, design: .monospaced))
@@ -66,7 +77,7 @@ struct GeohashPeopleList: View {
                                     .foregroundColor(suffixColor)
                             }
                             if isMe {
-                                Text(" (you)")
+                                Text(Strings.youSuffix)
                                     .font(.bitchatSystem(size: 14, design: .monospaced))
                                     .foregroundColor(rowColor)
                             }
@@ -76,7 +87,7 @@ struct GeohashPeopleList: View {
                                 Image(systemName: "nosign")
                                     .font(.bitchatSystem(size: 10))
                                     .foregroundColor(.red)
-                                    .help("Blocked in geochash")
+                                    .help(Strings.blockedTooltip)
                             }
                         }
                         Spacer()
@@ -97,9 +108,9 @@ struct GeohashPeopleList: View {
                         } else {
                             let blocked = viewModel.isGeohashUserBlocked(pubkeyHexLowercased: person.id)
                             if blocked {
-                                Button("Unblock") { viewModel.unblockGeohashUser(pubkeyHexLowercased: person.id, displayName: person.displayName) }
+                                Button(Strings.unblock) { viewModel.unblockGeohashUser(pubkeyHexLowercased: person.id, displayName: person.displayName) }
                             } else {
-                                Button("Block") { viewModel.blockGeohashUser(pubkeyHexLowercased: person.id, displayName: person.displayName) }
+                                Button(Strings.block) { viewModel.blockGeohashUser(pubkeyHexLowercased: person.id, displayName: person.displayName) }
                             }
                         }
                     }
@@ -117,17 +128,4 @@ struct GeohashPeopleList: View {
             }
         }
     }
-}
-
-// Helper to split a trailing #abcd suffix
-private func splitSuffix(from name: String) -> (String, String) {
-    guard name.count >= 5 else { return (name, "") }
-    let suffix = String(name.suffix(5))
-    if suffix.first == "#", suffix.dropFirst().allSatisfy({ c in
-        ("0"..."9").contains(String(c)) || ("a"..."f").contains(String(c)) || ("A"..."F").contains(String(c))
-    }) {
-        let base = String(name.dropLast(5))
-        return (base, suffix)
-    }
-    return (name, "")
 }

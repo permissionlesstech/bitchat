@@ -11,10 +11,22 @@ struct MeshPeerList: View {
 
     @State private var orderedIDs: [String] = []
 
+    private enum Strings {
+        static let noneNearby: LocalizedStringKey = "geohash_people.none_nearby"
+        static let blockedTooltip = L10n.string(
+            "geohash_people.tooltip.blocked",
+            comment: "Tooltip shown next to a blocked peer indicator"
+        )
+        static let newMessagesTooltip = L10n.string(
+            "mesh_peers.tooltip.new_messages",
+            comment: "Tooltip for the unread messages indicator"
+        )
+    }
+
     var body: some View {
         if viewModel.allPeers.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
-                Text("nobody around...")
+                Text(Strings.noneNearby)
                     .font(.bitchatSystem(size: 14, design: .monospaced))
                     .foregroundColor(secondaryTextColor)
                     .padding(.horizontal)
@@ -70,7 +82,7 @@ struct MeshPeerList: View {
                         }
 
                         let displayName = isMe ? viewModel.nickname : peer.nickname
-                        let (base, suffix) = splitSuffix(from: displayName)
+                        let (base, suffix) = displayName.splitSuffix()
                         HStack(spacing: 0) {
                             Text(base)
                                 .font(.bitchatSystem(size: 14, design: .monospaced))
@@ -87,7 +99,7 @@ struct MeshPeerList: View {
                             Image(systemName: "nosign")
                                 .font(.bitchatSystem(size: 10))
                                 .foregroundColor(.red)
-                                .help("Blocked")
+                                .help(Strings.blockedTooltip)
                         }
 
                         if !isMe {
@@ -120,7 +132,7 @@ struct MeshPeerList: View {
                             Image(systemName: "envelope.fill")
                                 .font(.bitchatSystem(size: 10))
                                 .foregroundColor(.orange)
-                                .help("New messages")
+                                .help(Strings.newMessagesTooltip)
                         }
 
                         if !isMe {
@@ -153,17 +165,4 @@ struct MeshPeerList: View {
             }
         }
     }
-}
-
-// Helper to split a trailing #abcd suffix
-private func splitSuffix(from name: String) -> (String, String) {
-    guard name.count >= 5 else { return (name, "") }
-    let suffix = String(name.suffix(5))
-    if suffix.first == "#", suffix.dropFirst().allSatisfy({ c in
-        ("0"..."9").contains(String(c)) || ("a"..."f").contains(String(c)) || ("A"..."F").contains(String(c))
-    }) {
-        let base = String(name.dropLast(5))
-        return (base, suffix)
-    }
-    return (name, "")
 }
