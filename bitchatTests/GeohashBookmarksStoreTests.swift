@@ -4,43 +4,44 @@ import XCTest
 final class GeohashBookmarksStoreTests: XCTestCase {
     let storeKey = "locationChannel.bookmarks"
 
+    private var storage: UserDefaultsStorageMock!
+    private var sut: GeohashBookmarksStore!
+    
     override func setUp() {
         super.setUp()
-        // Clear persisted state before each test
-        UserDefaults.standard.removeObject(forKey: storeKey)
-        GeohashBookmarksStore.shared._resetForTesting()
+        storage = UserDefaultsStorageMock()
+        sut = GeohashBookmarksStore(
+            storage: storage
+        )
     }
-
+    
     override func tearDown() {
-        // Clean after each test
-        UserDefaults.standard.removeObject(forKey: storeKey)
-        GeohashBookmarksStore.shared._resetForTesting()
         super.tearDown()
+        storage = nil
+        sut = nil
     }
 
     func testToggleAndNormalize() {
-        let store = GeohashBookmarksStore.shared
         // Start clean
-        XCTAssertTrue(store.bookmarks.isEmpty)
+        XCTAssertTrue(sut.bookmarks.isEmpty)
 
         // Add with mixed case and hash prefix
-        store.toggle("#U4PRUY")
-        XCTAssertTrue(store.isBookmarked("u4pruy"))
-        XCTAssertEqual(store.bookmarks.first, "u4pruy")
+        sut.toggle("#U4PRUY")
+        XCTAssertTrue(sut.isBookmarked("u4pruy"))
+        XCTAssertEqual(sut.bookmarks.first, "u4pruy")
 
         // Toggling again removes
-        store.toggle("u4pruy")
-        XCTAssertFalse(store.isBookmarked("u4pruy"))
-        XCTAssertTrue(store.bookmarks.isEmpty)
+        sut.toggle("u4pruy")
+        XCTAssertFalse(sut.isBookmarked("u4pruy"))
+        XCTAssertTrue(sut.bookmarks.isEmpty)
     }
-
+    
     func testPersistenceWritten() throws {
-        let store = GeohashBookmarksStore.shared
-        store.toggle("ezs42")
-        store.toggle("u4pruy")
-
+        sut.toggle("ezs42")
+        sut.toggle("u4pruy")
+        
         // Verify persisted JSON contains both (order not enforced here)
-        guard let data = UserDefaults.standard.data(forKey: storeKey) else {
+        guard let data: Data = storage.get(storeKey) else {
             XCTFail("No persisted data found")
             return
         }
