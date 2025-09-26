@@ -130,6 +130,8 @@
 "geohash_people.none_nearby" = "nobody around...";
 "geohash_people.tooltip.blocked" = "blocked in geohash";
 "geohash_people.you_suffix" = " (you)";
+"geohash_picker.instruction" = "pan and zoom to select a geohash";
+"geohash_picker.select_button" = "select";
 "location_channels.action.open_settings" = "open settings";
 "location_channels.action.remove_access" = "remove location access";
 "location_channels.action.request_permissions" = "get location and my geohashes";

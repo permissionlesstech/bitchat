@@ -128,6 +128,8 @@
 "geohash_people.none_nearby" = "لا أحد قريب...";
 "geohash_people.tooltip.blocked" = "محظور في geohash";
 "geohash_people.you_suffix" = " (أنت)";
+"geohash_picker.instruction" = "اسحب وقرب لاختيار geohash";
+"geohash_picker.select_button" = "اختيار";
 "location_channels.action.open_settings" = "فتح الإعدادات";
 "location_channels.action.remove_access" = "إزالة صلاحية الموقع";
 "location_channels.action.request_permissions" = "جلب موقعي و geohash";

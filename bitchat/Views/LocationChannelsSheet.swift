@@ -7,12 +7,12 @@ import AppKit
 #endif
 struct LocationChannelsSheet: View {
     @Binding var isPresented: Bool
+    @Binding var customGeohash: String
     @ObservedObject private var manager = LocationChannelManager.shared
     @ObservedObject private var bookmarks = GeohashBookmarksStore.shared
     @ObservedObject private var network = NetworkActivationService.shared
     @EnvironmentObject var viewModel: ChatViewModel
     @Environment(\.colorScheme) var colorScheme
-    @State private var customGeohash: String = ""
     @State private var customError: String? = nil
     @State private var showGeohashMap = false
 
@@ -138,7 +138,7 @@ struct LocationChannelsSheet: View {
         .presentationDetents([.large])
         #endif
         #if os(macOS)
-        .frame(minWidth: 420, minHeight: 520)
+        .frame(minWidth: 420, minHeight: 680)
         #endif
         .background(backgroundColor)
         .onAppear {
@@ -294,6 +294,42 @@ struct LocationChannelsSheet: View {
                             customGeohash = filtered
                         }
                     }
+                    // Map picker button
+                    Button(action: { showGeohashMap = true }) {
+                        Image(systemName: "map")
+                            .font(.bitchatSystem(size: 14))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.vertical, 6)
+                    .background(Color.secondary.opacity(0.12))
+                    .cornerRadius(6)
+                    #if os(iOS)
+                    .sheet(isPresented: $showGeohashMap) {
+                        let processedGeohash = customGeohash.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().replacingOccurrences(of: "#", with: "")
+                        return GeohashPickerSheet(
+                            isPresented: $showGeohashMap,
+                            initialGeohash: processedGeohash
+                        ) { selectedGeohash in
+                            customGeohash = selectedGeohash
+                            showGeohashMap = false
+                        }
+                        .environmentObject(viewModel)
+                        .onAppear {
+                        }
+                        .presentationDetents([.large])
+                        .presentationDragIndicator(.visible)
+                    }
+                    #else
+                    .onChange(of: showGeohashMap) { newValue in
+                        if newValue {
+                            let processedGeohash = customGeohash.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().replacingOccurrences(of: "#", with: "")
+                            openGeohashPickerWindow(initialGeohash: processedGeohash, onSelection: { selectedGeohash in
+                                customGeohash = selectedGeohash
+                            })
+                            showGeohashMap = false
+                        }
+                    }
+                    #endif
                 let normalized = customGeohash
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                     .lowercased()
@@ -630,3 +666,4 @@ private func openSystemLocationSettings() {
     }
     #endif
 }
+

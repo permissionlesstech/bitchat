@@ -128,6 +128,8 @@
 "geohash_people.none_nearby" = "वरिपरि कोही छैन...";
 "geohash_people.tooltip.blocked" = "geohash मा ब्लक";
 "geohash_people.you_suffix" = " (तिमी)";
+"geohash_picker.instruction" = "geohash छान्न तान्नु र जुम गर्नु";
+"geohash_picker.select_button" = "छान्नु";
 "location_channels.action.open_settings" = "सेटिङ खोल";
 "location_channels.action.remove_access" = "स्थान पहुँच हटाउ";
 "location_channels.action.request_permissions" = "मेरो स्थान र geohash प्राप्त गर";

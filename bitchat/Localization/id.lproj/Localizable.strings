@@ -128,6 +128,8 @@
 "geohash_people.none_nearby" = "tidak ada siapa pun...";
 "geohash_people.tooltip.blocked" = "diblokir di geohash";
 "geohash_people.you_suffix" = " (kamu)";
+"geohash_picker.instruction" = "seret dan perbesar untuk pilih geohash";
+"geohash_picker.select_button" = "pilih";
 "location_channels.action.open_settings" = "buka pengaturan";
 "location_channels.action.remove_access" = "cabut akses lokasi";
 "location_channels.action.request_permissions" = "ambil lokasiku dan geohash";

@@ -128,6 +128,8 @@
 "geohash_people.none_nearby" = "近くに誰もいません...";
 "geohash_people.tooltip.blocked" = "geohashでブロック中";
 "geohash_people.you_suffix" = " (あなた)";
+"geohash_picker.instruction" = "ドラッグとズームでgeohashを選択";
+"geohash_picker.select_button" = "選択";
 "location_channels.action.open_settings" = "設定を開く";
 "location_channels.action.remove_access" = "位置アクセスを解除";
 "location_channels.action.request_permissions" = "位置情報とgeohashを取得";

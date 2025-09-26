@@ -1,22 +1,64 @@
+#if os(macOS)
 import SwiftUI
+import AppKit
 
-struct GeohashPickerSheet: View {
-    @Binding var isPresented: Bool
-    let onGeohashSelected: (String) -> Void
+private var geohashWindowController: GeohashPickerWindowController?
+
+func openGeohashPickerWindow(initialGeohash: String, onSelection: @escaping (String) -> Void) {
+    geohashWindowController = GeohashPickerWindowController(initialGeohash: initialGeohash, onSelection: onSelection)
+    geohashWindowController?.showWindow(nil)
+    geohashWindowController?.window?.makeKeyAndOrderFront(nil)
+}
+
+class GeohashPickerWindowController: NSWindowController {
+    let onSelection: (String) -> Void
     let initialGeohash: String
+
+    init(initialGeohash: String, onSelection: @escaping (String) -> Void) {
+        self.initialGeohash = initialGeohash
+        self.onSelection = onSelection
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+
+        super.init(window: window)
+
+        window.center()
+        window.setFrameAutosaveName("GeohashPickerWindow")
+
+        // Create the SwiftUI view
+        let contentView = GeohashPickerWindowView(
+            initialGeohash: initialGeohash,
+            onSelection: { [weak self] selectedGeohash in
+                self?.onSelection(selectedGeohash)
+                self?.window?.close()
+                geohashWindowController = nil
+            }
+        )
+
+        window.contentView = NSHostingView(rootView: contentView)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+}
+
+struct GeohashPickerWindowView: View {
+    let initialGeohash: String
+    let onSelection: (String) -> Void
     @State private var selectedGeohash: String = ""
     @State private var currentPrecision: Int? = 6
     @Environment(\.colorScheme) var colorScheme
 
-    init(isPresented: Binding<Bool>, initialGeohash: String = "", onGeohashSelected: @escaping (String) -> Void) {
-        self._isPresented = isPresented
+    init(initialGeohash: String, onSelection: @escaping (String) -> Void) {
         self.initialGeohash = initialGeohash
-        self.onGeohashSelected = onGeohashSelected
+        self.onSelection = onSelection
         self._selectedGeohash = State(initialValue: initialGeohash)
-    }
-
-    private var backgroundColor: Color {
-        colorScheme == .dark ? Color.black : Color.white
     }
 
     private enum Strings {
@@ -44,7 +86,6 @@ struct GeohashPickerSheet: View {
                 showFloatingControls: false,
                 precision: $currentPrecision
             )
-            .ignoresSafeArea()
 
             // Top instruction banner
             VStack {
@@ -61,7 +102,7 @@ struct GeohashPickerSheet: View {
                         )
                 }
                 .padding(.horizontal, 16)
-                .padding(.top, 20) // Smaller top padding and more on top
+                .padding(.top, 20)
                 Spacer()
             }
 
@@ -82,7 +123,7 @@ struct GeohashPickerSheet: View {
                         )
                     Spacer()
                 }
-                .padding(.bottom, 120) // Position geohash display a bit down
+                .padding(.bottom, 120)
             }
 
             // Bottom controls bar
@@ -102,10 +143,10 @@ struct GeohashPickerSheet: View {
                             .background(
                                 RoundedRectangle(cornerRadius: 25)
                                     .fill(textColor.opacity(0.15))
-                                    .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
                             )
                     }
                     .disabled((currentPrecision ?? 6) <= 1)
+                    .buttonStyle(.plain)
 
                     // Plus button
                     Button(action: {
@@ -120,15 +161,15 @@ struct GeohashPickerSheet: View {
                             .background(
                                 RoundedRectangle(cornerRadius: 25)
                                     .fill(textColor.opacity(0.15))
-                                    .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
                             )
                     }
                     .disabled((currentPrecision ?? 6) >= 12)
+                    .buttonStyle(.plain)
 
                     // Select button
                     Button(action: {
                         if !selectedGeohash.isEmpty {
-                            onGeohashSelected(selectedGeohash)
+                            onSelection(selectedGeohash)
                         }
                     }) {
                         HStack(spacing: 8) {
@@ -142,23 +183,17 @@ struct GeohashPickerSheet: View {
                         .background(
                             RoundedRectangle(cornerRadius: 25)
                                 .fill(Color.secondary.opacity(0.15))
-                                .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
                         )
                     }
                     .disabled(selectedGeohash.isEmpty)
                     .opacity(selectedGeohash.isEmpty ? 0.6 : 1.0)
+                    .buttonStyle(.plain)
                 }
                 .padding(.horizontal, 20)
-                .padding(.bottom, 40) // Move buttons more up in the screen
+                .padding(.bottom, 40)
             }
         }
-        .background(backgroundColor)
-        #if os(macOS)
-        .frame(minWidth: 800, minHeight: 600)
-        #endif
         .onAppear {
-            // Always sync selectedGeohash with initialGeohash when view appears
-            // This ensures we restore the last selected geohash from LocationChannelsSheet
             if !initialGeohash.isEmpty {
                 selectedGeohash = initialGeohash
                 currentPrecision = initialGeohash.count
@@ -166,11 +201,4 @@ struct GeohashPickerSheet: View {
         }
     }
 }
-
-#Preview {
-    GeohashPickerSheet(
-        isPresented: .constant(true),
-        initialGeohash: "",
-        onGeohashSelected: { _ in }
-    )
-}
+#endif
