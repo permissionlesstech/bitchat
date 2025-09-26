@@ -2077,7 +2077,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         for (k, v) in nostrKeyMapping where v.lowercased() == hex { nostrKeyMapping.removeValue(forKey: k) }
         
         addSystemMessage(
-            L10n.format(
+            L10n.string(
                 "system.geohash.blocked",
                 comment: "System message shown when a user is blocked in geohash chats",
                 displayName
@@ -2088,7 +2088,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     func unblockGeohashUser(pubkeyHexLowercased: String, displayName: String) {
         identityManager.setNostrBlocked(pubkeyHexLowercased, isBlocked: false)
         addSystemMessage(
-            L10n.format(
+            L10n.string(
                 "system.geohash.unblocked",
                 comment: "System message shown when a user is unblocked in geohash chats",
                 displayName
@@ -2278,7 +2278,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         if unifiedPeerService.isBlocked(peerID) {
             let nickname = meshService.peerNickname(peerID: peerID) ?? "user"
             addSystemMessage(
-                L10n.format(
+                L10n.string(
                     "system.dm.blocked_recipient",
                     comment: "System message when attempting to message a blocked user",
                     nickname
@@ -2353,7 +2353,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                 )
             }
             addSystemMessage(
-                L10n.format(
+                L10n.string(
                     "system.dm.unreachable",
                     comment: "System message when a recipient is unreachable",
                     recipientNickname ?? L10n.string("system.common.user", comment: "Fallback recipient name")
@@ -2561,7 +2561,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         // Check if the peer is blocked
         if unifiedPeerService.isBlocked(peerID) {
             addSystemMessage(
-                L10n.format(
+                L10n.string(
                     "system.chat.blocked",
                     comment: "System message when starting chat fails because peer is blocked",
                     peerNickname
@@ -2574,7 +2574,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         if let peer = unifiedPeerService.getPeer(by: peerID),
            peer.isFavorite && !peer.theyFavoritedUs && !peer.isConnected {
             addSystemMessage(
-                L10n.format(
+                L10n.string(
                     "system.chat.requires_favorite",
                     comment: "System message when mutual favorite requirement blocks chat",
                     peerNickname

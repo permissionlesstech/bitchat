@@ -145,11 +145,11 @@ struct LocationNotesView: View {
     }
 
     private func headerTitle(for count: Int) -> String {
-        let format = NSLocalizedString(
+        L10n.string(
             "location_notes.header",
-            comment: "Header displaying the geohash and localized note count"
+            comment: "Header displaying the geohash and localized note count",
+            geohash, count
         )
-        return NSString.localizedStringWithFormat(format as NSString, geohash, count) as String
     }
 
     private var notesContent: some View {

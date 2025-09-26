@@ -120,7 +120,7 @@ struct QRScanView: View {
         static let pastePrompt: LocalizedStringKey = "verification.scan.paste_prompt"
         static let validate: LocalizedStringKey = "verification.scan.validate"
         static func requested(_ nickname: String) -> String {
-            L10n.format(
+            L10n.string(
                 "verification.scan.status.requested",
                 comment: "Status text when verification is requested for a nickname",
                 nickname
