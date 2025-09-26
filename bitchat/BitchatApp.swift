@@ -6,6 +6,7 @@
 // For more information, see <https://unlicense.org>
 //
 
+import Tor
 import SwiftUI
 import UserNotifications
 
