@@ -1,0 +1,20 @@
+{
+  "app": [
+    "common.ok",
+    "content.input.message_placeholder",
+    "content.alert.bluetooth_required.title",
+    "content.delivery.delivered_to",
+    "location_channels.title",
+    "location_channels.action.request_permissions",
+    "location_notes.header",
+    "content.accessibility.people_count",
+    "system.tor.started",
+    "fingerprint.title",
+    "app_info.warning.message"
+  ],
+  "shareExtension": [
+    "share.status.shared_text",
+    "share.status.shared_link",
+    "share.status.failed_to_encode"
+  ]
+}
