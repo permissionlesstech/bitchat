@@ -128,6 +128,8 @@
 "geohash_people.none_nearby" = "אין אף אחד בסביבה...";
 "geohash_people.tooltip.blocked" = "חסום ב-geohash";
 "geohash_people.you_suffix" = " (אתה)";
+"geohash_picker.instruction" = "גרור וזום כדי לבחור geohash";
+"geohash_picker.select_button" = "בחר";
 "location_channels.action.open_settings" = "פתח הגדרות";
 "location_channels.action.remove_access" = "הסר גישת מיקום";
 "location_channels.action.request_permissions" = "קבל את המיקום וה-geohash שלי";

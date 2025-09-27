@@ -128,6 +128,8 @@
 "geohash_people.none_nearby" = "никого рядом...";
 "geohash_people.tooltip.blocked" = "заблокирован в geohash";
 "geohash_people.you_suffix" = " (ты)";
+"geohash_picker.instruction" = "перетаскивайте и масштабируйте для выбора geohash";
+"geohash_picker.select_button" = "выбрать";
 "location_channels.action.open_settings" = "открыть настройки";
 "location_channels.action.remove_access" = "отключить доступ к локации";
 "location_channels.action.request_permissions" = "получить мою локацию и geohash";

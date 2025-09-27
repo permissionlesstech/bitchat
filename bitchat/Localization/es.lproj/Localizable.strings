@@ -128,6 +128,8 @@
 "geohash_people.none_nearby" = "nadie cerca...";
 "geohash_people.tooltip.blocked" = "bloqueado en geohash";
 "geohash_people.you_suffix" = " (tú)";
+"geohash_picker.instruction" = "arrastra y acerca para seleccionar un geohash";
+"geohash_picker.select_button" = "seleccionar";
 "location_channels.action.open_settings" = "abrir ajustes";
 "location_channels.action.remove_access" = "eliminar acceso a la ubicación";
 "location_channels.action.request_permissions" = "obtener mi ubicación y mis geohashes";

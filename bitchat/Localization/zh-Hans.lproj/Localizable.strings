@@ -128,6 +128,8 @@
 "geohash_people.none_nearby" = "附近没人...";
 "geohash_people.tooltip.blocked" = "在 geohash 中已屏蔽";
 "geohash_people.you_suffix" = " (你)";
+"geohash_picker.instruction" = "拖拽和缩放来选择 geohash";
+"geohash_picker.select_button" = "选择";
 "location_channels.action.open_settings" = "打开设置";
 "location_channels.action.remove_access" = "移除位置访问";
 "location_channels.action.request_permissions" = "获取位置和我的 geohash";
