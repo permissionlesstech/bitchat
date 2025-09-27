@@ -824,6 +824,11 @@ struct ContentView: View {
                 .foregroundColor(textColor)
                 .focused($isTextFieldFocused)
                 .padding(.leading, 12)
+                #if os(iOS)
+                // Fix for gray overlay issue when iOS app runs on macOS with Increase Contrast disabled
+                .autocorrectionDisabled(true)
+                .focusEffectDisabled()
+                #endif
                 // iOS keyboard autocomplete and capitalization enabled by default
                 .onChange(of: messageText) { newValue in
                     // Cancel previous debounce timer
