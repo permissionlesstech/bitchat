@@ -120,7 +120,7 @@
 "fingerprint.badge.not_verified" = "⚠️ NOT VERIFIED";
 "fingerprint.badge.verified" = "✓ VERIFIED";
 "fingerprint.handshake_pending" = "not available - handshake in progress";
-"fingerprint.message.verified" = "uou have verified this person's identity.";
+"fingerprint.message.verified" = "you have verified this person's identity.";
 "fingerprint.message.verify_hint" = "compare these fingerprints with %@ using a secure channel.";
 "fingerprint.their_label" = "their fingerprint:";
 "fingerprint.title" = "security verification";
