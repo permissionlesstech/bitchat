@@ -1,5 +1,4 @@
 import Foundation
-import CryptoKit
 
 /// QR verification scaffolding: schema, signing, and basic challenge/response helpers.
 final class VerificationService {
@@ -95,7 +94,7 @@ final class VerificationService {
                                     nickname: payload.nickname,
                                     ts: payload.ts,
                                     nonceB64: payload.nonceB64,
-                                    sigHex: sig.map { String(format: "%02x", $0) }.joined())
+                                    sigHex: sig.hexEncodedString())
         let out = signed.toURLString()
         Cache.last = (nickname, npub, Date(), out)
         return out
