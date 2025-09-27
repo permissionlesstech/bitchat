@@ -264,8 +264,7 @@ final class BLEService: NSObject {
     // MARK: - Helpers: IDs, selection, and write backpressure
     private func makeMessageID(for packet: BitchatPacket) -> String {
         let senderID = packet.senderID.hexEncodedString()
-        let digest = SHA256.hash(data: packet.payload)
-        let digestPrefix = digest.prefix(4).map { String(format: "%02x", $0) }.joined()
+        let digestPrefix = packet.payload.sha256Hash().prefix(4).hexEncodedString()
         return "\(senderID)-\(packet.timestamp)-\(packet.type)-\(digestPrefix)"
     }
 
@@ -777,12 +776,7 @@ final class BLEService: NSObject {
     
     func getPeerFingerprint(_ peerID: String) -> String? {
         return collectionsQueue.sync {
-            if let publicKey = peers[peerID]?.noisePublicKey {
-                // Use the same fingerprinting method as NoiseEncryptionService/UnifiedPeerService (SHA-256 of raw key)
-                let hash = SHA256.hash(data: publicKey)
-                return hash.map { String(format: "%02x", $0) }.joined()
-            }
-            return nil
+            return peers[peerID]?.noisePublicKey?.sha256Fingerprint()
         }
     }
 
@@ -1705,17 +1699,12 @@ final class BLEService: NSObject {
         }
 
         // Persist cryptographic identity and signing key for robust offline verification
-        do {
-            // Derive fingerprint from Noise public key
-            let hash = SHA256.hash(data: announcement.noisePublicKey)
-            let fingerprint = hash.map { String(format: "%02x", $0) }.joined()
-            identityManager.upsertCryptographicIdentity(
-                fingerprint: fingerprint,
-                noisePublicKey: announcement.noisePublicKey,
-                signingPublicKey: announcement.signingPublicKey,
-                claimedNickname: announcement.nickname
-            )
-        }
+        identityManager.upsertCryptographicIdentity(
+            fingerprint: announcement.noisePublicKey.sha256Fingerprint(),
+            noisePublicKey: announcement.noisePublicKey,
+            signingPublicKey: announcement.signingPublicKey,
+            claimedNickname: announcement.nickname
+        )
 
         // Record this announce for lightweight rebroadcast buffer (exclude self)
         if peerID != myPeerID {

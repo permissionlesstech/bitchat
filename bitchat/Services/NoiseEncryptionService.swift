@@ -302,8 +302,7 @@ final class NoiseEncryptionService {
     
     /// Get our identity fingerprint
     func getIdentityFingerprint() -> String {
-        let hash = SHA256.hash(data: staticIdentityPublicKey.rawRepresentation)
-        return hash.map { String(format: "%02x", $0) }.joined()
+        staticIdentityPublicKey.rawRepresentation.sha256Fingerprint()
     }
     
     /// Get peer's public key data
@@ -584,7 +583,7 @@ final class NoiseEncryptionService {
     
     private func handleSessionEstablished(peerID: String, remoteStaticKey: Curve25519.KeyAgreement.PublicKey) {
         // Calculate fingerprint
-        let fingerprint = calculateFingerprint(for: remoteStaticKey)
+        let fingerprint = remoteStaticKey.rawRepresentation.sha256Fingerprint()
         
         // Store fingerprint mapping
         serviceQueue.sync(flags: .barrier) {
@@ -601,11 +600,6 @@ final class NoiseEncryptionService {
                 handler(peerID, fingerprint)
             }
         }
-    }
-    
-    private func calculateFingerprint(for publicKey: Curve25519.KeyAgreement.PublicKey) -> String {
-        let hash = SHA256.hash(data: publicKey.rawRepresentation)
-        return hash.map { String(format: "%02x", $0) }.joined()
     }
         
     // MARK: - Session Maintenance
