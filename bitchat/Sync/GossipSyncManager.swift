@@ -1,5 +1,4 @@
 import Foundation
-import CryptoKit
 
 // Gossip-based sync manager using on-demand GCS filters
 final class GossipSyncManager {
@@ -53,6 +52,12 @@ final class GossipSyncManager {
     }
 
     func onPublicPacketSeen(_ packet: BitchatPacket) {
+        queue.async { [weak self] in
+            self?._onPublicPacketSeen(packet)
+        }
+    }
+
+    private func _onPublicPacketSeen(_ packet: BitchatPacket) {
         let mt = MessageType(rawValue: packet.type)
         let isBroadcastRecipient: Bool = {
             guard let r = packet.recipientID else { return true }
@@ -119,18 +124,17 @@ final class GossipSyncManager {
     }
 
     func handleRequestSync(fromPeerID: String, request: RequestSyncPacket) {
+        queue.async { [weak self] in
+            self?._handleRequestSync(fromPeerID: fromPeerID, request: request)
+        }
+    }
+
+    private func _handleRequestSync(fromPeerID: String, request: RequestSyncPacket) {
         // Decode GCS into sorted set and prepare membership checker
         let sorted = GCSFilter.decodeToSortedSet(p: request.p, m: request.m, data: request.data)
         func mightContain(_ id: Data) -> Bool {
-            var hasher = SHA256()
-            hasher.update(data: id) // 16-byte PacketId
-            let digest = hasher.finalize()
-            let db = Data(digest)
-            var x: UInt64 = 0
-            let take = min(8, db.count)
-            for i in 0..<take { x = (x << 8) | UInt64(db[i]) }
-            let v = (x & 0x7fff_ffff_ffff_ffff) % UInt64(request.m)
-            return GCSFilter.contains(sortedValues: sorted, candidate: v)
+            let bucket = GCSFilter.bucket(for: id, modulus: request.m)
+            return GCSFilter.contains(sortedValues: sorted, candidate: bucket)
         }
 
         // 1) Announcements: send latest per peer if requester lacks them
@@ -182,9 +186,15 @@ final class GossipSyncManager {
 
     // Explicit removal hook for LEAVE/stale peer
     func removeAnnouncementForPeer(_ peerID: String) {
+        queue.async { [weak self] in
+            self?._removeAnnouncementForPeer(peerID)
+        }
+    }
+
+    private func _removeAnnouncementForPeer(_ peerID: String) {
         let normalizedPeerID = peerID.lowercased()
         _ = latestAnnouncementByPeer.removeValue(forKey: normalizedPeerID)
-        
+
         // Remove messages from this peer
         // Collect IDs to remove first to avoid concurrent modification
         let messageIdsToRemove = messages.compactMap { (id, message) -> String? in

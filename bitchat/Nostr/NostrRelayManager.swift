@@ -41,6 +41,8 @@ final class NostrRelayManager: ObservableObject {
     @Published private(set) var isConnected = false
     
     private var allowDefaultRelays: Bool = false
+    private var hasMutualFavorites: Bool = false
+    private var hasLocationPermission: Bool = false
     private var connections: [String: URLSessionWebSocketTask] = [:]
     private var subscriptions: [String: Set<String>] = [:] // relay URL -> active subscription IDs
     private var pendingSubscriptions: [String: [String: String]] = [:] // relay URL -> (subscription id -> encoded REQ JSON)
@@ -82,17 +84,27 @@ final class NostrRelayManager: ObservableObject {
     private var connectionGeneration: Int = 0
     
     init() {
-        let hasMutual = !FavoritesPersistenceService.shared.mutualFavorites.isEmpty
-        allowDefaultRelays = hasMutual
-        if hasMutual {
-            self.relays = Self.defaultRelays.map { Relay(url: $0) }
-        }
+        hasMutualFavorites = !FavoritesPersistenceService.shared.mutualFavorites.isEmpty
+        hasLocationPermission = LocationChannelManager.shared.permissionState == .authorized
+        applyDefaultRelayPolicy(force: true)
         // Deterministic JSON shape for outbound requests
         self.encoder.outputFormatting = .sortedKeys
         FavoritesPersistenceService.shared.$mutualFavorites
             .receive(on: DispatchQueue.main)
             .sink { [weak self] favorites in
-                self?.updateDefaultRelayPolicy(hasMutual: !favorites.isEmpty)
+                guard let self = self else { return }
+                self.hasMutualFavorites = !favorites.isEmpty
+                self.applyDefaultRelayPolicy()
+            }
+            .store(in: &cancellables)
+        LocationChannelManager.shared.$permissionState
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] state in
+                guard let self = self else { return }
+                let authorized = (state == .authorized)
+                if authorized == self.hasLocationPermission { return }
+                self.hasLocationPermission = authorized
+                self.applyDefaultRelayPolicy()
             }
             .store(in: &cancellables)
     }
@@ -326,10 +338,11 @@ final class NostrRelayManager: ObservableObject {
         }
     }
 
-    private func updateDefaultRelayPolicy(hasMutual: Bool) {
-        guard hasMutual != allowDefaultRelays else { return }
-        allowDefaultRelays = hasMutual
-        if hasMutual {
+    private func applyDefaultRelayPolicy(force: Bool = false) {
+        let shouldAllow = hasMutualFavorites || hasLocationPermission
+        if !force && shouldAllow == allowDefaultRelays { return }
+        allowDefaultRelays = shouldAllow
+        if shouldAllow {
             var existing = Set(relays.map { $0.url })
             for url in Self.defaultRelays where !existing.contains(url) {
                 relays.append(Relay(url: url))

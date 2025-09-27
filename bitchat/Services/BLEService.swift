@@ -7,6 +7,78 @@ import CryptoKit
 import UIKit
 #endif
 
+struct NotificationStreamAssembler {
+    private var buffer = Data()
+
+    mutating func append(_ chunk: Data) -> (frames: [Data], droppedPrefixes: [UInt8], reset: Bool) {
+        guard !chunk.isEmpty else { return ([], [], false) }
+
+        buffer.append(chunk)
+
+        var frames: [Data] = []
+        var dropped: [UInt8] = []
+        var reset = false
+        let maxFrameLength = TransportConfig.blePendingWriteBufferCapBytes
+
+        let minHeaderBytes = 14 // version + type + ttl + timestamp(8) + flags + length(2)
+        let minFramePrefix = minHeaderBytes + BinaryProtocol.senderIDSize
+
+        while buffer.count >= minFramePrefix {
+            guard let first = buffer.first else { break }
+            if first != 1 {
+                dropped.append(buffer.removeFirst())
+                continue
+            }
+
+            guard buffer.count >= minHeaderBytes else { break }
+
+            let headerBytes = Array(buffer.prefix(minFramePrefix))
+            guard headerBytes.count == minFramePrefix else { break }
+
+            let flags = headerBytes[11]
+            let hasRecipient = (flags & BinaryProtocol.Flags.hasRecipient) != 0
+            let hasSignature = (flags & BinaryProtocol.Flags.hasSignature) != 0
+            let payloadLen = (Int(headerBytes[12]) << 8) | Int(headerBytes[13])
+
+            var frameLength = minFramePrefix + payloadLen
+            if hasRecipient { frameLength += BinaryProtocol.recipientIDSize }
+            if hasSignature { frameLength += BinaryProtocol.signatureSize }
+
+            guard frameLength > 0, frameLength <= maxFrameLength else {
+                buffer.removeAll()
+                reset = true
+                break
+            }
+
+            if buffer.count < frameLength {
+                // Check if a new frame start exists within the incomplete buffer; if so, drop leading partial bytes.
+                if let nextStart = buffer.dropFirst().firstIndex(of: 1) {
+                    let dropCount = buffer.distance(from: buffer.startIndex, to: nextStart)
+                    if dropCount > 0 {
+                        buffer.removeFirst(dropCount)
+                        dropped.append(1) // treat as dropped partial start
+                    }
+                }
+                break
+            }
+
+            let frame = Data(buffer.prefix(frameLength))
+            frames.append(frame)
+            buffer.removeFirst(frameLength)
+        }
+
+        if !buffer.isEmpty, buffer.allSatisfy({ $0 == 0 }) {
+            buffer.removeAll(keepingCapacity: false)
+        }
+
+        return (frames, dropped, reset)
+    }
+
+    mutating func reset() {
+        buffer.removeAll(keepingCapacity: false)
+    }
+}
+
 /// BLEService — Bluetooth Mesh Transport
 /// - Emits events exclusively via `BitchatDelegate` for UI.
 /// - ChatViewModel must consume delegate callbacks (`didReceivePublicMessage`, `didReceiveNoisePayload`).
@@ -40,6 +112,7 @@ final class BLEService: NSObject {
         var isConnecting: Bool = false
         var isConnected: Bool = false
         var lastConnectionAttempt: Date? = nil
+        var assembler = NotificationStreamAssembler()
     }
     private var peripherals: [String: PeripheralState] = [:]  // UUID -> PeripheralState
     private var peerToPeripheralUUID: [String: String] = [:]  // PeerID -> Peripheral UUID
@@ -191,7 +264,9 @@ final class BLEService: NSObject {
     // MARK: - Helpers: IDs, selection, and write backpressure
     private func makeMessageID(for packet: BitchatPacket) -> String {
         let senderID = packet.senderID.hexEncodedString()
-        return "\(senderID)-\(packet.timestamp)-\(packet.type)"
+        let digest = SHA256.hash(data: packet.payload)
+        let digestPrefix = digest.prefix(4).map { String(format: "%02x", $0) }.joined()
+        return "\(senderID)-\(packet.timestamp)-\(packet.type)-\(digestPrefix)"
     }
 
     private func subsetSizeForFanout(_ n: Int) -> Int {
@@ -1110,6 +1185,13 @@ final class BLEService: NSObject {
         // Determine last-hop link for this message to avoid echoing back
         let messageID = makeMessageID(for: packet)
         let ingressLink: LinkID? = collectionsQueue.sync { ingressByMessageID[messageID]?.link }
+        let directedPeerHint: String? = {
+            if let explicit = directedOnlyPeer { return explicit }
+            if let recipient = packet.recipientID?.hexEncodedString(), !recipient.isEmpty {
+                return recipient
+            }
+            return nil
+        }()
 
         let states = snapshotPeripheralStates()
         var minCentralWriteLen: Int?
@@ -1163,7 +1245,7 @@ final class BLEService: NSObject {
         // Special-case control/presence messages: do NOT subset to maximize immediate coverage
         var selectedPeripheralIDs = Set(allowedPeripheralIDs)
         var selectedCentralIDs = Set(allowedCentralIDs)
-        if directedOnlyPeer == nil
+        if directedPeerHint == nil
             && packet.type != MessageType.fragment.rawValue
             && packet.type != MessageType.announce.rawValue
             && packet.type != MessageType.requestSync.rawValue {
@@ -1174,7 +1256,7 @@ final class BLEService: NSObject {
         }
 
         // If directed and we currently have no links to forward on, spool for a short window
-        if let only = directedOnlyPeer,
+        if let only = directedPeerHint,
            selectedPeripheralIDs.isEmpty && selectedCentralIDs.isEmpty,
            (packet.type == MessageType.noiseEncrypted.rawValue || packet.type == MessageType.noiseHandshake.rawValue) {
             spoolDirectedPacket(packet, recipientPeerID: only)
@@ -2515,7 +2597,8 @@ extension BLEService: CBCentralManagerDelegate {
             peerID: nil,
             isConnecting: true,
             isConnected: false,
-            lastConnectionAttempt: Date()
+            lastConnectionAttempt: Date(),
+            assembler: NotificationStreamAssembler()
         )
         peripheral.delegate = self
         
@@ -2564,7 +2647,9 @@ func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeriph
                 characteristic: nil,
                 peerID: nil,
                 isConnecting: false,
-                isConnected: true
+                isConnected: true,
+                lastConnectionAttempt: nil,
+                assembler: NotificationStreamAssembler()
             )
         }
         
@@ -2702,7 +2787,8 @@ extension BLEService {
             peerID: nil,
             isConnecting: true,
             isConnected: false,
-            lastConnectionAttempt: Date()
+            lastConnectionAttempt: Date(),
+            assembler: NotificationStreamAssembler()
         )
         peripheral.delegate = self
         let options: [String: Any] = [
@@ -2839,53 +2925,72 @@ extension BLEService: CBPeripheralDelegate {
             return
         }
         
-        guard let data = characteristic.value else {
+        guard let data = characteristic.value, !data.isEmpty else {
             SecureLogger.warning("⚠️ No data in notification", category: .session)
             return
         }
-        
-        // Received BLE notification
-        
-        // Process directly on main thread to avoid deadlocks (matches original implementation)
-        guard let packet = BinaryProtocol.decode(data) else {
-            // Avoid dumping entire payload; log size and short prefix for diagnostics
-            let prefix = data.prefix(16).map { String(format: "%02x", $0) }.joined(separator: " ")
-            SecureLogger.error("❌ Failed to decode notification packet (len=\(data.count), prefix=\(prefix))", category: .session)
-            return
-        }
-        
-        // Use the packet's senderID as the peer identifier
-        let senderID = packet.senderID.hexEncodedString()
-        // Only log non-announce packets
-    if packet.type != MessageType.announce.rawValue {
-        SecureLogger.debug("📦 Decoded notification packet type: \(packet.type) from sender: \(senderID)", category: .session)
+
+        bufferNotificationChunk(data, from: peripheral)
     }
-        
+
+    private func bufferNotificationChunk(_ chunk: Data, from peripheral: CBPeripheral) {
         let peripheralUUID = peripheral.identifier.uuidString
-        
-        // Update mapping ONLY for announce packets that come directly from the peer (not relayed)
+
+        var state = peripherals[peripheralUUID] ?? PeripheralState(
+            peripheral: peripheral,
+            characteristic: nil,
+            peerID: nil,
+            isConnecting: false,
+            isConnected: peripheral.state == .connected,
+            lastConnectionAttempt: nil,
+            assembler: NotificationStreamAssembler()
+        )
+
+        var assembler = state.assembler
+        let result = assembler.append(chunk)
+        state.assembler = assembler
+        peripherals[peripheralUUID] = state
+
+        for byte in result.droppedPrefixes {
+            SecureLogger.warning("⚠️ Dropping byte from BLE stream (unexpected prefix \(String(format: "%02x", byte)))", category: .session)
+        }
+
+        if result.reset {
+            SecureLogger.error("❌ Invalid BLE frame length; reset notification stream", category: .session)
+        }
+
+        for frame in result.frames {
+            guard let packet = BinaryProtocol.decode(frame) else {
+                let prefix = frame.prefix(16).map { String(format: "%02x", $0) }.joined(separator: " ")
+                SecureLogger.error("❌ Failed to decode assembled notification frame (len=\(frame.count), prefix=\(prefix))", category: .session)
+                continue
+            }
+            processNotificationPacket(packet, from: peripheral, peripheralUUID: peripheralUUID)
+        }
+    }
+
+    private func processNotificationPacket(_ packet: BitchatPacket, from peripheral: CBPeripheral, peripheralUUID: String) {
+        let senderID = packet.senderID.hexEncodedString()
+
+        if packet.type != MessageType.announce.rawValue {
+            SecureLogger.debug("📦 Decoded notification packet type: \(packet.type) from sender: \(senderID)", category: .session)
+        }
+
         if packet.type == MessageType.announce.rawValue {
-            // Only update mapping if this is a direct announce (TTL == messageTTL means not relayed)
             if packet.ttl == messageTTL {
                 if var state = peripherals[peripheralUUID] {
                     state.peerID = senderID
                     peripherals[peripheralUUID] = state
                 }
                 peerToPeripheralUUID[senderID] = peripheralUUID
-                // Mapping update - direct announce from peer
             }
-            // Record ingress link for last-hop suppression and process
+
             let msgID = makeMessageID(for: packet)
             collectionsQueue.async(flags: .barrier) { [weak self] in
                 self?.ingressByMessageID[msgID] = (.peripheral(peripheralUUID), Date())
             }
-            // Process the announce packet regardless of whether we updated the mapping
             handleReceivedPacket(packet, from: senderID)
         } else {
-            // For non-announce packets, DO NOT update mappings
-            // These could be relayed packets from other peers
-            // Always use the packet's original senderID
-            // Record ingress link for last-hop suppression and process
             let msgID = makeMessageID(for: packet)
             collectionsQueue.async(flags: .barrier) { [weak self] in
                 self?.ingressByMessageID[msgID] = (.peripheral(peripheralUUID), Date())

@@ -13,18 +13,26 @@ struct MyQRView: View {
     @Environment(\.colorScheme) var colorScheme
     private var boxColor: Color { Color.gray.opacity(0.1) }
 
+    private enum Strings {
+        static let title: LocalizedStringKey = "verification.my_qr.title"
+        static let accessibilityLabel = L10n.string(
+            "verification.my_qr.accessibility_label",
+            comment: "Accessibility label describing the verification QR code"
+        )
+    }
+
     var body: some View {
         VStack(spacing: 12) {
-            Text("scan to verify me")
-                .font(.system(size: 16, weight: .bold, design: .monospaced))
+            Text(Strings.title)
+                .font(.bitchatSystem(size: 16, weight: .bold, design: .monospaced))
 
             VStack(spacing: 10) {
                 QRCodeImage(data: qrString, size: 240)
-                    .accessibilityLabel("verification qr code")
+                    .accessibilityLabel(Strings.accessibilityLabel)
 
                 // Non-scrolling, fully visible URL (wraps across lines)
                 Text(qrString)
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.bitchatSystem(size: 11, design: .monospaced))
                     .textSelection(.enabled)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
@@ -49,6 +57,10 @@ struct QRCodeImage: View {
     private let context = CIContext()
     private let filter = CIFilter.qrCodeGenerator()
 
+    private enum Strings {
+        static let unavailable: LocalizedStringKey = "verification.my_qr.unavailable"
+    }
+
     var body: some View {
         Group {
             if let image = generateImage() {
@@ -59,8 +71,8 @@ struct QRCodeImage: View {
                     .stroke(Color.gray.opacity(0.5), lineWidth: 1)
                     .frame(width: size, height: size)
                     .overlay(
-                        Text("qr unavailable")
-                            .font(.system(size: 12, design: .monospaced))
+                        Text(Strings.unavailable)
+                            .font(.bitchatSystem(size: 12, design: .monospaced))
                             .foregroundColor(.gray)
                     )
             }
@@ -103,6 +115,27 @@ struct QRScanView: View {
     @State private var input = ""
     @State private var result: String = "" // not shown for iOS scanner
     @State private var lastValid: String = ""
+
+    private enum Strings {
+        static let pastePrompt: LocalizedStringKey = "verification.scan.paste_prompt"
+        static let validate: LocalizedStringKey = "verification.scan.validate"
+        static func requested(_ nickname: String) -> String {
+            L10n.string(
+                "verification.scan.status.requested",
+                comment: "Status text when verification is requested for a nickname",
+                nickname
+            )
+        }
+        static let notFound = L10n.string(
+            "verification.scan.status.no_peer",
+            comment: "Status when no matching peer is found for a verification request"
+        )
+        static let invalid = L10n.string(
+            "verification.scan.status.invalid",
+            comment: "Status when a scanned QR payload is invalid"
+        )
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             #if os(iOS)
@@ -118,17 +151,17 @@ struct QRScanView: View {
             .frame(height: 260)
             .clipShape(RoundedRectangle(cornerRadius: 8))
             #else
-            Text("paste qr content to validate:")
-                .font(.system(size: 14, weight: .medium, design: .monospaced))
+            Text(Strings.pastePrompt)
+                .font(.bitchatSystem(size: 14, weight: .medium, design: .monospaced))
             TextEditor(text: $input)
                 .frame(height: 100)
                 .border(Color.gray.opacity(0.4))
-            Button("validate") {
+            Button(Strings.validate) {
                 if let qr = VerificationService.shared.verifyScannedQR(input) {
                     let ok = viewModel.beginQRVerification(with: qr)
-                    result = ok ? "verification requested for \(qr.nickname)" : "could not find matching peer"
+                    result = ok ? Strings.requested(qr.nickname) : Strings.notFound
                 } else {
-                    result = "invalid or expired qr payload"
+                    result = Strings.invalid
                 }
             }
             .buttonStyle(.bordered)
@@ -254,8 +287,8 @@ struct VerificationSheetView: View {
         VStack(spacing: 0) {
             // Top header (always at top)
             HStack {
-                Text("VERIFY")
-                    .font(.system(size: 14, weight: .bold, design: .monospaced))
+                Text("verification.sheet.title")
+                    .font(.bitchatSystem(size: 14, weight: .bold, design: .monospaced))
                     .foregroundColor(accentColor)
                 Spacer()
                 Button(action: {
@@ -263,7 +296,7 @@ struct VerificationSheetView: View {
                     isPresented = false
                 }) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.bitchatSystem(size: 14, weight: .semibold))
                         .foregroundColor(accentColor)
                 }
                 .buttonStyle(.plain)
@@ -278,8 +311,8 @@ struct VerificationSheetView: View {
             Group {
                 if showingScanner {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("scan a friend's qr")
-                            .font(.system(size: 16, weight: .bold, design: .monospaced))
+                        Text("verification.scan.prompt_friend")
+                            .font(.bitchatSystem(size: 16, weight: .bold, design: .monospaced))
                             .frame(maxWidth: .infinity)
                             .multilineTextAlignment(.center)
                             .foregroundColor(accentColor)
@@ -310,13 +343,13 @@ struct VerificationSheetView: View {
                 if showingScanner {
                     Button(action: { showingScanner = false }) {
                         Label("show my qr", systemImage: "qrcode")
-                            .font(.system(size: 13, design: .monospaced))
+                            .font(.bitchatSystem(size: 13, design: .monospaced))
                     }
                     .buttonStyle(.bordered)
                 } else {
                     Button(action: { showingScanner = true }) {
                         Label("scan someone else's qr", systemImage: "camera.viewfinder")
-                            .font(.system(size: 13, weight: .medium, design: .monospaced))
+                            .font(.bitchatSystem(size: 13, weight: .medium, design: .monospaced))
                     }
                     .buttonStyle(.bordered)
                     .tint(.gray)
@@ -328,7 +361,7 @@ struct VerificationSheetView: View {
                    viewModel.verifiedFingerprints.contains(fp) {
                     Button(action: { viewModel.unverifyFingerprint(for: pid) }) {
                         Label("remove verification", systemImage: "minus.circle")
-                            .font(.system(size: 12, design: .monospaced))
+                            .font(.bitchatSystem(size: 12, design: .monospaced))
                     }
                     .buttonStyle(.bordered)
                     .tint(.gray)

@@ -72,6 +72,7 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Services/TransportConfig.swift,
+				Utils/Localization.swift,
 			);
 			target = 57CA17A36A2532A6CFF367BB /* bitchatShareExtension */;
 		};
@@ -304,6 +305,19 @@
 			knownRegions = (
 				Base,
 				en,
+				es,
+				ar,
+				de,
+				fr,
+				he,
+				id,
+				it,
+				ja,
+				ne,
+				"pt-BR",
+				ru,
+				uk,
+				"zh-Hans",
 			);
 			mainGroup = 18198ED912AAF495D8AF7763;
 			minimizedProjectReferenceProxies = 1;

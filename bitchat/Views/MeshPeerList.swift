@@ -11,11 +11,23 @@ struct MeshPeerList: View {
 
     @State private var orderedIDs: [String] = []
 
+    private enum Strings {
+        static let noneNearby: LocalizedStringKey = "geohash_people.none_nearby"
+        static let blockedTooltip = L10n.string(
+            "geohash_people.tooltip.blocked",
+            comment: "Tooltip shown next to a blocked peer indicator"
+        )
+        static let newMessagesTooltip = L10n.string(
+            "mesh_peers.tooltip.new_messages",
+            comment: "Tooltip for the unread messages indicator"
+        )
+    }
+
     var body: some View {
         if viewModel.allPeers.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
-                Text("nobody around...")
-                    .font(.system(size: 14, design: .monospaced))
+                Text(Strings.noneNearby)
+                    .font(.bitchatSystem(size: 14, design: .monospaced))
                     .foregroundColor(secondaryTextColor)
                     .padding(.horizontal)
                     .padding(.top, 12)
@@ -45,56 +57,56 @@ struct MeshPeerList: View {
                         let baseColor = isMe ? Color.orange : assigned
                         if isMe {
                             Image(systemName: "person.fill")
-                                .font(.system(size: 10))
+                                .font(.bitchatSystem(size: 10))
                                 .foregroundColor(baseColor)
                         } else if peer.isConnected {
                             // Mesh-connected peer: radio icon
                             Image(systemName: "antenna.radiowaves.left.and.right")
-                                .font(.system(size: 10))
+                                .font(.bitchatSystem(size: 10))
                                 .foregroundColor(baseColor)
                         } else if peer.isReachable {
                             // Mesh-reachable (relayed): point.3 icon
                             Image(systemName: "point.3.filled.connected.trianglepath.dotted")
-                                .font(.system(size: 10))
+                                .font(.bitchatSystem(size: 10))
                                 .foregroundColor(baseColor)
                         } else if peer.isMutualFavorite {
                             // Mutual favorite reachable via Nostr: globe icon (purple)
                             Image(systemName: "globe")
-                                .font(.system(size: 10))
+                                .font(.bitchatSystem(size: 10))
                                 .foregroundColor(.purple)
                         } else {
                             // Fallback icon for others (dimmed)
                             Image(systemName: "person")
-                                .font(.system(size: 10))
+                                .font(.bitchatSystem(size: 10))
                                 .foregroundColor(secondaryTextColor)
                         }
 
                         let displayName = isMe ? viewModel.nickname : peer.nickname
-                        let (base, suffix) = splitSuffix(from: displayName)
+                        let (base, suffix) = displayName.splitSuffix()
                         HStack(spacing: 0) {
                             Text(base)
-                                .font(.system(size: 14, design: .monospaced))
+                                .font(.bitchatSystem(size: 14, design: .monospaced))
                                 .foregroundColor(baseColor)
                             if !suffix.isEmpty {
                                 let suffixColor = isMe ? Color.orange.opacity(0.6) : baseColor.opacity(0.6)
                                 Text(suffix)
-                                    .font(.system(size: 14, design: .monospaced))
+                                    .font(.bitchatSystem(size: 14, design: .monospaced))
                                     .foregroundColor(suffixColor)
                             }
                         }
 
                         if !isMe, viewModel.isPeerBlocked(peer.id) {
                             Image(systemName: "nosign")
-                                .font(.system(size: 10))
+                                .font(.bitchatSystem(size: 10))
                                 .foregroundColor(.red)
-                                .help("Blocked")
+                                .help(Strings.blockedTooltip)
                         }
 
                         if !isMe {
                             if peer.isConnected {
                                 if let icon = item.enc.icon {
                                     Image(systemName: icon)
-                                        .font(.system(size: 10))
+                                        .font(.bitchatSystem(size: 10))
                                         .foregroundColor(baseColor)
                                 }
                             } else {
@@ -102,12 +114,12 @@ struct MeshPeerList: View {
                                 if let fp = viewModel.getFingerprint(for: peer.id),
                                    viewModel.verifiedFingerprints.contains(fp) {
                                     Image(systemName: "checkmark.seal.fill")
-                                        .font(.system(size: 10))
+                                        .font(.bitchatSystem(size: 10))
                                         .foregroundColor(baseColor)
                                 } else if let icon = item.enc.icon {
                                     // Fallback to whatever status says (likely lock if we had a past session)
                                     Image(systemName: icon)
-                                        .font(.system(size: 10))
+                                        .font(.bitchatSystem(size: 10))
                                         .foregroundColor(baseColor)
                                 }
                             }
@@ -118,15 +130,15 @@ struct MeshPeerList: View {
                         // Unread message indicator for this peer
                         if !isMe, item.hasUnread {
                             Image(systemName: "envelope.fill")
-                                .font(.system(size: 10))
+                                .font(.bitchatSystem(size: 10))
                                 .foregroundColor(.orange)
-                                .help("New messages")
+                                .help(Strings.newMessagesTooltip)
                         }
 
                         if !isMe {
                             Button(action: { onToggleFavorite(peer.id) }) {
                                 Image(systemName: (peer.favoriteStatus?.isFavorite ?? false) ? "star.fill" : "star")
-                                    .font(.system(size: 12))
+                                    .font(.bitchatSystem(size: 12))
                                     .foregroundColor((peer.favoriteStatus?.isFavorite ?? false) ? .yellow : secondaryTextColor)
                             }
                             .buttonStyle(.plain)
@@ -153,17 +165,4 @@ struct MeshPeerList: View {
             }
         }
     }
-}
-
-// Helper to split a trailing #abcd suffix
-private func splitSuffix(from name: String) -> (String, String) {
-    guard name.count >= 5 else { return (name, "") }
-    let suffix = String(name.suffix(5))
-    if suffix.first == "#", suffix.dropFirst().allSatisfy({ c in
-        ("0"..."9").contains(String(c)) || ("a"..."f").contains(String(c)) || ("A"..."F").contains(String(c))
-    }) {
-        let base = String(name.dropLast(5))
-        return (base, suffix)
-    }
-    return (name, "")
 }
