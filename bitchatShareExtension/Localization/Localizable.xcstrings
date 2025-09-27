@@ -1,4 +1,624 @@
 {
   "sourceLanguage": "en",
-  "strings": {}
+  "strings": {
+    "share.fallback.shared_link_title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "shared Link",
+            "comment": "Fallback title when saving a shared link"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u0631\u0627\u0628\u0637 \u0645\u0634\u062a\u0631\u0643",
+            "comment": "Fallback title when saving a shared link"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "geteilter link",
+            "comment": "Fallback title when saving a shared link"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "enlace compartido",
+            "comment": "Fallback title when saving a shared link"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "lien partag\u00e9",
+            "comment": "Fallback title when saving a shared link"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u05e7\u05d9\u05e9\u05d5\u05e8 \u05de\u05e9\u05d5\u05ea\u05e3",
+            "comment": "Fallback title when saving a shared link"
+          }
+        },
+        "id": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tautan dibagikan",
+            "comment": "Fallback title when saving a shared link"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "link condiviso",
+            "comment": "Fallback title when saving a shared link"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u5171\u6709\u30ea\u30f3\u30af",
+            "comment": "Fallback title when saving a shared link"
+          }
+        },
+        "ne": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u0938\u093e\u091d\u093e \u0917\u0930\u093f\u090f\u0915\u094b \u0932\u093f\u0919\u094d\u0915",
+            "comment": "Fallback title when saving a shared link"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "link compartilhado",
+            "comment": "Fallback title when saving a shared link"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u043f\u043e\u0434\u0435\u043b\u0438\u043b\u0441\u044f \u0441\u0441\u044b\u043b\u043a\u043e\u0439",
+            "comment": "Fallback title when saving a shared link"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u0441\u043f\u0456\u043b\u044c\u043d\u0435 \u043f\u043e\u0441\u0438\u043b\u0430\u043d\u043d\u044f",
+            "comment": "Fallback title when saving a shared link"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u5206\u4eab\u7684\u94fe\u63a5",
+            "comment": "Fallback title when saving a shared link"
+          }
+        }
+      }
+    },
+    "share.status.failed_to_encode": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "failed to encode link",
+            "comment": "Shown when the share payload cannot be encoded"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u062a\u0639\u0630\u0631 \u062a\u0631\u0645\u064a\u0632 \u0627\u0644\u0631\u0627\u0628\u0637",
+            "comment": "Shown when the share payload cannot be encoded"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "link konnte nicht codiert werden",
+            "comment": "Shown when the share payload cannot be encoded"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "no se pudo codificar el enlace",
+            "comment": "Shown when the share payload cannot be encoded"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u00e9chec de l'encodage du lien",
+            "comment": "Shown when the share payload cannot be encoded"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u05dc\u05d0 \u05e0\u05d9\u05ea\u05df \u05dc\u05e7\u05d5\u05d3\u05d3 \u05d0\u05ea \u05d4\u05e7\u05d9\u05e9\u05d5\u05e8",
+            "comment": "Shown when the share payload cannot be encoded"
+          }
+        },
+        "id": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "gagal mengodekan tautan",
+            "comment": "Shown when the share payload cannot be encoded"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "impossibile codificare il link",
+            "comment": "Shown when the share payload cannot be encoded"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u30ea\u30f3\u30af\u306e\u30a8\u30f3\u30b3\u30fc\u30c9\u306b\u5931\u6557\u3057\u307e\u3057\u305f",
+            "comment": "Shown when the share payload cannot be encoded"
+          }
+        },
+        "ne": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u0932\u093f\u0919\u094d\u0915 \u0938\u0919\u094d\u0915\u0947\u0924 \u0917\u0930\u094d\u0928 \u0938\u0915\u0947\u0928",
+            "comment": "Shown when the share payload cannot be encoded"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "falha ao codificar link",
+            "comment": "Shown when the share payload cannot be encoded"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u043d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0437\u0430\u043a\u043e\u0434\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u0441\u0441\u044b\u043b\u043a\u0443",
+            "comment": "Shown when the share payload cannot be encoded"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u043d\u0435 \u0432\u0434\u0430\u043b\u043e\u0441\u044f \u0437\u0430\u043a\u043e\u0434\u0443\u0432\u0430\u0442\u0438 \u043f\u043e\u0441\u0438\u043b\u0430\u043d\u043d\u044f",
+            "comment": "Shown when the share payload cannot be encoded"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u65e0\u6cd5\u7f16\u7801\u94fe\u63a5",
+            "comment": "Shown when the share payload cannot be encoded"
+          }
+        }
+      }
+    },
+    "share.status.no_shareable_content": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "no shareable content",
+            "comment": "Shown when provided content cannot be shared"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u0644\u0627 \u0645\u062d\u062a\u0648\u0649 \u0642\u0627\u0628\u0644\u0627\u064b \u0644\u0644\u0645\u0634\u0627\u0631\u0643\u0629",
+            "comment": "Shown when provided content cannot be shared"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "kein teilbarer inhalt",
+            "comment": "Shown when provided content cannot be shared"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sin contenido que se pueda compartir",
+            "comment": "Shown when provided content cannot be shared"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "aucun contenu partageable",
+            "comment": "Shown when provided content cannot be shared"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u05d0\u05d9\u05df \u05ea\u05d5\u05db\u05df \u05e9\u05e0\u05d9\u05ea\u05df \u05dc\u05e9\u05ea\u05e3",
+            "comment": "Shown when provided content cannot be shared"
+          }
+        },
+        "id": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tidak ada konten yang bisa dibagikan",
+            "comment": "Shown when provided content cannot be shared"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nessun contenuto condivisibile",
+            "comment": "Shown when provided content cannot be shared"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u5171\u6709\u53ef\u80fd\u306a\u30b3\u30f3\u30c6\u30f3\u30c4\u304c\u3042\u308a\u307e\u305b\u3093",
+            "comment": "Shown when provided content cannot be shared"
+          }
+        },
+        "ne": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u092c\u093e\u0901\u0921\u094d\u0928 \u092e\u093f\u0932\u094d\u0928\u0947 \u0938\u093e\u092e\u0917\u094d\u0930\u0940 \u091b\u0948\u0928",
+            "comment": "Shown when provided content cannot be shared"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nenhum conte\u00fado compartilh\u00e1vel",
+            "comment": "Shown when provided content cannot be shared"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u043d\u0435\u0442 \u043f\u043e\u0434\u0445\u043e\u0434\u044f\u0449\u0435\u0433\u043e \u043a\u043e\u043d\u0442\u0435\u043d\u0442\u0430",
+            "comment": "Shown when provided content cannot be shared"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u043d\u0435\u043c\u0430 \u0432\u0456\u0434\u043f\u043e\u0432\u0456\u0434\u043d\u043e\u0433\u043e \u043a\u043e\u043d\u0442\u0435\u043d\u0442\u0443",
+            "comment": "Shown when provided content cannot be shared"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u6ca1\u6709\u53ef\u5206\u4eab\u7684\u7d20\u6750",
+            "comment": "Shown when provided content cannot be shared"
+          }
+        }
+      }
+    },
+    "share.status.nothing_to_share": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nothing to share",
+            "comment": "Shown when the share extension receives no content"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u0644\u0627 \u0634\u064a\u0621 \u0644\u0645\u0634\u0627\u0631\u0643\u062a\u0647",
+            "comment": "Shown when the share extension receives no content"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nichts zum teilen",
+            "comment": "Shown when the share extension receives no content"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nada que compartir",
+            "comment": "Shown when the share extension receives no content"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "rien \u00e0 partager",
+            "comment": "Shown when the share extension receives no content"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u05d0\u05d9\u05df \u05de\u05d4 \u05dc\u05e9\u05ea\u05e3",
+            "comment": "Shown when the share extension receives no content"
+          }
+        },
+        "id": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tidak ada yang bisa dibagikan",
+            "comment": "Shown when the share extension receives no content"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "niente da condividere",
+            "comment": "Shown when the share extension receives no content"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u5171\u6709\u3067\u304d\u308b\u3082\u306e\u304c\u3042\u308a\u307e\u305b\u3093",
+            "comment": "Shown when the share extension receives no content"
+          }
+        },
+        "ne": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u092c\u093e\u0901\u0921\u094d\u0928\u0947 \u0915\u0947\u0939\u0940 \u091b\u0948\u0928",
+            "comment": "Shown when the share extension receives no content"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nada para compartilhar",
+            "comment": "Shown when the share extension receives no content"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u043d\u0435\u0447\u0435\u043c \u043f\u043e\u0434\u0435\u043b\u0438\u0442\u044c\u0441\u044f",
+            "comment": "Shown when the share extension receives no content"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u043d\u0435\u043c\u0430 \u0447\u0438\u043c \u0434\u0456\u043b\u0438\u0442\u0438\u0441\u044f",
+            "comment": "Shown when the share extension receives no content"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u6ca1\u6709\u53ef\u5206\u4eab\u7684\u5185\u5bb9",
+            "comment": "Shown when the share extension receives no content"
+          }
+        }
+      }
+    },
+    "share.status.shared_link": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u2713 shared link to bitchat",
+            "comment": "Confirmation after successfully sharing a link"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u2713 \u062a\u0645 \u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u0631\u0627\u0628\u0637 \u0625\u0644\u0649 bitchat",
+            "comment": "Confirmation after successfully sharing a link"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u2713 link zu bitchat geteilt",
+            "comment": "Confirmation after successfully sharing a link"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u2713 enlace compartido con bitchat",
+            "comment": "Confirmation after successfully sharing a link"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u2713 lien partag\u00e9 vers bitchat",
+            "comment": "Confirmation after successfully sharing a link"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u2713 \u05d4\u05e7\u05d9\u05e9\u05d5\u05e8 \u05e0\u05e9\u05dc\u05d7 \u05d0\u05dc bitchat",
+            "comment": "Confirmation after successfully sharing a link"
+          }
+        },
+        "id": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u2713 tautan dikirim ke bitchat",
+            "comment": "Confirmation after successfully sharing a link"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u2713 link inviato a bitchat",
+            "comment": "Confirmation after successfully sharing a link"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u2713 bitchat\u306b\u30ea\u30f3\u30af\u3092\u5171\u6709",
+            "comment": "Confirmation after successfully sharing a link"
+          }
+        },
+        "ne": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u2713 bitchat \u092e\u093e \u0932\u093f\u0919\u094d\u0915 \u092a\u0920\u093e\u0907\u092f\u094b",
+            "comment": "Confirmation after successfully sharing a link"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u2713 link enviado para bitchat",
+            "comment": "Confirmation after successfully sharing a link"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u2713 \u0441\u0441\u044b\u043b\u043a\u0430 \u043e\u0442\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0430 \u0432 bitchat",
+            "comment": "Confirmation after successfully sharing a link"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u2713 \u043f\u043e\u0441\u0438\u043b\u0430\u043d\u043d\u044f \u043d\u0430\u0434\u0456\u0441\u043b\u0430\u043d\u043e \u0432 bitchat",
+            "comment": "Confirmation after successfully sharing a link"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u2713 \u5df2\u5c06\u94fe\u63a5\u5206\u4eab\u81f3 bitchat",
+            "comment": "Confirmation after successfully sharing a link"
+          }
+        }
+      }
+    },
+    "share.status.shared_text": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u2713 shared text to bitchat",
+            "comment": "Confirmation after successfully sharing text"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u2713 \u062a\u0645 \u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u0646\u0635 \u0625\u0644\u0649 bitchat",
+            "comment": "Confirmation after successfully sharing text"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u2713 text zu bitchat geteilt",
+            "comment": "Confirmation after successfully sharing text"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u2713 texto compartido con bitchat",
+            "comment": "Confirmation after successfully sharing text"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u2713 texte partag\u00e9 vers bitchat",
+            "comment": "Confirmation after successfully sharing text"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u2713 \u05d4\u05d8\u05e7\u05e1\u05d8 \u05e0\u05e9\u05dc\u05d7 \u05d0\u05dc bitchat",
+            "comment": "Confirmation after successfully sharing text"
+          }
+        },
+        "id": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u2713 teks dikirim ke bitchat",
+            "comment": "Confirmation after successfully sharing text"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u2713 testo inviato a bitchat",
+            "comment": "Confirmation after successfully sharing text"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u2713 bitchat\u306b\u30c6\u30ad\u30b9\u30c8\u3092\u5171\u6709",
+            "comment": "Confirmation after successfully sharing text"
+          }
+        },
+        "ne": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u2713 bitchat \u092e\u093e \u092a\u093e\u0920 \u092a\u0920\u093e\u0907\u092f\u094b",
+            "comment": "Confirmation after successfully sharing text"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u2713 texto enviado para bitchat",
+            "comment": "Confirmation after successfully sharing text"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u2713 \u0442\u0435\u043a\u0441\u0442 \u043e\u0442\u043f\u0440\u0430\u0432\u043b\u0435\u043d \u0432 bitchat",
+            "comment": "Confirmation after successfully sharing text"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u2713 \u0442\u0435\u043a\u0441\u0442 \u043d\u0430\u0434\u0456\u0441\u043b\u0430\u043d\u043e \u0432 bitchat",
+            "comment": "Confirmation after successfully sharing text"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\u2713 \u5df2\u5c06\u6587\u672c\u5206\u4eab\u81f3 bitchat",
+            "comment": "Confirmation after successfully sharing text"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
 }
