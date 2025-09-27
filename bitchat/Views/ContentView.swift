@@ -1013,9 +1013,22 @@ struct ContentView: View {
                 .id(viewModel.allPeers.map { "\($0.id)-\($0.isConnected)" }.joined())
             }
             
-            Spacer()
-        }
-        .background(backgroundColor)
+                Spacer()
+            }
+            .background(backgroundColor)
+            .gesture(
+                DragGesture()
+                    .onEnded { value in
+                        let translation = value.translation.width.isNaN ? 0 : value.translation.width
+                        let velocity = value.velocity.width.isNaN ? 0 : value.velocity.width
+                        if translation > 100 || (translation > 50 && velocity > 500) {
+                            showSidebar = false
+                            sidebarDragOffset = 0
+                        }
+                    }
+            )
+            
+            
         }
     }
     
