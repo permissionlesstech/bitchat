@@ -1,0 +1,12 @@
+/*
+  Localizable.strings
+  bitchatShareExtension (Korean)
+*/
+
+"share.status.nothing_to_share" = "공유할 내용이 없습니다";
+"share.status.no_shareable_content" = "공유할 수 있는 내용이 없습니다";
+"share.fallback.shared_link_title" = "공유된 링크";
+"share.status.shared_link" = "✓ bitchat으로 링크를 공유했습니다";
+"share.status.shared_text" = "✓ bitchat으로 텍스트를 공유했습니다";
+"share.status.failed_to_encode" = "링크를 인코딩하는 데 실패했습니다";
+
