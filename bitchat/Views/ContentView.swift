@@ -10,12 +10,25 @@ import SwiftUI
 #if os(iOS)
 import UIKit
 #endif
+#if canImport(PhotosUI)
+import PhotosUI
+#endif
+#if os(macOS)
+import AppKit
+#endif
+import UniformTypeIdentifiers
+import BitLogger
 
 // MARK: - Supporting Types
 
 //
 
 //
+
+private struct MessageDisplayItem: Identifiable {
+    let id: String
+    let message: BitchatMessage
+}
 
 // MARK: - Main Content View
 
@@ -27,7 +40,6 @@ struct ContentView: View {
     @ObservedObject private var bookmarks = GeohashBookmarksStore.shared
     @ObservedObject private var notesCounter = LocationNotesCounter.shared
     @State private var messageText = ""
-    @State private var textFieldSelection: NSRange? = nil
     @FocusState private var isTextFieldFocused: Bool
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -54,6 +66,20 @@ struct ContentView: View {
     @State private var showLocationNotes = false
     @State private var notesGeohash: String? = nil
     @State private var sheetNotesCount: Int = 0
+    @State private var imagePreviewURL: URL? = nil
+    @State private var recordingAlertMessage: String = ""
+    @State private var showRecordingAlert = false
+    @State private var isRecordingVoiceNote = false
+    @State private var isPreparingVoiceNote = false
+    @State private var recordingDuration: TimeInterval = 0
+    @State private var recordingTimer: Timer?
+    @State private var recordingStartDate: Date?
+    @State private var showFileImporter = false
+#if canImport(PhotosUI)
+    @State private var showPhotoPicker = false
+    @State private var selectedPhotoPickerItem: PhotosPickerItem?
+#endif
+    @State private var showAttachmentActions = false
     @ScaledMetric(relativeTo: .body) private var headerHeight: CGFloat = 44
     @ScaledMetric(relativeTo: .subheadline) private var headerPeerIconSize: CGFloat = 11
     @ScaledMetric(relativeTo: .subheadline) private var headerPeerCountFontSize: CGFloat = 12
@@ -189,6 +215,42 @@ struct ContentView: View {
                 FingerprintView(viewModel: viewModel, peerID: peerID)
             }
         }
+#if canImport(PhotosUI)
+        .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotoPickerItem, matching: .images)
+        .onChange(of: selectedPhotoPickerItem) { newItem in
+            guard let item = newItem else { return }
+            Task { await handlePhotoSelection(item) }
+        }
+#endif
+        .fileImporter(isPresented: $showFileImporter, allowedContentTypes: [.data], allowsMultipleSelection: false) { result in
+            handleImportResult(result, handler: handleImportedFile)
+        }
+        .sheet(isPresented: Binding(
+            get: { imagePreviewURL != nil },
+            set: { presenting in if !presenting { imagePreviewURL = nil } }
+        )) {
+            if let url = imagePreviewURL {
+                ImagePreviewView(url: url)
+            }
+        }
+        .confirmationDialog("Attach", isPresented: $showAttachmentActions, titleVisibility: .visible) {
+#if canImport(PhotosUI)
+            Button("Image") {
+                showAttachmentActions = false
+                DispatchQueue.main.async { showPhotoPicker = true }
+            }
+#endif
+            Button("File") {
+                showAttachmentActions = false
+                DispatchQueue.main.async { showFileImporter = true }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        .alert("Recording Error", isPresented: $showRecordingAlert, actions: {
+            Button("OK", role: .cancel) {}
+        }, message: {
+            Text(recordingAlertMessage)
+        })
         .confirmationDialog(
             selectedMessageSender.map { "@\($0)" } ?? L10n.string(
                 "content.actions.title",
@@ -268,673 +330,165 @@ struct ContentView: View {
     // MARK: - Message List View
     
     private func messagesView(privatePeer: String?, isAtBottom: Binding<Bool>) -> some View {
-        ScrollViewReader { proxy in
+        let messages: [BitchatMessage] = {
+            if let privatePeer = privatePeer {
+                return viewModel.getPrivateChatMessages(for: privatePeer)
+            }
+            return viewModel.messages
+        }()
+
+        let currentWindowCount: Int = {
+            if let peer = privatePeer {
+                return windowCountPrivate[peer] ?? TransportConfig.uiWindowInitialCountPrivate
+            }
+            return windowCountPublic
+        }()
+
+        let windowedMessages: [BitchatMessage] = Array(messages.suffix(currentWindowCount))
+
+        let contextKey: String = {
+            if let peer = privatePeer { return "dm:\(peer)" }
+            switch locationManager.selectedChannel {
+            case .mesh: return "mesh"
+            case .location(let ch): return "geo:\(ch.geohash)"
+            }
+        }()
+
+        let messageItems: [MessageDisplayItem] = windowedMessages.compactMap { message in
+            let trimmed = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return nil }
+            return MessageDisplayItem(id: "\(contextKey)|\(message.id)", message: message)
+        }
+
+        let lastMessageID = messageItems.last?.id
+
+        return ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    // Extract messages based on context (private or public chat)
-                    let messages: [BitchatMessage] = {
-                        if let privatePeer = privatePeer {
-                            let msgs = viewModel.getPrivateChatMessages(for: privatePeer)
-                            return msgs
-                        } else {
-                            return viewModel.messages
-                        }
-                    }()
-                    
-                    // Implement windowing with adjustable window count per chat
-                    let currentWindowCount: Int = {
-                        if let peer = privatePeer { return windowCountPrivate[peer] ?? TransportConfig.uiWindowInitialCountPrivate }
-                        return windowCountPublic
-                    }()
-                    let windowedMessages = messages.suffix(currentWindowCount)
-
-                    // Build stable UI IDs with a context key to avoid ID collisions when switching channels
-                    let contextKey: String = {
-                        if let peer = privatePeer { return "dm:\(peer)" }
-                        switch locationManager.selectedChannel {
-                        case .mesh: return "mesh"
-                        case .location(let ch): return "geo:\(ch.geohash)"
-                        }
-                    }()
-                    let items = windowedMessages.map { (uiID: "\(contextKey)|\($0.id)", message: $0) }
-                    // Filter out empty/whitespace-only messages to avoid blank rows
-                    let filteredItems = items.filter { !$0.message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-
-                    ForEach(filteredItems, id: \.uiID) { item in
+                    ForEach(messageItems) { item in
                         let message = item.message
-                        VStack(alignment: .leading, spacing: 0) {
-                            // Check if current user is mentioned
-                            
-                            if message.sender == "system" {
-                                // System messages
-                                Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme))
-                                    .fixedSize(horizontal: false, vertical: true)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            } else {
-                                // Regular messages with natural text wrapping
-                                VStack(alignment: .leading, spacing: 0) {
-                                    // Precompute heavy token scans once per row
-                                    let cashuTokens = message.content.extractCashuTokens()
-                                    let lightningLinks = message.content.extractLightningLinks()
-                                    HStack(alignment: .top, spacing: 0) {
-                                        let isLong = (message.content.count > TransportConfig.uiLongMessageLengthThreshold || message.content.hasVeryLongToken(threshold: TransportConfig.uiVeryLongTokenThreshold)) && cashuTokens.isEmpty
-                                        let isExpanded = expandedMessageIDs.contains(message.id)
-                                        Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme))
-                                            .fixedSize(horizontal: false, vertical: true)
-                                            .lineLimit(isLong && !isExpanded ? TransportConfig.uiLongMessageLineLimit : nil)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                        
-                                        // Delivery status indicator for private messages
-                                        if message.isPrivate && message.sender == viewModel.nickname,
-                                           let status = message.deliveryStatus {
-                                            DeliveryStatusView(status: status, colorScheme: colorScheme)
-                                                .padding(.leading, 4)
-                                        }
-                                    }
-                                    
-                                    // Expand/Collapse for very long messages
-                                    if (message.content.count > TransportConfig.uiLongMessageLengthThreshold || message.content.hasVeryLongToken(threshold: TransportConfig.uiVeryLongTokenThreshold)) && cashuTokens.isEmpty {
-                                        let isExpanded = expandedMessageIDs.contains(message.id)
-                                        let labelKey = isExpanded ? LocalizedStringKey("content.message.show_less") : LocalizedStringKey("content.message.show_more")
-                                        Button(labelKey) {
-                                            if isExpanded { expandedMessageIDs.remove(message.id) }
-                                            else { expandedMessageIDs.insert(message.id) }
-                                        }
-                                        .font(.bitchatSystem(size: 11, weight: .medium, design: .monospaced))
-                                        .foregroundColor(Color.blue)
-                                        .padding(.top, 4)
-                                    }
-
-                                    // Render payment chips (Lightning / Cashu) with rounded background
-                                    if !lightningLinks.isEmpty || !cashuTokens.isEmpty {
-                                        HStack(spacing: 8) {
-                                            ForEach(Array(lightningLinks.prefix(3)).indices, id: \.self) { i in
-                                                let link = lightningLinks[i]
-                                                PaymentChipView(
-                                                    emoji: "⚡",
-                                                    label: L10n.string(
-                                                        "content.payment.lightning",
-                                                        comment: "Label for Lightning payment chip"
-                                                    ),
-                                                    colorScheme: colorScheme
-                                                ) {
-                                                    #if os(iOS)
-                                                    if let url = URL(string: link) { UIApplication.shared.open(url) }
-                                                    #else
-                                                    if let url = URL(string: link) { NSWorkspace.shared.open(url) }
-                                                    #endif
-                                                }
-                                            }
-                                            ForEach(Array(cashuTokens.prefix(3)).indices, id: \.self) { i in
-                                                let token = cashuTokens[i]
-                                                let enc = token.addingPercentEncoding(withAllowedCharacters: .alphanumerics.union(CharacterSet(charactersIn: "-_"))) ?? token
-                                                let urlStr = "cashu:\(enc)"
-                                                PaymentChipView(
-                                                    emoji: "🥜",
-                                                    label: L10n.string(
-                                                        "content.payment.cashu",
-                                                        comment: "Label for Cashu payment chip"
-                                                    ),
-                                                    colorScheme: colorScheme
-                                                ) {
-                                                    #if os(iOS)
-                                                    if let url = URL(string: urlStr) { UIApplication.shared.open(url) }
-                                                    #else
-                                                    if let url = URL(string: urlStr) { NSWorkspace.shared.open(url) }
-                                                    #endif
-                                                }
-                                            }
-                                        }
-                                        .padding(.top, 6)
-                                        .padding(.leading, 2)
-                                    }
+                        messageRow(for: message)
+                            .id(item.id)
+                            .onAppear {
+                                if message.id == windowedMessages.last?.id {
+                                    isAtBottom.wrappedValue = true
+                                }
+                                if message.id == windowedMessages.first?.id,
+                                   messages.count > windowedMessages.count {
+                                    expandWindow(
+                                        ifNeededFor: message,
+                                        allMessages: messages,
+                                        privatePeer: privatePeer,
+                                        proxy: proxy
+                                    )
                                 }
                             }
-                        }
-                        .id(item.uiID)
-                        .onAppear {
-                            // Track if last item is visible to enable auto-scroll only when near bottom
-                            if message.id == windowedMessages.last?.id {
-                                isAtBottom.wrappedValue = true
-                            }
-                            // Infinite scroll up: when top row appears, increase window and preserve anchor
-                            if message.id == windowedMessages.first?.id, messages.count > windowedMessages.count {
-                                let step = TransportConfig.uiWindowStepCount
-                                let contextKey: String = {
-                                    if let peer = privatePeer { return "dm:\(peer)" }
-                                    switch locationManager.selectedChannel {
-                                    case .mesh: return "mesh"
-                                    case .location(let ch): return "geo:\(ch.geohash)"
-                                    }
-                                }()
-                                let preserveID = "\(contextKey)|\(message.id)"
-                                if let peer = privatePeer {
-                                    let current = windowCountPrivate[peer] ?? TransportConfig.uiWindowInitialCountPrivate
-                                    let newCount = min(messages.count, current + step)
-                                    if newCount != current {
-                                        windowCountPrivate[peer] = newCount
-                                        DispatchQueue.main.async {
-                                            proxy.scrollTo(preserveID, anchor: .top)
-                                        }
-                                    }
-                                } else {
-                                    let current = windowCountPublic
-                                    let newCount = min(messages.count, current + step)
-                                    if newCount != current {
-                                        windowCountPublic = newCount
-                                        DispatchQueue.main.async {
-                                            proxy.scrollTo(preserveID, anchor: .top)
-                                        }
-                                    }
+                            .onDisappear {
+                                if message.id == windowedMessages.last?.id {
+                                    isAtBottom.wrappedValue = false
                                 }
                             }
-                        }
-                        .onDisappear {
-                            if message.id == windowedMessages.last?.id {
-                                isAtBottom.wrappedValue = false
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                if message.sender != "system" {
+                                    messageText = "@\(message.sender) "
+                                    isTextFieldFocused = true
+                                }
                             }
-                        }
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            // Tap on message body: insert @mention for this sender
-                            if message.sender != "system" {
-                                let name = message.sender
-                                messageText = "@\(name) "
-                                isTextFieldFocused = true
+                            .contextMenu {
+                                Button("content.message.copy") {
+                                    #if os(iOS)
+                                    UIPasteboard.general.string = message.content
+                                    #else
+                                    let pb = NSPasteboard.general
+                                    pb.clearContents()
+                                    pb.setString(message.content, forType: .string)
+                                    #endif
+                                }
                             }
-                        }
-                        .contextMenu {
-                            Button("content.message.copy") {
-                                #if os(iOS)
-                                UIPasteboard.general.string = message.content
-                                #else
-                                let pb = NSPasteboard.general
-                                pb.clearContents()
-                                pb.setString(message.content, forType: .string)
-                                #endif
-                            }
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 2)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 1)
                     }
                 }
                 .transaction { tx in if viewModel.isBatchingPublic { tx.disablesAnimations = true } }
-                .padding(.vertical, 4)
+                .padding(.vertical, 2)
             }
             .background(backgroundColor)
-            .onOpenURL { url in
-                guard url.scheme == "bitchat", url.host == "user" else { return }
-                let id = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-                let peerID = id.removingPercentEncoding ?? id
-                selectedMessageSenderID = peerID
-                // Derive a stable display name from the peerID instead of peeking at the last message,
-                // which may be a transformed system action (sender == "system").
-                if peerID.hasPrefix("nostr") {
-                    // For geohash senders, resolve display name via mapping (works for "nostr:" and "nostr_" keys)
-                    selectedMessageSender = viewModel.geohashDisplayName(for: peerID)
-                } else {
-                    // Mesh sender: use current mesh nickname if available; otherwise fall back to last non-system message
-                    if let name = viewModel.meshService.peerNickname(peerID: peerID) {
-                        selectedMessageSender = name
-                    } else {
-                        selectedMessageSender = viewModel.messages.last(where: { $0.senderPeerID == peerID && $0.sender != "system" })?.sender
-                    }
-                }
-                if viewModel.isSelfSender(peerID: selectedMessageSenderID, displayName: selectedMessageSender) {
-                    selectedMessageSender = nil
-                    selectedMessageSenderID = nil
-                } else {
-                    showMessageActions = true
-                }
-            }
-            .onOpenURL { url in
-                guard url.scheme == "bitchat", url.host == "geohash" else { return }
-                let gh = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")).lowercased()
-                let allowed = Set("0123456789bcdefghjkmnpqrstuvwxyz")
-                guard (2...12).contains(gh.count), gh.allSatisfy({ allowed.contains($0) }) else { return }
-                func levelForLength(_ len: Int) -> GeohashChannelLevel {
-                    switch len {
-                        case 0...2: return .region
-                        case 3...4: return .province
-                        case 5: return .city
-                        case 6: return .neighborhood
-                    case 7: return .block
-                    default: return .block
-                        }
-                    }
-                let level = levelForLength(gh.count)
-                let ch = GeohashChannel(level: level, geohash: gh)
-                // Do not mark teleported when opening a geohash that is in our regional set.
-                // If availableChannels is empty (e.g., cold start), defer marking and let
-                // LocationChannelManager compute teleported based on actual location.
-                let inRegional = LocationChannelManager.shared.availableChannels.contains { $0.geohash == gh }
-                if !inRegional && !LocationChannelManager.shared.availableChannels.isEmpty {
-                    LocationChannelManager.shared.markTeleported(for: gh, true)
-                }
-                LocationChannelManager.shared.select(ChannelID.location(ch))
-            }
+            .onOpenURL { handleOpenURL($0) }
             .onTapGesture(count: 3) {
-                // Triple-tap to clear current chat
                 viewModel.sendMessage("/clear")
             }
             .onAppear {
-                // Force scroll to bottom when opening a chat view
-                let targetID: String? = {
-                    if let peer = privatePeer,
-                       let last = viewModel.getPrivateChatMessages(for: peer).suffix(300).last?.id {
-                        return "dm:\(peer)|\(last)"
-                    }
-                    let contextKey: String = {
-                        switch locationManager.selectedChannel {
-                        case .mesh: return "mesh"
-                        case .location(let ch): return "geo:\(ch.geohash)"
-                        }
-                    }()
-                    if let last = viewModel.messages.suffix(300).last?.id { return "\(contextKey)|\(last)" }
-                    return nil
-                }()
-                isAtBottom.wrappedValue = true
+                scrollToBottom(on: proxy, privatePeer: privatePeer, isAtBottom: isAtBottom)
+            }
+            .onChange(of: lastMessageID) { newValue in
+                guard let target = newValue else { return }
                 DispatchQueue.main.async {
-                    if let target = targetID { proxy.scrollTo(target, anchor: .bottom) }
-                }
-                // Second pass after a brief delay to handle late layout
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                    let targetID2: String? = {
-                        if let peer = privatePeer,
-                           let last = viewModel.getPrivateChatMessages(for: peer).suffix(300).last?.id {
-                            return "dm:\(peer)|\(last)"
-                        }
-                        let contextKey: String = {
-                            switch locationManager.selectedChannel {
-                            case .mesh: return "mesh"
-                            case .location(let ch): return "geo:\(ch.geohash)"
-                            }
-                        }()
-                        if let last = viewModel.messages.suffix(300).last?.id { return "\(contextKey)|\(last)" }
-                        return nil
-                    }()
-                    if let t2 = targetID2 { proxy.scrollTo(t2, anchor: .bottom) }
-                }
-            }
-            .onChange(of: privatePeer) { _ in
-                // When switching to a different private chat, jump to bottom
-                let targetID: String? = {
-                    if let peer = privatePeer,
-                       let last = viewModel.getPrivateChatMessages(for: peer).suffix(300).last?.id {
-                        return "dm:\(peer)|\(last)"
-                    }
-                    let contextKey: String = {
-                        switch locationManager.selectedChannel {
-                        case .mesh: return "mesh"
-                        case .location(let ch): return "geo:\(ch.geohash)"
-                        }
-                    }()
-                    if let last = viewModel.messages.suffix(300).last?.id { return "\(contextKey)|\(last)" }
-                    return nil
-                }()
-                isAtBottom.wrappedValue = true
-                DispatchQueue.main.async {
-                    if let target = targetID { proxy.scrollTo(target, anchor: .bottom) }
-                }
-            }
-            .onChange(of: viewModel.messages.count) { _ in
-                if privatePeer == nil && !viewModel.messages.isEmpty {
-                    // If the newest message is from me, always scroll to bottom
-                    let lastMsg = viewModel.messages.last!
-                    let isFromSelf = (lastMsg.sender == viewModel.nickname) || lastMsg.sender.hasPrefix(viewModel.nickname + "#")
-                    if !isFromSelf {
-                        // Only autoscroll when user is at/near bottom
-                        guard isAtBottom.wrappedValue else { return }
-                    } else {
-                        // Ensure we consider ourselves at bottom for subsequent messages
-                        isAtBottom.wrappedValue = true
-                    }
-                    // Throttle scroll animations to prevent excessive UI updates
-                    let now = Date()
-                    if now.timeIntervalSince(lastScrollTime) > TransportConfig.uiScrollThrottleSeconds {
-                        // Immediate scroll if enough time has passed
-                        lastScrollTime = now
-                        let contextKey: String = {
-                            switch locationManager.selectedChannel {
-                            case .mesh: return "mesh"
-                            case .location(let ch): return "geo:\(ch.geohash)"
-                            }
-                        }()
-                        let count = windowCountPublic
-                        let target = viewModel.messages.suffix(count).last.map { "\(contextKey)|\($0.id)" }
-                        DispatchQueue.main.async {
-                            if let target = target { proxy.scrollTo(target, anchor: .bottom) }
-                        }
-                    } else {
-                        // Schedule a delayed scroll
-                        scrollThrottleTimer?.invalidate()
-                        scrollThrottleTimer = Timer.scheduledTimer(withTimeInterval: TransportConfig.uiScrollThrottleSeconds, repeats: false) { _ in
-                            lastScrollTime = Date()
-                        let contextKey: String = {
-                            switch locationManager.selectedChannel {
-                            case .mesh: return "mesh"
-                            case .location(let ch): return "geo:\(ch.geohash)"
-                            }
-                        }()
-                            let count = windowCountPublic
-                            let target = viewModel.messages.suffix(count).last.map { "\(contextKey)|\($0.id)" }
-                            DispatchQueue.main.async {
-                                if let target = target { proxy.scrollTo(target, anchor: .bottom) }
-                            }
-                        }
+                    withAnimation(.easeOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
+                        proxy.scrollTo(target, anchor: .bottom)
                     }
                 }
-            }
-            .onChange(of: viewModel.privateChats) { _ in
-                if let peerID = privatePeer,
-                   let messages = viewModel.privateChats[peerID],
-                   !messages.isEmpty {
-                    // If the newest private message is from me, always scroll
-                    let lastMsg = messages.last!
-                    let isFromSelf = (lastMsg.sender == viewModel.nickname) || lastMsg.sender.hasPrefix(viewModel.nickname + "#")
-                    if !isFromSelf {
-                        // Only autoscroll when user is at/near bottom
-                        guard isAtBottom.wrappedValue else { return }
-                    } else {
-                        isAtBottom.wrappedValue = true
-                    }
-                    // Same throttling for private chats
-                    let now = Date()
-                    if now.timeIntervalSince(lastScrollTime) > TransportConfig.uiScrollThrottleSeconds {
-                        lastScrollTime = now
-                        let contextKey = "dm:\(peerID)"
-                        let count = windowCountPrivate[peerID] ?? 300
-                        let target = messages.suffix(count).last.map { "\(contextKey)|\($0.id)" }
-                        DispatchQueue.main.async {
-                            if let target = target { proxy.scrollTo(target, anchor: .bottom) }
-                        }
-                    } else {
-                        scrollThrottleTimer?.invalidate()
-                        scrollThrottleTimer = Timer.scheduledTimer(withTimeInterval: TransportConfig.uiScrollThrottleSeconds, repeats: false) { _ in
-                            lastScrollTime = Date()
-                            let contextKey = "dm:\(peerID)"
-                            let count = windowCountPrivate[peerID] ?? 300
-                            let target = messages.suffix(count).last.map { "\(contextKey)|\($0.id)" }
-                            DispatchQueue.main.async {
-                                if let target = target { proxy.scrollTo(target, anchor: .bottom) }
-                            }
-                        }
-                    }
-                }
-            }
-            .onChange(of: locationManager.selectedChannel) { newChannel in
-                // When switching to a new geohash channel, scroll to the bottom
-                guard privatePeer == nil else { return }
-                switch newChannel {
-                case .mesh:
-                    break
-                case .location(let ch):
-                    // Reset window size
-                    windowCountPublic = TransportConfig.uiWindowInitialCountPublic
-                    let contextKey = "geo:\(ch.geohash)"
-                    let last = viewModel.messages.suffix(windowCountPublic).last?.id
-                    let target = last.map { "\(contextKey)|\($0)" }
-                    isAtBottom.wrappedValue = true
-                    DispatchQueue.main.async {
-                        if let target = target { proxy.scrollTo(target, anchor: .bottom) }
-                    }
-                }
-            }
-            .onAppear {
-                // Also check when view appears
-                if let peerID = privatePeer {
-                    // Try multiple times to ensure read receipts are sent
-                    viewModel.markPrivateMessagesAsRead(from: peerID)
-                    
-                    DispatchQueue.main.asyncAfter(deadline: .now() + TransportConfig.uiReadReceiptRetryShortSeconds) {
-                        viewModel.markPrivateMessagesAsRead(from: peerID)
-                    }
-                    
-                    DispatchQueue.main.asyncAfter(deadline: .now() + TransportConfig.uiReadReceiptRetryLongSeconds) {
-                        viewModel.markPrivateMessagesAsRead(from: peerID)
-                    }
-                }
-            }
-        }
-        .environment(\.openURL, OpenURLAction { url in
-            // Intercept custom cashu: links created in attributed text
-            if let scheme = url.scheme?.lowercased(), scheme == "cashu" || scheme == "lightning" {
-                #if os(iOS)
-                UIApplication.shared.open(url)
-                return .handled
-                #else
-                // On non-iOS platforms, let the system handle or ignore
-                return .systemAction
-                #endif
-            }
-            return .systemAction
-        })
-    }
-    
-    // MARK: - Input View
-    
-    private var inputView: some View {
-        VStack(spacing: 0) {
-            // @mentions autocomplete
-            if viewModel.showAutocomplete && !viewModel.autocompleteSuggestions.isEmpty {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(viewModel.autocompleteSuggestions.prefix(4)), id: \.self) { suggestion in
-                        Button(action: {
-                            _ = viewModel.completeNickname(suggestion, in: &messageText)
-                        }) {
-                            HStack {
-                                Text(suggestion)
-                                    .font(.bitchatSystem(size: 11, design: .monospaced))
-                                    .foregroundColor(textColor)
-                                    .fontWeight(.medium)
-                                Spacer()
-                            }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 3)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        .buttonStyle(.plain)
-                        .background(Color.gray.opacity(0.1))
-                    }
-                }
-                .background(backgroundColor)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 4)
-                        .stroke(secondaryTextColor.opacity(0.3), lineWidth: 1)
-                )
-                .padding(.horizontal, 12)
-            }
-            
-            // Command suggestions
-            if showCommandSuggestions && !commandSuggestions.isEmpty {
-                VStack(alignment: .leading, spacing: 0) {
-                    // Define commands with aliases and syntax
-                    let baseInfo: [(commands: [String], syntax: String?, description: String)] = [
-                        (["/block"], "[nickname]", "block or list blocked peers"),
-                        (["/clear"], nil, "clear chat messages"),
-                        (["/hug"], "<nickname>", "send someone a warm hug"),
-                        (["/m", "/msg"], "<nickname> [message]", "send private message"),
-                        (["/slap"], "<nickname>", "slap someone with a trout"),
-                        (["/unblock"], "<nickname>", "unblock a peer"),
-                        (["/w"], nil, "see who's online")
-                    ]
-                    let isGeoPublic: Bool = { if case .location = locationManager.selectedChannel { return true }; return false }()
-                    let isGeoDM: Bool = (viewModel.selectedPrivateChatPeer?.hasPrefix("nostr_") == true)
-                    let favInfo: [(commands: [String], syntax: String?, description: String)] = [
-                        (["/fav"], "<nickname>", "add to favorites"),
-                        (["/unfav"], "<nickname>", "remove from favorites")
-                    ]
-                    let commandInfo = baseInfo + ((isGeoPublic || isGeoDM) ? [] : favInfo)
-                    
-                    // Build the display
-                    let allCommands = commandInfo
-                    
-                    // Show matching commands
-                    ForEach(commandSuggestions, id: \.self) { command in
-                        // Find the command info for this suggestion
-                        if let info = allCommands.first(where: { $0.commands.contains(command) }) {
-                            Button(action: {
-                                // Replace current text with selected command
-                                messageText = command + " "
-                                showCommandSuggestions = false
-                                commandSuggestions = []
-                            }) {
-                                HStack {
-                                    // Show all aliases together
-                                    Text(info.commands.joined(separator: ", "))
-                                        .font(.bitchatSystem(size: 11, design: .monospaced))
-                                        .foregroundColor(textColor)
-                                        .fontWeight(.medium)
-                                    
-                                    // Show syntax if any
-                                    if let syntax = info.syntax {
-                                        Text(syntax)
-                                            .font(.bitchatSystem(size: 10, design: .monospaced))
-                                            .foregroundColor(secondaryTextColor.opacity(0.8))
-                                    }
-                                    
-                                    Spacer()
-                                    
-                                    // Show description
-                                    Text(info.description)
-                                        .font(.bitchatSystem(size: 10, design: .monospaced))
-                                        .foregroundColor(secondaryTextColor)
-                                }
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 3)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            .buttonStyle(.plain)
-                            .background(Color.gray.opacity(0.1))
-                        }
-                    }
-                }
-                .background(backgroundColor)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 4)
-                        .stroke(secondaryTextColor.opacity(0.3), lineWidth: 1)
-                )
-                .padding(.horizontal, 12)
-            }
-            
-            HStack(alignment: .center, spacing: 4) {
-        TextField("content.input.message_placeholder", text: $messageText)
-                .textFieldStyle(.plain)
-                .font(.bitchatSystem(size: 14, design: .monospaced))
-                .foregroundColor(textColor)
-                .focused($isTextFieldFocused)
-                .padding(.leading, 12)
-                // iOS keyboard autocomplete and capitalization enabled by default
-                .onChange(of: messageText) { newValue in
-                    // Cancel previous debounce timer
-                    autocompleteDebounceTimer?.invalidate()
-                    
-                    // Debounce autocomplete updates to reduce calls during rapid typing
-                    autocompleteDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: false) { _ in
-                        // Get cursor position (approximate - end of text for now)
-                        let cursorPosition = newValue.count
-                        viewModel.updateAutocomplete(for: newValue, cursorPosition: cursorPosition)
-                    }
-                    
-                    // Check for command autocomplete (instant, no debounce needed)
-                    if newValue.hasPrefix("/") && newValue.count >= 1 {
-                        // Build context-aware command list
-                        let isGeoPublic: Bool = {
-                            if case .location = locationManager.selectedChannel { return true }
-                            return false
-                        }()
-                        let isGeoDM: Bool = (viewModel.selectedPrivateChatPeer?.hasPrefix("nostr_") == true)
-                        var commandDescriptions = [
-                            ("/block", L10n.string("content.commands.block", comment: "Description for /block command")),
-                            ("/clear", L10n.string("content.commands.clear", comment: "Description for /clear command")),
-                            ("/hug", L10n.string("content.commands.hug", comment: "Description for /hug command")),
-                            ("/m", L10n.string("content.commands.message", comment: "Description for /m command")),
-                            ("/slap", L10n.string("content.commands.slap", comment: "Description for /slap command")),
-                            ("/unblock", L10n.string("content.commands.unblock", comment: "Description for /unblock command")),
-                            ("/w", L10n.string("content.commands.who", comment: "Description for /w command"))
-                        ]
-                        // Only show favorites commands when not in geohash context
-                        if !(isGeoPublic || isGeoDM) {
-                            commandDescriptions.append(("/fav", L10n.string("content.commands.favorite", comment: "Description for /fav command")))
-                            commandDescriptions.append(("/unfav", L10n.string("content.commands.unfavorite", comment: "Description for /unfav command")))
-                        }
-                        
-                        let input = newValue.lowercased()
-                        
-                        // Map of aliases to primary commands
-                        let aliases: [String: String] = [
-                            "/join": "/j",
-                            "/msg": "/m"
-                        ]
-                        
-                        // Filter commands, but convert aliases to primary
-                        commandSuggestions = commandDescriptions
-                            .filter { $0.0.starts(with: input) }
-                            .map { $0.0 }
-                        
-                        // Also check if input matches an alias
-                        for (alias, primary) in aliases {
-                            if alias.starts(with: input) && !commandSuggestions.contains(primary) {
-                                if commandDescriptions.contains(where: { $0.0 == primary }) {
-                                    commandSuggestions.append(primary)
-                                }
-                            }
-                        }
-                        
-                        // Remove duplicates and sort
-                        commandSuggestions = Array(Set(commandSuggestions)).sorted()
-                        showCommandSuggestions = !commandSuggestions.isEmpty
-                    } else {
-                        showCommandSuggestions = false
-                        commandSuggestions = []
-                    }
-                }
-                .onSubmit {
-                    sendMessage()
-                }
-            
-            Button(action: sendMessage) {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.bitchatSystem(size: 20))
-                    .foregroundColor(messageText.isEmpty ? Color.gray :
-                                            viewModel.selectedPrivateChatPeer != nil
-                                             ? Color.orange : textColor)
-            }
-            .buttonStyle(.plain)
-            .padding(.trailing, 12)
-            .accessibilityLabel(
-                L10n.string(
-                    "content.accessibility.send_message",
-                    comment: "Accessibility label for the send message button"
-                )
-            )
-            .accessibilityHint(
-                messageText.isEmpty
-                ? L10n.string(
-                    "content.accessibility.send_hint_empty",
-                    comment: "Hint prompting the user to enter a message"
-                )
-                : L10n.string(
-                    "content.accessibility.send_hint_ready",
-                    comment: "Hint prompting the user to send the message"
-                )
-            )
-            }
-            .padding(.vertical, 8)
-            .background(backgroundColor.opacity(0.95))
-        }
-        .onAppear {
-            // Delay keyboard focus to avoid iOS constraint warnings
-            DispatchQueue.main.asyncAfter(deadline: .now() + TransportConfig.uiReadReceiptRetryShortSeconds) {
-                isTextFieldFocused = true
             }
         }
     }
-    
+
+    private func handleOpenURL(_ url: URL) {
+        guard url.scheme == "bitchat", url.host == "user" else { return }
+        let id = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let peerID = id.removingPercentEncoding ?? id
+        selectedMessageSenderID = peerID
+
+        if peerID.hasPrefix("nostr") {
+            selectedMessageSender = viewModel.geohashDisplayName(for: peerID)
+        } else {
+            if let name = viewModel.meshService.peerNickname(peerID: peerID) {
+                selectedMessageSender = name
+            } else {
+                selectedMessageSender = viewModel.messages.last(where: { $0.senderPeerID == peerID && $0.sender != "system" })?.sender
+            }
+        }
+
+        if viewModel.isSelfSender(peerID: selectedMessageSenderID, displayName: selectedMessageSender) {
+            selectedMessageSender = nil
+            selectedMessageSenderID = nil
+        } else {
+            showMessageActions = true
+        }
+    }
+
+    private func scrollToBottom(on proxy: ScrollViewProxy,
+                                privatePeer: String?,
+                                isAtBottom: Binding<Bool>) {
+        let targetID: String? = {
+            if let peer = privatePeer,
+               let last = viewModel.getPrivateChatMessages(for: peer).suffix(300).last?.id {
+                return "dm:\(peer)|\(last)"
+            }
+            let contextKey: String = {
+                switch locationManager.selectedChannel {
+                case .mesh: return "mesh"
+                case .location(let ch): return "geo:\(ch.geohash)"
+                }
+            }()
+            if let last = viewModel.messages.suffix(300).last?.id { return "\(contextKey)|\(last)" }
+            return nil
+        }()
+
+        isAtBottom.wrappedValue = true
+        guard let target = targetID else { return }
+        DispatchQueue.main.async {
+            proxy.scrollTo(target, anchor: .bottom)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            proxy.scrollTo(target, anchor: .bottom)
+        }
+    }
     // MARK: - Actions
     
     private func sendMessage() {
-        viewModel.sendMessage(messageText)
+        let trimmed = trimmedMessageText
+        guard !trimmed.isEmpty else { return }
+        viewModel.sendMessage(trimmed)
         messageText = ""
     }
     
@@ -1082,6 +636,58 @@ struct ContentView: View {
             .background(backgroundColor)
             .foregroundColor(textColor)
         }
+    }
+
+    @ViewBuilder
+    private var inputView: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if isPreparingVoiceNote || isRecordingVoiceNote {
+                recordingIndicator
+            }
+
+            HStack(alignment: .center, spacing: 4) {
+                TextField(
+                    "",
+                    text: $messageText,
+                    prompt: Text(
+                        L10n.string(
+                            "content.input.message_placeholder",
+                            comment: "Placeholder shown in the chat composer"
+                        )
+                    )
+                    .foregroundColor(secondaryTextColor.opacity(0.6))
+                )
+                .textFieldStyle(.plain)
+                .font(.bitchatSystem(size: 15, design: .monospaced))
+                .foregroundColor(textColor)
+                .focused($isTextFieldFocused)
+                .autocorrectionDisabled(true)
+#if os(iOS)
+                .textInputAutocapitalization(.sentences)
+#endif
+                .submitLabel(.send)
+                .onSubmit { sendMessage() }
+                .padding(.vertical, 4)
+                .padding(.horizontal, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(colorScheme == .dark ? Color.black.opacity(0.35) : Color.white.opacity(0.7))
+                )
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                HStack(alignment: .center, spacing: 4) {
+                    if shouldShowMediaControls {
+                        attachmentButton
+                    }
+
+                    sendOrMicButton
+                }
+            }
+        }
+        .padding(.horizontal, 6)
+        .padding(.top, 6)
+        .padding(.bottom, 8)
+        .background(backgroundColor.opacity(0.95))
     }
 
     // Split a name into base and a '#abcd' suffix if present
@@ -1732,6 +1338,545 @@ private struct PaymentChipView: View {
 
 //
 
+private enum MessageMedia {
+    case voice(URL)
+    case image(URL)
+    case file(URL)
+
+    var url: URL {
+        switch self {
+        case .voice(let url), .image(let url), .file(let url):
+            return url
+        }
+    }
+}
+
+private extension ContentView {
+    func mediaAttachment(for message: BitchatMessage) -> MessageMedia? {
+        guard let baseDirectory = applicationFilesDirectory() else { return nil }
+
+        func url(from prefix: String, in subdirectories: [String]) -> URL? {
+            guard message.content.hasPrefix(prefix) else { return nil }
+            let filename = String(message.content.dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !filename.isEmpty else { return nil }
+            let fm = FileManager.default
+            for sub in subdirectories {
+                let directory = baseDirectory.appendingPathComponent(sub, isDirectory: true)
+                let candidate = directory.appendingPathComponent(filename)
+                if fm.fileExists(atPath: candidate.path) {
+                    return candidate
+                }
+            }
+            return nil
+        }
+
+        if let url = url(from: "[voice] ", in: ["voicenotes/outgoing", "voicenotes/incoming"]) {
+            return .voice(url)
+        }
+        if let url = url(from: "[image] ", in: ["images/outgoing", "images/incoming"]) {
+            return .image(url)
+        }
+        if let url = url(from: "[file] ", in: ["files/outgoing", "files/incoming"]) {
+            return .file(url)
+        }
+        return nil
+    }
+
+    func mediaSendState(for message: BitchatMessage, mediaURL: URL) -> (isSending: Bool, progress: Double?, canCancel: Bool) {
+        var isSending = false
+        var progress: Double?
+        if let status = message.deliveryStatus {
+            switch status {
+            case .sending:
+                isSending = true
+                progress = 0
+            case .partiallyDelivered(let reached, let total):
+                if total > 0 {
+                    isSending = true
+                    progress = Double(reached) / Double(total)
+                }
+            default:
+                break
+            }
+        }
+        let isOutgoing = mediaURL.path.contains("/outgoing/")
+        let canCancel = isSending && isOutgoing
+        let clamped = progress.map { max(0, min(1, $0)) }
+        return (isSending, isSending ? clamped : nil, canCancel)
+    }
+
+    @ViewBuilder
+    private func messageRow(for message: BitchatMessage) -> some View {
+        if message.sender == "system" {
+            systemMessageRow(message)
+        } else if let media = mediaAttachment(for: message) {
+            mediaMessageRow(message: message, media: media)
+        } else {
+            textMessageRow(message)
+        }
+    }
+
+    @ViewBuilder
+    private func systemMessageRow(_ message: BitchatMessage) -> some View {
+        Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme))
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private func mediaMessageRow(message: BitchatMessage, media: MessageMedia) -> some View {
+        let mediaURL = media.url
+        let state = mediaSendState(for: message, mediaURL: mediaURL)
+        let isOutgoing = mediaURL.path.contains("/outgoing/")
+        let isAuthoredByUs = isOutgoing || (message.senderPeerID == viewModel.meshService.myPeerID)
+        let shouldBlurImage = !isAuthoredByUs
+        let cancelAction: (() -> Void)? = state.canCancel ? { viewModel.cancelMediaSend(messageID: message.id) } : nil
+
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .center, spacing: 4) {
+                Text(viewModel.formatMessageHeader(message, colorScheme: colorScheme))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if message.isPrivate && message.sender == viewModel.nickname,
+                   let status = message.deliveryStatus {
+                    DeliveryStatusView(status: status, colorScheme: colorScheme)
+                        .padding(.leading, 4)
+                }
+            }
+
+            Group {
+                switch media {
+                case .voice(let url):
+                    VoiceNoteView(
+                        url: url,
+                        isSending: state.isSending,
+                        sendProgress: state.progress,
+                        onCancel: cancelAction
+                    )
+                case .image(let url):
+                    BlockRevealImageView(
+                        url: url,
+                        revealProgress: state.progress,
+                        isSending: state.isSending,
+                        onCancel: cancelAction,
+                        initiallyBlurred: shouldBlurImage,
+                        onOpen: {
+                            if !state.isSending {
+                                imagePreviewURL = url
+                            }
+                        },
+                        onDelete: shouldBlurImage ? {
+                            viewModel.deleteMediaMessage(messageID: message.id)
+                        } : nil
+                    )
+                    .frame(maxWidth: 280)
+                case .file(let url):
+                    FileAttachmentView(
+                        url: url,
+                        isSending: state.isSending,
+                        progress: state.progress,
+                        onCancel: cancelAction
+                    )
+                }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    @ViewBuilder
+    private func textMessageRow(_ message: BitchatMessage) -> some View {
+        let cashuTokens = message.content.extractCashuTokens()
+        let lightningLinks = message.content.extractLightningLinks()
+        let isLong = (message.content.count > TransportConfig.uiLongMessageLengthThreshold || message.content.hasVeryLongToken(threshold: TransportConfig.uiVeryLongTokenThreshold)) && cashuTokens.isEmpty
+        let isExpanded = expandedMessageIDs.contains(message.id)
+
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: 0) {
+                Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(isLong && !isExpanded ? TransportConfig.uiLongMessageLineLimit : nil)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                if message.isPrivate && message.sender == viewModel.nickname,
+                   let status = message.deliveryStatus {
+                    DeliveryStatusView(status: status, colorScheme: colorScheme)
+                        .padding(.leading, 4)
+                }
+            }
+
+            if isLong && cashuTokens.isEmpty {
+                let labelKey = isExpanded ? LocalizedStringKey("content.message.show_less") : LocalizedStringKey("content.message.show_more")
+                Button(labelKey) {
+                    if isExpanded { expandedMessageIDs.remove(message.id) }
+                    else { expandedMessageIDs.insert(message.id) }
+                }
+                .font(.bitchatSystem(size: 11, weight: .medium, design: .monospaced))
+                .foregroundColor(Color.blue)
+                .padding(.top, 4)
+            }
+
+            if !lightningLinks.isEmpty || !cashuTokens.isEmpty {
+                HStack(spacing: 8) {
+                    ForEach(Array(lightningLinks.prefix(3)).indices, id: \.self) { index in
+                        let link = lightningLinks[index]
+                        PaymentChipView(
+                            emoji: "⚡",
+                            label: L10n.string(
+                                "content.payment.lightning",
+                                comment: "Label for Lightning payment chip"
+                            ),
+                            colorScheme: colorScheme
+                        ) {
+                            #if os(iOS)
+                            if let url = URL(string: link) { UIApplication.shared.open(url) }
+                            #else
+                            if let url = URL(string: link) { NSWorkspace.shared.open(url) }
+                            #endif
+                        }
+                    }
+
+                    ForEach(Array(cashuTokens.prefix(3)).indices, id: \.self) { index in
+                        let token = cashuTokens[index]
+                        let enc = token.addingPercentEncoding(withAllowedCharacters: .alphanumerics.union(CharacterSet(charactersIn: "-_"))) ?? token
+                        let urlStr = "cashu:\(enc)"
+                        PaymentChipView(
+                            emoji: "🥜",
+                            label: L10n.string(
+                                "content.payment.cashu",
+                                comment: "Label for Cashu payment chip"
+                            ),
+                            colorScheme: colorScheme
+                        ) {
+                            #if os(iOS)
+                            if let url = URL(string: urlStr) { UIApplication.shared.open(url) }
+                            #else
+                            if let url = URL(string: urlStr) { NSWorkspace.shared.open(url) }
+                            #endif
+                        }
+                    }
+                }
+                .padding(.top, 6)
+                .padding(.leading, 2)
+            }
+        }
+    }
+
+    private func expandWindow(ifNeededFor message: BitchatMessage,
+                              allMessages: [BitchatMessage],
+                              privatePeer: String?,
+                              proxy: ScrollViewProxy) {
+        let step = TransportConfig.uiWindowStepCount
+        let contextKey: String = {
+            if let peer = privatePeer { return "dm:\(peer)" }
+            switch locationManager.selectedChannel {
+            case .mesh: return "mesh"
+            case .location(let ch): return "geo:\(ch.geohash)"
+            }
+        }()
+        let preserveID = "\(contextKey)|\(message.id)"
+
+        if let peer = privatePeer {
+            let current = windowCountPrivate[peer] ?? TransportConfig.uiWindowInitialCountPrivate
+            let newCount = min(allMessages.count, current + step)
+            guard newCount != current else { return }
+            windowCountPrivate[peer] = newCount
+            DispatchQueue.main.async {
+                proxy.scrollTo(preserveID, anchor: .top)
+            }
+        } else {
+            let current = windowCountPublic
+            let newCount = min(allMessages.count, current + step)
+            guard newCount != current else { return }
+            windowCountPublic = newCount
+            DispatchQueue.main.async {
+                proxy.scrollTo(preserveID, anchor: .top)
+            }
+        }
+    }
+
+    var recordingIndicator: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "waveform.circle.fill")
+                .foregroundColor(.red)
+                .font(.bitchatSystem(size: 20))
+            Text("Recording \(formattedRecordingDuration())")
+                .font(.bitchatSystem(size: 13, design: .monospaced))
+                .foregroundColor(.red)
+            Spacer()
+            Button(action: cancelVoiceRecording) {
+                Label("Cancel", systemImage: "xmark.circle")
+                    .labelStyle(.iconOnly)
+                    .font(.bitchatSystem(size: 18))
+                    .foregroundColor(.red)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.red.opacity(0.15))
+        )
+    }
+
+    private var trimmedMessageText: String {
+        messageText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var shouldShowMediaControls: Bool {
+        if viewModel.selectedPrivateChatPeer != nil {
+            return true
+        }
+        switch locationManager.selectedChannel {
+        case .mesh:
+            return true
+        case .location:
+            return false
+        }
+    }
+
+    private var composerAccentColor: Color {
+        viewModel.selectedPrivateChatPeer != nil ? Color.orange : textColor
+    }
+
+    var attachmentButton: some View {
+        Button(action: { showAttachmentActions = true }) {
+            Image(systemName: "paperclip.circle.fill")
+                .font(.bitchatSystem(size: 24))
+                .foregroundColor(composerAccentColor)
+                .frame(width: 36, height: 36)
+        }
+        .buttonStyle(.plain)
+    }
+
+    var sendOrMicButton: some View {
+        let hasText = !trimmedMessageText.isEmpty
+        return ZStack {
+            micButtonView
+                .opacity(hasText ? 0 : 1)
+                .allowsHitTesting(!hasText)
+            sendButtonView(enabled: hasText)
+                .opacity(hasText ? 1 : 0)
+                .allowsHitTesting(hasText)
+        }
+        .frame(width: 36, height: 36)
+    }
+
+    private var micButtonView: some View {
+        let tint = (isRecordingVoiceNote || isPreparingVoiceNote) ? Color.red : composerAccentColor
+
+        return Image(systemName: "mic.circle.fill")
+            .font(.bitchatSystem(size: 24))
+            .foregroundColor(tint)
+            .frame(width: 36, height: 36)
+            .contentShape(Circle())
+            .overlay(
+                Color.clear
+                    .contentShape(Circle())
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { _ in startVoiceRecording() }
+                            .onEnded { _ in finishVoiceRecording(send: true) }
+                    )
+            )
+            .accessibilityLabel("Hold to record a voice note")
+    }
+
+    private func sendButtonView(enabled: Bool) -> some View {
+        let activeColor = composerAccentColor
+        return Button(action: sendMessage) {
+            Image(systemName: "arrow.up.circle.fill")
+                .font(.bitchatSystem(size: 24))
+                .foregroundColor(enabled ? activeColor : Color.gray)
+                .frame(width: 36, height: 36)
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .accessibilityLabel(
+            L10n.string(
+                "content.accessibility.send_message",
+                comment: "Accessibility label for the send message button"
+            )
+        )
+        .accessibilityHint(
+            enabled
+            ? L10n.string(
+                "content.accessibility.send_hint_ready",
+                comment: "Hint prompting the user to send the message"
+            )
+            : L10n.string(
+                "content.accessibility.send_hint_empty",
+                comment: "Hint prompting the user to enter a message"
+            )
+        )
+    }
+
+    func formattedRecordingDuration() -> String {
+        let clamped = max(0, recordingDuration)
+        let totalMilliseconds = Int((clamped * 1000).rounded())
+        let minutes = totalMilliseconds / 60_000
+        let seconds = (totalMilliseconds % 60_000) / 1_000
+        let centiseconds = (totalMilliseconds % 1_000) / 10
+        return String(format: "%02d:%02d.%02d", minutes, seconds, centiseconds)
+    }
+
+    func startVoiceRecording() {
+        guard !isRecordingVoiceNote && !isPreparingVoiceNote else { return }
+        isPreparingVoiceNote = true
+        Task { @MainActor in
+            let granted = await VoiceRecorder.shared.requestPermission()
+            guard granted else {
+                isPreparingVoiceNote = false
+                recordingAlertMessage = "Microphone access is required to record voice notes."
+                showRecordingAlert = true
+                return
+            }
+            do {
+                _ = try VoiceRecorder.shared.startRecording()
+                recordingDuration = 0
+                recordingStartDate = Date()
+                recordingTimer?.invalidate()
+                recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { _ in
+                    if let start = recordingStartDate {
+                        recordingDuration = Date().timeIntervalSince(start)
+                    }
+                }
+                if let timer = recordingTimer {
+                    RunLoop.main.add(timer, forMode: .common)
+                }
+                isPreparingVoiceNote = false
+                isRecordingVoiceNote = true
+            } catch {
+                SecureLogger.error("Voice recording failed to start: \(error)", category: .session)
+                recordingAlertMessage = "Could not start recording."
+                showRecordingAlert = true
+                VoiceRecorder.shared.cancelRecording()
+                isPreparingVoiceNote = false
+                isRecordingVoiceNote = false
+                recordingStartDate = nil
+            }
+        }
+    }
+
+    func finishVoiceRecording(send: Bool) {
+        if isPreparingVoiceNote {
+            isPreparingVoiceNote = false
+            VoiceRecorder.shared.cancelRecording()
+            return
+        }
+        guard isRecordingVoiceNote else { return }
+        isRecordingVoiceNote = false
+        recordingTimer?.invalidate()
+        recordingTimer = nil
+        if let start = recordingStartDate {
+            recordingDuration = Date().timeIntervalSince(start)
+        }
+        recordingStartDate = nil
+        if send {
+            let minimumDuration: TimeInterval = 1.0
+            VoiceRecorder.shared.stopRecording { url in
+                DispatchQueue.main.async {
+                    guard
+                        let url = url,
+                        let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+                        let fileSize = attributes[.size] as? NSNumber,
+                        fileSize.intValue > 0,
+                        recordingDuration >= minimumDuration
+                    else {
+                        if let url = url {
+                            try? FileManager.default.removeItem(at: url)
+                        }
+                        recordingAlertMessage = recordingDuration < minimumDuration
+                            ? "Recording is too short."
+                            : "Recording failed to save."
+                        showRecordingAlert = true
+                        return
+                    }
+                    viewModel.sendVoiceNote(at: url)
+                }
+            }
+        } else {
+            VoiceRecorder.shared.cancelRecording()
+        }
+    }
+
+    func cancelVoiceRecording() {
+        if isPreparingVoiceNote || isRecordingVoiceNote {
+            finishVoiceRecording(send: false)
+        }
+    }
+
+    func handleImportResult(_ result: Result<[URL], Error>, handler: @escaping (URL) async -> Void) {
+        switch result {
+        case .success(let urls):
+            guard let url = urls.first else { return }
+            let needsStop = url.startAccessingSecurityScopedResource()
+            Task {
+                defer {
+                    if needsStop {
+                        url.stopAccessingSecurityScopedResource()
+                    }
+                }
+                await handler(url)
+            }
+        case .failure(let error):
+            SecureLogger.error("Media import failed: \(error)", category: .session)
+        }
+    }
+
+#if canImport(PhotosUI)
+    func handlePhotoSelection(_ item: PhotosPickerItem) async {
+        defer { Task { @MainActor in selectedPhotoPickerItem = nil } }
+        do {
+            if let data = try await item.loadTransferable(type: Data.self) {
+                let tempURL = FileManager.default.temporaryDirectory
+                    .appendingPathComponent(UUID().uuidString)
+                    .appendingPathExtension("jpg")
+                try data.write(to: tempURL, options: .atomic)
+                await MainActor.run {
+                    viewModel.sendImage(from: tempURL) {
+                        try? FileManager.default.removeItem(at: tempURL)
+                    }
+                }
+            }
+        } catch {
+            SecureLogger.error("Photo picker load failed: \(error)", category: .session)
+        }
+    }
+#endif
+
+    func handleImportedFile(url: URL) async {
+        do {
+            let fileManager = FileManager.default
+            let tempDir = fileManager.temporaryDirectory
+            let fileName = url.lastPathComponent.isEmpty ? "attachment" : url.lastPathComponent
+            let destination = tempDir.appendingPathComponent(UUID().uuidString + "_" + fileName)
+            if fileManager.fileExists(atPath: destination.path) {
+                try fileManager.removeItem(at: destination)
+            }
+            try fileManager.copyItem(at: url, to: destination)
+            await MainActor.run {
+                viewModel.sendFileAttachment(from: destination)
+            }
+        } catch {
+            SecureLogger.error("File copy failed before send: \(error)", category: .session)
+        }
+    }
+
+    func applicationFilesDirectory() -> URL? {
+        do {
+            let base = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+            let filesDir = base.appendingPathComponent("files", isDirectory: true)
+            try FileManager.default.createDirectory(at: filesDir, withIntermediateDirectories: true, attributes: nil)
+            return filesDir
+        } catch {
+            SecureLogger.error("Failed to resolve application files directory: \(error)", category: .session)
+            return nil
+        }
+    }
+}
+
+//
+
 // Delivery status indicator view
 struct DeliveryStatusView: View {
     let status: DeliveryStatus
@@ -1833,4 +1978,119 @@ struct DeliveryStatusView: View {
             .help(Strings.deliveredToMembers(reached, total))
         }
     }
+}
+
+struct ImagePreviewView: View {
+    let url: URL
+
+    @Environment(\.dismiss) private var dismiss
+    #if os(iOS)
+    @State private var showExporter = false
+    @State private var platformImage: UIImage?
+    #else
+    @State private var platformImage: NSImage?
+    #endif
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            VStack {
+                Spacer()
+                if let image = platformImage {
+                    #if os(iOS)
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .padding()
+                    #else
+                    Image(nsImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .padding()
+                    #endif
+                } else {
+                    ProgressView()
+                        .progressViewStyle(.circular)
+                        .tint(.white)
+                }
+                Spacer()
+                HStack {
+                    Button(action: { dismiss() }) {
+                        Text("close")
+                            .font(.bitchatSystem(size: 15, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.5), lineWidth: 1))
+                    }
+                    Spacer()
+                    Button(action: saveCopy) {
+                        Text("save")
+                            .font(.bitchatSystem(size: 15, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(RoundedRectangle(cornerRadius: 12).fill(Color.blue.opacity(0.6)))
+                    }
+                }
+                .padding([.horizontal, .bottom], 24)
+            }
+        }
+        .onAppear(perform: loadImage)
+        #if os(iOS)
+        .sheet(isPresented: $showExporter) {
+            FileExportWrapper(url: url)
+        }
+        #endif
+    }
+
+    private func loadImage() {
+        DispatchQueue.global(qos: .userInitiated).async {
+            #if os(iOS)
+            guard let image = UIImage(contentsOfFile: url.path) else { return }
+            #else
+            guard let image = NSImage(contentsOf: url) else { return }
+            #endif
+            DispatchQueue.main.async {
+                self.platformImage = image
+            }
+        }
+    }
+
+    private func saveCopy() {
+        #if os(iOS)
+        showExporter = true
+        #else
+        Task { @MainActor in
+            let panel = NSSavePanel()
+            panel.canCreateDirectories = true
+            panel.nameFieldStringValue = url.lastPathComponent
+            panel.prompt = "save"
+            if panel.runModal() == .OK, let destination = panel.url {
+                do {
+                    if FileManager.default.fileExists(atPath: destination.path) {
+                        try FileManager.default.removeItem(at: destination)
+                    }
+                    try FileManager.default.copyItem(at: url, to: destination)
+                } catch {
+                    SecureLogger.error("Failed to save image preview copy: \(error)", category: .session)
+                }
+            }
+        }
+        #endif
+    }
+
+    #if os(iOS)
+    private struct FileExportWrapper: UIViewControllerRepresentable {
+        let url: URL
+
+        func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
+            let controller = UIDocumentPickerViewController(forExporting: [url])
+            controller.shouldShowFileExtensions = true
+            return controller
+        }
+
+        func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {}
+    }
+#endif
 }

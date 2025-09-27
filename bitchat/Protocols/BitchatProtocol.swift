@@ -78,6 +78,7 @@ enum MessageType: UInt8 {
     
     // Fragmentation (simplified)
     case fragment = 0x20        // Single fragment type for large messages
+    case fileTransfer = 0x22    // Binary file/audio/image payloads
     
     var description: String {
         switch self {
@@ -88,6 +89,7 @@ enum MessageType: UInt8 {
         case .noiseHandshake: return "noiseHandshake"
         case .noiseEncrypted: return "noiseEncrypted"
         case .fragment: return "fragment"
+        case .fileTransfer: return "fileTransfer"
         }
     }
 }
