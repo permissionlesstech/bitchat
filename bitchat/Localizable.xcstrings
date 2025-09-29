@@ -99,6 +99,12 @@
             "state": "translated",
             "value": "bitchat"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat"
+          }
         }
       }
     },
@@ -199,6 +205,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "বন্ধ করুন"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "बंद करें"
           }
         }
       }
@@ -301,6 +313,12 @@
             "state": "translated",
             "value": "সম্পন্ন"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "समाप्त"
+          }
         }
       }
     },
@@ -401,6 +419,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "গোপন বার্তাগুলো নোইজ প্রোটোকলের মাধ্যমে এনক্রিপ্ট করা হয়"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "नॉइज़ प्रोटोकॉल से निजी संदेश एन्क्रिप्ट किए जाते हैं"
           }
         }
       }
@@ -503,6 +527,12 @@
             "state": "translated",
             "value": "এন্ড-টু-এন্ড এনক্রিপশন"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "एंड-टू-एंड एन्क्रिप्शन"
+          }
         }
       }
     },
@@ -603,6 +633,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "বার্তাগুলো সহ-পিয়ারদের মাধ্যমে রিলে হয়ে দূরেও পৌঁছে যায়"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "संदेश साथियों के माध्यम से रिले होकर दूर तक पहुँचते हैं"
           }
         }
       }
@@ -705,6 +741,12 @@
             "state": "translated",
             "value": "বর্ধিত পরিসর"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "विस्तारित दायरा"
+          }
         }
       }
     },
@@ -805,6 +847,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "আপনার প্রিয় মানুষ যোগ দিলে বিজ্ঞপ্তি পান"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "जब आपके पसंदीदा लोग जुड़ें तो सूचना पाएं"
           }
         }
       }
@@ -907,6 +955,12 @@
             "state": "translated",
             "value": "প্রিয়সমূহ"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "पसंदीदा"
+          }
         }
       }
     },
@@ -1007,6 +1061,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ডিসেন্ট্রালাইজড বেনামি রিলে দিয়ে কাছাকাছি অঞ্চলের মানুষের সাথে কথা বলার জন্য জিওহ্যাশ চ্যানেল"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "विकेंद्रीकृत गुमनाम रिले के माध्यम से आसपास के क्षेत्रों के लोगों से चैट करने के लिए जियोहैश चैनल"
           }
         }
       }
@@ -1109,6 +1169,12 @@
             "state": "translated",
             "value": "স্থানীয় চ্যানেল"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "स्थानीय चैनल"
+          }
         }
       }
     },
@@ -1209,6 +1275,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "নির্দিষ্ট কাউকে জানানোর জন্য @nickname ব্যবহার করুন"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "विशेष लोगों को सूचित करने के लिए @nickname उपयोग करें"
           }
         }
       }
@@ -1311,6 +1383,12 @@
             "state": "translated",
             "value": "মেনশন"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "मेंशन"
+          }
         }
       }
     },
@@ -1411,6 +1489,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ব্লুটুথ লো এনার্জি ব্যবহার করে ইন্টারনেট ছাড়াই কাজ করে"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ब्लूटूथ लो एनर्जी से इंटरनेट बिना भी काम करता है"
           }
         }
       }
@@ -1513,6 +1597,12 @@
             "state": "translated",
             "value": "অফলাইন যোগাযোগ"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ऑफलाइन संचार"
+          }
         }
       }
     },
@@ -1613,6 +1703,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "বৈশিষ্ট্য"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "विशेषताएँ"
           }
         }
       }
@@ -1715,6 +1811,12 @@
             "state": "translated",
             "value": "• চ্যানেল বদলাতে #mesh ট্যাপ করুন"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• चैनल बदलने के लिए #mesh टैप करें"
+          }
         }
       }
     },
@@ -1815,6 +1917,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "• চ্যাট মুছতে তিনবার ট্যাপ করুন"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• चैट साफ़ करने के लिए तीन बार टैप करें"
           }
         }
       }
@@ -1917,6 +2025,12 @@
             "state": "translated",
             "value": "• কমান্ডের জন্য / টাইপ করুন"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• कमांड के लिए / टाइप करें"
+          }
         }
       }
     },
@@ -2017,6 +2131,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "• সাইডবার খুলতে মানুষ আইকনে ট্যাপ করুন"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• साइडबार खोलने के लिए लोगों वाले आइकन पर टैप करें"
           }
         }
       }
@@ -2119,6 +2239,12 @@
             "state": "translated",
             "value": "• আপনার ডাকনামে ট্যাপ করে সেট করুন"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• अपना उपनाम टैप करके सेट करें"
+          }
         }
       }
     },
@@ -2219,6 +2345,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "• ডিএম শুরু করতে পিয়ারের নাম ট্যাপ করুন"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• किसी पीयर का नाम टैप करके DM शुरू करें"
           }
         }
       }
@@ -2321,6 +2453,12 @@
             "state": "translated",
             "value": "ব্যবহারের নিয়ম"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "उपयोग कैसे करें"
+          }
         }
       }
     },
@@ -2421,6 +2559,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "নিয়মিত নতুন পিয়ার আইডি তৈরি হয়"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "नया पीयर आईडी नियमित रूप से बनाया जाता है"
           }
         }
       }
@@ -2523,6 +2667,12 @@
             "state": "translated",
             "value": "অস্থায়ী পরিচয়"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "अस्थायी पहचान"
+          }
         }
       }
     },
@@ -2623,6 +2773,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "কোনো সার্ভার, অ্যাকাউন্ট বা ডেটা সংগ্রহ নেই"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "कोई सर्वर, खाते या डेटा संग्रह नहीं"
           }
         }
       }
@@ -2725,6 +2881,12 @@
             "state": "translated",
             "value": "ট্র্যাকিং নেই"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ट्रैकिंग नहीं"
+          }
         }
       }
     },
@@ -2825,6 +2987,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "লোগোতে তিনবার ট্যাপ করলে সঙ্গে সঙ্গে সব ডেটা মুছে যাবে"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "लोगो पर तीन बार टैप करें और तुरंत सारा डेटा साफ़ करें"
           }
         }
       }
@@ -2927,6 +3095,12 @@
             "state": "translated",
             "value": "প্যানিক মোড"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "पैनिक मोड"
+          }
         }
       }
     },
@@ -3028,6 +3202,12 @@
             "state": "translated",
             "value": "গোপনীয়তা"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "गोपनीयता"
+          }
         }
       }
     },
@@ -3125,6 +3305,12 @@
           }
         },
         "bn": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sidegroupchat"
+          }
+        },
+        "hi": {
           "stringUnit": {
             "state": "translated",
             "value": "sidegroupchat"
@@ -3230,6 +3416,12 @@
             "state": "translated",
             "value": "ব্যক্তিগত বার্তার নিরাপত্তা এখনো সম্পূর্ণ অডিট হয়নি। এই সতর্কতা না থাকা পর্যন্ত জরুরি পরিস্থিতিতে ব্যবহার করবেন না।"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "निजी संदेश सुरक्षा का अभी पूरा ऑडिट नहीं हुआ है। यह चेतावनी हटने तक गंभीर स्थितियों में उपयोग न करें।"
+          }
         }
       }
     },
@@ -3330,6 +3522,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "সতর্কতা"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "चेतावनी"
           }
         }
       }
@@ -3432,6 +3630,12 @@
             "state": "translated",
             "value": "বাতিল"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "रद्द करें"
+          }
         }
       }
     },
@@ -3532,6 +3736,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "বন্ধ করুন"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "बंद करें"
           }
         }
       }
@@ -3634,6 +3844,12 @@
             "state": "translated",
             "value": "কপি করুন"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "कॉपी करें"
+          }
         }
       }
     },
@@ -3734,6 +3950,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ঠিক আছে"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ठीक है"
           }
         }
       }
@@ -3836,6 +4058,12 @@
             "state": "translated",
             "value": "বন্ধ"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "बंद"
+          }
         }
       }
     },
@@ -3936,6 +4164,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "চালু"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "चालू"
           }
         }
       }
@@ -4038,6 +4272,12 @@
             "state": "translated",
             "value": "অজানা"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "अज्ञात"
+          }
         }
       }
     },
@@ -4138,6 +4378,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "প্রিয়তে যোগ করুন"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "पसंदीदा में जोड़ें"
           }
         }
       }
@@ -4240,6 +4486,12 @@
             "state": "translated",
             "value": "নোস্টরে উপলব্ধ"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "नोस्ट्र पर उपलब्ध"
+          }
         }
       }
     },
@@ -4340,6 +4592,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "মুখ্য চ্যাটে ফিরুন"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "मुख्य चैट पर वापस"
           }
         }
       }
@@ -4442,6 +4700,12 @@
             "state": "translated",
             "value": "মেশের মাধ্যমে সংযুক্ত"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "मेश से जुड़ा"
+          }
         }
       }
     },
@@ -4542,6 +4806,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "এনক্রিপশনের অবস্থা: %@"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "एन्क्रिप्शन स्थिति: %@"
           }
         }
       }
@@ -4644,6 +4914,12 @@
             "state": "translated",
             "value": "অবস্থান চ্যানেল"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "लोकेशन चैनल"
+          }
         }
       }
     },
@@ -4745,6 +5021,12 @@
             "state": "translated",
             "value": "এই স্থানের লোকেশন নোট"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "इस स्थान के लोकेशन नोट"
+          }
         }
       }
     },
@@ -4845,6 +5127,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "না পড়া ব্যক্তিগত চ্যাট খুলুন"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "अपठित निजी चैट खोलें"
           }
         }
       }
@@ -5331,6 +5619,12 @@
             "state": "translated",
             "value": "%#@people@"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%#@people@"
+          }
         }
       }
     },
@@ -5431,6 +5725,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@-এর সঙ্গে ব্যক্তিগত চ্যাট"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ के साथ निजी चैट"
           }
         }
       }
@@ -5533,6 +5833,12 @@
             "state": "translated",
             "value": "মেশের মাধ্যমে পৌঁছানো সম্ভব"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "मेश के माध्यम से पहुंच योग्य"
+          }
         }
       }
     },
@@ -5633,6 +5939,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "প্রিয় থেকে সরান"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "पसंदीदा से हटाएँ"
           }
         }
       }
@@ -5735,6 +6047,12 @@
             "state": "translated",
             "value": "বার্তা পাঠাতে একটি বার্তা লিখুন"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "संदेश भेजने के लिए संदेश लिखें"
+          }
         }
       }
     },
@@ -5835,6 +6153,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "পাঠাতে দুইবার ট্যাপ করুন"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "भेजने के लिए डबल टैप करें"
           }
         }
       }
@@ -5937,6 +6261,12 @@
             "state": "translated",
             "value": "বার্তা পাঠান"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "संदेश भेजें"
+          }
         }
       }
     },
@@ -6037,6 +6367,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "#%@-এর জন্য বুকমার্ক টগল করুন"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#%@ के लिए बुकमार्क टॉगल करें"
           }
         }
       }
@@ -6139,6 +6475,12 @@
             "state": "translated",
             "value": "প্রিয় অবস্থা বদলাতে দুইবার ট্যাপ করুন"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "पसंदीदा स्थिति बदलने के लिए डबल टैप करें"
+          }
         }
       }
     },
@@ -6239,6 +6581,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "এনক্রিপশন ফিঙ্গারপ্রিন্ট দেখতে ট্যাপ করুন"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "एन्क्रिप्शन फिंगरप्रिंट देखने के लिए टैप करें"
           }
         }
       }
@@ -6341,6 +6689,12 @@
             "state": "translated",
             "value": "ব্লক করুন"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ब्लॉक करें"
+          }
         }
       }
     },
@@ -6441,6 +6795,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ডিরেক্ট মেসেজ"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "डायरेक्ट संदेश"
           }
         }
       }
@@ -6543,6 +6903,12 @@
             "state": "translated",
             "value": "আলিঙ্গন"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "गले लगाएँ"
+          }
         }
       }
     },
@@ -6643,6 +7009,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "মেনশন"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "मेंशन करें"
           }
         }
       }
@@ -6745,6 +7117,12 @@
             "state": "translated",
             "value": "চপেটাঘাত"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "थप्पड़ मारें"
+          }
         }
       }
     },
@@ -6845,6 +7223,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "অ্যাকশন"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "क्रियाएँ"
           }
         }
       }
@@ -6947,6 +7331,12 @@
             "state": "translated",
             "value": "ব্লুটুথ বন্ধ আছে। bitchat ব্যবহার করতে সেটিংসে ব্লুটুথ চালু করুন।"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ब्लूटूथ बंद है। bitchat उपयोग करने के लिए सेटिंग्स में ब्लूटूथ चालू करें।"
+          }
         }
       }
     },
@@ -7047,6 +7437,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "নিকটবর্তী ডিভাইসের সাথে যুক্ত হতে bitchat-এর ব্লুটুথ অনুমতি দরকার। দয়া করে সেটিংসে ব্লুটুথ অ্যাক্সেস সক্রিয় করুন।"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat को पास के उपकरणों से जुड़ने के लिए ब्लूटूथ अनुमति चाहिए। कृपया सेटिंग्स में ब्लूटूथ एक्सेस सक्षम करें।"
           }
         }
       }
@@ -7149,6 +7545,12 @@
             "state": "translated",
             "value": "সেটিংস"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "सेटिंग्स"
+          }
         }
       }
     },
@@ -7249,6 +7651,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ব্লুটুথ প্রয়োজন"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ब्लूटूथ आवश्यक"
           }
         }
       }
@@ -7351,6 +7759,12 @@
             "state": "translated",
             "value": "এই ডিভাইস ব্লুটুথ সমর্থন করে না। bitchat চালাতে ব্লুটুথ দরকার।"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "यह डिवाइस ब्लूटूथ समर्थित नहीं है। bitchat चलाने के लिए ब्लूटूथ जरूरी है।"
+          }
         }
       }
     },
@@ -7451,6 +7865,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "লোকেশন চ্যানেলের স্ক্রিনশট আপনার অবস্থান প্রকাশ করবে। প্রকাশ করার আগে ভেবে দেখুন।"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "लोकेशन चैनलों के स्क्रीनशॉट आपकी लोकेशन प्रकट करेंगे। सार्वजनिक रूप से साझा करने से पहले सोचें।"
           }
         }
       }
@@ -7553,6 +7973,12 @@
             "state": "translated",
             "value": "সতর্কতা"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ध्यान दें"
+          }
         }
       }
     },
@@ -7653,6 +8079,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ব্লক বা ব্লক করা পিয়ারদের তালিকা দেখুন"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ब्लॉक करें या ब्लॉक पीयरों की सूची देखें"
           }
         }
       }
@@ -7755,6 +8187,12 @@
             "state": "translated",
             "value": "চ্যাট মেসেজ মুছে দিন"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "चैट संदेश साफ़ करें"
+          }
         }
       }
     },
@@ -7855,6 +8293,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "প্রিয়তে যোগ করুন"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "पसंदीदा में जोड़ें"
           }
         }
       }
@@ -7957,6 +8401,12 @@
             "state": "translated",
             "value": "কাউকে উষ্ণ আলিঙ্গন পাঠান"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "किसी को गर्म आलिंगन भेजें"
+          }
         }
       }
     },
@@ -8057,6 +8507,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ব্যক্তিগত বার্তা পাঠান"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "निजी संदेश भेजें"
           }
         }
       }
@@ -8159,6 +8615,12 @@
             "state": "translated",
             "value": "কারওকে ট্রাউট মাছ দিয়ে চপেটাঘাত করুন"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "किसी को ट्राउट से थप्पड़ मारें"
+          }
         }
       }
     },
@@ -8259,6 +8721,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "কাউকে আনব্লক করুন"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "किसी पीयर को अनब्लॉक करें"
           }
         }
       }
@@ -8361,6 +8829,12 @@
             "state": "translated",
             "value": "প্রিয় থেকে সরিয়ে দিন"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "पसंदीदा से हटाएँ"
+          }
         }
       }
     },
@@ -8461,6 +8935,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "কে অনলাইনে আছে দেখুন"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "कौन ऑनलाइन है देखें"
           }
         }
       }
@@ -8563,6 +9043,12 @@
             "state": "translated",
             "value": "%2$d জন সদস্যের মধ্যে %1$d জনের কাছে পৌঁছেছে"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%2$d सदस्यों में से %1$d को पहुँचाया"
+          }
         }
       }
     },
@@ -8663,6 +9149,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@-এর কাছে পৌঁছেছে"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ को पहुँचाया"
           }
         }
       }
@@ -8765,6 +9257,12 @@
             "state": "translated",
             "value": "ব্যর্থ: %@"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "विफल: %@"
+          }
         }
       }
     },
@@ -8865,6 +9363,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ পড়েছে"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ ने पढ़ा"
           }
         }
       }
@@ -8967,6 +9471,12 @@
             "state": "translated",
             "value": "ব্যবহারকারী ব্লক করা"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "उपयोगकर्ता ब्लॉक है"
+          }
         }
       }
     },
@@ -9067,6 +9577,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "নিজেকে বার্তা পাঠানো যায় না"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "खुद को संदेश नहीं भेज सकते"
           }
         }
       }
@@ -9169,6 +9685,12 @@
             "state": "translated",
             "value": "পাঠাতে ত্রুটি"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "भेजने में त्रुटि"
+          }
         }
       }
     },
@@ -9269,6 +9791,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "অজানা প্রাপক"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "अज्ञात प्राप्तकर्ता"
           }
         }
       }
@@ -9371,6 +9899,12 @@
             "state": "translated",
             "value": "পিয়ার পৌঁছানো যাচ্ছে না"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "पीयर पहुंच योग्य नहीं"
+          }
         }
       }
     },
@@ -9471,6 +10005,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "মানুষ"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "लोग"
           }
         }
       }
@@ -9573,6 +10113,12 @@
             "state": "translated",
             "value": "যাচাই: আমার QR দেখান বা বন্ধুরটি স্ক্যান করুন"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "सत्यापन: मेरा QR दिखाएँ या मित्र का स्कैन करें"
+          }
         }
       }
     },
@@ -9673,6 +10219,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "একটি বার্তা লিখুন..."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "संदेश लिखें..."
           }
         }
       }
@@ -9775,6 +10327,12 @@
             "state": "translated",
             "value": "ডাকনাম"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "उपनाम"
+          }
         }
       }
     },
@@ -9875,6 +10433,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "লোকেশন চালু করুন"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "लोकेशन सक्षम करें"
           }
         }
       }
@@ -9977,6 +10541,12 @@
             "state": "translated",
             "value": "বার্তা কপি করুন"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "संदेश कॉपी करें"
+          }
         }
       }
     },
@@ -10077,6 +10647,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "কম দেখান"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "कम दिखाएँ"
           }
         }
       }
@@ -10179,6 +10755,12 @@
             "state": "translated",
             "value": "আরও দেখান"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "और दिखाएँ"
+          }
         }
       }
     },
@@ -10279,6 +10861,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "অবস্থান অনুপলব্ধ"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "लोकेशन उपलब्ध नहीं"
           }
         }
       }
@@ -10381,6 +10969,12 @@
             "state": "translated",
             "value": "নোট"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "नोट्स"
+          }
         }
       }
     },
@@ -10481,6 +11075,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ক্যাশু দিয়ে পরিশোধ করুন"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "कैशु से भुगतान करें"
           }
         }
       }
@@ -10583,6 +11183,12 @@
             "state": "translated",
             "value": "লাইটনিং দিয়ে পরিশোধ করুন"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "लाइटनिंग से भुगतान करें"
+          }
         }
       }
     },
@@ -10683,6 +11289,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "এনক্রিপশন স্থাপিত হচ্ছে"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "एन्क्रिप्शन स्थापित हो रहा है"
           }
         }
       }
@@ -10785,6 +11397,12 @@
             "state": "translated",
             "value": "এনক্রিপশন ব্যর্থ হয়েছে"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "एन्क्रिप्शन विफल हुआ"
+          }
         }
       }
     },
@@ -10885,6 +11503,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "এনক্রিপ্ট করা নেই"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "एन्क्रिप्ट नहीं"
           }
         }
       }
@@ -10987,6 +11611,12 @@
             "state": "translated",
             "value": "এনক্রিপ্ট করা"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "एन्क्रिप्टेड"
+          }
         }
       }
     },
@@ -11087,6 +11717,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "এনক্রিপ্ট ও যাচাইকৃত"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "एन्क्रिप्टेड और सत्यापित"
           }
         }
       }
@@ -11189,6 +11825,12 @@
             "state": "translated",
             "value": "এনক্রিপশন স্থাপিত হচ্ছে..."
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "एन्क्रिप्शन स्थापित हो रहा है..."
+          }
         }
       }
     },
@@ -11289,6 +11931,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "এনক্রিপশন ব্যর্থ হয়েছে"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "एन्क्रिप्शन विफल हुआ"
           }
         }
       }
@@ -11391,6 +12039,12 @@
             "state": "translated",
             "value": "এনক্রিপ্ট করা নেই"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "एन्क्रिप्ट नहीं"
+          }
         }
       }
     },
@@ -11491,6 +12145,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "এনক্রিপ্ট করা"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "एन्क्रिप्टेड"
           }
         }
       }
@@ -11593,6 +12253,12 @@
             "state": "translated",
             "value": "এনক্রিপ্ট করা ও যাচাইকৃত"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "एन्क्रिप्टेड और सत्यापित"
+          }
         }
       }
     },
@@ -11693,6 +12359,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "যাচাইকৃত হিসেবে চিহ্নিত করুন"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "सत्यापित के रूप में चिह्नित करें"
           }
         }
       }
@@ -11795,6 +12467,12 @@
             "state": "translated",
             "value": "যাচাইকরণ সরান"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "सत्यापन हटाएँ"
+          }
         }
       }
     },
@@ -11895,6 +12573,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "⚠️ যাচাইকৃত নয়"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⚠️ सत्यापित नहीं"
           }
         }
       }
@@ -11997,6 +12681,12 @@
             "state": "translated",
             "value": "✓ যাচাইকৃত"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ सत्यापित"
+          }
         }
       }
     },
@@ -12097,6 +12787,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "উপলব্ধ নয় - হ্যান্ডশেক চলছে"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "उपलब्ध नहीं - हैंडशेक जारी है"
           }
         }
       }
@@ -12199,6 +12895,12 @@
             "state": "translated",
             "value": "আপনি এই ব্যক্তির পরিচয় যাচাই করেছেন।"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "आपने इस व्यक्ति की पहचान सत्यापित की है।"
+          }
         }
       }
     },
@@ -12299,6 +13001,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "নিরাপদ চ্যানেলে %@-এর সঙ্গে এই ফিঙ্গারপ্রিন্ট মিলিয়ে দেখুন।"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "इन फिंगरप्रिंट्स की तुलना %@ से सुरक्षित चैनल पर करें।"
           }
         }
       }
@@ -12401,6 +13109,12 @@
             "state": "translated",
             "value": "তাদের ফিঙ্গারপ্রিন্ট:"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "उनका फिंगरप्रिंट:"
+          }
         }
       }
     },
@@ -12501,6 +13215,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "নিরাপত্তা যাচাই"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "सुरक्षा सत्यापन"
           }
         }
       }
@@ -12603,6 +13323,12 @@
             "state": "translated",
             "value": "আপনার ফিঙ্গারপ্রিন্ট:"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "आपका फिंगरप्रिंट:"
+          }
         }
       }
     },
@@ -12703,6 +13429,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ব্লক করুন"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ब्लॉक करें"
           }
         }
       }
@@ -12805,6 +13537,12 @@
             "state": "translated",
             "value": "আনব্লক করুন"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "अनब्लॉक करें"
+          }
         }
       }
     },
@@ -12905,6 +13643,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "কাছে কেউ নেই..."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "आसपास कोई नहीं..."
           }
         }
       }
@@ -13007,6 +13751,12 @@
             "state": "translated",
             "value": "জিওহ্যাশে ব্লক করা"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "जियोहैश में ब्लॉक"
+          }
         }
       }
     },
@@ -13107,6 +13857,12 @@
           "stringUnit": {
             "state": "translated",
             "value": " (আপনি)"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": " (आप)"
           }
         }
       }
@@ -13209,6 +13965,12 @@
             "state": "translated",
             "value": "সেটিংস খুলুন"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "सेटिंग्स खोलें"
+          }
         }
       }
     },
@@ -13309,6 +14071,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "লোকেশন অ্যাক্সেস সরান"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "लोकेशन एक्सेस हटाएँ"
           }
         }
       }
@@ -13411,6 +14179,12 @@
             "state": "translated",
             "value": "লোকেশন অনুমতি ও আমার জিওহ্যাশ নিন"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "लोकेशन अनुमति और मेरे जियोहैश प्राप्त करें"
+          }
         }
       }
     },
@@ -13511,6 +14285,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "টেলিপোর্ট"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "टेलीपोर्ट"
           }
         }
       }
@@ -13613,6 +14393,12 @@
             "state": "translated",
             "value": "বুকমার্ক করা"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "बुकमार्क की गई"
+          }
         }
       }
     },
@@ -13713,6 +14499,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "জিওহ্যাশ চ্যানেল দিয়ে কাছাকাছি অঞ্চলের মানুষের সঙ্গে চ্যাট করুন। শুধুই স্থূল জিওহ্যাশ শেয়ার হয়, কখনো সঠিক GPS নয়। আপনার IP টর দিয়ে সব ট্রাফিক রাউট করে লুকানো থাকে।"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "जियोहैश चैनलों से आसपास के लोगों से चैट करें। केवल मोटा जियोहैश साझा होता है, कभी सटीक GPS नहीं। आपका IP सारा ट्रैफ़िक Tor से रूट कर छिपा रहता है।"
           }
         }
       }
@@ -13815,6 +14607,12 @@
             "state": "translated",
             "value": "অবৈধ জিওহ্যাশ"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "अमान्य जियोहैश"
+          }
         }
       }
     },
@@ -13915,6 +14713,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "কাছাকাছি চ্যানেল খোঁজা হচ্ছে…"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "पास के चैनल खोजे जा रहे हैं…"
           }
         }
       }
@@ -14017,6 +14821,12 @@
             "state": "translated",
             "value": "মেশ"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "मेश"
+          }
         }
       }
     },
@@ -14117,6 +14927,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "লোকেশন অনুমতি অস্বীকৃত। লোকেশন চ্যানেল ব্যবহার করতে সেটিংসে সক্রিয় করুন।"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "लोकेशन अनुमति अस्वीकृत। लोकेशन चैनल उपयोग करने के लिए सेटिंग्स में सक्षम करें।"
           }
         }
       }
@@ -14603,6 +15419,12 @@
             "state": "translated",
             "value": "%1$@ [%2$#@people_count@]"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ [%2$#@people_count@]"
+          }
         }
       }
     },
@@ -14700,6 +15522,12 @@
           }
         },
         "bn": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#%1$@ • %2$@"
+          }
+        },
+        "hi": {
           "stringUnit": {
             "state": "translated",
             "value": "#%1$@ • %2$@"
@@ -14805,6 +15633,12 @@
             "state": "translated",
             "value": "%1$@ • %2$@"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ • %2$@"
+          }
         }
       }
     },
@@ -14905,6 +15739,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "#লোকেশন চ্যানেল"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#लोकेशन चैनल"
           }
         }
       }
@@ -15007,6 +15847,12 @@
             "state": "translated",
             "value": "লোকেশন চ্যানেলের জন্য আপনার IP লুকায়। সুপারিশ: চালু রাখুন।"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "लोकेशन चैनलों के लिए आपका IP छुपाता है। अनुशंसित: चालू रखें।"
+          }
         }
       }
     },
@@ -15107,6 +15953,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Tor রাউটিং"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tor रूटिंग"
           }
         }
       }
@@ -15209,6 +16061,12 @@
             "state": "translated",
             "value": "ব্লক"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ब्लॉक"
+          }
         }
       }
     },
@@ -15309,6 +16167,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ভবন"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "भवन"
           }
         }
       }
@@ -15411,6 +16275,12 @@
             "state": "translated",
             "value": "শহর"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "शहर"
+          }
         }
       }
     },
@@ -15511,6 +16381,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "পাড়া"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "पड़ोस"
           }
         }
       }
@@ -15613,6 +16489,12 @@
             "state": "translated",
             "value": "প্রদেশ"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "प्रांत"
+          }
         }
       }
     },
@@ -15713,6 +16595,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "অঞ্চল"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "क्षेत्र"
           }
         }
       }
@@ -15815,6 +16703,12 @@
             "state": "translated",
             "value": "বন্ধ করুন"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "बंद करें"
+          }
         }
       }
     },
@@ -15915,6 +16809,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "আবার চেষ্টা করুন"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "फिर प्रयास करें"
           }
         }
       }
@@ -16017,6 +16917,12 @@
             "state": "translated",
             "value": "এই স্থানে অন্যরা খুঁজে পেতে পারে এমন ছোট স্থায়ী নোট যোগ করুন।"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "इस स्थान के लिए अन्य आगंतुकों को मिलने वाले छोटे स्थायी नोट जोड़ें।"
+          }
         }
       }
     },
@@ -16117,6 +17023,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "এই জায়গার জন্য প্রথম নোট যোগ করুন।"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "इस जगह के लिए पहला नोट आप जोड़ें।"
           }
         }
       }
@@ -16219,6 +17131,12 @@
             "state": "translated",
             "value": "এখনও কোনো নোট নেই"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "अभी कोई नोट नहीं"
+          }
         }
       }
     },
@@ -16320,6 +17238,12 @@
             "state": "translated",
             "value": "নোট পাঠাতে ব্যর্থ। %@"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "नोट भेजने में विफल। %@"
+          }
         }
       }
     },
@@ -16420,6 +17344,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "এই স্থানের কাছে কোনো জিও রিলে নেই। কিছুক্ষণ পরে আবার চেষ্টা করুন।"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "इस स्थान के पास कोई जियो रिले उपलब्ध नहीं। कुछ देर बाद फिर प्रयास करें।"
           }
         }
       }
@@ -16906,6 +17836,12 @@
             "state": "translated",
             "value": "#%1$@ • %2$#@note_count@"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#%1$@ • %2$#@note_count@"
+          }
         }
       }
     },
@@ -17006,6 +17942,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "নোট লোড হচ্ছে…"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "नोट लोड हो रहे हैं…"
           }
         }
       }
@@ -17108,6 +18050,12 @@
             "state": "translated",
             "value": "সাম্প্রতিক নোট লোড হচ্ছে…"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "हाल के नोट लोड हो रहे हैं…"
+          }
         }
       }
     },
@@ -17208,6 +18156,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "কাছে কোনো জিও রিলে নেই"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "पास कोई जियो रिले नहीं"
           }
         }
       }
@@ -17310,6 +18264,12 @@
             "state": "translated",
             "value": "এই স্থানের জন্য একটি নোট যোগ করুন"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "इस स्थान के लिए नोट जोड़ें"
+          }
         }
       }
     },
@@ -17410,6 +18370,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "জিও রিলে অনুপলব্ধ; নোট স্থগিত"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "जियो रिले अनुपलब्ध; नोट रुके हैं"
           }
         }
       }
@@ -17512,6 +18478,12 @@
             "state": "translated",
             "value": "নোট জিও রিলের উপর নির্ভরশীল। সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "नोट जियो रिले पर निर्भर हैं। कनेक्शन जांचें और फिर प्रयास करें।"
+          }
         }
       }
     },
@@ -17612,6 +18584,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "নতুন বার্তা"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "नए संदेश"
           }
         }
       }
@@ -17714,6 +18692,12 @@
             "state": "translated",
             "value": "%@-এর সঙ্গে চ্যাট শুরু করা যায় না: ব্যক্তি ব্লক করা আছে।"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ के साथ चैट शुरू नहीं कर सकते: व्यक्ति ब्लॉक है।"
+          }
         }
       }
     },
@@ -17814,6 +18798,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@-এর সঙ্গে চ্যাট শুরু করা যায় না: অফলাইন মেসেজিংয়ের জন্য পারস্পরিক প্রিয় দরকার।"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ के साथ चैट शुरू नहीं कर सकते: ऑफ़लाइन मैसेजिंग के लिए आपसी पसंदीदा आवश्यक है।"
           }
         }
       }
@@ -17916,6 +18906,12 @@
             "state": "translated",
             "value": "ব্যবহারকারী"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "उपयोगकर्ता"
+          }
         }
       }
     },
@@ -18016,6 +19012,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "বার্তা পাঠানো যায় না: ব্যক্তি ব্লক করা আছে।"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "संदेश नहीं भेज सकते: व्यक्ति ब्लॉक है।"
           }
         }
       }
@@ -18118,6 +19120,12 @@
             "state": "translated",
             "value": "%@-কে বার্তা পাঠানো যায় না: ব্যক্তি ব্লক করা আছে।"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ को संदेश नहीं भेज सकते: व्यक्ति ब्लॉक है।"
+          }
         }
       }
     },
@@ -18218,6 +19226,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@-কে বার্তা পাঠানো যায় না - পিয়ার মেশ বা নোস্টরে পৌঁছানো যাচ্ছে না।"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ को संदेश नहीं भेज सकते - पीयर मेश या नोस्ट्र पर पहुँच योग्य नहीं।"
           }
         }
       }
@@ -18320,6 +19334,12 @@
             "state": "translated",
             "value": "জিওহ্যাশ চ্যাটে %@ ব্লক করা হয়েছে"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "जियोहैश चैट में %@ ब्लॉक किया गया"
+          }
         }
       }
     },
@@ -18420,6 +19440,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "জিওহ্যাশ চ্যাটে %@ আনব্লক করা হয়েছে"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "जियोहैश चैट में %@ अनब्लॉक किया गया"
           }
         }
       }
@@ -18522,6 +19548,12 @@
             "state": "translated",
             "value": "পাঠানো যায় না: লোকেশন চ্যানেলে নেই"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "भेज नहीं सकते: लोकेशन चैनल में नहीं हैं"
+          }
         }
       }
     },
@@ -18622,6 +19654,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "লোকেশন চ্যানেলে পাঠাতে ব্যর্থ"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "लोकेशन चैनल पर भेजना विफल"
           }
         }
       }
@@ -18724,6 +19762,12 @@
             "state": "translated",
             "value": "ডেভেলপমেন্ট বিল্ড: Tor বাইপাস সক্রিয়।"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "डेवलपमेंट बिल्ड: Tor बायपास सक्षम।"
+          }
         }
       }
     },
@@ -18824,6 +19868,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Tor পুনরায় চালু হয়েছে। নেটওয়ার্ক রাউটিং পুনরুদ্ধার হয়েছে।"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tor पुनः आरंभ हो गया। नेटवर्क रूटिंग बहाल।"
           }
         }
       }
@@ -18926,6 +19976,12 @@
             "state": "translated",
             "value": "Tor সংযোগ ফিরিয়ে আনতে পুনরায় চালু হচ্ছে..."
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "कनेक्टिविटी बहाल करने के लिए Tor पुनः आरंभ हो रहा है..."
+          }
         }
       }
     },
@@ -19026,6 +20082,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Tor চালু হয়েছে। IP গোপন রাখতে সব চ্যাট Tor দিয়ে যাচ্ছে।"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tor शुरू हो गया। IP गोपनीयता के लिए सभी चैट Tor से रूट हो रहे हैं।"
           }
         }
       }
@@ -19128,6 +20190,12 @@
             "state": "translated",
             "value": "Tor চালু হচ্ছে..."
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tor शुरू हो रहा है..."
+          }
         }
       }
     },
@@ -19228,6 +20296,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "যাচাই QR কোড"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "सत्यापन QR कोड"
           }
         }
       }
@@ -19330,6 +20404,12 @@
             "state": "translated",
             "value": "আমাকে যাচাই করতে স্ক্যান করুন"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "मुझे सत्यापित करने के लिए स्कैन करें"
+          }
         }
       }
     },
@@ -19430,6 +20510,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "QR অনুপলব্ধ"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "QR उपलब्ध नहीं"
           }
         }
       }
@@ -19532,6 +20618,12 @@
             "state": "translated",
             "value": "যাচাই করতে QR বিষয়বস্তু পেস্ট করুন:"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "सत्यापित करने के लिए QR सामग्री पेस्ट करें:"
+          }
         }
       }
     },
@@ -19632,6 +20724,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "বন্ধুর QR স্ক্যান করুন"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "मित्र का QR स्कैन करें"
           }
         }
       }
@@ -19734,6 +20832,12 @@
             "state": "translated",
             "value": "অবৈধ বা মেয়াদোত্তীর্ণ QR পেলোড"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "अमान्य या समाप्त हुआ QR पेलोड"
+          }
         }
       }
     },
@@ -19834,6 +20938,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "মিলে যাওয়া পিয়ার খুঁজে পাওয়া যায়নি"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "मिलता-जुलता पीयर नहीं मिला"
           }
         }
       }
@@ -19936,6 +21046,12 @@
             "state": "translated",
             "value": "%@-এর জন্য যাচাই অনুরোধ করা হয়েছে"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ के लिए सत्यापन अनुरोध किया गया"
+          }
         }
       }
     },
@@ -20036,6 +21152,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "যাচাই করুন"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "सत्यापित करें"
           }
         }
       }
@@ -20138,6 +21260,12 @@
             "state": "translated",
             "value": "যাচাই"
           }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "सत्यापन"
+          }
         }
       }
     },
@@ -20237,6 +21365,12 @@
           }
         },
         "bn": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@"
+          }
+        },
+        "hi": {
           "stringUnit": {
             "state": "translated",
             "value": "%@"
