@@ -112,7 +112,8 @@ final class NotificationStreamAssemblerTests: XCTestCase {
     func testAssemblesCompressedLargeFrame() throws {
         var assembler = NotificationStreamAssembler()
 
-        let largeContent = Data(repeating: 0x41, count: 2_500_000)
+        // Keep the fixture below FileTransferLimits.maxPayloadBytes so encoding succeeds while still exercising compression.
+        let largeContent = Data(repeating: 0x41, count: 600_000)
         let filePacket = BitchatFilePacket(
             fileName: "large.bin",
             fileSize: UInt64(largeContent.count),

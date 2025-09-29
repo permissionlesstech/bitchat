@@ -90,7 +90,8 @@ final class BinaryProtocolTests: XCTestCase {
         }
         
         // The encoded size should be smaller than uncompressed due to compression
-        let uncompressedSize = BinaryProtocol.headerSize + BinaryProtocol.senderIDSize + largePayload.count
+        let headerSize = BinaryProtocol.headerSize(for: packet.version)
+        let uncompressedSize = headerSize + BinaryProtocol.senderIDSize + largePayload.count
         XCTAssertLessThan(encodedData.count, uncompressedSize)
         
         // Decode and verify
