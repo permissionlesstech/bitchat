@@ -263,7 +263,7 @@ struct LocationChannelsSheet: View {
     private var customTeleportSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 2) {
-                Text("#")
+                Text(verbatim: "#")
                     .font(.bitchatSystem(size: 14, design: .monospaced))
                     .foregroundColor(.secondary)
                 TextField("geohash", text: $customGeohash)
@@ -419,7 +419,7 @@ struct LocationChannelsSheet: View {
                 }
                 Spacer()
                 if isSelected {
-                    Text("✔︎")
+                    Text(verbatim: "✔︎")
                         .font(.bitchatSystem(size: 16, design: .monospaced))
                         .foregroundColor(standardGreen)
                 }

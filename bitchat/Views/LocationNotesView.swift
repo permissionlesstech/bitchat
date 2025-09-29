@@ -176,7 +176,7 @@ struct LocationNotesView: View {
         let ts = timestampText(for: note.createdAt)
         return VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 6) {
-                Text("@\(baseName)")
+                Text(verbatim: "@\(baseName)")
                     .font(.bitchatSystem(size: 12, weight: .semibold, design: .monospaced))
                 if !ts.isEmpty {
                     Text(ts)

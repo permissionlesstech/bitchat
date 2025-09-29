@@ -1098,7 +1098,7 @@ struct ContentView: View {
     
     private var mainHeaderView: some View {
         HStack(spacing: 0) {
-            Text("bitchat/")
+            Text(verbatim: "bitchat/")
                 .font(.bitchatSystem(size: 18, weight: .medium, design: .monospaced))
                 .foregroundColor(textColor)
                 .onTapGesture(count: 3) {
@@ -1111,7 +1111,7 @@ struct ContentView: View {
                 }
             
             HStack(spacing: 0) {
-                Text("@")
+                Text(verbatim: "@")
                     .font(.bitchatSystem(size: 14, design: .monospaced))
                     .foregroundColor(secondaryTextColor)
                 
@@ -1757,7 +1757,7 @@ struct DeliveryStatusView: View {
             HStack(spacing: 1) {
                 Image(systemName: "checkmark")
                     .font(.bitchatSystem(size: 10))
-                Text("\(reached)/\(total)")
+                Text(verbatim: "\(reached)/\(total)")
                     .font(.bitchatSystem(size: 10, design: .monospaced))
             }
             .foregroundColor(secondaryTextColor.opacity(0.6))
