@@ -44,6 +44,72 @@ final class LocalizationCatalogTests: XCTestCase {
     assertPrimaryKeysPresent(context: context, keys: primaryKeys, catalogName: "ShareExtension")
   }
 
+  // Validates that configured locales contain expected string values.
+  func testLocalizationExpectedValues() throws {
+    let appContext = try loadContext(relativePath: "bitchat/Localization/Localizable.xcstrings")
+    let shareContext = try loadContext(relativePath: "bitchatShareExtension/Localization/Localizable.xcstrings")
+    let config = try loadPrimaryKeys()
+    
+    guard let testLocales = config.testLocales else {
+      // If no testLocales specified, skip this test
+      return
+    }
+    
+    guard let expectedValues = config.expectedValues else {
+      XCTFail("No expectedValues configured in PrimaryLocalizationKeys.json")
+      return
+    }
+    
+    // Loop through each locale to test
+    for locale in testLocales {
+      guard let localeExpectedValues = expectedValues[locale] else {
+        XCTFail("No expected values configured for locale '\(locale)' in PrimaryLocalizationKeys.json")
+        continue
+      }
+      
+      // Test each expected key/value pair for this locale
+      for (key, expectedValue) in localeExpectedValues {
+        if config.app.contains(key) {
+          assertLocaleStringValue(context: appContext, locale: locale, key: key, expectedValue: expectedValue, catalogName: "App")
+        } else if config.shareExtension.contains(key) {
+          assertLocaleStringValue(context: shareContext, locale: locale, key: key, expectedValue: expectedValue, catalogName: "ShareExtension")
+        }
+      }
+    }
+  }
+
+  // Ensures configured test locales are present and complete.
+  func testConfiguredLocalesCompleteness() throws {
+    let appContext = try loadContext(relativePath: "bitchat/Localization/Localizable.xcstrings")
+    let shareContext = try loadContext(relativePath: "bitchatShareExtension/Localization/Localizable.xcstrings")
+    let config = try loadPrimaryKeys()
+    
+    guard let testLocales = config.testLocales else {
+      // If no testLocales specified, skip this test
+      return
+    }
+    
+    let baseLocale = appContext.baseLocale
+    let baseAppKeys = appContext.keysByLocale[baseLocale] ?? Set()
+    let baseShareKeys = shareContext.keysByLocale[baseLocale] ?? Set()
+    
+    for locale in testLocales {
+      // Skip base locale comparison with itself
+      if locale == baseLocale { continue }
+      
+      // Verify locale is present in both catalogs
+      XCTAssertTrue(appContext.locales.contains(locale), "Locale '\(locale)' missing from app catalog")
+      XCTAssertTrue(shareContext.locales.contains(locale), "Locale '\(locale)' missing from share extension catalog")
+      
+      // Verify locale has same number of keys as base locale
+      let appLocaleKeys = appContext.keysByLocale[locale] ?? Set()
+      XCTAssertEqual(appLocaleKeys.count, baseAppKeys.count, "Locale '\(locale)' app catalog missing keys compared to \(baseLocale)")
+      
+      let shareLocaleKeys = shareContext.keysByLocale[locale] ?? Set()
+      XCTAssertEqual(shareLocaleKeys.count, baseShareKeys.count, "Locale '\(locale)' share extension catalog missing keys compared to \(baseLocale)")
+    }
+  }
+
   // MARK: - Assertions
 
   private func assertLocaleParity(context: CatalogContext, catalogName: String, file: StaticString = #filePath, line: UInt = #line) {
@@ -109,6 +175,25 @@ final class LocalizationCatalogTests: XCTestCase {
           XCTAssertFalse(trimmed.isEmpty, "Empty translation for key \(key) at \(segment.path) in locale \(locale) (\(catalogName))", file: file, line: line)
         }
       }
+    }
+  }
+
+  private func assertLocaleStringValue(context: CatalogContext, locale: String, key: String, expectedValue: String, catalogName: String, file: StaticString = #filePath, line: UInt = #line) {
+    guard let entry = context.catalog.strings[key] else {
+      XCTFail("Missing key \(key) in \(catalogName) catalog", file: file, line: line)
+      return
+    }
+    
+    guard let localization = entry.localizations[locale], let unit = localization.stringUnit else {
+      XCTFail("Missing \(locale) localization for key \(key) in \(catalogName) catalog", file: file, line: line)
+      return
+    }
+    
+    // For simple strings (non-pluralized)
+    if let actualValue = unit.value {
+      XCTAssertEqual(actualValue, expectedValue, "\(locale) translation mismatch for key \(key) in \(catalogName) catalog. Expected: '\(expectedValue)', Actual: '\(actualValue)'", file: file, line: line)
+    } else {
+      XCTFail("Key \(key) has no value in \(locale) localization for \(catalogName) catalog", file: file, line: line)
     }
   }
 
@@ -277,4 +362,6 @@ private func placeholders(in string: String) -> [String] {
 private struct PrimaryKeyConfig: Decodable {
   let app: [String]
   let shareExtension: [String]
+  let expectedValues: [String: [String: String]]?
+  let testLocales: [String]?
 }
