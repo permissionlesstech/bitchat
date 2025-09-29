@@ -3556,8 +3556,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                         mentionStyle.font = .bitchatSystem(size: 14, weight: isSelf ? .bold : .semibold, design: .monospaced)
                         let mentionColor: Color = isMentionToMe ? .orange : baseColor
                         mentionStyle.foregroundColor = mentionColor
-                        // Emit '@'
-                        result.append(AttributedString("@").mergingAttributes(mentionStyle))
+                        // Emit '@' (non-localizable symbol - use interpolation to avoid extraction)
+                        let at = "@"
+                        result.append(AttributedString("\(at)").mergingAttributes(mentionStyle))
                         // Base name
                         result.append(AttributedString(mBase).mergingAttributes(mentionStyle))
                         // Suffix in light grey
