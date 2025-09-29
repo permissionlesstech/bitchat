@@ -24,10 +24,7 @@ struct LocationNotesView: View {
     private var maxDraftLines: Int { dynamicTypeSize.isAccessibilitySize ? 5 : 3 }
 
     private enum Strings {
-        static let closeAccessibility = L10n.string(
-            "common.close",
-            comment: "Accessibility label for close buttons"
-        )
+        static let closeAccessibility = String(localized: "common.close", comment: "Accessibility label for close buttons")
         static let description: LocalizedStringKey = "location_notes.description"
         static let loadingRecent: LocalizedStringKey = "location_notes.loading_recent"
         static let relaysPaused: LocalizedStringKey = "location_notes.relays_paused"
@@ -145,9 +142,9 @@ struct LocationNotesView: View {
     }
 
     private func headerTitle(for count: Int) -> String {
-        L10n.string(
-            "location_notes.header",
-            comment: "Header displaying the geohash and localized note count",
+        String(
+            format: String(localized: "location_notes.header", comment: "Header displaying the geohash and localized note count"),
+            locale: .current,
             geohash, count
         )
     }

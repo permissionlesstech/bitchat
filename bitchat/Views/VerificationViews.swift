@@ -15,10 +15,7 @@ struct MyQRView: View {
 
     private enum Strings {
         static let title: LocalizedStringKey = "verification.my_qr.title"
-        static let accessibilityLabel = L10n.string(
-            "verification.my_qr.accessibility_label",
-            comment: "Accessibility label describing the verification QR code"
-        )
+        static let accessibilityLabel = String(localized: "verification.my_qr.accessibility_label", comment: "Accessibility label describing the verification QR code")
     }
 
     var body: some View {
@@ -120,20 +117,10 @@ struct QRScanView: View {
         static let pastePrompt: LocalizedStringKey = "verification.scan.paste_prompt"
         static let validate: LocalizedStringKey = "verification.scan.validate"
         static func requested(_ nickname: String) -> String {
-            L10n.string(
-                "verification.scan.status.requested",
-                comment: "Status text when verification is requested for a nickname",
-                nickname
-            )
+            String(localized: "verification.scan.status.requested", defaultValue: "verification requested for \(nickname)", comment: "Status text when verification is requested for a nickname")
         }
-        static let notFound = L10n.string(
-            "verification.scan.status.no_peer",
-            comment: "Status when no matching peer is found for a verification request"
-        )
-        static let invalid = L10n.string(
-            "verification.scan.status.invalid",
-            comment: "Status when a scanned QR payload is invalid"
-        )
+        static let notFound = String(localized: "verification.scan.status.no_peer", comment: "Status when no matching peer is found for a verification request")
+        static let invalid = String(localized: "verification.scan.status.invalid", comment: "Status when a scanned QR payload is invalid")
     }
 
     var body: some View {

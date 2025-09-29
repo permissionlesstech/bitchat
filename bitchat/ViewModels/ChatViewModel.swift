@@ -554,20 +554,14 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         if TorManager.shared.torEnforced && !torStatusAnnounced && TorManager.shared.isAutoStartAllowed() {
             torStatusAnnounced = true
             addGeohashOnlySystemMessage(
-                L10n.string(
-                    "system.tor.starting",
-                    comment: "System message when Tor is starting"
-                )
+                String(localized: "system.tor.starting", comment: "System message when Tor is starting")
             )
             // Suppress incremental Tor progress messages
             torProgressCancellable = nil
         } else if !TorManager.shared.torEnforced && !torStatusAnnounced {
             torStatusAnnounced = true
             addGeohashOnlySystemMessage(
-                L10n.string(
-                    "system.tor.dev_bypass",
-                    comment: "System message when Tor bypass is enabled in development"
-                )
+                String(localized: "system.tor.dev_bypass", comment: "System message when Tor bypass is enabled in development")
             )
         }
 
@@ -866,10 +860,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                 self.torStatusAnnounced = true
                 // Post only in geohash channels (queue if not active)
                 self.addGeohashOnlySystemMessage(
-                    L10n.string(
-                        "system.tor.starting",
-                        comment: "System message when Tor is starting"
-                    )
+                    String(localized: "system.tor.starting", comment: "System message when Tor is starting")
                 )
             }
         }
@@ -879,10 +870,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             self.torRestartPending = true
             // Post only in geohash channels (queue if not active)
             self.addGeohashOnlySystemMessage(
-                L10n.string(
-                    "system.tor.restarting",
-                    comment: "System message when Tor is restarting"
-                )
+                String(localized: "system.tor.restarting", comment: "System message when Tor is restarting")
             )
         }
     }
@@ -893,19 +881,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             if self.torRestartPending {
                 // Post only in geohash channels (queue if not active)
                 self.addGeohashOnlySystemMessage(
-                    L10n.string(
-                        "system.tor.restarted",
-                        comment: "System message when Tor has restarted"
-                    )
+                    String(localized: "system.tor.restarted", comment: "System message when Tor has restarted")
                 )
                 self.torRestartPending = false
             } else if TorManager.shared.torEnforced && !self.torInitialReadyAnnounced {
                 // Initial start completed
                 self.addGeohashOnlySystemMessage(
-                    L10n.string(
-                        "system.tor.started",
-                        comment: "System message when Tor has started"
-                    )
+                    String(localized: "system.tor.started", comment: "System message when Tor has started")
                 )
                 self.torInitialReadyAnnounced = true
             }
@@ -1588,10 +1570,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         } catch {
             SecureLogger.error("❌ Failed to send geohash message: \(error)", category: .session)
             addSystemMessage(
-                L10n.string(
-                    "system.location.send_failed",
-                    comment: "System message when a location channel send fails"
-                )
+                String(localized: "system.location.send_failed", comment: "System message when a location channel send fails")
             )
         }
     }
@@ -2077,22 +2056,14 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         for (k, v) in nostrKeyMapping where v.lowercased() == hex { nostrKeyMapping.removeValue(forKey: k) }
         
         addSystemMessage(
-            L10n.string(
-                "system.geohash.blocked",
-                comment: "System message shown when a user is blocked in geohash chats",
-                displayName
-            )
+            String(localized: "system.geohash.blocked", defaultValue: "blocked \(displayName) in geohash chats", comment: "System message shown when a user is blocked in geohash chats")
         )
     }
     @MainActor
     func unblockGeohashUser(pubkeyHexLowercased: String, displayName: String) {
         identityManager.setNostrBlocked(pubkeyHexLowercased, isBlocked: false)
         addSystemMessage(
-            L10n.string(
-                "system.geohash.unblocked",
-                comment: "System message shown when a user is unblocked in geohash chats",
-                displayName
-            )
+            String(localized: "system.geohash.unblocked", defaultValue: "unblocked \(displayName) in geohash chats", comment: "System message shown when a user is unblocked in geohash chats")
         )
     }
 
@@ -2278,11 +2249,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         if unifiedPeerService.isBlocked(peerID) {
             let nickname = meshService.peerNickname(peerID: peerID) ?? "user"
             addSystemMessage(
-                L10n.string(
-                    "system.dm.blocked_recipient",
-                    comment: "System message when attempting to message a blocked user",
-                    nickname
-                )
+                String(localized: "system.dm.blocked_recipient", defaultValue: "cannot send message to \(nickname): person is blocked.", comment: "System message when attempting to message a blocked user")
             )
             return
         }
@@ -2346,18 +2313,12 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             // Update delivery status to failed
             if let index = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
                 privateChats[peerID]?[index].deliveryStatus = .failed(
-                    reason: L10n.string(
-                        "content.delivery.reason.unreachable",
-                        comment: "Failure reason when a peer is unreachable"
-                    )
+                    reason: String(localized: "content.delivery.reason.unreachable", comment: "Failure reason when a peer is unreachable")
                 )
             }
+            let name = recipientNickname ?? "user"
             addSystemMessage(
-                L10n.string(
-                    "system.dm.unreachable",
-                    comment: "System message when a recipient is unreachable",
-                    recipientNickname ?? L10n.string("system.common.user", comment: "Fallback recipient name")
-                )
+                String(localized: "system.dm.unreachable", defaultValue: "cannot send message to \(name) - peer is not reachable via mesh or nostr.", comment: "System message when a recipient is unreachable")
             )
         }
     }
@@ -2365,10 +2326,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     private func sendGeohashDM(_ content: String, to peerID: String) {
         guard case .location(let ch) = activeChannel else {
             addSystemMessage(
-                L10n.string(
-                    "system.location.not_in_channel",
-                    comment: "System message when attempting to send without being in a location channel"
-                )
+                String(localized: "system.location.not_in_channel", comment: "System message when attempting to send without being in a location channel")
             )
             return
         }
@@ -2399,10 +2357,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         guard let recipientHex = nostrKeyMapping[peerID] else {
             if let msgIdx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
                 privateChats[peerID]?[msgIdx].deliveryStatus = .failed(
-                    reason: L10n.string(
-                        "content.delivery.reason.unknown_recipient",
-                        comment: "Failure reason when the recipient is unknown"
-                    )
+                    reason: String(localized: "content.delivery.reason.unknown_recipient", comment: "Failure reason when the recipient is unknown")
                 )
             }
             return
@@ -2412,17 +2367,11 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         if identityManager.isNostrBlocked(pubkeyHexLowercased: recipientHex) {
             if let msgIdx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
                 privateChats[peerID]?[msgIdx].deliveryStatus = .failed(
-                    reason: L10n.string(
-                        "content.delivery.reason.blocked",
-                        comment: "Failure reason when the user is blocked"
-                    )
+                    reason: String(localized: "content.delivery.reason.blocked", comment: "Failure reason when the user is blocked")
                 )
             }
             addSystemMessage(
-                L10n.string(
-                    "system.dm.blocked_generic",
-                    comment: "System message when sending fails because user is blocked"
-                )
+                String(localized: "system.dm.blocked_generic", comment: "System message when sending fails because user is blocked")
             )
             return
         }
@@ -2434,10 +2383,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             if recipientHex.lowercased() == id.publicKeyHex.lowercased() {
                 if let idx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
                 privateChats[peerID]?[idx].deliveryStatus = .failed(
-                    reason: L10n.string(
-                        "content.delivery.reason.self",
-                        comment: "Failure reason when attempting to message yourself"
-                    )
+                    reason: String(localized: "content.delivery.reason.self", comment: "Failure reason when attempting to message yourself")
                 )
             }
                 return
@@ -2452,10 +2398,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         } catch {
             if let idx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
                 privateChats[peerID]?[idx].deliveryStatus = .failed(
-                    reason: L10n.string(
-                        "content.delivery.reason.send_error",
-                        comment: "Failure reason for a generic send error"
-                    )
+                    reason: String(localized: "content.delivery.reason.send_error", comment: "Failure reason for a generic send error")
                 )
             }
         }
@@ -2515,22 +2458,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         
         switch state {
         case .poweredOff:
-            bluetoothAlertMessage = L10n.string(
-                "content.alert.bluetooth_required.off",
-                comment: "Message shown when Bluetooth is turned off"
-            )
+            bluetoothAlertMessage = String(localized: "content.alert.bluetooth_required.off", comment: "Message shown when Bluetooth is turned off")
             showBluetoothAlert = true
         case .unauthorized:
-            bluetoothAlertMessage = L10n.string(
-                "content.alert.bluetooth_required.permission",
-                comment: "Message shown when Bluetooth permission is missing"
-            )
+            bluetoothAlertMessage = String(localized: "content.alert.bluetooth_required.permission", comment: "Message shown when Bluetooth permission is missing")
             showBluetoothAlert = true
         case .unsupported:
-            bluetoothAlertMessage = L10n.string(
-                "content.alert.bluetooth_required.unsupported",
-                comment: "Message shown when the device lacks Bluetooth support"
-            )
+            bluetoothAlertMessage = String(localized: "content.alert.bluetooth_required.unsupported", comment: "Message shown when the device lacks Bluetooth support")
             showBluetoothAlert = true
         case .poweredOn:
             // Hide alert when Bluetooth is powered on
@@ -2561,11 +2495,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         // Check if the peer is blocked
         if unifiedPeerService.isBlocked(peerID) {
             addSystemMessage(
-                L10n.string(
-                    "system.chat.blocked",
-                    comment: "System message when starting chat fails because peer is blocked",
-                    peerNickname
-                )
+                String(localized: "system.chat.blocked", defaultValue: "cannot start chat with \(peerNickname): person is blocked.", comment: "System message when starting chat fails because peer is blocked")
             )
             return
         }
@@ -2574,11 +2504,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         if let peer = unifiedPeerService.getPeer(by: peerID),
            peer.isFavorite && !peer.theyFavoritedUs && !peer.isConnected {
             addSystemMessage(
-                L10n.string(
-                    "system.chat.requires_favorite",
-                    comment: "System message when mutual favorite requirement blocks chat",
-                    peerNickname
-                )
+                String(localized: "system.chat.requires_favorite", defaultValue: "cannot start chat with \(peerNickname): mutual favorite required for offline messaging.", comment: "System message when mutual favorite requirement blocks chat")
             )
             return
         }
@@ -3034,10 +2960,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                     } catch {
                         SecureLogger.error("❌ Failed to send geohash screenshot message: \(error)", category: .session)
                         self.addSystemMessage(
-                            L10n.string(
-                                "system.location.send_failed",
-                                comment: "System message when a location channel send fails"
-                            )
+                            String(localized: "system.location.send_failed", comment: "System message when a location channel send fails")
                         )
                     }
                 }

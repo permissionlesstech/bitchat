@@ -115,60 +115,30 @@ enum EncryptionStatus: Equatable {
     var description: String {
         switch self {
         case .none:
-            return L10n.string(
-                "encryption.status.failed",
-                comment: "Status text when encryption failed"
-            )
+            return String(localized: "encryption.status.failed", comment: "Status text when encryption failed")
         case .noHandshake:
-            return L10n.string(
-                "encryption.status.not_encrypted",
-                comment: "Status text when no encryption handshake happened"
-            )
+            return String(localized: "encryption.status.not_encrypted", comment: "Status text when no encryption handshake happened")
         case .noiseHandshaking:
-            return L10n.string(
-                "encryption.status.establishing",
-                comment: "Status text when encryption is being established"
-            )
+            return String(localized: "encryption.status.establishing", comment: "Status text when encryption is being established")
         case .noiseSecured:
-            return L10n.string(
-                "encryption.status.secured",
-                comment: "Status text when encryption is secured but not verified"
-            )
+            return String(localized: "encryption.status.secured", comment: "Status text when encryption is secured but not verified")
         case .noiseVerified:
-            return L10n.string(
-                "encryption.status.verified",
-                comment: "Status text when encryption is verified"
-            )
+            return String(localized: "encryption.status.verified", comment: "Status text when encryption is verified")
         }
     }
 
     var accessibilityDescription: String {
         switch self {
         case .none:
-            return L10n.string(
-                "encryption.accessibility.failed",
-                comment: "Accessibility text when encryption failed"
-            )
+            return String(localized: "encryption.accessibility.failed", comment: "Accessibility text when encryption failed")
         case .noHandshake:
-            return L10n.string(
-                "encryption.accessibility.not_encrypted",
-                comment: "Accessibility text when encryption is not established"
-            )
+            return String(localized: "encryption.accessibility.not_encrypted", comment: "Accessibility text when encryption is not established")
         case .noiseHandshaking:
-            return L10n.string(
-                "encryption.accessibility.establishing",
-                comment: "Accessibility text when encryption is being established"
-            )
+            return String(localized: "encryption.accessibility.establishing", comment: "Accessibility text when encryption is being established")
         case .noiseSecured:
-            return L10n.string(
-                "encryption.accessibility.secured",
-                comment: "Accessibility text when encryption is secured"
-            )
+            return String(localized: "encryption.accessibility.secured", comment: "Accessibility text when encryption is secured")
         case .noiseVerified:
-            return L10n.string(
-                "encryption.accessibility.verified",
-                comment: "Accessibility text when encryption is verified"
-            )
+            return String(localized: "encryption.accessibility.verified", comment: "Accessibility text when encryption is verified")
         }
     }
 }
