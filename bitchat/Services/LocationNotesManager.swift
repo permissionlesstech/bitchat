@@ -77,15 +77,12 @@ final class LocationNotesManager: ObservableObject {
     private let dependencies: LocationNotesDependencies
 
     private enum Strings {
-        static let noRelays = L10n.string(
-            "location_notes.error.no_relays",
-            comment: "Shown when no geo relays are available near the selected location"
-        )
+        static let noRelays = String(localized: "location_notes.error.no_relays", comment: "Shown when no geo relays are available near the selected location")
 
         static func failedToSend(_ detail: String) -> String {
-            L10n.string(
-                "location_notes.error.failed_to_send",
-                comment: "Shown when a location note fails to send",
+            String(
+                format: String(localized: "location_notes.error.failed_to_send", comment: "Shown when a location note fails to send"),
+                locale: .current,
                 detail
             )
         }

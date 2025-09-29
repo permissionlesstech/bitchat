@@ -32,19 +32,16 @@ struct FingerprintView: View {
         static let notVerifiedBadge: LocalizedStringKey = "fingerprint.badge.not_verified"
         static let verifiedMessage: LocalizedStringKey = "fingerprint.message.verified"
         static func verifyHint(_ nickname: String) -> String {
-            L10n.string(
-                "fingerprint.message.verify_hint",
-                comment: "Instruction to compare fingerprints with a named peer",
+            String(
+                format: String(localized: "fingerprint.message.verify_hint", comment: "Instruction to compare fingerprints with a named peer"),
+                locale: .current,
                 nickname
             )
         }
         static let markVerified: LocalizedStringKey = "fingerprint.action.mark_verified"
         static let removeVerification: LocalizedStringKey = "fingerprint.action.remove_verification"
         static func unknownPeer() -> String {
-            L10n.string(
-                "common.unknown",
-                comment: "Label for an unknown peer"
-            )
+            String(localized: "common.unknown", comment: "Label for an unknown peer")
         }
     }
     
