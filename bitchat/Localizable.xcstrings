@@ -111,6 +111,12 @@
             "state": "translated",
             "value": "bitchat"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat"
+          }
         }
       }
     },
@@ -223,6 +229,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "kapat"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "fechar"
           }
         }
       }
@@ -337,6 +349,12 @@
             "state": "translated",
             "value": "BİTTİ"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CONCLUÍDO"
+          }
         }
       }
     },
@@ -449,6 +467,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "özel mesajlar noise protokolü ile şifrelenir"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mensagens privadas encriptadas com o protocolo Noise"
           }
         }
       }
@@ -563,6 +587,12 @@
             "state": "translated",
             "value": "uçtan uca şifreleme"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "encriptação ponta a ponta"
+          }
         }
       }
     },
@@ -675,6 +705,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "mesajlar eşler üzerinden aktarılarak uzağa ulaşır"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mensagens retransmitidas entre pares para chegar mais longe"
           }
         }
       }
@@ -789,6 +825,12 @@
             "state": "translated",
             "value": "genişletilmiş menzil"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "alcance alargado"
+          }
         }
       }
     },
@@ -901,6 +943,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "favori kişileriniz katıldığında bildirim alın"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "recebe notificações quando as tuas pessoas favoritas entram"
           }
         }
       }
@@ -1015,6 +1063,12 @@
             "state": "translated",
             "value": "favoriler"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "favoritos"
+          }
         }
       }
     },
@@ -1127,6 +1181,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "merkeziyetsiz anonim röleler üzerinden yakın bölgelerdeki insanlarla sohbet etmek için geohash kanalları"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "canais geohash para conversar com pessoas em regiões próximas através de relés descentralizados anónimos"
           }
         }
       }
@@ -1241,6 +1301,12 @@
             "state": "translated",
             "value": "yerel kanallar"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "canais locais"
+          }
         }
       }
     },
@@ -1353,6 +1419,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "belirli kişileri bildirmek için @nickname kullanın"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "usa @nickname para avisar pessoas específicas"
           }
         }
       }
@@ -1467,6 +1539,12 @@
             "state": "translated",
             "value": "bahsetmeler"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "menções"
+          }
         }
       }
     },
@@ -1579,6 +1657,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Bluetooth Low Energy kullanarak internet olmadan çalışır"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "funciona sem internet usando Bluetooth de baixo consumo"
           }
         }
       }
@@ -1693,6 +1777,12 @@
             "state": "translated",
             "value": "çevrimdışı iletişim"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "comunicação offline"
+          }
         }
       }
     },
@@ -1805,6 +1895,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ÖZELLİKLER"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "FUNCIONALIDADES"
           }
         }
       }
@@ -1919,6 +2015,12 @@
             "state": "translated",
             "value": "• kanalı değiştirmek için #mesh'e dokunun"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• toca em #mesh para mudar de canal"
+          }
         }
       }
     },
@@ -2031,6 +2133,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "• sohbeti temizlemek için sohbete üç kez dokunun"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• toca três vezes no chat para o limpar"
           }
         }
       }
@@ -2145,6 +2253,12 @@
             "state": "translated",
             "value": "• komutlar için / yazın"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• escreve / para ver os comandos"
+          }
         }
       }
     },
@@ -2257,6 +2371,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "• kenar çubuğunu açmak için insan simgesine dokunun"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• toca no ícone das pessoas para abrir a barra lateral"
           }
         }
       }
@@ -2371,6 +2491,12 @@
             "state": "translated",
             "value": "• takma adınızı üzerine dokunarak ayarlayın"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• define o teu apelido tocando nele"
+          }
         }
       }
     },
@@ -2483,6 +2609,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "• bir eşin adına dokunarak DM başlatın"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• toca no nome de um par para iniciar um DM"
           }
         }
       }
@@ -2597,6 +2729,12 @@
             "state": "translated",
             "value": "NASIL KULLANILIR"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "COMO USAR"
+          }
         }
       }
     },
@@ -2709,6 +2847,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "yeni eş kimliği düzenli olarak oluşturulur"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "novo ID de par gerado regularmente"
           }
         }
       }
@@ -2823,6 +2967,12 @@
             "state": "translated",
             "value": "geçici kimlik"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "identidade efémera"
+          }
         }
       }
     },
@@ -2935,6 +3085,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "sunucu, hesap veya veri toplama yok"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sem servidores, contas ou recolha de dados"
           }
         }
       }
@@ -3049,6 +3205,12 @@
             "state": "translated",
             "value": "izleme yok"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sem rastreio"
+          }
         }
       }
     },
@@ -3161,6 +3323,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "logoya üç kez dokunun, tüm veriler anında silinsin"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "toca três vezes no logótipo para limpar todos os dados de imediato"
           }
         }
       }
@@ -3275,6 +3443,12 @@
             "state": "translated",
             "value": "panik modu"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "modo pânico"
+          }
         }
       }
     },
@@ -3388,6 +3562,12 @@
             "state": "translated",
             "value": "GİZLİLİK"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PRIVACIDADE"
+          }
         }
       }
     },
@@ -3497,6 +3677,12 @@
           }
         },
         "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sidegroupchat"
+          }
+        },
+        "pt": {
           "stringUnit": {
             "state": "translated",
             "value": "sidegroupchat"
@@ -3614,6 +3800,12 @@
             "state": "translated",
             "value": "özel mesaj güvenliği henüz tamamen denetlenmedi. bu uyarı kaybolana kadar kritik durumlarda kullanmayın."
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "a segurança das mensagens privadas ainda não foi totalmente auditada. não uses em situações críticas até este aviso desaparecer."
+          }
         }
       }
     },
@@ -3726,6 +3918,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "UYARI"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AVISO"
           }
         }
       }
@@ -3840,6 +4038,12 @@
             "state": "translated",
             "value": "iptal"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cancelar"
+          }
         }
       }
     },
@@ -3952,6 +4156,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "kapat"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "fechar"
           }
         }
       }
@@ -4066,6 +4276,12 @@
             "state": "translated",
             "value": "kopyala"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "copiar"
+          }
         }
       }
     },
@@ -4178,6 +4394,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "TAMAM"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
           }
         }
       }
@@ -4292,6 +4514,12 @@
             "state": "translated",
             "value": "kapalı"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "desligado"
+          }
         }
       }
     },
@@ -4404,6 +4632,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "açık"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ligado"
           }
         }
       }
@@ -4518,6 +4752,12 @@
             "state": "translated",
             "value": "bilinmiyor"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "desconhecido"
+          }
         }
       }
     },
@@ -4630,6 +4870,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "favorilere ekle"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "adicionar aos favoritos"
           }
         }
       }
@@ -4744,6 +4990,12 @@
             "state": "translated",
             "value": "Nostr üzerinden kullanılabilir"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "disponível através do Nostr"
+          }
         }
       }
     },
@@ -4856,6 +5108,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ana sohbete dön"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "voltar ao chat principal"
           }
         }
       }
@@ -4970,6 +5228,12 @@
             "state": "translated",
             "value": "mesh üzerinden bağlı"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ligado por mesh"
+          }
         }
       }
     },
@@ -5082,6 +5346,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "şifreleme durumu: %@"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "estado da encriptação: %@"
           }
         }
       }
@@ -5196,6 +5466,12 @@
             "state": "translated",
             "value": "konum kanalları"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "canais de localização"
+          }
         }
       }
     },
@@ -5309,6 +5585,12 @@
             "state": "translated",
             "value": "bu yer için konum notları"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "notas de localização deste lugar"
+          }
         }
       }
     },
@@ -5421,6 +5703,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "okunmamış özel sohbeti aç"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "abrir chat privado não lido"
           }
         }
       }
@@ -5919,6 +6207,12 @@
             "state": "translated",
             "value": "%#@people@"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%#@people@"
+          }
         }
       }
     },
@@ -6031,6 +6325,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ ile özel sohbet"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "chat privado com %@"
           }
         }
       }
@@ -6145,6 +6445,12 @@
             "state": "translated",
             "value": "mesh üzerinden ulaşılabilir"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "acessível por mesh"
+          }
         }
       }
     },
@@ -6257,6 +6563,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "favorilerden kaldır"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "remover dos favoritos"
           }
         }
       }
@@ -6371,6 +6683,12 @@
             "state": "translated",
             "value": "bir mesaj göndermek için metin girin"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "escreve uma mensagem para enviar"
+          }
         }
       }
     },
@@ -6483,6 +6801,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "göndermek için çift dokunun"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "toca duas vezes para enviar"
           }
         }
       }
@@ -6597,6 +6921,12 @@
             "state": "translated",
             "value": "mesaj gönder"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "enviar mensagem"
+          }
         }
       }
     },
@@ -6709,6 +7039,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "#%@ için yer işaretini değiştir"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "alternar o marcador de #%@"
           }
         }
       }
@@ -6823,6 +7159,12 @@
             "state": "translated",
             "value": "favori durumunu değiştirmek için çift dokunun"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "toca duas vezes para alternar o estado de favorito"
+          }
         }
       }
     },
@@ -6935,6 +7277,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "şifreleme parmak izini görmek için dokunun"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "toca para ver a impressão de encriptação"
           }
         }
       }
@@ -7049,6 +7397,12 @@
             "state": "translated",
             "value": "engelle"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bloquear"
+          }
         }
       }
     },
@@ -7161,6 +7515,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "doğrudan mesaj"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mensagem direta"
           }
         }
       }
@@ -7275,6 +7635,12 @@
             "state": "translated",
             "value": "sarıl"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "abraçar"
+          }
         }
       }
     },
@@ -7387,6 +7753,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "bahset"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mencionar"
           }
         }
       }
@@ -7501,6 +7873,12 @@
             "state": "translated",
             "value": "tokatla"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "dar uma chapada"
+          }
         }
       }
     },
@@ -7613,6 +7991,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "eylemler"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ações"
           }
         }
       }
@@ -7727,6 +8111,12 @@
             "state": "translated",
             "value": "Bluetooth kapalı. bitchat'i kullanmak için ayarlardan Bluetooth'u açın."
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O Bluetooth está desligado. Ativa o Bluetooth em Definições para usar o bitchat."
+          }
         }
       }
     },
@@ -7839,6 +8229,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "bitchat'in yakın cihazlara bağlanması için Bluetooth izni gerekir. lütfen ayarlardan Bluetooth erişimini etkinleştirin."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O bitchat precisa de autorização de Bluetooth para se ligar a dispositivos próximos. Ativa o acesso em Definições."
           }
         }
       }
@@ -7953,6 +8349,12 @@
             "state": "translated",
             "value": "ayarlar"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "definições"
+          }
         }
       }
     },
@@ -8065,6 +8467,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Bluetooth gerekli"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bluetooth necessário"
           }
         }
       }
@@ -8179,6 +8587,12 @@
             "state": "translated",
             "value": "bu cihaz Bluetooth'u desteklemiyor. bitchat'in çalışması için Bluetooth gerekli."
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este dispositivo não suporta Bluetooth. O bitchat precisa de Bluetooth para funcionar."
+          }
         }
       }
     },
@@ -8291,6 +8705,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "konum kanallarının ekran görüntüleri konumunuzu ortaya çıkarır. paylaşmadan önce iki kez düşünün."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capturas de ecrã dos canais de localização revelam a tua localização. Pensa antes de partilhar publicamente."
           }
         }
       }
@@ -8405,6 +8825,12 @@
             "state": "translated",
             "value": "dikkat"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "atenção"
+          }
         }
       }
     },
@@ -8517,6 +8943,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "engelle veya engellenen eşleri listele"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bloquear ou listar pares bloqueados"
           }
         }
       }
@@ -8631,6 +9063,12 @@
             "state": "translated",
             "value": "sohbet mesajlarını temizle"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "limpar mensagens do chat"
+          }
         }
       }
     },
@@ -8743,6 +9181,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "favorilere ekle"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "adicionar aos favoritos"
           }
         }
       }
@@ -8857,6 +9301,12 @@
             "state": "translated",
             "value": "birine sıcak bir sarılma gönder"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "enviar um abraço caloroso"
+          }
         }
       }
     },
@@ -8969,6 +9419,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "özel mesaj gönder"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "enviar mensagem privada"
           }
         }
       }
@@ -9083,6 +9539,12 @@
             "state": "translated",
             "value": "birine alabalıkla tokat at"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "dar uma chapada a alguém com uma truta"
+          }
         }
       }
     },
@@ -9195,6 +9657,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "bir eşin engelini kaldır"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "desbloquear um par"
           }
         }
       }
@@ -9309,6 +9777,12 @@
             "state": "translated",
             "value": "favorilerden çıkar"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "remover dos favoritos"
+          }
         }
       }
     },
@@ -9421,6 +9895,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "kimler çevrimiçi gör"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ver quem está online"
           }
         }
       }
@@ -9535,6 +10015,12 @@
             "state": "translated",
             "value": "%2$d üyeden %1$d kişiye ulaştı"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "entregue a %1$d de %2$d membros"
+          }
         }
       }
     },
@@ -9647,6 +10133,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@'a iletildi"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "entregue a %@"
           }
         }
       }
@@ -9761,6 +10253,12 @@
             "state": "translated",
             "value": "başarısız: %@"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "falhou: %@"
+          }
         }
       }
     },
@@ -9873,6 +10371,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ okudu"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "lido por %@"
           }
         }
       }
@@ -9987,6 +10491,12 @@
             "state": "translated",
             "value": "kullanıcı engellendi"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "utilizador bloqueado"
+          }
         }
       }
     },
@@ -10099,6 +10609,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "kendine mesaj gönderemezsin"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "não é possível enviar mensagem a ti próprio"
           }
         }
       }
@@ -10213,6 +10729,12 @@
             "state": "translated",
             "value": "gönderme hatası"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "erro ao enviar"
+          }
         }
       }
     },
@@ -10325,6 +10847,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "bilinmeyen alıcı"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "destinatário desconhecido"
           }
         }
       }
@@ -10439,6 +10967,12 @@
             "state": "translated",
             "value": "eşe ulaşılamıyor"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "par inacessível"
+          }
         }
       }
     },
@@ -10551,6 +11085,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "KİŞİLER"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PESSOAS"
           }
         }
       }
@@ -10665,6 +11205,12 @@
             "state": "translated",
             "value": "doğrulama: QR kodumu göster veya bir arkadaşını tara"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verificação: mostra o meu QR ou lê o de um amigo"
+          }
         }
       }
     },
@@ -10777,6 +11323,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "bir mesaj yazın..."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "escreve uma mensagem..."
           }
         }
       }
@@ -10891,6 +11443,12 @@
             "state": "translated",
             "value": "takma ad"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "apelido"
+          }
         }
       }
     },
@@ -11003,6 +11561,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "konumu etkinleştir"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ativar localização"
           }
         }
       }
@@ -11117,6 +11681,12 @@
             "state": "translated",
             "value": "mesajı kopyala"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "copiar mensagem"
+          }
         }
       }
     },
@@ -11229,6 +11799,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "daha az göster"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mostrar menos"
           }
         }
       }
@@ -11343,6 +11919,12 @@
             "state": "translated",
             "value": "daha fazla göster"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mostrar mais"
+          }
         }
       }
     },
@@ -11455,6 +12037,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "konum kullanılamıyor"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "localização indisponível"
           }
         }
       }
@@ -11569,6 +12157,12 @@
             "state": "translated",
             "value": "notlar"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "notas"
+          }
         }
       }
     },
@@ -11681,6 +12275,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "cashu ile öde"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "pagar com Cashu"
           }
         }
       }
@@ -11795,6 +12395,12 @@
             "state": "translated",
             "value": "lightning ile öde"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "pagar com Lightning"
+          }
         }
       }
     },
@@ -11907,6 +12513,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "şifreleme kuruluyor"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "a estabelecer encriptação"
           }
         }
       }
@@ -12021,6 +12633,12 @@
             "state": "translated",
             "value": "şifreleme başarısız"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "encriptação falhada"
+          }
         }
       }
     },
@@ -12133,6 +12751,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "şifrelenmedi"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sem encriptação"
           }
         }
       }
@@ -12247,6 +12871,12 @@
             "state": "translated",
             "value": "şifreli"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "encriptado"
+          }
         }
       }
     },
@@ -12359,6 +12989,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "şifreli ve doğrulandı"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "encriptado e verificado"
           }
         }
       }
@@ -12473,6 +13109,12 @@
             "state": "translated",
             "value": "şifreleme kuruluyor..."
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "a estabelecer encriptação..."
+          }
         }
       }
     },
@@ -12585,6 +13227,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "şifreleme başarısız"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "encriptação falhada"
           }
         }
       }
@@ -12699,6 +13347,12 @@
             "state": "translated",
             "value": "şifrelenmedi"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sem encriptação"
+          }
         }
       }
     },
@@ -12811,6 +13465,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "şifreli"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "encriptado"
           }
         }
       }
@@ -12925,6 +13585,12 @@
             "state": "translated",
             "value": "şifreli ve doğrulandı"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "encriptado e verificado"
+          }
         }
       }
     },
@@ -13037,6 +13703,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "doğrulandı olarak işaretle"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "marcar como verificado"
           }
         }
       }
@@ -13151,6 +13823,12 @@
             "state": "translated",
             "value": "doğrulamayı kaldır"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "remover verificação"
+          }
         }
       }
     },
@@ -13263,6 +13941,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "⚠️ DOĞRULANMADI"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⚠️ NÃO VERIFICADO"
           }
         }
       }
@@ -13377,6 +14061,12 @@
             "state": "translated",
             "value": "✓ DOĞRULANDI"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ VERIFICADO"
+          }
         }
       }
     },
@@ -13489,6 +14179,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "kullanılamıyor - el sıkışma sürüyor"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "indisponível - aperto de mão em curso"
           }
         }
       }
@@ -13603,6 +14299,12 @@
             "state": "translated",
             "value": "bu kişinin kimliğini doğruladınız."
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "confirmaste a identidade desta pessoa."
+          }
         }
       }
     },
@@ -13715,6 +14417,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "bu parmak izlerini %@ ile güvenli bir kanalda karşılaştırın."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "compara estas impressões com %@ num canal seguro."
           }
         }
       }
@@ -13829,6 +14537,12 @@
             "state": "translated",
             "value": "onların parmak izi:"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "impressão digital desta pessoa:"
+          }
         }
       }
     },
@@ -13941,6 +14655,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "güvenlik doğrulaması"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verificação de segurança"
           }
         }
       }
@@ -14055,6 +14775,12 @@
             "state": "translated",
             "value": "sizin parmak iziniz:"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "a tua impressão digital:"
+          }
         }
       }
     },
@@ -14167,6 +14893,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "engelle"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bloquear"
           }
         }
       }
@@ -14281,6 +15013,12 @@
             "state": "translated",
             "value": "engeli kaldır"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "desbloquear"
+          }
         }
       }
     },
@@ -14393,6 +15131,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "yakında kimse yok..."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ninguém por perto..."
           }
         }
       }
@@ -14507,6 +15251,12 @@
             "state": "translated",
             "value": "geohash'te engellendi"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bloqueado em geohash"
+          }
         }
       }
     },
@@ -14619,6 +15369,12 @@
           "stringUnit": {
             "state": "translated",
             "value": " (sen)"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": " (tu)"
           }
         }
       }
@@ -14733,6 +15489,12 @@
             "state": "translated",
             "value": "ayarları aç"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "abrir definições"
+          }
         }
       }
     },
@@ -14845,6 +15607,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "konum erişimini kaldır"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "remover acesso à localização"
           }
         }
       }
@@ -14959,6 +15727,12 @@
             "state": "translated",
             "value": "konum izni ve geohash'lerimi al"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "obter permissões de localização e os meus geohash"
+          }
         }
       }
     },
@@ -15071,6 +15845,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ışınlan"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "teletransportar"
           }
         }
       }
@@ -15185,6 +15965,12 @@
             "state": "translated",
             "value": "yer imleri"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "marcados"
+          }
         }
       }
     },
@@ -15297,6 +16083,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "geohash kanallarıyla yakınınızdaki insanlarla sohbet edin. yalnızca kaba bir geohash paylaşılır, tam GPS asla değil. IP adresiniz tüm trafik Tor üzerinden yönlendirilerek gizlenir."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "conversa com pessoas perto de ti usando canais geohash. apenas um geohash de baixa precisão é partilhado, nunca GPS exato. o teu IP fica oculto ao encaminhar todo o tráfego através do Tor."
           }
         }
       }
@@ -15411,6 +16203,12 @@
             "state": "translated",
             "value": "geçersiz geohash"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "geohash inválido"
+          }
         }
       }
     },
@@ -15524,6 +16322,12 @@
             "state": "translated",
             "value": "yakındaki kanallar aranıyor…"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "a procurar canais próximos…"
+          }
         }
       }
     },
@@ -15633,6 +16437,12 @@
           }
         },
         "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mesh"
+          }
+        },
+        "pt": {
           "stringUnit": {
             "state": "translated",
             "value": "mesh"
@@ -15749,6 +16559,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "konum izni reddedildi. konum kanallarını kullanmak için ayarlardan etkinleştirin."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "permissão de localização negada. ativa nas definições para usar canais de localização."
           }
         }
       }
@@ -16247,6 +17063,12 @@
             "state": "translated",
             "value": "%1$@ [%2$#@people_count@]"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ [%2$#@people_count@]"
+          }
         }
       }
     },
@@ -16356,6 +17178,12 @@
           }
         },
         "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#%1$@ • %2$@"
+          }
+        },
+        "pt": {
           "stringUnit": {
             "state": "translated",
             "value": "#%1$@ • %2$@"
@@ -16473,6 +17301,12 @@
             "state": "translated",
             "value": "%1$@ • %2$@"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ • %2$@"
+          }
         }
       }
     },
@@ -16585,6 +17419,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "#konum kanalları"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#canais de localização"
           }
         }
       }
@@ -16699,6 +17539,12 @@
             "state": "translated",
             "value": "konum kanalları için IP'nizi gizler. önerilen: açık."
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "oculta o teu IP para canais de localização. recomendado: ligado."
+          }
         }
       }
     },
@@ -16811,6 +17657,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Tor yönlendirmesi"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "encaminhamento Tor"
           }
         }
       }
@@ -16925,6 +17777,12 @@
             "state": "translated",
             "value": "blok"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bloco"
+          }
         }
       }
     },
@@ -17037,6 +17895,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "bina"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "edifício"
           }
         }
       }
@@ -17151,6 +18015,12 @@
             "state": "translated",
             "value": "şehir"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cidade"
+          }
         }
       }
     },
@@ -17263,6 +18133,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "mahalle"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bairro"
           }
         }
       }
@@ -17377,6 +18253,12 @@
             "state": "translated",
             "value": "il"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "província"
+          }
         }
       }
     },
@@ -17489,6 +18371,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "bölge"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "região"
           }
         }
       }
@@ -17603,6 +18491,12 @@
             "state": "translated",
             "value": "kapat"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "fechar"
+          }
         }
       }
     },
@@ -17715,6 +18609,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "yeniden dene"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tentar novamente"
           }
         }
       }
@@ -17829,6 +18729,12 @@
             "state": "translated",
             "value": "bu konuma gelen diğer ziyaretçilerin bulması için kısa kalıcı notlar ekleyin."
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "adiciona pequenas notas permanentes a este local para outros visitantes encontrarem."
+          }
         }
       }
     },
@@ -17941,6 +18847,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "bu yer için ilk notu sen ekle."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sê o primeiro a adicionar uma nota para este sítio."
           }
         }
       }
@@ -18055,6 +18967,12 @@
             "state": "translated",
             "value": "henüz not yok"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ainda sem notas"
+          }
         }
       }
     },
@@ -18168,6 +19086,12 @@
             "state": "translated",
             "value": "not gönderilemedi. %@"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "falha ao enviar a nota. %@"
+          }
         }
       }
     },
@@ -18280,6 +19204,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "bu konuma yakın geo röle yok. birazdan yeniden deneyin."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sem relés geográficos disponíveis perto deste local. tenta novamente em breve."
           }
         }
       }
@@ -18778,6 +19708,12 @@
             "state": "translated",
             "value": "#%1$@ • %2$#@note_count@"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#%1$@ • %2$#@note_count@"
+          }
         }
       }
     },
@@ -18890,6 +19826,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "notlar yükleniyor…"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "a carregar notas…"
           }
         }
       }
@@ -19004,6 +19946,12 @@
             "state": "translated",
             "value": "son notlar yükleniyor…"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "a carregar notas recentes…"
+          }
         }
       }
     },
@@ -19116,6 +20064,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "yakında geo röle yok"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sem relés geográficos por perto"
           }
         }
       }
@@ -19230,6 +20184,12 @@
             "state": "translated",
             "value": "bu yer için bir not ekleyin"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "adiciona uma nota para este local"
+          }
         }
       }
     },
@@ -19342,6 +20302,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "geo röleler kullanılamıyor; notlar durduruldu"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "relés geográficos indisponíveis; notas em pausa"
           }
         }
       }
@@ -19456,6 +20422,12 @@
             "state": "translated",
             "value": "notlar geo rölelere bağlıdır. bağlantıyı kontrol edip tekrar deneyin."
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "as notas dependem de relés geográficos. verifica a ligação e tenta de novo."
+          }
         }
       }
     },
@@ -19568,6 +20540,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "yeni mesajlar"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "novas mensagens"
           }
         }
       }
@@ -19682,6 +20660,12 @@
             "state": "translated",
             "value": "%@ ile sohbet başlatılamıyor: kişi engelli."
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "não é possível iniciar o chat com %@: a pessoa está bloqueada."
+          }
         }
       }
     },
@@ -19794,6 +20778,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ ile sohbet başlatılamıyor: çevrimdışı mesajlaşma için karşılıklı favori gerekiyor."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "não é possível iniciar o chat com %@: precisam de ser favoritos mútuos para mensagens offline."
           }
         }
       }
@@ -19908,6 +20898,12 @@
             "state": "translated",
             "value": "kullanıcı"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "utilizador"
+          }
         }
       }
     },
@@ -20020,6 +21016,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "mesaj gönderilemiyor: kişi engelli."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "não é possível enviar mensagem: a pessoa está bloqueada."
           }
         }
       }
@@ -20134,6 +21136,12 @@
             "state": "translated",
             "value": "%@'a mesaj gönderilemiyor: kişi engelli."
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "não é possível enviar mensagem a %@: a pessoa está bloqueada."
+          }
         }
       }
     },
@@ -20246,6 +21254,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@'a mesaj gönderilemiyor - eş mesh veya Nostr üzerinden ulaşılamıyor."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "não é possível enviar mensagem a %@ - o par não está acessível por mesh ou Nostr."
           }
         }
       }
@@ -20360,6 +21374,12 @@
             "state": "translated",
             "value": "geohash sohbetlerinde %@ engellendi"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ bloqueado nos chats geohash"
+          }
         }
       }
     },
@@ -20472,6 +21492,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "geohash sohbetlerinde %@ engeli kaldırıldı"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ desbloqueado nos chats geohash"
           }
         }
       }
@@ -20586,6 +21612,12 @@
             "state": "translated",
             "value": "gönderilemiyor: konum kanalında değilsiniz"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "não foi possível enviar: não estás num canal de localização"
+          }
         }
       }
     },
@@ -20698,6 +21730,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "konum kanalına gönderme başarısız"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "falha ao enviar para o canal de localização"
           }
         }
       }
@@ -20812,6 +21850,12 @@
             "state": "translated",
             "value": "geliştirme yapısı: Tor atlatması etkin."
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "compilação de desenvolvimento: bypass do Tor ativo."
+          }
         }
       }
     },
@@ -20924,6 +21968,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Tor yeniden başlatıldı. ağ yönlendirmesi geri geldi."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O Tor foi reiniciado. O encaminhamento de rede foi restaurado."
           }
         }
       }
@@ -21038,6 +22088,12 @@
             "state": "translated",
             "value": "Tor bağlantıyı kurtarmak için yeniden başlatılıyor..."
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O Tor está a reiniciar para recuperar a conectividade..."
+          }
         }
       }
     },
@@ -21150,6 +22206,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Tor başlatıldı. IP gizliliği için tüm sohbetler Tor üzerinden yönlendiriliyor."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O Tor foi iniciado. Todas as conversas são encaminhadas via Tor para ocultar o IP."
           }
         }
       }
@@ -21264,6 +22326,12 @@
             "state": "translated",
             "value": "Tor başlatılıyor..."
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O Tor está a iniciar..."
+          }
         }
       }
     },
@@ -21376,6 +22444,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "doğrulama QR kodu"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "código QR de verificação"
           }
         }
       }
@@ -21490,6 +22564,12 @@
             "state": "translated",
             "value": "beni doğrulamak için tara"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Digitaliza para me verificares"
+          }
         }
       }
     },
@@ -21602,6 +22682,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "QR mevcut değil"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "QR indisponível"
           }
         }
       }
@@ -21716,6 +22802,12 @@
             "state": "translated",
             "value": "doğrulamak için QR içeriğini yapıştırın:"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cola o conteúdo do QR para validar:"
+          }
         }
       }
     },
@@ -21828,6 +22920,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "bir arkadaşının QR'ını tara"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Digitaliza o QR de um amigo"
           }
         }
       }
@@ -21942,6 +23040,12 @@
             "state": "translated",
             "value": "geçersiz veya süresi dolmuş QR yükü"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "payload de QR inválido ou expirado"
+          }
         }
       }
     },
@@ -22054,6 +23158,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "eş bulunamadı"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "não foi possível encontrar o par correspondente"
           }
         }
       }
@@ -22168,6 +23278,12 @@
             "state": "translated",
             "value": "%@ için doğrulama istendi"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verificação solicitada para %@"
+          }
         }
       }
     },
@@ -22280,6 +23396,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "doğrula"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "validar"
           }
         }
       }
@@ -22394,6 +23516,12 @@
             "state": "translated",
             "value": "DOĞRULA"
           }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "VERIFICAR"
+          }
         }
       }
     },
@@ -22505,6 +23633,12 @@
           }
         },
         "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@"
+          }
+        },
+        "pt": {
           "stringUnit": {
             "state": "translated",
             "value": "%@"
