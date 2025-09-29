@@ -32,16 +32,10 @@ struct LocationChannelsSheet: View {
         static let toggleOn: LocalizedStringKey = "common.toggle.on"
         static let toggleOff: LocalizedStringKey = "common.toggle.off"
 
-        static let invalidGeohash = L10n.string(
-            "location_channels.error.invalid_geohash",
-            comment: "Error shown when a custom geohash is invalid"
-        )
+        static let invalidGeohash = String(localized: "location_channels.error.invalid_geohash", comment: "Error shown when a custom geohash is invalid")
 
         static func meshTitle(_ count: Int) -> String {
-            let label = L10n.string(
-                "location_channels.mesh_label",
-                comment: "Label for the mesh channel row"
-            )
+            let label = String(localized: "location_channels.mesh_label", comment: "Label for the mesh channel row")
             return rowTitle(label: label, count: count)
         }
 
@@ -54,28 +48,26 @@ struct LocationChannelsSheet: View {
         }
 
         static func subtitlePrefix(geohash: String, coverage: String) -> String {
-            L10n.string(
-                "location_channels.subtitle_prefix",
-                comment: "Subtitle prefix showing geohash and coverage",
-                geohash,
-                coverage
+            String(
+                format: String(localized: "location_channels.subtitle_prefix", comment: "Subtitle prefix showing geohash and coverage"),
+                locale: .current,
+                geohash, coverage
             )
         }
 
         static func subtitle(prefix: String, name: String?) -> String {
             guard let name, !name.isEmpty else { return prefix }
-            return L10n.string(
-                "location_channels.subtitle_with_name",
-                comment: "Subtitle combining prefix and resolved location name",
-                prefix,
-                name
+            return String(
+                format: String(localized: "location_channels.subtitle_with_name", comment: "Subtitle combining prefix and resolved location name"),
+                locale: .current,
+                prefix, name
             )
         }
 
         private static func rowTitle(label: String, count: Int) -> String {
-            L10n.string(
-                "location_channels.row_title",
-                comment: "List row title with participant count",
+            String(
+                format: String(localized: "location_channels.row_title", comment: "List row title with participant count"),
+                locale: .current,
                 label, count
             )
         }
@@ -271,7 +263,7 @@ struct LocationChannelsSheet: View {
     private var customTeleportSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 2) {
-                Text("#")
+                Text(verbatim: "#")
                     .font(.bitchatSystem(size: 14, design: .monospaced))
                     .foregroundColor(.secondary)
                 TextField("geohash", text: $customGeohash)
@@ -427,7 +419,7 @@ struct LocationChannelsSheet: View {
                 }
                 Spacer()
                 if isSelected {
-                    Text("✔︎")
+                    Text(verbatim: "✔︎")
                         .font(.bitchatSystem(size: 16, design: .monospaced))
                         .foregroundColor(standardGreen)
                 }

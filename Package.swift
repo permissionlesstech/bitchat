@@ -37,6 +37,9 @@ let package = Package(
                 "LaunchScreen.storyboard",
                 "Services/Tor/C/"
             ],
+            resources: [
+                .process("Localization")
+            ],
             linkerSettings: [
                 .linkedLibrary("z")
             ]
@@ -56,6 +59,9 @@ let package = Package(
             exclude: [
                 "Info.plist",
                 "README.md"
+            ],
+            resources: [
+                .process("Localization")
             ]
         )
     ]
