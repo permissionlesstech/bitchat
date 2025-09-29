@@ -2056,14 +2056,22 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         for (k, v) in nostrKeyMapping where v.lowercased() == hex { nostrKeyMapping.removeValue(forKey: k) }
         
         addSystemMessage(
-            String(localized: "system.geohash.blocked", defaultValue: "blocked \(displayName) in geohash chats", comment: "System message shown when a user is blocked in geohash chats")
+            String(
+                format: String(localized: "system.geohash.blocked", comment: "System message shown when a user is blocked in geohash chats"),
+                locale: .current,
+                displayName
+            )
         )
     }
     @MainActor
     func unblockGeohashUser(pubkeyHexLowercased: String, displayName: String) {
         identityManager.setNostrBlocked(pubkeyHexLowercased, isBlocked: false)
         addSystemMessage(
-            String(localized: "system.geohash.unblocked", defaultValue: "unblocked \(displayName) in geohash chats", comment: "System message shown when a user is unblocked in geohash chats")
+            String(
+                format: String(localized: "system.geohash.unblocked", comment: "System message shown when a user is unblocked in geohash chats"),
+                locale: .current,
+                displayName
+            )
         )
     }
 
@@ -2249,7 +2257,11 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         if unifiedPeerService.isBlocked(peerID) {
             let nickname = meshService.peerNickname(peerID: peerID) ?? "user"
             addSystemMessage(
-                String(localized: "system.dm.blocked_recipient", defaultValue: "cannot send message to \(nickname): person is blocked.", comment: "System message when attempting to message a blocked user")
+                String(
+                    format: String(localized: "system.dm.blocked_recipient", comment: "System message when attempting to message a blocked user"),
+                    locale: .current,
+                    nickname
+                )
             )
             return
         }
@@ -2318,7 +2330,11 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             }
             let name = recipientNickname ?? "user"
             addSystemMessage(
-                String(localized: "system.dm.unreachable", defaultValue: "cannot send message to \(name) - peer is not reachable via mesh or nostr.", comment: "System message when a recipient is unreachable")
+                String(
+                    format: String(localized: "system.dm.unreachable", comment: "System message when a recipient is unreachable"),
+                    locale: .current,
+                    name
+                )
             )
         }
     }
@@ -2495,7 +2511,11 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         // Check if the peer is blocked
         if unifiedPeerService.isBlocked(peerID) {
             addSystemMessage(
-                String(localized: "system.chat.blocked", defaultValue: "cannot start chat with \(peerNickname): person is blocked.", comment: "System message when starting chat fails because peer is blocked")
+                String(
+                    format: String(localized: "system.chat.blocked", comment: "System message when starting chat fails because peer is blocked"),
+                    locale: .current,
+                    peerNickname
+                )
             )
             return
         }
@@ -2504,7 +2524,11 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         if let peer = unifiedPeerService.getPeer(by: peerID),
            peer.isFavorite && !peer.theyFavoritedUs && !peer.isConnected {
             addSystemMessage(
-                String(localized: "system.chat.requires_favorite", defaultValue: "cannot start chat with \(peerNickname): mutual favorite required for offline messaging.", comment: "System message when mutual favorite requirement blocks chat")
+                String(
+                    format: String(localized: "system.chat.requires_favorite", comment: "System message when mutual favorite requirement blocks chat"),
+                    locale: .current,
+                    peerNickname
+                )
             )
             return
         }

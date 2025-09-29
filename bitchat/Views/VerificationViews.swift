@@ -117,7 +117,11 @@ struct QRScanView: View {
         static let pastePrompt: LocalizedStringKey = "verification.scan.paste_prompt"
         static let validate: LocalizedStringKey = "verification.scan.validate"
         static func requested(_ nickname: String) -> String {
-            String(localized: "verification.scan.status.requested", defaultValue: "verification requested for \(nickname)", comment: "Status text when verification is requested for a nickname")
+            String(
+                format: String(localized: "verification.scan.status.requested", comment: "Status text when verification is requested for a nickname"),
+                locale: .current,
+                nickname
+            )
         }
         static let notFound = String(localized: "verification.scan.status.no_peer", comment: "Status when no matching peer is found for a verification request")
         static let invalid = String(localized: "verification.scan.status.invalid", comment: "Status when a scanned QR payload is invalid")

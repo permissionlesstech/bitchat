@@ -4226,7 +4226,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "encryption status: \\(status)"
+            "value": "encryption status: %@"
           }
         },
         "es": {
@@ -5085,7 +5085,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "private chat with \\(nickname)"
+            "value": "private chat with %@"
           }
         },
         "es": {
@@ -5655,7 +5655,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "toggle bookmark for #\\(geohash)"
+            "value": "toggle bookmark for #%@"
           }
         },
         "es": {
@@ -8125,7 +8125,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "delivered to \\(nickname)"
+            "value": "delivered to %@"
           }
         },
         "es": {
@@ -8220,7 +8220,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "failed: \\(reason)"
+            "value": "failed: %@"
           }
         },
         "es": {
@@ -8315,7 +8315,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "read by \\(nickname)"
+            "value": "read by %@"
           }
         },
         "es": {
@@ -11545,7 +11545,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "compare these fingerprints with \\(nickname) using a secure channel."
+            "value": "compare these fingerprints with %@ using a secure channel."
           }
         },
         "es": {
@@ -13829,7 +13829,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "#\\(geohash) • \\(coverage)"
+            "value": "#%1$@ • %2$@"
           }
         },
         "es": {
@@ -13924,7 +13924,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "\\(prefix) • \\(name)"
+            "value": "%1$@ • %2$@"
           }
         },
         "es": {
@@ -15349,7 +15349,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "failed to send note. \\(detail)"
+            "value": "failed to send note. %@"
           }
         },
         "es": {
@@ -16683,7 +16683,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "cannot start chat with \\(peerNickname): person is blocked."
+            "value": "cannot start chat with %@: person is blocked."
           }
         },
         "es": {
@@ -16778,7 +16778,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "cannot start chat with \\(peerNickname): mutual favorite required for offline messaging."
+            "value": "cannot start chat with %@: mutual favorite required for offline messaging."
           }
         },
         "es": {
@@ -17063,7 +17063,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "cannot send message to \\(nickname): person is blocked."
+            "value": "cannot send message to %@: person is blocked."
           }
         },
         "es": {
@@ -17158,7 +17158,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "cannot send message to \\(recipientNickname) - peer is not reachable via mesh or nostr."
+            "value": "cannot send message to %@ - peer is not reachable via mesh or nostr."
           }
         },
         "es": {
@@ -17253,7 +17253,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "blocked \\(displayName) in geohash chats"
+            "value": "blocked %@ in geohash chats"
           }
         },
         "es": {
@@ -17348,7 +17348,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "unblocked \\(displayName) in geohash chats"
+            "value": "unblocked %@ in geohash chats"
           }
         },
         "es": {
@@ -18773,7 +18773,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "verification requested for \\(nickname)"
+            "value": "verification requested for %@"
           }
         },
         "es": {

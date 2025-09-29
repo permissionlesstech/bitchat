@@ -48,12 +48,20 @@ struct LocationChannelsSheet: View {
         }
 
         static func subtitlePrefix(geohash: String, coverage: String) -> String {
-            String(localized: "location_channels.subtitle_prefix", defaultValue: "#\(geohash) • \(coverage)", comment: "Subtitle prefix showing geohash and coverage")
+            String(
+                format: String(localized: "location_channels.subtitle_prefix", comment: "Subtitle prefix showing geohash and coverage"),
+                locale: .current,
+                geohash, coverage
+            )
         }
 
         static func subtitle(prefix: String, name: String?) -> String {
             guard let name, !name.isEmpty else { return prefix }
-            return String(localized: "location_channels.subtitle_with_name", defaultValue: "\(prefix) • \(name)", comment: "Subtitle combining prefix and resolved location name")
+            return String(
+                format: String(localized: "location_channels.subtitle_with_name", comment: "Subtitle combining prefix and resolved location name"),
+                locale: .current,
+                prefix, name
+            )
         }
 
         private static func rowTitle(label: String, count: Int) -> String {

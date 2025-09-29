@@ -1198,7 +1198,11 @@ struct ContentView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(
-                        String(localized: "content.accessibility.toggle_bookmark", defaultValue: "toggle bookmark for #\(ch.geohash)", comment: "Accessibility label for toggling a geohash bookmark")
+                        String(
+                            format: String(localized: "content.accessibility.toggle_bookmark", comment: "Accessibility label for toggling a geohash bookmark"),
+                            locale: .current,
+                            ch.geohash
+                        )
                     )
                 }
 
@@ -1518,13 +1522,21 @@ struct ContentView: View {
                                                        encryptionStatus == .noiseSecured ? textColor :
                                                        Color.red)
                                         .accessibilityLabel(
-                                            String(localized: "content.accessibility.encryption_status", defaultValue: "encryption status: \(encryptionStatus.accessibilityDescription)", comment: "Accessibility label announcing encryption status")
+                                            String(
+                                                format: String(localized: "content.accessibility.encryption_status", comment: "Accessibility label announcing encryption status"),
+                                                locale: .current,
+                                                encryptionStatus.accessibilityDescription
+                                            )
                                         )
                                 }
                             }
                         }
                         .accessibilityLabel(
-                            String(localized: "content.accessibility.private_chat_header", defaultValue: "private chat with \(privatePeerNick)", comment: "Accessibility label describing the private chat header")
+                            String(
+                                format: String(localized: "content.accessibility.private_chat_header", comment: "Accessibility label describing the private chat header"),
+                                locale: .current,
+                                privatePeerNick
+                            )
                         )
                         .accessibilityHint(
                             String(localized: "content.accessibility.view_fingerprint_hint", comment: "Accessibility hint for viewing encryption fingerprint")
@@ -1668,15 +1680,27 @@ struct DeliveryStatusView: View {
 
     private enum Strings {
         static func delivered(to nickname: String) -> String {
-            String(localized: "content.delivery.delivered_to", defaultValue: "delivered to \(nickname)", comment: "Tooltip for delivered private messages")
+            String(
+                format: String(localized: "content.delivery.delivered_to", comment: "Tooltip for delivered private messages"),
+                locale: .current,
+                nickname
+            )
         }
 
         static func read(by nickname: String) -> String {
-            String(localized: "content.delivery.read_by", defaultValue: "read by \(nickname)", comment: "Tooltip for read private messages")
+            String(
+                format: String(localized: "content.delivery.read_by", comment: "Tooltip for read private messages"),
+                locale: .current,
+                nickname
+            )
         }
 
         static func failed(_ reason: String) -> String {
-            String(localized: "content.delivery.failed", defaultValue: "failed: \(reason)", comment: "Tooltip for failed message delivery")
+            String(
+                format: String(localized: "content.delivery.failed", comment: "Tooltip for failed message delivery"),
+                locale: .current,
+                reason
+            )
         }
 
         static func deliveredToMembers(_ reached: Int, _ total: Int) -> String {
