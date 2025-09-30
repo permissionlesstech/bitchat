@@ -80,7 +80,6 @@
 import BitLogger
 import Foundation
 import SwiftUI
-import CryptoKit
 import Combine
 import CommonCrypto
 import CoreBluetooth
@@ -1299,10 +1298,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     // Called when we receive a peer's public key
     @MainActor
     func registerPeerPublicKey(peerID: String, publicKeyData: Data) {
-        // Create a fingerprint from the public key (full SHA256, not truncated)
-        let fingerprintStr = SHA256.hash(data: publicKeyData)
-            .compactMap { String(format: "%02x", $0) }
-            .joined()
+        let fingerprintStr = publicKeyData.sha256Fingerprint()
         
         // Only register if not already registered
         if peerIDToPublicKeyFingerprint[peerID] != fingerprintStr {
@@ -5184,11 +5180,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             }
 
             // Validate recipient
-            if let rid = packet.recipientID {
-                let ridHex = rid.map { String(format: "%02x", $0) }.joined()
-                if ridHex != meshService.myPeerID {
-                    return
-                }
+            if let rid = packet.recipientID, rid.hexEncodedString() != meshService.myPeerID {
+                return
             }
 
             // Parse plaintext typed payload

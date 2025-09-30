@@ -38,7 +38,7 @@ let package = Package(
                 "Services/Tor/C/"
             ],
             resources: [
-                .process("Localization")
+                .process("Localizable.xcstrings")
             ],
             linkerSettings: [
                 .linkedLibrary("z")

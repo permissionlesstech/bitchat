@@ -70,26 +70,6 @@ final class NotificationService {
         sendLocalNotification(title: title, body: body, identifier: identifier, userInfo: userInfo)
     }
     
-    func sendFavoriteOnlineNotification(nickname: String) {
-        // Send directly without checking app state for favorites
-        DispatchQueue.main.async {
-            let content = UNMutableNotificationContent()
-            content.title = "⭐ \(nickname) is online!"
-            content.body = "wanna get in there?"
-            content.sound = .default
-            
-            let request = UNNotificationRequest(
-                identifier: "favorite-online-\(UUID().uuidString)",
-                content: content,
-                trigger: nil
-            )
-            
-            UNUserNotificationCenter.current().add(request) { _ in
-                // Notification added
-            }
-        }
-    }
-    
     // Geohash public chat notification with deep link to a specific geohash
     func sendGeohashActivityNotification(geohash: String, titlePrefix: String = "#", bodyPreview: String) {
         let title = "\(titlePrefix)\(geohash)"
