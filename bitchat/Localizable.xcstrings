@@ -273,6 +273,12 @@
             "state": "translated",
             "value": "bitchat"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat"
+          }
         }
       }
     },
@@ -544,6 +550,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "закрыть"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "закрыть"
@@ -823,6 +835,12 @@
             "state": "translated",
             "value": "ГОТОВО"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ГОТОВО"
+          }
         }
       }
     },
@@ -1094,6 +1112,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "личные сообщения шифруются протоколом noise"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "личные сообщения шифруются протоколом noise"
@@ -1373,6 +1397,12 @@
             "state": "translated",
             "value": "сквозное шифрование"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "сквозное шифрование"
+          }
         }
       }
     },
@@ -1644,6 +1674,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "сообщения ретранслируются между пирами и уходят дальше"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "сообщения ретранслируются между пирами и уходят дальше"
@@ -1923,6 +1959,12 @@
             "state": "translated",
             "value": "расширенный радиус"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "расширенный радиус"
+          }
         }
       }
     },
@@ -2194,6 +2236,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "получай уведомления, когда подключаются любимые люди"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "получай уведомления, когда подключаются любимые люди"
@@ -2473,6 +2521,12 @@
             "state": "translated",
             "value": "избранное"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "избранное"
+          }
         }
       }
     },
@@ -2744,6 +2798,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "каналы geohash для чата с людьми поблизости через децентрализованные анонимные реле"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "каналы geohash для чата с людьми поблизости через децентрализованные анонимные реле"
@@ -3023,6 +3083,12 @@
             "state": "translated",
             "value": "локальные каналы"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "локальные каналы"
+          }
         }
       }
     },
@@ -3294,6 +3360,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "используй @nickname, чтобы уведомить конкретных людей"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "используй @nickname, чтобы уведомить конкретных людей"
@@ -3573,6 +3645,12 @@
             "state": "translated",
             "value": "упоминания"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "упоминания"
+          }
         }
       }
     },
@@ -3844,6 +3922,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "работает без интернета через bluetooth low energy"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "работает без интернета через bluetooth low energy"
@@ -4123,6 +4207,12 @@
             "state": "translated",
             "value": "офлайн-связь"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "офлайн-связь"
+          }
         }
       }
     },
@@ -4394,6 +4484,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ВОЗМОЖНОСТИ"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "ВОЗМОЖНОСТИ"
@@ -4673,6 +4769,12 @@
             "state": "translated",
             "value": "• нажми #mesh, чтобы сменить канал"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• нажми #mesh, чтобы сменить канал"
+          }
         }
       }
     },
@@ -4944,6 +5046,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• тройной тап по чату очистит его"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "• тройной тап по чату очистит его"
@@ -5223,6 +5331,12 @@
             "state": "translated",
             "value": "• введи /, чтобы увидеть команды"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• введи /, чтобы увидеть команды"
+          }
         }
       }
     },
@@ -5494,6 +5608,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• нажми на иконку людей, чтобы открыть боковое меню"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "• нажми на иконку людей, чтобы открыть боковое меню"
@@ -5773,6 +5893,12 @@
             "state": "translated",
             "value": "• коснись своего ника, чтобы изменить его"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• коснись своего ника, чтобы изменить его"
+          }
         }
       }
     },
@@ -6044,6 +6170,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• нажми имя пользователя, чтобы начать лс"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "• нажми имя пользователя, чтобы начать лс"
@@ -6323,6 +6455,12 @@
             "state": "translated",
             "value": "КАК ИСПОЛЬЗОВАТЬ"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "КАК ИСПОЛЬЗОВАТЬ"
+          }
         }
       }
     },
@@ -6594,6 +6732,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "новый id пира создаётся регулярно"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "новый id пира создаётся регулярно"
@@ -6873,6 +7017,12 @@
             "state": "translated",
             "value": "эфемерная личность"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "эфемерная личность"
+          }
         }
       }
     },
@@ -7144,6 +7294,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "без серверов, аккаунтов и сбора данных"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "без серверов, аккаунтов и сбора данных"
@@ -7423,6 +7579,12 @@
             "state": "translated",
             "value": "без трекинга"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "без трекинга"
+          }
         }
       }
     },
@@ -7694,6 +7856,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "тройной тап по логотипу мгновенно очищает все данные"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "тройной тап по логотипу мгновенно очищает все данные"
@@ -7973,6 +8141,12 @@
             "state": "translated",
             "value": "режим паники"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "режим паники"
+          }
         }
       }
     },
@@ -8244,6 +8418,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "КОНФИДЕНЦИАЛЬНОСТЬ"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "КОНФИДЕНЦИАЛЬНОСТЬ"
@@ -8523,6 +8703,12 @@
             "state": "translated",
             "value": "sidegroupchat"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sidegroupchat"
+          }
         }
       }
     },
@@ -8794,6 +8980,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "безопасность приватных сообщений ещё не прошла полный аудит. не используй для критичных случаев, пока предупреждение не исчезнет."
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "безопасность приватных сообщений ещё не прошла полный аудит. не используй для критичных случаев, пока предупреждение не исчезнет."
@@ -9073,6 +9265,12 @@
             "state": "translated",
             "value": "ПРЕДУПРЕЖДЕНИЕ"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ПРЕДУПРЕЖДЕНИЕ"
+          }
         }
       }
     },
@@ -9344,6 +9542,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "отмена"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "отмена"
@@ -9623,6 +9827,12 @@
             "state": "translated",
             "value": "закрыть"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "закрыть"
+          }
         }
       }
     },
@@ -9894,6 +10104,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "копировать"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "копировать"
@@ -10173,6 +10389,12 @@
             "state": "translated",
             "value": "OK"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
+          }
         }
       }
     },
@@ -10444,6 +10666,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "выкл"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "выкл"
@@ -10723,6 +10951,12 @@
             "state": "translated",
             "value": "вкл"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "вкл"
+          }
         }
       }
     },
@@ -10994,6 +11228,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "неизвестно"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "неизвестно"
@@ -11273,6 +11513,12 @@
             "state": "translated",
             "value": "добавить в избранное"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "добавить в избранное"
+          }
         }
       }
     },
@@ -11544,6 +11790,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "доступно через nostr"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "доступно через nostr"
@@ -11823,6 +12075,12 @@
             "state": "translated",
             "value": "назад в основной чат"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "назад в основной чат"
+          }
         }
       }
     },
@@ -12094,6 +12352,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "подключено через mesh"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "подключено через mesh"
@@ -12373,6 +12637,12 @@
             "state": "translated",
             "value": "статус шифрования: %@"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "статус шифрования: %@"
+          }
         }
       }
     },
@@ -12644,6 +12914,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "каналы локации"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "каналы локации"
@@ -12923,6 +13199,12 @@
             "state": "translated",
             "value": "заметки для этого места"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "заметки для этого места"
+          }
         }
       }
     },
@@ -13194,6 +13476,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "открыть непрочитанный приватный чат"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "открыть непрочитанный приватный чат"
@@ -13989,6 +14277,12 @@
             "state": "translated",
             "value": "%#@people@"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%#@people@"
+          }
         }
       }
     },
@@ -14260,6 +14554,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "приватный чат с %@"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "приватный чат с %@"
@@ -14539,6 +14839,12 @@
             "state": "translated",
             "value": "достижим через mesh"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "достижим через mesh"
+          }
         }
       }
     },
@@ -14810,6 +15116,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "убрать из избранного"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "убрать из избранного"
@@ -15089,6 +15401,12 @@
             "state": "translated",
             "value": "введи сообщение для отправки"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "введи сообщение для отправки"
+          }
         }
       }
     },
@@ -15360,6 +15678,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "дважды тапни, чтобы отправить"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "дважды тапни, чтобы отправить"
@@ -15639,6 +15963,12 @@
             "state": "translated",
             "value": "отправить сообщение"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "отправить сообщение"
+          }
         }
       }
     },
@@ -15910,6 +16240,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "переключить закладку для #%@"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "переключить закладку для #%@"
@@ -16189,6 +16525,12 @@
             "state": "translated",
             "value": "дважды тапни, чтобы переключить статус избранного"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "дважды тапни, чтобы переключить статус избранного"
+          }
         }
       }
     },
@@ -16460,6 +16802,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "нажми, чтобы увидеть криптографический отпечаток"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "нажми, чтобы увидеть криптографический отпечаток"
@@ -16739,6 +17087,12 @@
             "state": "translated",
             "value": "заблокировать"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "заблокировать"
+          }
         }
       }
     },
@@ -17010,6 +17364,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "личное сообщение"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "личное сообщение"
@@ -17289,6 +17649,12 @@
             "state": "translated",
             "value": "обнять"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "обнять"
+          }
         }
       }
     },
@@ -17560,6 +17926,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "упомянуть"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "упомянуть"
@@ -17839,6 +18211,12 @@
             "state": "translated",
             "value": "дать леща"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "дать леща"
+          }
         }
       }
     },
@@ -18110,6 +18488,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "действия"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "действия"
@@ -18389,6 +18773,12 @@
             "state": "translated",
             "value": "bluetooth выключен. включи bluetooth в настройках, чтобы использовать bitchat."
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bluetooth выключен. включи bluetooth в настройках, чтобы использовать bitchat."
+          }
         }
       }
     },
@@ -18660,6 +19050,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat нужен доступ к bluetooth, чтобы соединяться с ближайшими устройствами. включи разрешение в настройках."
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "bitchat нужен доступ к bluetooth, чтобы соединяться с ближайшими устройствами. включи разрешение в настройках."
@@ -18939,6 +19335,12 @@
             "state": "translated",
             "value": "настройки"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "настройки"
+          }
         }
       }
     },
@@ -19210,6 +19612,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bluetooth обязателен"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "bluetooth обязателен"
@@ -19489,6 +19897,12 @@
             "state": "translated",
             "value": "это устройство не поддерживает bluetooth. bitchat нужен bluetooth для работы."
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "это устройство не поддерживает bluetooth. bitchat нужен bluetooth для работы."
+          }
         }
       }
     },
@@ -19760,6 +20174,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "скриншоты каналов местоположения раскроют твою позицию. подумай, прежде чем делиться публично."
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "скриншоты каналов местоположения раскроют твою позицию. подумай, прежде чем делиться публично."
@@ -20039,6 +20459,12 @@
             "state": "translated",
             "value": "внимание"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "внимание"
+          }
         }
       }
     },
@@ -20310,6 +20736,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "заблокировать или показать заблокированных"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "заблокировать или показать заблокированных"
@@ -20589,6 +21021,12 @@
             "state": "translated",
             "value": "очистить чат"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "очистить чат"
+          }
         }
       }
     },
@@ -20860,6 +21298,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "добавить в избранное"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "добавить в избранное"
@@ -21139,6 +21583,12 @@
             "state": "translated",
             "value": "отправить тёплое объятие"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "отправить тёплое объятие"
+          }
         }
       }
     },
@@ -21410,6 +21860,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "отправить приватное сообщение"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "отправить приватное сообщение"
@@ -21689,6 +22145,12 @@
             "state": "translated",
             "value": "дать кому-то пощёчину форелью"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "дать кому-то пощёчину форелью"
+          }
         }
       }
     },
@@ -21960,6 +22422,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "разблокировать пира"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "разблокировать пира"
@@ -22239,6 +22707,12 @@
             "state": "translated",
             "value": "убрать из избранного"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "убрать из избранного"
+          }
         }
       }
     },
@@ -22510,6 +22984,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "посмотреть, кто онлайн"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "посмотреть, кто онлайн"
@@ -22789,6 +23269,12 @@
             "state": "translated",
             "value": "доставлено %1$d из %2$d участников"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "доставлено %1$d из %2$d участников"
+          }
         }
       }
     },
@@ -23060,6 +23546,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "доставлено %@"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "доставлено %@"
@@ -23339,6 +23831,12 @@
             "state": "translated",
             "value": "ошибка: %@"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ошибка: %@"
+          }
         }
       }
     },
@@ -23610,6 +24108,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "прочитано %@"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "прочитано %@"
@@ -23889,6 +24393,12 @@
             "state": "translated",
             "value": "пользователь заблокирован"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "пользователь заблокирован"
+          }
         }
       }
     },
@@ -24160,6 +24670,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "нельзя отправить себе"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "нельзя отправить себе"
@@ -24439,6 +24955,12 @@
             "state": "translated",
             "value": "ошибка отправки"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ошибка отправки"
+          }
         }
       }
     },
@@ -24710,6 +25232,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "неизвестный получатель"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "неизвестный получатель"
@@ -24989,6 +25517,12 @@
             "state": "translated",
             "value": "пир недостижим"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "пир недостижим"
+          }
         }
       }
     },
@@ -25260,6 +25794,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ЛЮДИ"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "ЛЮДИ"
@@ -25539,6 +26079,12 @@
             "state": "translated",
             "value": "верификация: показать мой qr или сканировать друга"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "верификация: показать мой qr или сканировать друга"
+          }
         }
       }
     },
@@ -25810,6 +26356,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "напиши сообщение..."
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "напиши сообщение..."
@@ -26089,6 +26641,12 @@
             "state": "translated",
             "value": "ник"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ник"
+          }
         }
       }
     },
@@ -26360,6 +26918,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "включить локацию"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "включить локацию"
@@ -26639,6 +27203,12 @@
             "state": "translated",
             "value": "копировать сообщение"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "копировать сообщение"
+          }
         }
       }
     },
@@ -26910,6 +27480,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "показать меньше"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "показать меньше"
@@ -27189,6 +27765,12 @@
             "state": "translated",
             "value": "показать больше"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "показать больше"
+          }
         }
       }
     },
@@ -27460,6 +28042,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "локация недоступна"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "локация недоступна"
@@ -27739,6 +28327,12 @@
             "state": "translated",
             "value": "заметки"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "заметки"
+          }
         }
       }
     },
@@ -28010,6 +28604,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "оплатить через cashu"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "оплатить через cashu"
@@ -28289,6 +28889,12 @@
             "state": "translated",
             "value": "оплатить через lightning"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "оплатить через lightning"
+          }
         }
       }
     },
@@ -28560,6 +29166,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "устанавливается шифрование"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "устанавливается шифрование"
@@ -28839,6 +29451,12 @@
             "state": "translated",
             "value": "шифрование не удалось"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "шифрование не удалось"
+          }
         }
       }
     },
@@ -29110,6 +29728,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "не зашифровано"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "не зашифровано"
@@ -29389,6 +30013,12 @@
             "state": "translated",
             "value": "зашифровано"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "зашифровано"
+          }
         }
       }
     },
@@ -29660,6 +30290,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "зашифровано и проверено"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "зашифровано и проверено"
@@ -29939,6 +30575,12 @@
             "state": "translated",
             "value": "устанавливаем шифрование..."
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "устанавливаем шифрование..."
+          }
         }
       }
     },
@@ -30210,6 +30852,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "шифрование не удалось"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "шифрование не удалось"
@@ -30489,6 +31137,12 @@
             "state": "translated",
             "value": "не зашифровано"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "не зашифровано"
+          }
         }
       }
     },
@@ -30760,6 +31414,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "зашифровано"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "зашифровано"
@@ -31039,6 +31699,12 @@
             "state": "translated",
             "value": "зашифровано и проверено"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "зашифровано и проверено"
+          }
         }
       }
     },
@@ -31310,6 +31976,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "пометить как проверено"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "пометить как проверено"
@@ -31589,6 +32261,12 @@
             "state": "translated",
             "value": "удалить проверку"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "удалить проверку"
+          }
         }
       }
     },
@@ -31860,6 +32538,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⚠️ НЕ ПРОВЕРЕНО"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "⚠️ НЕ ПРОВЕРЕНО"
@@ -32139,6 +32823,12 @@
             "state": "translated",
             "value": "✓ ПРОВЕРЕНО"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ ПРОВЕРЕНО"
+          }
         }
       }
     },
@@ -32410,6 +33100,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "недоступно — handshake выполняется"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "недоступно — handshake выполняется"
@@ -32689,6 +33385,12 @@
             "state": "translated",
             "value": "ты подтвердил личность этого человека."
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ты подтвердил личность этого человека."
+          }
         }
       }
     },
@@ -32960,6 +33662,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "сравни эти отпечатки с %@ по безопасному каналу."
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "сравни эти отпечатки с %@ по безопасному каналу."
@@ -33239,6 +33947,12 @@
             "state": "translated",
             "value": "их отпечаток:"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "их отпечаток:"
+          }
         }
       }
     },
@@ -33510,6 +34224,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "проверка безопасности"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "проверка безопасности"
@@ -33789,6 +34509,12 @@
             "state": "translated",
             "value": "твой отпечаток:"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "твой отпечаток:"
+          }
         }
       }
     },
@@ -34060,6 +34786,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "заблокировать"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "заблокировать"
@@ -34339,6 +35071,12 @@
             "state": "translated",
             "value": "разблокировать"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "разблокировать"
+          }
         }
       }
     },
@@ -34610,6 +35348,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "никого рядом..."
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "никого рядом..."
@@ -34889,6 +35633,12 @@
             "state": "translated",
             "value": "заблокирован в geohash"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "заблокирован в geohash"
+          }
         }
       }
     },
@@ -35160,6 +35910,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": " (ты)"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": " (ты)"
@@ -35439,6 +36195,12 @@
             "state": "translated",
             "value": "открыть настройки"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "открыть настройки"
+          }
         }
       }
     },
@@ -35710,6 +36472,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "отключить доступ к локации"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "отключить доступ к локации"
@@ -35989,6 +36757,12 @@
             "state": "translated",
             "value": "получить мою локацию и geohash"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "получить мою локацию и geohash"
+          }
         }
       }
     },
@@ -36260,6 +37034,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "телепорт"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "телепорт"
@@ -36539,6 +37319,12 @@
             "state": "translated",
             "value": "закреплённые"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "закреплённые"
+          }
         }
       }
     },
@@ -36810,6 +37596,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "общайся с людьми рядом через каналы geohash. делится только грубый geohash, без точного gps. твой ip скрывается за счёт маршрутизации трафика через tor."
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "общайся с людьми рядом через каналы geohash. делится только грубый geohash, без точного gps. твой ip скрывается за счёт маршрутизации трафика через tor."
@@ -37089,6 +37881,12 @@
             "state": "translated",
             "value": "некорректный geohash"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "некорректный geohash"
+          }
         }
       }
     },
@@ -37360,6 +38158,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "поиск каналов рядом…"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "поиск каналов рядом…"
@@ -37639,6 +38443,12 @@
             "state": "translated",
             "value": "mesh"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mesh"
+          }
         }
       }
     },
@@ -37910,6 +38720,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "доступ к локации запрещён. включи разрешение в настройках, чтобы использовать каналы."
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "доступ к локации запрещён. включи разрешение в настройках, чтобы использовать каналы."
@@ -38705,6 +39521,12 @@
             "state": "translated",
             "value": "%1$@ [%2$#@people_count@]"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ [%2$#@people_count@]"
+          }
         }
       }
     },
@@ -38976,6 +39798,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#%@ • %@"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "#%@ • %@"
@@ -39255,6 +40083,12 @@
             "state": "translated",
             "value": "%1$@ • %2$@"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ • %2$@"
+          }
         }
       }
     },
@@ -39526,6 +40360,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#каналы локации"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "#каналы локации"
@@ -39805,6 +40645,12 @@
             "state": "translated",
             "value": "скрывает твой ip для каналов локации. рекомендуем включить."
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "скрывает твой ip для каналов локации. рекомендуем включить."
+          }
         }
       }
     },
@@ -40076,6 +40922,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "маршрутизация tor"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "маршрутизация tor"
@@ -40355,6 +41207,12 @@
             "state": "translated",
             "value": "квартал"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "квартал"
+          }
         }
       }
     },
@@ -40626,6 +41484,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "здание"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "здание"
@@ -40905,6 +41769,12 @@
             "state": "translated",
             "value": "город"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "город"
+          }
         }
       }
     },
@@ -41176,6 +42046,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "район"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "район"
@@ -41455,6 +42331,12 @@
             "state": "translated",
             "value": "область"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "область"
+          }
         }
       }
     },
@@ -41726,6 +42608,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "регион"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "регион"
@@ -42005,6 +42893,12 @@
             "state": "translated",
             "value": "закрыть"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "закрыть"
+          }
         }
       }
     },
@@ -42276,6 +43170,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "повторить"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "повторить"
@@ -42555,6 +43455,12 @@
             "state": "translated",
             "value": "добавь короткие постоянные заметки об этом месте для других."
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "добавь короткие постоянные заметки об этом месте для других."
+          }
         }
       }
     },
@@ -42826,6 +43732,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "стань первым, кто добавит здесь заметку."
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "стань первым, кто добавит здесь заметку."
@@ -43105,6 +44017,12 @@
             "state": "translated",
             "value": "заметок пока нет"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "заметок пока нет"
+          }
         }
       }
     },
@@ -43380,6 +44298,12 @@
             "state": "translated",
             "value": "не удалось отправить заметку. %@"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "не удалось отправить заметку. %@"
+          }
         }
       }
     },
@@ -43651,6 +44575,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "рядом нет георелеев. попробуй позже."
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "рядом нет георелеев. попробуй позже."
@@ -44446,6 +45376,12 @@
             "state": "translated",
             "value": "#%1$@ • %2$#@note_count@"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#%1$@ • %2$#@note_count@"
+          }
         }
       }
     },
@@ -44717,6 +45653,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "загрузка заметок…"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "загрузка заметок…"
@@ -44996,6 +45938,12 @@
             "state": "translated",
             "value": "загрузка свежих заметок…"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "загрузка свежих заметок…"
+          }
         }
       }
     },
@@ -45267,6 +46215,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "рядом нет георелеев"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "рядом нет георелеев"
@@ -45546,6 +46500,12 @@
             "state": "translated",
             "value": "добавь заметку для этого места"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "добавь заметку для этого места"
+          }
         }
       }
     },
@@ -45817,6 +46777,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "геореле недоступны; заметки приостановлены"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "геореле недоступны; заметки приостановлены"
@@ -46096,6 +47062,12 @@
             "state": "translated",
             "value": "заметки зависят от георелеев. проверь подключение и попробуй снова."
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "заметки зависят от георелеев. проверь подключение и попробуй снова."
+          }
         }
       }
     },
@@ -46367,6 +47339,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "новые сообщения"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "новые сообщения"
@@ -46646,6 +47624,12 @@
             "state": "translated",
             "value": "нельзя начать чат с %@: пользователь заблокирован."
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "нельзя начать чат с %@: пользователь заблокирован."
+          }
         }
       }
     },
@@ -46917,6 +47901,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "нельзя начать чат с %@: нужны взаимные избранные для офлайна."
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "нельзя начать чат с %@: нужны взаимные избранные для офлайна."
@@ -47196,6 +48186,12 @@
             "state": "translated",
             "value": "пользователь"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "пользователь"
+          }
         }
       }
     },
@@ -47467,6 +48463,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "отправка невозможна: пользователь заблокирован."
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "отправка невозможна: пользователь заблокирован."
@@ -47746,6 +48748,12 @@
             "state": "translated",
             "value": "нельзя отправить %@: пользователь заблокирован."
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "нельзя отправить %@: пользователь заблокирован."
+          }
         }
       }
     },
@@ -48017,6 +49025,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "нельзя отправить %@: адресат недоступен через mesh или nostr."
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "нельзя отправить %@: адресат недоступен через mesh или nostr."
@@ -48296,6 +49310,12 @@
             "state": "translated",
             "value": "%@ заблокирован в geohash-чатах"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ заблокирован в geohash-чатах"
+          }
         }
       }
     },
@@ -48567,6 +49587,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ разблокирован в geohash-чатах"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "%@ разблокирован в geohash-чатах"
@@ -48846,6 +49872,12 @@
             "state": "translated",
             "value": "отправка невозможна: ты не в канале локации"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "отправка невозможна: ты не в канале локации"
+          }
         }
       }
     },
@@ -49117,6 +50149,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "не удалось отправить в канал локации"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "не удалось отправить в канал локации"
@@ -49396,6 +50434,12 @@
             "state": "translated",
             "value": "dev-сборка: обход tor включён."
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "dev-сборка: обход tor включён."
+          }
         }
       }
     },
@@ -49667,6 +50711,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tor перезапущен. маршрутизация восстановлена."
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "tor перезапущен. маршрутизация восстановлена."
@@ -49946,6 +50996,12 @@
             "state": "translated",
             "value": "tor перезапускается, чтобы вернуть связь..."
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tor перезапускается, чтобы вернуть связь..."
+          }
         }
       }
     },
@@ -50217,6 +51273,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tor запущен. весь чат идёт через tor для приватности."
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "tor запущен. весь чат идёт через tor для приватности."
@@ -50496,6 +51558,12 @@
             "state": "translated",
             "value": "запуск tor..."
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "запуск tor..."
+          }
         }
       }
     },
@@ -50767,6 +51835,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "qr-код проверки"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "qr-код проверки"
@@ -51046,6 +52120,12 @@
             "state": "translated",
             "value": "отсканируй, чтобы подтвердить меня"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "отсканируй, чтобы подтвердить меня"
+          }
         }
       }
     },
@@ -51317,6 +52397,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "qr недоступен"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "qr недоступен"
@@ -51596,6 +52682,12 @@
             "state": "translated",
             "value": "вставь содержимое qr для проверки:"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "вставь содержимое qr для проверки:"
+          }
         }
       }
     },
@@ -51867,6 +52959,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "отсканируй qr друга"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "отсканируй qr друга"
@@ -52146,6 +53244,12 @@
             "state": "translated",
             "value": "qr недействителен или просрочен"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "qr недействителен или просрочен"
+          }
         }
       }
     },
@@ -52417,6 +53521,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "соответствующий пир не найден"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "соответствующий пир не найден"
@@ -52696,6 +53806,12 @@
             "state": "translated",
             "value": "проверка запрошена для %@"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "проверка запрошена для %@"
+          }
         }
       }
     },
@@ -52967,6 +54083,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "проверить"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "проверить"
@@ -53246,6 +54368,12 @@
             "state": "translated",
             "value": "ПРОВЕРИТЬ"
           }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ПРОВЕРИТЬ"
+          }
         }
       }
     },
@@ -53519,6 +54647,12 @@
           }
         },
         "kk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@"
+          }
+        },
+        "uz": {
           "stringUnit": {
             "state": "translated",
             "value": "%@"
