@@ -225,6 +225,12 @@
             "state": "translated",
             "value": "bitchat"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat"
+          }
         }
       }
     },
@@ -448,6 +454,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إغلاق"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "إغلاق"
@@ -679,6 +691,12 @@
             "state": "translated",
             "value": "تم"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم"
+          }
         }
       }
     },
@@ -902,6 +920,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الرسائل الخاصة مشفرة ببروتوكول noise"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "الرسائل الخاصة مشفرة ببروتوكول noise"
@@ -1133,6 +1157,12 @@
             "state": "translated",
             "value": "تشفير طرف لطرف"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تشفير طرف لطرف"
+          }
         }
       }
     },
@@ -1356,6 +1386,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يُعاد تمرير الرسائل بين الأقران لتصل لمسافات أبعد"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "يُعاد تمرير الرسائل بين الأقران لتصل لمسافات أبعد"
@@ -1587,6 +1623,12 @@
             "state": "translated",
             "value": "نطاق ممتد"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نطاق ممتد"
+          }
         }
       }
     },
@@ -1810,6 +1852,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تلقَّ تنبيهات عندما ينضم أحباؤك"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "تلقَّ تنبيهات عندما ينضم أحباؤك"
@@ -2041,6 +2089,12 @@
             "state": "translated",
             "value": "المفضلة"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المفضلة"
+          }
         }
       }
     },
@@ -2264,6 +2318,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قنوات geohash للدردشة مع أشخاص قريبين عبر مرحلات لامركزية مجهولة"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "قنوات geohash للدردشة مع أشخاص قريبين عبر مرحلات لامركزية مجهولة"
@@ -2495,6 +2555,12 @@
             "state": "translated",
             "value": "قنوات محلية"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قنوات محلية"
+          }
         }
       }
     },
@@ -2718,6 +2784,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "استخدم @nickname لتنبيه أشخاص محددين"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "استخدم @nickname لتنبيه أشخاص محددين"
@@ -2949,6 +3021,12 @@
             "state": "translated",
             "value": "إشارات"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إشارات"
+          }
         }
       }
     },
@@ -3172,6 +3250,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يعمل بدون إنترنت باستخدام bluetooth منخفض الطاقة"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "يعمل بدون إنترنت باستخدام bluetooth منخفض الطاقة"
@@ -3403,6 +3487,12 @@
             "state": "translated",
             "value": "تواصل بدون اتصال"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تواصل بدون اتصال"
+          }
         }
       }
     },
@@ -3626,6 +3716,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مزايا"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "مزايا"
@@ -3857,6 +3953,12 @@
             "state": "translated",
             "value": "• اضغط #mesh لتغيير القناة"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• اضغط #mesh لتغيير القناة"
+          }
         }
       }
     },
@@ -4080,6 +4182,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• اضغط الدردشة ثلاث مرات للمسح"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "• اضغط الدردشة ثلاث مرات للمسح"
@@ -4311,6 +4419,12 @@
             "state": "translated",
             "value": "• اكتب / لعرض الأوامر"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• اكتب / لعرض الأوامر"
+          }
         }
       }
     },
@@ -4534,6 +4648,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• اضغط أيقونة الأشخاص لفتح الشريط الجانبي"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "• اضغط أيقونة الأشخاص لفتح الشريط الجانبي"
@@ -4765,6 +4885,12 @@
             "state": "translated",
             "value": "• اضبط لقبك بلمسه"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• اضبط لقبك بلمسه"
+          }
         }
       }
     },
@@ -4988,6 +5114,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• اضغط اسم القرين لبدء رسائل خاصة"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "• اضغط اسم القرين لبدء رسائل خاصة"
@@ -5219,6 +5351,12 @@
             "state": "translated",
             "value": "طريقة الاستخدام"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "طريقة الاستخدام"
+          }
         }
       }
     },
@@ -5442,6 +5580,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يُولد معرف قرين جديد بانتظام"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "يُولد معرف قرين جديد بانتظام"
@@ -5673,6 +5817,12 @@
             "state": "translated",
             "value": "هوية مؤقتة"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هوية مؤقتة"
+          }
         }
       }
     },
@@ -5896,6 +6046,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا خوادم أو حسابات أو جمع بيانات"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "لا خوادم أو حسابات أو جمع بيانات"
@@ -6127,6 +6283,12 @@
             "state": "translated",
             "value": "لا تتبع"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا تتبع"
+          }
         }
       }
     },
@@ -6350,6 +6512,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اضغط الشعار ثلاث مرات لمسح كل البيانات فوراً"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "اضغط الشعار ثلاث مرات لمسح كل البيانات فوراً"
@@ -6581,6 +6749,12 @@
             "state": "translated",
             "value": "وضع الذعر"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "وضع الذعر"
+          }
         }
       }
     },
@@ -6804,6 +6978,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "خصوصية"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "خصوصية"
@@ -7035,6 +7215,12 @@
             "state": "translated",
             "value": "sidegroupchat"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sidegroupchat"
+          }
         }
       }
     },
@@ -7258,6 +7444,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أمان الرسائل الخاصة لم يتم تدقيقه بالكامل بعد. لا تستخدمها في الحالات الحرجة حتى يختفي هذا التحذير."
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "أمان الرسائل الخاصة لم يتم تدقيقه بالكامل بعد. لا تستخدمها في الحالات الحرجة حتى يختفي هذا التحذير."
@@ -7489,6 +7681,12 @@
             "state": "translated",
             "value": "تحذير"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تحذير"
+          }
         }
       }
     },
@@ -7712,6 +7910,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إلغاء"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "إلغاء"
@@ -7943,6 +8147,12 @@
             "state": "translated",
             "value": "إغلاق"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إغلاق"
+          }
         }
       }
     },
@@ -8166,6 +8376,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نسخ"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "نسخ"
@@ -8397,6 +8613,12 @@
             "state": "translated",
             "value": "موافق"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "موافق"
+          }
         }
       }
     },
@@ -8620,6 +8842,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إيقاف"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "إيقاف"
@@ -8851,6 +9079,12 @@
             "state": "translated",
             "value": "تشغيل"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تشغيل"
+          }
         }
       }
     },
@@ -9074,6 +9308,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "غير معروف"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "غير معروف"
@@ -9305,6 +9545,12 @@
             "state": "translated",
             "value": "إضافة إلى المفضلة"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إضافة إلى المفضلة"
+          }
         }
       }
     },
@@ -9528,6 +9774,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "متاح عبر nostr"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "متاح عبر nostr"
@@ -9759,6 +10011,12 @@
             "state": "translated",
             "value": "عودة إلى الدردشة الرئيسية"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عودة إلى الدردشة الرئيسية"
+          }
         }
       }
     },
@@ -9982,6 +10240,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "متصل عبر mesh"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "متصل عبر mesh"
@@ -10213,6 +10477,12 @@
             "state": "translated",
             "value": "حالة التشفير: %@"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حالة التشفير: %@"
+          }
         }
       }
     },
@@ -10436,6 +10706,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قنوات الموقع"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "قنوات الموقع"
@@ -10667,6 +10943,12 @@
             "state": "translated",
             "value": "ملاحظات الموقع لهذا المكان"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ملاحظات الموقع لهذا المكان"
+          }
         }
       }
     },
@@ -10890,6 +11172,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فتح دردشة خاصة غير مقروءة"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "فتح دردشة خاصة غير مقروءة"
@@ -11637,6 +11925,12 @@
             "state": "translated",
             "value": "%#@people@"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%#@people@"
+          }
         }
       }
     },
@@ -11860,6 +12154,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "دردشة خاصة مع %@"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "دردشة خاصة مع %@"
@@ -12091,6 +12391,12 @@
             "state": "translated",
             "value": "قابل للوصول عبر mesh"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قابل للوصول عبر mesh"
+          }
         }
       }
     },
@@ -12314,6 +12620,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إزالة من المفضلة"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "إزالة من المفضلة"
@@ -12545,6 +12857,12 @@
             "state": "translated",
             "value": "أدخل رسالة للإرسال"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أدخل رسالة للإرسال"
+          }
         }
       }
     },
@@ -12768,6 +13086,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اضغط مرتين للإرسال"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "اضغط مرتين للإرسال"
@@ -12999,6 +13323,12 @@
             "state": "translated",
             "value": "إرسال رسالة"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إرسال رسالة"
+          }
         }
       }
     },
@@ -13222,6 +13552,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تبديل الإشارة لـ #%@"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "تبديل الإشارة لـ #%@"
@@ -13453,6 +13789,12 @@
             "state": "translated",
             "value": "اضغط مرتين لتبديل حالة المفضلة"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اضغط مرتين لتبديل حالة المفضلة"
+          }
         }
       }
     },
@@ -13676,6 +14018,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اضغط لمشاهدة بصمة التشفير"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "اضغط لمشاهدة بصمة التشفير"
@@ -13907,6 +14255,12 @@
             "state": "translated",
             "value": "حظر"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حظر"
+          }
         }
       }
     },
@@ -14130,6 +14484,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رسالة مباشرة"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "رسالة مباشرة"
@@ -14361,6 +14721,12 @@
             "state": "translated",
             "value": "عناق"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عناق"
+          }
         }
       }
     },
@@ -14584,6 +14950,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ذكر"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "ذكر"
@@ -14815,6 +15187,12 @@
             "state": "translated",
             "value": "صفعة"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "صفعة"
+          }
         }
       }
     },
@@ -15038,6 +15416,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إجراءات"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "إجراءات"
@@ -15269,6 +15653,12 @@
             "state": "translated",
             "value": "bluetooth متوقف. فعّل bluetooth في الإعدادات لاستخدام bitchat."
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bluetooth متوقف. فعّل bluetooth في الإعدادات لاستخدام bitchat."
+          }
         }
       }
     },
@@ -15492,6 +15882,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تحتاج bitchat إلى إذن bluetooth للاتصال بالأجهزة القريبة. فعّل الوصول في الإعدادات."
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "تحتاج bitchat إلى إذن bluetooth للاتصال بالأجهزة القريبة. فعّل الوصول في الإعدادات."
@@ -15723,6 +16119,12 @@
             "state": "translated",
             "value": "الإعدادات"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الإعدادات"
+          }
         }
       }
     },
@@ -15946,6 +16348,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مطلوب bluetooth"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "مطلوب bluetooth"
@@ -16177,6 +16585,12 @@
             "state": "translated",
             "value": "هذا الجهاز لا يدعم bluetooth. يحتاج bitchat إلى bluetooth للعمل."
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا الجهاز لا يدعم bluetooth. يحتاج bitchat إلى bluetooth للعمل."
+          }
         }
       }
     },
@@ -16400,6 +16814,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لقطات قنوات الموقع تكشف موقعك. فكر قبل المشاركة علناً."
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "لقطات قنوات الموقع تكشف موقعك. فكر قبل المشاركة علناً."
@@ -16631,6 +17051,12 @@
             "state": "translated",
             "value": "تنبيه"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تنبيه"
+          }
         }
       }
     },
@@ -16854,6 +17280,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حظر أو عرض المحظورين"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "حظر أو عرض المحظورين"
@@ -17085,6 +17517,12 @@
             "state": "translated",
             "value": "مسح رسائل الدردشة"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مسح رسائل الدردشة"
+          }
         }
       }
     },
@@ -17308,6 +17746,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إضافة للمفضلة"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "إضافة للمفضلة"
@@ -17539,6 +17983,12 @@
             "state": "translated",
             "value": "إرسال عناق دافئ"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إرسال عناق دافئ"
+          }
         }
       }
     },
@@ -17762,6 +18212,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إرسال رسالة خاصة"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "إرسال رسالة خاصة"
@@ -17993,6 +18449,12 @@
             "state": "translated",
             "value": "صفع شخص بسمكة تراوت"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "صفع شخص بسمكة تراوت"
+          }
         }
       }
     },
@@ -18216,6 +18678,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إلغاء حظر قرين"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "إلغاء حظر قرين"
@@ -18447,6 +18915,12 @@
             "state": "translated",
             "value": "إزالة من المفضلة"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إزالة من المفضلة"
+          }
         }
       }
     },
@@ -18670,6 +19144,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عرض من هو متصل"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "عرض من هو متصل"
@@ -18901,6 +19381,12 @@
             "state": "translated",
             "value": "تم التسليم إلى %1$d من %2$d عضو"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم التسليم إلى %1$d من %2$d عضو"
+          }
         }
       }
     },
@@ -19124,6 +19610,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "سُلّم إلى %@"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "سُلّم إلى %@"
@@ -19355,6 +19847,12 @@
             "state": "translated",
             "value": "فشل: %@"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فشل: %@"
+          }
         }
       }
     },
@@ -19578,6 +20076,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قُرِئ بواسطة %@"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "قُرِئ بواسطة %@"
@@ -19809,6 +20313,12 @@
             "state": "translated",
             "value": "المستخدم محظور"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المستخدم محظور"
+          }
         }
       }
     },
@@ -20032,6 +20542,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يمكن الإرسال لنفسك"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "لا يمكن الإرسال لنفسك"
@@ -20263,6 +20779,12 @@
             "state": "translated",
             "value": "خطأ في الإرسال"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "خطأ في الإرسال"
+          }
         }
       }
     },
@@ -20486,6 +21008,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مستلم غير معروف"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "مستلم غير معروف"
@@ -20717,6 +21245,12 @@
             "state": "translated",
             "value": "القرين غير متاح"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "القرين غير متاح"
+          }
         }
       }
     },
@@ -20940,6 +21474,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أشخاص"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "أشخاص"
@@ -21171,6 +21711,12 @@
             "state": "translated",
             "value": "التحقق: عرض رمز qr الخاص بي أو مسح صديق"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "التحقق: عرض رمز qr الخاص بي أو مسح صديق"
+          }
         }
       }
     },
@@ -21394,6 +21940,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اكتب رسالة..."
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "اكتب رسالة..."
@@ -21625,6 +22177,12 @@
             "state": "translated",
             "value": "لقب"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لقب"
+          }
         }
       }
     },
@@ -21848,6 +22406,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تفعيل الموقع"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "تفعيل الموقع"
@@ -22079,6 +22643,12 @@
             "state": "translated",
             "value": "نسخ الرسالة"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نسخ الرسالة"
+          }
         }
       }
     },
@@ -22302,6 +22872,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عرض أقل"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "عرض أقل"
@@ -22533,6 +23109,12 @@
             "state": "translated",
             "value": "عرض المزيد"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عرض المزيد"
+          }
         }
       }
     },
@@ -22756,6 +23338,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الموقع غير متاح"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "الموقع غير متاح"
@@ -22987,6 +23575,12 @@
             "state": "translated",
             "value": "ملاحظات"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ملاحظات"
+          }
         }
       }
     },
@@ -23210,6 +23804,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الدفع عبر cashu"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "الدفع عبر cashu"
@@ -23441,6 +24041,12 @@
             "state": "translated",
             "value": "الدفع عبر lightning"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الدفع عبر lightning"
+          }
         }
       }
     },
@@ -23664,6 +24270,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جار إعداد التشفير"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "جار إعداد التشفير"
@@ -23895,6 +24507,12 @@
             "state": "translated",
             "value": "فشل التشفير"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فشل التشفير"
+          }
         }
       }
     },
@@ -24118,6 +24736,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "غير مشفر"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "غير مشفر"
@@ -24349,6 +24973,12 @@
             "state": "translated",
             "value": "مشفر"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مشفر"
+          }
         }
       }
     },
@@ -24572,6 +25202,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مشفر ومُتحقق"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "مشفر ومُتحقق"
@@ -24803,6 +25439,12 @@
             "state": "translated",
             "value": "جار إعداد التشفير..."
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جار إعداد التشفير..."
+          }
         }
       }
     },
@@ -25026,6 +25668,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فشل التشفير"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "فشل التشفير"
@@ -25257,6 +25905,12 @@
             "state": "translated",
             "value": "غير مشفر"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "غير مشفر"
+          }
         }
       }
     },
@@ -25480,6 +26134,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مشفر"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "مشفر"
@@ -25711,6 +26371,12 @@
             "state": "translated",
             "value": "مشفر ومُتحقق"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مشفر ومُتحقق"
+          }
         }
       }
     },
@@ -25934,6 +26600,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "وضع علامة تم التحقق"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "وضع علامة تم التحقق"
@@ -26165,6 +26837,12 @@
             "state": "translated",
             "value": "إزالة التحقق"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إزالة التحقق"
+          }
         }
       }
     },
@@ -26388,6 +27066,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⚠️ غير مُتحقق"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "⚠️ غير مُتحقق"
@@ -26619,6 +27303,12 @@
             "state": "translated",
             "value": "✓ مُتحقق"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ مُتحقق"
+          }
         }
       }
     },
@@ -26842,6 +27532,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "غير متاح - جار تنفيذ handshake"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "غير متاح - جار تنفيذ handshake"
@@ -27073,6 +27769,12 @@
             "state": "translated",
             "value": "لقد تحققت من هوية هذا الشخص."
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لقد تحققت من هوية هذا الشخص."
+          }
         }
       }
     },
@@ -27296,6 +27998,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قارن هذه البصمات مع %@ عبر قناة آمنة."
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "قارن هذه البصمات مع %@ عبر قناة آمنة."
@@ -27527,6 +28235,12 @@
             "state": "translated",
             "value": "بصمتهم:"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بصمتهم:"
+          }
         }
       }
     },
@@ -27750,6 +28464,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تحقق الأمان"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "تحقق الأمان"
@@ -27981,6 +28701,12 @@
             "state": "translated",
             "value": "بصمتك:"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بصمتك:"
+          }
         }
       }
     },
@@ -28204,6 +28930,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حظر"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "حظر"
@@ -28435,6 +29167,12 @@
             "state": "translated",
             "value": "إلغاء الحظر"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إلغاء الحظر"
+          }
         }
       }
     },
@@ -28658,6 +29396,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا أحد قريب..."
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "لا أحد قريب..."
@@ -28889,6 +29633,12 @@
             "state": "translated",
             "value": "محظور في geohash"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "محظور في geohash"
+          }
         }
       }
     },
@@ -29112,6 +29862,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": " (أنت)"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": " (أنت)"
@@ -29343,6 +30099,12 @@
             "state": "translated",
             "value": "فتح الإعدادات"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فتح الإعدادات"
+          }
         }
       }
     },
@@ -29566,6 +30328,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إزالة صلاحية الموقع"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "إزالة صلاحية الموقع"
@@ -29797,6 +30565,12 @@
             "state": "translated",
             "value": "جلب موقعي و geohash"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جلب موقعي و geohash"
+          }
         }
       }
     },
@@ -30020,6 +30794,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "انتقال فوري"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "انتقال فوري"
@@ -30251,6 +31031,12 @@
             "state": "translated",
             "value": "محفوظ"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "محفوظ"
+          }
         }
       }
     },
@@ -30474,6 +31260,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تحدث مع أشخاص قريبين عبر قنوات geohash. نشارك geohash تقريبي فقط، وليس gps الدقيق. يتم إخفاء عنوان ip لأن كل المرور يمر عبر tor."
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "تحدث مع أشخاص قريبين عبر قنوات geohash. نشارك geohash تقريبي فقط، وليس gps الدقيق. يتم إخفاء عنوان ip لأن كل المرور يمر عبر tor."
@@ -30705,6 +31497,12 @@
             "state": "translated",
             "value": "geohash غير صالح"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "geohash غير صالح"
+          }
         }
       }
     },
@@ -30928,6 +31726,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جار البحث عن قنوات قريبة…"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "جار البحث عن قنوات قريبة…"
@@ -31159,6 +31963,12 @@
             "state": "translated",
             "value": "mesh"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mesh"
+          }
         }
       }
     },
@@ -31382,6 +32192,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم رفض إذن الموقع. فعّله في الإعدادات لاستخدام قنوات الموقع."
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "تم رفض إذن الموقع. فعّله في الإعدادات لاستخدام قنوات الموقع."
@@ -32129,6 +32945,12 @@
             "state": "translated",
             "value": "%1$@ [%2$#@people_count@]"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ [%2$#@people_count@]"
+          }
         }
       }
     },
@@ -32352,6 +33174,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#%@ • %@"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "#%@ • %@"
@@ -32583,6 +33411,12 @@
             "state": "translated",
             "value": "%1$@ • %2$@"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ • %2$@"
+          }
         }
       }
     },
@@ -32806,6 +33640,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#قنوات الموقع"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "#قنوات الموقع"
@@ -33037,6 +33877,12 @@
             "state": "translated",
             "value": "يخفي ip لقنوات الموقع. الموصى به: تشغيل."
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يخفي ip لقنوات الموقع. الموصى به: تشغيل."
+          }
         }
       }
     },
@@ -33260,6 +34106,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "توجيه tor"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "توجيه tor"
@@ -33491,6 +34343,12 @@
             "state": "translated",
             "value": "مربع"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مربع"
+          }
         }
       }
     },
@@ -33714,6 +34572,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مبنى"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "مبنى"
@@ -33945,6 +34809,12 @@
             "state": "translated",
             "value": "مدينة"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مدينة"
+          }
         }
       }
     },
@@ -34168,6 +35038,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حي"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "حي"
@@ -34399,6 +35275,12 @@
             "state": "translated",
             "value": "مقاطعة"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مقاطعة"
+          }
         }
       }
     },
@@ -34622,6 +35504,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "منطقة"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "منطقة"
@@ -34853,6 +35741,12 @@
             "state": "translated",
             "value": "إغلاق"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إغلاق"
+          }
         }
       }
     },
@@ -35076,6 +35970,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إعادة المحاولة"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "إعادة المحاولة"
@@ -35307,6 +36207,12 @@
             "state": "translated",
             "value": "أضف ملاحظات قصيرة دائمة لهذا المكان ليجدها الآخرون."
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أضف ملاحظات قصيرة دائمة لهذا المكان ليجدها الآخرون."
+          }
         }
       }
     },
@@ -35530,6 +36436,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كن أول من يضيف هنا."
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "كن أول من يضيف هنا."
@@ -35761,6 +36673,12 @@
             "state": "translated",
             "value": "لا توجد ملاحظات بعد"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا توجد ملاحظات بعد"
+          }
         }
       }
     },
@@ -35988,6 +36906,12 @@
             "state": "translated",
             "value": "تعذر إرسال الملاحظة. %@"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذر إرسال الملاحظة. %@"
+          }
         }
       }
     },
@@ -36211,6 +37135,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا توجد مرحلات جغرافية قريبة من هذا المكان. حاول لاحقاً."
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "لا توجد مرحلات جغرافية قريبة من هذا المكان. حاول لاحقاً."
@@ -36958,6 +37888,12 @@
             "state": "translated",
             "value": "#%1$@ • %2$#@note_count@"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#%1$@ • %2$#@note_count@"
+          }
         }
       }
     },
@@ -37181,6 +38117,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جار تحميل الملاحظات…"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "جار تحميل الملاحظات…"
@@ -37412,6 +38354,12 @@
             "state": "translated",
             "value": "جار تحميل الملاحظات الحديثة…"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جار تحميل الملاحظات الحديثة…"
+          }
         }
       }
     },
@@ -37635,6 +38583,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا مرحلات جغرافية قريبة"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "لا مرحلات جغرافية قريبة"
@@ -37866,6 +38820,12 @@
             "state": "translated",
             "value": "أضف ملاحظة لهذا المكان"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أضف ملاحظة لهذا المكان"
+          }
         }
       }
     },
@@ -38089,6 +39049,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المرحلات الجغرافية غير متاحة؛ الملاحظات متوقفة"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "المرحلات الجغرافية غير متاحة؛ الملاحظات متوقفة"
@@ -38320,6 +39286,12 @@
             "state": "translated",
             "value": "الملاحظات تعتمد على المرحلات الجغرافية. تحقق من الاتصال ثم أعد المحاولة."
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الملاحظات تعتمد على المرحلات الجغرافية. تحقق من الاتصال ثم أعد المحاولة."
+          }
         }
       }
     },
@@ -38543,6 +39515,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رسائل جديدة"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "رسائل جديدة"
@@ -38774,6 +39752,12 @@
             "state": "translated",
             "value": "لا يمكن بدء دردشة مع %@: المستخدم محظور."
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يمكن بدء دردشة مع %@: المستخدم محظور."
+          }
         }
       }
     },
@@ -38997,6 +39981,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يمكن بدء دردشة مع %@: يجب أن تكونا مفضلين متبادلين للتشغيل بدون اتصال."
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "لا يمكن بدء دردشة مع %@: يجب أن تكونا مفضلين متبادلين للتشغيل بدون اتصال."
@@ -39228,6 +40218,12 @@
             "state": "translated",
             "value": "مستخدم"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مستخدم"
+          }
         }
       }
     },
@@ -39451,6 +40447,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذر الإرسال: المستخدم محظور."
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "تعذر الإرسال: المستخدم محظور."
@@ -39682,6 +40684,12 @@
             "state": "translated",
             "value": "لا يمكن الإرسال إلى %@: المستخدم محظور."
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يمكن الإرسال إلى %@: المستخدم محظور."
+          }
         }
       }
     },
@@ -39905,6 +40913,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يمكن الإرسال إلى %@: المستلم غير متاح عبر mesh أو nostr."
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "لا يمكن الإرسال إلى %@: المستلم غير متاح عبر mesh أو nostr."
@@ -40136,6 +41150,12 @@
             "state": "translated",
             "value": "تم حظر %@ في محادثات geohash"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم حظر %@ في محادثات geohash"
+          }
         }
       }
     },
@@ -40359,6 +41379,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم إلغاء حظر %@ في محادثات geohash"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "تم إلغاء حظر %@ في محادثات geohash"
@@ -40590,6 +41616,12 @@
             "state": "translated",
             "value": "تعذر الإرسال: لست داخل قناة موقع"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذر الإرسال: لست داخل قناة موقع"
+          }
         }
       }
     },
@@ -40813,6 +41845,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذر الإرسال إلى قناة الموقع"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "تعذر الإرسال إلى قناة الموقع"
@@ -41044,6 +42082,12 @@
             "state": "translated",
             "value": "بناء تطوير: تجاوز tor مفعل."
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بناء تطوير: تجاوز tor مفعل."
+          }
         }
       }
     },
@@ -41267,6 +42311,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tor أُعيد تشغيله. تمت استعادة التوجيه."
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "tor أُعيد تشغيله. تمت استعادة التوجيه."
@@ -41498,6 +42548,12 @@
             "state": "translated",
             "value": "tor يعاد تشغيله لاستعادة الاتصال..."
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tor يعاد تشغيله لاستعادة الاتصال..."
+          }
         }
       }
     },
@@ -41721,6 +42777,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tor يعمل. كل الدردشة تمر عبر tor للخصوصية."
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "tor يعمل. كل الدردشة تمر عبر tor للخصوصية."
@@ -41952,6 +43014,12 @@
             "state": "translated",
             "value": "يتم تشغيل tor..."
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يتم تشغيل tor..."
+          }
         }
       }
     },
@@ -42175,6 +43243,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رمز qr للتحقق"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "رمز qr للتحقق"
@@ -42406,6 +43480,12 @@
             "state": "translated",
             "value": "امسح للتحقق مني"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "امسح للتحقق مني"
+          }
         }
       }
     },
@@ -42629,6 +43709,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "qr غير متاح"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "qr غير متاح"
@@ -42860,6 +43946,12 @@
             "state": "translated",
             "value": "الصق محتوى qr للتحقق:"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الصق محتوى qr للتحقق:"
+          }
         }
       }
     },
@@ -43083,6 +44175,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "امسح qr لصديق"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "امسح qr لصديق"
@@ -43314,6 +44412,12 @@
             "state": "translated",
             "value": "qr غير صالح أو منتهٍ"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "qr غير صالح أو منتهٍ"
+          }
         }
       }
     },
@@ -43537,6 +44641,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم يتم العثور على قرين مطابق"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "لم يتم العثور على قرين مطابق"
@@ -43768,6 +44878,12 @@
             "state": "translated",
             "value": "تم طلب التحقق لـ %@"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم طلب التحقق لـ %@"
+          }
         }
       }
     },
@@ -43991,6 +45107,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تحقق"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "تحقق"
@@ -44222,6 +45344,12 @@
             "state": "translated",
             "value": "تحقق"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تحقق"
+          }
         }
       }
     },
@@ -44447,6 +45575,12 @@
           }
         },
         "am": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "%@"
