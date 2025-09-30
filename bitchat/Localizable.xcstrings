@@ -213,6 +213,12 @@
             "state": "translated",
             "value": "bitchat"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat"
+          }
         }
       }
     },
@@ -427,6 +433,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "إغلاق"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "закрыть"
           }
         }
       }
@@ -643,6 +655,12 @@
             "state": "translated",
             "value": "تم"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ГОТОВО"
+          }
         }
       }
     },
@@ -857,6 +875,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "الرسائل الخاصة مشفرة ببروتوكول noise"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "личные сообщения шифруются протоколом noise"
           }
         }
       }
@@ -1073,6 +1097,12 @@
             "state": "translated",
             "value": "تشفير طرف لطرف"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "сквозное шифрование"
+          }
         }
       }
     },
@@ -1287,6 +1317,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "يُعاد تمرير الرسائل بين الأقران لتصل لمسافات أبعد"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "сообщения ретранслируются между пирами и уходят дальше"
           }
         }
       }
@@ -1503,6 +1539,12 @@
             "state": "translated",
             "value": "نطاق ممتد"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "расширенный радиус"
+          }
         }
       }
     },
@@ -1717,6 +1759,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "تلقَّ تنبيهات عندما ينضم أحباؤك"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "получай уведомления, когда подключаются любимые люди"
           }
         }
       }
@@ -1933,6 +1981,12 @@
             "state": "translated",
             "value": "المفضلة"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "избранное"
+          }
         }
       }
     },
@@ -2147,6 +2201,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "قنوات geohash للدردشة مع أشخاص قريبين عبر مرحلات لامركزية مجهولة"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "каналы geohash для чата с людьми поблизости через децентрализованные анонимные реле"
           }
         }
       }
@@ -2363,6 +2423,12 @@
             "state": "translated",
             "value": "قنوات محلية"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "локальные каналы"
+          }
         }
       }
     },
@@ -2577,6 +2643,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "استخدم @nickname لتنبيه أشخاص محددين"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "используй @nickname, чтобы уведомить конкретных людей"
           }
         }
       }
@@ -2793,6 +2865,12 @@
             "state": "translated",
             "value": "إشارات"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "упоминания"
+          }
         }
       }
     },
@@ -3007,6 +3085,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "يعمل بدون إنترنت باستخدام bluetooth منخفض الطاقة"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "работает без интернета через bluetooth low energy"
           }
         }
       }
@@ -3223,6 +3307,12 @@
             "state": "translated",
             "value": "تواصل بدون اتصال"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "офлайн-связь"
+          }
         }
       }
     },
@@ -3437,6 +3527,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "مزايا"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ВОЗМОЖНОСТИ"
           }
         }
       }
@@ -3653,6 +3749,12 @@
             "state": "translated",
             "value": "• اضغط #mesh لتغيير القناة"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• нажми #mesh, чтобы сменить канал"
+          }
         }
       }
     },
@@ -3867,6 +3969,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "• اضغط الدردشة ثلاث مرات للمسح"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• тройной тап по чату очистит его"
           }
         }
       }
@@ -4083,6 +4191,12 @@
             "state": "translated",
             "value": "• اكتب / لعرض الأوامر"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• введи /, чтобы увидеть команды"
+          }
         }
       }
     },
@@ -4297,6 +4411,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "• اضغط أيقونة الأشخاص لفتح الشريط الجانبي"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• нажми на иконку людей, чтобы открыть боковое меню"
           }
         }
       }
@@ -4513,6 +4633,12 @@
             "state": "translated",
             "value": "• اضبط لقبك بلمسه"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• коснись своего ника, чтобы изменить его"
+          }
         }
       }
     },
@@ -4727,6 +4853,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "• اضغط اسم القرين لبدء رسائل خاصة"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• нажми имя пользователя, чтобы начать лс"
           }
         }
       }
@@ -4943,6 +5075,12 @@
             "state": "translated",
             "value": "طريقة الاستخدام"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "КАК ИСПОЛЬЗОВАТЬ"
+          }
         }
       }
     },
@@ -5157,6 +5295,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "يُولد معرف قرين جديد بانتظام"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "новый id пира создаётся регулярно"
           }
         }
       }
@@ -5373,6 +5517,12 @@
             "state": "translated",
             "value": "هوية مؤقتة"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "эфемерная личность"
+          }
         }
       }
     },
@@ -5587,6 +5737,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "لا خوادم أو حسابات أو جمع بيانات"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "без серверов, аккаунтов и сбора данных"
           }
         }
       }
@@ -5803,6 +5959,12 @@
             "state": "translated",
             "value": "لا تتبع"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "без трекинга"
+          }
         }
       }
     },
@@ -6017,6 +6179,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "اضغط الشعار ثلاث مرات لمسح كل البيانات فوراً"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "тройной тап по логотипу мгновенно очищает все данные"
           }
         }
       }
@@ -6233,6 +6401,12 @@
             "state": "translated",
             "value": "وضع الذعر"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "режим паники"
+          }
         }
       }
     },
@@ -6448,6 +6622,12 @@
             "state": "translated",
             "value": "خصوصية"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "КОНФИДЕНЦИАЛЬНОСТЬ"
+          }
         }
       }
     },
@@ -6659,6 +6839,12 @@
           }
         },
         "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sidegroupchat"
+          }
+        },
+        "pl": {
           "stringUnit": {
             "state": "translated",
             "value": "sidegroupchat"
@@ -6878,6 +7064,12 @@
             "state": "translated",
             "value": "أمان الرسائل الخاصة لم يتم تدقيقه بالكامل بعد. لا تستخدمها في الحالات الحرجة حتى يختفي هذا التحذير."
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "безопасность приватных сообщений ещё не прошла полный аудит. не используй для критичных случаев, пока предупреждение не исчезнет."
+          }
         }
       }
     },
@@ -7092,6 +7284,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "تحذير"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ПРЕДУПРЕЖДЕНИЕ"
           }
         }
       }
@@ -7308,6 +7506,12 @@
             "state": "translated",
             "value": "إلغاء"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "отмена"
+          }
         }
       }
     },
@@ -7522,6 +7726,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "إغلاق"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "закрыть"
           }
         }
       }
@@ -7738,6 +7948,12 @@
             "state": "translated",
             "value": "نسخ"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "копировать"
+          }
         }
       }
     },
@@ -7952,6 +8168,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "موافق"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
           }
         }
       }
@@ -8168,6 +8390,12 @@
             "state": "translated",
             "value": "إيقاف"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "выкл"
+          }
         }
       }
     },
@@ -8382,6 +8610,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "تشغيل"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "вкл"
           }
         }
       }
@@ -8598,6 +8832,12 @@
             "state": "translated",
             "value": "غير معروف"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "неизвестно"
+          }
         }
       }
     },
@@ -8812,6 +9052,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "إضافة إلى المفضلة"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "добавить в избранное"
           }
         }
       }
@@ -9028,6 +9274,12 @@
             "state": "translated",
             "value": "متاح عبر nostr"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "доступно через nostr"
+          }
         }
       }
     },
@@ -9242,6 +9494,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "عودة إلى الدردشة الرئيسية"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "назад в основной чат"
           }
         }
       }
@@ -9458,6 +9716,12 @@
             "state": "translated",
             "value": "متصل عبر mesh"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "подключено через mesh"
+          }
         }
       }
     },
@@ -9672,6 +9936,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "حالة التشفير: %@"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "статус шифрования: %@"
           }
         }
       }
@@ -9888,6 +10158,12 @@
             "state": "translated",
             "value": "قنوات الموقع"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "каналы локации"
+          }
         }
       }
     },
@@ -10103,6 +10379,12 @@
             "state": "translated",
             "value": "ملاحظات الموقع لهذا المكان"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "заметки для этого места"
+          }
         }
       }
     },
@@ -10317,6 +10599,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "فتح دردشة خاصة غير مقروءة"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "открыть непрочитанный приватный чат"
           }
         }
       }
@@ -11049,6 +11337,12 @@
             "state": "translated",
             "value": "%#@people@"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%#@people@"
+          }
         }
       }
     },
@@ -11263,6 +11557,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "دردشة خاصة مع %@"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "приватный чат с %@"
           }
         }
       }
@@ -11479,6 +11779,12 @@
             "state": "translated",
             "value": "قابل للوصول عبر mesh"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "достижим через mesh"
+          }
         }
       }
     },
@@ -11693,6 +11999,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "إزالة من المفضلة"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "убрать из избранного"
           }
         }
       }
@@ -11909,6 +12221,12 @@
             "state": "translated",
             "value": "أدخل رسالة للإرسال"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "введи сообщение для отправки"
+          }
         }
       }
     },
@@ -12123,6 +12441,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "اضغط مرتين للإرسال"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "дважды тапни, чтобы отправить"
           }
         }
       }
@@ -12339,6 +12663,12 @@
             "state": "translated",
             "value": "إرسال رسالة"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "отправить сообщение"
+          }
         }
       }
     },
@@ -12553,6 +12883,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "تبديل الإشارة لـ #%@"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "переключить закладку для #%@"
           }
         }
       }
@@ -12769,6 +13105,12 @@
             "state": "translated",
             "value": "اضغط مرتين لتبديل حالة المفضلة"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "дважды тапни, чтобы переключить статус избранного"
+          }
         }
       }
     },
@@ -12983,6 +13325,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "اضغط لمشاهدة بصمة التشفير"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "нажми, чтобы увидеть криптографический отпечаток"
           }
         }
       }
@@ -13199,6 +13547,12 @@
             "state": "translated",
             "value": "حظر"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "заблокировать"
+          }
         }
       }
     },
@@ -13413,6 +13767,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "رسالة مباشرة"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "личное сообщение"
           }
         }
       }
@@ -13629,6 +13989,12 @@
             "state": "translated",
             "value": "عناق"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "обнять"
+          }
         }
       }
     },
@@ -13843,6 +14209,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ذكر"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "упомянуть"
           }
         }
       }
@@ -14059,6 +14431,12 @@
             "state": "translated",
             "value": "صفعة"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "дать леща"
+          }
         }
       }
     },
@@ -14273,6 +14651,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "إجراءات"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "действия"
           }
         }
       }
@@ -14489,6 +14873,12 @@
             "state": "translated",
             "value": "bluetooth متوقف. فعّل bluetooth في الإعدادات لاستخدام bitchat."
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bluetooth выключен. включи bluetooth в настройках, чтобы использовать bitchat."
+          }
         }
       }
     },
@@ -14703,6 +15093,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "تحتاج bitchat إلى إذن bluetooth للاتصال بالأجهزة القريبة. فعّل الوصول في الإعدادات."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat нужен доступ к bluetooth, чтобы соединяться с ближайшими устройствами. включи разрешение в настройках."
           }
         }
       }
@@ -14919,6 +15315,12 @@
             "state": "translated",
             "value": "الإعدادات"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "настройки"
+          }
         }
       }
     },
@@ -15133,6 +15535,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "مطلوب bluetooth"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bluetooth обязателен"
           }
         }
       }
@@ -15349,6 +15757,12 @@
             "state": "translated",
             "value": "هذا الجهاز لا يدعم bluetooth. يحتاج bitchat إلى bluetooth للعمل."
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "это устройство не поддерживает bluetooth. bitchat нужен bluetooth для работы."
+          }
         }
       }
     },
@@ -15563,6 +15977,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "لقطات قنوات الموقع تكشف موقعك. فكر قبل المشاركة علناً."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "скриншоты каналов местоположения раскроют твою позицию. подумай, прежде чем делиться публично."
           }
         }
       }
@@ -15779,6 +16199,12 @@
             "state": "translated",
             "value": "تنبيه"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "внимание"
+          }
         }
       }
     },
@@ -15993,6 +16419,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "حظر أو عرض المحظورين"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "заблокировать или показать заблокированных"
           }
         }
       }
@@ -16209,6 +16641,12 @@
             "state": "translated",
             "value": "مسح رسائل الدردشة"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "очистить чат"
+          }
         }
       }
     },
@@ -16423,6 +16861,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "إضافة للمفضلة"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "добавить в избранное"
           }
         }
       }
@@ -16639,6 +17083,12 @@
             "state": "translated",
             "value": "إرسال عناق دافئ"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "отправить тёплое объятие"
+          }
         }
       }
     },
@@ -16853,6 +17303,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "إرسال رسالة خاصة"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "отправить приватное сообщение"
           }
         }
       }
@@ -17069,6 +17525,12 @@
             "state": "translated",
             "value": "صفع شخص بسمكة تراوت"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "дать кому-то пощёчину форелью"
+          }
         }
       }
     },
@@ -17283,6 +17745,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "إلغاء حظر قرين"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "разблокировать пира"
           }
         }
       }
@@ -17499,6 +17967,12 @@
             "state": "translated",
             "value": "إزالة من المفضلة"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "убрать из избранного"
+          }
         }
       }
     },
@@ -17713,6 +18187,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "عرض من هو متصل"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "посмотреть, кто онлайн"
           }
         }
       }
@@ -17929,6 +18409,12 @@
             "state": "translated",
             "value": "تم التسليم إلى %1$d من %2$d عضو"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "доставлено %1$d из %2$d участников"
+          }
         }
       }
     },
@@ -18143,6 +18629,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "سُلّم إلى %@"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "доставлено %@"
           }
         }
       }
@@ -18359,6 +18851,12 @@
             "state": "translated",
             "value": "فشل: %@"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ошибка: %@"
+          }
         }
       }
     },
@@ -18573,6 +19071,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "قُرِئ بواسطة %@"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "прочитано %@"
           }
         }
       }
@@ -18789,6 +19293,12 @@
             "state": "translated",
             "value": "المستخدم محظور"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "пользователь заблокирован"
+          }
         }
       }
     },
@@ -19003,6 +19513,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "لا يمكن الإرسال لنفسك"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "нельзя отправить себе"
           }
         }
       }
@@ -19219,6 +19735,12 @@
             "state": "translated",
             "value": "خطأ في الإرسال"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ошибка отправки"
+          }
         }
       }
     },
@@ -19433,6 +19955,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "مستلم غير معروف"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "неизвестный получатель"
           }
         }
       }
@@ -19649,6 +20177,12 @@
             "state": "translated",
             "value": "القرين غير متاح"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "пир недостижим"
+          }
         }
       }
     },
@@ -19863,6 +20397,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "أشخاص"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ЛЮДИ"
           }
         }
       }
@@ -20079,6 +20619,12 @@
             "state": "translated",
             "value": "التحقق: عرض رمز qr الخاص بي أو مسح صديق"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "верификация: показать мой qr или сканировать друга"
+          }
         }
       }
     },
@@ -20293,6 +20839,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "اكتب رسالة..."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "напиши сообщение..."
           }
         }
       }
@@ -20509,6 +21061,12 @@
             "state": "translated",
             "value": "لقب"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ник"
+          }
         }
       }
     },
@@ -20723,6 +21281,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "تفعيل الموقع"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "включить локацию"
           }
         }
       }
@@ -20939,6 +21503,12 @@
             "state": "translated",
             "value": "نسخ الرسالة"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "копировать сообщение"
+          }
         }
       }
     },
@@ -21153,6 +21723,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "عرض أقل"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "показать меньше"
           }
         }
       }
@@ -21369,6 +21945,12 @@
             "state": "translated",
             "value": "عرض المزيد"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "показать больше"
+          }
         }
       }
     },
@@ -21583,6 +22165,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "الموقع غير متاح"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "локация недоступна"
           }
         }
       }
@@ -21799,6 +22387,12 @@
             "state": "translated",
             "value": "ملاحظات"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "заметки"
+          }
         }
       }
     },
@@ -22013,6 +22607,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "الدفع عبر cashu"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "оплатить через cashu"
           }
         }
       }
@@ -22229,6 +22829,12 @@
             "state": "translated",
             "value": "الدفع عبر lightning"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "оплатить через lightning"
+          }
         }
       }
     },
@@ -22443,6 +23049,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "جار إعداد التشفير"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "устанавливается шифрование"
           }
         }
       }
@@ -22659,6 +23271,12 @@
             "state": "translated",
             "value": "فشل التشفير"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "шифрование не удалось"
+          }
         }
       }
     },
@@ -22873,6 +23491,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "غير مشفر"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "не зашифровано"
           }
         }
       }
@@ -23089,6 +23713,12 @@
             "state": "translated",
             "value": "مشفر"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "зашифровано"
+          }
         }
       }
     },
@@ -23303,6 +23933,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "مشفر ومُتحقق"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "зашифровано и проверено"
           }
         }
       }
@@ -23519,6 +24155,12 @@
             "state": "translated",
             "value": "جار إعداد التشفير..."
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "устанавливаем шифрование..."
+          }
         }
       }
     },
@@ -23733,6 +24375,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "فشل التشفير"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "шифрование не удалось"
           }
         }
       }
@@ -23949,6 +24597,12 @@
             "state": "translated",
             "value": "غير مشفر"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "не зашифровано"
+          }
         }
       }
     },
@@ -24163,6 +24817,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "مشفر"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "зашифровано"
           }
         }
       }
@@ -24379,6 +25039,12 @@
             "state": "translated",
             "value": "مشفر ومُتحقق"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "зашифровано и проверено"
+          }
         }
       }
     },
@@ -24593,6 +25259,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "وضع علامة تم التحقق"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "пометить как проверено"
           }
         }
       }
@@ -24809,6 +25481,12 @@
             "state": "translated",
             "value": "إزالة التحقق"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "удалить проверку"
+          }
         }
       }
     },
@@ -25023,6 +25701,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "⚠️ غير مُتحقق"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⚠️ НЕ ПРОВЕРЕНО"
           }
         }
       }
@@ -25239,6 +25923,12 @@
             "state": "translated",
             "value": "✓ مُتحقق"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ ПРОВЕРЕНО"
+          }
         }
       }
     },
@@ -25453,6 +26143,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "غير متاح - جار تنفيذ handshake"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "недоступно — handshake выполняется"
           }
         }
       }
@@ -25669,6 +26365,12 @@
             "state": "translated",
             "value": "لقد تحققت من هوية هذا الشخص."
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ты подтвердил личность этого человека."
+          }
         }
       }
     },
@@ -25883,6 +26585,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "قارن هذه البصمات مع %@ عبر قناة آمنة."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "сравни эти отпечатки с %@ по безопасному каналу."
           }
         }
       }
@@ -26099,6 +26807,12 @@
             "state": "translated",
             "value": "بصمتهم:"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "их отпечаток:"
+          }
         }
       }
     },
@@ -26313,6 +27027,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "تحقق الأمان"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "проверка безопасности"
           }
         }
       }
@@ -26529,6 +27249,12 @@
             "state": "translated",
             "value": "بصمتك:"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "твой отпечаток:"
+          }
         }
       }
     },
@@ -26743,6 +27469,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "حظر"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "заблокировать"
           }
         }
       }
@@ -26959,6 +27691,12 @@
             "state": "translated",
             "value": "إلغاء الحظر"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "разблокировать"
+          }
         }
       }
     },
@@ -27173,6 +27911,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "لا أحد قريب..."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "никого рядом..."
           }
         }
       }
@@ -27389,6 +28133,12 @@
             "state": "translated",
             "value": "محظور في geohash"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "заблокирован в geohash"
+          }
         }
       }
     },
@@ -27603,6 +28353,12 @@
           "stringUnit": {
             "state": "translated",
             "value": " (أنت)"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": " (ты)"
           }
         }
       }
@@ -27819,6 +28575,12 @@
             "state": "translated",
             "value": "فتح الإعدادات"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "открыть настройки"
+          }
         }
       }
     },
@@ -28033,6 +28795,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "إزالة صلاحية الموقع"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "отключить доступ к локации"
           }
         }
       }
@@ -28249,6 +29017,12 @@
             "state": "translated",
             "value": "جلب موقعي و geohash"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "получить мою локацию и geohash"
+          }
         }
       }
     },
@@ -28463,6 +29237,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "انتقال فوري"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "телепорт"
           }
         }
       }
@@ -28679,6 +29459,12 @@
             "state": "translated",
             "value": "محفوظ"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "закреплённые"
+          }
         }
       }
     },
@@ -28893,6 +29679,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "تحدث مع أشخاص قريبين عبر قنوات geohash. نشارك geohash تقريبي فقط، وليس gps الدقيق. يتم إخفاء عنوان ip لأن كل المرور يمر عبر tor."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "общайся с людьми рядом через каналы geohash. делится только грубый geohash, без точного gps. твой ip скрывается за счёт маршрутизации трафика через tor."
           }
         }
       }
@@ -29109,6 +29901,12 @@
             "state": "translated",
             "value": "geohash غير صالح"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "некорректный geohash"
+          }
         }
       }
     },
@@ -29324,6 +30122,12 @@
             "state": "translated",
             "value": "جار البحث عن قنوات قريبة…"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "поиск каналов рядом…"
+          }
         }
       }
     },
@@ -29535,6 +30339,12 @@
           }
         },
         "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mesh"
+          }
+        },
+        "pl": {
           "stringUnit": {
             "state": "translated",
             "value": "mesh"
@@ -29753,6 +30563,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "تم رفض إذن الموقع. فعّله في الإعدادات لاستخدام قنوات الموقع."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "доступ к локации запрещён. включи разрешение в настройках, чтобы использовать каналы."
           }
         }
       }
@@ -30485,6 +31301,12 @@
             "state": "translated",
             "value": "%1$@ [%2$#@people_count@]"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ [%2$#@people_count@]"
+          }
         }
       }
     },
@@ -30696,6 +31518,12 @@
           }
         },
         "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#%@ • %@"
+          }
+        },
+        "pl": {
           "stringUnit": {
             "state": "translated",
             "value": "#%@ • %@"
@@ -30915,6 +31743,12 @@
             "state": "translated",
             "value": "%1$@ • %2$@"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ • %2$@"
+          }
         }
       }
     },
@@ -31129,6 +31963,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "#قنوات الموقع"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#каналы локации"
           }
         }
       }
@@ -31345,6 +32185,12 @@
             "state": "translated",
             "value": "يخفي ip لقنوات الموقع. الموصى به: تشغيل."
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "скрывает твой ip для каналов локации. рекомендуем включить."
+          }
         }
       }
     },
@@ -31559,6 +32405,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "توجيه tor"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "маршрутизация tor"
           }
         }
       }
@@ -31775,6 +32627,12 @@
             "state": "translated",
             "value": "مربع"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "квартал"
+          }
         }
       }
     },
@@ -31989,6 +32847,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "مبنى"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "здание"
           }
         }
       }
@@ -32205,6 +33069,12 @@
             "state": "translated",
             "value": "مدينة"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "город"
+          }
         }
       }
     },
@@ -32419,6 +33289,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "حي"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "район"
           }
         }
       }
@@ -32635,6 +33511,12 @@
             "state": "translated",
             "value": "مقاطعة"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "область"
+          }
         }
       }
     },
@@ -32849,6 +33731,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "منطقة"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "регион"
           }
         }
       }
@@ -33065,6 +33953,12 @@
             "state": "translated",
             "value": "إغلاق"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "закрыть"
+          }
         }
       }
     },
@@ -33279,6 +34173,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "إعادة المحاولة"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "повторить"
           }
         }
       }
@@ -33495,6 +34395,12 @@
             "state": "translated",
             "value": "أضف ملاحظات قصيرة دائمة لهذا المكان ليجدها الآخرون."
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "добавь короткие постоянные заметки об этом месте для других."
+          }
         }
       }
     },
@@ -33709,6 +34615,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "كن أول من يضيف هنا."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "стань первым, кто добавит здесь заметку."
           }
         }
       }
@@ -33925,6 +34837,12 @@
             "state": "translated",
             "value": "لا توجد ملاحظات بعد"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "заметок пока нет"
+          }
         }
       }
     },
@@ -34140,6 +35058,12 @@
             "state": "translated",
             "value": "تعذر إرسال الملاحظة. %@"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "не удалось отправить заметку. %@"
+          }
         }
       }
     },
@@ -34354,6 +35278,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "لا توجد مرحلات جغرافية قريبة من هذا المكان. حاول لاحقاً."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "рядом нет георелеев. попробуй позже."
           }
         }
       }
@@ -35086,6 +36016,12 @@
             "state": "translated",
             "value": "#%1$@ • %2$#@note_count@"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#%1$@ • %2$#@note_count@"
+          }
         }
       }
     },
@@ -35300,6 +36236,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "جار تحميل الملاحظات…"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "загрузка заметок…"
           }
         }
       }
@@ -35516,6 +36458,12 @@
             "state": "translated",
             "value": "جار تحميل الملاحظات الحديثة…"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "загрузка свежих заметок…"
+          }
         }
       }
     },
@@ -35730,6 +36678,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "لا مرحلات جغرافية قريبة"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "рядом нет георелеев"
           }
         }
       }
@@ -35946,6 +36900,12 @@
             "state": "translated",
             "value": "أضف ملاحظة لهذا المكان"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "добавь заметку для этого места"
+          }
         }
       }
     },
@@ -36160,6 +37120,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "المرحلات الجغرافية غير متاحة؛ الملاحظات متوقفة"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "геореле недоступны; заметки приостановлены"
           }
         }
       }
@@ -36376,6 +37342,12 @@
             "state": "translated",
             "value": "الملاحظات تعتمد على المرحلات الجغرافية. تحقق من الاتصال ثم أعد المحاولة."
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "заметки зависят от георелеев. проверь подключение и попробуй снова."
+          }
         }
       }
     },
@@ -36590,6 +37562,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "رسائل جديدة"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "новые сообщения"
           }
         }
       }
@@ -36806,6 +37784,12 @@
             "state": "translated",
             "value": "لا يمكن بدء دردشة مع %@: المستخدم محظور."
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "нельзя начать чат с %@: пользователь заблокирован."
+          }
         }
       }
     },
@@ -37020,6 +38004,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "لا يمكن بدء دردشة مع %@: يجب أن تكونا مفضلين متبادلين للتشغيل بدون اتصال."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "нельзя начать чат с %@: нужны взаимные избранные для офлайна."
           }
         }
       }
@@ -37236,6 +38226,12 @@
             "state": "translated",
             "value": "مستخدم"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "пользователь"
+          }
         }
       }
     },
@@ -37450,6 +38446,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "تعذر الإرسال: المستخدم محظور."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "отправка невозможна: пользователь заблокирован."
           }
         }
       }
@@ -37666,6 +38668,12 @@
             "state": "translated",
             "value": "لا يمكن الإرسال إلى %@: المستخدم محظور."
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "нельзя отправить %@: пользователь заблокирован."
+          }
         }
       }
     },
@@ -37880,6 +38888,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "لا يمكن الإرسال إلى %@: المستلم غير متاح عبر mesh أو nostr."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "нельзя отправить %@: адресат недоступен через mesh или nostr."
           }
         }
       }
@@ -38096,6 +39110,12 @@
             "state": "translated",
             "value": "تم حظر %@ في محادثات geohash"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ заблокирован в geohash-чатах"
+          }
         }
       }
     },
@@ -38310,6 +39330,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "تم إلغاء حظر %@ في محادثات geohash"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ разблокирован в geohash-чатах"
           }
         }
       }
@@ -38526,6 +39552,12 @@
             "state": "translated",
             "value": "تعذر الإرسال: لست داخل قناة موقع"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "отправка невозможна: ты не в канале локации"
+          }
         }
       }
     },
@@ -38740,6 +39772,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "تعذر الإرسال إلى قناة الموقع"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "не удалось отправить в канал локации"
           }
         }
       }
@@ -38956,6 +39994,12 @@
             "state": "translated",
             "value": "بناء تطوير: تجاوز tor مفعل."
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "dev-сборка: обход tor включён."
+          }
         }
       }
     },
@@ -39170,6 +40214,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tor أُعيد تشغيله. تمت استعادة التوجيه."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tor перезапущен. маршрутизация восстановлена."
           }
         }
       }
@@ -39386,6 +40436,12 @@
             "state": "translated",
             "value": "tor يعاد تشغيله لاستعادة الاتصال..."
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tor перезапускается, чтобы вернуть связь..."
+          }
         }
       }
     },
@@ -39600,6 +40656,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tor يعمل. كل الدردشة تمر عبر tor للخصوصية."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tor запущен. весь чат идёт через tor для приватности."
           }
         }
       }
@@ -39816,6 +40878,12 @@
             "state": "translated",
             "value": "يتم تشغيل tor..."
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "запуск tor..."
+          }
         }
       }
     },
@@ -40030,6 +41098,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "رمز qr للتحقق"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "qr-код проверки"
           }
         }
       }
@@ -40246,6 +41320,12 @@
             "state": "translated",
             "value": "امسح للتحقق مني"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "отсканируй, чтобы подтвердить меня"
+          }
         }
       }
     },
@@ -40460,6 +41540,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "qr غير متاح"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "qr недоступен"
           }
         }
       }
@@ -40676,6 +41762,12 @@
             "state": "translated",
             "value": "الصق محتوى qr للتحقق:"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "вставь содержимое qr для проверки:"
+          }
         }
       }
     },
@@ -40890,6 +41982,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "امسح qr لصديق"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "отсканируй qr друга"
           }
         }
       }
@@ -41106,6 +42204,12 @@
             "state": "translated",
             "value": "qr غير صالح أو منتهٍ"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "qr недействителен или просрочен"
+          }
         }
       }
     },
@@ -41320,6 +42424,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "لم يتم العثور على قرين مطابق"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "соответствующий пир не найден"
           }
         }
       }
@@ -41536,6 +42646,12 @@
             "state": "translated",
             "value": "تم طلب التحقق لـ %@"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "проверка запрошена для %@"
+          }
         }
       }
     },
@@ -41750,6 +42866,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "تحقق"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "проверить"
           }
         }
       }
@@ -41966,6 +43088,12 @@
             "state": "translated",
             "value": "تحقق"
           }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ПРОВЕРИТЬ"
+          }
         }
       }
     },
@@ -42179,6 +43307,12 @@
           }
         },
         "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@"
+          }
+        },
+        "pl": {
           "stringUnit": {
             "state": "translated",
             "value": "%@"
