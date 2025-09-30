@@ -177,6 +177,12 @@
             "state": "translated",
             "value": "bitchat"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat"
+          }
         }
       }
     },
@@ -355,6 +361,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "بند کریں"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mechie"
           }
         }
       }
@@ -535,6 +547,12 @@
             "state": "translated",
             "value": "مکمل"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Emechala"
+          }
         }
       }
     },
@@ -713,6 +731,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "نجی پیغامات Noise پروٹوکول سے خفیہ کیے جاتے ہیں"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ozi nkeonwe emebere site na usoro Noise"
           }
         }
       }
@@ -893,6 +917,12 @@
             "state": "translated",
             "value": "اینڈ ٹو اینڈ انکرپشن"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mkpuchi ozi site na njedebe ruo njedebe"
+          }
         }
       }
     },
@@ -1071,6 +1101,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "پیغامات ہم منصبوں کے ذریعے آگے بڑھا کر دور تک پہنچتے ہیں"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ozi na-agafe site n’aka ndị òtù, na-eru anya"
           }
         }
       }
@@ -1251,6 +1287,12 @@
             "state": "translated",
             "value": "وسیع دائرہ"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ọtụtụ ebe ọ ga-eru"
+          }
         }
       }
     },
@@ -1429,6 +1471,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "جب آپ کے پسندیدہ لوگ شامل ہوں تو اطلاع پائیں"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nata ìkìlọ mgbe ndị ị masịrị sonyere"
           }
         }
       }
@@ -1609,6 +1657,12 @@
             "state": "translated",
             "value": "پسندیدہ"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ndị masịrị"
+          }
         }
       }
     },
@@ -1787,6 +1841,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "غیر مرکزی گمنام ریلوں کے ذریعے قریب کے لوگوں سے بات کرنے کیلئے geohash چینلز"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ụzọ geohash maka ikwu okwu na ndị nọ nso site na relais na-enweghị isi ma na-enweghị aha"
           }
         }
       }
@@ -1967,6 +2027,12 @@
             "state": "translated",
             "value": "مقامی چینلز"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ụzọ mpaghara"
+          }
         }
       }
     },
@@ -2145,6 +2211,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "کسی مخصوص شخص کو خبردار کرنے کیلئے @nickname استعمال کریں"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jiri @aha ntakịrị gwa ndị a họpụtara"
           }
         }
       }
@@ -2325,6 +2397,12 @@
             "state": "translated",
             "value": "ذکر"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nkọwa"
+          }
         }
       }
     },
@@ -2503,6 +2581,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Bluetooth Low Energy کے ساتھ بغیر انٹرنیٹ کے کام کرتا ہے"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Na-arụ ọrụ na-enweghị ịntanetị site na Bluetooth nwere obere ike"
           }
         }
       }
@@ -2683,6 +2767,12 @@
             "state": "translated",
             "value": "آف لائن مواصلات"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mkparịta ụka na-enweghị ịntanetị"
+          }
         }
       }
     },
@@ -2861,6 +2951,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "خصوصیات"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NJIRI"
           }
         }
       }
@@ -3041,6 +3137,12 @@
             "state": "translated",
             "value": "• چینل بدلنے کیلئے #mesh پر ٹیپ کریں"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• pịa #mesh ka ị gbanwee ụzọ"
+          }
         }
       }
     },
@@ -3219,6 +3321,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "• چیٹ صاف کرنے کیلئے تین بار ٹیپ کریں"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• pịa mkparịta ụka ugboro atọ ka ihicha ya"
           }
         }
       }
@@ -3399,6 +3507,12 @@
             "state": "translated",
             "value": "• کمانڈز کیلئے / ٹائپ کریں"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• dee / maka iwu"
+          }
         }
       }
     },
@@ -3577,6 +3691,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "• سائیڈ بار کھولنے کیلئے لوگوں کا آئیکن ٹیپ کریں"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• pịa akara ndị mmadụ maka sidebar"
           }
         }
       }
@@ -3757,6 +3877,12 @@
             "state": "translated",
             "value": "• اپنا نک نیم سیٹ کرنے کیلئے اس پر ٹیپ کریں"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• pịa aha gị ka ịhazi ya"
+          }
         }
       }
     },
@@ -3935,6 +4061,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "• DM شروع کرنے کیلئے کسی ہم منصب کے نام پر ٹیپ کریں"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• pịa aha onye òtù ka ị malite DM"
           }
         }
       }
@@ -4115,6 +4247,12 @@
             "state": "translated",
             "value": "استعمال کرنے کا طریقہ"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OTU E SI EJIRI YA"
+          }
         }
       }
     },
@@ -4293,6 +4431,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "نیا peer ID باقاعدگی سے بنایا جاتا ہے"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A na-emepụta ID òtù ọhụrụ mgbe niile"
           }
         }
       }
@@ -4473,6 +4617,12 @@
             "state": "translated",
             "value": "عارضی شناخت"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Njirimara oge ntakịrị"
+          }
         }
       }
     },
@@ -4651,6 +4801,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "کوئی سرور، اکاؤنٹس یا ڈیٹا جمع نہیں کیا جاتا"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enweghị sava, akaụntụ ma ọ bụ nchịkọta data"
           }
         }
       }
@@ -4831,6 +4987,12 @@
             "state": "translated",
             "value": "ٹریسنگ نہیں"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enweghị iso ụzọ"
+          }
         }
       }
     },
@@ -5009,6 +5171,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "تمام ڈیٹا فوری صاف کرنے کیلئے لوگو پر تین بار ٹیپ کریں"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pịa akara ngosi ugboro atọ ka ihicha data niile ozugbo"
           }
         }
       }
@@ -5189,6 +5357,12 @@
             "state": "translated",
             "value": "پینک موڈ"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ọnọdụ egwu"
+          }
         }
       }
     },
@@ -5368,6 +5542,12 @@
             "state": "translated",
             "value": "رازداری"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NZỌCHI"
+          }
         }
       }
     },
@@ -5543,6 +5723,12 @@
           }
         },
         "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sidegroupchat"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "sidegroupchat"
@@ -5726,6 +5912,12 @@
             "state": "translated",
             "value": "نجی پیغامات کی سیکیورٹی کا ابھی مکمل آڈٹ نہیں ہوا۔ اس انتباہ کے ختم ہونے تک اسے اہم حالات میں استعمال نہ کریں۔"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enweghị nyocha zuru oke maka nchekwa ozi nkeonwe. Ekwela iji ya n’ọnọdụ dị oke mkpa ruo mgbe ozi a ga-apụ."
+          }
         }
       }
     },
@@ -5904,6 +6096,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "انتباہ"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ỊKPA AKA"
           }
         }
       }
@@ -6084,6 +6282,12 @@
             "state": "translated",
             "value": "منسوخ کریں"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "kagbuo"
+          }
         }
       }
     },
@@ -6262,6 +6466,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "بند کریں"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mechie"
           }
         }
       }
@@ -6442,6 +6652,12 @@
             "state": "translated",
             "value": "نقل کریں"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "detuo"
+          }
         }
       }
     },
@@ -6620,6 +6836,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ٹھیک"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ọ DỊ MMA"
           }
         }
       }
@@ -6800,6 +7022,12 @@
             "state": "translated",
             "value": "بند"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "gbanyụọ"
+          }
         }
       }
     },
@@ -6978,6 +7206,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "چالو"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "gbaa"
           }
         }
       }
@@ -7158,6 +7392,12 @@
             "state": "translated",
             "value": "نامعلوم"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "amaghị"
+          }
         }
       }
     },
@@ -7336,6 +7576,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "پسندیدہ میں شامل کریں"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tinye na ndị masịrị gị"
           }
         }
       }
@@ -7516,6 +7762,12 @@
             "state": "translated",
             "value": "Nostr کے ذریعے دستیاب"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "dị site na Nostr"
+          }
         }
       }
     },
@@ -7694,6 +7946,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "مرکزی چیٹ پر واپس جائیں"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "laghachi na mkparịta ụka bụ isi"
           }
         }
       }
@@ -7874,6 +8132,12 @@
             "state": "translated",
             "value": "mesh کے ذریعے جڑا ہوا"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ejikọta site na mesh"
+          }
         }
       }
     },
@@ -8052,6 +8316,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "انکرپشن کی حالت: %@"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ọkwa mkpuchi ozi: %@"
           }
         }
       }
@@ -8232,6 +8502,12 @@
             "state": "translated",
             "value": "لوکیشن چینلز"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ụzọ ebe"
+          }
         }
       }
     },
@@ -8411,6 +8687,12 @@
             "state": "translated",
             "value": "اس جگہ کیلئے لوکیشن نوٹس"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ndụmọdụ ebe maka ebe a"
+          }
         }
       }
     },
@@ -8589,6 +8871,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "نہ پڑھی گئی نجی چیٹ کھولیں"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meghee mkparịta ụka nkeonwe a gụghị"
           }
         }
       }
@@ -9153,6 +9441,12 @@
             "state": "translated",
             "value": "%#@people@"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%#@people@"
+          }
         }
       }
     },
@@ -9331,6 +9625,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ کے ساتھ نجی چیٹ"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mkparịta ụka nkeonwe na %@"
           }
         }
       }
@@ -9511,6 +9811,12 @@
             "state": "translated",
             "value": "mesh کے ذریعے قابل رسائی"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A pụrụ iru site na mesh"
+          }
         }
       }
     },
@@ -9689,6 +9995,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "پسندیدہ سے ہٹائیں"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "wepụ na ndị masịrị"
           }
         }
       }
@@ -9869,6 +10181,12 @@
             "state": "translated",
             "value": "بھیجنے کیلئے پیغام درج کریں"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tinye ozi ka ezite"
+          }
         }
       }
     },
@@ -10047,6 +10365,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "بھیجنے کیلئے دو بار ٹیپ کریں"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "pịa ugboro abụọ ka izite"
           }
         }
       }
@@ -10227,6 +10551,12 @@
             "state": "translated",
             "value": "پیغام بھیجیں"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ziga ozi"
+          }
         }
       }
     },
@@ -10405,6 +10735,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "#%@ کیلئے بُک مارک تبدیل کریں"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "gbanwee akara ndekọ maka #%@"
           }
         }
       }
@@ -10585,6 +10921,12 @@
             "state": "translated",
             "value": "پسندیدہ حالت بدلنے کیلئے دو بار ٹیپ کریں"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "pịa ugboro abụọ ka ị gbanwee ọnọdụ masịrị"
+          }
         }
       }
     },
@@ -10763,6 +11105,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "انکرپشن فنگرپرنٹ دیکھنے کیلئے ٹیپ کریں"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "pịa ka ihụ mkpịsị aka mkpuchi ozi"
           }
         }
       }
@@ -10943,6 +11291,12 @@
             "state": "translated",
             "value": "بلاک کریں"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "gbochie"
+          }
         }
       }
     },
@@ -11121,6 +11475,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "براہ راست پیغام"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ozi ozugbo"
           }
         }
       }
@@ -11301,6 +11661,12 @@
             "state": "translated",
             "value": "گلے لگائیں"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "kpo onye n’ahụ"
+          }
         }
       }
     },
@@ -11479,6 +11845,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ذکر کریں"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "kụkpọ aha"
           }
         }
       }
@@ -11659,6 +12031,12 @@
             "state": "translated",
             "value": "چاپڑ"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tụpụ aka"
+          }
         }
       }
     },
@@ -11837,6 +12215,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "کارروائیاں"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ọrụ"
           }
         }
       }
@@ -12017,6 +12401,12 @@
             "state": "translated",
             "value": "Bluetooth بند ہے۔ bitchat استعمال کرنے کیلئے سیٹنگز میں Bluetooth آن کریں۔"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bluetooth gbanyụrụ. Biko gbaa Bluetooth na ntọala ka i jiri bitchat."
+          }
         }
       }
     },
@@ -12195,6 +12585,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "قریب کے آلات سے جڑنے کیلئے bitchat کو Bluetooth اجازت درکار ہے۔ سیٹنگز میں رسائی فعال کریں۔"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat chọrọ ikike Bluetooth iji jikọọ ngwaọrụ dị nso. Biko mee ka nnweta Bluetooth dị na ntọala."
           }
         }
       }
@@ -12375,6 +12771,12 @@
             "state": "translated",
             "value": "سیٹنگز"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ntọala"
+          }
         }
       }
     },
@@ -12553,6 +12955,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Bluetooth درکار ہے"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "achọrọ Bluetooth"
           }
         }
       }
@@ -12733,6 +13141,12 @@
             "state": "translated",
             "value": "یہ ڈیوائس Bluetooth کو سپورٹ نہیں کرتی۔ bitchat کو چلنے کیلئے Bluetooth چاہیے۔"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ngwaọrụ a anaghị akwado Bluetooth. Iji rụọ ọrụ, bitchat chọrọ Bluetooth."
+          }
         }
       }
     },
@@ -12911,6 +13325,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "لوکیشن چینلز کے اسکرین شاٹس آپ کی لوکیشن ظاہر کر دیں گے۔ عوامی طور پر شیئر کرنے سے پہلے سوچیں۔"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ihe onyonyo nke ụzọ ebe ga-egosi ebe ị nọ. Chee echiche tupu ị kesaa n’ihu ọha."
           }
         }
       }
@@ -13091,6 +13511,12 @@
             "state": "translated",
             "value": "خبردار"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ịkpachapụ anya"
+          }
         }
       }
     },
@@ -13269,6 +13695,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "peer کو بلاک کریں یا فہرست دیکھیں"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "gbochie ma ọ bụ lee ndepụta ndị e gbochiri"
           }
         }
       }
@@ -13449,6 +13881,12 @@
             "state": "translated",
             "value": "چیٹ پیغامات صاف کریں"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hichapụ ozi mkparịta ụka"
+          }
         }
       }
     },
@@ -13627,6 +14065,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "پسندیدہ میں شامل کریں"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tinye na ndị masịrị gị"
           }
         }
       }
@@ -13807,6 +14251,12 @@
             "state": "translated",
             "value": "کسی کو گرمجوشی سے گلے لگائیں"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "zipu onye nnukwu ịṅụnanya"
+          }
         }
       }
     },
@@ -13985,6 +14435,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "نجی پیغام بھیجیں"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ziga ozi nkeonwe"
           }
         }
       }
@@ -14165,6 +14621,12 @@
             "state": "translated",
             "value": "کسی کو ٹراؤٹ سے تھپڑ ماریں"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tụpụ onye na azụ trout"
+          }
         }
       }
     },
@@ -14343,6 +14805,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "peer کا بلاک ہٹائیں"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "wepụ mgbochi onye òtù"
           }
         }
       }
@@ -14523,6 +14991,12 @@
             "state": "translated",
             "value": "پسندیدہ سے ہٹا دیں"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "wepụ na ndị masịrị"
+          }
         }
       }
     },
@@ -14701,6 +15175,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "دیکھیں کون آن لائن ہے"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "lee onye nọ n’ịntanetị"
           }
         }
       }
@@ -14881,6 +15361,12 @@
             "state": "translated",
             "value": "%2$d میں سے %1$d اراکین کو پہنچا دیا گیا"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ezitere %1$d n’ime %2$d ndị òtù"
+          }
         }
       }
     },
@@ -15059,6 +15545,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ کو پہنچایا گیا"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ezitere %@"
           }
         }
       }
@@ -15239,6 +15731,12 @@
             "state": "translated",
             "value": "ناکام: %@"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "adaala: %@"
+          }
         }
       }
     },
@@ -15417,6 +15915,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ نے پڑھا"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "gụpụtara ya %@"
           }
         }
       }
@@ -15597,6 +16101,12 @@
             "state": "translated",
             "value": "صارف بلاک ہے"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "onye ọrụ e gbochiri"
+          }
         }
       }
     },
@@ -15775,6 +16285,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "خود کو پیغام نہیں بھیج سکتے"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ị gaghị ezite onwe gị ozi"
           }
         }
       }
@@ -15955,6 +16471,12 @@
             "state": "translated",
             "value": "بھیجنے میں غلطی"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "njehie iziga"
+          }
         }
       }
     },
@@ -16133,6 +16655,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "نامعلوم وصول کنندہ"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "onye nnata amaghị"
           }
         }
       }
@@ -16313,6 +16841,12 @@
             "state": "translated",
             "value": "peer تک رسائی نہیں"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "enweghị ike iru onye òtù"
+          }
         }
       }
     },
@@ -16491,6 +17025,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "PEOPLE"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NDỊ MMADỤ"
           }
         }
       }
@@ -16671,6 +17211,12 @@
             "state": "translated",
             "value": "توثیق: میرا QR دکھائیں یا دوست کا اسکین کریں"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nkwenye: gosi QR m ma ọ bụ sụọ nke enyi"
+          }
         }
       }
     },
@@ -16849,6 +17395,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "پیغام ٹائپ کریں..."
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "dee ozi..."
           }
         }
       }
@@ -17029,6 +17581,12 @@
             "state": "translated",
             "value": "نک نیم"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "aha ntakịrị"
+          }
         }
       }
     },
@@ -17207,6 +17765,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "لوکیشن فعال کریں"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mepee ntụpọ"
           }
         }
       }
@@ -17387,6 +17951,12 @@
             "state": "translated",
             "value": "پیغام کاپی کریں"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "detuo ozi"
+          }
         }
       }
     },
@@ -17565,6 +18135,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "کم دکھائیں"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "gosipụta obere"
           }
         }
       }
@@ -17745,6 +18321,12 @@
             "state": "translated",
             "value": "مزید دکھائیں"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "gosipụta ọzọ"
+          }
         }
       }
     },
@@ -17923,6 +18505,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "لوکیشن دستیاب نہیں"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ebe adịghị"
           }
         }
       }
@@ -18103,6 +18691,12 @@
             "state": "translated",
             "value": "نوٹس"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ndetu"
+          }
         }
       }
     },
@@ -18281,6 +18875,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Cashu سے ادائیگی کریں"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "kwụ ụgwọ site na Cashu"
           }
         }
       }
@@ -18461,6 +19061,12 @@
             "state": "translated",
             "value": "Lightning سے ادائیگی کریں"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "kwụ ụgwọ site na Lightning"
+          }
         }
       }
     },
@@ -18639,6 +19245,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "انکرپشن قائم کی جا رہی ہے"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "na-etolite mkpuchi ozi"
           }
         }
       }
@@ -18819,6 +19431,12 @@
             "state": "translated",
             "value": "انکرپشن ناکام رہی"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mkpuchi ozi adịghị eme"
+          }
         }
       }
     },
@@ -18997,6 +19615,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "غیر انکرپٹڈ"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "agaghị ekpuchi"
           }
         }
       }
@@ -19177,6 +19801,12 @@
             "state": "translated",
             "value": "انکرپٹڈ"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ekpuchiri"
+          }
         }
       }
     },
@@ -19355,6 +19985,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "انکرپٹڈ اور تصدیق شدہ"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ekpuchiri ma kwado ya"
           }
         }
       }
@@ -19535,6 +20171,12 @@
             "state": "translated",
             "value": "انکرپشن قائم کی جا رہی ہے..."
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "na-etolite mkpuchi ozi..."
+          }
         }
       }
     },
@@ -19713,6 +20355,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "انکرپشن ناکام رہی"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mkpuchi ozi adịghị eme"
           }
         }
       }
@@ -19893,6 +20541,12 @@
             "state": "translated",
             "value": "غیر انکرپٹڈ"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "agaghị ekpuchi"
+          }
         }
       }
     },
@@ -20071,6 +20725,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "انکرپٹڈ"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ekpuchiri"
           }
         }
       }
@@ -20251,6 +20911,12 @@
             "state": "translated",
             "value": "انکرپٹڈ اور تصدیق شدہ"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ekpuchiri & kwadoro"
+          }
         }
       }
     },
@@ -20429,6 +21095,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "تصدیق شدہ کے طور پر نشان زد کریں"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "kekọrịe ya dị ka a kwadoro"
           }
         }
       }
@@ -20609,6 +21281,12 @@
             "state": "translated",
             "value": "تصدیق ہٹائیں"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "wepụ nkwenye"
+          }
         }
       }
     },
@@ -20787,6 +21465,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "⚠️ تصدیق نہیں ہوئی"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⚠️ EKWADOROGHỊ"
           }
         }
       }
@@ -20967,6 +21651,12 @@
             "state": "translated",
             "value": "✓ تصدیق شدہ"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ A KWADỌRỌ"
+          }
         }
       }
     },
@@ -21145,6 +21835,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "دستیاب نہیں - ہینڈ شیک جاری ہے"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "adịghị dị - nkwenye na-aga n’ihu"
           }
         }
       }
@@ -21325,6 +22021,12 @@
             "state": "translated",
             "value": "آپ نے اس شخص کی شناخت کی تصدیق کی ہے۔"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ị kwadoro njirimara onye a."
+          }
         }
       }
     },
@@ -21503,6 +22205,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ان فنگر پرنٹس کو %@ کے ساتھ محفوظ چینل پر ملائیں۔"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tụnyere mkpịsịaka ndị a na %@ site n’ụzọ nchekwa."
           }
         }
       }
@@ -21683,6 +22391,12 @@
             "state": "translated",
             "value": "ان کا فنگر پرنٹ:"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mkpịsịaka ha:"
+          }
         }
       }
     },
@@ -21861,6 +22575,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "سیکیورٹی تصدیق"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nkwenye nchekwa"
           }
         }
       }
@@ -22041,6 +22761,12 @@
             "state": "translated",
             "value": "آپ کا فنگر پرنٹ:"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mkpịsịaka gị:"
+          }
         }
       }
     },
@@ -22219,6 +22945,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "بلاک کریں"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "gbochie"
           }
         }
       }
@@ -22399,6 +23131,12 @@
             "state": "translated",
             "value": "بلاک ہٹائیں"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "wepụ mgbochi"
+          }
         }
       }
     },
@@ -22577,6 +23315,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "قریب کوئی نہیں..."
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "enweghị onye nso..."
           }
         }
       }
@@ -22757,6 +23501,12 @@
             "state": "translated",
             "value": "geohash میں بلاک شدہ"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "e gbochiri na geohash"
+          }
         }
       }
     },
@@ -22935,6 +23685,12 @@
           "stringUnit": {
             "state": "translated",
             "value": " (آپ)"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": " (ị)"
           }
         }
       }
@@ -23115,6 +23871,12 @@
             "state": "translated",
             "value": "سیٹنگز کھولیں"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mepee ntọala"
+          }
         }
       }
     },
@@ -23293,6 +24055,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "لوکیشن رسائی ہٹائیں"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "wepụ nnweta ntụpọ"
           }
         }
       }
@@ -23473,6 +24241,12 @@
             "state": "translated",
             "value": "لوکیشن کی اجازت اور میرے geohash حاصل کریں"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nweta ebe na geohash m"
+          }
         }
       }
     },
@@ -23651,6 +24425,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ٹیلی پورٹ"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "teleport"
           }
         }
       }
@@ -23831,6 +24611,12 @@
             "state": "translated",
             "value": "بک مارک شدہ"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "debere akara"
+          }
         }
       }
     },
@@ -24009,6 +24795,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "قریب کے لوگوں سے گفتگو کیلئے geohash چینلز استعمال کریں۔ صرف عمومی geohash شیئر کیا جاتا ہے، کبھی درست GPS نہیں۔ آپ کا IP tor کے ذریعے ساری ٹریفک روٹ کر کے چھپایا جاتا ہے۔"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kparịta ụka na ndị dị nso site na ụzọ geohash. A na-ekekọrịta naanị geohash zuru oke, ọ bụghị GPS ziri ezi. A na-ezo IP gị site n’ịduzi njem niile site na Tor."
           }
         }
       }
@@ -24189,6 +24981,12 @@
             "state": "translated",
             "value": "غلط geohash"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "geohash ezighi ezi"
+          }
         }
       }
     },
@@ -24368,6 +25166,12 @@
             "state": "translated",
             "value": "قریب کے چینلز تلاش ہو رہے ہیں…"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "na-achọ ụzọ nso…"
+          }
         }
       }
     },
@@ -24543,6 +25347,12 @@
           }
         },
         "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mesh"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "mesh"
@@ -24725,6 +25535,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "لوکیشن کی اجازت مسترد کر دی گئی۔ لوکیشن چینلز استعمال کرنے کیلئے سیٹنگز میں فعال کریں۔"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A jụrụ ikike ntụpọ. Mepee ya na ntọala iji jiri ụzọ ebe."
           }
         }
       }
@@ -25289,6 +26105,12 @@
             "state": "translated",
             "value": "%1$@ [%2$#@people_count@]"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ [%2$#@people_count@]"
+          }
         }
       }
     },
@@ -25464,6 +26286,12 @@
           }
         },
         "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#%1$@ • %2$@"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "#%1$@ • %2$@"
@@ -25647,6 +26475,12 @@
             "state": "translated",
             "value": "%1$@ • %2$@"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ • %2$@"
+          }
         }
       }
     },
@@ -25825,6 +26659,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "#لوکیشن چینلز"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#ụzọ ebe"
           }
         }
       }
@@ -26005,6 +26845,12 @@
             "state": "translated",
             "value": "لوکیشن چینلز کیلئے آپ کا IP چھپاتا ہے۔ تجویز: آن رکھیں۔"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Na-ezo IP gị maka ụzọ ebe. akwadoro: gaa n’ọrụ."
+          }
         }
       }
     },
@@ -26183,6 +27029,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tor روٹنگ"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tor routing"
           }
         }
       }
@@ -26363,6 +27215,12 @@
             "state": "translated",
             "value": "بلاک"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "gbochie"
+          }
         }
       }
     },
@@ -26541,6 +27399,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "عمارت"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ụlọ"
           }
         }
       }
@@ -26721,6 +27585,12 @@
             "state": "translated",
             "value": "شہر"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "obodo"
+          }
         }
       }
     },
@@ -26899,6 +27769,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "محلہ"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ụlọ agbata obi"
           }
         }
       }
@@ -27079,6 +27955,12 @@
             "state": "translated",
             "value": "صوبہ"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "steeti"
+          }
         }
       }
     },
@@ -27257,6 +28139,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "خطہ"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mpaghara"
           }
         }
       }
@@ -27437,6 +28325,12 @@
             "state": "translated",
             "value": "بند کریں"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tụpụ"
+          }
         }
       }
     },
@@ -27615,6 +28509,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "دوبارہ کوشش کریں"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nwale ọzọ"
           }
         }
       }
@@ -27795,6 +28695,12 @@
             "state": "translated",
             "value": "اس جگہ کیلئے مختصر مستقل نوٹس شامل کریں تاکہ دوسرے دیکھ سکیں"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tinye obere ndetu mgbe niile n’ebe a ka ndị ọzọ nwee ike ịhụ."
+          }
         }
       }
     },
@@ -27973,6 +28879,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "اس مقام کیلئے پہلا نوٹ آپ شامل کریں"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bụ onye mbụ tinye maka ebe a."
           }
         }
       }
@@ -28153,6 +29065,12 @@
             "state": "translated",
             "value": "ابھی تک کوئی نوٹس نہیں"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "enweghị ndetu ugbu a"
+          }
         }
       }
     },
@@ -28332,6 +29250,12 @@
             "state": "translated",
             "value": "نوٹ بھیجنا ناکام۔ %@"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enweghị ike iziga ndetu. %@"
+          }
         }
       }
     },
@@ -28510,6 +29434,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "اس جگہ کے قریب کوئی geo relay دستیاب نہیں۔ کچھ دیر بعد دوبارہ کوشش کریں۔"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enweghị geo relay nso ebe a. Nwaa ọzọ n’oge nta."
           }
         }
       }
@@ -29074,6 +30004,12 @@
             "state": "translated",
             "value": "#%1$@ • %2$#@note_count@"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#%1$@ • %2$#@note_count@"
+          }
         }
       }
     },
@@ -29252,6 +30188,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "نوٹس لوڈ ہو رہے ہیں…"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "na-ebufe ndetu…"
           }
         }
       }
@@ -29432,6 +30374,12 @@
             "state": "translated",
             "value": "حالیہ نوٹس لوڈ ہو رہے ہیں…"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "na-ebufe ndetu ọhụrụ…"
+          }
         }
       }
     },
@@ -29610,6 +30558,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "قریب کوئی geo relay نہیں"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "enweghị geo relay nso"
           }
         }
       }
@@ -29790,6 +30744,12 @@
             "state": "translated",
             "value": "اس جگہ کیلئے نوٹ شامل کریں"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tinye ndetu maka ebe a"
+          }
         }
       }
     },
@@ -29968,6 +30928,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "geo relay دستیاب نہیں؛ نوٹس موقوف"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "geo relay adịghị; kwụsịrị ndetu"
           }
         }
       }
@@ -30148,6 +31114,12 @@
             "state": "translated",
             "value": "نوٹس geo relay پر منحصر ہیں۔ کنکشن چیک کریں اور دوبارہ کوشش کریں۔"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ndụmọdụ dabere na geo relay. Lelee njikọ ma nwaa ọzọ."
+          }
         }
       }
     },
@@ -30326,6 +31298,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "نئے پیغامات"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ozi ọhụrụ"
           }
         }
       }
@@ -30506,6 +31484,12 @@
             "state": "translated",
             "value": "%@ کے ساتھ چیٹ شروع نہیں کر سکتے: شخص بلاک ہے۔"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enweghị ike ịmalite mkparịta ụka na %@: e gbochiri onye ahụ."
+          }
         }
       }
     },
@@ -30684,6 +31668,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ کے ساتھ چیٹ شروع نہیں کر سکتے: آفلائن پیغامات کیلئے باہمی پسندیدہ ہونا ضروری ہے۔"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enweghị ike ịmalite mkparịta ụka na %@: achọrọ ka unu bụrụ ndị masịrị ibe unu maka ozi offline."
           }
         }
       }
@@ -30864,6 +31854,12 @@
             "state": "translated",
             "value": "صارف"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "onye ọrụ"
+          }
         }
       }
     },
@@ -31042,6 +32038,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "پیغام نہیں بھیج سکتے: شخص بلاک ہے۔"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enweghị ike iziga ozi: e gbochiri onye ahụ."
           }
         }
       }
@@ -31222,6 +32224,12 @@
             "state": "translated",
             "value": "%@ کو پیغام نہیں بھیج سکتے: شخص بلاک ہے۔"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enweghị ike iziga %@ ozi: e gbochiri onye ahụ."
+          }
         }
       }
     },
@@ -31400,6 +32408,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ کو پیغام نہیں بھیج سکتے - peer mesh یا nostr کے ذریعے دستیاب نہیں۔"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enweghị ike iziga %@ ozi - onye òtù adịghị enweta site na mesh ma ọ bụ Nostr."
           }
         }
       }
@@ -31580,6 +32594,12 @@
             "state": "translated",
             "value": "geohash چیٹس میں %@ کو بلاک کیا"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gbochiri %@ na mkparịta ụka geohash"
+          }
         }
       }
     },
@@ -31758,6 +32778,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "geohash چیٹس میں %@ کا بلاک ہٹایا"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wepụ mgbachi %@ na mkparịta ụka geohash"
           }
         }
       }
@@ -31938,6 +32964,12 @@
             "state": "translated",
             "value": "نہیں بھیج سکتے: آپ لوکیشن چینل میں نہیں ہیں"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enweghị ike iziga: ị nọghị n’ụzọ ebe"
+          }
         }
       }
     },
@@ -32116,6 +33148,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "لوکیشن چینل کو بھیجنا ناکام رہا"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Iziga n’ụzọ ebe adịghị eme"
           }
         }
       }
@@ -32296,6 +33334,12 @@
             "state": "translated",
             "value": "ڈیولپر بلڈ: Tor بائی پاس فعال ہے۔"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ụdị mmepe: e kwadoro mgbago Tor."
+          }
         }
       }
     },
@@ -32474,6 +33518,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tor نے دوبارہ آغاز کر دیا۔ نیٹ ورک روٹنگ بحال ہو گئی۔"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tor malitere ọzọ. E weghachiri ụzọ netwọk."
           }
         }
       }
@@ -32654,6 +33704,12 @@
             "state": "translated",
             "value": "tor کنکشن بحال کرنے کیلئے دوبارہ شروع ہو رہا ہے..."
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tor na-amaliteghachi iji weghachi njikọ..."
+          }
         }
       }
     },
@@ -32832,6 +33888,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tor شروع ہو گیا۔ IP راز داری کیلئے تمام چیٹس tor سے گزرتی ہیں۔"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tor amalitela. A na-enyefe mkparịta ụka niile site na Tor maka nzuzo IP."
           }
         }
       }
@@ -33012,6 +34074,12 @@
             "state": "translated",
             "value": "tor شروع ہو رہا ہے..."
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Na-amalite Tor..."
+          }
         }
       }
     },
@@ -33190,6 +34258,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "تصدیقی QR کوڈ"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "koodu QR nkwenye"
           }
         }
       }
@@ -33370,6 +34444,12 @@
             "state": "translated",
             "value": "مجھے تصدیق کرنے کیلئے اسکین کریں"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sụọ ka ị kwado m"
+          }
         }
       }
     },
@@ -33548,6 +34628,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "QR دستیاب نہیں"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "QR adịghị"
           }
         }
       }
@@ -33728,6 +34814,12 @@
             "state": "translated",
             "value": "تصدیق کیلئے QR مواد چسپاں کریں:"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tinye ọdịnaya QR ka ị kwado ya:"
+          }
         }
       }
     },
@@ -33906,6 +34998,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "دوست کا QR اسکین کریں"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sụọ QR enyi"
           }
         }
       }
@@ -34086,6 +35184,12 @@
             "state": "translated",
             "value": "غلط یا میعاد ختم شدہ QR payload"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "QR anaghị arụ ọrụ ma ọ bụ akwụsịrị"
+          }
         }
       }
     },
@@ -34264,6 +35368,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ملتا جلتا peer نہیں ملا"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enweghị onye òtù kwekọrọ"
           }
         }
       }
@@ -34444,6 +35554,12 @@
             "state": "translated",
             "value": "%@ کیلئے تصدیق کی درخواست کی گئی"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arịrịọ nkwenye maka %@"
+          }
         }
       }
     },
@@ -34622,6 +35738,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "تصدیق کریں"
+          }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "kwado"
           }
         }
       }
@@ -34802,6 +35924,12 @@
             "state": "translated",
             "value": "تصدیق"
           }
+        },
+        "ig": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "KWADO"
+          }
         }
       }
     },
@@ -34979,6 +36107,12 @@
           }
         },
         "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@"
+          }
+        },
+        "ig": {
           "stringUnit": {
             "state": "translated",
             "value": "%@"
