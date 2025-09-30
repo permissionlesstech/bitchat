@@ -252,10 +252,7 @@ struct ContentView: View {
             Text(recordingAlertMessage)
         })
         .confirmationDialog(
-            selectedMessageSender.map { "@\($0)" } ?? L10n.string(
-                "content.actions.title",
-                comment: "Fallback title for the message action sheet"
-            ),
+            selectedMessageSender.map { "@\($0)" } ?? String(localized: "content.actions.title", comment: "Fallback title for the message action sheet"),
             isPresented: $showMessageActions,
             titleVisibility: .visible
         ) {
@@ -516,7 +513,7 @@ struct ContentView: View {
                         }
                         .buttonStyle(.plain)
                         .help(
-                            L10n.string(
+                            String(localized: 
                                 "content.help.verification",
                                 comment: "Help text for verification button"
                             )
@@ -650,7 +647,7 @@ struct ContentView: View {
                     "",
                     text: $messageText,
                     prompt: Text(
-                        L10n.string(
+                        String(localized: 
                             "content.input.message_placeholder",
                             comment: "Placeholder shown in the chat composer"
                         )
@@ -788,7 +785,7 @@ struct ContentView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(
-                        L10n.string(
+                        String(localized: 
                             "content.accessibility.open_unread_private_chat",
                             comment: "Accessibility label for the unread private chat button"
                         )
@@ -816,7 +813,7 @@ struct ContentView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(
-                        L10n.string(
+                        String(localized: 
                             "content.accessibility.location_notes",
                             comment: "Accessibility label for location notes button"
                         )
@@ -831,9 +828,9 @@ struct ContentView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(
-                        L10n.string(
-                            "content.accessibility.toggle_bookmark",
-                            comment: "Accessibility label for toggling a geohash bookmark",
+                        String(
+                            format: String(localized: "content.accessibility.toggle_bookmark", comment: "Accessibility label for toggling a geohash bookmark"),
+                            locale: .current,
                             ch.geohash
                         )
                     )
@@ -862,7 +859,7 @@ struct ContentView: View {
                         .fixedSize(horizontal: true, vertical: false)
                         .layoutPriority(2)
                         .accessibilityLabel(
-                            L10n.string(
+                            String(localized: 
                                 "content.accessibility.location_channels",
                                 comment: "Accessibility label for the location channels button"
                             )
@@ -877,9 +874,9 @@ struct ContentView: View {
                     Image(systemName: "person.2.fill")
                         .font(.system(size: headerPeerIconSize, weight: .regular))
                         .accessibilityLabel(
-                            L10n.string(
-                                "content.accessibility.people_count",
-                                comment: "Accessibility label announcing number of people in header",
+                            String(
+                                format: String(localized: "content.accessibility.people_count", comment: "Accessibility label announcing number of people in header"),
+                                locale: .current,
                                 headerOtherPeersCount
                             )
                         )
@@ -931,7 +928,7 @@ struct ContentView: View {
                                     .frame(width: 32, height: 32)
                             }
                             .buttonStyle(.plain)
-                            .accessibilityLabel(L10n.string(
+                            .accessibilityLabel(String(localized: 
                                 "common.close",
                                 comment: "Accessibility label for close buttons"
                             ))
@@ -1059,7 +1056,7 @@ struct ContentView: View {
                     if !social.claimedNickname.isEmpty { return social.claimedNickname }
                 }
             }
-            return L10n.string(
+            return String(localized: 
                 "common.unknown",
                 comment: "Fallback label for unknown peer"
             )
@@ -1097,7 +1094,7 @@ struct ContentView: View {
                                         .font(.bitchatSystem(size: 14))
                                         .foregroundColor(textColor)
                                         .accessibilityLabel(
-                                            L10n.string(
+                                            String(localized: 
                                                 "content.accessibility.connected_mesh",
                                                 comment: "Accessibility label for mesh-connected peer indicator"
                                             )
@@ -1108,7 +1105,7 @@ struct ContentView: View {
                                         .font(.bitchatSystem(size: 14))
                                         .foregroundColor(textColor)
                                         .accessibilityLabel(
-                                            L10n.string(
+                                            String(localized: 
                                                 "content.accessibility.reachable_mesh",
                                                 comment: "Accessibility label for mesh-reachable peer indicator"
                                             )
@@ -1119,7 +1116,7 @@ struct ContentView: View {
                                         .font(.bitchatSystem(size: 14))
                                         .foregroundColor(.purple)
                                         .accessibilityLabel(
-                                            L10n.string(
+                                            String(localized: 
                                                 "content.accessibility.available_nostr",
                                                 comment: "Accessibility label for Nostr-available peer indicator"
                                             )
@@ -1134,7 +1131,7 @@ struct ContentView: View {
                                     .font(.bitchatSystem(size: 14))
                                     .foregroundColor(textColor)
                                     .accessibilityLabel(
-                                        L10n.string(
+                                        String(localized: 
                                             "content.accessibility.reachable_mesh",
                                             comment: "Accessibility label for mesh-reachable peer indicator"
                                         )
@@ -1145,7 +1142,7 @@ struct ContentView: View {
                                     .font(.bitchatSystem(size: 14))
                                     .foregroundColor(.purple)
                                     .accessibilityLabel(
-                                        L10n.string(
+                                        String(localized: 
                                             "content.accessibility.available_nostr",
                                             comment: "Accessibility label for Nostr-available peer indicator"
                                         )
@@ -1156,7 +1153,7 @@ struct ContentView: View {
                                     .font(.bitchatSystem(size: 14))
                                     .foregroundColor(textColor)
                                     .accessibilityLabel(
-                                        L10n.string(
+                                        String(localized: 
                                             "content.accessibility.connected_mesh",
                                             comment: "Accessibility label for mesh-connected peer indicator"
                                         )
@@ -1182,9 +1179,9 @@ struct ContentView: View {
                                                        encryptionStatus == .noiseSecured ? textColor :
                                                        Color.red)
                                         .accessibilityLabel(
-                                            L10n.string(
-                                                "content.accessibility.encryption_status",
-                                                comment: "Accessibility label announcing encryption status",
+                                            String(
+                                                format: String(localized: "content.accessibility.encryption_status", comment: "Accessibility label announcing encryption status"),
+                                                locale: .current,
                                                 encryptionStatus.accessibilityDescription
                                             )
                                         )
@@ -1192,14 +1189,14 @@ struct ContentView: View {
                             }
                         }
                         .accessibilityLabel(
-                            L10n.string(
-                                "content.accessibility.private_chat_header",
-                                comment: "Accessibility label describing the private chat header",
+                            String(
+                                format: String(localized: "content.accessibility.private_chat_header", comment: "Accessibility label describing the private chat header"),
+                                locale: .current,
                                 privatePeerNick
                             )
                         )
                         .accessibilityHint(
-                            L10n.string(
+                            String(localized: 
                                 "content.accessibility.view_fingerprint_hint",
                                 comment: "Accessibility hint for viewing encryption fingerprint"
                             )
@@ -1223,7 +1220,7 @@ struct ContentView: View {
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel(
-                            L10n.string(
+                            String(localized: 
                                 "content.accessibility.back_to_main_chat",
                                 comment: "Accessibility label for returning to main chat"
                             )
@@ -1243,17 +1240,17 @@ struct ContentView: View {
                             .buttonStyle(.plain)
                             .accessibilityLabel(
                                 viewModel.isFavorite(peerID: privatePeerID)
-                                ? L10n.string(
+                                ? String(localized: 
                                     "content.accessibility.remove_favorite",
                                     comment: "Accessibility label to remove a favorite"
                                 )
-                                : L10n.string(
+                                : String(localized: 
                                     "content.accessibility.add_favorite",
                                     comment: "Accessibility label to add a favorite"
                                 )
                             )
                             .accessibilityHint(
-                                L10n.string(
+                                String(localized: 
                                     "content.accessibility.toggle_favorite_hint",
                                     comment: "Accessibility hint for toggling favorite status"
                                 )
@@ -1521,7 +1518,7 @@ private extension ContentView {
                         let link = lightningLinks[index]
                         PaymentChipView(
                             emoji: "⚡",
-                            label: L10n.string(
+                            label: String(localized: 
                                 "content.payment.lightning",
                                 comment: "Label for Lightning payment chip"
                             ),
@@ -1541,7 +1538,7 @@ private extension ContentView {
                         let urlStr = "cashu:\(enc)"
                         PaymentChipView(
                             emoji: "🥜",
-                            label: L10n.string(
+                            label: String(localized: 
                                 "content.payment.cashu",
                                 comment: "Label for Cashu payment chip"
                             ),
@@ -1692,18 +1689,18 @@ private extension ContentView {
         .buttonStyle(.plain)
         .disabled(!enabled)
         .accessibilityLabel(
-            L10n.string(
+            String(localized: 
                 "content.accessibility.send_message",
                 comment: "Accessibility label for the send message button"
             )
         )
         .accessibilityHint(
             enabled
-            ? L10n.string(
+            ? String(localized: 
                 "content.accessibility.send_hint_ready",
                 comment: "Hint prompting the user to send the message"
             )
-            : L10n.string(
+            : String(localized: 
                 "content.accessibility.send_hint_empty",
                 comment: "Hint prompting the user to enter a message"
             )
@@ -1894,33 +1891,33 @@ struct DeliveryStatusView: View {
 
     private enum Strings {
         static func delivered(to nickname: String) -> String {
-            L10n.string(
-                "content.delivery.delivered_to",
-                comment: "Tooltip for delivered private messages",
+            String(
+                format: String(localized: "content.delivery.delivered_to", comment: "Tooltip for delivered private messages"),
+                locale: .current,
                 nickname
             )
         }
 
         static func read(by nickname: String) -> String {
-            L10n.string(
-                "content.delivery.read_by",
-                comment: "Tooltip for read private messages",
+            String(
+                format: String(localized: "content.delivery.read_by", comment: "Tooltip for read private messages"),
+                locale: .current,
                 nickname
             )
         }
 
         static func failed(_ reason: String) -> String {
-            L10n.string(
-                "content.delivery.failed",
-                comment: "Tooltip for failed message delivery",
+            String(
+                format: String(localized: "content.delivery.failed", comment: "Tooltip for failed message delivery"),
+                locale: .current,
                 reason
             )
         }
 
         static func deliveredToMembers(_ reached: Int, _ total: Int) -> String {
-            L10n.string(
-                "content.delivery.delivered_members",
-                comment: "Tooltip for partially delivered messages",
+            String(
+                format: String(localized: "content.delivery.delivered_members", comment: "Tooltip for partially delivered messages"),
+                locale: .current,
                 reached,
                 total
             )
