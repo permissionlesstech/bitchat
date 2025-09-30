@@ -108,6 +108,12 @@
             "value": "공유된 링크",
             "comment": "Fallback title when saving a shared link"
           }
+        },
+        "my": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "မျှဝေထားသော လင့်ခ်"
+          }
         }
       }
     },
@@ -217,6 +223,12 @@
             "state": "translated",
             "value": "링크를 인코딩하는 데 실패했습니다",
             "comment": "Shown when the share payload cannot be encoded"
+          }
+        },
+        "my": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "လင့်ခ်ကို ကုဒ်တပ်ခြင်း မအောင်မြင်ပါ"
           }
         }
       }
@@ -328,6 +340,12 @@
             "value": "공유할 수 있는 내용이 없습니다",
             "comment": "Shown when provided content cannot be shared"
           }
+        },
+        "my": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "မျှဝေနိုင်သော အကြောင်းအရာ မရှိပါ"
+          }
         }
       }
     },
@@ -437,6 +455,12 @@
             "state": "translated",
             "value": "공유할 내용이 없습니다",
             "comment": "Shown when the share extension receives no content"
+          }
+        },
+        "my": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "မျှဝေရန် မရှိပါ"
           }
         }
       }
@@ -548,6 +572,12 @@
             "value": "✓ bitchat으로 링크를 공유했습니다",
             "comment": "Confirmation after successfully sharing a link"
           }
+        },
+        "my": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ bitchat သို့ လင့်ခ် မျှဝေခဲ့သည်"
+          }
         }
       }
     },
@@ -657,6 +687,12 @@
             "state": "translated",
             "value": "✓ bitchat으로 텍스트를 공유했습니다",
             "comment": "Confirmation after successfully sharing text"
+          }
+        },
+        "my": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ bitchat သို့ စာသား မျှဝေခဲ့သည်"
           }
         }
       }
