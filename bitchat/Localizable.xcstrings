@@ -38750,37 +38750,37 @@
                   "few": {
                     "stringUnit": {
                       "state": "translated",
-                      "value": "%d أشخاص"
+                      "value": "%lld أشخاص"
                     }
                   },
                   "many": {
                     "stringUnit": {
                       "state": "translated",
-                      "value": "%d شخص"
+                      "value": "%lld شخص"
                     }
                   },
                   "one": {
                     "stringUnit": {
                       "state": "translated",
-                      "value": "%d شخص"
+                      "value": "%lld شخص"
                     }
                   },
                   "other": {
                     "stringUnit": {
                       "state": "translated",
-                      "value": "%d شخص"
+                      "value": "%lld شخص"
                     }
                   },
                   "two": {
                     "stringUnit": {
                       "state": "translated",
-                      "value": "%d شخصان"
+                      "value": "%lld شخصان"
                     }
                   },
                   "zero": {
                     "stringUnit": {
                       "state": "translated",
-                      "value": "%d أشخاص"
+                      "value": "%lld أشخاص"
                     }
                   }
                 }

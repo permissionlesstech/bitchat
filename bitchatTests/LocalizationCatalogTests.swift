@@ -1,9 +1,9 @@
 import Foundation
 import XCTest
 
-private let localizationTestsDirectoryURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-private let testsRootURL = localizationTestsDirectoryURL.deletingLastPathComponent()
+private let testsRootURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
 private let repoRootURL = testsRootURL.deletingLastPathComponent()
+private let localizationTestsDirectoryURL = testsRootURL.appendingPathComponent("Localization")
 
 final class LocalizationCatalogTests: XCTestCase {
   // Ensures every app locale includes exactly the same keys as Base.
