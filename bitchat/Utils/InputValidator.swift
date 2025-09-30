@@ -11,7 +11,6 @@ struct InputValidator {
         // BinaryProtocol caps payload length at UInt16.max (65_535). Leave headroom
         // for headers/padding by limiting user content to 60_000 bytes.
         static let maxMessageLength = 60_000
-        static let maxReasonLength = 200
         static let maxPeerIDLength = 64
         static let hexPeerIDLength = 16 // 8 bytes = 16 hex chars
     }
@@ -37,25 +36,20 @@ struct InputValidator {
     
     // MARK: - String Content Validation
     
-    /// Validates and sanitizes user-provided strings (nicknames, messages)
-    static func validateUserString(_ string: String, maxLength: Int, allowNewlines: Bool = false) -> String? {
+    /// Validates and sanitizes user-provided strings used in UI
+    static func validateUserString(_ string: String, maxLength: Int) -> String? {
         // Check empty
         guard !string.isEmpty else { return nil }
-        
+
         // Trim whitespace
         let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
-        
+
         // Check length
         guard trimmed.count <= maxLength else { return nil }
-        
-        // Remove control characters except allowed ones
-        var allowedControlChars = CharacterSet()
-        if allowNewlines {
-            allowedControlChars.insert(charactersIn: "\n\r")
-        }
-        
-        let controlChars = CharacterSet.controlCharacters.subtracting(allowedControlChars)
+
+        // Remove control characters
+        let controlChars = CharacterSet.controlCharacters
         let cleaned = trimmed.components(separatedBy: controlChars).joined()
         
         // Ensure valid UTF-8 (should already be, but double-check)
@@ -70,29 +64,14 @@ struct InputValidator {
     
     /// Validates nickname
     static func validateNickname(_ nickname: String) -> String? {
-        return validateUserString(nickname, maxLength: Limits.maxNicknameLength, allowNewlines: false)
-    }
-    
-    /// Validates message content
-    static func validateMessageContent(_ content: String) -> String? {
-        return validateUserString(content, maxLength: Limits.maxMessageLength, allowNewlines: true)
-    }
-    
-    /// Validates error/reason strings
-    static func validateReasonString(_ reason: String) -> String? {
-        return validateUserString(reason, maxLength: Limits.maxReasonLength, allowNewlines: false)
+        return validateUserString(nickname, maxLength: Limits.maxNicknameLength)
     }
     
     // MARK: - Protocol Field Validation
-    
+
     // Note: Message type validation is performed closer to decoding using
     // MessageType/NoisePayloadType enums; keeping validator free of stale lists.
-    
-    /// Validates hop count is reasonable
-    static func validateHopCount(_ hopCount: UInt8) -> Bool {
-        return hopCount <= 10 // Prevent excessive forwarding
-    }
-    
+
     /// Validates timestamp is reasonable (not too far in past or future)
     static func validateTimestamp(_ timestamp: Date) -> Bool {
         let now = Date()
@@ -100,38 +79,5 @@ struct InputValidator {
         let oneHourFromNow = now.addingTimeInterval(3600)
         return timestamp >= oneHourAgo && timestamp <= oneHourFromNow
     }
-    
-    /// Validates data size for different contexts
-    static func validateDataSize(_ data: Data, maxSize: Int) -> Bool {
-        return data.count > 0 && data.count <= maxSize
-    }
-    
-    // MARK: - Binary Data Validation
-    
-    /// Validates UUID format
-    static func validateUUID(_ uuid: String) -> Bool {
-        // Remove dashes and validate hex
-        let cleaned = uuid.replacingOccurrences(of: "-", with: "")
-        return cleaned.count == 32 && cleaned.allSatisfy { $0.isHexDigit }
-    }
-    
-    /// Validates public key data
-    static func validatePublicKey(_ keyData: Data) -> Bool {
-        // Curve25519 public keys are 32 bytes
-        return keyData.count == 32
-    }
-    
-    /// Validates signature data
-    static func validateSignature(_ signature: Data) -> Bool {
-        // Ed25519 signatures are 64 bytes
-        return signature.count == 64
-    }
-}
 
-// MARK: - Character Extensions
-
-private extension Character {
-    var isHexDigit: Bool {
-        return "0123456789abcdefABCDEF".contains(self)
-    }
 }

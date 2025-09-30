@@ -14,8 +14,4 @@ enum PacketIdUtil {
         let digest = hasher.finalize()
         return Data(digest.prefix(16))
     }
-
-    static func computeIdHex(_ packet: BitchatPacket) -> String {
-        return computeId(packet).hexEncodedString()
-    }
 }
