@@ -682,7 +682,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "pesan pribadi dienkripsi dengan protokol noise"
+            "value": "Mesej peribadi dienkripsi dengan protokol Noise"
           }
         },
         "pl": {
@@ -861,7 +861,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "enkripsi ujung ke ujung"
+            "value": "Penyulitan hujung ke hujung"
           }
         },
         "pl": {
@@ -1040,7 +1040,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "pesan diteruskan antar peer sehingga jangkauannya lebih jauh"
+            "value": "Mesej disampaikan melalui rakan rangkaian, mencapai jauh"
           }
         },
         "pl": {
@@ -1219,7 +1219,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "jangkauan diperluas"
+            "value": "Julat diperluas"
           }
         },
         "pl": {
@@ -1398,7 +1398,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "dapatkan notifikasi saat orang favoritmu bergabung"
+            "value": "Terima makluman apabila orang kegemaran anda sertai"
           }
         },
         "pl": {
@@ -1577,7 +1577,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "favorit"
+            "value": "Kegemaran"
           }
         },
         "pl": {
@@ -1756,7 +1756,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "kanal geohash untuk ngobrol dengan orang di wilayah sekitar lewat relay anonim terdesentralisasi"
+            "value": "Saluran geohash untuk berbual dengan orang di kawasan berhampiran melalui relay anonim terdesentralisasi"
           }
         },
         "pl": {
@@ -1935,7 +1935,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "kanal lokal"
+            "value": "Saluran tempatan"
           }
         },
         "pl": {
@@ -2114,7 +2114,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "guna @nickname untuk memberi tahu orang tertentu"
+            "value": "Gunakan @nama samaran untuk maklumkan orang tertentu"
           }
         },
         "pl": {
@@ -2293,7 +2293,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "mention"
+            "value": "Sebut"
           }
         },
         "pl": {
@@ -2472,7 +2472,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "berfungsi tanpa internet menggunakan bluetooth low energy"
+            "value": "Berfungsi tanpa internet menggunakan Bluetooth tenaga rendah"
           }
         },
         "pl": {
@@ -2651,7 +2651,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "komunikasi offline"
+            "value": "Komunikasi luar talian"
           }
         },
         "pl": {
@@ -2830,7 +2830,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "FITUR"
+            "value": "CIRI-CIRI"
           }
         },
         "pl": {
@@ -3009,7 +3009,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "• ketuk #mesh untuk ganti kanal"
+            "value": "• ketik #mesh untuk tukar saluran"
           }
         },
         "pl": {
@@ -3188,7 +3188,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "• ketuk chat tiga kali untuk menghapus"
+            "value": "• ketik tiga kali pada chat untuk bersihkan"
           }
         },
         "pl": {
@@ -3367,7 +3367,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "• ketik / untuk melihat perintah"
+            "value": "• taip / untuk arahan"
           }
         },
         "pl": {
@@ -3546,7 +3546,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "• ketuk ikon orang untuk membuka sidebar"
+            "value": "• ketik ikon orang untuk bar sisi"
           }
         },
         "pl": {
@@ -3725,7 +3725,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "• atur nama panggilanmu dengan mengetuknya"
+            "value": "• tetapkan nama samaran anda dengan mengetik"
           }
         },
         "pl": {
@@ -3904,7 +3904,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "• ketuk nama peer untuk mulai dm"
+            "value": "• ketik nama rakan untuk mulakan DM"
           }
         },
         "pl": {
@@ -4083,7 +4083,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "CARA PAKAI"
+            "value": "CARA GUNA"
           }
         },
         "pl": {
@@ -4262,7 +4262,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "id peer baru dibuat secara berkala"
+            "value": "ID rakan baharu dijana secara berkala"
           }
         },
         "pl": {
@@ -4441,7 +4441,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "identitas sementara"
+            "value": "Identiti sementara"
           }
         },
         "pl": {
@@ -4620,7 +4620,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "tanpa server, akun, atau pengumpulan data"
+            "value": "Tiada pelayan, akaun atau pengumpulan data"
           }
         },
         "pl": {
@@ -4799,7 +4799,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "tanpa pelacakan"
+            "value": "Tiada penjejakan"
           }
         },
         "pl": {
@@ -4978,7 +4978,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "ketuk logo tiga kali untuk langsung menghapus semua data"
+            "value": "Ketik logo tiga kali untuk kosongkan semua data serta-merta"
           }
         },
         "pl": {
@@ -5157,7 +5157,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "mode panik"
+            "value": "Mod panik"
           }
         },
         "pl": {
@@ -5694,7 +5694,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "keamanan pesan pribadi belum diaudit sepenuhnya. jangan diguna untuk situasi kritis sampai peringatan ini hilang."
+            "value": "Keselamatan mesej peribadi belum diaudit sepenuhnya. Jangan gunakan untuk keadaan kritikal sehingga amaran ini hilang."
           }
         },
         "pl": {
@@ -5873,7 +5873,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "PERINGATAN"
+            "value": "AMARAN"
           }
         },
         "pl": {
@@ -6947,7 +6947,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "nyala"
+            "value": "hidup"
           }
         },
         "pl": {
@@ -7305,7 +7305,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "tambah ke favorit"
+            "value": "tambah ke kegemaran"
           }
         },
         "pl": {
@@ -7484,7 +7484,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "tersedia melalui nostr"
+            "value": "tersedia melalui Nostr"
           }
         },
         "pl": {
@@ -7842,7 +7842,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "terhubung lewat mesh"
+            "value": "disambung melalui mesh"
           }
         },
         "pl": {
@@ -8021,7 +8021,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "status enkripsi: %@"
+            "value": "Status penyulitan: %@"
           }
         },
         "pl": {
@@ -8200,7 +8200,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "kanal lokasi"
+            "value": "Saluran lokasi"
           }
         },
         "pl": {
@@ -8379,7 +8379,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "catatan lokasi untuk tempat ini"
+            "value": "Nota lokasi untuk tempat ini"
           }
         },
         "pl": {
@@ -8558,7 +8558,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "buka chat pribadi belum dibaca"
+            "value": "buka chat peribadi belum dibaca"
           }
         },
         "pl": {
@@ -9300,7 +9300,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "chat pribadi dengan %@"
+            "value": "chat peribadi dengan %@"
           }
         },
         "pl": {
@@ -9479,7 +9479,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "dapat dijangkau lewat mesh"
+            "value": "boleh dicapai melalui mesh"
           }
         },
         "pl": {
@@ -9658,7 +9658,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "hapus dari favorit"
+            "value": "alih keluar dari kegemaran"
           }
         },
         "pl": {
@@ -9837,7 +9837,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "masukkan pesan untuk dihantar"
+            "value": "masukkan mesej untuk dihantar"
           }
         },
         "pl": {
@@ -10016,7 +10016,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "ketuk dua kali untuk menghantar"
+            "value": "ketik dua kali untuk hantar"
           }
         },
         "pl": {
@@ -10195,7 +10195,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "hantar pesan"
+            "value": "hantar mesej"
           }
         },
         "pl": {
@@ -10374,7 +10374,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "ubah penanda untuk #%@"
+            "value": "tukar penanda halaman untuk #%@"
           }
         },
         "pl": {
@@ -10553,7 +10553,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "ketuk dua kali untuk mengubah status favorit"
+            "value": "ketik dua kali untuk tukar status kegemaran"
           }
         },
         "pl": {
@@ -10732,7 +10732,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "ketuk untuk melihat sidik enkripsi"
+            "value": "ketik untuk lihat cap jari penyulitan"
           }
         },
         "pl": {
@@ -10911,7 +10911,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "blokir"
+            "value": "sekatan"
           }
         },
         "pl": {
@@ -11090,7 +11090,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "pesan langsung"
+            "value": "mesej langsung"
           }
         },
         "pl": {
@@ -11806,7 +11806,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "aksi"
+            "value": "tindakan"
           }
         },
         "pl": {
@@ -11985,7 +11985,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bluetooth dimatikan. Hidupkan Bluetooth dalam Tetapan untuk menggunakan bitchat."
+            "value": "Bluetooth dimatikan. Sila hidupkan Bluetooth dalam tetapan untuk menggunakan bitchat."
           }
         },
         "pl": {
@@ -12164,7 +12164,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "bitchat memerlukan kebenaran Bluetooth untuk disambungkan kepada peranti berhampiran. Benarkan capaian dalam Tetapan."
+            "value": "bitchat memerlukan kebenaran Bluetooth untuk bersambung dengan peranti berhampiran. Sila benarkan akses Bluetooth dalam tetapan."
           }
         },
         "pl": {
@@ -12343,7 +12343,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tetapan"
+            "value": "tetapan"
           }
         },
         "pl": {
@@ -12880,7 +12880,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "tangkapan layar kanal lokasi akan mengungkap lokasimu. pikirkan dulu sebelum membagikannya."
+            "value": "Tangkapan skrin saluran lokasi akan mendedahkan lokasi anda. Fikir dahulu sebelum berkongsi secara umum."
           }
         },
         "pl": {
@@ -13059,7 +13059,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "perhatian"
+            "value": "awas"
           }
         },
         "pl": {
@@ -13238,7 +13238,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "blokir atau lihat peer yang diblokir"
+            "value": "sekatan atau senarai rakan yang disekat"
           }
         },
         "pl": {
@@ -13417,7 +13417,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "hapus pesan chat"
+            "value": "bersihkan mesej chat"
           }
         },
         "pl": {
@@ -13596,7 +13596,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "tambah ke favorit"
+            "value": "tambah ke kegemaran"
           }
         },
         "pl": {
@@ -13775,7 +13775,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "hantar pelukan hangat"
+            "value": "hantar pelukan mesra kepada seseorang"
           }
         },
         "pl": {
@@ -13954,7 +13954,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "hantar pesan pribadi"
+            "value": "hantar mesej peribadi"
           }
         },
         "pl": {
@@ -14312,7 +14312,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "buka blokir peer"
+            "value": "nyahsekat rakan"
           }
         },
         "pl": {
@@ -14491,7 +14491,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "hapus dari favorit"
+            "value": "alih keluar dari kegemaran"
           }
         },
         "pl": {
@@ -14670,7 +14670,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "lihat siapa yang online"
+            "value": "lihat siapa dalam talian"
           }
         },
         "pl": {
@@ -14849,7 +14849,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "terhantar ke %1$d dari %2$d anggota"
+            "value": "dihantar kepada %1$d daripada %2$d ahli"
           }
         },
         "pl": {
@@ -15028,7 +15028,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "terhantar ke %@"
+            "value": "dihantar kepada %@"
           }
         },
         "pl": {
@@ -15565,7 +15565,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "pengguna diblokir"
+            "value": "pengguna disekat"
           }
         },
         "pl": {
@@ -15744,7 +15744,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "tidak bisa hantar ke diri sendiri"
+            "value": "tidak boleh mesej diri sendiri"
           }
         },
         "pl": {
@@ -15923,7 +15923,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "kesalahan penghantaran"
+            "value": "ralat penghantaran"
           }
         },
         "pl": {
@@ -16102,7 +16102,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "penerima tidak dikenal"
+            "value": "penerima tidak diketahui"
           }
         },
         "pl": {
@@ -16281,7 +16281,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "peer tidak dapat dijangkau"
+            "value": "rakan tidak boleh dicapai"
           }
         },
         "pl": {
@@ -16639,7 +16639,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "verifikasi: tampilkan qr-ku atau pindai teman"
+            "value": "Pengesahan: tunjukkan QR saya atau imbas rakan"
           }
         },
         "pl": {
@@ -16818,7 +16818,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "ketik pesan..."
+            "value": "taip mesej..."
           }
         },
         "pl": {
@@ -16997,7 +16997,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "nama panggilan"
+            "value": "nama samaran"
           }
         },
         "pl": {
@@ -17355,7 +17355,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "salin pesan"
+            "value": "salin mesej"
           }
         },
         "pl": {
@@ -17534,7 +17534,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "tampilkan lebih sedikit"
+            "value": "tunjuk kurang"
           }
         },
         "pl": {
@@ -17713,7 +17713,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "tampilkan lebih banyak"
+            "value": "tunjuk lebih"
           }
         },
         "pl": {
@@ -18071,7 +18071,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "catatan"
+            "value": "nota"
           }
         },
         "pl": {
@@ -18250,7 +18250,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "bayar via cashu"
+            "value": "bayar melalui Cashu"
           }
         },
         "pl": {
@@ -18429,7 +18429,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "bayar via lightning"
+            "value": "bayar melalui Lightning"
           }
         },
         "pl": {
@@ -18608,7 +18608,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "menyiapkan enkripsi"
+            "value": "menjalankan penyulitan"
           }
         },
         "pl": {
@@ -18787,7 +18787,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "enkripsi gagal"
+            "value": "penyulitan gagal"
           }
         },
         "pl": {
@@ -18966,7 +18966,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "tidak terenkripsi"
+            "value": "tidak disulitkan"
           }
         },
         "pl": {
@@ -19145,7 +19145,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "terenkripsi"
+            "value": "disulitkan"
           }
         },
         "pl": {
@@ -19324,7 +19324,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "terenkripsi dan terverifikasi"
+            "value": "disulitkan dan disahkan"
           }
         },
         "pl": {
@@ -19503,7 +19503,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "menyiapkan enkripsi..."
+            "value": "menjalankan penyulitan..."
           }
         },
         "pl": {
@@ -19682,7 +19682,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "enkripsi gagal"
+            "value": "penyulitan gagal"
           }
         },
         "pl": {
@@ -19861,7 +19861,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "tidak terenkripsi"
+            "value": "tidak disulitkan"
           }
         },
         "pl": {
@@ -20040,7 +20040,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "terenkripsi"
+            "value": "disulitkan"
           }
         },
         "pl": {
@@ -20219,7 +20219,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "terenkripsi dan terverifikasi"
+            "value": "disulitkan & disahkan"
           }
         },
         "pl": {
@@ -20398,7 +20398,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "tandai sebagai terverifikasi"
+            "value": "tanda sebagai disahkan"
           }
         },
         "pl": {
@@ -20577,7 +20577,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "hapus verifikasi"
+            "value": "buang pengesahan"
           }
         },
         "pl": {
@@ -20756,7 +20756,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "⚠️ BELUM TERVERIFIKASI"
+            "value": "⚠️ TIDAK DISAHKAN"
           }
         },
         "pl": {
@@ -20935,7 +20935,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "✓ TERVERIFIKASI"
+            "value": "✓ DISAHKAN"
           }
         },
         "pl": {
@@ -21293,7 +21293,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "kamu sudah memverifikasi identitas orang ini."
+            "value": "Anda telah mengesahkan identiti orang ini."
           }
         },
         "pl": {
@@ -21472,7 +21472,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "bandingkan sidik ini dengan %@ lewat kanal aman."
+            "value": "Bandingkan cap jari ini dengan %@ melalui saluran selamat."
           }
         },
         "pl": {
@@ -21651,7 +21651,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "sidik mereka:"
+            "value": "cap jari mereka:"
           }
         },
         "pl": {
@@ -21830,7 +21830,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "verifikasi keamanan"
+            "value": "pengesahan keselamatan"
           }
         },
         "pl": {
@@ -22009,7 +22009,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "sidikmu:"
+            "value": "cap jari anda:"
           }
         },
         "pl": {
@@ -22188,7 +22188,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "blokir"
+            "value": "sekatan"
           }
         },
         "pl": {
@@ -22367,7 +22367,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "buka blokir"
+            "value": "nyahsekat"
           }
         },
         "pl": {
@@ -22546,7 +22546,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "tidak ada siapa pun..."
+            "value": "tiada sesiapa di sekeliling..."
           }
         },
         "pl": {
@@ -22725,7 +22725,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "diblokir di geohash"
+            "value": "disekat dalam geohash"
           }
         },
         "pl": {
@@ -22904,7 +22904,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": " (kamu)"
+            "value": " (anda)"
           }
         },
         "pl": {
@@ -23083,7 +23083,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "buka Tetapan"
+            "value": "buka tetapan"
           }
         },
         "pl": {
@@ -23262,7 +23262,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "cabut capaian lokasi"
+            "value": "buang akses lokasi"
           }
         },
         "pl": {
@@ -23441,7 +23441,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "ambil lokasiku dan geohash"
+            "value": "dapatkan lokasi dan geohash saya"
           }
         },
         "pl": {
@@ -23799,7 +23799,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "disimpan"
+            "value": "ditanda"
           }
         },
         "pl": {
@@ -23978,7 +23978,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "ngobrol dengan orang terdekat lewat kanal geohash. hanya geohash kasar yang dibagikan, tidak pernah gps tepat. alamat ip-mu tersembunyi karena seluruh trafik lewat tor."
+            "value": "Berbual dengan orang berhampiran menggunakan saluran geohash. Hanya geohash kasar dikongsi, tidak pernah GPS tepat. Alamat IP anda disembunyikan kerana semua trafik dihalakan melalui Tor."
           }
         },
         "pl": {
@@ -24157,7 +24157,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "geohash tidak valid"
+            "value": "geohash tidak sah"
           }
         },
         "pl": {
@@ -24336,7 +24336,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "mencari kanal sekitar…"
+            "value": "mencari saluran berdekatan..."
           }
         },
         "pl": {
@@ -24694,7 +24694,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "kebenaran lokasi ditolak. aktifkan dalam Tetapan untuk menggunakan kanal lokasi."
+            "value": "Kebenaran lokasi dinafikan. Aktifkan dalam tetapan untuk menggunakan saluran lokasi."
           }
         },
         "pl": {
@@ -25436,7 +25436,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "#%@ • %@"
+            "value": "#%1$@ • %2$@"
           }
         },
         "pl": {
@@ -25794,7 +25794,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "#kanal lokasi"
+            "value": "#saluran lokasi"
           }
         },
         "pl": {
@@ -25973,7 +25973,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "menyembunyikan ip-mu untuk kanal lokasi. disarankan: aktif."
+            "value": "Menyembunyikan IP anda untuk saluran lokasi. Disyorkan: hidup."
           }
         },
         "pl": {
@@ -26152,7 +26152,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "perutean tor"
+            "value": "penghalaan Tor"
           }
         },
         "pl": {
@@ -26331,7 +26331,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "blok"
+            "value": "sekatan"
           }
         },
         "pl": {
@@ -26510,7 +26510,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "gedung"
+            "value": "bangunan"
           }
         },
         "pl": {
@@ -26689,7 +26689,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "kota"
+            "value": "bandar"
           }
         },
         "pl": {
@@ -26868,7 +26868,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "lingkungan"
+            "value": "kejiranan"
           }
         },
         "pl": {
@@ -27047,7 +27047,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "provinsi"
+            "value": "negeri"
           }
         },
         "pl": {
@@ -27226,7 +27226,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "wilayah"
+            "value": "rantau"
           }
         },
         "pl": {
@@ -27584,7 +27584,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "coba lagi"
+            "value": "cuba lagi"
           }
         },
         "pl": {
@@ -27763,7 +27763,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "tambahkan catatan permanen singkat di tempat ini agar orang lain menemukannya."
+            "value": "Tambah nota kekal ringkas untuk tempat ini supaya pelawat lain boleh jumpa."
           }
         },
         "pl": {
@@ -27942,7 +27942,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "jadilah orang pertama yang menambahkannya di sini."
+            "value": "Jadilah orang pertama menambah untuk tempat ini."
           }
         },
         "pl": {
@@ -28121,7 +28121,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "belum ada catatan"
+            "value": "tiada nota lagi"
           }
         },
         "pl": {
@@ -28300,7 +28300,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "tidak bisa menghantar catatan. %@"
+            "value": "Gagal menghantar nota. %@"
           }
         },
         "pl": {
@@ -28479,7 +28479,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "tidak ada relay geo tersedia dekat sini. coba lagi nanti."
+            "value": "Tiada geo relay berhampiran tempat ini. Cuba lagi nanti."
           }
         },
         "pl": {
@@ -29221,7 +29221,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "memuat catatan…"
+            "value": "memuatkan nota..."
           }
         },
         "pl": {
@@ -29400,7 +29400,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "memuat catatan terbaru…"
+            "value": "memuatkan nota terbaharu..."
           }
         },
         "pl": {
@@ -29579,7 +29579,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "tidak ada relay geo di dekatmu"
+            "value": "tiada geo relay berdekatan"
           }
         },
         "pl": {
@@ -29758,7 +29758,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "tambahkan catatan untuk tempat ini"
+            "value": "tambah nota untuk tempat ini"
           }
         },
         "pl": {
@@ -29937,7 +29937,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "relay geo tidak tersedia; catatan dijeda"
+            "value": "geo relay tidak tersedia; nota dijeda"
           }
         },
         "pl": {
@@ -30116,7 +30116,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "catatan bergantung pada relay geo. cek koneksi lalu coba lagi."
+            "value": "Nota bergantung pada geo relay. Semak sambungan dan cuba lagi."
           }
         },
         "pl": {
@@ -30295,7 +30295,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "pesan baru"
+            "value": "mesej baharu"
           }
         },
         "pl": {
@@ -30474,7 +30474,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "tidak bisa mulai chat dengan %@: pengguna diblokir."
+            "value": "Tidak boleh mulakan chat dengan %@: orang itu disekat."
           }
         },
         "pl": {
@@ -30653,7 +30653,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "tidak bisa mulai chat dengan %@: butuh favorit bersama untuk offline."
+            "value": "Tidak boleh mulakan chat dengan %@: perlu kedua-duanya dalam kegemaran untuk mesej luar talian."
           }
         },
         "pl": {
@@ -31011,7 +31011,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "tidak bisa menghantar: pengguna diblokir."
+            "value": "Tidak boleh hantar mesej: orang itu disekat."
           }
         },
         "pl": {
@@ -31190,7 +31190,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "tidak bisa menghantar ke %@: pengguna diblokir."
+            "value": "Tidak boleh hantar mesej kepada %@: orang itu disekat."
           }
         },
         "pl": {
@@ -31369,7 +31369,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "tidak bisa menghantar ke %@: penerima tidak dapat dijangkau lewat mesh atau nostr."
+            "value": "Tidak boleh hantar mesej kepada %@ - rakan tidak boleh dicapai melalui mesh atau Nostr."
           }
         },
         "pl": {
@@ -31548,7 +31548,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ diblokir di chat geohash"
+            "value": "%@ disekat dalam chat geohash"
           }
         },
         "pl": {
@@ -31727,7 +31727,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ dibuka blokirnya di chat geohash"
+            "value": "%@ dinyahsekat dalam chat geohash"
           }
         },
         "pl": {
@@ -31906,7 +31906,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "gagal menghantar: kamu tidak berada di kanal lokasi"
+            "value": "Tidak boleh hantar: tidak berada dalam saluran lokasi"
           }
         },
         "pl": {
@@ -32085,7 +32085,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "gagal menghantar ke kanal lokasi"
+            "value": "Gagal hantar ke saluran lokasi"
           }
         },
         "pl": {
@@ -32264,7 +32264,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "build pengembangan: bypass tor aktif."
+            "value": "Binaan pembangunan: pintasan Tor diaktifkan."
           }
         },
         "pl": {
@@ -32443,7 +32443,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "tor dimulai ulang. perutean dipulihkan."
+            "value": "Tor dimulakan semula. Penghalaan rangkaian dipulihkan."
           }
         },
         "pl": {
@@ -32622,7 +32622,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "tor sedang dimulai ulang untuk memulihkan konektivitas..."
+            "value": "Tor dimulakan semula untuk memulihkan sambungan..."
           }
         },
         "pl": {
@@ -32801,7 +32801,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "tor berjalan. seluruh chat dirutekan lewat tor demi privasi."
+            "value": "Tor bermula. Semua chat dihalakan melalui Tor demi privasi IP."
           }
         },
         "pl": {
@@ -32980,7 +32980,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "menjalankan tor..."
+            "value": "Memulakan Tor..."
           }
         },
         "pl": {
@@ -33159,7 +33159,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "kode qr verifikasi"
+            "value": "Kod QR pengesahan"
           }
         },
         "pl": {
@@ -33338,7 +33338,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "pindai untuk verifikasi"
+            "value": "Imbas untuk sahkan saya"
           }
         },
         "pl": {
@@ -33517,7 +33517,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "qr tidak tersedia"
+            "value": "QR tidak tersedia"
           }
         },
         "pl": {
@@ -33696,7 +33696,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "tempel konten qr untuk validasi:"
+            "value": "Tampal kandungan QR untuk sahkan:"
           }
         },
         "pl": {
@@ -33875,7 +33875,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "pindai qr teman"
+            "value": "Imbas QR rakan"
           }
         },
         "pl": {
@@ -34054,7 +34054,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "qr tidak valid atau kedaluwarsa"
+            "value": "QR tidak sah atau tamat tempoh"
           }
         },
         "pl": {
@@ -34233,7 +34233,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "tidak ada peer yang cocok"
+            "value": "Tidak jumpa rakan yang sepadan"
           }
         },
         "pl": {
@@ -34412,7 +34412,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "verifikasi diminta untuk %@"
+            "value": "Pengesahan diminta untuk %@"
           }
         },
         "pl": {
@@ -34591,7 +34591,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "validasi"
+            "value": "sahkan"
           }
         },
         "pl": {
@@ -34770,7 +34770,7 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "VERIFIKASI"
+            "value": "SAHKAN"
           }
         },
         "pl": {
