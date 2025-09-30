@@ -16,12 +16,14 @@ final class VoiceNotePlaybackController: NSObject, ObservableObject, AVAudioPlay
     init(url: URL) {
         self.url = url
         super.init()
-        // Load duration asynchronously to avoid blocking main thread
-        loadDurationAsync()
+        // Don't load anything eagerly - wait until user interaction or view is fully displayed
     }
 
-    private func loadDurationAsync() {
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+    func loadDuration() {
+        // Only load if not already loaded
+        guard duration == 0 else { return }
+
+        DispatchQueue.global(qos: .utility).async { [weak self] in
             guard let self = self else { return }
             do {
                 let player = try AVAudioPlayer(contentsOf: self.url)
@@ -44,7 +46,8 @@ final class VoiceNotePlaybackController: NSObject, ObservableObject, AVAudioPlay
         stop()
         self.url = url
         player = nil
-        loadDurationAsync()
+        duration = 0
+        // Duration will be loaded on demand when needed
     }
 
     func togglePlayback() {

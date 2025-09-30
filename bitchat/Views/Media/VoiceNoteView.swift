@@ -100,10 +100,13 @@ struct VoiceNoteView: View {
                 .stroke(borderColor, lineWidth: 1)
         )
         .onAppear {
-            WaveformCache.shared.waveform(for: url, completion: { bins in
-                self.waveform = bins
-            })
-            // No need to call playback.replaceURL - already initialized with correct URL
+            // Defer both duration and waveform loading to let UI settle after message appears
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                playback.loadDuration()
+                WaveformCache.shared.waveform(for: url, completion: { bins in
+                    self.waveform = bins
+                })
+            }
         }
         .onChange(of: url) { newValue in
             WaveformCache.shared.waveform(for: newValue, completion: { bins in
