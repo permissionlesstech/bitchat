@@ -108,6 +108,12 @@
             "value": "공유된 링크",
             "comment": "Fallback title when saving a shared link"
           }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ลิงก์ที่แชร์"
+          }
         }
       }
     },
@@ -217,6 +223,12 @@
             "state": "translated",
             "value": "링크를 인코딩하는 데 실패했습니다",
             "comment": "Shown when the share payload cannot be encoded"
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "เข้ารหัสลิงก์ไม่สำเร็จ"
           }
         }
       }
@@ -328,6 +340,12 @@
             "value": "공유할 수 있는 내용이 없습니다",
             "comment": "Shown when provided content cannot be shared"
           }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ไม่มีเนื้อหาที่แชร์ได้"
+          }
         }
       }
     },
@@ -437,6 +455,12 @@
             "state": "translated",
             "value": "공유할 내용이 없습니다",
             "comment": "Shown when the share extension receives no content"
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ไม่มีสิ่งใดจะแชร์"
           }
         }
       }
@@ -548,6 +572,12 @@
             "value": "✓ bitchat으로 링크를 공유했습니다",
             "comment": "Confirmation after successfully sharing a link"
           }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ แชร์ลิงก์ไปยัง bitchat แล้ว"
+          }
         }
       }
     },
@@ -657,6 +687,12 @@
             "state": "translated",
             "value": "✓ bitchat으로 텍스트를 공유했습니다",
             "comment": "Confirmation after successfully sharing text"
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ แชร์ข้อความไปยัง bitchat แล้ว"
           }
         }
       }
