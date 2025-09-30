@@ -397,7 +397,7 @@ final class NoiseSymmetricState {
         if nameData.count <= 32 {
             self.hash = nameData + Data(repeating: 0, count: 32 - nameData.count)
         } else {
-            self.hash = Data(SHA256.hash(data: nameData))
+            self.hash = nameData.sha256Hash()
         }
         self.chainingKey = self.hash
     }
@@ -410,7 +410,7 @@ final class NoiseSymmetricState {
     }
     
     func mixHash(_ data: Data) {
-        hash = Data(SHA256.hash(data: hash + data))
+        hash = (hash + data).sha256Hash()
     }
     
     func mixKeyAndHash(_ inputKeyMaterial: Data) {

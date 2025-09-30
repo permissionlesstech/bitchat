@@ -521,10 +521,7 @@ struct NostrEvent: Codable {
         ] as [Any]
         
         let data = try JSONSerialization.data(withJSONObject: serialized, options: [.withoutEscapingSlashes])
-        let hash = CryptoKit.SHA256.hash(data: data)
-        let hashData = Data(hash)
-        let hashHex = hash.compactMap { String(format: "%02x", $0) }.joined()
-        return (hashHex, hashData)
+        return (data.sha256Fingerprint(), data.sha256Hash())
     }
     
     func jsonString() throws -> String {

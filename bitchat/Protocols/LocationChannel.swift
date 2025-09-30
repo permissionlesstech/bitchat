@@ -24,17 +24,17 @@ enum GeohashChannelLevel: CaseIterable, Codable, Equatable {
     var displayName: String {
         switch self {
         case .building:
-            return L10n.string("location_levels.building", comment: "Name for building-level location channel")
+            return String(localized: "location_levels.building", comment: "Name for building-level location channel")
         case .block:
-            return L10n.string("location_levels.block", comment: "Name for block-level location channel")
+            return String(localized: "location_levels.block", comment: "Name for block-level location channel")
         case .neighborhood:
-            return L10n.string("location_levels.neighborhood", comment: "Name for neighborhood-level location channel")
+            return String(localized: "location_levels.neighborhood", comment: "Name for neighborhood-level location channel")
         case .city:
-            return L10n.string("location_levels.city", comment: "Name for city-level location channel")
+            return String(localized: "location_levels.city", comment: "Name for city-level location channel")
         case .province:
-            return L10n.string("location_levels.province", comment: "Name for province-level location channel")
+            return String(localized: "location_levels.province", comment: "Name for province-level location channel")
         case .region:
-            return L10n.string("location_levels.region", comment: "Name for region-level location channel")
+            return String(localized: "location_levels.region", comment: "Name for region-level location channel")
         }
     }
 }

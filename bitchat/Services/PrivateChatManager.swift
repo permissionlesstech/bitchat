@@ -138,19 +138,24 @@ final class PrivateChatManager: ObservableObject {
     /// Remove duplicate messages by ID and keep chronological order
     func sanitizeChat(for peerID: String) {
         guard let arr = privateChats[peerID] else { return }
-        var seen = Set<String>()
+        if arr.count <= 1 {
+            return
+        }
+
+        var indexByID: [String: Int] = [:]
+        indexByID.reserveCapacity(arr.count)
         var deduped: [BitchatMessage] = []
+        deduped.reserveCapacity(arr.count)
+
         for msg in arr.sorted(by: { $0.timestamp < $1.timestamp }) {
-            if !seen.contains(msg.id) {
-                seen.insert(msg.id)
-                deduped.append(msg)
+            if let existing = indexByID[msg.id] {
+                deduped[existing] = msg
             } else {
-                // Replace previous with the latest occurrence (which is later in sort)
-                if let index = deduped.firstIndex(where: { $0.id == msg.id }) {
-                    deduped[index] = msg
-                }
+                indexByID[msg.id] = deduped.count
+                deduped.append(msg)
             }
         }
+
         privateChats[peerID] = deduped
     }
     

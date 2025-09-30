@@ -13,14 +13,8 @@ struct MeshPeerList: View {
 
     private enum Strings {
         static let noneNearby: LocalizedStringKey = "geohash_people.none_nearby"
-        static let blockedTooltip = L10n.string(
-            "geohash_people.tooltip.blocked",
-            comment: "Tooltip shown next to a blocked peer indicator"
-        )
-        static let newMessagesTooltip = L10n.string(
-            "mesh_peers.tooltip.new_messages",
-            comment: "Tooltip for the unread messages indicator"
-        )
+        static let blockedTooltip = String(localized: "geohash_people.tooltip.blocked", comment: "Tooltip shown next to a blocked peer indicator")
+        static let newMessagesTooltip = String(localized: "mesh_peers.tooltip.new_messages", comment: "Tooltip for the unread messages indicator")
     }
 
     var body: some View {

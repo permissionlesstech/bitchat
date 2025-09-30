@@ -226,10 +226,7 @@ struct NostrIdentityBridge {
             }
         }
         // As a final fallback, hash the seed+msg and try again
-        var combined = Data()
-        combined.append(seed)
-        combined.append(msg)
-        let fallback = Data(CryptoKit.SHA256.hash(data: combined))
+        let fallback = (seed + msg).sha256Hash()
         return try NostrIdentity(privateKeyData: fallback)
     }
 }

@@ -16,12 +16,12 @@ final class ShareViewController: UIViewController {
     private static let groupID = "group.chat.bitchat"
 
     private enum Strings {
-        static let nothingToShare = L10n.string("share.status.nothing_to_share", comment: "Shown when the share extension receives no content")
-        static let noShareableContent = L10n.string("share.status.no_shareable_content", comment: "Shown when provided content cannot be shared")
-        static let sharedLinkTitleFallback = L10n.string("share.fallback.shared_link_title", comment: "Fallback title when saving a shared link")
-        static let sharedLinkConfirmation = L10n.string("share.status.shared_link", comment: "Confirmation after successfully sharing a link")
-        static let sharedTextConfirmation = L10n.string("share.status.shared_text", comment: "Confirmation after successfully sharing text")
-        static let failedToEncode = L10n.string("share.status.failed_to_encode", comment: "Shown when the share payload cannot be encoded")
+        static let nothingToShare = String(localized: "share.status.nothing_to_share", comment: "Shown when the share extension receives no content")
+        static let noShareableContent = String(localized: "share.status.no_shareable_content", comment: "Shown when provided content cannot be shared")
+        static let sharedLinkTitleFallback = String(localized: "share.fallback.shared_link_title", comment: "Fallback title when saving a shared link")
+        static let sharedLinkConfirmation = String(localized: "share.status.shared_link", comment: "Confirmation after successfully sharing a link")
+        static let sharedTextConfirmation = String(localized: "share.status.shared_text", comment: "Confirmation after successfully sharing text")
+        static let failedToEncode = String(localized: "share.status.failed_to_encode", comment: "Shown when the share payload cannot be encoded")
     }
     
     private let statusLabel: UILabel = {

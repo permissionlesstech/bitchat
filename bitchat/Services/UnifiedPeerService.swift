@@ -10,7 +10,6 @@ import BitLogger
 import Foundation
 import Combine
 import SwiftUI
-import CryptoKit
 
 /// Single source of truth for peer state, combining mesh connectivity and favorites
 @MainActor
@@ -387,15 +386,5 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         Set(peers.compactMap { peer in
             isBlocked(peer.id) ? getFingerprint(for: peer.id) : nil
         })
-    }
-}
-
-// MARK: - Helper Extensions
-
-extension Data {
-    func sha256Fingerprint() -> String {
-        // Implementation matches existing fingerprint generation in NoiseEncryptionService
-        let hash = SHA256.hash(data: self)
-        return hash.map { String(format: "%02x", $0) }.joined()
     }
 }
