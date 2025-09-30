@@ -1352,28 +1352,39 @@ private extension ContentView {
     func mediaAttachment(for message: BitchatMessage) -> MessageMedia? {
         guard let baseDirectory = applicationFilesDirectory() else { return nil }
 
-        func url(from prefix: String, in subdirectories: [String]) -> URL? {
+        // Extract filename from message content
+        func url(from prefix: String, subdirectory: String) -> URL? {
             guard message.content.hasPrefix(prefix) else { return nil }
             let filename = String(message.content.dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
             guard !filename.isEmpty else { return nil }
-            let fm = FileManager.default
-            for sub in subdirectories {
-                let directory = baseDirectory.appendingPathComponent(sub, isDirectory: true)
-                let candidate = directory.appendingPathComponent(filename)
-                if fm.fileExists(atPath: candidate.path) {
-                    return candidate
-                }
-            }
-            return nil
+
+            // Construct URL directly without fileExists check (avoids blocking disk I/O in view body)
+            // Files are checked during playback/display, so missing files fail gracefully
+            let directory = baseDirectory.appendingPathComponent(subdirectory, isDirectory: true)
+            return directory.appendingPathComponent(filename)
         }
 
-        if let url = url(from: "[voice] ", in: ["voicenotes/outgoing", "voicenotes/incoming"]) {
+        // Try outgoing first (most common for sent media), fall back to incoming
+        if message.content.hasPrefix("[voice] ") {
+            let filename = String(message.content.dropFirst("[voice] ".count)).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !filename.isEmpty else { return nil }
+            // Check outgoing first for sent messages, incoming for received
+            let subdir = message.sender == viewModel.nickname ? "voicenotes/outgoing" : "voicenotes/incoming"
+            let url = baseDirectory.appendingPathComponent(subdir, isDirectory: true).appendingPathComponent(filename)
             return .voice(url)
         }
-        if let url = url(from: "[image] ", in: ["images/outgoing", "images/incoming"]) {
+        if message.content.hasPrefix("[image] ") {
+            let filename = String(message.content.dropFirst("[image] ".count)).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !filename.isEmpty else { return nil }
+            let subdir = message.sender == viewModel.nickname ? "images/outgoing" : "images/incoming"
+            let url = baseDirectory.appendingPathComponent(subdir, isDirectory: true).appendingPathComponent(filename)
             return .image(url)
         }
-        if let url = url(from: "[file] ", in: ["files/outgoing", "files/incoming"]) {
+        if message.content.hasPrefix("[file] ") {
+            let filename = String(message.content.dropFirst("[file] ".count)).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !filename.isEmpty else { return nil }
+            let subdir = message.sender == viewModel.nickname ? "files/outgoing" : "files/incoming"
+            let url = baseDirectory.appendingPathComponent(subdir, isDirectory: true).appendingPathComponent(filename)
             return .file(url)
         }
         return nil
@@ -1860,13 +1871,26 @@ private extension ContentView {
     }
 
     func applicationFilesDirectory() -> URL? {
+        // Cache the directory lookup to avoid repeated FileManager calls during view rendering
+        struct Cache {
+            static var cachedURL: URL?
+            static var didAttempt = false
+        }
+
+        if Cache.didAttempt {
+            return Cache.cachedURL
+        }
+
         do {
             let base = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
             let filesDir = base.appendingPathComponent("files", isDirectory: true)
             try FileManager.default.createDirectory(at: filesDir, withIntermediateDirectories: true, attributes: nil)
+            Cache.cachedURL = filesDir
+            Cache.didAttempt = true
             return filesDir
         } catch {
             SecureLogger.error("Failed to resolve application files directory: \(error)", category: .session)
+            Cache.didAttempt = true
             return nil
         }
     }

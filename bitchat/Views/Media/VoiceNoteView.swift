@@ -103,7 +103,7 @@ struct VoiceNoteView: View {
             WaveformCache.shared.waveform(for: url, completion: { bins in
                 self.waveform = bins
             })
-            playback.replaceURL(url)
+            // No need to call playback.replaceURL - already initialized with correct URL
         }
         .onChange(of: url) { newValue in
             WaveformCache.shared.waveform(for: newValue, completion: { bins in
