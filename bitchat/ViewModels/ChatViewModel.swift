@@ -1295,57 +1295,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     
     // MARK: - Public Key and Identity Management
     
-    // Called when we receive a peer's public key
-    @MainActor
-    func registerPeerPublicKey(peerID: String, publicKeyData: Data) {
-        let fingerprintStr = publicKeyData.sha256Fingerprint()
-        
-        // Only register if not already registered
-        if peerIDToPublicKeyFingerprint[peerID] != fingerprintStr {
-            peerIDToPublicKeyFingerprint[peerID] = fingerprintStr
-        }
-        
-        // Update identity state manager with handshake completion
-        identityManager.updateHandshakeState(peerID: peerID, state: .completed(fingerprint: fingerprintStr))
-        
-        // Update encryption status now that we have the fingerprint
-        updateEncryptionStatus(for: peerID)
-        
-        // Check if we have a claimed nickname for this peer
-        let peerNicknames = meshService.getPeerNicknames()
-        if let nickname = peerNicknames[peerID], nickname != "Unknown" && nickname != "anon\(peerID.prefix(4))" {
-            // Update or create social identity with the claimed nickname
-            if var identity = identityManager.getSocialIdentity(for: fingerprintStr) {
-                identity.claimedNickname = nickname
-                identityManager.updateSocialIdentity(identity)
-            } else {
-                let newIdentity = SocialIdentity(
-                    fingerprint: fingerprintStr,
-                    localPetname: nil,
-                    claimedNickname: nickname,
-                    trustLevel: .casual,
-                    isFavorite: false,
-                    isBlocked: false,
-                    notes: nil
-                )
-                identityManager.updateSocialIdentity(newIdentity)
-            }
-        }
-        
-        // Check if this peer is the one we're in a private chat with
-        updatePrivateChatPeerIfNeeded()
-        
-        // If we're in a private chat with this peer (by fingerprint), send pending read receipts
-        if let chatFingerprint = selectedPrivateChatFingerprint,
-           chatFingerprint == fingerprintStr {
-            // Send read receipts for any unread messages from this peer
-            // Use a small delay to ensure the connection is fully established
-        DispatchQueue.main.asyncAfter(deadline: .now() + TransportConfig.uiReadReceiptRetryLongSeconds) { [weak self] in
-                self?.markPrivateMessagesAsRead(from: peerID)
-            }
-        }
-    }
-    
     @MainActor
     func isPeerBlocked(_ peerID: String) -> Bool {
         return unifiedPeerService.isBlocked(peerID)
