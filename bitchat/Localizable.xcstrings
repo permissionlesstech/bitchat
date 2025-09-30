@@ -261,6 +261,12 @@
             "state": "translated",
             "value": "bitchat"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat"
+          }
         }
       }
     },
@@ -520,6 +526,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إغلاق"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "إغلاق"
@@ -787,6 +799,12 @@
             "state": "translated",
             "value": "تم"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم"
+          }
         }
       }
     },
@@ -1046,6 +1064,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الرسائل الخاصة مشفرة ببروتوكول noise"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "الرسائل الخاصة مشفرة ببروتوكول noise"
@@ -1313,6 +1337,12 @@
             "state": "translated",
             "value": "تشفير طرف لطرف"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تشفير طرف لطرف"
+          }
         }
       }
     },
@@ -1572,6 +1602,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يُعاد تمرير الرسائل بين الأقران لتصل لمسافات أبعد"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "يُعاد تمرير الرسائل بين الأقران لتصل لمسافات أبعد"
@@ -1839,6 +1875,12 @@
             "state": "translated",
             "value": "نطاق ممتد"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نطاق ممتد"
+          }
         }
       }
     },
@@ -2098,6 +2140,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تلقَّ تنبيهات عندما ينضم أحباؤك"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "تلقَّ تنبيهات عندما ينضم أحباؤك"
@@ -2365,6 +2413,12 @@
             "state": "translated",
             "value": "المفضلة"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المفضلة"
+          }
         }
       }
     },
@@ -2624,6 +2678,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قنوات geohash للدردشة مع أشخاص قريبين عبر مرحلات لامركزية مجهولة"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "قنوات geohash للدردشة مع أشخاص قريبين عبر مرحلات لامركزية مجهولة"
@@ -2891,6 +2951,12 @@
             "state": "translated",
             "value": "قنوات محلية"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قنوات محلية"
+          }
         }
       }
     },
@@ -3150,6 +3216,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "استخدم @nickname لتنبيه أشخاص محددين"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "استخدم @nickname لتنبيه أشخاص محددين"
@@ -3417,6 +3489,12 @@
             "state": "translated",
             "value": "إشارات"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إشارات"
+          }
         }
       }
     },
@@ -3676,6 +3754,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يعمل بدون إنترنت باستخدام bluetooth منخفض الطاقة"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "يعمل بدون إنترنت باستخدام bluetooth منخفض الطاقة"
@@ -3943,6 +4027,12 @@
             "state": "translated",
             "value": "تواصل بدون اتصال"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تواصل بدون اتصال"
+          }
         }
       }
     },
@@ -4202,6 +4292,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مزايا"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "مزايا"
@@ -4469,6 +4565,12 @@
             "state": "translated",
             "value": "• اضغط #mesh لتغيير القناة"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• اضغط #mesh لتغيير القناة"
+          }
         }
       }
     },
@@ -4728,6 +4830,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• اضغط الدردشة ثلاث مرات للمسح"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "• اضغط الدردشة ثلاث مرات للمسح"
@@ -4995,6 +5103,12 @@
             "state": "translated",
             "value": "• اكتب / لعرض الأوامر"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• اكتب / لعرض الأوامر"
+          }
         }
       }
     },
@@ -5254,6 +5368,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• اضغط أيقونة الأشخاص لفتح الشريط الجانبي"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "• اضغط أيقونة الأشخاص لفتح الشريط الجانبي"
@@ -5521,6 +5641,12 @@
             "state": "translated",
             "value": "• اضبط لقبك بلمسه"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• اضبط لقبك بلمسه"
+          }
         }
       }
     },
@@ -5780,6 +5906,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• اضغط اسم القرين لبدء رسائل خاصة"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "• اضغط اسم القرين لبدء رسائل خاصة"
@@ -6047,6 +6179,12 @@
             "state": "translated",
             "value": "طريقة الاستخدام"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "طريقة الاستخدام"
+          }
         }
       }
     },
@@ -6306,6 +6444,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يُولد معرف قرين جديد بانتظام"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "يُولد معرف قرين جديد بانتظام"
@@ -6573,6 +6717,12 @@
             "state": "translated",
             "value": "هوية مؤقتة"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هوية مؤقتة"
+          }
         }
       }
     },
@@ -6832,6 +6982,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا خوادم أو حسابات أو جمع بيانات"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "لا خوادم أو حسابات أو جمع بيانات"
@@ -7099,6 +7255,12 @@
             "state": "translated",
             "value": "لا تتبع"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا تتبع"
+          }
         }
       }
     },
@@ -7358,6 +7520,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اضغط الشعار ثلاث مرات لمسح كل البيانات فوراً"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "اضغط الشعار ثلاث مرات لمسح كل البيانات فوراً"
@@ -7625,6 +7793,12 @@
             "state": "translated",
             "value": "وضع الذعر"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "وضع الذعر"
+          }
         }
       }
     },
@@ -7884,6 +8058,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "خصوصية"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "خصوصية"
@@ -8151,6 +8331,12 @@
             "state": "translated",
             "value": "sidegroupchat"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sidegroupchat"
+          }
         }
       }
     },
@@ -8410,6 +8596,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أمان الرسائل الخاصة لم يتم تدقيقه بالكامل بعد. لا تستخدمها في الحالات الحرجة حتى يختفي هذا التحذير."
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "أمان الرسائل الخاصة لم يتم تدقيقه بالكامل بعد. لا تستخدمها في الحالات الحرجة حتى يختفي هذا التحذير."
@@ -8677,6 +8869,12 @@
             "state": "translated",
             "value": "تحذير"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تحذير"
+          }
         }
       }
     },
@@ -8936,6 +9134,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إلغاء"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "إلغاء"
@@ -9203,6 +9407,12 @@
             "state": "translated",
             "value": "إغلاق"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إغلاق"
+          }
         }
       }
     },
@@ -9462,6 +9672,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نسخ"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "نسخ"
@@ -9729,6 +9945,12 @@
             "state": "translated",
             "value": "موافق"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "موافق"
+          }
         }
       }
     },
@@ -9988,6 +10210,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إيقاف"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "إيقاف"
@@ -10255,6 +10483,12 @@
             "state": "translated",
             "value": "تشغيل"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تشغيل"
+          }
         }
       }
     },
@@ -10514,6 +10748,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "غير معروف"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "غير معروف"
@@ -10781,6 +11021,12 @@
             "state": "translated",
             "value": "إضافة إلى المفضلة"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إضافة إلى المفضلة"
+          }
         }
       }
     },
@@ -11040,6 +11286,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "متاح عبر nostr"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "متاح عبر nostr"
@@ -11307,6 +11559,12 @@
             "state": "translated",
             "value": "عودة إلى الدردشة الرئيسية"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عودة إلى الدردشة الرئيسية"
+          }
         }
       }
     },
@@ -11566,6 +11824,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "متصل عبر mesh"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "متصل عبر mesh"
@@ -11833,6 +12097,12 @@
             "state": "translated",
             "value": "حالة التشفير: %@"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حالة التشفير: %@"
+          }
         }
       }
     },
@@ -12092,6 +12362,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قنوات الموقع"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "قنوات الموقع"
@@ -12359,6 +12635,12 @@
             "state": "translated",
             "value": "ملاحظات الموقع لهذا المكان"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ملاحظات الموقع لهذا المكان"
+          }
         }
       }
     },
@@ -12618,6 +12900,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فتح دردشة خاصة غير مقروءة"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "فتح دردشة خاصة غير مقروءة"
@@ -13401,6 +13689,12 @@
             "state": "translated",
             "value": "%#@people@"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%#@people@"
+          }
         }
       }
     },
@@ -13660,6 +13954,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "دردشة خاصة مع %@"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "دردشة خاصة مع %@"
@@ -13927,6 +14227,12 @@
             "state": "translated",
             "value": "قابل للوصول عبر mesh"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قابل للوصول عبر mesh"
+          }
         }
       }
     },
@@ -14186,6 +14492,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إزالة من المفضلة"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "إزالة من المفضلة"
@@ -14453,6 +14765,12 @@
             "state": "translated",
             "value": "أدخل رسالة للإرسال"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أدخل رسالة للإرسال"
+          }
         }
       }
     },
@@ -14712,6 +15030,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اضغط مرتين للإرسال"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "اضغط مرتين للإرسال"
@@ -14979,6 +15303,12 @@
             "state": "translated",
             "value": "إرسال رسالة"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إرسال رسالة"
+          }
         }
       }
     },
@@ -15238,6 +15568,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تبديل الإشارة لـ #%@"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "تبديل الإشارة لـ #%@"
@@ -15505,6 +15841,12 @@
             "state": "translated",
             "value": "اضغط مرتين لتبديل حالة المفضلة"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اضغط مرتين لتبديل حالة المفضلة"
+          }
         }
       }
     },
@@ -15764,6 +16106,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اضغط لمشاهدة بصمة التشفير"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "اضغط لمشاهدة بصمة التشفير"
@@ -16031,6 +16379,12 @@
             "state": "translated",
             "value": "حظر"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حظر"
+          }
         }
       }
     },
@@ -16290,6 +16644,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رسالة مباشرة"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "رسالة مباشرة"
@@ -16557,6 +16917,12 @@
             "state": "translated",
             "value": "عناق"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عناق"
+          }
         }
       }
     },
@@ -16816,6 +17182,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ذكر"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "ذكر"
@@ -17083,6 +17455,12 @@
             "state": "translated",
             "value": "صفعة"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "صفعة"
+          }
         }
       }
     },
@@ -17342,6 +17720,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إجراءات"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "إجراءات"
@@ -17609,6 +17993,12 @@
             "state": "translated",
             "value": "bluetooth متوقف. فعّل bluetooth في الإعدادات لاستخدام bitchat."
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bluetooth متوقف. فعّل bluetooth في الإعدادات لاستخدام bitchat."
+          }
         }
       }
     },
@@ -17868,6 +18258,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تحتاج bitchat إلى إذن bluetooth للاتصال بالأجهزة القريبة. فعّل الوصول في الإعدادات."
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "تحتاج bitchat إلى إذن bluetooth للاتصال بالأجهزة القريبة. فعّل الوصول في الإعدادات."
@@ -18135,6 +18531,12 @@
             "state": "translated",
             "value": "الإعدادات"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الإعدادات"
+          }
         }
       }
     },
@@ -18394,6 +18796,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مطلوب bluetooth"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "مطلوب bluetooth"
@@ -18661,6 +19069,12 @@
             "state": "translated",
             "value": "هذا الجهاز لا يدعم bluetooth. يحتاج bitchat إلى bluetooth للعمل."
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا الجهاز لا يدعم bluetooth. يحتاج bitchat إلى bluetooth للعمل."
+          }
         }
       }
     },
@@ -18920,6 +19334,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لقطات قنوات الموقع تكشف موقعك. فكر قبل المشاركة علناً."
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "لقطات قنوات الموقع تكشف موقعك. فكر قبل المشاركة علناً."
@@ -19187,6 +19607,12 @@
             "state": "translated",
             "value": "تنبيه"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تنبيه"
+          }
         }
       }
     },
@@ -19446,6 +19872,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حظر أو عرض المحظورين"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "حظر أو عرض المحظورين"
@@ -19713,6 +20145,12 @@
             "state": "translated",
             "value": "مسح رسائل الدردشة"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مسح رسائل الدردشة"
+          }
         }
       }
     },
@@ -19972,6 +20410,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إضافة للمفضلة"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "إضافة للمفضلة"
@@ -20239,6 +20683,12 @@
             "state": "translated",
             "value": "إرسال عناق دافئ"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إرسال عناق دافئ"
+          }
         }
       }
     },
@@ -20498,6 +20948,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إرسال رسالة خاصة"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "إرسال رسالة خاصة"
@@ -20765,6 +21221,12 @@
             "state": "translated",
             "value": "صفع شخص بسمكة تراوت"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "صفع شخص بسمكة تراوت"
+          }
         }
       }
     },
@@ -21024,6 +21486,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إلغاء حظر قرين"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "إلغاء حظر قرين"
@@ -21291,6 +21759,12 @@
             "state": "translated",
             "value": "إزالة من المفضلة"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إزالة من المفضلة"
+          }
         }
       }
     },
@@ -21550,6 +22024,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عرض من هو متصل"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "عرض من هو متصل"
@@ -21817,6 +22297,12 @@
             "state": "translated",
             "value": "تم التسليم إلى %1$d من %2$d عضو"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم التسليم إلى %1$d من %2$d عضو"
+          }
         }
       }
     },
@@ -22076,6 +22562,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "سُلّم إلى %@"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "سُلّم إلى %@"
@@ -22343,6 +22835,12 @@
             "state": "translated",
             "value": "فشل: %@"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فشل: %@"
+          }
         }
       }
     },
@@ -22602,6 +23100,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قُرِئ بواسطة %@"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "قُرِئ بواسطة %@"
@@ -22869,6 +23373,12 @@
             "state": "translated",
             "value": "المستخدم محظور"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المستخدم محظور"
+          }
         }
       }
     },
@@ -23128,6 +23638,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يمكن الإرسال لنفسك"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "لا يمكن الإرسال لنفسك"
@@ -23395,6 +23911,12 @@
             "state": "translated",
             "value": "خطأ في الإرسال"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "خطأ في الإرسال"
+          }
         }
       }
     },
@@ -23654,6 +24176,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مستلم غير معروف"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "مستلم غير معروف"
@@ -23921,6 +24449,12 @@
             "state": "translated",
             "value": "القرين غير متاح"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "القرين غير متاح"
+          }
         }
       }
     },
@@ -24180,6 +24714,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أشخاص"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "أشخاص"
@@ -24447,6 +24987,12 @@
             "state": "translated",
             "value": "التحقق: عرض رمز qr الخاص بي أو مسح صديق"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "التحقق: عرض رمز qr الخاص بي أو مسح صديق"
+          }
         }
       }
     },
@@ -24706,6 +25252,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اكتب رسالة..."
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "اكتب رسالة..."
@@ -24973,6 +25525,12 @@
             "state": "translated",
             "value": "لقب"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لقب"
+          }
         }
       }
     },
@@ -25232,6 +25790,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تفعيل الموقع"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "تفعيل الموقع"
@@ -25499,6 +26063,12 @@
             "state": "translated",
             "value": "نسخ الرسالة"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نسخ الرسالة"
+          }
         }
       }
     },
@@ -25758,6 +26328,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عرض أقل"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "عرض أقل"
@@ -26025,6 +26601,12 @@
             "state": "translated",
             "value": "عرض المزيد"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عرض المزيد"
+          }
         }
       }
     },
@@ -26284,6 +26866,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الموقع غير متاح"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "الموقع غير متاح"
@@ -26551,6 +27139,12 @@
             "state": "translated",
             "value": "ملاحظات"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ملاحظات"
+          }
         }
       }
     },
@@ -26810,6 +27404,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الدفع عبر cashu"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "الدفع عبر cashu"
@@ -27077,6 +27677,12 @@
             "state": "translated",
             "value": "الدفع عبر lightning"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الدفع عبر lightning"
+          }
         }
       }
     },
@@ -27336,6 +27942,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جار إعداد التشفير"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "جار إعداد التشفير"
@@ -27603,6 +28215,12 @@
             "state": "translated",
             "value": "فشل التشفير"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فشل التشفير"
+          }
         }
       }
     },
@@ -27862,6 +28480,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "غير مشفر"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "غير مشفر"
@@ -28129,6 +28753,12 @@
             "state": "translated",
             "value": "مشفر"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مشفر"
+          }
         }
       }
     },
@@ -28388,6 +29018,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مشفر ومُتحقق"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "مشفر ومُتحقق"
@@ -28655,6 +29291,12 @@
             "state": "translated",
             "value": "جار إعداد التشفير..."
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جار إعداد التشفير..."
+          }
         }
       }
     },
@@ -28914,6 +29556,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فشل التشفير"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "فشل التشفير"
@@ -29181,6 +29829,12 @@
             "state": "translated",
             "value": "غير مشفر"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "غير مشفر"
+          }
         }
       }
     },
@@ -29440,6 +30094,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مشفر"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "مشفر"
@@ -29707,6 +30367,12 @@
             "state": "translated",
             "value": "مشفر ومُتحقق"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مشفر ومُتحقق"
+          }
         }
       }
     },
@@ -29966,6 +30632,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "وضع علامة تم التحقق"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "وضع علامة تم التحقق"
@@ -30233,6 +30905,12 @@
             "state": "translated",
             "value": "إزالة التحقق"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إزالة التحقق"
+          }
         }
       }
     },
@@ -30492,6 +31170,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⚠️ غير مُتحقق"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "⚠️ غير مُتحقق"
@@ -30759,6 +31443,12 @@
             "state": "translated",
             "value": "✓ مُتحقق"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ مُتحقق"
+          }
         }
       }
     },
@@ -31018,6 +31708,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "غير متاح - جار تنفيذ handshake"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "غير متاح - جار تنفيذ handshake"
@@ -31285,6 +31981,12 @@
             "state": "translated",
             "value": "لقد تحققت من هوية هذا الشخص."
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لقد تحققت من هوية هذا الشخص."
+          }
         }
       }
     },
@@ -31544,6 +32246,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قارن هذه البصمات مع %@ عبر قناة آمنة."
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "قارن هذه البصمات مع %@ عبر قناة آمنة."
@@ -31811,6 +32519,12 @@
             "state": "translated",
             "value": "بصمتهم:"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بصمتهم:"
+          }
         }
       }
     },
@@ -32070,6 +32784,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تحقق الأمان"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "تحقق الأمان"
@@ -32337,6 +33057,12 @@
             "state": "translated",
             "value": "بصمتك:"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بصمتك:"
+          }
         }
       }
     },
@@ -32596,6 +33322,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حظر"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "حظر"
@@ -32863,6 +33595,12 @@
             "state": "translated",
             "value": "إلغاء الحظر"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إلغاء الحظر"
+          }
         }
       }
     },
@@ -33122,6 +33860,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا أحد قريب..."
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "لا أحد قريب..."
@@ -33389,6 +34133,12 @@
             "state": "translated",
             "value": "محظور في geohash"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "محظور في geohash"
+          }
         }
       }
     },
@@ -33648,6 +34398,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": " (أنت)"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": " (أنت)"
@@ -33915,6 +34671,12 @@
             "state": "translated",
             "value": "فتح الإعدادات"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فتح الإعدادات"
+          }
         }
       }
     },
@@ -34174,6 +34936,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إزالة صلاحية الموقع"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "إزالة صلاحية الموقع"
@@ -34441,6 +35209,12 @@
             "state": "translated",
             "value": "جلب موقعي و geohash"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جلب موقعي و geohash"
+          }
         }
       }
     },
@@ -34700,6 +35474,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "انتقال فوري"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "انتقال فوري"
@@ -34967,6 +35747,12 @@
             "state": "translated",
             "value": "محفوظ"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "محفوظ"
+          }
         }
       }
     },
@@ -35226,6 +36012,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تحدث مع أشخاص قريبين عبر قنوات geohash. نشارك geohash تقريبي فقط، وليس gps الدقيق. يتم إخفاء عنوان ip لأن كل المرور يمر عبر tor."
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "تحدث مع أشخاص قريبين عبر قنوات geohash. نشارك geohash تقريبي فقط، وليس gps الدقيق. يتم إخفاء عنوان ip لأن كل المرور يمر عبر tor."
@@ -35493,6 +36285,12 @@
             "state": "translated",
             "value": "geohash غير صالح"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "geohash غير صالح"
+          }
         }
       }
     },
@@ -35752,6 +36550,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جار البحث عن قنوات قريبة…"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "جار البحث عن قنوات قريبة…"
@@ -36019,6 +36823,12 @@
             "state": "translated",
             "value": "mesh"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mesh"
+          }
         }
       }
     },
@@ -36278,6 +37088,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم رفض إذن الموقع. فعّله في الإعدادات لاستخدام قنوات الموقع."
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "تم رفض إذن الموقع. فعّله في الإعدادات لاستخدام قنوات الموقع."
@@ -37061,6 +37877,12 @@
             "state": "translated",
             "value": "%1$@ [%2$#@people_count@]"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ [%2$#@people_count@]"
+          }
         }
       }
     },
@@ -37320,6 +38142,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#%@ • %@"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "#%@ • %@"
@@ -37587,6 +38415,12 @@
             "state": "translated",
             "value": "%1$@ • %2$@"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ • %2$@"
+          }
         }
       }
     },
@@ -37846,6 +38680,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#قنوات الموقع"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "#قنوات الموقع"
@@ -38113,6 +38953,12 @@
             "state": "translated",
             "value": "يخفي ip لقنوات الموقع. الموصى به: تشغيل."
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يخفي ip لقنوات الموقع. الموصى به: تشغيل."
+          }
         }
       }
     },
@@ -38372,6 +39218,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "توجيه tor"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "توجيه tor"
@@ -38639,6 +39491,12 @@
             "state": "translated",
             "value": "مربع"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مربع"
+          }
         }
       }
     },
@@ -38898,6 +39756,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مبنى"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "مبنى"
@@ -39165,6 +40029,12 @@
             "state": "translated",
             "value": "مدينة"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مدينة"
+          }
         }
       }
     },
@@ -39424,6 +40294,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حي"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "حي"
@@ -39691,6 +40567,12 @@
             "state": "translated",
             "value": "مقاطعة"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مقاطعة"
+          }
         }
       }
     },
@@ -39950,6 +40832,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "منطقة"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "منطقة"
@@ -40217,6 +41105,12 @@
             "state": "translated",
             "value": "إغلاق"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إغلاق"
+          }
         }
       }
     },
@@ -40476,6 +41370,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إعادة المحاولة"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "إعادة المحاولة"
@@ -40743,6 +41643,12 @@
             "state": "translated",
             "value": "أضف ملاحظات قصيرة دائمة لهذا المكان ليجدها الآخرون."
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أضف ملاحظات قصيرة دائمة لهذا المكان ليجدها الآخرون."
+          }
         }
       }
     },
@@ -41002,6 +41908,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كن أول من يضيف هنا."
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "كن أول من يضيف هنا."
@@ -41269,6 +42181,12 @@
             "state": "translated",
             "value": "لا توجد ملاحظات بعد"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا توجد ملاحظات بعد"
+          }
         }
       }
     },
@@ -41532,6 +42450,12 @@
             "state": "translated",
             "value": "تعذر إرسال الملاحظة. %@"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذر إرسال الملاحظة. %@"
+          }
         }
       }
     },
@@ -41791,6 +42715,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا توجد مرحلات جغرافية قريبة من هذا المكان. حاول لاحقاً."
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "لا توجد مرحلات جغرافية قريبة من هذا المكان. حاول لاحقاً."
@@ -42574,6 +43504,12 @@
             "state": "translated",
             "value": "#%1$@ • %2$#@note_count@"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#%1$@ • %2$#@note_count@"
+          }
         }
       }
     },
@@ -42833,6 +43769,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جار تحميل الملاحظات…"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "جار تحميل الملاحظات…"
@@ -43100,6 +44042,12 @@
             "state": "translated",
             "value": "جار تحميل الملاحظات الحديثة…"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جار تحميل الملاحظات الحديثة…"
+          }
         }
       }
     },
@@ -43359,6 +44307,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا مرحلات جغرافية قريبة"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "لا مرحلات جغرافية قريبة"
@@ -43626,6 +44580,12 @@
             "state": "translated",
             "value": "أضف ملاحظة لهذا المكان"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أضف ملاحظة لهذا المكان"
+          }
         }
       }
     },
@@ -43885,6 +44845,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المرحلات الجغرافية غير متاحة؛ الملاحظات متوقفة"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "المرحلات الجغرافية غير متاحة؛ الملاحظات متوقفة"
@@ -44152,6 +45118,12 @@
             "state": "translated",
             "value": "الملاحظات تعتمد على المرحلات الجغرافية. تحقق من الاتصال ثم أعد المحاولة."
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الملاحظات تعتمد على المرحلات الجغرافية. تحقق من الاتصال ثم أعد المحاولة."
+          }
         }
       }
     },
@@ -44411,6 +45383,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رسائل جديدة"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "رسائل جديدة"
@@ -44678,6 +45656,12 @@
             "state": "translated",
             "value": "لا يمكن بدء دردشة مع %@: المستخدم محظور."
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يمكن بدء دردشة مع %@: المستخدم محظور."
+          }
         }
       }
     },
@@ -44937,6 +45921,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يمكن بدء دردشة مع %@: يجب أن تكونا مفضلين متبادلين للتشغيل بدون اتصال."
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "لا يمكن بدء دردشة مع %@: يجب أن تكونا مفضلين متبادلين للتشغيل بدون اتصال."
@@ -45204,6 +46194,12 @@
             "state": "translated",
             "value": "مستخدم"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مستخدم"
+          }
         }
       }
     },
@@ -45463,6 +46459,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذر الإرسال: المستخدم محظور."
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "تعذر الإرسال: المستخدم محظور."
@@ -45730,6 +46732,12 @@
             "state": "translated",
             "value": "لا يمكن الإرسال إلى %@: المستخدم محظور."
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يمكن الإرسال إلى %@: المستخدم محظور."
+          }
         }
       }
     },
@@ -45989,6 +46997,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يمكن الإرسال إلى %@: المستلم غير متاح عبر mesh أو nostr."
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "لا يمكن الإرسال إلى %@: المستلم غير متاح عبر mesh أو nostr."
@@ -46256,6 +47270,12 @@
             "state": "translated",
             "value": "تم حظر %@ في محادثات geohash"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم حظر %@ في محادثات geohash"
+          }
         }
       }
     },
@@ -46515,6 +47535,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم إلغاء حظر %@ في محادثات geohash"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "تم إلغاء حظر %@ في محادثات geohash"
@@ -46782,6 +47808,12 @@
             "state": "translated",
             "value": "تعذر الإرسال: لست داخل قناة موقع"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذر الإرسال: لست داخل قناة موقع"
+          }
         }
       }
     },
@@ -47041,6 +48073,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذر الإرسال إلى قناة الموقع"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "تعذر الإرسال إلى قناة الموقع"
@@ -47308,6 +48346,12 @@
             "state": "translated",
             "value": "بناء تطوير: تجاوز tor مفعل."
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بناء تطوير: تجاوز tor مفعل."
+          }
         }
       }
     },
@@ -47567,6 +48611,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tor أُعيد تشغيله. تمت استعادة التوجيه."
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "tor أُعيد تشغيله. تمت استعادة التوجيه."
@@ -47834,6 +48884,12 @@
             "state": "translated",
             "value": "tor يعاد تشغيله لاستعادة الاتصال..."
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tor يعاد تشغيله لاستعادة الاتصال..."
+          }
         }
       }
     },
@@ -48093,6 +49149,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tor يعمل. كل الدردشة تمر عبر tor للخصوصية."
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "tor يعمل. كل الدردشة تمر عبر tor للخصوصية."
@@ -48360,6 +49422,12 @@
             "state": "translated",
             "value": "يتم تشغيل tor..."
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يتم تشغيل tor..."
+          }
         }
       }
     },
@@ -48619,6 +49687,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رمز qr للتحقق"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "رمز qr للتحقق"
@@ -48886,6 +49960,12 @@
             "state": "translated",
             "value": "امسح للتحقق مني"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "امسح للتحقق مني"
+          }
         }
       }
     },
@@ -49145,6 +50225,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "qr غير متاح"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "qr غير متاح"
@@ -49412,6 +50498,12 @@
             "state": "translated",
             "value": "الصق محتوى qr للتحقق:"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الصق محتوى qr للتحقق:"
+          }
         }
       }
     },
@@ -49671,6 +50763,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "امسح qr لصديق"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "امسح qr لصديق"
@@ -49938,6 +51036,12 @@
             "state": "translated",
             "value": "qr غير صالح أو منتهٍ"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "qr غير صالح أو منتهٍ"
+          }
         }
       }
     },
@@ -50197,6 +51301,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم يتم العثور على قرين مطابق"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "لم يتم العثور على قرين مطابق"
@@ -50464,6 +51574,12 @@
             "state": "translated",
             "value": "تم طلب التحقق لـ %@"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم طلب التحقق لـ %@"
+          }
         }
       }
     },
@@ -50723,6 +51839,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تحقق"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "تحقق"
@@ -50990,6 +52112,12 @@
             "state": "translated",
             "value": "تحقق"
           }
+        },
+        "ti": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تحقق"
+          }
         }
       }
     },
@@ -51251,6 +52379,12 @@
           }
         },
         "so": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@"
+          }
+        },
+        "ti": {
           "stringUnit": {
             "state": "translated",
             "value": "%@"
