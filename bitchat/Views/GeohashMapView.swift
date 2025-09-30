@@ -121,7 +121,7 @@ struct GeohashMapView: View {
                                     .font(.bitchatSystem(size: 16, weight: .semibold, design: .monospaced))
                                     .foregroundColor(textColor)
                             } else {
-                                Text("pan and zoom to select")
+                                Text(String(localized: "geohash_picker.instruction", comment: "Instruction text for geohash map picker"))
                                     .font(.bitchatSystem(size: 14, design: .monospaced))
                                     .foregroundColor(.secondary)
                             }

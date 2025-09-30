@@ -20,15 +20,8 @@ struct GeohashPickerSheet: View {
     }
 
     private enum Strings {
-        static let instruction = L10n.string(
-            "geohash_picker.instruction",
-            comment: "Instruction text for geohash map picker"
-        )
-
-        static let selectButton = L10n.string(
-            "geohash_picker.select_button",
-            comment: "Select button text in geohash picker"
-        )
+        static let instruction = String(localized: "geohash_picker.instruction", comment: "Instruction text for geohash map picker")
+        static let selectButton = String(localized: "geohash_picker.select_button", comment: "Select button text in geohash picker")
     }
 
     private var textColor: Color {
