@@ -1,0 +1,146 @@
+{
+  "testCases": [
+    {
+      "key": "content.accessibility.encryption_status",
+      "args": ["encrypted"],
+      "type": "simple",
+      "description": "Encryption status accessibility label"
+    },
+    {
+      "key": "content.accessibility.private_chat_header",
+      "args": ["TestUser"],
+      "type": "simple", 
+      "description": "Private chat header accessibility label"
+    },
+    {
+      "key": "content.accessibility.toggle_bookmark",
+      "args": ["9q9p"],
+      "type": "simple",
+      "description": "Toggle bookmark accessibility label"
+    },
+    {
+      "key": "content.delivery.delivered_to",
+      "args": ["TestUser"],
+      "type": "simple",
+      "description": "Message delivered to user"
+    },
+    {
+      "key": "content.delivery.failed",
+      "args": ["Network error"],
+      "type": "simple",
+      "description": "Message delivery failed"
+    },
+    {
+      "key": "content.delivery.read_by",
+      "args": ["TestUser"],
+      "type": "simple",
+      "description": "Message read by user"
+    },
+    {
+      "key": "fingerprint.message.verify_hint",
+      "args": ["TestUser"],
+      "type": "simple",
+      "description": "Fingerprint verification hint"
+    },
+    {
+      "key": "location_notes.error.failed_to_send",
+      "args": ["Network timeout"],
+      "type": "simple",
+      "description": "Location note send error"
+    },
+    {
+      "key": "system.chat.blocked",
+      "args": ["TestUser"],
+      "type": "simple",
+      "description": "User blocked system message"
+    },
+    {
+      "key": "system.chat.requires_favorite",
+      "args": ["TestUser"],
+      "type": "simple",
+      "description": "Requires favorite system message"
+    },
+    {
+      "key": "system.dm.blocked_recipient",
+      "args": ["TestUser"],
+      "type": "simple",
+      "description": "Blocked recipient DM message"
+    },
+    {
+      "key": "system.dm.unreachable",
+      "args": ["TestUser"],
+      "type": "simple",
+      "description": "Unreachable user DM message"
+    },
+    {
+      "key": "system.geohash.blocked",
+      "args": ["TestUser"],
+      "type": "simple",
+      "description": "Geohash user blocked message"
+    },
+    {
+      "key": "system.geohash.unblocked",
+      "args": ["TestUser"],
+      "type": "simple",
+      "description": "Geohash user unblocked message"
+    },
+    {
+      "key": "verification.scan.status.requested",
+      "args": ["TestUser"],
+      "type": "simple",
+      "description": "Verification scan requested status"
+    },
+    {
+      "key": "location_channels.subtitle_prefix",
+      "args": ["9q9p", "Pleasant Valley"],
+      "type": "positional",
+      "description": "Location channel subtitle with geohash and name"
+    },
+    {
+      "key": "location_channels.subtitle_with_name",
+      "args": ["9q9p", "Pleasant Valley"],
+      "type": "positional",
+      "description": "Location channel subtitle with name"
+    },
+    {
+      "key": "content.delivery.delivered_members",
+      "args": [5, 10],
+      "type": "multiple",
+      "description": "Partial delivery to group members"
+    },
+    {
+      "key": "content.accessibility.people_count",
+      "args": [5],
+      "type": "pluralization",
+      "description": "People count with pluralization rules"
+    },
+    {
+      "key": "location_channels.row_title",
+      "args": ["Pleasant Valley", 3],
+      "type": "pluralization",
+      "description": "Location row with name and participant count"
+    },
+    {
+      "key": "location_notes.header",
+      "args": ["9q9p", 7],
+      "type": "pluralization",
+      "description": "Location notes header with geohash and count"
+    }
+  ],
+  "testLocales": [
+    "am", "ar", "bn", "de", "en", "es", "fa", "fil", "fr", "ha", "he", "hi", 
+    "id", "ig", "it", "ja", "jv", "kk", "ko", "ku", "mg", "mr", "ms", "my", 
+    "ne", "pa", "pl", "ps", "pt-BR", "rhg", "ru", "so", "sw", "ta", "te", 
+    "th", "ti", "tr", "uk", "ur", "uz", "vi", "yo", "zh-CN", "zh-Hans", "zu"
+  ],
+  "criticalLocales": [
+    "en", "ar", "de", "es", "fr", "pl", "ru", "uk"
+  ],
+  "pluralizationTestCounts": [0, 1, 2, 3, 5, 11, 21, 101],
+  "rawPlaceholderPatterns": [
+    "%@", "%1$@", "%2$@", "%3$@", 
+    "%d", "%1$d", "%2$d", "%3$d",
+    "%lld", "%1$lld", "%2$lld", "%3$lld",
+    "[%", "@]", "people_count@", "people@", "note_count@"
+  ]
+}
